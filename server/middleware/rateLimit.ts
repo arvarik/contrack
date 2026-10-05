@@ -18,6 +18,7 @@
 
 import type { Request, Response, NextFunction } from "express";
 import { RateLimitedError } from "../utils/AppError.ts";
+import { trimTrailingSlashes } from "../utils/urlPath.ts";
 
 interface WindowState {
   count: number;
@@ -135,9 +136,13 @@ const AI_COST_PATTERNS: RegExp[] = [
  * against the path as it arrived let one capital letter escape both limiters
  * entirely: measured at forty requests with no refusal, against ten refusals
  * for the same forty spelled in lower case.
+ *
+ * Trailing slashes go too, for the same reason: Express routes
+ * `POST /api/ai-search/` to the handler of `/api/ai-search`, and the one
+ * pattern that ends in `$` let all thirty-five such requests through.
  */
 export function isAiCostPath(path: string): boolean {
-  const normalized = path.toLowerCase();
+  const normalized = trimTrailingSlashes(path.toLowerCase());
   return AI_COST_PATTERNS.some((p) => p.test(normalized));
 }
 

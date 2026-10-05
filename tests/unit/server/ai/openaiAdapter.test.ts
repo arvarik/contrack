@@ -295,6 +295,7 @@ describe("web research", () => {
     });
 
     const call = responsesCalls[0];
+    expect(call.store).toBe(false);
     expect(call.include).toEqual(["web_search_call.action.sources"]);
     expect(call.reasoning).toEqual({ effort: "low" });
     expect(call.text).toMatchObject({

@@ -22,8 +22,12 @@ import { AppError } from "../utils/AppError.ts";
 import * as secretBox from "../utils/secretBox.ts";
 import { publicOrigin } from "../utils/publicOrigin.ts";
 import { isDocker, kindsFor } from "../connectors/registry.ts";
+import { startSync } from "../connectors/scheduler.ts";
 import { getGoogleOAuthCredentials } from "../services/integrationSettings.ts";
-import type { GoogleSecret } from "../connectors/adapters/google.ts";
+import {
+  GOOGLE_CALL_TIMEOUT_MS,
+  type GoogleSecret,
+} from "../connectors/adapters/google.ts";
 import {
   createConnector,
   deleteConnector,
@@ -32,7 +36,6 @@ import {
   listConnectors,
   listCorrespondents,
   listRuns,
-  runNow,
   testConnector,
   updateConnector,
 } from "../connectors/service.ts";
@@ -271,11 +274,13 @@ connectorsRouter.get(
     }
 
     const redirectUri = `${publicOrigin(req)}/api/connectors/google/callback`;
-    const oauth2Client = new google.auth.OAuth2(
-      creds.clientId,
-      creds.clientSecret,
+    // The code exchange and the address lookup time out like a sync's calls.
+    const oauth2Client = new google.auth.OAuth2({
+      clientId: creds.clientId,
+      clientSecret: creds.clientSecret,
       redirectUri,
-    );
+      transporterOptions: { timeout: GOOGLE_CALL_TIMEOUT_MS },
+    });
 
     let tokens;
     try {
@@ -297,7 +302,10 @@ connectorsRouter.get(
     const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
     let userEmail: string | undefined;
     try {
-      const userInfoRes = await oauth2.userinfo.get();
+      const userInfoRes = await oauth2.userinfo.get(
+        {},
+        { timeout: GOOGLE_CALL_TIMEOUT_MS },
+      );
       userEmail = userInfoRes.data.email || undefined;
     } catch (userErr) {
       log.warn("Connectors", "Could not fetch user email in Google callback", {
@@ -440,6 +448,8 @@ connectorsRouter.delete(
 
 // ── POST /:id/sync ─────────────────────────────────────────────────────────
 // Triggers an immediate sync run. Runs synchronously if background jobs are disabled.
+// The run takes the scheduler's lock: a connector that is syncing already,
+// by schedule or by a second click, answers with the run in flight.
 connectorsRouter.post(
   "/:id/sync",
   requireSession,
@@ -453,12 +463,19 @@ connectorsRouter.post(
       throw new AppError("Connector not found", 404);
     }
 
+    const started = startSync(scope, { id, ownerId: scope.ownerId }, "manual");
+    if (!started) {
+      const runs = listRuns(scope, id, 1);
+      res.status(202).json({ runId: runs[0]?.id ?? "run-queued" });
+      return;
+    }
+
     if (process.env.DISABLE_BACKGROUND_JOBS === "true") {
-      const result = await runNow(scope, id, "manual");
+      const result = await started;
       res.status(202).json({ runId: result.runId });
     } else {
       // Run in background and return 202 immediately
-      const runPromise = runNow(scope, id, "manual");
+      const runPromise = started;
       // Prevent unhandled rejection
       runPromise.catch((err) =>
         log.error("Connectors", `Background sync failed for connector ${id}`, {

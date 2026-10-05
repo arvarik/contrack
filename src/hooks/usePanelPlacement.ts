@@ -30,8 +30,9 @@
  * 3. Whatever is left is clamped 8 px inside the window.
  *
  * A fixed panel does not move with the page, so a scroll that moves the
- * trigger closes the panel, and so does a resize. A scroll inside the panel
- * (its own rows) does not.
+ * trigger closes the panel, and so does a resize that changes the width. A
+ * resize that changes only the height, a phone's keyboard, places the panel
+ * again a frame later. A scroll inside the panel (its own rows) does not.
  *
  * Escape inside the panel closes the panel and returns focus to the trigger,
  * and nothing else happens: the hook takes the key in the window's capture
@@ -43,6 +44,7 @@
  * @module hooks/usePanelPlacement
  */
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -127,14 +129,8 @@ export function usePanelPlacement({
   /** Where the trigger was when the panel opened. */
   const anchorRef = useRef<DOMRect | null>(null);
 
-  useLayoutEffect(() => {
-    if (!open) {
-      setDropUp(false);
-      setEdge(align);
-      setPosition({});
-      anchorRef.current = null;
-      return;
-    }
+  /** Measure the trigger and the panel, and place the panel. */
+  const place = useCallback(() => {
     const node = panel.current;
     const anchorNode = trigger.current;
     if (!node || !anchorNode) return;
@@ -177,9 +173,45 @@ export function usePanelPlacement({
       left: Math.round(left),
       minWidth: matchWidth ? Math.round(anchor.width) : undefined,
     });
+  }, [align, matchWidth, panel, trigger]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setDropUp(false);
+      setEdge(align);
+      setPosition({});
+      anchorRef.current = null;
+      return;
+    }
+    place();
     // Once per opening, and once for each new `measureKey`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, measureKey]);
+
+  useEffect(() => {
+    if (!open) return;
+    // A new height alone is a phone's keyboard coming or going. The sheet
+    // the trigger sits in moves with it, and a list left where it opened
+    // ended up far from its trigger. So the list is placed again one frame
+    // later, once the sheet has moved. Android resizes the window for the
+    // keyboard and iOS only the visual viewport, so both are heard. A new
+    // width closes the panel instead, in the effect below.
+    const width = window.innerWidth;
+    let frame = 0;
+    const onResize = () => {
+      if (window.innerWidth !== width) return;
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(place);
+    };
+    const viewport = window.visualViewport;
+    window.addEventListener("resize", onResize);
+    viewport?.addEventListener("resize", onResize);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", onResize);
+      viewport?.removeEventListener("resize", onResize);
+    };
+  }, [open, place]);
 
   useEffect(() => {
     if (!open || !onClose) return;

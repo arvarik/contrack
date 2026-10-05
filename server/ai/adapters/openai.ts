@@ -487,7 +487,12 @@ export class OpenAIAdapter implements AIProvider {
       };
     }
     const response = await this.withEffort(model, options, (effort) => {
-      const requestParams: Record<string, unknown> = { model, messages };
+      // Never kept for OpenAI's stored completions (the API's default too).
+      const requestParams: Record<string, unknown> = {
+        model,
+        messages,
+        store: false,
+      };
       const max = this.budget(options, effort);
       if (max) requestParams.max_completion_tokens = max;
       if (effort !== "omit") requestParams.reasoning_effort = effort;
@@ -556,6 +561,7 @@ export class OpenAIAdapter implements AIProvider {
       const requestParams: Record<string, unknown> = {
         model,
         messages,
+        store: false,
         stream: true,
         // The usage arrives in a last chunk that has no choices.
         stream_options: { include_usage: true },
@@ -642,6 +648,9 @@ export class OpenAIAdapter implements AIProvider {
       const requestParams: Record<string, unknown> = {
         model,
         input,
+        // The Responses API keeps every response for 30 days unless told
+        // not to. Research prompts name a contact, so none is kept.
+        store: false,
         tools: [{ type: "web_search" }],
         // Without this the pages the model read are not returned at all:
         // a JSON answer carries no inline url_citation annotations.

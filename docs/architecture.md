@@ -88,7 +88,9 @@ This is the path of one edit, from a click to a saved row.
    2. The JSON parser: 1 MB, or 50 MB for `POST /api/contacts/bulk`.
    3. The AI rate limit for each client address.
    4. `GET /healthz`, which sits outside the credential gate.
-   5. `attachPrincipal`: a token, the `API_TOKEN`, a cookie, or the local owner.
+   5. `attachPrincipal`: a token, a cookie, or the local owner. Then
+      `refuseCrossSiteWrites`: a write with the cookie from another site's
+      page gets `403`.
    6. `attachRequestContext`, which puts the caller in AsyncLocalStorage.
    7. The AI rate limit for each account, and `requireAiAllowed`.
    8. `Cache-Control: no-store` for four prefixes.
@@ -391,9 +393,9 @@ Many accounts can share one instance. These rules keep each account's data
 apart.
 
 - **Every request has a principal.** `attachPrincipal`
-  (`server/middleware/auth.ts`) resolves a session, a personal token, the
-  deprecated `API_TOKEN` (the first admin), or the local owner when sign-in is
-  off. The local owner is a real account, so every row has an owner.
+  (`server/middleware/auth.ts`) resolves a session, a personal token, or the
+  local owner when sign-in is off. The local owner is a real account, so every
+  row has an owner.
 - **The Scope is the isolation.** `scopeOf(req)` returns a `Scope` with a typed
   `ownerId` (`server/tenancy/scope.ts`). Every function that reads or writes an
   owned table takes a Scope first.
@@ -648,10 +650,13 @@ queue a job that a restart stopped.
 | Work                                                                                                                                                                                                                                     | Job                                  | When                                                                                       |
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------ |
 | Geocode contacts that have an address and no pin, one Nominatim request every 1.1 seconds                                                                                                                                                | `geocode.startup`                    | Once, 2 seconds after start                                                                |
+| Delete the cached address lookups that no contact uses, a day after the lookup                                                                                                                                                           | `geocode.cachePrune`                 | A minute after start, then daily                                                           |
 | Copy stored Google photo URLs into uploads                                                                                                                                                                                               | `connectors.photoSweep`              | Once, 5 seconds after start                                                                |
 | Sync the due connectors, 2 at a time and one for each account                                                                                                                                                                            | `connectors.tick`                    | At start, then every minute                                                                |
 | Take a database snapshot, check it, and rotate old ones                                                                                                                                                                                  | `backup.startup`, `backup.scheduled` | 15 seconds after start, then every 24 hours by default                                     |
 | Purge trashed contacts after the retention period, 30 days by default                                                                                                                                                                    | `contacts.trashPurge`                | At start, then daily                                                                       |
+| Delete a merged-away contact once its merge can no longer be undone (90 days), and the merge log entries past that window                                                                                                                | `contacts.mergePurge`                | At start, then daily                                                                       |
+| Delete the files under an account's upload folder that no row uses, 2 days after they were written (31 for a link preview)                                                                                                               | `uploads.orphanSweep`                | A minute after start, then daily                                                           |
 | Delete expired and old rows (audit entries, sessions, sign-in links, revoked tokens, dead invitations, AI usage, finished imports, old score snapshots, OAuth states, connector runs, old events, finished jobs), and checkpoint the WAL | `maintenance.daily`                  | At start, then daily                                                                       |
 | Refresh the model lists of the AI providers                                                                                                                                                                                              | `ai.modelCatalogs`                   | At start, then daily                                                                       |
 | Run `PRAGMA optimize`                                                                                                                                                                                                                    | `database.plannerStats`              | Daily. Shutdown and each search index drain run it too.                                    |

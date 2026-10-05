@@ -124,7 +124,8 @@ const mergeClusterBodySchema = z
  * or empty is not refused: the answer lists it with nothing merged and each
  * of its duplicates counted as failed, beside the clusters that merged. A
  * value of the wrong type, such as a null primary or duplicates given as a
- * string, refuses the whole batch with 400.
+ * string, refuses the whole batch with 400, and so does a cluster whose
+ * primary is one of its own duplicates.
  */
 const mergeClustersBodySchema = z
   .object({
@@ -145,6 +146,15 @@ const mergeClustersBodySchema = z
         0,
       ) <= 250,
     { message: "Maximum 250 total merge operations per batch" },
+  )
+  .refine(
+    (body) =>
+      body.clusters.every(
+        (cluster) =>
+          !cluster.primaryId ||
+          !cluster.duplicateIds?.includes(cluster.primaryId),
+      ),
+    { message: "primaryId cannot appear in duplicateIds" },
   );
 
 // =============================================================================

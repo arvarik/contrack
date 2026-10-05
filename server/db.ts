@@ -230,7 +230,7 @@ export const OWNED_TABLES = [
 ] as const;
 
 /**
- * The admin that machine credentials and instance-wide work act as.
+ * The admin that instance-wide work acts as.
  *
  * Throws only if called before ensureLocalOwner has ever run, which the boot
  * order makes impossible.
@@ -283,8 +283,9 @@ export function assertVecVersion(version: string, minimum = [0, 1, 6]): void {
 // Four steps run on every start, after the migrations and the indexes,
 // because live code needs them and not only old rows:
 //
-// - §8, because POST /api/contacts still accepts `nextFollowUpAt`, and only
-//   this turns it into a task.
+// - §8, because earlier builds wrote `nextFollowUpAt` from POST and PATCH
+//   with no task, and this turns such a date into one. A write now makes the
+//   task itself (`followUpTo` in contactService).
 // - §9i, the ownership guard over the live OWNED_TABLES.
 // - ANALYZE and PRAGMA optimize, for the planner.
 // - §10, because ghost contacts from mentions and connectors are written with

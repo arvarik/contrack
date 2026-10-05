@@ -30,7 +30,11 @@ export type RouteClass =
   | "session-self"
   /** Reads or writes owned data for the caller's scope. */
   | "scoped"
-  /** requireAdmin. */
+  /**
+   * requireAdmin: an admin account with a signed-in session. A token is
+   * refused, an admin's included. The implicit local owner passes while
+   * sign-in is off.
+   */
   | "admin"
   /** Any authenticated caller, no owned data: /api/avatar/:style. */
   | "instance-read"
@@ -847,6 +851,8 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     isolated: false,
   },
   { method: "GET", path: "/api/geo/status", class: "scoped", isolated: true },
+  { method: "GET", path: "/api/geo/lookups", class: "admin", isolated: false },
+  { method: "PUT", path: "/api/geo/lookups", class: "admin", isolated: false },
   {
     method: "GET",
     path: "/api/imports",

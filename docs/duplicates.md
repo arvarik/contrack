@@ -219,8 +219,8 @@ it.
 - Tracking stays as the primary had it. If only the other contact was
   tracked, track the merged contact again.
 
-The other contact is hidden, not deleted, so you can undo the merge. One merge
-joins at most 11 contacts: the primary and 10 more.
+The other contact is hidden, not deleted, so you can undo the merge for 90
+days. One merge joins at most 11 contacts: the primary and 10 more.
 
 ## Undo a merge
 
@@ -231,9 +231,13 @@ joins at most 11 contacts: the primary and 10 more.
 **Merge activity** lists your latest 50 merges under **Today**,
 **Yesterday**, **This week**, and **Older**. Each entry says **Merged** or
 **Auto-merged**, the two names, when it happened, the confidence, and the
-reason. Every merge can be undone, the automatic ones too. A group merge adds
-one entry for each contact that merged in, so you undo it one contact at a
-time.
+reason. Every merge can be undone for 90 days, the automatic ones too. A
+group merge adds one entry for each contact that merged in, so you undo it one
+contact at a time.
+
+After 90 days the entry leaves **Merge activity**, and Contrack deletes the
+hidden contact and the files that only it used. The primary keeps everything
+the merge gave it, a photo too.
 
 **Undo** brings back the other contact with its own records. If you changed a
 moved record after the merge, your change stays on the primary, and the

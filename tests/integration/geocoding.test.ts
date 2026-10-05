@@ -72,6 +72,12 @@ describe("Geocoding Integration Tests", () => {
     expect(new Headers(init?.headers).get("User-Agent")).toMatch(
       /^ContrackCRM\//,
     );
+
+    vi.stubEnv("NOMINATIM_URL", "http://nominatim.internal:8080/");
+    await geocodeWithFallback("Paris");
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      "http://nominatim.internal:8080/search?format=json&limit=1&q=Paris",
+    );
   });
 });
 
@@ -115,6 +121,25 @@ describe("no answer, and the pace", () => {
     expect(starts[1] - starts[0]).toBeGreaterThanOrEqual(
       INTER_REQUEST_DELAY_MS,
     );
+  });
+
+  it("keeps looking up after one lookup throws", async () => {
+    vi.stubEnv("DISABLE_BACKGROUND_JOBS", "false");
+    const fetchMock = vi
+      .fn()
+      // A name that is not text cannot be cached, so the write throws.
+      .mockResolvedValueOnce(
+        Response.json([{ lat: "1", lon: "2", display_name: { odd: 1 } }]),
+      )
+      .mockResolvedValueOnce(Response.json([]));
+    vi.stubGlobal("fetch", fetchMock);
+
+    queueGeocode("throwing-contact", "Odd Place");
+    await vi.advanceTimersByTimeAsync(5_000);
+    queueGeocode("next-contact", "Viseu");
+    await vi.advanceTimersByTimeAsync(5_000);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("asks again after a wait when there is no answer, and caches nothing until then", async () => {

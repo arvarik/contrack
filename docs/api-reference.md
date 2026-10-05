@@ -26,10 +26,9 @@ Requests and responses are JSON unless an endpoint says otherwise. Send
 Sign-in is off by default. Every request then acts as the local owner, and you
 need no credential.
 
-Sign-in is on when `AUTH_REQUIRED=true` is set, or when the deprecated
-`API_TOKEN` is set. The server also turns it on by itself when an account with
-a password exists. Every `/api` and `/uploads` request then needs one of two
-credentials:
+Sign-in is on when `AUTH_REQUIRED=true` is set. The server also turns it on by
+itself when an account with a password exists. Every `/api` and `/uploads`
+request then needs one of two credentials:
 
 - **A personal token.** Send `Authorization: Bearer ctk_...`. Create one in
   **Settings → Account**, or with `POST /api/auth/tokens`. A token acts as
@@ -39,11 +38,13 @@ credentials:
   Google sign-in at `/api/connectors/google/`, which adds a connector.
 - **The session cookie.** The browser gets `contrack_session` when it signs in.
   The cookie is `HttpOnly` and `SameSite=Strict`. It is `Secure` when the
-  request arrived over HTTPS.
+  request arrived over HTTPS. A `POST`, `PUT`, `PATCH` or `DELETE` with the
+  cookie must come from this server's own pages. It gets
+  `403 CROSS_SITE_REQUEST` when its `Origin` names another host than the
+  request's own or `PUBLIC_URL`, or, with no `Origin`, when `Sec-Fetch-Site`
+  is `cross-site` or `same-site`.
 
-The environment `API_TOKEN` still works as a bearer token. It belongs to no
-account, acts as the first admin, and is removed in 3.0. A request with no
-valid credential gets `401 UNAUTHORIZED`.
+A request with no valid credential gets `401 UNAUTHORIZED`.
 
 An account whose password an admin set gets `403 PASSWORD_CHANGE_REQUIRED` on
 every route until it sets its own password. Six routes stay open for that
@@ -60,7 +61,7 @@ manifest, `server/tenancy/routeManifest.ts`.
 | public               | Anyone who can reach the port. No credential.                                                                                                                                                  |
 | your session         | You, for your own account. It needs the session cookie: a personal token gets `403 SESSION_REQUIRED`. With sign-in off, the local owner passes. The three preference routes also take a token. |
 | your data            | You, for the data your account owns. An id that belongs to another account answers `404` with the same body as an id that does not exist.                                                      |
-| admin                | An account with the admin role. Other accounts get `403 ADMIN_REQUIRED`. A personal token of an admin account works.                                                                           |
+| admin                | An account with the admin role, signed in. Other accounts get `403 ADMIN_REQUIRED`. A token gets `403 SESSION_REQUIRED`, an admin's too. With sign-in off, the local owner passes.             |
 | any signed-in caller | Any caller with a valid credential. The route reads no owned data.                                                                                                                             |
 | dev only             | Registered only when `NODE_ENV` is not `production`.                                                                                                                                           |
 
@@ -98,6 +99,7 @@ Every error uses one envelope:
 | `UNSUPPORTED_FILE_TYPE`    | 400    | The attachment type is not allowed.                              |
 | `UNAUTHORIZED`             | 401    | No valid credential.                                             |
 | `SESSION_REQUIRED`         | 403    | The route needs the session cookie, not a token.                 |
+| `CROSS_SITE_REQUEST`       | 403    | A change with the session cookie came from another site's page.  |
 | `ADMIN_REQUIRED`           | 403    | The route needs an admin account.                                |
 | `PASSWORD_CHANGE_REQUIRED` | 403    | Set your own password first.                                     |
 | `TOKEN_READ_ONLY`          | 403    | A read-only token sent a request that changes data.              |
@@ -254,7 +256,7 @@ works. Each route then checks what it needs.
 
 | Endpoint                                 | What it does                                                                                                                                                                                                                                                                                                                                         | Access |
 | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| `GET /api/auth/status`                   | Everything the sign-in screen needs: `authRequired`, `authenticated`, `setupRequired`, `hasAccounts`, `user`, `registrationOpen`, `mailConfigured`, `magicLinkSignIn`, `localOwnerPresent`, `legacyTokenConfigured`, `publicUrl`, `instanceName`, `deviceContacts`, and the basemap style URLs in `map`.                                             | public |
+| `GET /api/auth/status`                   | Everything the sign-in screen needs: `authRequired`, `authenticated`, `setupRequired`, `hasAccounts`, `user`, `registrationOpen`, `mailConfigured`, `magicLinkSignIn`, `localOwnerPresent`, `publicUrl`, `instanceName`, `deviceContacts`, and the basemap style URLs in `map`.                                                                      | public |
 | `POST /api/auth/setup`                   | Create the first account: `email`, `username`, `password`, `displayName`. The account is an admin and is signed in (`201 { user }`). On a used instance it takes over the local owner and keeps its data. `409 SETUP_COMPLETE` once an account with a password exists.                                                                               | public |
 | `POST /api/auth/login`                   | Sign in with `identifier` (username or email) and `password`. `remember: false` sets a cookie that ends with the browser. Answers `{ user }`. `401 INVALID_CREDENTIALS` for a wrong password and for an unknown account alike. `403 ACCOUNT_DISABLED` for a disabled account. With sign-in off it answers `{ "authRequired": false, "user": null }`. | public |
 | `POST /api/auth/logout`                  | End this session and clear the cookie.                                                                                                                                                                                                                                                                                                               | public |
@@ -539,6 +541,9 @@ How an import behaves:
   `409 IMPORT_ID_IN_USE` when another account used the id.
 - **A failed row.** The other rows save. The row keeps its error, and
   `POST /api/imports/:id/retry` runs it again.
+- **A stop part way.** Rows save in batches of 250. An import that stops
+  after a batch keeps what it saved. Its other rows become failed rows that a
+  retry runs, and its status is `imported`.
 - **Duplicates.** When your `dedupeOnImport` preference is on (the default), a
   check compares the new contacts with your contacts and with the rest of the
   file. Pairs at or above your sensitivity preset merge at once. The rest
@@ -679,6 +684,10 @@ curl -X PATCH http://localhost:3210/api/action-items/52b907e9-6f64-478a-8ec0-d16
 
 The answer is the follow-up with `completedAt` set. A contact's
 `nextFollowUpAt` always holds the earliest due date of its open follow-ups.
+A contact write (`POST`, `PUT`, `PATCH` or a bulk update) that sends
+`nextFollowUpAt` changes the follow-ups, and the field follows them. A date
+moves the earliest open follow-up to that date, or adds a "Follow up" when
+there is none. `null` completes the open follow-ups.
 
 ## Lists
 
@@ -977,12 +986,12 @@ with `details.queued`. The merge routes for two or more contacts are in
 
 ## Pulse
 
-| Endpoint                              | What it does                                                                                                                                                                                         | Access    |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `GET /api/dashboard`                  | The Pulse data: `overdue`, `dueToday`, `upcoming`, `ghosts`, `metrics`, `catchUp`, `tracking`, `recentlyAdded`, the composition lists, 30-day timelines, `hygiene`, `meetings` and `correspondents`. | your data |
-| `GET /api/dashboard/activity`         | Activity counts: 84 `days`, 12 `weekTotals` and `prevWeekTotals`, `streak`, `today` and `thisWeek`, in the server's time zone.                                                                       | your data |
-| `GET /api/dashboard/insight`          | The daily insight, written by AI. Answers `null` with no provider.                                                                                                                                   | your data |
-| `GET /api/command-palette/zero-state` | What the command palette shows before you type: `{ insights }`, such as follow-ups due, catch-ups and ghosts. No model runs.                                                                         | your data |
+| Endpoint                              | What it does                                                                                                                                                                                                                                                                                                           | Access    |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `GET /api/dashboard`                  | The Pulse data: `overdue`, `dueToday`, `upcoming`, `ghosts`, `metrics`, `catchUp`, `tracking`, `recentlyAdded`, the composition lists, 30-day timelines, `hygiene`, `meetings` and `correspondents`. `tz` is your IANA time zone, for the days of `overdue`, `dueToday` and `upcoming`. Without it, the server's zone. | your data |
+| `GET /api/dashboard/activity`         | Activity counts: 84 `days`, 12 `weekTotals` and `prevWeekTotals`, `streak`, `today` and `thisWeek`, in the server's time zone.                                                                                                                                                                                         | your data |
+| `GET /api/dashboard/insight`          | The daily insight, written by AI. Answers `null` with no provider.                                                                                                                                                                                                                                                     | your data |
+| `GET /api/command-palette/zero-state` | What the command palette shows before you type: `{ insights }`, such as follow-ups due, catch-ups and ghosts. No model runs.                                                                                                                                                                                           | your data |
 
 In `GET /api/dashboard`, `catchUp` lists up to ten tracked contacts past their
 cadence, the furthest first. `tracking` holds `count`, the score `bands`,
@@ -996,6 +1005,8 @@ snapshots exist.
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
 | `GET /api/geo/search`       | Find a place by name: `q` (2 to 120 characters). See the answers below. It reads no contacts.                                                                                    | any signed-in caller |
 | `GET /api/geo/status`       | Your contacts with address text and no pin: `{ contacts }`. See the rows below.                                                                                                  | your data            |
+| `GET /api/geo/lookups`      | Whether the server sends addresses to Nominatim: `{ off, lockedByEnv, host }`.                                                                                                   | admin                |
+| `PUT /api/geo/lookups`      | Turn address lookups off or on for every account: `{ off }`. `409 SET_BY_ENVIRONMENT` while `GEOCODING_DISABLED` holds them off or `NOMINATIM_URL` is not a URL.                 | admin                |
 | `GET /api/map/views`        | Your saved map views: `{ views }`.                                                                                                                                               | your data            |
 | `POST /api/map/views`       | Save a view: `name` (1 to 60 characters), `query` (up to 200), `layer` (`pins` or `heat`) and `bounds` `[west, south, east, north]`. `201`. `409 TOO_MANY_VIEWS` past 100 views. | your data            |
 | `PATCH /api/map/views/:id`  | Change `name`, `query`, `layer` or `bounds`. `sortOrder` moves the view to that place in the list (0 is first), and the others keep their order.                                 | your data            |
@@ -1010,13 +1021,14 @@ when the contact has no address text to read.
 A place search answers `{ query, lat, lng, provider, cached, displayName }`.
 `displayName` is the place Nominatim matched. `404 NO_RESULT` means nothing
 matches, and `503 GEOCODER_UNAVAILABLE` means Nominatim is busy or does not
-answer. A search that finds nothing is remembered for 7 days. A search that
-gets no answer is not.
+answer. With address lookups off, only the cache answers, and a search it
+cannot answer is `503 GEOCODING_OFF`. A search that finds nothing is
+remembered for 7 days. A search that gets no answer is not.
 
 Each row of `GET /api/geo/status` has `id`, `name`, `company`, `avatarUrl`,
 `location` (the text the geocoder reads), `isTracked`, `lat` and `lng` (both
-null), and `reason`: `pending` (not tried yet, or queued) or `not-found` (the
-geocoder found nothing).
+null), and `reason`: `pending` (not tried yet, or queued), `not-found` (the
+geocoder found nothing) or `off` (address lookups are off).
 
 ## Connectors
 
@@ -1106,7 +1118,7 @@ audit entry with the setting name, never its value.
 | Endpoint                         | What it does                                                                                                                                                                | Access               |
 | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
 | `GET /api/ai/instance`           | Whether AI is off for the instance: `{ aiOff, lockedByEnv }`.                                                                                                               | any signed-in caller |
-| `GET /api/ai/stats/summary`      | Your AI usage: calls, cached calls, tokens and an estimated cost. An admin also sees the cache tiers, and `?scope=all` gives the whole instance.                            | your data            |
+| `GET /api/ai/stats/summary`      | Your AI usage: calls, cached calls, tokens and an estimated cost. An admin also sees the cache tiers, and `?scope=all` gives a signed-in admin the whole instance.          | your data            |
 | `GET /api/ai/stats/feed`         | Your AI calls, newest first: `offset`, `limit`, `operation` (a comma list), `cached` (`true` or `false`) and `sort` (`newest` or `oldest`). An admin can send `?scope=all`. | your data            |
 | `GET /api/ai/diagnostics`        | What `quick`, `deep` and `research` resolve to, Gemini's usage meter and the paused Gemini models.                                                                          | admin                |
 | `GET /api/ai/grounding-capacity` | Whether contact research can run now: `{ hasCapacity, provider, researchRuns24h }`.                                                                                         | admin                |
@@ -1126,7 +1138,7 @@ tools, see [Connect a client](mcp.md#connect-a-client).
 | `GET /api/mcp`                   | Answers `405` with `Allow: POST`.                                                                                                                                                                                            | your data |
 | `DELETE /api/mcp`                | Answers `405` with `Allow: POST`.                                                                                                                                                                                            | your data |
 | `GET /api/query/contacts`        | Your contacts as raw rows, newest first. Filters `role` and `company` (contains) and `industry` (exact). `fields` is a comma list of columns to keep. `limit` and `offset`. Trashed, merged and ghost contacts are left out. | your data |
-| `GET /api/contacts/action-items` | Your contacts that are due for contact: a follow-up date that has come, or a tracked contact past its cadence. Answers full contacts.                                                                                        | your data |
+| `GET /api/contacts/action-items` | Your contacts that are due for contact: a follow-up date that has come, or a tracked contact past its cadence, by the rule Pulse uses. Archived, trashed, merged and ghost contacts are left out. Answers full contacts.     | your data |
 
 An MCP client and a script share the token rules: a token reads and writes the
 data of the account that created it.

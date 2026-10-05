@@ -7,9 +7,14 @@ import { contactRepo } from "../../repositories/contactRepository.ts";
 import type { Scope } from "../../tenancy/scope.ts";
 import { normalizePhone } from "../../utils/nlp/index.ts";
 import { recordMergeUnsafe } from "./suggestions.ts";
-import { ConflictError, NotFoundError } from "../../utils/AppError.ts";
+import {
+  ConflictError,
+  NotFoundError,
+  ValidationError,
+} from "../../utils/AppError.ts";
 import { dispatchEvents, recordEvent } from "../../events/index.ts";
 import type { ContactRow, MergeSnapshotData } from "./types.ts";
+import { recomputeLastContacted } from "../lastContacted.ts";
 
 /**
  * Load both sides of a merge in one statement that names the owner.
@@ -104,6 +109,12 @@ export function executeMerge(
   options: ExecuteMergeOptions,
 ) {
   const { mergedBy, confidence, reasoning, rid } = options;
+
+  // A contact merged into itself points its canonicalId at itself and leaves
+  // every list. Each route's schema refuses it too, and this is the floor.
+  if (primaryId === duplicateId) {
+    throw new ValidationError("Cannot merge a contact with itself");
+  }
 
   const { primary, duplicate } = loadMergePair(scope, primaryId, duplicateId);
 
@@ -266,6 +277,9 @@ export function executeMerge(
         )
         .run(primaryId, duplicateId, scope.ownerId);
     }
+    // `lastContactedAt` follows the interactions: the survivor's is the
+    // newest of the pair, and the duplicate keeps none.
+    recomputeLastContacted(scope, [primaryId, duplicateId]);
 
     // Interaction mentions
     const primaryMentions = sqlite

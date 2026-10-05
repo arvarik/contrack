@@ -119,7 +119,6 @@ beforeAll(() => {
 
 afterAll(() => {
   delete process.env.AUTH_REQUIRED;
-  delete process.env.API_TOKEN;
   resetAccounts();
   sqlite.exec(`DELETE FROM audit_log; DELETE FROM invitations;`);
   __resetAuthWarnings();
@@ -192,6 +191,17 @@ describe("a personal token", () => {
       (c: { name: string }) => c.name,
     );
     expect(names).toEqual(["tokenmember Contact"]);
+  });
+
+  it("writes whatever Origin it carries, since no page sends a token itself", async () => {
+    const secret = await mintToken(other);
+    const res = await withToken(secret)(
+      request(app)
+        .patch("/api/auth/preferences")
+        .set("Origin", "https://other-app.example.com")
+        .send({ tempUnit: "fahrenheit" }),
+    );
+    expect(res.status, JSON.stringify(res.body)).toBe(200);
   });
 
   it("acts as its own account on every MCP route", async () => {
@@ -589,7 +599,7 @@ describe("instance settings", () => {
 });
 
 // =============================================================================
-// 3.11 and 3.12 Status, profile, and the environment token
+// 3.11 and 3.12 Status and profile
 // =============================================================================
 
 describe("what the status endpoint reports", () => {
@@ -599,17 +609,11 @@ describe("what the status endpoint reports", () => {
     admin = await freshInstance("statusadmin");
   });
 
-  afterAll(() => {
-    delete process.env.API_TOKEN;
-    __resetAuthWarnings();
-  });
-
   it("says the local owner is gone once the instance is secured", async () => {
     const res = await request(app).get("/api/auth/status");
     // Setup converts the local owner rather than adding a second account, so
     // a secured instance has none.
     expect(res.body.localOwnerPresent).toBe(false);
-    expect(res.body.legacyTokenConfigured).toBe(false);
   });
 
   it("says how the caller proved who they are", async () => {
@@ -622,24 +626,6 @@ describe("what the status endpoint reports", () => {
       credentialState: "password",
       mustChangePassword: false,
     });
-  });
-
-  it("reports the deprecated environment token, and it acts as the first admin", async () => {
-    process.env.API_TOKEN = "an-instance-wide-secret";
-    __resetAuthWarnings();
-    try {
-      const status = await request(app).get("/api/auth/status");
-      expect(status.body.legacyTokenConfigured).toBe(true);
-
-      const res = await request(app)
-        .get("/api/auth/status")
-        .set("Authorization", "Bearer an-instance-wide-secret");
-      expect(res.body.user.id).toBe(admin.id);
-      expect(res.body.authenticated).toBe(true);
-    } finally {
-      delete process.env.API_TOKEN;
-      __resetAuthWarnings();
-    }
   });
 });
 
@@ -666,7 +652,8 @@ describe("the instance view of AI usage", () => {
     insert.run(crypto.randomUUID(), "member asked about Beta", member.id);
   });
 
-  it("refuses a member who asks for the instance", async () => {
+  it("refuses a member, and an admin's token, that ask for the instance", async () => {
+    const token = await mintToken(admin);
     for (const url of [
       "/api/ai/stats/summary?scope=all",
       "/api/ai/stats/feed?scope=all",
@@ -674,6 +661,9 @@ describe("the instance view of AI usage", () => {
       const res = await as(member)(request(app).get(url));
       expect(res.status, url).toBe(403);
       expect(res.body.error.code).toBe("ADMIN_REQUIRED");
+      const byToken = await withToken(token)(request(app).get(url));
+      expect(byToken.status, url).toBe(403);
+      expect(byToken.body.error.code).toBe("SESSION_REQUIRED");
     }
   });
 

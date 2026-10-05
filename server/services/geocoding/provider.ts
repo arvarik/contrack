@@ -1,5 +1,6 @@
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
+import { nominatimBaseUrl } from "./switch.ts";
 
 // Nominatim's usage policy allows at most one request a second.
 export const INTER_REQUEST_DELAY_MS = 1100;
@@ -30,8 +31,9 @@ async function takeTurn(): Promise<void> {
 }
 
 /**
- * Resolve an address with Nominatim. Nothing found drops the first comma part
- * and tries the rest, up to four queries. No answer stops at once.
+ * Resolve an address with Nominatim (NOMINATIM_URL, or the public server).
+ * Nothing found drops the first comma part and tries the rest, up to four
+ * queries. No answer stops at once. The log names no address.
  */
 export async function geocodeWithFallback(
   location: string,
@@ -48,12 +50,14 @@ export async function geocodeWithFallback(
 }
 
 async function geocodeSingle(query: string): Promise<GeoOutcome> {
+  const base = nominatimBaseUrl();
+  if (!base) return { status: "error" };
   await takeTurn();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 10_000);
 
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
+    const url = `${base}/search?format=json&limit=1&q=${encodeURIComponent(query)}`;
     const res = await fetch(url, {
       signal: controller.signal,
       headers: {
@@ -64,10 +68,7 @@ async function geocodeSingle(query: string): Promise<GeoOutcome> {
       },
     });
     if (!res.ok) {
-      log.warn(
-        "Geocode",
-        `Nominatim returned HTTP ${res.status} for "${query}"`,
-      );
+      log.warn("Geocode", `Nominatim answered HTTP ${res.status}`);
       return { status: "error" };
     }
     const hit = (await res.json())?.[0];
@@ -80,7 +81,7 @@ async function geocodeSingle(query: string): Promise<GeoOutcome> {
       displayName: hit.display_name,
     };
   } catch (err: unknown) {
-    log.error("Geocode", `API error for "${query}": ${getErrorMessage(err)}`);
+    log.error("Geocode", `Nominatim did not answer: ${getErrorMessage(err)}`);
     return { status: "error" };
   } finally {
     clearTimeout(timeoutId);

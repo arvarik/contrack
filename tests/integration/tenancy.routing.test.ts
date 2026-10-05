@@ -22,17 +22,26 @@ describe("GET /api/contacts/action-items", () => {
     // mcpService.getActionItems() answers "who is due for follow-up", so a
     // contact with a past nextFollowUpAt must appear. That proves the MCP
     // handler ran, not merely that some handler returned an array.
+    const due = { nextFollowUpAt: "2020-01-01" };
     const created = await request(app)
       .post("/api/contacts")
-      .send({ name: "Ada Lovelace", nextFollowUpAt: "2020-01-01" });
+      .send({ name: "Ada Lovelace", ...due });
     expect(created.status).toBe(201);
+    // Neither an archived contact nor one in the trash is due, as on Pulse.
+    const archived = await request(app)
+      .post("/api/contacts")
+      .send({ name: "Archived Due", isArchived: true, ...due });
+    const trashed = await request(app)
+      .post("/api/contacts")
+      .send({ name: "Trashed Due", ...due });
+    await request(app).delete(`/api/contacts/${trashed.body.id}`).expect(200);
 
     const res = await request(app).get("/api/contacts/action-items");
     expect(res.status).toBe(200);
-    const mine = (res.body as { id?: string }[]).find(
-      (r) => r.id === created.body.id,
-    );
-    expect(mine).toBeTruthy();
+    const ids = (res.body as { id?: string }[]).map((r) => r.id);
+    expect(ids).toContain(created.body.id);
+    expect(ids).not.toContain(archived.body.id);
+    expect(ids).not.toContain(trashed.body.id);
   });
 });
 

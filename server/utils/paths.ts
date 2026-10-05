@@ -74,8 +74,9 @@ export function ensureDir(dir: string): void {
  * attempts like `/uploads/avatars/../../etc/passwd`, which normalize to a
  * path outside the uploads root.
  *
- * Every unlink/read of a stored upload URL MUST go through this function;
- * these columns are user-writable via the contact update endpoints.
+ * Every read of a stored upload URL MUST go through this function, and every
+ * delete through `resolveOwnUploadPath`: these columns are user-writable via
+ * the contact update endpoints, and uploads/ holds every account's files.
  */
 export function resolveUploadPath(urlPath: string): string | null {
   if (!urlPath.startsWith("/uploads/")) return null;
@@ -85,4 +86,26 @@ export function resolveUploadPath(urlPath: string): string | null {
     return null;
   }
   return abs;
+}
+
+/**
+ * Resolve a stored `/uploads/...` URL only when it is inside this owner's own
+ * folder, `uploads/u/<ownerId>/`, or inside its `kind` folder when one is
+ * named. Null for anything else.
+ *
+ * `resolveUploadPath` keeps a path inside `uploads/`, and that folder holds
+ * every account's files. A contact's `avatarUrl` of
+ * `/uploads/u/<another owner>/avatars/../files/<file>` passed it, and a photo
+ * upload then deleted the other account's attachment.
+ */
+export function resolveOwnUploadPath(
+  ownerId: string,
+  urlPath: string,
+  kind?: OwnerUploadKind,
+): string | null {
+  const abs = resolveUploadPath(urlPath);
+  const dir = kind
+    ? ownerUploadDir(ownerId, kind)
+    : path.join(UPLOADS_DIR, "u", assertOwnerId(ownerId));
+  return abs !== null && abs.startsWith(dir + path.sep) ? abs : null;
 }

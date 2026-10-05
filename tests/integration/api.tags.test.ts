@@ -27,6 +27,15 @@ describe("Tags API", () => {
     expect(typeof res.body[0]).toBe("string");
   });
 
+  it("keeps one row for a tag sent again in another case", async () => {
+    const created = await request(app)
+      .post("/api/contacts")
+      .send({ name: "Tag Twice", tags: ["dup", "dup", "Dup"] });
+    expect(created.body.tags.map((t: { tag: string }) => t.tag)).toEqual([
+      "dup",
+    ]);
+  });
+
   it("GET /api/tags/summary returns tag objects with contact counts", async () => {
     await request(app)
       .post("/api/contacts")

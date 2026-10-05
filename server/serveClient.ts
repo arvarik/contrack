@@ -9,6 +9,24 @@ import express, { type Express } from "express";
 /** Stops what `serveClient` started. */
 export type CloseClient = () => Promise<void>;
 
+/** The addresses that only this machine can reach. */
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
+
+/**
+ * Refuse to run the development server on an address other machines reach.
+ *
+ * Vite's middleware serves the files under the project folder, and without
+ * `DATA_DIR` the database is one of them: `GET /curator.db` answered with the
+ * whole database and no sign-in. `server.fs.deny` in `vite.config.ts` refuses
+ * the data files too. The production build serves `dist/` only.
+ */
+export function assertDevHost(host: string, production: boolean): void {
+  if (production || LOOPBACK_HOSTS.has(host.toLowerCase())) return;
+  throw new Error(
+    `HOST is "${host}", and the development server listens on this machine only. To serve other machines, run the production build: npm run build, then NODE_ENV=production node server.ts`,
+  );
+}
+
 /**
  * Serve the web app on `app`, which `server` listens for.
  *

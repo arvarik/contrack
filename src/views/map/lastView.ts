@@ -87,3 +87,12 @@ export function writeLastView(view: MapViewState): void {
     // A full or read-only store. The map still works, it only forgets.
   }
 }
+
+/** Forget the view, at sign-out: it shows where the map was looking. */
+export function clearLastView(): void {
+  try {
+    viewStore()?.removeItem(LAST_VIEW_KEY);
+  } catch {
+    // A read-only store keeps it.
+  }
+}

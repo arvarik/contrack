@@ -10,9 +10,9 @@
 
 import { Router, type Request } from "express";
 import { z } from "zod";
-import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { scopeOf } from "../tenancy/scope.ts";
+import { adminRefusal } from "../middleware/auth.ts";
 import {
   getSummary,
   getFeed,
@@ -29,14 +29,14 @@ const router = Router();
  * `?scope=all` is an admin read, and `requireAdmin` cannot sit on the route
  * because the same route without the parameter is every member's own billing
  * page. The manifest classes both routes `scoped` for that reason and the
- * check happens here, on the one shape that crosses accounts.
+ * check happens here, on the one shape that crosses accounts. It is the same
+ * check as `requireAdmin`, so an admin's token cannot read it either.
  */
 function wantsInstance(req: Request): boolean {
   if (req.query.scope !== "all") return false;
-  if (req.principal?.user.role === "admin") return true;
-  throw new AppError("Instance-wide AI usage needs an admin account.", 403, {
-    code: "ADMIN_REQUIRED",
-  });
+  const refused = adminRefusal(req);
+  if (refused) throw refused;
+  return true;
 }
 
 // =============================================================================

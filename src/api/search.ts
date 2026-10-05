@@ -330,7 +330,7 @@ interface InteractionSearchParams {
 }
 
 /** The browser's IANA zone, so "last month" is the reader's month. */
-function browserTimeZone(): string | undefined {
+export function browserTimeZone(): string | undefined {
   try {
     return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
   } catch {

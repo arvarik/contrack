@@ -34,12 +34,11 @@ describe("Scope", () => {
   });
 
   // Phase 1 made every principal a user, so `via` is what separates them and
-  // all four carry an owner.
+  // all three carry an owner.
   it.each([
     ["session", { via: "session", sessionId: "s" }],
     ["token", { via: "token", tokenId: "t" }],
     ["implicit", { via: "implicit" }],
-    ["legacy-env-token", { via: "legacy-env-token" }],
   ])("derives a scope from a %s principal", (_label, extra) => {
     const req = {
       principal: { kind: "user", user: { id: UUID }, ...extra },

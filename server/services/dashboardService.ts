@@ -6,12 +6,15 @@ import { log } from "../utils/logger.ts";
 import { actionItemService } from "./actionItemService.ts";
 import { generateDailyInsight, type DailyInsight } from "../ai/aiService.ts";
 import { aiCache, ownerKey } from "../utils/aiCache.ts";
-import { startOfDay, isBefore, isSameDay, isAfter, addDays } from "date-fns";
 import type { ActionItem } from "../../src/types.ts";
 import type { Scope } from "../tenancy/scope.ts";
 import { searchRevision } from "./searchService.ts";
 import { RequestCoalescer } from "../utils/requestCoalescer.ts";
-import { isoWeekStart } from "../../shared/dates.ts";
+import {
+  addCalendarDays,
+  dayInZone,
+  isoWeekStart,
+} from "../../shared/dates.ts";
 import {
   toLocalDay,
   computeStreak,
@@ -65,26 +68,28 @@ export const dashboardService = {
    * than reaching through the contact subselect, which is what
    * `idx_interactions_owner_date` is for.
    */
-  getDashboardPayload(scope: Scope) {
+  getDashboardPayload(scope: Scope, timeZone?: string) {
     const startMs = Date.now();
 
-    // 1. Action Items categorized
+    // 1. Action Items categorized, by the day on the reader's calendar. The
+    // server's own zone is UTC in Docker, so at 18:00 in UTC-7 a task due
+    // today read as overdue. A date with no time is that day in every zone.
     const allPending = actionItemService.getAllPending(scope) as ActionItem[];
-    const today = startOfDay(new Date());
-    const weekFromNow = addDays(today, 7);
+    const today = dayInZone(new Date(), timeZone)!;
+    const weekFromNow = addCalendarDays(today, 7);
 
     const overdue: ActionItem[] = [];
     const dueToday: ActionItem[] = [];
     const upcoming: ActionItem[] = [];
 
     for (const item of allPending) {
-      if (!item.dueAt) continue;
-      const due = startOfDay(new Date(item.dueAt));
-      if (isBefore(due, today)) {
+      const due = item.dueAt ? dayInZone(item.dueAt, timeZone) : null;
+      if (!due) continue;
+      if (due < today) {
         overdue.push(item);
-      } else if (isSameDay(due, today)) {
+      } else if (due === today) {
         dueToday.push(item);
-      } else if (isAfter(due, today) && !isAfter(due, weekFromNow)) {
+      } else if (due <= weekFromNow) {
         upcoming.push(item);
       }
     }
@@ -653,14 +658,19 @@ export const dashboardService = {
     const todayEntry = dayMap.get(todayStr);
     const loggedToday = todayEntry ? todayEntry.count : 0;
 
+    // The server's local day, as for the rest of this payload. An instant is
+    // moved to that day with 'localtime'. A due date with no time is a day
+    // already, and 'localtime' would move it to the day before west of UTC.
+    // Each count used to OR the UTC day in as well, so a task due tomorrow
+    // here could count as today.
     const completedToday = (
       sqlite
         .prepare(
           `SELECT COUNT(*) as count FROM action_items
             WHERE ownerId = ? AND completedAt IS NOT NULL
-              AND (date(completedAt, 'localtime') = ? OR date(completedAt) = ?)`,
+              AND date(completedAt, 'localtime') = ?`,
         )
-        .get(scope.ownerId, todayStr, todayStr) as { count: number }
+        .get(scope.ownerId, todayStr) as { count: number }
     ).count;
 
     const dueToday = (
@@ -668,9 +678,10 @@ export const dashboardService = {
         .prepare(
           `SELECT COUNT(*) as count FROM action_items
             WHERE ownerId = ? AND completedAt IS NULL
-              AND (date(dueAt, 'localtime') = ? OR date(dueAt) = ?)`,
+              AND (CASE WHEN length(dueAt) = 10 THEN dueAt
+                        ELSE date(dueAt, 'localtime') END) = ?`,
         )
-        .get(scope.ownerId, todayStr, todayStr) as { count: number }
+        .get(scope.ownerId, todayStr) as { count: number }
     ).count;
 
     // thisWeek: logged, byType (starts on ISO week Monday)

@@ -35,8 +35,7 @@ Until the first account exists, Contrack refuses every request for data.
 After that, a person signs in, and a script uses a personal token. Only the
 health check and the app's own page load without either. Once an account with
 a password exists, sign-in stays on, even if `AUTH_REQUIRED` is false. The
-server log says so at start. The deprecated `API_TOKEN` variable also turns
-sign-in on, see [MCP and API tokens](mcp.md#keep-your-tokens-safe).
+server log says so at start.
 
 ## First setup
 
@@ -249,8 +248,10 @@ The same page holds the Trash, backup, and Google settings, see
 **Settings → Administration → Audit log** lists every administrative action
 and every sign-in, newest first. Filter it with **Everything**, **Accounts**,
 **Invitations**, **Sign-in**, or **Tokens**. **Load more** shows older
-entries. The log never holds a password, a token, or an invitation secret.
-Contrack deletes an entry after 90 days.
+entries. The log never holds a password, a token, or an invitation secret. A
+failed sign-in records whether the name typed matched an account, and which
+account, never the text typed, so a password typed into the wrong field does
+not reach the log. Contrack deletes an entry after 90 days.
 
 ### What keeps an instance administrable
 
@@ -260,6 +261,8 @@ Contrack deletes an entry after 90 days.
   another account first.
 - An admin cannot reset the password of, disable, or delete their own
   account. Ask another admin.
+- Administration needs you signed in. An API token or an MCP client cannot
+  use it, even an admin's.
 
 ## Outgoing mail
 

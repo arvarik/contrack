@@ -24,6 +24,14 @@
 // keeps its payload, and `retry` runs those rows again without the browser
 // re-sending the file. A row that succeeds keeps only its contact id.
 //
+// The contacts are written in batches, each its own transaction, so a large
+// file does not hold the database, and every other request, for the whole
+// write. Every row is first recorded as `pending`, with its payload. A run
+// that stops part way, by an error or a process death, has committed some
+// batches and not the rest: the rows it never reached become `failed`, with
+// their payloads, and the import is `imported` with what it saved. Nothing is
+// lost and nothing is written twice. A run that committed nothing is `failed`.
+//
 // @module server/services/importService
 // =============================================================================
 
@@ -131,6 +139,10 @@ const live = new Map<string, { ownerId: string }>();
 const INTERRUPTED_BEFORE_COMMIT =
   "The import was interrupted before any contact was saved.";
 
+/** The error of a row that a stopped import never reached. */
+const INTERRUPTED_BEFORE_ROW =
+  "The import was interrupted before this row was saved.";
+
 /** A second request for an import this process is still running. */
 function inProgress(id: string): AppError {
   return new AppError("This import is already running.", 409, {
@@ -177,6 +189,20 @@ const _stmts = {
     ON CONFLICT(importId, rowIndex) DO UPDATE SET
       status = 'done', contactId = excluded.contactId, name = excluded.name,
       error = NULL, payload = NULL
+  `),
+
+  /**
+   * A row the import is about to write, with its payload. A batch turns it
+   * `done` or `failed`. A run that stops first leaves it here, and
+   * `settle` makes it `failed`, so a retry can still run it.
+   */
+  rowPending: sqlite.prepare(`
+    INSERT INTO import_rows (importId, rowIndex, status, contactId, name, error, payload)
+    SELECT ?, ?, 'pending', NULL, ?, NULL, ?
+     WHERE EXISTS (SELECT 1 FROM imports WHERE id = ? AND ownerId = ?)
+    ON CONFLICT(importId, rowIndex) DO UPDATE SET
+      status = 'pending', contactId = NULL, name = excluded.name,
+      error = NULL, payload = excluded.payload
   `),
 
   rowFailed: sqlite.prepare(`
@@ -229,6 +255,31 @@ const _stmts = {
      WHERE id = ? AND ownerId = ? AND status = 'running'
   `),
 
+  /** How many of the import's rows are saved. */
+  rowCounts: sqlite.prepare(`
+    SELECT COALESCE(SUM(r.status = 'done'), 0) AS done
+      FROM import_rows r
+      JOIN imports i ON i.id = r.importId
+     WHERE i.id = ? AND i.ownerId = ?
+  `),
+
+  /** The rows a stopped run never reached. They keep their payloads. */
+  pendingToFailed: sqlite.prepare(`
+    UPDATE import_rows SET status = 'failed', error = ?
+     WHERE importId = ? AND status = 'pending'
+       AND EXISTS (SELECT 1 FROM imports WHERE id = ? AND ownerId = ?)
+  `),
+
+  /**
+   * A run that saved no contact keeps no rows, so a new run starts clean.
+   * Only for an import with no `done` row, so this is every row it has.
+   */
+  dropRows: sqlite.prepare(`
+    DELETE FROM import_rows
+     WHERE importId = ? AND status != 'done'
+       AND EXISTS (SELECT 1 FROM imports WHERE id = ? AND ownerId = ?)
+  `),
+
   rows: sqlite.prepare(`
     SELECT r.rowIndex, r.status, r.name, r.error, r.contactId
       FROM import_rows r
@@ -259,25 +310,35 @@ const _stmts = {
    *
    * Read from the suggestions table rather than carried back from the scan,
    * so a resumed check and a retried one add up the same way a fresh one
-   * does. A pair is counted once whichever side of it the import wrote.
+   * does. A pair is counted once whichever side of it the import wrote: the
+   * UNION drops the second copy of a pair whose two contacts it wrote.
+   *
+   * It starts from the import's rows and finds each row's suggestions by
+   * one side and then the other, through the UNIQUE index on contactIdA and
+   * `idx_dedupe_sugg_contact_b`. The cost follows the size of the import.
+   * It used to start from every suggestion of the account and compare each
+   * with every row (`r.contactId IN (s.contactIdA, s.contactIdB)`, which no
+   * index serves): 1.3 s at 14,000 suggestions, run every 50 rows.
    */
   matches: sqlite.prepare(`
+    WITH touched AS (
+      SELECT s.id, s.status FROM import_rows r
+        JOIN dedupe_suggestions s ON s.contactIdA = r.contactId
+       WHERE r.importId = ? AND r.status = 'done' AND s.ownerId = ?
+      UNION
+      SELECT s.id, s.status FROM import_rows r
+        JOIN dedupe_suggestions s ON s.contactIdB = r.contactId
+       WHERE r.importId = ? AND r.status = 'done' AND s.ownerId = ?
+    )
     SELECT
-      (SELECT COUNT(*) FROM dedupe_suggestions s
-        WHERE s.ownerId = ? AND s.status = 'auto_merged'
-          AND EXISTS (SELECT 1 FROM import_rows r
-                       WHERE r.importId = ? AND r.status = 'done'
-                         AND r.contactId IN (s.contactIdA, s.contactIdB))) AS autoMerged,
-      (SELECT COUNT(*) FROM dedupe_suggestions s
-        WHERE s.ownerId = ? AND s.status = 'pending'
-          AND EXISTS (SELECT 1 FROM import_rows r
-                       WHERE r.importId = ? AND r.status = 'done'
-                         AND r.contactId IN (s.contactIdA, s.contactIdB))) AS needsReview,
+      (SELECT COUNT(*) FROM touched WHERE status = 'auto_merged') AS autoMerged,
+      (SELECT COUNT(*) FROM touched WHERE status = 'pending') AS needsReview,
       (SELECT COUNT(*) FROM import_rows r
         WHERE r.importId = ? AND r.status = 'done'
-          AND EXISTS (SELECT 1 FROM dedupe_suggestions s
-                       WHERE s.ownerId = ?
-                         AND r.contactId IN (s.contactIdA, s.contactIdB))) AS matched
+          AND (EXISTS (SELECT 1 FROM dedupe_suggestions s
+                        WHERE s.contactIdA = r.contactId AND s.ownerId = ?)
+            OR EXISTS (SELECT 1 FROM dedupe_suggestions s
+                        WHERE s.contactIdB = r.contactId AND s.ownerId = ?))) AS matched
   `),
 
   /**
@@ -290,9 +351,14 @@ const _stmts = {
   clearPending: sqlite.prepare(`
     DELETE FROM dedupe_suggestions
      WHERE ownerId = ? AND status = 'pending'
-       AND EXISTS (SELECT 1 FROM import_rows r
-                    WHERE r.importId = ? AND r.status = 'done'
-                      AND r.contactId IN (dedupe_suggestions.contactIdA, dedupe_suggestions.contactIdB))
+       AND id IN (
+         SELECT s.id FROM import_rows r
+           JOIN dedupe_suggestions s ON s.contactIdA = r.contactId
+          WHERE r.importId = ? AND r.status = 'done'
+         UNION ALL
+         SELECT s.id FROM import_rows r
+           JOIN dedupe_suggestions s ON s.contactIdB = r.contactId
+          WHERE r.importId = ? AND r.status = 'done')
   `),
 
   list: sqlite.prepare(`
@@ -339,6 +405,55 @@ function read(scope: Scope, id: string): ImportTableRow | undefined {
   return _stmts.get.get(id, scope.ownerId) as ImportTableRow | undefined;
 }
 
+/**
+ * Make the record agree with its rows, for an import nobody is running.
+ *
+ * A record whose phase is still `importing` was being written when its run
+ * stopped: a fresh run (`running`), or a retry of an import that was
+ * already `imported` or `complete`. The batches it committed are there and
+ * the rest are not. When a fresh run saved no contact, the import failed
+ * and keeps no rows. Otherwise the rows it never reached become `failed`,
+ * the counts are taken from the rows, and the import is `imported`, so its
+ * duplicate check runs for what it saved.
+ *
+ * @returns true when the record changed.
+ */
+function settle(scope: Scope, row: ImportTableRow, error: string): boolean {
+  const writing = row.status === "running" || row.phase === "importing";
+  if (!writing || live.has(row.id)) return false;
+  sqlite.transaction(() => {
+    const counts = _stmts.rowCounts.get(row.id, scope.ownerId) as {
+      done: number;
+    };
+    if (row.status === "running" && counts.done === 0) {
+      _stmts.dropRows.run(row.id, row.id, scope.ownerId);
+      _stmts.fail.run(error, row.id, scope.ownerId);
+      return;
+    }
+    _stmts.pendingToFailed.run(
+      error === INTERRUPTED_BEFORE_COMMIT ? INTERRUPTED_BEFORE_ROW : error,
+      row.id,
+      row.id,
+      scope.ownerId,
+    );
+    _stmts.markImported.run(row.id, scope.ownerId);
+  })();
+  return true;
+}
+
+/** The suggestions that name this import's contacts, by status. */
+function countMatches(
+  scope: Scope,
+  id: string,
+): { autoMerged: number; needsReview: number; matched: number } {
+  const owner = scope.ownerId;
+  return _stmts.matches.get(id, owner, id, owner, id, owner, owner) as {
+    autoMerged: number;
+    needsReview: number;
+    matched: number;
+  };
+}
+
 // ---------------------------------------------------------------------------
 // The service
 // ---------------------------------------------------------------------------
@@ -359,15 +474,19 @@ export const importService = {
     total: number,
     message: string,
   ): { record: ImportRecord; repeated: boolean } {
-    const existing = read(scope, id);
+    let existing = read(scope, id);
     if (existing) {
       if (existing.status === "running" && live.has(id)) {
         throw inProgress(id);
       }
+      // A run that died part way kept what it saved, and is not run again.
+      if (settle(scope, existing, INTERRUPTED_BEFORE_COMMIT)) {
+        existing = read(scope, id)!;
+      }
       if (existing.status === "imported" || existing.status === "complete") {
         return { record: toRecord(existing), repeated: true };
       }
-      // `failed`, or `running` with nobody running it: nothing was written.
+      // `failed`: nothing was written.
       _stmts.restart.run(message, total, id, scope.ownerId);
       live.set(id, { ownerId: scope.ownerId });
       return { record: toRecord(read(scope, id)!), repeated: false };
@@ -393,11 +512,36 @@ export const importService = {
     return crypto.randomUUID();
   },
 
-  // -- Called from inside the import transaction --------------------------
+  /**
+   * Record every row of a fresh run as `pending`, with its payload, before
+   * the first batch. A retry needs no such step: its rows are `failed`
+   * already, with their payloads.
+   */
+  recordPending(
+    scope: Scope,
+    id: string,
+    rows: { index: number; payload: NewContactPayload }[],
+  ): void {
+    sqlite.transaction(() => {
+      for (const { index, payload } of rows) {
+        _stmts.rowPending.run(
+          id,
+          index,
+          payload.name,
+          JSON.stringify(payload),
+          id,
+          scope.ownerId,
+        );
+      }
+    })();
+  },
+
+  // -- Called from inside an import batch ---------------------------------
   //
-  // These three run inside `contactService.bulkCreateContacts`'s transaction,
-  // so the rows and the status commit with the contacts or not at all. A
-  // record can never say `imported` about contacts that are not there.
+  // These three run inside the transactions of
+  // `contactService.bulkCreateContacts`, so each row commits with its
+  // contact or not at all, and `markImported` commits with the last batch.
+  // A record can never say `imported` about contacts that are not there.
 
   rowDone(
     scope: Scope,
@@ -439,10 +583,14 @@ export const importService = {
     _stmts.progress.run(processed, id, scope.ownerId);
   },
 
-  /** The run threw before it committed. */
+  /**
+   * The run threw. With nothing saved the import failed. With some batches
+   * saved, the rows it did not reach keep this error and can be retried.
+   */
   fail(scope: Scope, id: string, error: string): void {
-    _stmts.fail.run(error, id, scope.ownerId);
     live.delete(id);
+    const row = read(scope, id);
+    if (row) settle(scope, row, error);
   },
 
   /**
@@ -503,7 +651,7 @@ export const importService = {
         send?.({ phase: "scanning", message });
         // A resumed check may be running over pairs a dead one already
         // wrote. Pending rows are cleared and found again; merged ones stand.
-        _stmts.clearPending.run(scope.ownerId, id);
+        _stmts.clearPending.run(scope.ownerId, id, id);
         let autoMerged = 0;
         let needsReview = 0;
         await dedupeService.runImportScan(scope, createdIds, rid, {
@@ -511,14 +659,7 @@ export const importService = {
             if (checked % 50 === 0 && checked < total) {
               const progress = `Checked ${checked}/${total} contacts…`;
               _stmts.phase.run("scanning", progress, id, scope.ownerId);
-              const counts = _stmts.matches.get(
-                scope.ownerId,
-                id,
-                scope.ownerId,
-                id,
-                id,
-                scope.ownerId,
-              ) as { autoMerged: number; needsReview: number };
+              const counts = countMatches(scope, id);
               autoMerged = counts.autoMerged;
               needsReview = counts.needsReview;
               send?.({
@@ -536,14 +677,7 @@ export const importService = {
       log.warn("Imports", `[${rid}] ${error}`);
     }
 
-    const counts = _stmts.matches.get(
-      scope.ownerId,
-      id,
-      scope.ownerId,
-      id,
-      id,
-      scope.ownerId,
-    ) as { autoMerged: number; needsReview: number; matched: number };
+    const counts = countMatches(scope, id);
     const current = read(scope, id);
     const newUnique = Math.max(0, (current?.imported ?? 0) - counts.matched);
     _stmts.complete.run(
@@ -575,16 +709,22 @@ export const importService = {
    * here in the background. Both are the shape a process death leaves.
    */
   get(scope: Scope, id: string, rid: string): ImportRecord | null {
-    const row = read(scope, id);
+    let row = read(scope, id);
     if (!row) return null;
 
-    if (row.status === "running" && !live.has(id)) {
-      this.fail(scope, id, INTERRUPTED_BEFORE_COMMIT);
+    if (settle(scope, row, INTERRUPTED_BEFORE_COMMIT)) {
+      row = read(scope, id)!;
+      if (row.status === "failed") {
+        log.warn(
+          "Imports",
+          `[${rid}] Import ${id} was running with nobody running it. Marked failed.`,
+        );
+        return toRecord(row);
+      }
       log.warn(
         "Imports",
-        `[${rid}] Import ${id} was running with nobody running it. Marked failed.`,
+        `[${rid}] Import ${id} stopped part way with nobody running it: ${row.imported} saved, ${row.failed} to retry.`,
       );
-      return toRecord(read(scope, id)!);
     }
 
     if (row.status === "imported" && !live.has(id)) {
@@ -689,21 +829,31 @@ export const importService = {
     );
   },
 
-  /** Give an import back after a retry that threw before it committed. */
-  releaseRetry(scope: Scope, id: string): void {
+  /**
+   * Give an import back after a retry that threw. A batch it committed
+   * changed the counts, and the record says so: it is `imported` again,
+   * and the next read runs the duplicate check for the rows it saved.
+   */
+  releaseRetry(scope: Scope, id: string, error: string): void {
     live.delete(id);
-    _stmts.phase.run("done", null, id, scope.ownerId);
+    const row = read(scope, id);
+    if (!row) return;
+    const counts = _stmts.rowCounts.get(id, scope.ownerId) as {
+      done: number;
+    };
+    if (counts.done !== row.imported) settle(scope, row, error);
+    else _stmts.phase.run("done", null, id, scope.ownerId);
   },
 
   /**
    * List the newest imports for this account.
-   * Interrupted running imports that have no process attached are marked failed.
+   * An import that was being written when its process stopped is settled
+   * first, the way `get` settles it.
    */
   list(scope: Scope, limit = 50): ImportRecord[] {
     const rows = _stmts.list.all(scope.ownerId, limit) as ImportTableRow[];
     return rows.map((row) => {
-      if (row.status === "running" && !live.has(row.id)) {
-        _stmts.fail.run(INTERRUPTED_BEFORE_COMMIT, row.id, scope.ownerId);
+      if (settle(scope, row, INTERRUPTED_BEFORE_COMMIT)) {
         const updated = read(scope, row.id);
         return toRecord(updated ?? row);
       }

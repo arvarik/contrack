@@ -2,7 +2,7 @@
 // Security utilities — upload path containment, SSRF guards, rate limiting
 // =============================================================================
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import path from "path";
 import type { Request, Response } from "express";
 import {
@@ -21,6 +21,10 @@ import {
   RateLimitedError,
   ValidationError,
 } from "../../../../server/utils/AppError.ts";
+import {
+  guardReadOnlyToken,
+  requireAuth,
+} from "../../../../server/middleware/auth.ts";
 
 // =============================================================================
 // resolveUploadPath — containment
@@ -189,6 +193,8 @@ describe("isAiCostPath", () => {
       "/api/contacts/abc/enrich",
       "/api/contacts/abc/briefing",
       "/api/ai-search",
+      // Express routes a trailing slash to the same handler.
+      "/api/ai-search/",
       "/api/dedupe/backfill-embeddings",
       "/api/link-preview/unfurl",
     ]) {
@@ -201,5 +207,36 @@ describe("isAiCostPath", () => {
     expect(isAiCostPath("/api/contacts/bulk")).toBe(false);
     expect(isAiCostPath("/api/contacts")).toBe(false);
     expect(isAiCostPath("/api/ai-search/status")).toBe(false);
+  });
+});
+
+// =============================================================================
+// Trailing slashes, on paths that need no sign-in
+// =============================================================================
+
+describe("a path of 200,000 slashes and a letter", () => {
+  it("is read in linear time by the guards that trim it", () => {
+    // `replace(/\/+$/, "")` backtracked from every slash of the run: 16,000
+    // and a letter cost 0.1 s on a 401, and the cost grows with the square.
+    const originalUrl = `/api${"/".repeat(200_000)}x`;
+    const next = vi.fn();
+    const started = performance.now();
+    requireAuth(
+      { originalUrl, headers: {} } as Request,
+      { setHeader: vi.fn() } as unknown as Response,
+      next,
+    );
+    guardReadOnlyToken(
+      {
+        originalUrl,
+        method: "POST",
+        principal: { via: "token", readOnly: true },
+      } as unknown as Request,
+      {} as Response,
+      next,
+    );
+    expect(isAiCostPath(originalUrl)).toBe(false);
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(next).toHaveBeenCalledTimes(2);
   });
 });

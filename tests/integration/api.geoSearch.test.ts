@@ -1,6 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
+import { sqlite } from "../../server/db.ts";
+import {
+  pruneGeocodeCache,
+  queueGeocode,
+} from "../../server/services/geocoding/index.ts";
 
 vi.mock("../../server/services/geocoding/provider.ts", () => ({
   geocodeWithFallback: vi.fn(),
@@ -97,5 +102,56 @@ describe("GET /api/geo/search", () => {
     const res31 = await request(app).get("/api/geo/search?q=Paris");
     expect(res31.status).toBe(429);
     expect(res31.body.error.code).toBe("RATE_LIMITED");
+  });
+});
+
+describe("address lookups off", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    __resetGeoSearchLimiter();
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("sends no address to Nominatim, and an admin turns lookups back on unless the environment holds them off", async () => {
+    vi.stubEnv("DISABLE_BACKGROUND_JOBS", "false");
+    const put = (off: boolean) =>
+      request(app).put("/api/geo/lookups").send({ off });
+    expect((await put(true)).body).toMatchObject({ off: true });
+
+    queueGeocode("off-contact", "Coimbra, Portugal");
+    const search = await request(app).get("/api/geo/search?q=Braga");
+    expect(search.body.error.code).toBe("GEOCODING_OFF");
+    expect(geocodeWithFallback).not.toHaveBeenCalled();
+
+    vi.stubEnv("GEOCODING_DISABLED", "true");
+    expect((await put(false)).status).toBe(409);
+    vi.unstubAllEnvs();
+    expect((await put(false)).body.off).toBe(false);
+  });
+
+  it("prunes the cached lookups that no contact uses, once they are a day old", async () => {
+    await request(app)
+      .post("/api/contacts")
+      .send({ name: "Pinned Person", location: "Évora, Portugal" })
+      .expect(201);
+    const cache = sqlite.prepare(
+      `INSERT INTO geocode_cache (key, provider, createdAt)
+       VALUES (?, 'Nominatim', datetime('now', ?))`,
+    );
+    cache.run("évora, portugal", "-3 days");
+    cache.run("old unused", "-3 days");
+    cache.run("fresh search", "-1 hours");
+
+    pruneGeocodeCache();
+
+    const keys = sqlite
+      .prepare(
+        `SELECT key FROM geocode_cache
+          WHERE key IN ('évora, portugal', 'old unused', 'fresh search')
+          ORDER BY key`,
+      )
+      .pluck()
+      .all();
+    expect(keys).toEqual(["fresh search", "évora, portugal"]);
   });
 });

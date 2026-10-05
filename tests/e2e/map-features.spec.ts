@@ -150,6 +150,15 @@ test.describe("map features - filters and place search", () => {
     const late = new Date(Date.now() - 3 * 86_400_000)
       .toISOString()
       .slice(0, 10);
+    const tasks = async () =>
+      (
+        await instance.api<{ id: string }[]>(
+          "GET",
+          `/contacts/${linus.id}/action-items`,
+        )
+      ).map((task) => task.id);
+    const before = await tasks();
+    // The date becomes a follow-up task for Linus.
     await instance.api("PATCH", `/contacts/${linus.id}`, {
       nextFollowUpAt: late,
     });
@@ -175,9 +184,13 @@ test.describe("map features - filters and place search", () => {
         map.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
       ).toBeVisible();
     } finally {
-      await instance.api("PATCH", `/contacts/${linus.id}`, {
-        nextFollowUpAt: null,
-      });
+      // Deleted, not completed, so the next spec in this worker finds the
+      // tasks it seeded and nothing else.
+      for (const id of await tasks()) {
+        if (!before.includes(id)) {
+          await instance.api("DELETE", `/action-items/${id}`);
+        }
+      }
     }
   });
 

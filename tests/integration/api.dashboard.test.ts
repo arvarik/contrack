@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { sqlite } from "../../server/db.ts";
 import { makeTestApp } from "./helpers.ts";
 import { asUser, createActor, type Actor } from "./tenancy/helpers.ts";
-import { isoWeekStart } from "../../shared/dates.ts";
+import { dayInZone, isoWeekStart } from "../../shared/dates.ts";
 
 let app: ReturnType<typeof makeTestApp>;
 let actor: Actor;
@@ -167,6 +167,33 @@ describe("GET /api/dashboard", () => {
     const found = res.body.find((c: { id: string }) => c.id === contactId);
     expect(found).toBeDefined();
     expect(found.birthday).toBe("1990-05-14");
+  });
+
+  it("groups follow-ups by the reader's day, from ?tz=", async () => {
+    // Kiritimati (UTC+14) is 25 hours ahead of Pago Pago (UTC-11), so its
+    // today is always a day still to come in Pago Pago.
+    const ahead = "Pacific/Kiritimati";
+    const contactId = crypto.randomUUID();
+    sqlite
+      .prepare(`INSERT INTO contacts (id, name, ownerId) VALUES (?, 'Tz', ?)`)
+      .run(contactId, actor.user.id);
+    const taskId = crypto.randomUUID();
+    sqlite
+      .prepare(
+        `INSERT INTO action_items (id, contactId, ownerId, title, dueAt) VALUES (?, ?, ?, 'Call', ?)`,
+      )
+      .run(taskId, contactId, actor.user.id, dayInZone(new Date(), ahead));
+    const groupOf = async (tz: string) => {
+      const res = await asUser(actor)(
+        request(app).get(`/api/dashboard?tz=${encodeURIComponent(tz)}`),
+      );
+      const has = (list: { id: string }[]) => list.some((i) => i.id === taskId);
+      return ["overdue", "dueToday", "upcoming"].find((key) =>
+        has(res.body[key]),
+      );
+    };
+    expect(await groupOf(ahead)).toBe("dueToday");
+    expect(await groupOf("Pacific/Pago_Pago")).toBe("upcoming");
   });
 });
 

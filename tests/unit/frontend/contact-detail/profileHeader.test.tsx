@@ -682,6 +682,10 @@ describe("the contact actions", () => {
     );
     const link = screen.getByRole("link", { name: /umbrella\.com/ });
     expect(link.getAttribute("target")).toBe("_blank");
+    // The icon comes from this server, never from a third party.
+    expect(link.querySelector("img")?.getAttribute("src")).toBe(
+      "/api/logos/www.umbrella.com",
+    );
   });
 });
 

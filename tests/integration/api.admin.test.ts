@@ -230,10 +230,12 @@ function concretePath(routePath: string): string {
 describe("every admin route", () => {
   let admin: Handle;
   let member: Handle;
+  let adminToken: string;
 
   beforeAll(async () => {
     admin = await freshInstance("guardadmin");
     member = await createAndActivate(admin, "guardmember");
+    adminToken = issueToken(admin.id);
   });
 
   it.each(ADMIN_ROUTES.map((r) => [`${r.method} ${r.path}`, r] as const))(
@@ -244,6 +246,19 @@ describe("every admin route", () => {
       );
       expect(res.status, JSON.stringify(res.body)).toBe(403);
       expect(res.body.error.code).toBe("ADMIN_REQUIRED");
+    },
+  );
+
+  // An admin's token once created an admin, reset the first admin's
+  // password and exported any account. Administration needs the person.
+  it.each(ADMIN_ROUTES.map((r) => [`${r.method} ${r.path}`, r] as const))(
+    "refuses an admin's personal token on %s",
+    async (_label, route) => {
+      const res = await callRoute(route.method, concretePath(route.path))
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({});
+      expect(res.status, JSON.stringify(res.body)).toBe(403);
+      expect(res.body.error.code).toBe("SESSION_REQUIRED");
     },
   );
 

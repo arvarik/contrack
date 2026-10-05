@@ -14,8 +14,7 @@
 //     would be strictly worse.
 //
 // Enforcement is controlled by AUTH_REQUIRED (default false — see the note on
-// binding below). API_TOKEN also implies enforcement, because a token is only
-// meaningful on an instance that is gated.
+// binding below).
 //
 // Every request carries a Principal describing who is asking. attachRequestContext
 // turns that Principal into a Scope and queries/mutations on owned tables
@@ -27,10 +26,10 @@
 // is the case where that default is wrong.
 // =============================================================================
 
-import crypto from "crypto";
 import type { Request, Response, NextFunction } from "express";
-import { log } from "../utils/logger.ts";
 import { AppError } from "../utils/AppError.ts";
+import { isOwnOrigin } from "../utils/publicOrigin.ts";
+import { trimTrailingSlashes } from "../utils/urlPath.ts";
 import {
   getUserById,
   resolveSession,
@@ -44,7 +43,7 @@ import {
   resolveAccessToken,
   resourceMetadataUrl,
 } from "../services/oauthService.ts";
-import { primaryAdminId, sqlite } from "../db.ts";
+import { sqlite } from "../db.ts";
 
 export const COOKIE_NAME = "contrack_session";
 
@@ -76,9 +75,7 @@ export type Principal =
       readOnly: boolean;
     }
   /** Auth is off. The local owner account, which nobody can sign in to. */
-  | { kind: "user"; user: User; via: "implicit" }
-  /** `Authorization: Bearer <env API_TOKEN>`, resolved to the primary admin. */
-  | { kind: "user"; user: User; via: "legacy-env-token" };
+  | { kind: "user"; user: User; via: "implicit" };
 
 // `Request.principal` is declared in server/types/express.d.ts, alongside the
 // other Request augmentations, rather than here.
@@ -93,7 +90,7 @@ export function currentUser(req: Request): User | null {
   return req.principal?.user ?? null;
 }
 
-/** The session id backing this request, or null for the other three kinds. */
+/** The session id backing this request, or null for the other two kinds. */
 export function currentSessionId(req: Request): string | null {
   return req.principal?.via === "session" ? req.principal.sessionId : null;
 }
@@ -101,40 +98,6 @@ export function currentSessionId(req: Request): string | null {
 // =============================================================================
 // Configuration
 // =============================================================================
-
-/**
- * The machine token, or null when none is configured.
- *
- * Read per call rather than cached at import so tests can toggle enforcement
- * by setting the environment variable.
- */
-export function resolveApiToken(): string | null {
-  const token = process.env.API_TOKEN?.trim();
-  if (token) {
-    warnEnvTokenOnce();
-    return token;
-  }
-  return null;
-}
-
-/**
- * The environment token is deprecated as a whole from 2.0, not just its old
- * name. It belongs to no account, so it acts as the primary admin and every
- * row it writes lands there, which is the wrong answer the moment a second
- * person has an account. A personal token belongs to the person using it.
- *
- * Warned once rather than per request: `resolveApiToken` is on the path of
- * `isAuthRequired`, which runs constantly.
- */
-let envTokenWarned = false;
-function warnEnvTokenOnce(): void {
-  if (envTokenWarned) return;
-  envTokenWarned = true;
-  log.warn(
-    "Auth",
-    "API_TOKEN is deprecated. Create a personal token in Settings → Account → API tokens and remove API_TOKEN from your environment. The environment token acts as the first admin and is removed in 3.0.",
-  );
-}
 
 /**
  * Set when boot finds real accounts on an instance that asked for auth to be
@@ -148,18 +111,18 @@ export function setForcedAuth(value: boolean): void {
   forcedAuth = value;
 }
 
-/** True when the instance requires a credential. */
+/**
+ * True when the instance requires a credential.
+ *
+ * Read per call rather than cached at import, so tests can turn enforcement
+ * on and off with the environment variable.
+ */
 export function isAuthRequired(): boolean {
-  return (
-    forcedAuth ||
-    process.env.AUTH_REQUIRED === "true" ||
-    resolveApiToken() !== null
-  );
+  return forcedAuth || process.env.AUTH_REQUIRED === "true";
 }
 
-/** Reset memoized warnings and the forced-auth latch. Test seam. */
+/** Reset the forced-auth latch. Test seam. */
 export function __resetAuthWarnings(): void {
-  envTokenWarned = false;
   forcedAuth = false;
 }
 
@@ -167,7 +130,12 @@ export function __resetAuthWarnings(): void {
 // Cookie handling
 // =============================================================================
 
-/** Minimal cookie parser (avoids a dependency for two cookies). */
+/**
+ * Minimal cookie parser (avoids a dependency for two cookies).
+ *
+ * A value that does not decode, such as `%E0%A4%A`, counts as no cookie.
+ * `decodeURIComponent` throws on it, and every route answered 500.
+ */
 function readCookie(req: Request, name: string): string | null {
   const header = req.headers.cookie;
   if (!header) return null;
@@ -175,7 +143,11 @@ function readCookie(req: Request, name: string): string | null {
     const eq = part.indexOf("=");
     if (eq === -1) continue;
     if (part.slice(0, eq).trim() === name) {
-      return decodeURIComponent(part.slice(eq + 1).trim());
+      try {
+        return decodeURIComponent(part.slice(eq + 1).trim());
+      } catch {
+        continue;
+      }
     }
   }
   return null;
@@ -184,9 +156,9 @@ function readCookie(req: Request, name: string): string | null {
 /**
  * Cookie attributes.
  *
- * `SameSite=Strict` is the CSRF defence for the cookie path — a cross-site
- * request simply does not carry the cookie, so no state-changing endpoint can
- * be triggered from another origin.
+ * `SameSite=Strict` keeps the cookie off a request from another site. A page
+ * on a sibling subdomain is the same site, though, so it still sends the
+ * cookie. `refuseCrossSiteWrites` is the second half of the CSRF defence.
  *
  * `Secure` is set only when the request arrived over HTTPS. Hard-coding it
  * would break plain-HTTP local use (`http://localhost:3210`), which is the
@@ -248,13 +220,6 @@ export function presentedSessionSecret(req: Request): string | null {
 // Middleware
 // =============================================================================
 
-function timingSafeEqualStrings(a: string, b: string): boolean {
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  if (bufA.length !== bufB.length) return false;
-  return crypto.timingSafeEqual(bufA, bufB);
-}
-
 /**
  * True for the MCP endpoint, however the client spells it. Express matches
  * paths without regard to case or a trailing slash, so this must too. It
@@ -263,7 +228,7 @@ function timingSafeEqualStrings(a: string, b: string): boolean {
  */
 function isMcpPath(req: Request): boolean {
   const path = req.originalUrl.split("?")[0].toLowerCase();
-  return path.replace(/\/+$/, "") === "/api/mcp";
+  return trimTrailingSlashes(path) === "/api/mcp";
 }
 
 /**
@@ -317,18 +282,7 @@ export function attachPrincipal(
     }
   }
 
-  // 2. The deprecated instance-wide env token. It has no account of its own,
-  //    so it acts as the primary admin and is warned about once at boot.
-  const apiToken = resolveApiToken();
-  if (presented && apiToken && timingSafeEqualStrings(presented, apiToken)) {
-    const admin = getUserById(primaryAdminId());
-    if (admin && admin.status !== "disabled") {
-      req.principal = { kind: "user", user: admin, via: "legacy-env-token" };
-      return next();
-    }
-  }
-
-  // 3. Session cookie. Resolved even when auth is off, so that someone who
+  // 2. Session cookie. Resolved even when auth is off, so that someone who
   //    signed in before enforcement was disabled is still identified and their
   //    rows are stamped to them rather than to the local owner. Costs one
   //    indexed lookup, and only when a cookie is actually present.
@@ -348,7 +302,7 @@ export function attachPrincipal(
     }
   }
 
-  // 4. No credential on an ungated instance: the person at the keyboard is
+  // 3. No credential on an ungated instance: the person at the keyboard is
   //    the local owner. This is what replaced the anonymous principal.
   if (!isAuthRequired()) {
     const owner = resolveLocalOwner();
@@ -445,8 +399,8 @@ export function requireAuth(
  * `403 PASSWORD_CHANGE_REQUIRED` until `POST /api/auth/change-password`
  * clears the flag.
  *
- * It applies to `session`, `token` and `legacy-env-token` principals alike,
- * because the reason is the password rather than the way it was presented.
+ * It applies to `session` and `token` principals alike, because the reason
+ * is the password rather than the way it was presented.
  * The `implicit` local owner never carries the flag: it has no password at
  * all, so nobody could have chosen one for it.
  *
@@ -522,7 +476,7 @@ export function guardReadOnlyToken(
   const principal = req.principal;
   if (principal?.via !== "token" || !principal.readOnly) return next();
 
-  const path = req.originalUrl.split("?")[0].toLowerCase().replace(/\/+$/, "");
+  const path = trimTrailingSlashes(req.originalUrl.split("?")[0].toLowerCase());
   const reads =
     READ_METHODS.has(req.method) && !path.startsWith("/api/connectors/google/");
   if (reads || (req.method === "POST" && path === "/api/mcp")) return next();
@@ -568,8 +522,38 @@ export function requireSession(
 }
 
 /**
+ * Why this caller may not administer the instance, or null when it may.
+ *
+ * It takes an admin account, signed in. A token is refused even when its
+ * account is an admin. A token proves which account it belongs to, not that
+ * the person is there, and an admin's token in a script could otherwise
+ * create an admin, reset the first admin's password and export any account.
+ * The implicit local owner passes while sign-in is off, as in requireSession.
+ */
+export function adminRefusal(req: Request): AppError | null {
+  const principal = req.principal;
+  if (!principal) {
+    return new AppError("Authentication required", 401, {
+      code: "UNAUTHORIZED",
+    });
+  }
+  if (principal.user.role !== "admin") {
+    return new AppError("This endpoint needs an admin account.", 403, {
+      code: "ADMIN_REQUIRED",
+    });
+  }
+  if (principal.via === "session") return null;
+  if (principal.via === "implicit" && !isAuthRequired()) return null;
+  return new AppError(
+    "Instance administration needs a signed-in session. A token cannot use it.",
+    403,
+    { code: "SESSION_REQUIRED" },
+  );
+}
+
+/**
  * Gate for instance administration: user management, instance settings,
- * backups, the audit log.
+ * backups, the audit log. `adminRefusal` says who passes.
  *
  * Mounted on each admin route individually rather than with `router.use`, so
  * that the route manifest test can look inside `route.stack` and fail when a
@@ -582,15 +566,51 @@ export function requireAdmin(
   _res: Response,
   next: NextFunction,
 ): void {
-  if (!req.principal) {
-    return next(
-      new AppError("Authentication required", 401, { code: "UNAUTHORIZED" }),
-    );
+  const refused = adminRefusal(req);
+  if (refused) return next(refused);
+  next();
+}
+
+/** The methods that change something, which a page on another site may not. */
+const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/**
+ * Refuse a write that the session cookie signs when another site's page sent
+ * it.
+ *
+ * `SameSite=Strict` keeps the cookie off a request from another site, but a
+ * page on a sibling subdomain (`other-app.example.com` beside
+ * `crm.example.com`) is the same site. A form there can send a `text/plain`
+ * POST with the cookie, and one disabled an account. So a write with the
+ * cookie must come from this server's own origin:
+ * - `Origin` present: it names this host or `PUBLIC_URL` (`isOwnOrigin`).
+ * - `Origin` absent: `Sec-Fetch-Site` is `same-origin` or `none`, or absent.
+ *   A client that sends neither header is not a browser.
+ *
+ * A bearer token is not sent by a browser on its own, so a token request
+ * passes. So do the OAuth endpoints, which are outside `/api`.
+ */
+export function refuseCrossSiteWrites(
+  req: Request,
+  _res: Response,
+  next: NextFunction,
+): void {
+  if (req.principal?.via !== "session" || !WRITE_METHODS.has(req.method)) {
+    return next();
   }
-  if (req.principal.user.role === "admin") return next();
+  const origin = req.headers.origin;
+  const site = req.headers["sec-fetch-site"];
+  const own = origin
+    ? isOwnOrigin(req, origin)
+    : site === undefined || site === "same-origin" || site === "none";
+  if (own) return next();
   next(
-    new AppError("This endpoint needs an admin account.", 403, {
-      code: "ADMIN_REQUIRED",
-    }),
+    new AppError(
+      origin
+        ? `This request came from a page at ${origin}, which is not this server, so it was refused. If you opened Contrack at that address, set PUBLIC_URL to it.`
+        : "This request came from a page on another site, so it was refused.",
+      403,
+      { code: "CROSS_SITE_REQUEST" },
+    ),
   );
 }

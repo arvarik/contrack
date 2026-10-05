@@ -202,6 +202,8 @@ npm run dev
 
 Open **http://localhost:3210**. The server auto-initializes the database, loads embedding models, and starts background tasks. Requires Node.js 26.10 or later.
 
+`npm run dev` listens on this machine only. To reach Contrack from other machines, run the production build: `npm run build`, then `NODE_ENV=production HOST=0.0.0.0 node server.ts`, and turn on sign-in first. See [Remote access](docs/self-hosting.md#remote-access).
+
 The first start downloads the two search models (28 MB) from Hugging Face. To keep the server off the network, run `npm run models:fetch` once, then set `MODEL_DOWNLOADS=false` in `.env`. See [Model files and offline installs](docs/configuration.md#model-files-and-offline-installs).
 
 > **Demo data:** Run `npm run db:seed` to generate ~30 realistic demo contacts, or `npm run seed` to add a single example contact to an empty database. Neither deletes existing data.
@@ -237,6 +239,7 @@ Full documentation lives in the [`docs/`](docs/README.md) directory:
 | [Getting Started](docs/getting-started.md)             | Installation, first steps, the main screens               |
 | [Self-Hosting](docs/self-hosting.md)                   | Docker, remote access, backups, upgrades, troubleshooting |
 | [Configuration](docs/configuration.md)                 | Environment variables, AI provider setup, model choice    |
+| [Privacy](docs/privacy.md)                             | What leaves the server, retention, and what deletes do    |
 | [Architecture](docs/architecture.md)                   | System overview, data flow, schema, search and AI         |
 | [API Reference](docs/api-reference.md)                 | Complete REST API with curl examples                      |
 | [CI & Release](CONTRIBUTING.md#continuous-integration) | Pipeline, published images, release procedure             |

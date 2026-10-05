@@ -26,8 +26,8 @@ with an empty `DATA_DIR`.
 - Admins invite people, give the member or admin role, and read an audit log.
   The **Instance health** page shows the database, the last backup, the
   queues, the models and the background jobs.
-- Each account makes its own API tokens, and a token can be read-only.
-  `API_TOKEN` still works but is deprecated, and 3.0 removes it.
+- Each account makes its own API tokens, and a token can be read-only. They
+  replace the one instance-wide token of version 1.
 - Each device's session can be signed out on its own. Theme, accent, list
   density and search history follow the account to every device.
 - Outgoing mail (`SMTP_URL`) sends invitations, password resets and sign-in
@@ -52,6 +52,11 @@ with an empty `DATA_DIR`.
 - While sign-in is off, the server answers only local host names, the
   `PUBLIC_URL` host and `ALLOWED_HOSTS`, so a web page cannot reach it through
   DNS rebinding. `/api/mcp` refuses a request from another site's page.
+- A signed-in change from another site's page is refused, a sibling
+  subdomain's included. Instance administration needs a signed-in admin, and
+  an API token cannot use it.
+- `npm run dev` listens on this machine only and does not serve the data
+  files. To serve other machines, run the production build.
 
 ### Search and Ask Contrack
 
@@ -73,7 +78,8 @@ with an empty `DATA_DIR`.
   tracked people get a relationship score.
 - Pulse is one morning page: what is due today, **Up next** with **Catch up**,
   **Keeping up**, **Activity**, **Inbox** and **Coming up**. You can move and
-  hide its cards.
+  hide its cards. Overdue and Today follow your own time zone, not the
+  server's.
 
 ### Contacts
 
@@ -116,12 +122,33 @@ with an empty `DATA_DIR`.
 - Connectors sync a calendar (ICS), a mailbox (IMAP) and Google Contacts,
   Gmail and Calendar. Meetings and email appear on each person's timeline.
 - An import survives a dropped connection and never imports a row twice.
+  It saves in batches, so the server keeps answering while a large file
+  goes in.
+- A Google, mailbox or calendar call that stops answering times out, so one
+  stuck sync no longer holds up every connector.
 
 ### Duplicates
 
 - One merge policy decides every merge, keeps follow-ups, and can be undone.
 - A pair marked as different people is never merged, and a quick scan runs
   with AI off.
+
+### Privacy
+
+- **Delete forever** also removes the contacts merged into the contact, their
+  merge records, and their photos, attachments and link-preview images. A
+  daily sweep removes uploaded files that nothing uses.
+- A merge can be undone for 90 days. After that, the merged-away contact and
+  its merge record are deleted.
+- An admin can turn off address lookups for the map, or point them at a
+  self-hosted Nominatim (`GEOCODING_DISABLED`, `NOMINATIM_URL`). Cached
+  addresses that no contact uses are deleted daily.
+- A contact's website icon comes from your server, never from Google. OpenAI
+  calls ask OpenAI not to store the answer. A failed sign-in no longer records
+  the name typed.
+- Signing out removes note drafts and the map's last view from the browser.
+- A new [Privacy](docs/privacy.md) page lists what leaves the server, how long
+  each kind of data stays, and what a delete removes.
 
 ### MCP and API
 

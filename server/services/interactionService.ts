@@ -3,6 +3,7 @@ import crypto from "crypto";
 import fs from "fs";
 import { ownerUploadUrl, resolveUploadPath } from "../utils/paths.ts";
 import { emailText } from "../utils/emailText.ts";
+import { ownerUploadUrls, removeUploads } from "./uploadCleanup.ts";
 import { db, sqlite } from "../db.ts";
 import * as schema from "../db/schema.ts";
 import { and, eq, sql } from "drizzle-orm";
@@ -25,6 +26,7 @@ import { SharedWork } from "../ai/workQueue.ts";
 import { aiAllowedForUser } from "../ai/instanceSwitch.ts";
 import { isAnyProviderConfigured } from "../ai/gateway.ts";
 import { dispatchEvents, recordEvent } from "../events/index.ts";
+import { NOW_ISO_SQL, lastContactedSql } from "./lastContacted.ts";
 // A ghost made from a note and a promoted ghost are contact writes, so the
 // contact reactions register wherever this service can run.
 import "../events/contactSubscribers.ts";
@@ -32,40 +34,6 @@ import "../events/contactSubscribers.ts";
 // =============================================================================
 // Interaction Payload Types
 // =============================================================================
-
-/**
- * Now, in the same shape the app writes timestamps in.
- *
- * `datetime('now')` gives `2026-09-11 18:45:11` and this file writes
- * `2026-09-11T18:45:10.665Z`. The two do not compare as strings, because a
- * space sorts below `T`, so a clamp built on `datetime('now')` would treat
- * every ISO timestamp as the later value and clamp nothing.
- */
-const NOW_ISO_SQL = `strftime('%Y-%m-%dT%H:%M:%fZ','now')`;
-
-/**
- * `lastContactedAt` is the newest interaction, and never the future.
- *
- * The column is derived from `MAX(interactions.date)`, and the route refuses a
- * future date with five minutes of clock slack. `MIN` here closes the slack
- * and the rows an older version wrote: `recencyScore` returns 100 for any date
- * at or ahead of now and 91.68 one millisecond later, so a contact stamped
- * ahead scores full marks on a 40 percent signal until the next real
- * interaction. Recorded as A-05 in `.agent/STATUS.md`.
- *
- * SQLite's two-argument `MIN` returns NULL when either side is NULL, so a
- * contact with no interactions left still comes out NULL rather than now.
- *
- * @param contactColumn - Placeholder or literal for the contact id.
- * @param ownerColumn - Placeholder or literal for the owner id.
- */
-function lastContactedSql(contactColumn: string, ownerColumn: string): string {
-  return (
-    // tenant-lint: allow owner-checked by caller
-    `MIN((SELECT MAX(date) FROM interactions ` +
-    `WHERE contactId = ${contactColumn} AND ownerId = ${ownerColumn}), ${NOW_ISO_SQL})`
-  );
-}
 
 /** Payload for creating a new interaction. */
 interface CreateInteractionPayload {
@@ -758,6 +726,12 @@ export const interactionService = {
         );
       }
     }
+    // The note's link-preview images go with it. Another note can show the
+    // same file, and removeUploads keeps a file that any row still names.
+    removeUploads(
+      scope.ownerId,
+      ownerUploadUrls(scope.ownerId, existing.content),
+    );
     return true;
   },
 

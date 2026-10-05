@@ -26,6 +26,7 @@ import {
   attachPrincipal,
   guardReadOnlyToken,
   isAuthRequired,
+  refuseCrossSiteWrites,
   requireAdmin,
   requireAuth,
   requirePasswordCurrent,
@@ -52,6 +53,7 @@ import {
 } from "./middleware/rateLimit.ts";
 import { requireAiAllowed } from "./middleware/aiAllowed.ts";
 import { UPLOADS_DIR, ensureDir } from "./utils/paths.ts";
+import { NotFoundError } from "./utils/AppError.ts";
 import { redactUrlForLog } from "./utils/helpers.ts";
 
 /** File extensions browsers may render inline; everything else downloads. */
@@ -219,6 +221,12 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   // know even for callers that are nobody.
   app.use(attachPrincipal);
 
+  // A write that the session cookie signs must come from this server's own
+  // pages. SameSite=Strict lets a sibling subdomain's page send the cookie,
+  // so this checks Origin and Sec-Fetch-Site (auth.ts). Before every router
+  // that writes, the auth router included.
+  app.use(["/api", "/uploads"], refuseCrossSiteWrites);
+
   // Carry who is asking through the async call tree, so an insert can stamp
   // ownerId without threading a parameter through every signature. Mounted
   // after attachPrincipal because it reads req.principal. Attribution only:
@@ -249,7 +257,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
 
   // Auth endpoints must stay reachable pre-auth (status, setup, login);
   // everything mounted after requireAuth — uploads and all other /api routes —
-  // is gated when AUTH_REQUIRED or API_TOKEN is configured.
+  // is gated when sign-in is required.
   app.use("/api/auth", authRouter);
   app.use(["/api", "/uploads"], requireAuth);
 
@@ -285,6 +293,9 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       },
     }),
   );
+  // A file that is not there answers 404, the same answer as another
+  // account's file, rather than falling through to the app's index.html.
+  app.use("/uploads", (_req, _res, next) => next(new NotFoundError("File")));
 
   // Every feature's routers, in the order of server/modules/index.ts.
   // Express matches in mount order, so that list's order is part of the

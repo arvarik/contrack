@@ -34,6 +34,7 @@ import type {
   UndoMergeResult,
 } from "./types.ts";
 import { UnionFind } from "../../utils/unionFind.ts";
+import { recomputeLastContacted } from "../lastContacted.ts";
 
 // =============================================================================
 // Types
@@ -1015,6 +1016,9 @@ export function undoSoftMerge(
         );
       }
     }
+
+    // `lastContactedAt` follows the interactions that moved back, on both.
+    recomputeLastContacted(scope, [entry.primaryId, entry.duplicateId]);
 
     // 6. Restore the duplicate contact's visibility
     _stmts.restoreDuplicate.run(entry.duplicateId, scope.ownerId);

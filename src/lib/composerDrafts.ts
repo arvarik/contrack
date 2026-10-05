@@ -159,3 +159,23 @@ export function clearDraft(key: string): void {
     // Nothing to remove, or nowhere to remove it from.
   }
 }
+
+/**
+ * Remove every draft one account wrote in this browser, at sign-out. Never
+ * throws. A session that expires keeps its drafts: that is the loss they
+ * exist to prevent. A person who signs out on a shared browser leaves no
+ * half-written note behind.
+ */
+export function clearAccountDrafts(accountId: string | null | undefined): void {
+  const prefix = draftKey(accountId, "");
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(prefix)) keys.push(key);
+    }
+    for (const key of keys) localStorage.removeItem(key);
+  } catch {
+    // Nowhere to remove them from.
+  }
+}

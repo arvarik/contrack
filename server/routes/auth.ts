@@ -30,7 +30,6 @@ import {
   listTokens,
   revokeToken,
 } from "../services/apiTokenService.ts";
-import { resolveApiToken } from "../middleware/auth.ts";
 import {
   createRegistrationOptions,
   verifyRegistration,
@@ -65,6 +64,7 @@ import {
   clearSessionCookie,
 } from "../middleware/auth.ts";
 import {
+  accountIdForIdentifier,
   createUser,
   verifyCredentials,
   updateUser,
@@ -232,9 +232,6 @@ router.get("/status", (req, res) => {
     // True while this instance has never been secured, so its data belongs to
     // an account nobody can sign in to.
     localOwnerPresent: hasLocalOwner(),
-    // The deprecated instance-wide environment token. The admin UI shows a
-    // banner asking the operator to replace it with a personal one.
-    legacyTokenConfigured: resolveApiToken() !== null,
     // The address people open (PUBLIC_URL), or null when it is not set. The
     // MCP settings page builds the address a client connects to from it, so
     // a client on another machine gets the public name, not localhost.
@@ -365,13 +362,17 @@ router.post(
 
     const user = await verifyCredentials(identifier, password);
     if (!user) {
-      // The audit row records what was typed into the identifier field and
-      // nothing else. A failed sign-in is the one event worth keeping for an
-      // account that may not exist, which is why the actor is null.
+      // The audit row says whether the typed name matched an account, and
+      // which one, never the text: a password typed into the name field
+      // would stay in the log. The actor is null, since nobody proved who
+      // they are.
+      const matched = accountIdForIdentifier(identifier);
       auditService.record({
         actorUserId: null,
         action: "auth.login.failed",
-        details: { identifier: identifier.slice(0, 100) },
+        targetType: matched ? "user" : undefined,
+        targetId: matched,
+        details: { matched: matched !== null },
         ip: ipOf(req),
       });
       // One message for both "no such account" and "wrong password" — telling
@@ -392,7 +393,7 @@ router.post(
         action: "auth.login.failed",
         targetType: "user",
         targetId: user.id,
-        details: { identifier: identifier.slice(0, 100), reason: "disabled" },
+        details: { matched: true, reason: "disabled" },
         ip: ipOf(req),
       });
       throw new AppError(
