@@ -50,6 +50,12 @@ interface ActionSubMenuProps {
   onCatchMeUp: () => void;
   onBack: () => void;
   onClose: () => void;
+  /**
+   * Puts the focus back in the palette's input. A note, a call or a list
+   * has a field or keys of its own, and when it closes its focus went with
+   * it, onto the dialog: the next key went nowhere.
+   */
+  onReturnFocus?: () => void;
 }
 
 interface ActionItem {
@@ -70,8 +76,17 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
   onCatchMeUp,
   onBack,
   onClose,
+  onReturnFocus,
 }) => {
   const [mode, setMode] = useState<SubMenuMode>("actions");
+  // Back from a note, a call or a list: the input takes the keys again.
+  const previousModeRef = useRef(mode);
+  useEffect(() => {
+    if (previousModeRef.current !== "actions" && mode === "actions") {
+      onReturnFocus?.();
+    }
+    previousModeRef.current = mode;
+  }, [mode, onReturnFocus]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const actionsRef = useRef<HTMLDivElement>(null);
 

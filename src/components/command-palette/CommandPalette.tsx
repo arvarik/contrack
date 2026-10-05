@@ -97,6 +97,8 @@ export const CommandPalette = () => {
   const [activeRow, setActiveRow] = useState("");
   // Escape hid the facet suggestions. Typing shows them again.
   const [facetMenuDismissed, setFacetMenuDismissed] = useState(false);
+  /** The person moved the highlight since the query last changed. */
+  const movedHighlightRef = useRef(false);
   const navigate = useNavigate();
 
   // ── Mode detection ──
@@ -184,7 +186,7 @@ export const CommandPalette = () => {
       .map((c) => ({
         id: c.id,
         name: c.name,
-        avatarUrl: null as string | null,
+        avatarUrl: c.avatarUrl ?? null,
       }));
   }, [recentIds, allContacts]);
 
@@ -355,10 +357,30 @@ export const CommandPalette = () => {
     };
   }, []);
 
+  // The result row the actions menu opened from. The menu takes the rows'
+  // place, and cmdk forgets the highlight when they go, so going back put
+  // it on the top row: a second → then opened another contact's menu.
+  const subMenuRowRef = useRef("");
+
+  const openSubMenu = useCallback(
+    (contact: { id: string; name: string; avatarUrl?: string | null }) => {
+      subMenuRowRef.current = `${contact.id}${contact.name}`.trim();
+      setSubMenuContactId(contact.id);
+      setSubMenuContactName(contact.name);
+      setSubMenuContactAvatar(contact.avatarUrl ?? null);
+    },
+    [],
+  );
+
   const closeSubMenu = useCallback(() => {
     setSubMenuContactId(null);
     setSubMenuContactName("");
     setSubMenuContactAvatar(null);
+    if (subMenuRowRef.current) {
+      movedHighlightRef.current = true;
+      setActiveRow(subMenuRowRef.current);
+      subMenuRowRef.current = "";
+    }
   }, []);
 
   const handleClose = useCallback(() => {
@@ -370,6 +392,7 @@ export const CommandPalette = () => {
     prevAiQueryRef.current = "";
     lastRecordedAiRef.current = "";
     clearFilters();
+    subMenuRowRef.current = "";
     closeSubMenu();
   }, [clearFilters, closeSubMenu]);
 
@@ -533,9 +556,6 @@ export const CommandPalette = () => {
   // palette swapped its list for that search's results. The recent searches
   // are rows in the empty palette instead.
 
-  /** The person moved the highlight since the query last changed. */
-  const movedHighlightRef = useRef(false);
-
   const handleSearchInputKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       // The actions menu took the key: ↑ and ↓ move its rows.
@@ -544,6 +564,12 @@ export const CommandPalette = () => {
       if (e.key === "Backspace" && search === "" && hasFilters) {
         e.preventDefault();
         removeLastFilter();
+        return;
+      }
+      // With text in the box, Home and End move the caret, as in any
+      // field. Stopped here, cmdk's handler on the list never sees them.
+      if ((e.key === "Home" || e.key === "End") && search !== "") {
+        e.stopPropagation();
         return;
       }
       if (["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) {
@@ -583,9 +609,7 @@ export const CommandPalette = () => {
       for (const contact of instantSearch.results) {
         if (activeRow.includes(contact.id)) {
           e.preventDefault();
-          setSubMenuContactId(contact.id);
-          setSubMenuContactName(contact.name);
-          setSubMenuContactAvatar(contact.avatarUrl ?? null);
+          openSubMenu(contact);
           return;
         }
       }
@@ -600,18 +624,20 @@ export const CommandPalette = () => {
     isEmptyInput,
     instantSearch.results,
     activeRow,
+    openSubMenu,
   ]);
 
   const handleSearchChange = useCallback(
     (value: string) => {
       setSearch(value);
       setFacetMenuDismissed(false);
-      // Clear sub-menu if user starts typing again
+      // Typing again closes the actions menu, for the new results.
       if (subMenuContactId) {
-        setSubMenuContactId(null);
+        subMenuRowRef.current = "";
+        closeSubMenu();
       }
     },
-    [subMenuContactId],
+    [subMenuContactId, closeSubMenu],
   );
 
   // A new query puts the highlight back on the top row, as cmdk does.
@@ -759,16 +785,12 @@ export const CommandPalette = () => {
                 label="Global command palette"
                 value={activeRow}
                 onValueChange={setActiveRow}
-                // Only the action rows are left to cmdk's fuzzy filter. The people
-                // rows arrive filtered and ranked, by the instant filter or by the
-                // server, and cmdk scores only a row's id and name: it hid every
-                // match on a company, a nickname, a misspelling or a phone number.
-                shouldFilter={
-                  mode === "action" &&
-                  !isEmptyInput &&
-                  !subMenuContactId &&
-                  !hasFilters
-                }
+                // Every row arrives filtered: the people by the instant filter
+                // or the server, the rest by this component. cmdk's own fuzzy
+                // filter scores only a row's value against the whole input. It
+                // hid every match on a company, a nickname or a phone number,
+                // and it hid the row a one-line `>` action had built.
+                shouldFilter={false}
                 // Backdrop click-to-dismiss. The dialog content fills the viewport
                 // (inset-0) which means Radix's built-in pointer-down-outside never
                 // fires — there's nothing outside it. We close manually when the
@@ -786,6 +808,21 @@ export const CommandPalette = () => {
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: -20 }}
                   transition={{ duration: DURATION.fast, ease: EASE }}
+                  // A press on the panel keeps the focus in the input, as a
+                  // press on a row does. A heading or a gap took the focus,
+                  // and then the page behind took the keys: `j` opened a
+                  // contact and `n` a new contact under the open palette.
+                  // A field, such as the note composer's, still takes it.
+                  onMouseDownCapture={(e) => {
+                    const target = e.target as HTMLElement;
+                    if (
+                      !target.closest(
+                        "input, textarea, select, [contenteditable='true']",
+                      )
+                    ) {
+                      e.preventDefault();
+                    }
+                  }}
                   className="w-full max-w-2xl glass-panel shadow-2xl rounded-3xl overflow-hidden flex flex-col font-body"
                 >
                   {/* ── Facet pills (Feature 5) ── */}
@@ -905,12 +942,9 @@ export const CommandPalette = () => {
                           navigate(`/contact/${subMenuContactId}?brief=1`);
                           handleClose();
                         }}
-                        onBack={() => {
-                          setSubMenuContactId(null);
-                          setSubMenuContactName("");
-                          setSubMenuContactAvatar(null);
-                        }}
+                        onBack={closeSubMenu}
                         onClose={handleClose}
+                        onReturnFocus={() => inputRef.current?.focus()}
                       />
                     )}
 
@@ -931,17 +965,21 @@ export const CommandPalette = () => {
                     {!subMenuContactId && mode === "ai" && (
                       <>
                         {/* Empty / typing prompt */}
+                        {/* Not `Command.Empty`: the starters are rows, and
+                            cmdk shows an empty state only with no rows. */}
                         {aiQuery.length === 0 && (
-                          <Command.Empty className="py-8 text-center text-sm text-on-surface-variant">
-                            <Sparkles className="w-8 h-8 text-primary mx-auto mb-3" />
-                            <p className="font-bold text-on-surface mb-1">
-                              AI query mode
-                            </p>
-                            <p className="text-xs mb-4">
-                              Ask anything about your network in plain English
-                            </p>
+                          <>
+                            <div className="pt-6 pb-3 text-center text-sm text-on-surface-variant">
+                              <Sparkles className="w-8 h-8 text-primary mx-auto mb-3" />
+                              <p className="font-bold text-on-surface mb-1">
+                                AI query mode
+                              </p>
+                              <p className="text-xs">
+                                Ask anything about your network in plain English
+                              </p>
+                            </div>
                             <AiStarters onPick={(q) => setSearch(`? ${q}`)} />
-                          </Command.Empty>
+                          </>
                         )}
 
                         {/* Short query — waiting for more input */}
@@ -1271,11 +1309,7 @@ export const CommandPalette = () => {
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setSubMenuContactId(contact.id);
-                                      setSubMenuContactName(contact.name);
-                                      setSubMenuContactAvatar(
-                                        contact.avatarUrl,
-                                      );
+                                      openSubMenu(contact);
                                     }}
                                     onMouseDown={(e) => e.preventDefault()}
                                     className="hit-area state-layer shrink-0 flex items-center gap-1 sm:opacity-0 sm:group-hover/result:opacity-50 sm:aria-selected:opacity-50 opacity-40 pointer-coarse:opacity-40 active:opacity-80 transition-opacity text-[11px] text-on-surface-variant self-center p-1.5 -mr-1 rounded-lg sm:p-0 sm:mr-0"

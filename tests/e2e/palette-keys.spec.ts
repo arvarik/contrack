@@ -2,7 +2,8 @@
  * The palette's keys: the arrows move the highlight, Enter opens it, and
  * Escape steps back one layer at a time.
  *
- * Each test here but the last failed before the fix it covers:
+ * Each test here but the quick interaction one failed before the fix it
+ * covers:
  * - ↑ on an empty input filled it with the last search, so ↓ then ↑ in the
  *   empty palette swapped the list for that search's results.
  * - When the server's people replaced the instant ones, the highlighted row
@@ -11,8 +12,14 @@
  *   either, until an arrow key was pressed.
  * - Escape closed the palette with the text still in it, and with a facet's
  *   suggestions open it did nothing at all.
+ * - A one-line `>` action showed no row, so Enter logged nothing.
+ * - A press on a heading took the focus from the input, and the page
+ *   behind took the next key.
+ * - Escape in the note composer left the focus on the dialog.
+ * - Back from the actions menu, the highlight sat on the top row.
+ * - Home and End moved the highlight, not the caret.
  *
- * The last test holds the quick interaction shortcut to closing the palette.
+ * The quick interaction test holds that shortcut to closing the palette.
  * It used to send the palette an Escape, which now only clears the text.
  */
 import type { Page } from "@playwright/test";
@@ -215,4 +222,107 @@ test("the quick interaction shortcut closes a palette that holds text", async ({
     page.getByRole("dialog", { name: "Log an interaction" }),
   ).toBeVisible();
   await expect(page.locator("[cmdk-dialog]")).toHaveCount(0);
+});
+
+test("a one-line action logs the note it shows", async ({
+  page,
+  instance,
+  seed,
+}) => {
+  // cmdk's fuzzy filter scored the row's value against the whole input and
+  // hid it, so Enter logged nothing.
+  const palette = await openPalette(page);
+  await page.keyboard.type("> note Edsger: zz sent the deck");
+  const row = palette.getByRole("option", {
+    name: /Log note for Edsger Dijkstra/,
+  });
+  await expect(row).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(palette).toHaveCount(0);
+
+  const edsger = seed.byName("Edsger Dijkstra");
+  const timeline = await instance.api<{ id: string; content: string }[]>(
+    "GET",
+    `/contacts/${edsger.id}/timeline`,
+  );
+  const logged = timeline.find((item) => item.content === "zz sent the deck");
+  expect(logged).toBeDefined();
+  created.push({ instance, path: `/interactions/${logged!.id}` });
+});
+
+test("a press on the palette keeps its keys from the page behind", async ({
+  page,
+}) => {
+  // A press on a heading took the focus from the input, and then `j` on
+  // the Network page opened a contact under the open palette.
+  const palette = await openPalette(page);
+  const input = palette.getByRole("combobox");
+  await palette.getByText("Go to", { exact: true }).click();
+  await expect(input).toBeFocused();
+
+  await page.keyboard.press("j");
+  await expect(input).toHaveValue("j");
+  await expect(page).toHaveURL(/\/$/);
+});
+
+test("Escape in the note composer goes back to the actions, with the input focused", async ({
+  page,
+}) => {
+  const palette = await openPalette(page);
+  const input = palette.getByRole("combobox");
+  await page.keyboard.type("Grace");
+  await expect(palette.getByText("Grace Hopper")).toBeVisible();
+
+  await page.keyboard.press("ArrowRight");
+  await expect(palette.getByText("Log note")).toBeVisible();
+  await page.keyboard.press("n");
+  await expect(palette.locator("textarea")).toBeFocused();
+
+  await page.keyboard.press("Escape");
+  await expect(palette.getByText("Log note")).toBeVisible();
+  await expect(input).toBeFocused();
+});
+
+test("→ then Escape keeps the highlight on the row the actions opened from", async ({
+  page,
+}) => {
+  // The actions menu takes the rows' place. cmdk re-checks only the last
+  // row to go, so when that was the highlighted one it forgot the
+  // highlight, and back from the menu it sat on the top row.
+  const palette = await openPalette(page);
+  await page.keyboard.type("ace");
+  const rows = palette.getByRole("option");
+  await expect(rows).toHaveCount(2);
+  await expect(palette.getByText("Ada Lovelace")).toBeVisible();
+  await expect(palette.getByText("Grace Hopper")).toBeVisible();
+  await page.keyboard.press("ArrowDown");
+  await expect.poll(() => highlightIndex(page)).toBe(1);
+  const [before] = await highlighted(page);
+
+  await page.keyboard.press("ArrowRight");
+  const back = palette.getByRole("button", { name: "Back to results" });
+  await expect(back).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(back).toBeHidden();
+  await expect.poll(() => highlighted(page)).toEqual([before]);
+});
+
+test("Home and End move the caret when the box holds text", async ({
+  page,
+}) => {
+  const palette = await openPalette(page);
+  const input = palette.getByRole("combobox");
+  await page.keyboard.type("a");
+  await page.keyboard.press("ArrowDown");
+  await expect.poll(() => highlightIndex(page)).toBe(1);
+
+  await page.keyboard.press("Home");
+  await expect
+    .poll(() => input.evaluate((el: HTMLInputElement) => el.selectionStart))
+    .toBe(0);
+  await page.keyboard.press("End");
+  await expect
+    .poll(() => input.evaluate((el: HTMLInputElement) => el.selectionStart))
+    .toBe(1);
+  expect(await highlightIndex(page)).toBe(1);
 });

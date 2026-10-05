@@ -176,27 +176,23 @@ export const ZeroStateView = ({
           heading="Recently viewed"
           className={GROUP_HEADING_DEFAULT}
         >
-          <div className="flex gap-2 px-3 py-1">
-            {recentContacts.map((c) => (
-              <Command.Item
-                key={`recent_${c.id}`}
-                value={`recent_${c.id}_${c.name}`}
-                onSelect={() => onSelectContact(c.id)}
-                // A chip in a row, not a row in a list: the current one takes
-                // the selected tint (`SELECTED_TINT`).
-                className="flex items-center gap-2 px-3 py-2 min-h-[44px] sm:min-h-0 rounded-xl cursor-default select-none aria-selected:bg-primary/10 aria-selected:text-on-primary-wash transition-colors text-on-surface shrink-0"
-              >
-                <img
-                  src={c.avatarUrl || fallbackAvatarUrl(c.name)}
-                  alt=""
-                  className="w-6 h-6 rounded-full bg-surface-container-highest object-cover"
-                />
-                <span className="text-xs font-bold truncate max-w-[100px]">
-                  {c.name}
-                </span>
-              </Command.Item>
-            ))}
-          </div>
+          {/* Rows, as everywhere else in the list. They were chips in one
+              line, and `↓` moved sideways along them. */}
+          {recentContacts.map((c) => (
+            <Command.Item
+              key={`recent_${c.id}`}
+              value={`recent_${c.id}_${c.name}`}
+              onSelect={() => onSelectContact(c.id)}
+              className={cn(ROW, "py-2 text-on-surface", ITEM_CURRENT)}
+            >
+              <img
+                src={c.avatarUrl || fallbackAvatarUrl(c.name)}
+                alt=""
+                className="w-6 h-6 rounded-full bg-surface-container-highest object-cover shrink-0"
+              />
+              <span className="text-sm truncate flex-1">{c.name}</span>
+            </Command.Item>
+          ))}
         </Command.Group>
       )}
 
