@@ -71,6 +71,9 @@ const STRIPPED = new Set([...INTERNAL, ...DRAWING, "highlights"]);
 export function lean(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(lean);
   if (value === null || typeof value !== "object") return value;
+  // Only plain records are rebuilt. A Date or a Buffer goes as JSON writes it.
+  const proto: unknown = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) return value;
   return Object.fromEntries(
     Object.entries(value)
       .filter(([key]) => !STRIPPED.has(key))

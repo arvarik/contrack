@@ -78,7 +78,9 @@ gatedTest(
     await page
       .getByRole("button", { name: "Create a token for Claude Code" })
       .click();
-    await expect(page.getByText("A token named “Claude Code”")).toBeVisible();
+    await expect(
+      page.getByText("A read-only token named “Claude Code”"),
+    ).toBeVisible();
     await expect(snippet).toContainText('--header "Authorization: Bearer ctk_');
 
     await page

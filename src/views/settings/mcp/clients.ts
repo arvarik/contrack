@@ -65,7 +65,7 @@ export const MCP_CLIENTS: readonly McpClient[] = [
     label: "Claude Desktop",
     setup: (url, token) => ({
       steps:
-        "In Claude Desktop, open Settings, then Developer, then Edit Config. Add this to claude_desktop_config.json and restart Claude. It starts the mcp-remote bridge, which needs Node.js",
+        "In Claude Desktop, open Settings, then Developer, then Edit Config. In claude_desktop_config.json, add the contrack entry inside mcpServers, then restart Claude. It starts the mcp-remote bridge, which needs Node.js",
       codeKind: "config",
       code: json({
         mcpServers: {
@@ -78,8 +78,11 @@ export const MCP_CLIENTS: readonly McpClient[] = [
               // mcp-remote refuses plain http unless the host is this
               // computer, or this flag says the address is meant.
               ...(isPlainHttpElsewhere(url) ? ["--allow-http"] : []),
-              ...(token ? ["--header", `Authorization: Bearer ${token}`] : []),
+              // No space in an argument: Claude Desktop on Windows passes
+              // args to npx unquoted. The space goes in the variable.
+              ...(token ? ["--header", "Authorization:${AUTH_HEADER}"] : []),
             ],
+            ...(token ? { env: { AUTH_HEADER: `Bearer ${token}` } } : {}),
           },
         },
       }),
@@ -92,7 +95,7 @@ export const MCP_CLIENTS: readonly McpClient[] = [
       const server = { url, headers: headers(token) };
       return {
         steps:
-          "Press Add to Cursor, or put this in ~/.cursor/mcp.json for every project",
+          "Press Add to Cursor. Or, for every project, add the contrack entry inside mcpServers in ~/.cursor/mcp.json",
         codeKind: "config",
         code: json({ mcpServers: { [NAME]: server } }),
         install: {
@@ -109,7 +112,7 @@ export const MCP_CLIENTS: readonly McpClient[] = [
       const server = { type: "http", url, headers: headers(token) };
       return {
         steps:
-          "Press Add to VS Code, or put this in .vscode/mcp.json in a project",
+          "Press Add to VS Code. Or run MCP: Open User Configuration, and add the contrack entry inside servers. Keep the token out of a project's .vscode folder, which is often shared",
         codeKind: "config",
         code: json({ servers: { [NAME]: server } }),
         install: {
@@ -163,10 +166,17 @@ export const MCP_CLIENTS: readonly McpClient[] = [
   },
 ];
 
-/** An http address on another machine, which mcp-remote needs told about. */
+/**
+ * An http address that mcp-remote needs `--allow-http` for. It takes plain
+ * http without the flag only for these two names.
+ */
 function isPlainHttpElsewhere(url: string): boolean {
   const parsed = new URL(url);
-  return parsed.protocol === "http:" && !isLoopbackHost(parsed.hostname);
+  return (
+    parsed.protocol === "http:" &&
+    parsed.hostname !== "localhost" &&
+    parsed.hostname !== "127.0.0.1"
+  );
 }
 
 /** True when only this computer can reach the address. */

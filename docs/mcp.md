@@ -13,7 +13,7 @@ assistants to other apps. With Contrack connected, an assistant can search
 your contacts, read a timeline, log a note, and add a follow-up while you
 talk to it. It works as your account and sees only your data.
 
-**Settings → MCP and API** sets up a client in three steps:
+**Settings → MCP and API** sets up a client step by step:
 
 1. **Server address**, the one address every client uses. It is your
    Contrack's address with `/api/mcp` after it, such as
@@ -26,11 +26,12 @@ talk to it. It works as your account and sees only your data.
    The token lasts 90 days and is named after the client. It fills in the
    setup, and the page shows it only once. **Use a token I have** takes a
    token you made before. The page never saves a token.
+4. **Add it** shows the command or the config for that client, with the
+   address and the token in it, and **Copy**. For Cursor and VS Code, **Add
+   to Cursor** and **Add to VS Code** add the server in one press. Copy and
+   the install button wait until the setup has a token.
 
-Then **Add it** shows the command or the config for that client, with the
-address and the token in it, and **Copy**. For Cursor and VS Code, **Add to
-Cursor** and **Add to VS Code** add the server in one press. **Tools** lists
-every tool a client can call.
+**Tools** lists every tool a client can call.
 
 The server speaks MCP over streamable HTTP. Each request stands alone, with no
 session to keep open.
@@ -41,7 +42,7 @@ A client needs a personal API token when your Contrack asks people to sign
 in.
 
 1. Open **Settings → Account** and go to **API tokens**. The **MCP and API**
-   page links there too, with **Create a token in Account**.
+   page also makes one for the client you set up, as above.
 2. Select **Create token**.
 3. In **What is it for**, name the machine or the script, such as "Claude
    Desktop on the laptop".
@@ -91,8 +92,8 @@ it.
 
 ### Claude Desktop
 
-In Claude Desktop, open **Settings → Developer → Edit Config**, and add this
-to `claude_desktop_config.json`:
+In Claude Desktop, open **Settings → Developer → Edit Config**. In
+`claude_desktop_config.json`, add the `contrack` entry inside `mcpServers`:
 
 ```json
 {
@@ -104,8 +105,9 @@ to `claude_desktop_config.json`:
         "mcp-remote",
         "http://localhost:3210/api/mcp",
         "--header",
-        "Authorization: Bearer <your-token>"
-      ]
+        "Authorization:${AUTH_HEADER}"
+      ],
+      "env": { "AUTH_HEADER": "Bearer <your-token>" }
     }
   }
 }
@@ -113,14 +115,16 @@ to `claude_desktop_config.json`:
 
 The config runs the `mcp-remote` bridge with `npx`, so the machine needs
 Node.js. For a plain `http` address on another computer, the settings page
-adds `--allow-http`, because `mcp-remote` refuses one without it. Restart
-Claude Desktop after you change the file.
+adds `--allow-http`, because `mcp-remote` refuses one without it. The token
+goes in `env`, because Claude Desktop on Windows passes each argument to
+`npx` without quotes, and a space would split it. Restart Claude Desktop
+after you change the file.
 
 ### Cursor
 
-Select **Add to Cursor** on the settings page, or add this to
-`~/.cursor/mcp.json` for every project, or to `.cursor/mcp.json` in one
-project:
+Select **Add to Cursor** on the settings page. Or add the `contrack` entry
+inside `mcpServers` in `~/.cursor/mcp.json` for every project, or in
+`.cursor/mcp.json` in one project:
 
 ```json
 {
@@ -135,8 +139,10 @@ project:
 
 ### VS Code
 
-Select **Add to VS Code** on the settings page, or add this to
-`.vscode/mcp.json` in a project:
+Select **Add to VS Code** on the settings page. Or run **MCP: Open User
+Configuration** from the Command Palette, and add the `contrack` entry inside
+`servers`. Keep a token out of a project's `.vscode/mcp.json`, which is often
+committed and shared:
 
 ```json
 {
