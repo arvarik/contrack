@@ -17,7 +17,6 @@ import { makeTestApp } from "./helpers.ts";
 import {
   defaultPreferences,
   getPreferences,
-  MAX_SEARCH_HISTORY,
   PREFERENCE_KEYS,
 } from "../../server/services/userPreferencesService.ts";
 import { asUser, createActor, type Actor } from "./tenancy/helpers.ts";
@@ -205,57 +204,6 @@ describe("DELETE /api/auth/preferences/:key", () => {
     } finally {
       process.env.AUTH_REQUIRED = "true";
     }
-  });
-});
-
-describe("search history", () => {
-  const entry = (query: string, timestamp = 1) => ({
-    query,
-    mode: "normal" as const,
-    timestamp,
-  });
-
-  it("stores entries and hands them back in order", async () => {
-    const res = await patch(B, {
-      searchHistory: [entry("vcs in sf", 3), entry("alumni", 2)],
-    });
-    expect(res.status).toBe(200);
-    expect(res.body.preferences.searchHistory).toEqual([
-      { query: "vcs in sf", mode: "normal", timestamp: 3 },
-      { query: "alumni", mode: "normal", timestamp: 2 },
-    ]);
-  });
-
-  it("accepts the maximum and refuses one more", async () => {
-    const full = Array.from({ length: MAX_SEARCH_HISTORY }, (_, i) =>
-      entry(`query ${i}`, i),
-    );
-    expect((await patch(B, { searchHistory: full })).status).toBe(200);
-    expect(
-      (await patch(B, { searchHistory: [...full, entry("one too many")] }))
-        .status,
-    ).toBe(400);
-  });
-
-  it("refuses a query long enough to be a payload", async () => {
-    const res = await patch(B, { searchHistory: [entry("x".repeat(201))] });
-    expect(res.status).toBe(400);
-  });
-
-  it("refuses a mode nothing in the app produces", async () => {
-    const res = await patch(B, {
-      searchHistory: [{ query: "x", mode: "telepathy", timestamp: 1 }],
-    });
-    expect(res.status).toBe(400);
-  });
-
-  it("clears with an empty list", async () => {
-    const res = await patch(B, { searchHistory: [] });
-    expect(res.status).toBe(200);
-    expect(res.body.preferences.searchHistory).toEqual([]);
-    // Cleared, not forgotten: the key stays chosen so the browser does not
-    // treat an emptied history as "never set" and migrate the old one back.
-    expect(res.body.stored).toContain("searchHistory");
   });
 });
 

@@ -22,18 +22,12 @@
 -- - Run top to bottom, the file builds the database: plain tables, virtual
 --   tables, indexes, then triggers, each group by name. Building needs
 --   sqlite-vec loaded on the connection, for the vec0 tables.
--- - The bookkeeping at the end is data that every d67c8a9 database carries.
---   It is not part of the comparison.
+-- - Contrack 2 starts fresh, so the baseline migration does not create
+--   drizzle-orm's "__drizzle_migrations" table, and the block for it and the
+--   bookkeeping rows a d67c8a9 database carried are gone from this file.
 -- =============================================================================
 
 -- Plain tables, by name.
-
--- table __drizzle_migrations
-CREATE TABLE "__drizzle_migrations" (
-				id SERIAL PRIMARY KEY,
-				hash text NOT NULL,
-				created_at numeric
-			);
 
 -- table action_items
 CREATE TABLE `action_items` (
@@ -1560,10 +1554,3 @@ CREATE TRIGGER search_vector_update AFTER UPDATE OF name, company, role, headlin
 CREATE TRIGGER upcoming_events_owner_required BEFORE INSERT ON upcoming_events
        WHEN NEW.ownerId IS NULL
        BEGIN SELECT RAISE(ABORT, 'upcoming_events.ownerId is required'); END;
-
--- Bookkeeping: the rows every d67c8a9 database carries.
-INSERT INTO "__drizzle_migrations" ("hash", "created_at") VALUES ('0ef5167273db3bf99b15797702a51d5b51c4fd7095ae8918f564eddbb0549e37', 1775690197662);
-INSERT INTO "__drizzle_migrations" ("hash", "created_at") VALUES ('857d453099a1d79a73808a003ce1c14f27a6e0e250bb45432d5991fffadb92b1', 1776211562913);
-INSERT INTO "__drizzle_migrations" ("hash", "created_at") VALUES ('2d9589f819c5485e0963ccbf18eee1006162e5e8f5d3ebc13334dafb3f9bd6d9', 1790620180973);
-INSERT INTO app_settings (key, value) VALUES ('schema.tenancy', '2');
-PRAGMA user_version = 6;

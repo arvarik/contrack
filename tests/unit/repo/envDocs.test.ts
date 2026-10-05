@@ -1,19 +1,17 @@
 // =============================================================================
 // Unit: the environment variables agree everywhere they are written down
 // =============================================================================
-// A variable lives in five places: the code that reads it, the table in
-// docs/configuration.md, .env.example, docker-compose.yml, and RETIRED_ENV
-// once it is retired. They drifted apart. AI_TIER stayed documented after the
-// code stopped reading it. MAIL_REPLY_TO and the Google OAuth pair were read
-// and never documented. Compose did not pass PUBLIC_URL, SMTP_URL or
+// A variable lives in four places: the code that reads it, the table in
+// docs/configuration.md, .env.example and docker-compose.yml. They drifted
+// apart. MAIL_REPLY_TO and the Google OAuth pair were read and never
+// documented. Compose did not pass PUBLIC_URL, SMTP_URL or
 // CONTRACK_SECRET_KEY, so a value in .env did nothing in Docker. This test
-// reads all five and fails at the next disagreement.
+// reads all four and fails at the next disagreement.
 // =============================================================================
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, it, expect } from "vitest";
-import { RETIRED_ENV } from "../../../server/utils/retiredEnv.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "../../..");
 const read = (file: string) => readFileSync(path.join(ROOT, file), "utf8");
@@ -30,7 +28,6 @@ const NOT_FORWARDED = [
   "DISABLE_BACKGROUND_JOBS",
   "DISABLE_CPU_WORKER",
   "TRANSFORMERS_CACHE",
-  "AUTH_TOKEN",
 ];
 
 function codeFiles(dir: string): string[] {
@@ -47,7 +44,6 @@ const CODE = [
   path.join(ROOT, "server.ts"),
   path.join(ROOT, "vite.config.ts"),
 ]
-  .filter((f) => !f.endsWith(path.join("utils", "retiredEnv.ts")))
   .map((f) => readFileSync(f, "utf8"))
   .join("\n");
 
@@ -156,21 +152,10 @@ describe("environment variables", () => {
       expect(example).toMatch(new RegExp(`^# ${name}=`, "m"));
   });
 
-  it("passes every documented variable to the container but eight", () => {
+  it("passes every documented variable to the container but seven", () => {
     const { main } = documented();
     for (const name of NOT_FORWARDED) expect(main).toContain(name);
     const expected = main.filter((n) => !NOT_FORWARDED.includes(n));
     expect([...composeNames()].sort()).toEqual([...expected].sort());
-  });
-
-  it("names each retired variable only where it says so", () => {
-    const { main, dev, section } = documented();
-    for (const name of Object.keys(RETIRED_ENV)) {
-      expect(section).toContain(`\`${name}\``);
-      expect([...main, ...dev]).not.toContain(name);
-      expect(exampleNames()).not.toContain(name);
-      expect(composeNames()).not.toContain(name);
-      expect(codeNames(name)).toBe(false);
-    }
   });
 });

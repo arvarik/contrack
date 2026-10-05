@@ -103,7 +103,6 @@ export class ContrackInstance {
         ANTHROPIC_API_KEY: "",
         AI_EMBEDDINGS_MODEL: "",
         API_TOKEN: "",
-        AUTH_TOKEN: "",
         CORS_ORIGIN: "",
         DISABLE_BACKGROUND_JOBS: "true",
         // The local embedding model would otherwise be fetched into the

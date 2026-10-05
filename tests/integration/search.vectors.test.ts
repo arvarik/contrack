@@ -12,17 +12,16 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 const { makeTestApp } = await import("./helpers.ts");
-const { sqlite, rebuildVecTable, vecTableDdl, VEC_METADATA_SQL } =
-  await import("../../server/db.ts");
+const { sqlite } = await import("../../server/db.ts");
 const {
   findSearchNeighbors,
   rebuildSearchEmbeddingTable,
   searchVectorScale,
   upsertSearchEmbeddings,
 } = await import("../../server/services/search/vectorIndex.ts");
-const { VECTOR_SCALE_KEY, floatsOf, quantize, scaleFor } =
+const { VECTOR_SCALE_KEY, floatsOf, scaleFor } =
   await import("../../server/services/search/vectorScale.ts");
-const { clearSettingsCache, deleteSetting } =
+const { deleteSetting } =
   await import("../../server/services/settingsService.ts");
 const { createActor, resetAccounts } = await import("./tenancy/helpers.ts");
 const { loadFixture } = await import("../eval/harness.ts");
@@ -79,169 +78,6 @@ function spread(seed: number): Float32Array {
   for (let i = 0; i < 384; i++) v[i] = Math.sin(seed * 7.1 + i * 0.37) * 0.3;
   return v;
 }
-
-describe("the boot migration from float", () => {
-  /** search_embeddings as it was before int8: the same shape, FLOAT[384]. */
-  function floatTable(): void {
-    sqlite.exec("DROP TABLE search_embeddings");
-    sqlite.exec(vecTableDdl("search_embeddings", 384, "float"));
-  }
-
-  afterAll(() => {
-    // Put the table every other test expects back.
-    sqlite.exec("DROP TABLE IF EXISTS search_embeddings");
-    rebuildSearchEmbeddingTable(384);
-  });
-
-  it("keeps every row, the partition key and the status columns", () => {
-    floatTable();
-    contact("active");
-    contact("archived", owner, { isArchived: 1 });
-    contact("trashed", owner, { deletedAt: "2026-01-01T00:00:00.000Z" });
-    contact("ghost", owner, { isGhost: 1 });
-    contact("merged", owner, { canonicalId: "active" });
-    contact("theirs", otherOwner);
-    const ids = ["active", "archived", "trashed", "ghost", "merged", "theirs"];
-    const floats = new Map(ids.map((id, i) => [id, spread(i + 1)]));
-    const insert = sqlite.prepare(
-      `INSERT INTO search_embeddings (contactId, ownerId, isGhost, isArchived, active, embedding)
-       SELECT c.id, c.ownerId, ${VEC_METADATA_SQL}, ? FROM contacts c WHERE c.id = ?`,
-    );
-    for (const [id, vector] of floats)
-      insert.run(Buffer.from(vector.buffer), id);
-
-    const result = rebuildVecTable("search_embeddings");
-
-    const scale = scaleFor(floats.values())!;
-    expect(result).toEqual({
-      copied: 6,
-      dropped: 0,
-      dimension: 384,
-      element: "int8",
-      scale,
-    });
-    const ddl = (
-      sqlite
-        .prepare(
-          "SELECT sql FROM sqlite_master WHERE name = 'search_embeddings'",
-        )
-        .get() as { sql: string }
-    ).sql;
-    expect(ddl).toContain("ownerId TEXT PARTITION KEY");
-    for (const column of ["isGhost", "isArchived", "active"])
-      expect(ddl).toMatch(new RegExp(`\\b${column}\\s+INTEGER`));
-    expect(ddl).toContain("embedding INT8[384]");
-
-    // Every row, under its owner, with its status.
-    expect(
-      sqlite
-        .prepare(
-          "SELECT contactId, ownerId, isGhost, isArchived, active FROM search_embeddings ORDER BY contactId",
-        )
-        .all(),
-    ).toEqual([
-      {
-        contactId: "active",
-        ownerId: owner,
-        isGhost: 0,
-        isArchived: 0,
-        active: 1,
-      },
-      {
-        contactId: "archived",
-        ownerId: owner,
-        isGhost: 0,
-        isArchived: 1,
-        active: 1,
-      },
-      {
-        contactId: "ghost",
-        ownerId: owner,
-        isGhost: 1,
-        isArchived: 0,
-        active: 1,
-      },
-      {
-        contactId: "merged",
-        ownerId: owner,
-        isGhost: 0,
-        isArchived: 0,
-        active: 0,
-      },
-      {
-        contactId: "theirs",
-        ownerId: otherOwner,
-        isGhost: 0,
-        isArchived: 0,
-        active: 1,
-      },
-      {
-        contactId: "trashed",
-        ownerId: owner,
-        isGhost: 0,
-        isArchived: 0,
-        active: 0,
-      },
-    ]);
-
-    // Each vector is its float quantized at the one scale: 384 bytes, a
-    // quarter of 1,536, and nothing re-embedded.
-    for (const [id, vector] of floats) {
-      const stored = (
-        sqlite
-          .prepare(
-            "SELECT embedding FROM search_embeddings WHERE contactId = ?",
-          )
-          .get(id) as { embedding: Buffer }
-      ).embedding;
-      expect(stored.length).toBe(384);
-      expect(stored.equals(quantize(vector, scale)), id).toBe(true);
-    }
-
-    // The scale is stored for every later write and query. At boot the
-    // settings cache is empty; here it is dropped by hand.
-    clearSettingsCache();
-    expect(searchVectorScale()).toBe(scale);
-  });
-
-  it("keeps the search results: the same contact, only the owner's, only visible ones", () => {
-    floatTable();
-    contact("near");
-    contact("far");
-    contact("near-archived", owner, { isArchived: 1 });
-    contact("near-theirs", otherOwner);
-    const query = spread(1);
-    const vectors: [string, Float32Array][] = [
-      ["near", spread(1.01)],
-      ["far", spread(4)],
-      ["near-archived", spread(1)],
-      ["near-theirs", spread(1)],
-    ];
-    const insert = sqlite.prepare(
-      `INSERT INTO search_embeddings (contactId, ownerId, isGhost, isArchived, active, embedding)
-       SELECT c.id, c.ownerId, ${VEC_METADATA_SQL}, ? FROM contacts c WHERE c.id = ?`,
-    );
-    for (const [id, vector] of vectors)
-      insert.run(Buffer.from(vector.buffer), id);
-
-    rebuildVecTable("search_embeddings");
-    clearSettingsCache();
-
-    const found = findSearchNeighbors(scopeForOwnerId(owner), query, 10).map(
-      (row) => row.contactId,
-    );
-    expect(found).toEqual(["near", "far"]);
-  });
-
-  it("refuses to turn int8 back into float", () => {
-    sqlite.exec("DROP TABLE IF EXISTS legacy_int8");
-    sqlite.exec(vecTableDdl("legacy_int8", 384, "int8"));
-    // Only search_embeddings is int8. A table that must be float and holds
-    // bytes cannot get its floats back.
-    expect(() => rebuildVecTable("legacy_int8")).toThrow(/re-embed/);
-    sqlite.exec("DROP TABLE legacy_int8");
-  });
-});
 
 describe("the neighbours of real vectors", () => {
   it("keeps the float KNN's nearest contacts, up to rounding", () => {

@@ -14,7 +14,7 @@
 
 import { describe, it, expect, afterAll, vi } from "vitest";
 import type Database from "better-sqlite3";
-import { sqlite, TENANCY_SCHEMA_VERSION } from "../../server/db.ts";
+import { sqlite } from "../../server/db.ts";
 import { FTS_SCHEMA_VERSION } from "../../server/services/search/ftsIndex.ts";
 import { verify } from "../../scripts/tenancy-verify.ts";
 
@@ -117,10 +117,9 @@ describe("booting the same database again", () => {
     expect(schemaOf(second)).toBe(schemaBefore);
   });
 
-  it("keeps the tenancy version and the search schema version", () => {
+  it("keeps the search schema version", () => {
     // Every row as it was, so no migration ran again and no version moved.
     expect(ledgerOf(second)).toEqual(ledgerBefore);
-    expect(versionOf(second, "tenancy")).toBe(TENANCY_SCHEMA_VERSION);
     expect(versionOf(second, "contacts_fts")).toBe(FTS_SCHEMA_VERSION);
   });
 

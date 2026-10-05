@@ -105,10 +105,9 @@ const unreadable = new Set<string>();
 /**
  * A key as the settings store holds it, ready to send.
  *
- * Keys saved from 2.0 are sealed. A key saved before is plain text, and it
- * is read as it is until the boot pass seals it (sealStoredAiKeys).
+ * Every saved key is sealed. A value that is not sealed reads as no key.
  *
- * A sealed key that does not open reads as no key. This happens when the
+ * A sealed key that does not open reads as no key too. This happens when the
  * instance secret changed: CONTRACK_SECRET_KEY was set or changed, or
  * DATA_DIR/secret.key was lost. The provider then shows as not connected,
  * and the key can be entered again. Sending the sealed text as a key would
@@ -119,7 +118,7 @@ export function readStoredKey(
   owner: string,
 ): string | undefined {
   if (typeof value !== "string" || value.length === 0) return undefined;
-  if (!isSealed(value)) return value;
+  if (!isSealed(value)) return undefined;
   try {
     return open(value);
   } catch {

@@ -9,10 +9,7 @@
 //   - "Web search engine": what research searches with when an account keeps
 //     "Instance default": the web search model, SearXNG, or both.
 //
-// Both live in one app setting, `ai.webSearch`. Before it, web search was
-// turned off by giving the research capability the mode "disabled", which
-// lost a pinned model. `isResearchOff` still reads that mode, so an instance
-// turned off that way stays off until an admin turns web search back on.
+// Both live in one app setting, `ai.webSearch`.
 // =============================================================================
 
 import {

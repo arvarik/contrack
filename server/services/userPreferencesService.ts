@@ -36,17 +36,6 @@ export const THEME_MODES = ["light", "dark", "system"] as const;
 /** The built-in accent. Every derived token is computed from this one value. */
 export const DEFAULT_ACCENT = "#006a91";
 
-/** Search history never grows past this, on the server or in the browser. */
-export const MAX_SEARCH_HISTORY = 20;
-
-/** One recorded search. The browser reads these back as ↑/↓ history. */
-const searchHistoryEntrySchema = z.object({
-  query: z.string().trim().min(1).max(200),
-  mode: z.enum(["normal", "ai", "action"]),
-  /** Epoch milliseconds. Written by the browser, so it is not trusted for order. */
-  timestamp: z.number().int().nonnegative(),
-});
-
 export const PULSE_COLUMNS = ["focus", "network", "intel"] as const;
 export type PulseColumn = (typeof PULSE_COLUMNS)[number];
 
@@ -111,7 +100,6 @@ export const preferenceSchemas = {
   recentLimit: z.number().int().min(0).max(10),
   dedupePreset: z.enum(["conservative", "default", "aggressive"]),
   tempUnit: z.enum(["celsius", "fahrenheit"]),
-  searchHistory: z.array(searchHistoryEntrySchema).max(MAX_SEARCH_HISTORY),
   pulseLayout: pulseLayoutSchema,
   askHistoryOpen: z.boolean(),
   mapPaneOpen: z.boolean(),
@@ -172,7 +160,6 @@ const DEFAULTS: Preferences = {
   recentLimit: 3,
   dedupePreset: "default",
   tempUnit: "celsius",
-  searchHistory: [],
   pulseLayout: {
     hidden: [],
     order: {},
@@ -210,7 +197,6 @@ export const preferencesPatchSchema = z
 export function defaultPreferences(): Preferences {
   return {
     ...DEFAULTS,
-    searchHistory: [],
     pulseLayout: { hidden: [], order: {} },
     askHistoryOpen: true,
   };

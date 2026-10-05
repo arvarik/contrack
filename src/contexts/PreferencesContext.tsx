@@ -45,7 +45,6 @@ import {
   type PreferencesResponse,
 } from "../api/preferences";
 import { applyTheme, readThemeCache, type ResolvedMode } from "../lib/theme";
-import { forgetLegacyKeys } from "../lib/forgetLegacyKeys";
 
 const QUERY_KEY = ["preferences"] as const;
 
@@ -251,14 +250,6 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     (key: keyof Preferences) => resetMutate(key),
     [resetMutate],
   );
-
-  // ── The keys 1.x left behind ─────────────────────────────────────────────
-  // 2.0 does not read them. Removing them closes the leak between two
-  // accounts on one browser: whatever is left cannot be read by the next
-  // person.
-  useEffect(() => {
-    forgetLegacyKeys();
-  }, []);
 
   // ── Painting it ──────────────────────────────────────────────────────────
   // `mode` is derived, not stored. Keeping it in `useState` and setting it from

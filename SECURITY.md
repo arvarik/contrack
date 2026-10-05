@@ -12,6 +12,7 @@ say if the problem is gone there.
 | -------------- | ------------------- |
 | Latest release | Yes                 |
 | Older releases | No                  |
+| 1.x            | No                  |
 
 ## Report a vulnerability
 

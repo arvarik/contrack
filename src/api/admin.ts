@@ -166,8 +166,8 @@ export interface InstanceHealth {
   uptimeSeconds: number;
   startedAt: string;
   schema: {
-    tenancy: number;
-    tenancyExpected: number;
+    migration: string | null;
+    migrationExpected: string;
     fts: number;
     ftsExpected: number;
     vec: string;

@@ -553,17 +553,6 @@ describe("instance settings", () => {
     expect(after.body).toEqual(written.body);
   });
 
-  it("still answers on the endpoint it replaces", async () => {
-    // PUT /api/auth/session-policy writes the same value and is removed in
-    // 3.0. Both are admin, and both have to agree until then.
-    const legacy = await as(admin)(
-      request(app).put("/api/auth/session-policy").send({ sessionTtlDays: 21 }),
-    );
-    expect(legacy.status).toBe(200);
-    const settings = await as(admin)(request(app).get("/api/admin/settings"));
-    expect(settings.body.sessionTtlDays).toBe(21);
-  });
-
   it("refuses a value outside the supported range", async () => {
     for (const body of [
       { sessionTtlDays: 0 },

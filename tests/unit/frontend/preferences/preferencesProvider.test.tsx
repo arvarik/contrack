@@ -26,7 +26,6 @@ import {
   usePreferences,
 } from "../../../../src/contexts/PreferencesContext";
 import { DEFAULT_PREFERENCES } from "../../../../src/api/preferences";
-import { LEGACY_KEYS } from "../../../../src/lib/forgetLegacyKeys";
 
 /** Requests the app made, newest last. */
 let calls: { url: string; method: string; body: unknown }[] = [];
@@ -347,37 +346,6 @@ describe("following the machine", () => {
       expect(document.documentElement.getAttribute("data-theme")).toBe("light"),
     );
     expect(result.current.mode).toBe("light");
-  });
-});
-
-describe("the keys 1.x left behind", () => {
-  it("removes them and sends none of their values to the account", async () => {
-    localStorage.setItem(LEGACY_KEYS.listDensity, "compact");
-    localStorage.setItem(LEGACY_KEYS.tempUnit, "fahrenheit");
-    localStorage.setItem("unrelated", "kept");
-
-    const { result } = renderHook(() => usePreferences(), {
-      wrapper: makeWrapper(),
-    });
-    await waitFor(() => expect(result.current.isLoaded).toBe(true));
-    await waitFor(() =>
-      expect(localStorage.getItem(LEGACY_KEYS.listDensity)).toBeNull(),
-    );
-
-    expect(localStorage.getItem(LEGACY_KEYS.tempUnit)).toBeNull();
-    expect(localStorage.getItem("unrelated")).toBe("kept");
-    expect(patches()).toEqual([]);
-    expect(result.current.preferences.listDensity).toBe(
-      DEFAULT_PREFERENCES.listDensity,
-    );
-  });
-
-  it("sends nothing when the browser holds nothing", async () => {
-    const { result } = renderHook(() => usePreferences(), {
-      wrapper: makeWrapper(),
-    });
-    await waitFor(() => expect(result.current.isLoaded).toBe(true));
-    expect(patches()).toEqual([]);
   });
 });
 

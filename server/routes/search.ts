@@ -407,7 +407,6 @@ router.get(
   "/history",
   asyncHandler(async (req, res) => {
     const scope = scopeOf(req);
-    searchHistoryService.backfillFromPreferences(scope.ownerId);
     const query = listHistoryQuerySchema.parse(req.query);
     const result = searchHistoryService.list(scope.ownerId, query);
     res.json(result);

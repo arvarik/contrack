@@ -43,7 +43,8 @@ export function primaryAdminId(sqlite: Database.Database): string {
  * is the operator.
  *
  * On an instance that already has real accounts this creates nothing and
- * returns the primary admin, so an upgrade never invents a second owner.
+ * returns the primary admin, so a local owner that became an account is not
+ * made again.
  */
 export function ensureLocalOwner(sqlite: Database.Database): string {
   const existing = sqlite

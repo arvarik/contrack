@@ -17,8 +17,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 
 const { makeTestApp } = await import("./helpers.ts");
-const { sqlite, OWNED_TABLES, TENANCY_SCHEMA_VERSION } =
-  await import("../../server/db.ts");
+const { sqlite, OWNED_TABLES } = await import("../../server/db.ts");
 const { FTS_SCHEMA_VERSION } =
   await import("../../server/services/search/ftsIndex.ts");
 const { MIGRATIONS } = await import("../../server/db/migrations/index.ts");
@@ -92,8 +91,6 @@ describe("what it says", () => {
   it("reports the schema this database is actually on", async () => {
     const body = (await health()) as unknown as {
       schema: {
-        tenancy: number;
-        tenancyExpected: number;
         fts: number;
         ftsExpected: number;
         migration: string | null;
@@ -104,8 +101,6 @@ describe("what it says", () => {
       };
     };
 
-    expect(body.schema.tenancy).toBe(TENANCY_SCHEMA_VERSION);
-    expect(body.schema.tenancyExpected).toBe(TENANCY_SCHEMA_VERSION);
     expect(body.schema.fts).toBe(FTS_SCHEMA_VERSION);
     expect(body.schema.ftsExpected).toBe(FTS_SCHEMA_VERSION);
     const last = MIGRATIONS[MIGRATIONS.length - 1].id;
@@ -113,7 +108,7 @@ describe("what it says", () => {
     expect(body.schema.migrationExpected).toBe(last);
     // Every derived structure, each at the version this build builds.
     expect(body.schema.indexes.map((index) => index.id)).toEqual(
-      expect.arrayContaining(["tenancy", "contacts_fts", "search_embeddings"]),
+      expect.arrayContaining(["contacts_fts", "search_embeddings"]),
     );
     for (const index of body.schema.indexes) {
       expect(index.version, index.id).toBe(index.expected);

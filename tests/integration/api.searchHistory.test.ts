@@ -11,7 +11,6 @@ import request from "supertest";
 import { sqlite } from "../../server/db.ts";
 import { makeTestApp } from "./helpers.ts";
 import { asUser, createActor, type Actor } from "./tenancy/helpers.ts";
-import { setPreferences } from "../../server/services/userPreferencesService.ts";
 
 let app: ReturnType<typeof makeTestApp>;
 let userA: Actor;
@@ -414,70 +413,5 @@ describe("API search history (/api/search/history)", () => {
 
     // Clean up
     await asUser(userA)(request(app).delete("/api/search/history"));
-  });
-
-  it("backfill: an account with 3 preference entries and no rows sees 3 rows on first GET and still 3 on the second", async () => {
-    const backfillUser = await createActor(app, {
-      username: "backfill_user",
-      email: "backfill_user@test.dev",
-    });
-
-    // Populate searchHistory in preferences
-    setPreferences(backfillUser.user.id, {
-      searchHistory: [
-        { query: "Sarah Connor", mode: "normal", timestamp: 1726000000000 },
-        { query: "New contact", mode: "action", timestamp: 1726000001000 },
-        {
-          query: "? who works at google",
-          mode: "ai",
-          timestamp: 1726000002000,
-        },
-      ],
-    });
-
-    // Ensure no search_history rows exist yet
-    const preCount = sqlite
-      .prepare("SELECT COUNT(*) as count FROM search_history WHERE ownerId = ?")
-      .get(backfillUser.user.id) as { count: number };
-    expect(preCount.count).toBe(0);
-
-    // First GET triggers backfill
-    const firstGet = await asUser(backfillUser)(
-      request(app).get("/api/search/history"),
-    );
-    expect(firstGet.status).toBe(200);
-    expect(firstGet.body.total).toBe(3);
-    expect(firstGet.body.entries).toHaveLength(3);
-
-    const queries = firstGet.body.entries.map(
-      (e: { query: string; mode: string }) => ({
-        query: e.query,
-        mode: e.mode,
-      }),
-    );
-
-    expect(queries).toContainEqual({
-      query: "Sarah Connor",
-      mode: "palette",
-    });
-    expect(queries).toContainEqual({
-      query: "New contact",
-      mode: "palette",
-    });
-    expect(queries).toContainEqual({
-      query: "who works at google", // '? ' stripped
-      mode: "people",
-    });
-
-    // Second GET still sees 3 rows (idempotent)
-    const secondGet = await asUser(backfillUser)(
-      request(app).get("/api/search/history"),
-    );
-    expect(secondGet.status).toBe(200);
-    expect(secondGet.body.total).toBe(3);
-    expect(secondGet.body.entries).toHaveLength(3);
-
-    // Clean up
-    await asUser(backfillUser)(request(app).delete("/api/search/history"));
   });
 });

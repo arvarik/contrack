@@ -15,7 +15,7 @@
 // =============================================================================
 
 import crypto from "crypto";
-import { sqlite, claimUnownedData, ensureLocalOwner } from "../db.ts";
+import { sqlite } from "../db.ts";
 import type { SessionMethod } from "../../shared/devices.ts";
 import { log } from "../utils/logger.ts";
 import { AppError, ConflictError, ValidationError } from "../utils/AppError.ts";
@@ -470,7 +470,6 @@ export async function createUser(input: {
       }
       throw err;
     }
-    if (isFirst) claimUnownedData(id);
     return getUserById(id)!;
   })();
 
@@ -907,26 +906,6 @@ export function revokeOtherSessions(
     .prepare(`DELETE FROM sessions WHERE userId = ? AND id IS NOT ?`)
     .run(userId, keepSessionId);
   return result.changes;
-}
-
-// =============================================================================
-// Ownership
-// =============================================================================
-
-/**
- * Boot-time ownership reconcile.
- *
- * Every instance has a local owner from `server/db.ts` §2z-4, so this no
- * longer has to guess who to claim for: it ensures that account exists and
- * hands it anything written without an owner. Idempotent, and a no-op after
- * the first boot because the claim's WHERE clause then matches nothing.
- *
- * The old "only when exactly one account exists" guard is gone. It was there
- * because with several accounts there was no safe answer, and the local owner
- * is that answer.
- */
-export function reconcileOwnership(): void {
-  claimUnownedData(ensureLocalOwner());
 }
 
 /**

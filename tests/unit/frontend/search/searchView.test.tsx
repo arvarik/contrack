@@ -150,7 +150,6 @@ const defaultPreferences = {
   recentLimit: 3,
   dedupePreset: "default",
   tempUnit: "celsius",
-  searchHistory: [],
   askHistoryOpen: true,
 };
 

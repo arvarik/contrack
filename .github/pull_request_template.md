@@ -8,7 +8,7 @@
 
 ## Checklist
 
-- [ ] The pull request targets `v2.0`, and its title is a plain sentence that says what the change does
+- [ ] The pull request targets `main`, and its title is a plain sentence that says what the change does
 - [ ] Tests cover the change, and a bug fix has a test that fails without it
 - [ ] The docs page that the change affects is updated
 - [ ] `CHANGELOG.md` has one short line under `[Unreleased]` when users or operators notice the change

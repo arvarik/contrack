@@ -256,7 +256,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
 
     setAuthRequired(status.authRequired);
     setUser(status.user);
-    setDeviceContacts(status.deviceContacts ?? status.existingContacts ?? 0);
+    setDeviceContacts(status.deviceContacts ?? 0);
     setRegistrationOpen(status.registrationOpen ?? false);
     setLegacyTokenConfigured(status.legacyTokenConfigured ?? false);
     setPublicUrl(status.publicUrl ?? null);
