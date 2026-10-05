@@ -8,8 +8,11 @@
 //                 added field by field, the searches it ran and the facts it
 //                 reported
 //   sources       every page the runs cited, deduplicated by address
-//   addedEntries  every list entry research added, so that it never adds
-//                 back one the person removed
+//   addedEntries  every entry research added, and the run that added it, so
+//                 that it never adds back one the person removed, and a run
+//                 marked "Not this person" can take back what it added
+//   rejectedSources  the pages of runs marked "Not this person", which later
+//                 runs leave out
 //
 // The dossier used to carry this as markdown inside `aiBackground`: the
 // sources as "Source 1", "Source 2" links to Google redirects, and a copy of
@@ -126,6 +129,11 @@ const researchRunSchema = z.object({
   sourceCount: z.number().int().nonnegative(),
   queries: z.array(z.string().max(300)).max(24),
   findings: z.array(researchFindingSchema).max(80),
+  /**
+   * The person said this run found someone else. What it added was taken
+   * back, and its pages are left out of later runs (`rejectedSources`).
+   */
+  rejected: z.boolean().optional(),
 });
 
 /**
@@ -136,10 +144,15 @@ const researchAddedEntrySchema = z.object({
   field: z.string().max(40),
   /** The school, the employer, the address, the email, the tag or the name. */
   value: z.string().max(300),
-  /** A school's degree, or a job's role. */
-  detail: z.string().max(200).optional(),
+  /**
+   * A school's degree, a job's role, a list item, or the whole list a run
+   * made for an attribute (up to an attribute's 2,000 characters).
+   */
+  detail: z.string().max(2000).optional(),
   /** A school's end date, or a job's start date. */
   date: z.string().max(20).optional(),
+  /** The run that added it (`ResearchRun.at`). Absent on older records. */
+  at: z.string().max(40).optional(),
 });
 
 export const researchRecordSchema = z.object({
@@ -154,6 +167,19 @@ export const researchRecordSchema = z.object({
   addedEntries: z
     .array(researchAddedEntrySchema)
     .max(MAX_ADDED_ENTRIES)
+    .optional(),
+  /**
+   * The pages of runs the person marked "Not this person". Later runs drop
+   * them and the facts they back. A bad address is dropped, like a source's.
+   */
+  rejectedSources: z
+    .preprocess(
+      (value) =>
+        Array.isArray(value)
+          ? value.filter((entry) => webUrl.safeParse(entry).success)
+          : value,
+      z.array(webUrl).max(MAX_RESEARCH_SOURCES),
+    )
     .optional(),
 });
 

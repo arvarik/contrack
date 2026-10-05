@@ -48,6 +48,12 @@ vi.mock("../../../../src/hooks/useAiAllowed", () => ({
   useAiAllowed: () => ai.allowed,
 }));
 
+/** The contact writes the Research card makes. */
+const writes = vi.hoisted(() => ({ update: vi.fn(), reject: vi.fn() }));
+vi.mock("../../../../src/api/contacts", () => ({
+  useUpdateContact: () => ({ mutate: writes.update, isPending: false }),
+  useRejectResearchRun: () => ({ mutate: writes.reject, isPending: false }),
+}));
 const contacts = vi.hoisted(() => ({ list: [] as unknown[] }));
 vi.mock("../../../../src/api", () => ({
   useContacts: () => ({ data: contacts.list, isLoading: false }),
@@ -349,18 +355,14 @@ describe("the Research card, when research found nobody", () => {
     expect(steps.textContent).toContain(
       "Research searched with Rowan’s name, company, role and LinkedIn profile",
     );
-    // The LinkedIn profile is a link already, so the offer is another one.
+    // The three that help most: one row of the dossier's column.
     expect(
       within(steps)
         .getAllByRole("button")
         .map((button) => button.textContent),
-    ).toEqual(["Add a city", "Add a work email", "Add another link"]);
+    ).toEqual(["Add a school", "Add a city", "Add a former name"]);
     fireEvent.click(within(steps).getByRole("button", { name: "Add a city" }));
     expect(onAddDetail).toHaveBeenCalledWith("city");
-    // A Standard run is followed by the offer of Deep.
-    expect(steps.textContent).toContain(
-      "Then choose Enrich again. Deep runs a longer search",
-    );
     // No page to check a detail against, so no line asking to.
     expect(screen.queryByText(/Check a detail against its page/)).toBeNull();
   });
@@ -378,11 +380,12 @@ describe("the Research card, when research found nobody", () => {
     const steps = screen.getByRole("region", {
       name: "No web page matched Rowan",
     });
+    // The LinkedIn profile is a link already, so the offer is another one.
     expect(
       within(steps)
         .getAllByRole("button")
         .map((button) => button.textContent),
-    ).toEqual(["Add another link"]);
+    ).toEqual(["Add a school", "Add a former name", "Add another link"]);
     expect(steps.textContent).not.toContain("Deep runs a longer search");
   });
 
@@ -395,6 +398,12 @@ describe("the Research card, when research found nobody", () => {
           socialLinks: [
             { platform: "github", url: "https://github.com/rowanv" },
           ] as Contact["socialLinks"],
+          education: [
+            { school: "University of Example" },
+          ] as Contact["education"],
+          attributes: [
+            { name: "Former name", value: "Rowan Ellis" },
+          ] as Contact["attributes"],
         })}
         onAddDetail={vi.fn()}
       />,
@@ -426,7 +435,7 @@ describe("the Research card, when research found nobody", () => {
       within(steps)
         .getAllByRole("button")
         .map((button) => button.textContent),
-    ).toEqual(["Add a city", "Add a work email", "Add a link"]);
+    ).toEqual(["Add a school", "Add a city", "Add a former name"]);
   });
 
   it("names no Enrich again when research is off, and still offers the details", () => {
@@ -439,7 +448,7 @@ describe("the Research card, when research found nobody", () => {
       within(steps)
         .getAllByRole("button")
         .map((button) => button.textContent),
-    ).toEqual(["Add a city", "Add a work email", "Add another link"]);
+    ).toEqual(["Add a school", "Add a city", "Add a former name"]);
     expect(steps.textContent).not.toContain("Enrich again");
     expect(screen.queryByRole("button", { name: /^Enrich again/ })).toBeNull();
   });

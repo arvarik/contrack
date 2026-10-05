@@ -26,6 +26,10 @@ vi.mock("../../../../src/hooks/useAiAllowed", () => ({
   useAiAllowed: () => false,
 }));
 
+vi.mock("../../../../src/api/contacts", () => ({
+  useUpdateContact: () => ({ mutate: vi.fn(), isPending: false }),
+  useRejectResearchRun: () => ({ mutate: vi.fn(), isPending: false }),
+}));
 import { parseResearchRecord } from "../../../../shared/researchRecord";
 import { ResearchCard } from "../../../../src/views/contact-detail/components/ResearchCard";
 import type { Contact } from "../../../../src/types";

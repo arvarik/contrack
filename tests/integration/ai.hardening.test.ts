@@ -171,67 +171,74 @@ describe("enrichment integrity", () => {
 });
 
 describe("batch research lifecycle", () => {
-  it("does not repeat paid research for an empty grounding result", async () => {
+  it("asks once more when a search returned no words, then says it had no answer", async () => {
+    // A search with no words is a call that failed, not a page that said
+    // nothing about the person.
     vi.mocked(generateFor).mockResolvedValue(reply(""));
     await expect(
       researchWith("provider-search", {
         scope: scope(),
         contact: enrichmentContact(scope(), id),
       }),
-    ).rejects.toThrow("No public information");
-    expect(generateFor).toHaveBeenCalledTimes(1);
+    ).rejects.toMatchObject({ code: "AI_NO_ANSWER" });
+    expect(generateFor).toHaveBeenCalledTimes(2);
   });
-  it("stops before extraction when the provider omits source links", async () => {
+  it("stops before extraction when the provider runs no search", async () => {
     vi.mocked(generateFor).mockResolvedValue({
       ...reply("An unsupported biography"),
       citations: [],
     });
     const response = await request(app).post(`/api/contacts/${id}/enrich`);
     expect(response.status).toBe(502);
-    expect(response.body.error.code).toBe("AI_GROUNDING_MISSING");
-    // The search pass is asked twice more, at once, each time in another
-    // form, and extraction never starts. A model decides for itself whether
-    // to search.
-    expect(generateFor).toHaveBeenCalledTimes(3);
-    expect(vi.mocked(generateFor).mock.calls[1][1].prompt).toContain(
-      "Run Google Search now",
-    );
-    expect(vi.mocked(generateFor).mock.calls[2][1].prompt).toMatch(
-      /^Run Google searches about one person/,
+    expect(response.body.error.code).toBe("AI_NO_SEARCH");
+    // The plain ask is asked once more, and extraction never starts. A
+    // model decides for itself whether to search.
+    expect(generateFor).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(generateFor).mock.calls[1][1].prompt).toBe(
+      vi.mocked(generateFor).mock.calls[0][1].prompt,
     );
     expect(enrichmentContact(scope(), id).aiHydratedAt).toBeNull();
     expect(enrichmentContact(scope(), id).role).toBeNull();
   });
-  it("asks twice more when the first search pass read nothing, and uses the answer that cites pages", async () => {
+  it("asks once more when the first ask ran no search, and uses the answer that cites pages", async () => {
     vi.mocked(generateFor)
       .mockResolvedValueOnce({ ...reply("From memory"), citations: [] })
       .mockResolvedValueOnce(reply("A source-backed biography"))
-      .mockResolvedValueOnce({ ...reply("From memory again"), citations: [] })
-      .mockResolvedValueOnce(reply('{"about":"Researcher in test software"}'));
+      .mockResolvedValueOnce(
+        reply(
+          '{"about":"Researcher in test software","location":"Austin, TX"}',
+        ),
+      );
     const response = await request(app).post(`/api/contacts/${id}/enrich`);
     expect(response.status).toBe(200);
-    expect(generateFor).toHaveBeenCalledTimes(4);
-    expect(vi.mocked(generateFor).mock.calls[3][1].prompt).toContain(
+    expect(generateFor).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(generateFor).mock.calls[2][1].prompt).toContain(
       "A source-backed biography",
+    );
+    expect(vi.mocked(generateFor).mock.calls[2][1].prompt).not.toContain(
+      "From memory",
     );
     expect(enrichmentContact(scope(), id).aiResearch).toContain(
       "https://example.com/profile",
     );
   });
-  it("asks again when the first search pass returns no answer and no pages", async () => {
+  it("asks again when the first ask returns no answer and no pages", async () => {
     vi.mocked(generateFor)
       .mockResolvedValueOnce({ ...reply(""), citations: [] })
-      .mockRejectedValueOnce(new Error("AI call exceeded 120000ms timeout"))
       .mockResolvedValueOnce(reply("A source-backed biography"))
-      .mockResolvedValueOnce(reply('{"about":"Researcher in test software"}'));
+      .mockResolvedValueOnce(
+        reply(
+          '{"about":"Researcher in test software","location":"Austin, TX"}',
+        ),
+      );
     const response = await request(app).post(`/api/contacts/${id}/enrich`);
     expect(response.status).toBe(200);
-    expect(generateFor).toHaveBeenCalledTimes(4);
+    expect(generateFor).toHaveBeenCalledTimes(3);
     expect(enrichmentContact(scope(), id).about).toBe(
       "Researcher in test software",
     );
   });
-  it("reports the provider's error when both further asks fail", async () => {
+  it("reports the provider's error when the second ask fails", async () => {
     vi.mocked(generateFor)
       .mockResolvedValueOnce({ ...reply("From memory"), citations: [] })
       .mockRejectedValue(new Error("Network 500"));
@@ -241,20 +248,24 @@ describe("batch research lifecycle", () => {
         contact: enrichmentContact(scope(), id),
       }),
     ).rejects.toThrow("Network 500");
-    expect(generateFor).toHaveBeenCalledTimes(3);
+    expect(generateFor).toHaveBeenCalledTimes(2);
   });
-  it("reports a failed call, not missing information, when no search pass answers", async () => {
+  it("reports a failed call, not missing information, when no ask answers", async () => {
     vi.mocked(generateFor).mockResolvedValue({ ...reply(""), citations: [] });
     const response = await request(app).post(`/api/contacts/${id}/enrich`);
     expect(response.status).toBe(502);
     expect(response.body.error.code).toBe("AI_NO_ANSWER");
-    expect(generateFor).toHaveBeenCalledTimes(3);
+    expect(generateFor).toHaveBeenCalledTimes(2);
     expect(enrichmentContact(scope(), id).aiHydratedAt).toBeNull();
   });
   it("persists safe provider source links with the validated research", async () => {
     vi.mocked(generateFor)
       .mockResolvedValueOnce(reply("A source-backed biography"))
-      .mockResolvedValueOnce(reply('{"about":"Researcher in test software"}'));
+      .mockResolvedValueOnce(
+        reply(
+          '{"about":"Researcher in test software","location":"Austin, TX"}',
+        ),
+      );
     const response = await request(app).post(`/api/contacts/${id}/enrich`);
     expect(response.status).toBe(200);
     // The sources are in the research record, not in a dossier text.

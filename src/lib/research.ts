@@ -7,6 +7,7 @@
  */
 import type { ResearchRun, ResearchSource } from "../../shared/researchRecord";
 import {
+  formerNames,
   placeFromAddresses,
   workEmailDomain,
 } from "../../shared/researchIdentity";
@@ -82,16 +83,23 @@ function fieldLabel(field: string): string {
  */
 export function runSummary(run: ResearchRun): string {
   if (run.models.length === 0) return "Enriched before details were recorded";
+  if (run.rejected) return "Someone else with this name, taken back";
   if (run.outcome === "no-public-info") return "No web page about this person";
   const pages = `${run.sourceCount} page${run.sourceCount === 1 ? "" : "s"}`;
   if (run.outcome === "nothing-new") return `Read ${pages}, nothing new`;
   const total = run.added.reduce((sum, entry) => sum + entry.count, 0);
-  const parts = run.added.map((entry) =>
-    entry.count > 1
-      ? `${fieldLabel(entry.field)} ×${entry.count}`
-      : fieldLabel(entry.field),
-  );
-  return `Added ${total} from ${pages}: ${parts.join(", ")}`;
+  return `Added ${total} from ${pages}: ${addedInWords(run)}`;
+}
+
+/** What a run added, field by field: "Roles ×4, Education ×2, Location". */
+export function addedInWords(run: ResearchRun): string {
+  return run.added
+    .map((entry) =>
+      entry.count > 1
+        ? `${fieldLabel(entry.field)} ×${entry.count}`
+        : fieldLabel(entry.field),
+    )
+    .join(", ");
 }
 
 /** True when a source's title is only its site's name, as Gemini gives it. */
@@ -140,13 +148,49 @@ export function sourceDisplay(source: ResearchSource): {
   return { title, site, trail };
 }
 
+/** Fields that only describe what research found, not the person's life. */
+const SUMMARY_FIELDS = new Set(["headline", "industry", "tags", "about"]);
+
 /**
- * A detail a person can add on the contact page that helps research find
- * the right person: a city, an email at their employer, a link of their own.
- * Schools and past jobs help too, but the contact page has no field for
- * them.
+ * How many details a run added beyond the summary fields it writes from
+ * them: "Roles ×3, Education, Headline" is 4.
  */
-export type ResearchAnchor = "city" | "workEmail" | "link";
+export function detailsAdded(run: ResearchRun): number {
+  return run.added
+    .filter((entry) => !SUMMARY_FIELDS.has(entry.field))
+    .reduce((sum, entry) => sum + entry.count, 0);
+}
+
+/**
+ * Why the Research card asks for one more detail, from the latest run, or
+ * null when it has no reason to:
+ *
+ * - `no-page`: the search found no page about the person.
+ * - `rejected`: the person said the search found someone else.
+ * - `thin`: it added two details or fewer. A run that found nothing new is
+ *   not thin: the records may hold all there is.
+ */
+export type NextStepReason = "no-page" | "rejected" | "thin";
+
+/** The reason the latest run gives, if any (`NextStepReason`). */
+export function nextStepReason(
+  runs: readonly ResearchRun[],
+): NextStepReason | null {
+  const last = runs[runs.length - 1];
+  if (!last || last.models.length === 0) return null;
+  if (last.rejected) return "rejected";
+  if (last.outcome === "no-public-info") return "no-page";
+  return last.outcome === "added" && detailsAdded(last) <= 2 ? "thin" : null;
+}
+
+/**
+ * A detail a person can add that helps research find the right person: a
+ * school, a city, a name they went by before, an email at their employer,
+ * a link of their own. A school and a former name are added in the
+ * Research card itself; the rest open their field on the page.
+ */
+export type ResearchAnchor =
+  "school" | "city" | "formerName" | "workEmail" | "link";
 
 /** The contact fields the identity advice reads. */
 type IdentityContact = Pick<
@@ -155,6 +199,7 @@ type IdentityContact = Pick<
 > & {
   education?: Contact["education"];
   experience?: Contact["experience"];
+  attributes?: Contact["attributes"];
 };
 
 /** The place research reads: the location, else an address that names a city. */
@@ -199,6 +244,7 @@ export function researchedWith(contact: IdentityContact): string[] {
     details.push("past jobs");
   const schools = contact.education?.length ?? 0;
   if (schools > 0) details.push(schools === 1 ? "school" : "schools");
+  if (formerNames(contact.attributes).length > 0) details.push("former name");
   const emails = contact.emails ?? [];
   if (emails.some((entry) => workEmailDomain(entry.email)))
     details.push("work email");
@@ -210,12 +256,17 @@ export function researchedWith(contact: IdentityContact): string[] {
 
 /**
  * The details the person could add that would help research, in the order
- * they help most. A LinkedIn profile does not count as a link here: the
+ * they help most. A school and a city tell two people with one name apart,
+ * and a former name finds the pages from before a change of name: the
+ * owner knew all three for contacts research found little about
+ * (2026-10-05). A LinkedIn profile does not count as a link here: the
  * search research runs does not return LinkedIn pages (2026-09-26).
  */
 export function missingAnchors(contact: IdentityContact): ResearchAnchor[] {
   const missing: ResearchAnchor[] = [];
+  if (!contact.education?.length) missing.push("school");
   if (!placeOf(contact)) missing.push("city");
+  if (formerNames(contact.attributes).length === 0) missing.push("formerName");
   if (!contact.emails?.some((entry) => workEmailDomain(entry.email)))
     missing.push("workEmail");
   if (

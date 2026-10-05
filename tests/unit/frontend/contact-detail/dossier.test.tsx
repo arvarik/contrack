@@ -13,6 +13,12 @@ import {
   type BriefingMutation,
 } from "../../../../src/views/contact-detail/components/DossierTab";
 import { MemoryRouter } from "react-router-dom";
+// The Research card's writes need no server here.
+vi.mock("../../../../src/api/contacts", () => ({
+  useUpdateContact: () => ({ mutate: vi.fn(), isPending: false }),
+  useRejectResearchRun: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
 import { THINKING_CLASS } from "../../../../src/components/brand/CorvidThinking";
 import type { Contact } from "../../../../src/types";
 afterEach(cleanup);

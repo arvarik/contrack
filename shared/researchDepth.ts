@@ -4,15 +4,14 @@
 // Two depths, one name each, used the same way by the API, the job queue,
 // the research record and every control that starts research:
 //
-//   standard  one search ask at thinking "medium", for the main facts, with
-//             four to six searches
-//   deep      the same ask, and beside it one at thinking "high" for a
-//             complete profile, with ten or more searches; what both cite
-//             is kept
+//   standard  one plain search ask at thinking "medium"
+//   deep      the same ask, and beside it the long prompt with the records
+//             and the searches to run, also at "medium"; what both cite is
+//             kept
 //
-// "High" found more when it answered, but it came back empty for some
-// contacts on every try (2026-09-26). Beside the "medium" ask, an empty
-// answer costs its tokens and the "medium" one still stands.
+// A deep ask at thinking "high" for a complete profile came back empty for
+// 13 of 64 contacts and wrote a namesake's facts into 3 (2026-10-05), so
+// neither depth asks at "high".
 //
 // The web searches are most of the cost. Google bills Gemini 3 each search
 // query the model runs, and the tokens of a pass cost a fraction of its
@@ -42,10 +41,9 @@ interface ResearchDepthFigures {
 
 /**
  * The measured figures, the Enrichment page's time and cost for each depth.
- * Five contacts from real records, with Gemini 3.8 Flash and 3.5 Flash-Lite
- * (2026-09-26): the means over the runs that found pages, ten at Standard in
- * three rounds and six at Deep in two. A contact no page is about took 15 to
- * 65 s and cost $0.01 to $0.06. The cost is $14 per 1,000 web searches, and
+ * Twenty contacts imported from LinkedIn, with Gemini 3.8 Flash and 3.5
+ * Flash-Lite (2026-10-05): the means over the runs that added details, 17 at
+ * Standard and 19 at Deep. The cost is $14 per 1,000 web searches, and
  * $0.75 and $3.75 per million input and output tokens, Gemini 3.8 Flash's
  * prices through 2026. Its token prices double in January 2027, so measure
  * again then (the cost tip names 2026 as the year of its prices). The
@@ -56,8 +54,8 @@ export const RESEARCH_DEPTH_FIGURES: Record<
   ResearchDepth,
   ResearchDepthFigures
 > = {
-  standard: { seconds: 41, searches: 8, costUsd: 0.15 },
-  deep: { seconds: 60, searches: 18, costUsd: 0.32 },
+  standard: { seconds: 20, searches: 5, costUsd: 0.08 },
+  deep: { seconds: 32, searches: 7, costUsd: 0.13 },
 };
 
 // -----------------------------------------------------------------------------
@@ -129,28 +127,27 @@ export const RESEARCH_PRICES: Record<ResearchProvider, ResearchPrices> = {
 };
 
 /**
- * The tokens one contact uses at each depth. The measured cost of a depth,
- * less its searches at Google's price, is what its tokens cost: $0.038
- * Standard and $0.068 Deep. Divided by Gemini 3.8 Flash's blended rate of
- * $1.50 a million tokens (three parts input to one part output, as the usage
- * page blends) that is about 25,000 and 45,000 tokens.
+ * The tokens one contact uses at each depth, thinking included, measured
+ * with the figures above: about 5,300 at Standard and 13,000 at Deep. About
+ * half of them are output, because research thinks, and thinking is billed
+ * as output.
  */
 const TOKENS_PER_CONTACT: Record<ResearchDepth, number> = {
-  standard: 25_000,
-  deep: 45_000,
+  standard: 5_300,
+  deep: 13_000,
 };
 
 /**
  * What one contact costs at a depth on a provider, in US dollars: the
  * measured searches at the provider's search price, and the tokens at its
- * blended token price.
+ * input and output prices, half each.
  */
 export function estimateCostUsd(
   provider: ResearchProvider,
   depth: ResearchDepth,
 ): number {
   const prices = RESEARCH_PRICES[provider];
-  const blendedPerM = (3 * prices.inputPerM + prices.outputPerM) / 4;
+  const blendedPerM = (prices.inputPerM + prices.outputPerM) / 2;
   const searches =
     (RESEARCH_DEPTH_FIGURES[depth].searches * prices.searchPer1000) / 1000;
   const tokens = (TOKENS_PER_CONTACT[depth] * blendedPerM) / 1_000_000;

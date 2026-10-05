@@ -73,6 +73,12 @@ const queries = () =>
 let pages: Record<string, string>;
 
 /** A model answer. */
+/**
+ * An extraction with one fact the records lack. A run whose extraction only
+ * restates the records records no public information (`hasNewFacts`).
+ */
+const EXTRACTED = JSON.stringify({ location: "Austin, TX" });
+
 const reply = (
   text: string,
   model: string,
@@ -421,7 +427,7 @@ describe("SearXNG research", () => {
       ].join("\n"),
       "mock-reader",
     );
-    byCapability.quick = reply("{}", "mock-extractor");
+    byCapability.quick = reply(EXTRACTED, "mock-extractor");
     const research = await researchWith("search-and-read", {
       scope: scope(),
       contact: enrichmentContact(scope(), id),
@@ -497,7 +503,7 @@ describe("SearXNG research", () => {
           `<html><body><p>Greg Whitlock of Northwind Partners. ${`Greg Whitlock worked at Firm ${index}. `.repeat(200)}</p></body></html>`;
       let part = 0;
       vi.mocked(generateFor).mockImplementation(async (capability) => {
-        if (capability !== "deep") return reply("{}", "small-model");
+        if (capability !== "deep") return reply(EXTRACTED, "small-model");
         part += 1;
         if (part === 2) throw new Error("The local model timed out");
         return reply(
@@ -727,7 +733,7 @@ describe("research with both searches", () => {
       "- Award: Fellow, Example Society [news.example]",
     );
     byCapability.deep = reply(READ_LINES, "mock-reader");
-    byCapability.quick = reply("{}", "mock-extractor");
+    byCapability.quick = reply(EXTRACTED, "mock-extractor");
     const research = await researchWith("combined", {
       scope: scope(),
       contact: enrichmentContact(scope(), id),
@@ -775,17 +781,18 @@ describe("research with both searches", () => {
       "mock-reader",
       "mock-extractor",
     ]);
-    // The model was asked three times, in its three forms.
+    // The model was asked twice: the plain ask, and once more when it ran
+    // no search.
     expect(
       calls().filter((call) => call.capability === "research"),
-    ).toHaveLength(3);
+    ).toHaveLength(2);
   });
 
   it("stands on the research model when SearXNG finds nothing", async () => {
     byCapability.research = provider(
       "- Award: Fellow, Example Society [news.example]",
     );
-    byCapability.quick = reply("{}", "mock-extractor");
+    byCapability.quick = reply(EXTRACTED, "mock-extractor");
     const research = await researchWith("combined", {
       scope: scope(),
       contact: enrichmentContact(scope(), id),
@@ -817,7 +824,7 @@ describe("research with both searches", () => {
   it("stops the research model's search at its own deadline, and stands on SearXNG", async () => {
     firmResults();
     byCapability.deep = reply(READ_LINES, "mock-reader");
-    byCapability.quick = reply("{}", "mock-extractor");
+    byCapability.quick = reply(EXTRACTED, "mock-extractor");
     researchHangs();
     const research = await researchWith("combined", {
       // Half a second for each search, after the extraction's time.
@@ -912,7 +919,7 @@ describe("choosing how to search, through the API", () => {
   it("runs a batch's jobs with each one's strategy", async () => {
     firmResults();
     byCapability.deep = reply(READ_LINES, "mock-reader");
-    byCapability.quick = reply("{}", "mock-extractor");
+    byCapability.quick = reply(EXTRACTED, "mock-extractor");
     const batch = jobQueue.createBatch(
       scope(),
       [{ id, name: "Greg Whitlock" }],

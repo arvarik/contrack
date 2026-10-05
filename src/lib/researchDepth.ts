@@ -5,10 +5,10 @@
  * the Research card's history all say them the same way.
  *
  * One name for each depth: Standard and Deep. Standard is the default, and
- * its name says nothing about quality: it is one search, and it found most
- * of what there was for most contacts. Deep adds a longer search beside it,
- * for the people worth a complete profile: about a fifth more details, from
- * nearly twice the pages, at about twice the cost.
+ * its name says nothing about quality: it is one plain search ask, and it
+ * found something for 17 of 20 contacts. Deep asks the long prompt beside
+ * it, which reads further: facts for 19 of 20, and about two fifths more of
+ * them, at about one and a half times the cost (2026-10-05).
  *
  * The times and costs are the measured figures in `shared/researchDepth.ts`.
  *
@@ -33,7 +33,7 @@ export const DEPTH_WORDS: Record<
   },
   deep: {
     name: "Deep",
-    does: "Adds a longer search, for a complete profile",
+    does: "Adds a second search that reads further",
   },
 };
 

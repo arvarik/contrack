@@ -2137,6 +2137,52 @@
         }
       }
     },
+    "/api/contacts/{id}/research/reject": {
+      "post": {
+        "summary": "Not this person: take back what one research run added, and leave its pages out of later runs",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "runAt": { "type": "string", "minLength": 1, "maxLength": 40 }
+                },
+                "required": ["runAt"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "const": true },
+                    "removed": { "type": "integer" },
+                    "contact": { "$ref": "#/components/schemas/Contact" }
+                  },
+                  "required": ["success", "removed", "contact"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/contacts/{id}/score": {
       "get": {
         "summary": "Why a tracked contact scores what it scores",

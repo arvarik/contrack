@@ -31,8 +31,9 @@
   one pattern for every detail, the Dossier with the briefing and the research
   record, default avatars from pronouns and names, a trash with undo, and
   vCard export.
-- **Research.** Two depths, cited sources, a record of every run, and filters
-  on the Contact enrichment page.
+- **Research.** Two depths that both start with one plain ask, cited
+  sources, a record of every run, **Not this person**, a next step when a
+  run finds little, and filters on the Contact enrichment page.
 - **Map.** MapLibre on OpenFreeMap tiles, layers and saved views, selection
   and bulk actions, the insights pane, pins placed by hand, and self-hosted
   basemaps.

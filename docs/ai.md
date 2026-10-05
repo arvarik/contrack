@@ -176,8 +176,8 @@ archived contacts or ghosts.
 
 | Depth        | What it does                                     | Time and cost per contact |
 | ------------ | ------------------------------------------------ | ------------------------- |
-| **Standard** | One search for roles, schools, city and profiles | About 40 s and $0.15      |
-| **Deep**     | Adds a longer search, for a complete profile     | About 1 min and $0.32     |
+| **Standard** | One search for roles, schools, city and profiles | About 20 s and $0.08      |
+| **Deep**     | Adds a second search that reads further          | About 30 s and $0.13      |
 
 The depth tiles show time and cost only while Gemini's own search runs
 research. The question mark beside **Depth** compares the cost per contact on
@@ -224,28 +224,57 @@ still bill a request that it already took.
 Research fills only empty fields and adds new list entries. It never changes a
 value that you already have, and it does not add back an entry that you
 removed. It keeps what a page about the person states, with no topic left
-out: every email, phone number and home or office address, and any other fact
-the page gives. When you edit the contact while research runs, Contrack drops
-the result.
+out. An email, a phone number or an address it keeps only when it is the
+person's own, never an employer's main line, mailbox or office. When you edit
+the contact while research runs, Contrack drops the result.
+
+Research leaves out what says nothing about the person: a site's front page
+given as a profile, such as `https://medium.com`, a mailbox such as `info@`,
+a job posting, and a list item that only says nothing was found. A job or a
+school worded two ways is added once: "Editor, Writer" and "Editor and
+Writer", or "Example University" and "Harbor School of Engineering at
+Example University". A later run adds new items to a list an earlier
+run made, such as **Publications**, and leaves a list you wrote alone.
+
+A run that finds nothing beyond what the contact already says records **No
+web page about this person**. It saves no headline, industry or tags of its
+own, and no pages.
 
 The **Research** card on the **Dossier** tab lists each run, each fact beside
 its page, and every page under **Sources**. Check a fact against its page.
 
-When research finds no page, the card says **No web page matched** and offers
-**Add a city**, **Add a work email** or **Add a link**. Add a detail, then
-choose **Enrich again**, or **Deep** after a Standard run. **Enrich again**
-looks in new places and adds only new facts.
+When research finds no page, or two details or fewer, the card says **No web
+page matched** or **Research found little**, and offers the details that tell
+the person apart from others with the name: **Add a school**, **Add a city**
+and **Add a former name**, then a work email and a link. A school and a
+former name are typed in the card: **Save and search** saves the detail and
+searches again at once, at the last search's depth. A city, a work email and
+a link open their field on the page, and **Search again** appears in the card
+once you add one. **Enrich again** looks in new places and adds only new
+facts.
 
-Research says no page matched only after the web search model reports a web
-search. When the model answers without one, Contrack records nothing and
-shows "The web search model did not report a web search for this contact".
-Try again, choose another **Web search model**, or search with SearXNG or
-both. A contact never researched stays under **Not yet**.
+### Not this person
+
+When a search found someone else with the same name, open the menu beside
+that search under **History** and choose **Not** and the contact's name. The
+dialog says what the search added. **Take back** removes each detail it
+added that you have not changed since, and later searches leave out its
+pages and never add those details again. The card then offers a detail to
+add and **Search again**.
+
+Research says no page matched only after the web search model searched.
+When the model answers without a search, Contrack asks once more. When it
+still does not search, Contrack records nothing and shows "The web search
+model did not run a web search for this contact". Try again, choose another
+**Web search model**, or search with SearXNG or both. A contact never
+researched stays under **Not yet**.
 
 Research searches the name the way pages write it. It leaves out
 credentials such as ", CPA", tries the name without a middle initial, and
 spells a surname from the LinkedIn handle when the name ends in an initial.
-It never searches a placeholder employer such as "Stealth Startup".
+It also searches a former name that you add, which is saved as the **Former
+name** fact. It never searches a placeholder employer such as "Stealth
+Startup".
 
 ### Limits
 

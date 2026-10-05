@@ -3,14 +3,18 @@
 // =============================================================================
 // Every enrichment is recorded on the contact (`aiResearch`): when it ran,
 // which models, what it added field by field, the searches, the facts and the
-// pages. A second enrichment adds to the record.
+// pages. A second enrichment adds to the record, and "Not this person" takes
+// a run back.
 // =============================================================================
 
 import { beforeEach, describe, it, expect } from "vitest";
 import request from "supertest";
 import { sqlite } from "../../server/db.ts";
 import { makeTestApp } from "./helpers.ts";
-import { enrichmentContact } from "../../server/services/aiSearch/contactSnapshot.ts";
+import {
+  enrichmentContact,
+  lockEnrichment,
+} from "../../server/services/aiSearch/contactSnapshot.ts";
 import {
   mergeSearchResult,
   researchHistory,
@@ -446,11 +450,287 @@ describe("the research record", () => {
       "attributes",
       "education",
     ]);
+    // Each entry names the run that added it, for "Not this person".
     expect(record().addedEntries?.at(-1)).toEqual({
       field: "education",
       value: "University of Example",
       detail: "BA",
       date: "2017",
+      at: record().runs.at(-1)!.at,
     });
+  });
+});
+
+describe("a second round, worded another way", () => {
+  it("adds no job or school again for a title or a school name worded two ways", () => {
+    merge({
+      experience: [{ company: "Juniper Review", role: "Editor, Writer" }],
+      education: [{ school: "Example University", degree: "BS" }],
+    });
+    const added = merge({
+      experience: [
+        { company: "Juniper Review", role: "Editor and Writer" },
+        // Two roles, not one: both words do not fit in either title.
+        { company: "Juniper Review", role: "Research Assistant" },
+      ],
+      education: [
+        {
+          school: "Harbor School of Engineering at Example University",
+          degree: "Bachelor of Science",
+        },
+      ],
+    });
+    expect(added).toBe(1);
+    const contact = enrichmentContact(scope(), id);
+    expect(contact.experience.map((job) => job.role).sort()).toEqual([
+      "Editor, Writer",
+      "Research Assistant",
+    ]);
+    expect(contact.education).toHaveLength(1);
+  });
+
+  it("keeps a promotion and a second university apart, even with no dates", () => {
+    merge({
+      experience: [{ company: "Juniper Review", role: "Analyst" }],
+      education: [{ school: "University of Example" }],
+    });
+    merge({
+      experience: [{ company: "Juniper Review", role: "Senior Analyst" }],
+      education: [{ school: "Example State University" }],
+    });
+    const contact = enrichmentContact(scope(), id);
+    expect(contact.experience.map((job) => job.role).sort()).toEqual([
+      "Analyst",
+      "Senior Analyst",
+    ]);
+    expect(contact.education).toHaveLength(2);
+  });
+
+  it("adds new items to a list an earlier run made, and leaves the person's own list alone", async () => {
+    await request(app)
+      .put(`/api/contacts/${id}`)
+      .send({ attributes: [{ name: "Languages", value: "Spanish" }] });
+    merge({
+      attributes: [
+        { name: "Publications", value: "Tidal Patterns in Harbor Sediment" },
+      ],
+    });
+    merge({
+      attributes: [
+        {
+          name: "Publications",
+          value:
+            "572 Tidal Patterns in Harbor Sediment; Lichen Growth on Coastal Granite",
+        },
+        { name: "Languages", value: "French" },
+      ],
+    });
+    const values = Object.fromEntries(
+      enrichmentContact(scope(), id).attributes.map((attribute) => [
+        attribute.name,
+        attribute.value,
+      ]),
+    );
+    expect(values).toEqual({
+      Publications:
+        "Tidal Patterns in Harbor Sediment; Lichen Growth on Coastal Granite",
+      Languages: "Spanish",
+    });
+    expect(record().addedEntries?.at(-1)).toMatchObject({
+      field: "attributeItems",
+      value: "Publications",
+      detail: "Lichen Growth on Coastal Granite",
+    });
+  });
+
+  it("does not add back an item the person removed from research's list", async () => {
+    merge({
+      attributes: [{ name: "Awards", value: "Dean's List; Example Prize" }],
+    });
+    merge({ attributes: [{ name: "Awards", value: "Fellowship of Note" }] });
+    await request(app)
+      .put(`/api/contacts/${id}`)
+      .send({ attributes: [{ name: "Awards", value: "Dean's List" }] });
+    merge({
+      attributes: [
+        {
+          name: "Awards",
+          value: "Fellowship of Note; Example Prize; New Medal",
+        },
+      ],
+    });
+    // Both items the person removed stay out: the one in the list the first
+    // run made, and the one a later run added.
+    expect(enrichmentContact(scope(), id).attributes[0].value).toBe(
+      "Dean's List; New Medal",
+    );
+  });
+});
+
+describe("Not this person", () => {
+  const reject = (runAt: string) =>
+    request(app).post(`/api/contacts/${id}/research/reject`).send({ runAt });
+
+  it("takes back what the run added, keeps what the person changed, and leaves its pages out", async () => {
+    await request(app)
+      .put(`/api/contacts/${id}`)
+      .send({ interests: [{ interest: "Sailing", isAiGenerated: false }] });
+    merge(
+      {
+        location: "Boston, MA",
+        headline: "Analyst at Harbor Point",
+        education: [{ school: "Example College", degree: "BA" }],
+        experience: [{ company: "Harbor Point Partners", role: "Analyst" }],
+        interests: [{ interest: "Track and field" }],
+        attributes: [{ name: "Awards", value: "Conference Champion" }],
+      },
+      { citations: [finra, fellows] },
+    );
+    const runAt = record().runs[0].at;
+    // The person corrects the job research wrote: it is theirs now.
+    const before = enrichmentContact(scope(), id);
+    await request(app)
+      .put(`/api/contacts/${id}`)
+      .send({
+        experience: before.experience.map((job) => ({
+          company: job.company,
+          role: "Senior Analyst",
+        })),
+      });
+
+    const response = await reject(runAt);
+    expect(response.status).toBe(200);
+    expect(response.body.removed).toBe(5);
+    const after = enrichmentContact(scope(), id);
+    expect(response.body.contact.id).toBe(id);
+    expect(after.location).toBeNull();
+    expect(after.headline).toBeNull();
+    expect(after.education).toEqual([]);
+    expect(after.attributes).toEqual([]);
+    expect(after.interests.map((entry) => entry.interest)).toEqual(["Sailing"]);
+    expect(after.experience.map((job) => job.role)).toEqual(["Senior Analyst"]);
+    const kept = record();
+    expect(kept.runs[0]).toMatchObject({ rejected: true, findings: [] });
+    expect(kept.sources).toEqual([]);
+    expect(kept.rejectedSources).toEqual([finra.uri, fellows.uri]);
+
+    // A later run does not add the same values back.
+    merge({
+      location: "Boston, MA",
+      education: [{ school: "Example College", degree: "BA" }],
+    });
+    expect(enrichmentContact(scope(), id).location).toBeNull();
+    expect(enrichmentContact(scope(), id).education).toEqual([]);
+
+    // A run is taken back once.
+    expect((await reject(runAt)).body.error.code).toBe(
+      "RESEARCH_RUN_NOT_FOUND",
+    );
+  });
+
+  it("takes back a run's own list items, and keeps what a later run added to the list", async () => {
+    merge({
+      attributes: [
+        {
+          name: "Publications",
+          value: "Tidal Patterns in Harbor Sediment; Lichen on Granite",
+        },
+      ],
+    });
+    const first = record().runs[0].at;
+    merge({
+      attributes: [{ name: "Publications", value: "Salt Marsh Survey" }],
+    });
+    expect((await reject(first)).body.removed).toBe(1);
+    expect(enrichmentContact(scope(), id).attributes).toEqual([
+      expect.objectContaining({
+        name: "Publications",
+        value: "Salt Marsh Survey",
+      }),
+    ]);
+  });
+
+  it("keeps a taken-back run's pages and items out of every later run", async () => {
+    merge(
+      {
+        attributes: [
+          { name: "Publications", value: "Tidal Patterns in Harbor Sediment" },
+        ],
+      },
+      { citations: [finra] },
+    );
+    await reject(record().runs[0].at);
+    // Two later runs: the pages stay left out after the first.
+    merge({ location: "Boston, MA" }, { citations: [fellows] });
+    merge({
+      attributes: [
+        {
+          name: "Publications",
+          value: "Tidal Patterns in Harbor Sediment; Salt Marsh Survey",
+        },
+      ],
+    });
+    expect(record().rejectedSources).toEqual([finra.uri]);
+    // The kind may come again with the right person's items, not the
+    // stranger's.
+    expect(enrichmentContact(scope(), id).attributes).toEqual([
+      expect.objectContaining({
+        name: "Publications",
+        value: "Salt Marsh Survey",
+      }),
+    ]);
+  });
+
+  it("moves the map pin with its text, and leaves a pin the person's own address placed", async () => {
+    const pin = () =>
+      sqlite.prepare("SELECT lat, lng FROM contacts WHERE id = ?").get(id) as {
+        lat: number | null;
+        lng: number | null;
+      };
+    const placed = () =>
+      sqlite
+        .prepare(
+          "UPDATE contacts SET lat = 42.36, lng = -71.06, geoSource = 'geocoder' WHERE id = ?",
+        )
+        .run(id);
+    // The location research wrote placed the pin: it goes with it.
+    merge({ location: "Boston, MA" });
+    placed();
+    await reject(record().runs[0].at);
+    expect(pin()).toEqual({ lat: null, lng: null });
+
+    // The person's own address placed the pin: it stays.
+    await request(app)
+      .put(`/api/contacts/${id}`)
+      .send({ addresses: [{ address: "Denver, CO", isPrimary: true }] });
+    merge({ location: "Boston, MA" });
+    placed();
+    await reject(record().runs.at(-1)!.at);
+    expect(pin()).toEqual({ lat: 42.36, lng: -71.06 });
+  });
+
+  it("refuses a run that added details before entries named their run", async () => {
+    merge({ location: "Boston, MA" });
+    const old = record();
+    old.addedEntries = old.addedEntries?.map(({ at: _at, ...entry }) => entry);
+    sqlite
+      .prepare("UPDATE contacts SET aiResearch = ? WHERE id = ?")
+      .run(JSON.stringify(old), id);
+    const response = await reject(old.runs[0].at);
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe("RESEARCH_RUN_UNTRACKED");
+    expect(enrichmentContact(scope(), id).location).toBe("Boston, MA");
+    expect(record().runs[0].rejected).toBeUndefined();
+  });
+
+  it("refuses while research runs for the contact", async () => {
+    merge({ location: "Boston, MA" });
+    const running = lockEnrichment(id);
+    try {
+      expect((await reject(record().runs[0].at)).status).toBe(409);
+    } finally {
+      running();
+    }
+    expect(enrichmentContact(scope(), id).location).toBe("Boston, MA");
   });
 });

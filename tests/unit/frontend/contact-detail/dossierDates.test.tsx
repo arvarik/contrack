@@ -6,9 +6,15 @@
  * as the start. It says "Until Dec 2024" now. A start alone, a current job
  * and a full span keep their forms.
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
+// The Research card's writes need no server here.
+vi.mock("../../../../src/api/contacts", () => ({
+  useUpdateContact: () => ({ mutate: vi.fn(), isPending: false }),
+  useRejectResearchRun: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+
 import { DossierTab } from "../../../../src/views/contact-detail/components/DossierTab";
 import type {
   Contact,

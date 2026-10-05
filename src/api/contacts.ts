@@ -327,6 +327,30 @@ export const useSetContactLocation = () => {
   });
 };
 
+/**
+ * "Not this person": take back what one research run added, and leave its
+ * pages out of later runs. The answer holds the whole contact, and it goes
+ * straight into both caches.
+ */
+export const useRejectResearchRun = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, runAt }: { id: string; runAt: string }) =>
+      writeContactInOrder(
+        id,
+        async () =>
+          (await apiJson(
+            contactRoutes.rejectResearchRun,
+            `/contacts/${encodeURIComponent(id)}/research/reject`,
+            jsonBody({ runAt }),
+          )) as { removed: number; contact: Contact },
+      ),
+    onSuccess: ({ contact }) => storeContact(queryClient, contact),
+    onError: (error) =>
+      toast.error(`Could not take back that search: ${error.message}`),
+  });
+};
+
 /** The body of `PATCH /api/contacts/:id` when a person tracks or untracks. */
 interface SetTrackedInput {
   id: string;

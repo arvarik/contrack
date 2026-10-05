@@ -472,7 +472,7 @@ test.describe("Settings — Tools and Data", () => {
       depth.getByRole("radio", { name: /^Standard/ }),
     ).toHaveAttribute("aria-checked", "true");
     const deep = depth.getByRole("radio", { name: /^Deep/ });
-    await expect(deep).toContainText("Adds a longer search");
+    await expect(deep).toContainText("Adds a second search that reads further");
     await expect(deep).not.toContainText("a contact");
     await expect(page.getByText(/web searches each month/)).toHaveCount(0);
 

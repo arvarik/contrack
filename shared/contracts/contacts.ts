@@ -600,6 +600,22 @@ export const contactRoutes = {
       tokenCount: z.number(),
     }),
   }),
+  rejectResearchRun: route({
+    method: "POST",
+    path: "/api/contacts/:id/research/reject",
+    summary:
+      "Not this person: take back what one research run added, and leave its pages out of later runs",
+    body: z.object({
+      /** The run, by its `at` in the contact's research record. */
+      runAt: z.string().trim().min(1).max(40),
+    }),
+    response: z.strictObject({
+      success: z.literal(true),
+      /** Fields, entries and list items taken back. */
+      removed: z.number().int(),
+      contact: contactSchema,
+    }),
+  }),
   merge: route({
     method: "POST",
     path: "/api/contacts/merge",
