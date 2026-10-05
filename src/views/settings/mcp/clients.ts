@@ -175,7 +175,9 @@ export const MCP_CLIENTS: readonly McpClient[] = [
   {
     id: "codex",
     label: "Codex",
-    signIn: "token",
+    signIn: "either",
+    oauthStep:
+      "Then run codex mcp login contrack to sign in to Contrack in your browser",
     setup: (url, token) => ({
       steps: token
         ? "Run this in a terminal. Codex reads the token from CONTRACK_TOKEN, so put the export line in your shell profile too"

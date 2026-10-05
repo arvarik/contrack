@@ -58,7 +58,9 @@ vi.mock("../../server/utils/urlSafety.ts", async (original) => ({
     const body = JSON.stringify({
       client_id: DOCUMENT_CLIENT,
       client_name: "Doc Assistant",
-      redirect_uris: [DOCUMENT_REDIRECT],
+      // The second is on another host, which the document can list but
+      // this server never sends an error to.
+      redirect_uris: [DOCUMENT_REDIRECT, "https://elsewhere.test/cb"],
       token_endpoint_auth_method: "none",
     });
     return {
@@ -277,6 +279,8 @@ describe("OAuth for MCP clients", () => {
       grant_type: "refresh_token",
       refresh_token: first.body.refresh_token,
       client_id: DOCUMENT_CLIENT,
+      // A scheme and a host match in any case.
+      resource: `${origin.toUpperCase()}/api/mcp/`,
     });
     expect(rotated.status).toBe(200);
     expect((await mcp(rotated.body.access_token)).status).toBe(200);
@@ -357,7 +361,17 @@ describe("OAuth for MCP clients", () => {
       const res = await request(server).get(query);
       expect(res.headers.location).toBe(`/oauth/consent?error=${problem}`);
     }
-    // A known client hears about a bad parameter, with the issuer.
+    // A bad parameter for an address off the document's host stays here.
+    const offHost = await request(server).get(
+      documentAuthorize(challenge)
+        .replace("S256", "plain")
+        .replace(
+          encodeURIComponent(DOCUMENT_REDIRECT),
+          encodeURIComponent("https://elsewhere.test/cb"),
+        ),
+    );
+    expect(offHost.headers.location).toBe("/oauth/consent?error=bad_request");
+    // The document's own host hears about it, with the issuer.
     const plain = await request(server).get(
       documentAuthorize(challenge).replace("S256", "plain"),
     );

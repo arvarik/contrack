@@ -11,10 +11,11 @@
 //   code exchange. The code is stored as its SHA-256 only.
 // - A grant is an api_tokens row with `kind = 'oauth'`. The token list shows
 //   it, and revoking it ends every token it issued.
+// - oauth_requests.ip: the address that opened the request. Each address
+//   keeps only its newest few open requests for a client.
 // - oauth_tokens: the access and refresh tokens of a grant, as SHA-256.
-//   `parentHash` links a refresh token to the one it replaced, and
-//   `childUsedAt` marks a refresh token once a token it issued is used,
-//   which is how a reused refresh token is told from a lost answer.
+//   `usedAt` marks a refresh token once it is rotated, so a second use is
+//   seen.
 // =============================================================================
 
 import type Database from "better-sqlite3";
@@ -38,6 +39,7 @@ export function up(db: Database.Database): void {
       state TEXT,
       codeChallenge TEXT NOT NULL,
       wantsWrite INTEGER NOT NULL,
+      ip TEXT,
       userId TEXT REFERENCES users(id) ON DELETE CASCADE,
       readOnly INTEGER,
       codeHash TEXT UNIQUE,
@@ -55,13 +57,10 @@ export function up(db: Database.Database): void {
       tokenHash TEXT PRIMARY KEY,
       grantId TEXT NOT NULL REFERENCES api_tokens(id) ON DELETE CASCADE,
       kind TEXT NOT NULL CHECK (kind IN ('access', 'refresh')),
-      parentHash TEXT,
       expiresAt TEXT NOT NULL,
       usedAt TEXT,
-      childUsedAt TEXT,
       createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
     );
     CREATE INDEX idx_oauth_tokens_grant ON oauth_tokens(grantId);
-    CREATE INDEX idx_oauth_tokens_parent ON oauth_tokens(parentHash);
   `);
 }

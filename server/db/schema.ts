@@ -139,6 +139,7 @@ export const oauthRequests = sqliteTable(
     state: text("state"),
     codeChallenge: text("codeChallenge").notNull(),
     wantsWrite: integer("wantsWrite").notNull(),
+    ip: text("ip"),
     userId: text("userId").references(() => users.id, { onDelete: "cascade" }),
     readOnly: integer("readOnly"),
     codeHash: text("codeHash").unique(),
@@ -161,20 +162,14 @@ export const oauthTokens = sqliteTable(
       .notNull()
       .references(() => apiTokens.id, { onDelete: "cascade" }),
     kind: text("kind").notNull(),
-    /** The refresh token this one replaced. */
-    parentHash: text("parentHash"),
     expiresAt: text("expiresAt").notNull(),
+    /** When a refresh token was rotated. */
     usedAt: text("usedAt"),
-    /** A token this refresh token issued has been used. */
-    childUsedAt: text("childUsedAt"),
     createdAt: text("createdAt")
       .notNull()
       .default(sql`(CURRENT_TIMESTAMP)`),
   },
-  (table) => [
-    index("idx_oauth_tokens_grant").on(table.grantId),
-    index("idx_oauth_tokens_parent").on(table.parentHash),
-  ],
+  (table) => [index("idx_oauth_tokens_grant").on(table.grantId)],
 );
 
 /** invitations — a signup link an admin hands out. */

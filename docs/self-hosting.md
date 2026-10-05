@@ -214,10 +214,14 @@ need three things:
 
 Then add `https://<your address>/api/mcp` in the assistant, as
 [Connect Claude or ChatGPT](mcp.md#connect-claude-or-chatgpt) says, and sign
-in to Contrack when it asks. Claude connects from the address range
-`160.79.104.0/21`, if you want to allow only that range at the proxy. The
-OAuth routes are `/.well-known/oauth-*` and `/oauth/*`, so a proxy that
-forwards only `/api` must forward those too.
+in to Contrack when it asks. The OAuth routes are `/.well-known/oauth-*`
+and `/oauth/*`, so a proxy that forwards only `/api` must forward those too.
+
+Claude's servers connect from the address range `160.79.104.0/21`. To allow
+only that range at the proxy, limit `/api/mcp`, `/oauth/token`,
+`/oauth/register` and `/oauth/revoke` to it. Leave the rest open to your
+own browser: it opens `/oauth/authorize`, the consent page and the sign-in
+page itself.
 
 Claude Code, Cursor, VS Code and Gemini CLI run on your own computer. They
 can sign in with OAuth too, and they need only an address that computer can

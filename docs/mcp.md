@@ -108,9 +108,10 @@ same address and OAuth sign-in, and approve it the same way.
   when its details come from its own web address, which a name cannot fake.
   It always says where your browser goes after you choose.
 - An app's access token lasts an hour and works on `/api/mcp` only. Its
-  refresh token lasts 30 days from its last use and works once. If a used
-  refresh token comes back after its replacement was used, someone else has
-  it, and Contrack disconnects the app.
+  refresh token lasts 30 days from its last use and works once. A used
+  refresh token that comes back within a minute is a retry, and gets a
+  pair of its own. Later, someone else has it, and Contrack disconnects the
+  app.
 
 Claude Code, Cursor, VS Code, Gemini CLI and the Claude Desktop config can
 sign in with OAuth too, when it is on. On **Settings → MCP and API**, choose

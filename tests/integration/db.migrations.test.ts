@@ -61,7 +61,6 @@ const ADDED_SINCE_FIXTURE = [
   "idx_oauth_requests_expires",
   "oauth_tokens",
   "idx_oauth_tokens_grant",
-  "idx_oauth_tokens_parent",
   "api_tokens",
 ];
 

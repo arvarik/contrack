@@ -142,10 +142,21 @@ export function resourceMetadataUrl(issuer: string): string {
   return `${issuer}/.well-known/oauth-protected-resource/api/mcp`;
 }
 
-/** A `resource` the client may name: the MCP endpoint, or the issuer. */
+/**
+ * A `resource` the client may name: the MCP endpoint, or the issuer. It is
+ * compared as a URL, so `HTTPS://Crm.Example.com/api/mcp/` names it too.
+ */
 function checkResource(issuer: string, resource: string | undefined): void {
   if (resource === undefined || resource === "") return;
-  const named = resource.replace(/\/+$/, "");
+  let named = "";
+  try {
+    const url = new URL(resource);
+    if (!url.search && !url.hash) {
+      named = url.origin + url.pathname.replace(/\/+$/, "");
+    }
+  } catch {
+    // Not a URL, so it names nothing here.
+  }
   if (named !== mcpResource(issuer) && named !== issuer) {
     throw new OAuthError(
       "invalid_target",
@@ -503,15 +514,17 @@ function callback(
  * The client and the redirect URI come first: until both are known good,
  * nothing redirects anywhere, so this cannot be used to send a browser to an
  * address of an attacker's choice. After that, a bad parameter goes back to
- * a document client, which a host vouches for, as an error. A registered
- * client could be anyone's, and its redirect anywhere, so its errors stay
- * on this server's error page: an error redirect would make this server a
- * redirector for whoever registered. This step never reads the session: the
- * cookie is SameSite=Strict, and a link from claude.ai does not carry it.
+ * the client as an error only when the address is the document's own host,
+ * or this computer. Anyone can register a client or publish a document, so
+ * any other error stays on this server's error page: a redirect there would
+ * make this server a redirector to any site. This step never reads the
+ * session: the cookie is SameSite=Strict, and a link from claude.ai does not
+ * carry it.
  */
 export async function beginAuthorization(
   issuer: string,
   query: Record<string, unknown>,
+  ip: string | null,
 ): Promise<AuthorizeOutcome> {
   const text = (key: string) =>
     typeof query[key] === "string" ? (query[key] as string) : undefined;
@@ -536,8 +549,13 @@ export async function beginAuthorization(
 
   const state = text("state");
   if (state && state.length > MAX_STATE) return { problem: "bad_request" };
+  const back = new URL(redirectUri);
+  const answerable =
+    client.source === "document" &&
+    (isLoopbackName(back.hostname) ||
+      back.origin === new URL(client.id).origin);
   const refuse = (error: string, description: string): AuthorizeOutcome =>
-    client.source === "document"
+    answerable
       ? {
           redirect: callback(redirectUri, issuer, {
             error,
@@ -570,8 +588,8 @@ export async function beginAuthorization(
   sqlite
     .prepare(
       `INSERT INTO oauth_requests
-         (id, clientId, redirectUri, state, codeChallenge, wantsWrite, expiresAt)
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now', ?))`,
+         (id, clientId, redirectUri, state, codeChallenge, wantsWrite, ip, expiresAt)
+       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now', ?))`,
     )
     .run(
       id,
@@ -580,6 +598,7 @@ export async function beginAuthorization(
       state ?? null,
       challenge,
       wantsWrite ? 1 : 0,
+      ip,
       REQUEST_LIFE,
     );
   sqlite
@@ -587,15 +606,17 @@ export async function beginAuthorization(
       `UPDATE oauth_clients SET lastUsedAt = CURRENT_TIMESTAMP WHERE id = ?`,
     )
     .run(client.id);
-  // A client that opens sign-in after sign-in keeps only its newest few.
+  // One address that opens sign-in after sign-in keeps only its newest few.
+  // Counted per address, as many people share one client such as Claude: a
+  // stranger's requests must not push out the owner's.
   sqlite
     .prepare(
       `DELETE FROM oauth_requests WHERE id IN (
          SELECT id FROM oauth_requests
-          WHERE clientId = ? AND codeHash IS NULL AND usedAt IS NULL
+          WHERE clientId = ? AND ip IS ? AND codeHash IS NULL AND usedAt IS NULL
           ORDER BY createdAt DESC LIMIT -1 OFFSET ?)`,
     )
-    .run(client.id, MAX_OPEN_REQUESTS);
+    .run(client.id, ip, MAX_OPEN_REQUESTS);
   return { consent: `/oauth/consent?request=${encodeURIComponent(id)}` };
 }
 
@@ -737,31 +758,15 @@ const scopeOf = (readOnly: boolean) =>
   readOnly ? "contrack:read" : "contrack:read contrack:write";
 
 /** A new access and refresh token for a grant, and the grant's new expiry. */
-function issueTokens(
-  grantId: string,
-  readOnly: boolean,
-  parentHash: string | null,
-): TokenResponse {
+function issueTokens(grantId: string, readOnly: boolean): TokenResponse {
   const access = randomSecret(ACCESS_PREFIX);
   const refresh = randomSecret(REFRESH_PREFIX);
   const insert = sqlite.prepare(
-    `INSERT INTO oauth_tokens (tokenHash, grantId, kind, parentHash, expiresAt)
-     VALUES (?, ?, ?, ?, datetime('now', ?))`,
+    `INSERT INTO oauth_tokens (tokenHash, grantId, kind, expiresAt)
+     VALUES (?, ?, ?, datetime('now', ?))`,
   );
-  insert.run(
-    sha256(access),
-    grantId,
-    "access",
-    parentHash,
-    `+${ACCESS_SECONDS} seconds`,
-  );
-  insert.run(
-    sha256(refresh),
-    grantId,
-    "refresh",
-    parentHash,
-    `+${REFRESH_DAYS} days`,
-  );
+  insert.run(sha256(access), grantId, "access", `+${ACCESS_SECONDS} seconds`);
+  insert.run(sha256(refresh), grantId, "refresh", `+${REFRESH_DAYS} days`);
   // The token list shows when the grant ends: when its refresh token does.
   // ISO, as a personal token's expiry is, because the page parses it.
   sqlite
@@ -925,19 +930,19 @@ export function exchangeCode(
       },
       ip,
     });
-    return issueTokens(grantId, row.readOnly === 1, null);
+    return issueTokens(grantId, row.readOnly === 1);
   })();
 }
 
 /**
  * Rotate a refresh token: the old one stops, and a new pair replaces it.
  *
- * A refresh token that comes back after it was used is one of three things:
- * - a second process of the same app, within a minute of the first (two
- *   terminals that share one login): it gets a fresh pair;
- * - a lost answer: the client never got its new pair, and nothing that pair
- *   holds was used. It gets a fresh pair in place of the lost one;
- * - a stolen token. Anything else revokes the grant.
+ * A refresh token that comes back after it was used is a retry, or a second
+ * process of the same app (two terminals that share one login), when it
+ * comes within a minute: it gets a fresh pair of its own. Later, two parties
+ * hold the grant, and one of them stole it, so the grant ends for both.
+ * A scope asking for more than the grant gets the grant's own scope, which
+ * the answer names.
  */
 export function refreshGrant(
   issuer: string,
@@ -960,7 +965,7 @@ export function refreshGrant(
   const hash = sha256(body.refresh_token);
   const row = sqlite
     .prepare(
-      `SELECT t.grantId, t.usedAt, t.childUsedAt, t.parentHash,
+      `SELECT t.grantId, t.usedAt,
               (t.expiresAt > datetime('now')) AS live,
               (t.usedAt > datetime('now', ?)) AS recent,
               g.readOnly, g.clientId, g.userId
@@ -972,8 +977,6 @@ export function refreshGrant(
     | {
         grantId: string;
         usedAt: string | null;
-        childUsedAt: string | null;
-        parentHash: string | null;
         live: number;
         recent: number | null;
         readOnly: number;
@@ -985,64 +988,30 @@ export function refreshGrant(
     throw badGrant();
   const user = getUserById(row.userId);
   if (!user || user.status === "disabled") throw badGrant();
-  if (
-    typeof body.scope === "string" &&
-    row.readOnly === 1 &&
-    body.scope.split(/\s+/).includes("contrack:write")
-  ) {
-    throw new OAuthError("invalid_scope", "This grant may only read.");
-  }
-
   // The reuse path revokes and refuses. It answers null rather than throwing,
   // because a throw would roll the revoke back with the transaction.
   const issued = sqlite.transaction((): TokenResponse | null => {
-    if (row.usedAt && row.recent === 1) {
-      return issueTokens(row.grantId, row.readOnly === 1, hash);
-    }
     if (row.usedAt) {
-      // The pair this token issued. Unused, the answer was lost on its way
-      // to the client. Used, two parties hold this grant. `childUsedAt`
-      // remembers a use after the sweep has deleted the expired child.
-      const children = sqlite
-        .prepare(
-          `SELECT COUNT(*) AS issued, COALESCE(SUM(usedAt IS NOT NULL), 0) AS used
-             FROM oauth_tokens WHERE parentHash = ?`,
-        )
-        .get(hash) as { issued: number; used: number };
-      if (row.childUsedAt || children.issued === 0 || children.used > 0) {
-        revokeGrant(row.grantId);
-        auditService.record({
-          actorUserId: row.userId,
-          action: "auth.oauth.refresh_reused",
-          targetType: "token",
-          targetId: row.grantId,
-          ip,
-        });
-        return null;
-      }
-      sqlite.prepare(`DELETE FROM oauth_tokens WHERE parentHash = ?`).run(hash);
-    } else {
-      sqlite
-        .prepare(
-          `UPDATE oauth_tokens SET usedAt = CURRENT_TIMESTAMP WHERE tokenHash = ?`,
-        )
-        .run(hash);
-      if (row.parentHash) markParentUsed(row.parentHash);
+      if (row.recent === 1) return issueTokens(row.grantId, row.readOnly === 1);
+      revokeGrant(row.grantId);
+      auditService.record({
+        actorUserId: row.userId,
+        action: "auth.oauth.refresh_reused",
+        targetType: "token",
+        targetId: row.grantId,
+        ip,
+      });
+      return null;
     }
-    return issueTokens(row.grantId, row.readOnly === 1, hash);
+    sqlite
+      .prepare(
+        `UPDATE oauth_tokens SET usedAt = CURRENT_TIMESTAMP WHERE tokenHash = ?`,
+      )
+      .run(hash);
+    return issueTokens(row.grantId, row.readOnly === 1);
   })();
   if (!issued) throw badGrant();
   return issued;
-}
-
-/** Note on a refresh token that a token it issued has been used. */
-function markParentUsed(parentHash: string): void {
-  sqlite
-    .prepare(
-      `UPDATE oauth_tokens SET childUsedAt = CURRENT_TIMESTAMP
-        WHERE tokenHash = ? AND childUsedAt IS NULL`,
-    )
-    .run(parentHash);
 }
 
 /** RFC 7009: a token a client gives back ends its whole grant. */
@@ -1082,35 +1051,17 @@ export function resolveAccessToken(
 ): { user: User; grantId: string; readOnly: boolean } | null {
   const row = sqlite
     .prepare(
-      `SELECT g.id, g.userId, g.readOnly, t.parentHash, t.usedAt
+      `SELECT g.id, g.userId, g.readOnly
          FROM oauth_tokens t JOIN api_tokens g ON g.id = t.grantId
         WHERE t.tokenHash = ? AND t.kind = 'access'
           AND t.expiresAt > datetime('now')
           AND g.kind = 'oauth' AND g.revokedAt IS NULL`,
     )
     .get(sha256(presented)) as
-    | {
-        id: string;
-        userId: string;
-        readOnly: number;
-        parentHash: string | null;
-        usedAt: string | null;
-      }
-    | undefined;
+    { id: string; userId: string; readOnly: number } | undefined;
   if (!row) return null;
   const user = getUserById(row.userId);
   if (!user || user.status === "disabled") return null;
-  // The first use only: it tells a lost refresh answer from a stolen token,
-  // on this token and, lasting past the sweep, on the token that issued it.
-  if (!row.usedAt) {
-    sqlite
-      .prepare(
-        `UPDATE oauth_tokens SET usedAt = CURRENT_TIMESTAMP
-          WHERE tokenHash = ? AND usedAt IS NULL`,
-      )
-      .run(sha256(presented));
-    if (row.parentHash) markParentUsed(row.parentHash);
-  }
   sqlite
     .prepare(
       `UPDATE api_tokens SET lastUsedAt = CURRENT_TIMESTAMP

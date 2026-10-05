@@ -17,7 +17,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Check, ExternalLink, Unlink } from "lucide-react";
+import { Check, ExternalLink, TriangleAlert, Unlink } from "lucide-react";
 import { useAuth } from "../../components/auth/AuthGate";
 import {
   AuthError,
@@ -63,7 +63,13 @@ const Returning = ({
   allowed: boolean;
 }) => (
   <AuthShell
-    icon={<Check className="w-7 h-7" aria-hidden="true" />}
+    icon={
+      allowed ? (
+        <Check className="w-7 h-7" aria-hidden="true" />
+      ) : (
+        <Unlink className="w-7 h-7" aria-hidden="true" />
+      )
+    }
     title={
       allowed
         ? `Return to ${request.client.name}`
@@ -117,12 +123,13 @@ export default function OAuthConsent() {
     },
   });
 
-  // A request that is gone is a 404. Anything else is a failure to load,
-  // which a reload may fix, and says so.
+  // A request that is gone is a 404, on load or on the answer (it expired
+  // while the page was open, or another tab answered it). Anything else is a
+  // failure to load, which a reload may fix, and says so.
+  const isGone = (error: unknown) =>
+    error instanceof ApiError && error.status === 404;
   const gone =
-    problem ||
-    !requestId ||
-    (request.error instanceof ApiError && request.error.status === 404);
+    problem || !requestId || isGone(request.error) || isGone(decide.error);
   if (gone || request.isError) {
     return (
       <AuthShell
@@ -175,9 +182,17 @@ export default function OAuthConsent() {
     {
       value: "read",
       label: "Read only",
-      hint: "Search and read. It sees no tool that changes anything",
+      hint: "Search and read all your contacts, notes and follow-ups. It sees no tool that changes anything",
     },
   ];
+
+  // Any app can name itself, and any program on this computer can claim to
+  // be an app whose answer comes back to this computer.
+  const warning = !shown.client.verified
+    ? "Any app can call itself anything, and Contrack cannot check who made this one. Allow it only if you just connected it yourself"
+    : shown.redirect.kind === "loopback"
+      ? `Allow it only if you just started this from ${shown.client.name} on this computer. Any program here can ask in its name`
+      : null;
 
   return (
     <AuthShell
@@ -186,12 +201,12 @@ export default function OAuthConsent() {
       title={
         shown.client.verified
           ? `Allow ${shown.client.name} (${shown.client.host}) to use your Contrack?`
-          : `Allow ${shown.client.name} to use your Contrack?`
+          : `Allow an app that calls itself “${shown.client.name}” to use your Contrack?`
       }
       subtitle={
         shown.client.verified
           ? `Its details come from ${shown.client.host}`
-          : "This app named itself. Contrack cannot check who made it"
+          : "Its name comes from the app itself"
       }
       onSubmit={(e) => {
         e.preventDefault();
@@ -200,6 +215,15 @@ export default function OAuthConsent() {
       footer="Disconnect it any time in Settings, Account, API tokens"
     >
       <div className="rounded-xl bg-surface-container-highest p-3 space-y-2 text-sm text-on-surface text-pretty">
+        {warning && (
+          <p className="flex items-start gap-2">
+            <TriangleAlert
+              className="w-4 h-4 shrink-0 mt-0.5 text-warning"
+              aria-hidden="true"
+            />
+            <span>{warning}</span>
+          </p>
+        )}
         <p>
           After you choose, you go back to{" "}
           <strong className="font-semibold">
@@ -230,7 +254,7 @@ export default function OAuthConsent() {
         onChange={setAccess}
       />
 
-      {decide.isError && (
+      {decide.isError && !isGone(decide.error) && (
         <AuthError>
           {decide.error instanceof Error
             ? decide.error.message

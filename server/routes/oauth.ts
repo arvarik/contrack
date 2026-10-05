@@ -210,6 +210,7 @@ router.get(
     const outcome = await beginAuthorization(
       issuer()!,
       req.query as Record<string, unknown>,
+      req.ip ?? null,
     );
     const to =
       "consent" in outcome

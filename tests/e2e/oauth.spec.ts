@@ -79,10 +79,12 @@ test("an app signs in: sign in, choose Read only, and go back with a code", asyn
 
   await expect(
     page.getByRole("heading", {
-      name: "Allow E2E Assistant to use your Contrack?",
+      name: "Allow an app that calls itself “E2E Assistant” to use your Contrack?",
     }),
   ).toBeVisible();
-  await expect(page.getByText("This app named itself")).toBeVisible();
+  await expect(
+    page.getByText("Any app can call itself anything"),
+  ).toBeVisible();
   await expect(
     page.getByText("an app on this computer (127.0.0.1:43999)"),
   ).toBeVisible();
