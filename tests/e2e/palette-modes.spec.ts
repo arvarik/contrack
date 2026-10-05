@@ -167,3 +167,26 @@ test("a screen reader hears how many people the list holds", async ({
   await page.keyboard.type(" zzqx");
   await expect(status).toHaveText("No people found");
 });
+
+test("pills alone list people, with the top row and its heading in view", async ({
+  page,
+}) => {
+  // While a facet was half typed, the five destinations were the only rows
+  // and one was highlighted. Once the pill locked they stayed under the
+  // people, and cmdk scrolled to the destination it had chosen, past the
+  // top row it no longer highlighted.
+  const palette = await openPalette(page);
+  await page.keyboard.type("location:London ");
+  await expect(
+    palette.getByRole("button", { name: /Remove filter location/ }),
+  ).toBeVisible();
+  await expect(palette.getByText("Ada Lovelace")).toBeVisible();
+  await expect(palette.getByText("Go to")).toHaveCount(0);
+  await expect(highlighted(palette)).toHaveText(/Ada Lovelace/);
+  await expect(
+    palette.locator("[cmdk-group-heading]").first(),
+  ).toBeInViewport();
+  expect(
+    await palette.locator("[cmdk-list]").evaluate((list) => list.scrollTop),
+  ).toBe(0);
+});

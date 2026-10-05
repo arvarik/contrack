@@ -322,6 +322,10 @@ test("Home and End move the caret when the box holds text", async ({
   const palette = await openPalette(page);
   const input = palette.getByRole("combobox");
   await page.keyboard.type("a");
+  // Once the server's people are in, so the highlighted row stays.
+  await expect(
+    palette.getByRole("status", { name: "Palette status" }),
+  ).toHaveText(/people found/);
   await page.keyboard.press("ArrowDown");
   await expect.poll(() => highlightIndex(page)).toBe(1);
 

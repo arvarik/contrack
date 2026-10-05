@@ -122,6 +122,8 @@ export const CommandPalette = () => {
   const [facetMenuDismissed, setFacetMenuDismissed] = useState(false);
   /** The person moved the highlight since the query last changed. */
   const movedHighlightRef = useRef(false);
+  /** The pointer, not a key, moved it last: the list does not scroll. */
+  const pointerMovedRef = useRef(false);
   const navigate = useNavigate();
 
   // ── Mode detection ──
@@ -549,6 +551,7 @@ export const CommandPalette = () => {
 
   const handleSearchInputKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
+      pointerMovedRef.current = false;
       // The actions menu took the key: ↑ and ↓ move its rows.
       if (e.defaultPrevented) return;
       // Backspace on empty input deletes the last facet pill
@@ -709,7 +712,8 @@ export const CommandPalette = () => {
    * screen reader announces. cmdk works it out before the rows show a new
    * highlight, so it was missing on open, after typing and after the
    * server's answer, until an arrow key was pressed. This follows the rows
-   * themselves, and puts it back when cmdk writes a stale one.
+   * themselves, and puts it back when cmdk writes a stale one. It keeps the
+   * row in view as well.
    *
    * The list mounts a render after the palette opens, inside a portal, so
    * this runs after every render and watches the nodes it finds.
@@ -720,10 +724,20 @@ export const CommandPalette = () => {
     if (!input || !list) return;
     const sync = () => {
       const row = list.querySelector('[cmdk-item][aria-selected="true"]');
-      if (!row?.id) input.removeAttribute("aria-activedescendant");
-      else if (input.getAttribute("aria-activedescendant") !== row.id) {
+      if (!row?.id) {
+        input.removeAttribute("aria-activedescendant");
+        return;
+      }
+      if (input.getAttribute("aria-activedescendant") !== row.id) {
         input.setAttribute("aria-activedescendant", row.id);
       }
+      // And in view: cmdk scrolls to the row it last chose, which can be
+      // one the highlight has already left. The top row shows its heading.
+      // Not for the pointer, as cmdk does not: a row half in view would
+      // jump under it.
+      if (pointerMovedRef.current) return;
+      if (row === list.querySelector("[cmdk-item]")) list.scrollTop = 0;
+      else row.scrollIntoView({ block: "nearest" });
     };
     sync();
     const observer = new MutationObserver(sync);
@@ -995,6 +1009,7 @@ export const CommandPalette = () => {
                     // keeps it where the pointer put it.
                     onPointerMove={() => {
                       movedHighlightRef.current = true;
+                      pointerMovedRef.current = true;
                     }}
                     className="max-h-[380px] overflow-y-auto p-2 scrollbar-hide"
                   >
@@ -1364,7 +1379,9 @@ export const CommandPalette = () => {
                           {/* Pages and Settings pages the words name:
                               "pulse" used to offer only a new contact. A
                               page named exactly comes before the people. */}
-                          {!exactPage && (
+                          {/* Only for words: with pills alone, or a facet
+                              half typed, it listed all five destinations. */}
+                          {!exactPage && typedWords && (
                             <GoToGroup
                               query={parsed.freeText}
                               onNavigate={handleNavigate}
