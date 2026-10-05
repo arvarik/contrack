@@ -13,41 +13,57 @@ import { parseBirthday } from "./birthday";
 /** "x 123", "ext. 123" or "extension 123" at the end of a number. */
 const EXTENSION = /\s*(?:ext(?:ension)?\.?|x)\s*(\d+)\s*$/i;
 
+/** E.164: a full number, country code included, is at most 15 digits. */
+const MAX_DIGITS = 15;
+
 /**
- * The number as a dialler reads it: a leading "+", the digits, and the marks
- * "*", "#" and ",". Spaces, brackets, dots and dashes go. An extension
- * follows a "," (a pause), which every phone dials after the call connects.
- * The trunk "(0)" after a country code goes too: "+44 (0) 20" is dialled as
- * "+4420". Null when the text holds no digit, or a letter, such as
- * "1-800-FLOWERS": dropping the letters would dial a wrong, short number.
+ * The number as a dialler reads it, in two parts.
+ *
+ * 1. `number`: a leading "+" and the digits. Spaces, brackets, dots, dashes
+ *    and slashes go. The trunk "(0)" after a country code goes too: "+44
+ *    (0) 20" is dialled as "+4420".
+ * 2. `pauses`: what a phone dials after the call connects, each after a ","
+ *    (a pause): the digits after a "," in the text, and an extension.
+ *
+ * Null when a wrong number would be dialled, so the caller shows plain text:
+ * no digit; a letter ("1-800-FLOWERS" would dial "1800"); a second "+" or
+ * more than 15 digits (two numbers in one field); a "*" or a "#", which the
+ * iPhone's Phone app refuses to dial.
  */
-function dialString(phone: string): string | null {
+function dialParts(phone: string): { number: string; pauses: string } | null {
   const trimmed = phone.trim();
   const extension = trimmed.match(EXTENSION);
   const main = (
     extension ? trimmed.slice(0, extension.index) : trimmed
   ).replace(/^(\+\d{1,3})\s*\(0\)/, "$1");
-  if (/\p{L}/u.test(main)) return null;
-  const digits = main.replace(/[^0-9*#,]/g, "");
-  if (!/\d/.test(digits)) return null;
-  const plus = main.startsWith("+") ? "+" : "";
-  return `${plus}${digits}${extension ? `,${extension[1]}` : ""}`;
+  if (/[\p{L}*#]/u.test(main) || main.lastIndexOf("+") > 0) return null;
+  const [digits, ...after] = main.replace(/[^0-9,]/g, "").split(",");
+  if (!digits || digits.length > MAX_DIGITS) return null;
+  if (extension) after.push(extension[1]);
+  return {
+    number: `${main.startsWith("+") ? "+" : ""}${digits}`,
+    pauses: after.map((part) => `,${part}`).join(""),
+  };
 }
 
 /**
  * The `tel:` link for a phone number: "+1 (555) 010-2030" calls
- * "tel:+15550102030". Null when the text holds no digit, so the caller shows
- * plain text and no link that dials nothing.
+ * "tel:+15550102030", and "020 7946 0018 x42" calls "tel:02079460018,42".
+ * Null for a number that would dial wrong (`dialParts`), so the caller shows
+ * plain text and no link.
  */
 export function telHref(phone: string): string | null {
-  const dial = dialString(phone);
-  return dial ? `tel:${dial}` : null;
+  const dial = dialParts(phone);
+  return dial ? `tel:${dial.number}${dial.pauses}` : null;
 }
 
-/** The `sms:` link that starts a text to a phone number, or null. */
+/**
+ * The `sms:` link that starts a text to a phone number, or null. The main
+ * number only: an extension is no part of a text's address.
+ */
 export function smsHref(phone: string): string | null {
-  const dial = dialString(phone);
-  return dial ? `sms:${dial}` : null;
+  const dial = dialParts(phone);
+  return dial ? `sms:${dial.number}` : null;
 }
 
 /**
@@ -136,17 +152,22 @@ function typeParam(types: (string | undefined)[], first: boolean): string {
   return list.length ? `;TYPE=${list.join(",")}` : "";
 }
 
+/** The year Apple's address books write for a birthday with no year. */
+const OMIT_YEAR = 1604;
+
 /**
- * The birthday as vCard writes a date: "1990-05-14", or "--05-14" when the
- * year is not known. Null for text that is no date.
+ * The BDAY line: "BDAY:1990-05-14". vCard 3.0 has no date without a year,
+ * and iCloud drops one, so a birthday with no year takes Apple's own form:
+ * the year 1604, which the parameter says to leave out. Null for text that
+ * is no date.
  */
-function vCardDate(birthday: string): string | null {
+function birthdayLine(birthday: string): string | null {
   const parsed = parseBirthday(birthday);
   if (!parsed) return null;
   const monthDay = `${String(parsed.month).padStart(2, "0")}-${String(parsed.day).padStart(2, "0")}`;
   return parsed.year === null
-    ? `--${monthDay}`
-    : `${String(parsed.year).padStart(4, "0")}-${monthDay}`;
+    ? `BDAY;X-APPLE-OMIT-YEAR=${OMIT_YEAR}:${OMIT_YEAR}-${monthDay}`
+    : `BDAY:${String(parsed.year).padStart(4, "0")}-${monthDay}`;
 }
 
 /**
@@ -212,8 +233,8 @@ export function buildVCard(contact: VCardSource): string {
     lines.push(`ADR${type}:;;${escapeText(address.trim())};;;;`);
   });
 
-  const birthday = contact.birthday ? vCardDate(contact.birthday) : null;
-  if (birthday) lines.push(`BDAY:${birthday}`);
+  const birthday = contact.birthday ? birthdayLine(contact.birthday) : null;
+  if (birthday) lines.push(birthday);
   const urls = [
     contact.website,
     ...(contact.socialLinks ?? []).map((link) => link.url),

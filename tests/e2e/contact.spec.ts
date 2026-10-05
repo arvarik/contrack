@@ -553,7 +553,7 @@ test.describe("the contact header", () => {
       "Enrich deeply",
       "Copy basic details",
       "Copy full details",
-      "Share contact",
+      "Save contact card",
       "Archive",
       "Delete",
     ]);
@@ -1445,12 +1445,14 @@ test.describe("phone", () => {
       phones: [{ phone: "+44 20 7946 0018", label: "mobile", isPrimary: true }],
       emails: [{ email: "zoe@example.com", label: "work", isPrimary: true }],
     });
-    // The share sheet, as a phone has one: it keeps the file it is given.
+    // The share sheet, as a phone has one: it keeps the file or the text it
+    // is given.
     await page.addInitScript(() => {
       const nav = navigator as Navigator & { shared?: string };
       nav.canShare = () => true;
       nav.share = async (data) => {
-        nav.shared = `${data?.files?.[0]?.name}\n${await data?.files?.[0]?.text()}`;
+        const file = data?.files?.[0];
+        nav.shared = file ? `${file.name}\n${await file.text()}` : data?.text;
       };
     });
     await page.goto(`/contact/${id}`);
@@ -1500,24 +1502,39 @@ test.describe("phone", () => {
       page.getByRole("button", { name: "Edit +44 20 7946 0019" }),
     ).toBeFocused();
 
-    // Share contact hands the sheet a vCard with the new number.
-    await page.getByRole("button", { name: "Contact actions" }).tap();
-    await page.getByRole("menuitem", { name: "Share contact" }).tap();
+    // Share contact hands the sheet a vCard with the new number. A sheet
+    // that takes no .vcf, as on Android, gets the card as text.
+    const shared = () =>
+      page.evaluate(
+        () => (navigator as Navigator & { shared?: string }).shared,
+      );
+    const share = async () => {
+      await page.getByRole("button", { name: "Contact actions" }).tap();
+      await page.getByRole("menuitem", { name: "Share contact" }).tap();
+    };
+    await share();
     await expect
-      .poll(() =>
-        page.evaluate(
-          () => (navigator as Navigator & { shared?: string }).shared,
-        ),
-      )
+      .poll(shared)
       .toMatch(
         /^Zoe Reach\.vcf\nBEGIN:VCARD[^]*TEL;TYPE=CELL,PREF:\+44 20 7946 0019/,
       );
+    await page.evaluate(() => (navigator.canShare = () => false));
+    await share();
+    await expect
+      .poll(shared)
+      .toBe("Zoe Reach\n+44 20 7946 0019\nzoe@example.com");
   });
 
   test("a long press selects the row under the finger, moves no row and opens no menu", async ({
     page,
     seed,
   }) => {
+    // As on iOS Safari, a finger's click says "mouse" (WebKit bug 282988).
+    await page.addInitScript(() =>
+      Object.defineProperty(PointerEvent.prototype, "pointerType", {
+        value: "mouse",
+      }),
+    );
     await page.goto("/");
     const ada = listRow(page, seed, "Ada Lovelace");
     await expect(ada).toBeVisible();

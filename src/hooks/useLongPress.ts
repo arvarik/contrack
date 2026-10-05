@@ -53,14 +53,19 @@ interface LongPressCoords {
 /**
  * Swallows the next click in the page, in the capture phase, before any
  * handler sees it. Returns a function that stops the wait `ms` from now.
+ *
+ * While the finger is down, only a click from a touch pointer is the
+ * press's: a screen reader, a switch or code clicks with no touch pointer,
+ * and that click goes through. After the lift, the next click in the wait
+ * is the lift's own, whatever its `pointerType`: iOS Safari reports a
+ * finger's click as "mouse" (WebKit bug 282988).
  */
 function swallowNextClick(): (ms: number) => void {
   let timer = window.setTimeout(() => disarm(), MAX_WAIT_MS);
+  let lifted = false;
   const swallow = (event: MouseEvent) => {
-    // Only a click a finger made. A screen reader's double tap, a switch, or
-    // a click from code sends no touch pointer, and must go through.
     const pointer = (event as PointerEvent).pointerType;
-    if (pointer !== undefined && pointer !== "touch") return;
+    if (!lifted && pointer !== undefined && pointer !== "touch") return;
     event.preventDefault();
     event.stopPropagation();
     disarm();
@@ -75,6 +80,7 @@ function swallowNextClick(): (ms: number) => void {
   // long press that it answered with `contextmenu`.
   window.addEventListener("touchstart", disarm, true);
   return (ms) => {
+    lifted = true;
     window.clearTimeout(timer);
     timer = window.setTimeout(disarm, ms);
   };

@@ -63,14 +63,6 @@ export const SECTION_HEADING =
  */
 export const FIELD_LABEL = "text-xs font-medium text-on-surface-variant";
 
-/**
- * Meta line — facts under a name, separated by a middle dot ("Sydney ·
- * 2:45 AM · 13°C"). Plain text: a fact is not a control, so it does not
- * wear a pill.
- */
-export const META_LINE =
-  "flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-on-surface-variant";
-
 /** Section heading with bottom spacing — preformatted for card headers */
 export const SECTION_HEADING_SPACED = cn(
   SECTION_HEADING,

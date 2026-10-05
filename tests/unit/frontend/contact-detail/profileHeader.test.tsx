@@ -335,7 +335,7 @@ describe("the contact header", () => {
       `Enrich deeply, ${depthTime("deep")}`,
       "Copy basic details",
       "Copy full details",
-      "Share contact",
+      "Save contact card",
       "Archive",
       "Delete",
     ];

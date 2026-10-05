@@ -38,7 +38,6 @@ import {
   Hash,
   Radar,
   Tag,
-  Command,
 } from "lucide-react";
 import {
   useContacts,
@@ -111,6 +110,9 @@ import { ActionMenu } from "../../components/ui/ActionMenu";
 import { useSwapFocus } from "../../components/bulk/useSwapFocus";
 import { openCommandPalette } from "../../lib/appEvents";
 import { settleSlide } from "../settings/slide";
+
+/** The space under each row of the list, in px: `space-y-2`. */
+const ROW_GAP = 8;
 
 // ---------------------------------------------------------------------------
 // FilterButton — Pill-style filter tab for the contact list header
@@ -402,7 +404,11 @@ const ContactRows = ({
     // Only an estimate — rows are measured for real by `measureElement`
     // below — but it must track density or the scrollbar jumps as the user
     // scrolls into rows that have not been measured yet.
-    estimateSize: () => metrics.rowHeight,
+    // The row and the 8 px under it (`ROW_GAP`). Without the gap each first
+    // measure of a row above the view moved the list 8 px, and on iOS the
+    // virtualizer makes that move once the scroll stops: after Back, the
+    // list jumped a beat after it came back.
+    estimateSize: () => metrics.rowHeight + ROW_GAP,
     overscan: 5, // Render 5 items outside viewport for smooth scrolling
     // The list is built anew on each return to the Network page, and the
     // scroller is put back where it was before paint. The rows start there
@@ -746,7 +752,7 @@ const ContactRows = ({
                     left: 0,
                     width: "100%",
                     transform: `translateY(${virtualItem.start - scrollMargin}px)`,
-                    paddingBottom: "8px", // Replaces space-y-2
+                    paddingBottom: ROW_GAP, // Replaces space-y-2
                   }}
                 >
                   <ContactRowWrapper
@@ -1185,7 +1191,7 @@ export const ContactList = () => {
                 aria-label="Command palette"
                 title="Command palette"
               >
-                <Command className="w-5 h-5" aria-hidden="true" />
+                <Search className="w-5 h-5" aria-hidden="true" />
               </button>
               <button
                 key="select"

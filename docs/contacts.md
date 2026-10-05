@@ -114,7 +114,9 @@ The **Contact actions** menu, the three dots, holds these items in order:
    phones, or also the role, company, birthday and addresses.
 4. **Share contact**: sends the contact as a card (a `.vcf` file) through
    your phone's share sheet, for example to Messages or to your phone's
-   contacts. Where the browser cannot share a file, it downloads the card.
+   contacts. Where the sheet takes no card, as on Android, it gets the name,
+   the phones and the emails as text. A browser with no share sheet shows
+   **Save contact card**, which downloads the card.
 5. **Archive** or **Unarchive**, and **Delete**. See
    [Archive and trash](#archive-and-trash).
 
@@ -133,12 +135,14 @@ The **Contact actions** menu, the three dots, holds these items in order:
 
 - **Edit**: click a value, or give it focus and press `Enter`. `Enter` saves
   and `Esc` cancels. Press a row's label to change the label.
-- **Call and write**: an email and a phone are links. Press an email to write
-  to it in your mail app, and a phone to call it. To edit one, press the
-  pencil after it. The phone field opens the phone keyboard on a phone.
-- **Row menu**: **Message** (a phone), **Make primary**, **Show on map** and
-  **Remove**, with **Undo** for 7 seconds. The first email and phone are the
-  primary ones, and the first address places the pin and says **Map pin**.
+- **Call and write**: on a touch screen, an email and a phone are links.
+  Press an email to write to it in your mail app, and a phone to call it. To
+  edit one, press the pencil after it. The phone field opens the phone
+  keyboard on a phone. With a mouse, a click on the value edits it.
+- **Row menu**: **Message** (a phone, on a touch screen), **Make primary**,
+  **Show on map** and **Remove**, with **Undo** for 7 seconds. The first
+  email and phone are the primary ones, and the first address places the pin
+  and says **Map pin**.
 - **Order**: open a row's menu and drag the row by its handle, or press
   `Alt+↑` or `Alt+↓` (`Option` on a Mac) on the value.
 - **+ Add**: adds a value. For preferences and interests, `Enter` adds a chip

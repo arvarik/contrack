@@ -152,11 +152,20 @@ export function toBirthdayInputValue(v: string | null | undefined): string {
 /**
  * Format a birthday for display.
  * Reads a YYYY-MM-DD via formatDay; if unparseable to input, shows stored string.
+ * A day with no year ("05-14") shows as "May 14": a full date added a year
+ * that nobody gave.
  */
 export function formatBirthdayDisplay(
   v: string | null | undefined,
 ): string | null {
   if (!v) return null;
+  const parsed = parseBirthday(v);
+  if (parsed?.year === null)
+    // 2000 is a leap year, so 29 February is a day in it.
+    return new Date(2000, parsed.month - 1, parsed.day).toLocaleDateString(
+      undefined,
+      { month: "short", day: "numeric" },
+    );
   const inputVal = toBirthdayInputValue(v);
   if (!inputVal) return v;
   return formatDay(inputVal, v);

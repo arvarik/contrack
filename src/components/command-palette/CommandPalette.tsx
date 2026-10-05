@@ -773,7 +773,8 @@ export const CommandPalette = () => {
                 }
                 className="flex-1 min-h-[44px] sm:min-h-0 bg-transparent border-none outline-none text-on-surface placeholder:text-on-surface-variant text-lg"
               />
-              <div className="flex items-center gap-1.5 opacity-50">
+              {/* A touch screen has no Esc key: a tap outside closes. */}
+              <div className="flex items-center gap-1.5 opacity-50 pointer-coarse:hidden">
                 <kbd className={KBD}>ESC</kbd>
               </div>
             </div>
@@ -1182,7 +1183,7 @@ export const CommandPalette = () => {
                               }
                             />
                           </div>
-                          {/* → action button: always visible on mobile (touch), hover-reveal on desktop */}
+                          {/* → action button: always visible on a touch screen, hover-reveal under a mouse from sm */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1191,7 +1192,7 @@ export const CommandPalette = () => {
                               setSubMenuContactAvatar(contact.avatarUrl);
                             }}
                             onMouseDown={(e) => e.preventDefault()}
-                            className="hit-area state-layer shrink-0 flex items-center gap-1 sm:opacity-0 sm:group-hover/result:opacity-50 sm:aria-selected:opacity-50 opacity-40 active:opacity-80 transition-opacity text-[11px] text-on-surface-variant self-center p-1.5 -mr-1 rounded-lg sm:p-0 sm:mr-0"
+                            className="hit-area state-layer shrink-0 flex items-center gap-1 sm:opacity-0 sm:group-hover/result:opacity-50 sm:aria-selected:opacity-50 opacity-40 pointer-coarse:opacity-40 active:opacity-80 transition-opacity text-[11px] text-on-surface-variant self-center p-1.5 -mr-1 rounded-lg sm:p-0 sm:mr-0"
                             aria-label={`Actions for ${contact.name}`}
                           >
                             <ChevronsRight className="w-4 h-4 sm:w-3.5 sm:h-3.5" />

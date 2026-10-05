@@ -71,7 +71,7 @@ import type {
   ContactUpdateData,
 } from "../../../types";
 import { cleanLinkedInSlug, cn, safeHref } from "../../../lib/utils";
-import { META_LINE, TONE_WASH } from "../../../lib/styles";
+import { TONE_WASH } from "../../../lib/styles";
 import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
 import { mailtoHref, smsHref, telHref } from "../../../lib/contactLinks";
 import { openQuickNote } from "../../../lib/appEvents";
@@ -82,7 +82,7 @@ import {
 } from "../../../components/LocalTimeWeather";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { ActionMenu } from "../../../components/ui/ActionMenu";
-import { MetaDot } from "../../../components/ui/MetaDot";
+import { DotLine } from "../../../components/ui/MetaDot";
 import { ScoreRingAvatar } from "../../../components/ScoreRingAvatar";
 import { AnimatedSkeleton } from "../../../components/ui/AnimatedSkeleton";
 import { ScoreBreakdown } from "../../../components/ScoreBreakdown";
@@ -196,7 +196,7 @@ function socialLinkName(sl: ContactSocialLink): string {
   return displayName;
 }
 
-/** One item on the meta line, with the dot before it. */
+/** The meta line's last item and "+ link" after it, as one item. */
 const META_ITEM = "inline-flex items-center gap-x-2 min-w-0 max-w-full";
 
 /** The host of a website, without "www.". */
@@ -371,9 +371,12 @@ const SocialLink = ({
 // QuickActions: Call, Message, Email and Log note, under a phone's header
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** One tile: a link out of the app, or a button that opens the note sheet. */
+/**
+ * One tile: a link out of the app, or a button that opens the note sheet.
+ * At most 144 px wide, so a lone Log note on a tablet is a tile, not a bar.
+ */
 const QUICK_ACTION =
-  "state-layer flex-1 basis-0 min-w-0 flex flex-col items-center justify-center gap-1 min-h-[52px] px-1 py-2 rounded-xl text-xs font-semibold";
+  "state-layer flex-1 basis-0 min-w-0 max-w-36 flex flex-col items-center justify-center gap-1 min-h-[52px] px-1 py-2 rounded-xl text-xs font-semibold";
 
 /**
  * The narrow header's last row: what a person with a phone in hand opens a
@@ -766,6 +769,20 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
       ),
     });
   }
+  const roleField = (
+    <EditableField
+      value={contact.role}
+      onSave={(val) => onUpdate("role", val)}
+      placeholder="Role / title"
+    />
+  );
+  const companyField = (
+    <EditableField
+      value={contact.company}
+      onSave={(val) => onUpdate("company", val)}
+      placeholder="Company"
+    />
+  );
   // What a new link must not repeat: the links, and the website beside them.
   const knownLinks = [
     ...(contact.socialLinks || []).map((sl) => sl.url),
@@ -979,25 +996,23 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
               </div>
             </div>
 
-            {/* Role at company. Narrow, a dot joins them, as in the meta line. */}
-            <div
-              className={cn(
-                "font-medium text-on-surface-variant flex flex-wrap items-center gap-x-1.5",
-                narrow ? "text-sm" : "mt-1 text-lg",
-              )}
-            >
-              <EditableField
-                value={contact.role}
-                onSave={(val) => onUpdate("role", val)}
-                placeholder="Role / title"
+            {/* Role at company. Narrow, a dot joins them, as in the meta
+                line, and a wrapped line neither starts nor ends with it. */}
+            {narrow ? (
+              <DotLine
+                className="font-medium text-on-surface-variant text-sm"
+                items={[
+                  { key: "role", node: roleField },
+                  { key: "company", node: companyField },
+                ]}
               />
-              {narrow ? <MetaDot /> : <span>at</span>}
-              <EditableField
-                value={contact.company}
-                onSave={(val) => onUpdate("company", val)}
-                placeholder="Company"
-              />
-            </div>
+            ) : (
+              <div className="font-medium text-on-surface-variant flex flex-wrap items-center gap-x-1.5 mt-1 text-lg">
+                {roleField}
+                <span>at</span>
+                {companyField}
+              </div>
+            )}
 
             {!narrow && (
               <ContactIntro
@@ -1010,35 +1025,38 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
             {/* Meta line: facts as text, links as links, and "+ link" at
                 the end. The line always shows, so "+ link" is always there,
                 even for a contact with no facts yet. */}
-            <div className={cn(META_LINE, narrow ? "mt-1" : "mt-3")}>
-              {/* Each dot stays with the item after it, so a line that
-                  wraps never ends on a dot. */}
-              {metaItems.slice(0, -1).map((item, index) => (
-                <span key={item.key} className={META_ITEM}>
-                  {index > 0 && <MetaDot />}
-                  {item.node}
-                </span>
-              ))}
-              {/*
-                The last item and "+ link" wrap as one: on a phone the plus
-                on a line of its own read as a stray bullet. No dot before
-                it: an action, not a fact. The pair is one element whatever
-                the last item is, so "+ link" is the same element after a
-                save, and focus stays on it while the new link arrives in
-                front of it.
-              */}
-              <span key="last" className={META_ITEM}>
-                {metaItems.length > 1 && <MetaDot />}
-                {metaItems.at(-1)?.node}
-                <AddLink
-                  links={knownLinks}
-                  onAdd={addSocialLink}
-                  iconOnly={narrow}
-                  openRequest={linkRequest}
-                  onOpenRequestDone={onLinkRequestDone}
-                />
-              </span>
-            </div>
+            {/*
+              A wrapped line neither starts nor ends with a dot (`DotLine`).
+              The last item and "+ link" wrap as one: on a phone the plus on
+              a line of its own read as a stray bullet. No dot before it: an
+              action, not a fact. The pair is one element whatever the last
+              item is, so "+ link" is the same element after a save, and
+              focus stays on it while the new link arrives in front of it.
+            */}
+            <DotLine
+              className={cn(
+                "text-sm text-on-surface-variant",
+                narrow ? "mt-1" : "mt-3",
+              )}
+              items={[
+                ...metaItems.slice(0, -1),
+                {
+                  key: "last",
+                  node: (
+                    <span className={META_ITEM}>
+                      {metaItems.at(-1)?.node}
+                      <AddLink
+                        links={knownLinks}
+                        onAdd={addSocialLink}
+                        iconOnly={narrow}
+                        openRequest={linkRequest}
+                        onOpenRequestDone={onLinkRequestDone}
+                      />
+                    </span>
+                  ),
+                },
+              ]}
+            />
 
             {/* Tags, then lists. Narrow, they open the Details tab. */}
             {!narrow && (

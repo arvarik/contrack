@@ -28,8 +28,10 @@ export const ContactDetail = () => {
   const slide = useSlideNavigate();
   const handleClose = () =>
     // The slide waits for the page it goes to, and only the list and the
-    // Settings pages finish one. Any other target navigates.
-    isOverlayActive || !(back.to === "/" || back.to.startsWith("/settings"))
+    // Settings pages finish one. Any other target navigates. The list's
+    // address can carry its search and its filter ("/?q=ada").
+    isOverlayActive ||
+    !(/^\/(\?|$)/.test(back.to) || back.to.startsWith("/settings"))
       ? navigate(back.to)
       : slide(back.to, "back");
   useLayoutEffect(() => {
@@ -39,8 +41,10 @@ export const ContactDetail = () => {
   return (
     <div
       className={cn(
-        "h-full w-full relative bg-surface md:bg-transparent",
-        !isOverlayActive && "settings-stage",
+        "h-full w-full relative bg-surface",
+        // The stage stays opaque at every width: from 768 px it was clear,
+        // and the list showed through the contact while it slid.
+        isOverlayActive ? "md:bg-transparent" : "settings-stage",
       )}
     >
       {/* In the Back bar's height below `lg`. From `lg`, 2 px from the top:

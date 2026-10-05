@@ -22,8 +22,8 @@ interface BackTarget {
  * link's state, `{ back: { to, label } }`, so Back returns to that list: the
  * Enrichment page does, with its filters. Only a path inside the app is
  * taken: "//" and "/\" start another site's address in a browser.
- * Otherwise the route decides: the archived list, the map with its filter
- * (`search`), or the network.
+ * Otherwise the route decides: the archived list, or the map or the
+ * network with its search and its list filter (`search`).
  */
 export function backTarget(
   pathname: string,
@@ -44,5 +44,5 @@ export function backTarget(
     return { to: "/settings/archived", label: ARCHIVED_LABEL };
   if (pathname.startsWith("/map"))
     return { to: `/map${search}`, label: NAMES.map.label };
-  return { to: "/", label: NAMES.network.label };
+  return { to: `/${search}`, label: NAMES.network.label };
 }

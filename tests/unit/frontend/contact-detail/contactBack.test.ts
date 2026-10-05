@@ -47,8 +47,8 @@ describe("the contact page's Back", () => {
       to: "/settings/archived",
       label: "Archived contacts",
     });
-    expect(backTarget("/contact/c1", {})).toEqual({
-      to: "/",
+    expect(backTarget("/contact/c1", {}, "?q=ada&list=l1")).toEqual({
+      to: "/?q=ada&list=l1",
       label: NAMES.network.label,
     });
   });

@@ -7,22 +7,30 @@ import { describe, expect, it } from "vitest";
 import {
   buildVCard,
   mailtoHref,
+  smsHref,
   telHref,
   vCardFileName,
 } from "../../../../src/lib/contactLinks";
 
 describe("contact links", () => {
   it.each([
-    ["+1 (555) 010-2030", "tel:+15550102030"],
-    ["020 7946 0018 ext. 42", "tel:02079460018,42"],
-    ["555.010.2030 x7", "tel:5550102030,7"],
+    ["+1 (555) 010-2030", "tel:+15550102030", "sms:+15550102030"],
+    // A text goes to the number, never to its extension.
+    ["020 7946 0018 ext. 42", "tel:02079460018,42", "sms:02079460018"],
+    ["555.010.2030 x7", "tel:5550102030,7", "sms:5550102030"],
+    ["+1 555 0100, 12", "tel:+15550100,12", "sms:+15550100"],
     // The trunk zero after a country code is not dialled.
-    ["+44 (0) 20 7946 0018", "tel:+442079460018"],
-    ["no number", null],
-    // Letters would dial a short, wrong number, so there is no link.
-    ["1-800-FLOWERS", null],
-  ])("dials %s as %s", (phone, href) => {
-    expect(telHref(phone)).toBe(href);
+    ["+44 (0) 20 7946 0018", "tel:+442079460018", "sms:+442079460018"],
+    // Each of these would dial a wrong number, or none on an iPhone.
+    ["no number", null, null],
+    ["1-800-FLOWERS", null, null],
+    ["+1 555 0100 / +1 555 0101", null, null],
+    ["1234 5678 9012 3456", null, null],
+    ["*67 555 010 2030", null, null],
+    ["+1 555 010 2030 #22", null, null],
+  ])("dials %s as %s and texts it as %s", (phone, tel, sms) => {
+    expect(telHref(phone)).toBe(tel);
+    expect(smsHref(phone)).toBe(sms);
   });
 
   it("encodes an email, so the value cannot add a subject or a body", () => {
@@ -88,7 +96,8 @@ describe("buildVCard", () => {
     });
     expect(lines(card)).toContain("N:;Cher;;;");
     expect(lines(card)).toContain("ADR;TYPE=HOME,PREF:;;Paris\\, France;;;;");
-    expect(lines(card)).toContain("BDAY:--05-20");
+    // Apple's form: vCard 3.0 has no date without a year.
+    expect(lines(card)).toContain("BDAY;X-APPLE-OMIT-YEAR=1604:1604-05-20");
   });
 
   it("folds a long line at 75 octets without cutting a character", () => {

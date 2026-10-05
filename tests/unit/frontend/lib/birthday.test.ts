@@ -83,6 +83,7 @@ describe("toBirthdayInputValue and formatDisplay", () => {
 
   it("formats display cleanly", () => {
     expect(formatBirthdayDisplay("1990-05-14")).toContain("May");
+    expect(formatBirthdayDisplay("05-14")).not.toMatch(/\d{4}/);
     expect(formatBirthdayDisplay(null)).toBeNull();
   });
 });
