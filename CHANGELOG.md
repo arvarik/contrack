@@ -80,6 +80,10 @@ search, Pulse, the map, research and the contact page.
 - Deletes go to a trash that keeps them for 30 days by default, and a write
   made with one key offers **Undo**.
 - Export to vCard, CSV or JSON. A vCard export imports back in.
+- On a phone, dialogs are sheets that drag closed, Back on Android closes
+  them, and Save stays above the keyboard while the tab bar steps aside.
+  The app keeps clear of the status bar and a side cutout, and a contact
+  opens without its timeline jumping.
 
 ### AI and research
 
@@ -132,6 +136,10 @@ search, Pulse, the map, research and the contact page.
   them in OpenAPI 3.1.
 
 ### Install and operations
+
+- The built files under `/assets` are cached for a year, as their names
+  change with their content, so a phone loads the app with far fewer
+  requests. The Home Screen app has shortcuts to Pulse, Ask and the map.
 
 - Node.js 26.10 or later is required. Node runs the TypeScript itself, so the
   server has no build step.

@@ -54,8 +54,18 @@ export const MobileNav = () => {
       aria-label="Primary"
       // The map reads this to keep its centre above the bar (`insets.ts`).
       data-covers-map="bottom"
-      className="md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-stretch px-1 pt-1.5 glass-panel rounded-t-2xl shadow-[0_-4px_16px_rgba(0,0,0,0.05)]"
-      style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+      // `mobile-tabbar`: index.css hides the bar while a person types.
+      className="mobile-tabbar md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-stretch px-1 pt-1.5 glass-panel rounded-t-2xl shadow-[0_-4px_16px_rgba(0,0,0,0.05)]"
+      style={{
+        // The largest inset the home indicator or the browser's own bar can
+        // take, where the browser reports it (Chrome 135). The current
+        // inset changes as Chrome's bottom bar slides away, which made the
+        // tab bar jump while the page scrolled.
+        paddingBottom:
+          "max(0.75rem, env(safe-area-max-inset-bottom, env(safe-area-inset-bottom)))",
+        paddingLeft: "max(0.25rem, env(safe-area-inset-left))",
+        paddingRight: "max(0.25rem, env(safe-area-inset-right))",
+      }}
     >
       {[
         {

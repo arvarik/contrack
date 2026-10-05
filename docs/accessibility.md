@@ -56,9 +56,21 @@ Every page works with no pointer. See
 ### Phones
 
 Every control has a touch target of at least 44 by 44 pixels, and no text is
-smaller than 11 pixels. Form fields are 16 pixels or larger, so the browser
-does not zoom in when a field takes focus. Dialogs rise from the bottom of the
-screen, and the tab bar marks the current page.
+smaller than 11 pixels. On a touch screen, form fields and the note editor are
+16 pixels or larger, so the browser does not zoom in when a field takes
+focus. The tab bar marks the current page.
+
+- Dialogs are sheets that rise from the bottom of the screen. Drag one down
+  by its handle or its title to close it. On Android, **Back** closes an open
+  sheet or menu instead of leaving the page.
+- While you type, the tab bar steps aside, and the note's **Save** bar and a
+  sheet's buttons stay above the keyboard.
+- The app keeps clear of the status bar, the home indicator and, on a phone
+  on its side, the camera cutout. On its side the rail scrolls, so Settings
+  stays in reach.
+- Added to the Home Screen, Contrack opens as an app, with shortcuts to
+  Pulse, Ask Contrack and the map. The browser bar takes the theme you chose
+  in the app.
 
 ## How it is checked
 
@@ -73,16 +85,17 @@ CSP on) on a free port, with a new temporary `DATA_DIR`. The suite runs with
 reduced motion, the `en-US` locale and the `America/Los_Angeles` time zone.
 The report is uploaded on every run.
 
-| Spec                           | What it holds                                                                                                                |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
-| `axe.spec.ts`                  | Eight screens against WCAG 2.2 AA, four of them in dark too. Landmark and heading rules on six screens and two phone screens |
-| `keyboard.spec.ts`             | The skip link, the sidebar in order with a visible ring in both themes, `/`, the list's arrow keys and the Tab budget        |
-| `contact.spec.ts`              | Focus when a contact opens, the list keys, the header menu, tracking, the timeline, the composer and Back on a phone         |
-| `dialogs.spec.ts`              | Four dialogs: focus in, `Tab` kept inside, `Esc`, focus back, and a scan while open                                          |
-| `search-announcements.spec.ts` | The status messages and alerts of People and Notes searches                                                                  |
-| `mobile-forms.spec.ts`         | A Pixel 7: the tab bar, the new contact sheet with 16 px fields, and setup errors tied to their fields                       |
-| `metrics.spec.ts`              | A 390 px phone: 44 px targets and 11 px text on seven screens                                                                |
-| `account-transitions.spec.ts`  | A gated instance: setup, sign out, sign in, an expired session and a forced password change                                  |
+| Spec                           | What it holds                                                                                                                       |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `axe.spec.ts`                  | Eight screens against WCAG 2.2 AA, four of them in dark too. Landmark and heading rules on six screens and two phone screens        |
+| `keyboard.spec.ts`             | The skip link, the sidebar in order with a visible ring in both themes, `/`, the list's arrow keys and the Tab budget               |
+| `contact.spec.ts`              | Focus when a contact opens, the list keys, the header menu, tracking, the timeline, the composer and Back on a phone                |
+| `dialogs.spec.ts`              | Four dialogs: focus in, `Tab` kept inside, `Esc`, focus back, and a scan while open                                                 |
+| `search-announcements.spec.ts` | The status messages and alerts of People and Notes searches                                                                         |
+| `mobile-forms.spec.ts`         | A Pixel 7: the tab bar, the new contact sheet with 16 px fields, and setup errors tied to their fields                              |
+| `metrics.spec.ts`              | A 390 px phone: 44 px targets and 11 px text on seven screens                                                                       |
+| `phone-shell.spec.ts`          | Typing hides the tab bar and keeps Save in view, a sheet drags closed, the browser bar's theme, asset caching, the rail on its side |
+| `account-transitions.spec.ts`  | A gated instance: setup, sign out, sign in, an expired session and a forced password change                                         |
 
 Most other specs, such as Pulse, the map and Settings, also scan the screens
 they reach. In the unit suite, `tests/unit/frontend/style/stylesFloor.test.ts`

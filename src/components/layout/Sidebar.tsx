@@ -166,7 +166,12 @@ export const Sidebar = () => {
     <aside
       className={cn(
         SECTION_BG,
-        "w-16 h-screen hidden md:flex flex-col items-center pt-6 pb-3 gap-6 shrink-0 relative z-20",
+        // The height its parent leaves, which pads for the status bar, and
+        // a scroll of its own on a short touch screen: a phone on its side
+        // is 393 px tall, and Settings sat below it. Only there, since a
+        // scroll box clips the labels that stand out to its right, and a
+        // short laptop window needs them.
+        "w-16 h-full min-h-0 [@media(max-height:40rem)_and_(pointer:coarse)]:overflow-y-auto scrollbar-hide hidden md:flex flex-col items-center pt-6 pb-3 gap-6 shrink-0 relative z-20",
       )}
     >
       {/*
@@ -310,16 +315,20 @@ export const Sidebar = () => {
         with keyboard shortcuts.
       */}
       <div className="flex flex-col items-center gap-2 w-full">
-        <RailTooltip label="Keyboard shortcuts" shortcut="?">
-          <button
-            type="button"
-            onClick={openKeyboardShortcuts}
-            className={navLink(false)}
-            aria-label="Keyboard shortcuts"
-          >
-            <Keyboard className="w-6 h-6" />
-          </button>
-        </RailTooltip>
+        {/* Not on a device with no mouse or trackpad, such as a tablet on its
+            own: there is no keyboard to use the shortcuts with. */}
+        <div className="[@media(not_(any-pointer:fine))]:hidden">
+          <RailTooltip label="Keyboard shortcuts" shortcut="?">
+            <button
+              type="button"
+              onClick={openKeyboardShortcuts}
+              className={navLink(false)}
+              aria-label="Keyboard shortcuts"
+            >
+              <Keyboard className="w-6 h-6" />
+            </button>
+          </RailTooltip>
+        </div>
 
         <RailTooltip
           label={NAMES.settings.label}

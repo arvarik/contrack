@@ -447,7 +447,11 @@ export const ContactProfile = ({
   return (
     <>
       <div ref={setRoot} className={ROOT} style={themeStyles}>
-        <div ref={setScroller} className="flex-1 min-h-0 overflow-y-auto">
+        {/* `contact-scroller`: index.css keeps the typed line above Save. */}
+        <div
+          ref={setScroller}
+          className="contact-scroller flex-1 min-h-0 overflow-y-auto"
+        >
           {/* ── Profile Header ──────────────────────────────────────────── */}
           <ProfileHeader
             contact={contact}

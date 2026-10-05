@@ -221,11 +221,18 @@ export function usePanelPlacement({
       capture: true,
       passive: true,
     });
-    window.addEventListener("resize", onClose);
+    // A new width moves the trigger. A new height alone is a phone's
+    // keyboard coming or going (Android resizes the page for it), and a
+    // list opened as the keyboard hides must stay open.
+    const width = window.innerWidth;
+    const onResize = () => {
+      if (window.innerWidth !== width) onClose();
+    };
+    window.addEventListener("resize", onResize);
     return () => {
       window.removeEventListener("keydown", onKeyDown, { capture: true });
       window.removeEventListener("scroll", onScroll, { capture: true });
-      window.removeEventListener("resize", onClose);
+      window.removeEventListener("resize", onResize);
     };
   }, [open, onClose, panel, trigger]);
 

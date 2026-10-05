@@ -242,12 +242,22 @@ describe("usePanelPlacement", () => {
     }
   });
 
-  it("closes when the window resizes", () => {
+  it("closes when the window's width changes, and not for its height alone", () => {
     const onClose = vi.fn();
+    const { innerWidth, innerHeight } = window;
     mount({ onClose });
+    // A phone's keyboard changes the height only, and the list stays open.
     act(() => {
+      window.innerHeight = innerHeight - 300;
+      fireEvent(window, new Event("resize"));
+    });
+    expect(onClose).not.toHaveBeenCalled();
+    act(() => {
+      window.innerWidth = innerWidth - 100;
       fireEvent(window, new Event("resize"));
     });
     expect(onClose).toHaveBeenCalledTimes(1);
+    window.innerWidth = innerWidth;
+    window.innerHeight = innerHeight;
   });
 });

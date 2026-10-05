@@ -579,6 +579,20 @@ const Composer = ({
             />
             <input
               aria-label="Next action"
+              // The phone keyboard's return key reads Done and puts the
+              // keyboard away, so Save is in view. On a desktop, Enter here
+              // still does nothing and ⌘ Enter saves.
+              enterKeyHint="done"
+              onKeyDown={(event) => {
+                if (
+                  event.key === "Enter" &&
+                  !event.metaKey &&
+                  !event.ctrlKey &&
+                  window.matchMedia?.("(pointer: coarse)").matches
+                ) {
+                  event.currentTarget.blur();
+                }
+              }}
               value={followUpText}
               onChange={(e) => {
                 setFollowUpText(e.target.value);
@@ -628,11 +642,11 @@ const Composer = ({
             : "bg-surface-container-low/40 px-5 py-3",
           // On a phone a long note pushes Save down the page. The bar then
           // sticks right on top of the tab bar, which is `md:hidden`, so Save
-          // stays in reach while the note is written. The offset is the tab
-          // bar's height: 3 rem of tab, 0.375 rem above it, and the larger of
-          // 0.75 rem and the home indicator's inset below it (App.tsx).
+          // stays in reach while the note is written. While the keyboard is
+          // up the tab bar steps aside, and the bar sits on the keyboard
+          // (`--tabbar-space` and `--keyboard-inset` in index.css).
           collapsible &&
-            "sticky bottom-[calc(3.375rem+max(0.75rem,env(safe-area-inset-bottom)))] md:static z-10 bg-surface-container-low",
+            "sticky bottom-[calc(var(--tabbar-space)+var(--keyboard-inset))] md:static z-10 bg-surface-container-low",
           !expanded && "hidden",
         )}
       >

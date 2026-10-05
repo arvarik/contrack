@@ -5,11 +5,15 @@
     <!--
       viewport-fit=cover lets the app paint into the display cutout area; the
       mobile tab bar pads itself with env(safe-area-inset-bottom) so it still
-      clears the iOS home indicator.
+      clears the iOS home indicator, and the shell pads itself for the status
+      bar and a side cutout.
+      interactive-widget=resizes-content makes Android shrink the page for the
+      keyboard, so a field and its Save button stay above it. iOS ignores it,
+      and useSoftKeyboard covers iOS.
     -->
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
     />
     <meta
       name="description"

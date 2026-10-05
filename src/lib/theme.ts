@@ -517,6 +517,26 @@ export function resolveMode(theme: ThemeMode): ResolvedMode {
 }
 
 /**
+ * The browser bar's colour for each palette: the page background, as the two
+ * `theme-color` metas in index.html give it.
+ */
+const BAR_COLORS = { light: "#f8f6f2", dark: "#0f1315" } as const;
+
+/**
+ * Point both `theme-color` metas at the chosen palette. Each meta answers one
+ * system scheme, so with a theme picked in the app the Android bar followed
+ * the system and not the page. "system" gives each meta its own colour back.
+ */
+function syncThemeColor(theme: ThemeMode): void {
+  for (const meta of document.querySelectorAll<HTMLMetaElement>(
+    'meta[name="theme-color"]',
+  )) {
+    const own = meta.media.includes("dark") ? "dark" : "light";
+    meta.content = BAR_COLORS[theme === "system" ? own : theme];
+  }
+}
+
+/**
  * Paint the theme, and remember it for the next page load.
  *
  * The accent is applied as inline custom properties on `<html>`, which beat
@@ -532,6 +552,7 @@ export function applyTheme(theme: ThemeMode, accent: string): ResolvedMode {
   // attribute would freeze the answer until the next render.
   if (theme === "system") root.removeAttribute("data-theme");
   else root.setAttribute("data-theme", theme);
+  syncThemeColor(theme);
 
   const vars: Record<string, string> = {};
   if (accent.toLowerCase() !== DEFAULT_ACCENT) {

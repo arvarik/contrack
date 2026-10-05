@@ -9,6 +9,7 @@
  */
 import { useEffect, useRef, type RefObject } from "react";
 import { useClickOutside } from "./useClickOutside";
+import { useCloseRequest } from "./useCloseRequest";
 
 export function useDismissable<T extends HTMLElement>(
   open: boolean,
@@ -16,6 +17,8 @@ export function useDismissable<T extends HTMLElement>(
 ): RefObject<T | null> {
   const ref = useRef<T>(null);
   useClickOutside(ref, close, open);
+  // And Android's Back, which closes it instead of leaving the page.
+  useCloseRequest(open, close);
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
