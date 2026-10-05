@@ -101,7 +101,7 @@ export function generateCandidatePairs(
       skippedMega++;
       log.debug(
         "DedupeBlocking",
-        `Skipping mega-block "${key}" with ${ids.length} contacts`,
+        `Skipping a ${key.split(":", 1)[0]} mega-block with ${ids.length} contacts`,
       );
       continue;
     }

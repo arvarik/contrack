@@ -119,7 +119,7 @@ async function searchBoth(
   );
   log.info(
     "Combined",
-    `${contact.name} (${depth}): research model: ${reason(provider)} ${label}: ${reason(web)}`,
+    `${contact.id} (${depth}): research model: ${reason(provider)} ${label}: ${reason(web)}`,
   );
   if (found.length > 0) return mergeEvidence(found);
   const noMatches = outcomes.filter(

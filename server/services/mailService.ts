@@ -336,6 +336,14 @@ function getTransport(): Transporter {
 // ── Mail Sending ────────────────────────────────────────────────────────────
 
 /**
+ * A mail error for the log. A mail server that refuses a recipient quotes
+ * the address, and the log keeps no address.
+ */
+function withoutAddresses(message: string): string {
+  return message.replace(/[^\s<>"'@]+@[^\s<>"'@]+/g, "[address]");
+}
+
+/**
  * Sends an email, throwing on error. Used by the test route.
  */
 export async function sendOrThrow(
@@ -382,7 +390,7 @@ export async function sendOrThrow(
   } catch (err) {
     log.warn(
       "Mail",
-      `sendOrThrow failed to ${options.to}: ${getErrorMessage(err)}`,
+      `sendOrThrow failed: ${withoutAddresses(getErrorMessage(err))}`,
     );
     throw err;
   }
@@ -395,10 +403,7 @@ export async function sendOrThrow(
 export async function send(options: SendMailOptions): Promise<boolean> {
   try {
     if (!isConfigured()) {
-      log.warn(
-        "Mail",
-        `Cannot send email to ${options.to}: mail is not configured`,
-      );
+      log.warn("Mail", "Cannot send email: mail is not configured");
       return false;
     }
     await sendOrThrow(options);
@@ -406,7 +411,7 @@ export async function send(options: SendMailOptions): Promise<boolean> {
   } catch (err) {
     log.warn(
       "Mail",
-      `Failed to send email to ${options.to}: ${getErrorMessage(err)}`,
+      `Failed to send email: ${withoutAddresses(getErrorMessage(err))}`,
     );
     return false;
   }

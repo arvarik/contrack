@@ -240,10 +240,7 @@ router.post(
       "manual",
       { autoEnrich: true },
     );
-    log.info(
-      "API",
-      `[${rid}] POST /api/contacts → "${req.body.name}" (${contact?.id})`,
-    );
+    log.info("API", `[${rid}] POST /api/contacts → ${contact?.id}`);
     res.status(201).json(contact);
   }),
 );
@@ -468,10 +465,7 @@ router.post(
     const rid = req.requestId;
     const { text } = req.body;
     const parsed = await parseContactRecord(text);
-    log.info(
-      "API",
-      `[${rid}] POST /api/parse-contact → parsed "${parsed.name}"`,
-    );
+    log.info("API", `[${rid}] POST /api/parse-contact → parsed`);
     res.json(parsed);
   }),
 );
@@ -695,7 +689,7 @@ router.post(
       // decides which models it calls.
       log.info(
         "API",
-        `[${rid}] POST /api/contacts/${id}/enrich — starting ${choice.technique} (${depth}) for "${contact.name}" (provider: ${providerIdFor("research") ?? "none"})`,
+        `[${rid}] POST /api/contacts/${id}/enrich — starting ${choice.technique} (${depth}) (provider: ${providerIdFor("research") ?? "none"})`,
       );
 
       const result = toAISearchResult(

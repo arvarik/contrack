@@ -21,6 +21,7 @@ import type { Request, Response, NextFunction } from "express";
 import { ZodError } from "zod";
 import { AppError } from "../utils/AppError.ts";
 import { log } from "../utils/logger.ts";
+import { redactUrlForLog } from "../utils/helpers.ts";
 import { recordBusyError } from "../services/walHealth.ts";
 
 interface SqliteLikeError {
@@ -173,12 +174,12 @@ export function errorHandler(
     const stack = (err as Error)?.stack ?? String(err);
     log.error(
       "Unhandled",
-      `[${requestId ?? "-"}] ${req.method} ${req.originalUrl} → ${t.statusCode} ${t.code}: ${stack}`,
+      `[${requestId ?? "-"}] ${req.method} ${redactUrlForLog(req.originalUrl)} → ${t.statusCode} ${t.code}: ${stack}`,
     );
   } else {
     log.warn(
       "Operational",
-      `[${requestId ?? "-"}] ${req.method} ${req.originalUrl} → ${t.statusCode} ${t.code}: ${t.message}`,
+      `[${requestId ?? "-"}] ${req.method} ${redactUrlForLog(req.originalUrl)} → ${t.statusCode} ${t.code}: ${t.message}`,
     );
     if (t.cause) {
       log.debug(

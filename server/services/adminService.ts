@@ -457,7 +457,7 @@ export async function resetPassword(
     ip: ctx.ip,
   });
 
-  log.info("Admin", `Password reset for "${target.username}" (${id})`);
+  log.info("Admin", `Password reset for account ${id}`);
   return { temporaryPassword };
 }
 
@@ -495,7 +495,7 @@ export function disableUser(ctx: AdminContext, id: string): AdminUserSummary {
     details: { username: target.username },
     ip: ctx.ip,
   });
-  log.info("Admin", `Disabled account "${target.username}" (${id})`);
+  log.info("Admin", `Disabled account ${id}`);
   return summaryOf(id, ctx);
 }
 
@@ -517,7 +517,7 @@ export function enableUser(ctx: AdminContext, id: string): AdminUserSummary {
     details: { username: target.username },
     ip: ctx.ip,
   });
-  log.info("Admin", `Enabled account "${target.username}" (${id})`);
+  log.info("Admin", `Enabled account ${id}`);
   return summaryOf(id, ctx);
 }
 
@@ -599,7 +599,7 @@ export function deleteUser(
   });
   log.info(
     "Admin",
-    `Deleted account "${target.username}" (${id}): ${counts.contacts} contacts, ${counts.interactions} interactions in ${(performance.now() - started).toFixed(0)}ms`,
+    `Deleted account ${id}: ${counts.contacts} contacts, ${counts.interactions} interactions in ${(performance.now() - started).toFixed(0)}ms`,
   );
 
   return { deleted: true, counts };

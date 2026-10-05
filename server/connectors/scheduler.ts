@@ -176,9 +176,13 @@ export async function tickScheduler(): Promise<void> {
       { requestId: `conn-sync-${rid}`, principal: null, scope },
       () => startSync(scope, candidate, "schedule"),
     )?.catch((err: unknown) => {
-      log.error("Connectors", `Scheduler run failed for ${candidate.name}`, {
-        error: err,
-      });
+      log.error(
+        "Connectors",
+        `Scheduler run failed for connector ${candidate.id}`,
+        {
+          error: err,
+        },
+      );
     });
   }
 }

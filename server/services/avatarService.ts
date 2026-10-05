@@ -362,7 +362,7 @@ export function renderAvatar(options: RenderAvatarOptions): string {
   } catch (err) {
     log.warn(
       "Avatar",
-      `${options.style} failed for seed "${options.seed}": ${getErrorMessage(err)} — falling back to initials`,
+      `${options.style} failed: ${getErrorMessage(err)} — falling back to initials`,
     );
   }
 

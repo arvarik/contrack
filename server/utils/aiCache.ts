@@ -235,7 +235,7 @@ function evictLRU(tier: string, store: Map<string, CacheEntry>): void {
     tierStats.entries = store.size;
     log.debug(
       "AICache",
-      `EVICT [${TIER_CONFIGS[tier]?.label}] "${oldestKey.slice(0, 40)}…" (LRU, ${store.size} remaining)`,
+      `EVICT [${TIER_CONFIGS[tier]?.label}] (LRU, ${store.size} remaining)`,
     );
   }
 }
@@ -274,7 +274,7 @@ export const aiCache = {
       tierStats.misses++;
       log.debug(
         "AICache",
-        `MISS [${TIER_CONFIGS[operation]?.label}] "${key.slice(0, 50)}" (${store.size} entries)`,
+        `MISS [${TIER_CONFIGS[operation]?.label}] (${store.size} entries)`,
       );
       return null;
     }
@@ -287,7 +287,7 @@ export const aiCache = {
       const age = Math.round((Date.now() - entry.createdAt) / 1000);
       log.debug(
         "AICache",
-        `EXPIRED [${TIER_CONFIGS[operation]?.label}] "${key.slice(0, 50)}" (age: ${age}s)`,
+        `EXPIRED [${TIER_CONFIGS[operation]?.label}] (age: ${age}s)`,
       );
       return null;
     }
@@ -298,7 +298,7 @@ export const aiCache = {
     const ageMs = Date.now() - entry.createdAt;
     log.debug(
       "AICache",
-      `HIT [${TIER_CONFIGS[operation]?.label}] "${key.slice(0, 50)}" (age: ${Math.round(ageMs / 1000)}s, ${store.size} entries)`,
+      `HIT [${TIER_CONFIGS[operation]?.label}] (age: ${Math.round(ageMs / 1000)}s, ${store.size} entries)`,
     );
     return entry.value as T;
   },
@@ -330,7 +330,7 @@ export const aiCache = {
     tierStats.entries = store.size;
     log.debug(
       "AICache",
-      `SET [${config.label}] "${key.slice(0, 50)}" (TTL: ${formatMs(config.ttlMs)}, ${store.size} entries)`,
+      `SET [${config.label}] (TTL: ${formatMs(config.ttlMs)}, ${store.size} entries)`,
     );
   },
 

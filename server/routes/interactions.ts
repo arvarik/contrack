@@ -90,7 +90,7 @@ router.post(
     );
     log.info(
       "API",
-      `[${rid}] POST interaction → ${req.body.type} "${req.body.title}"`,
+      `[${rid}] POST interaction → ${req.body.type} for ${String(req.params.id)}`,
     );
     res.status(201).json(result);
   }),
@@ -136,7 +136,7 @@ router.post(
     const updated = interactionService.promoteGhost(scope, id);
     if (!updated) throw new AppError("Contact not found", 404);
 
-    log.info("API", `[${rid}] Promoted ghost contact: ${updated.name}`);
+    log.info("API", `[${rid}] Promoted ghost contact ${id}`);
     // The whole contact, as every other contact route answers. The service
     // returns the bare row, with its flags as 0 and 1.
     res.json(contactService.getContactById(scope, id));
@@ -164,7 +164,10 @@ router.post(
           );
         throw error;
       });
-    log.info("API", `[${rid}] POST attachment → "${req.file.originalname}"`);
+    log.info(
+      "API",
+      `[${rid}] POST attachment → ${String(req.params.id)}, ${Math.round(req.file.size / 1024)} KB`,
+    );
     res.status(201).json(result);
   }),
 );

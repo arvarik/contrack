@@ -808,7 +808,7 @@ async function runSearch(
   const done = (result: SearchResult, kind: string, path: string) => {
     log.info(
       "SemanticSearch",
-      `[${rid}] "${query.slice(0, 60)}" kind=${kind} path=${path}` +
+      `[${rid}] kind=${kind} path=${path}` +
         `${filters.length ? ` facets=${filters.length}` : ""} ` +
         `→ ${result.matches.length} ${result.fallback ? "unverified" : "verified"} in ${elapsed()}ms`,
     );

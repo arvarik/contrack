@@ -148,7 +148,7 @@ export const actionItemService = {
 
     log.info(
       "ActionItems",
-      `Created "${title}" for contact ${contactId} due ${dueAt}`,
+      `Created ${id} for contact ${contactId} due ${dueAt}`,
     );
     return findOwnedItem(scope, id);
   },
@@ -186,7 +186,7 @@ export const actionItemService = {
 
     log.info(
       "ActionItems",
-      `Created "${title}" for ${usable.length} contacts due ${dueAt}`,
+      `Created one follow-up for ${usable.length} contacts due ${dueAt}`,
     );
     return usable.length;
   },
@@ -269,7 +269,7 @@ export const actionItemService = {
     })();
     dispatchEvents();
 
-    log.info("ActionItems", `Completed "${existing.title}" (${id})`);
+    log.info("ActionItems", `Completed ${id}`);
     return findOwnedItem(scope, id);
   },
 
@@ -290,7 +290,7 @@ export const actionItemService = {
       });
     })();
     dispatchEvents();
-    log.info("ActionItems", `Deleted "${existing.title}" (${id})`);
+    log.info("ActionItems", `Deleted ${id}`);
     return true;
   },
 };

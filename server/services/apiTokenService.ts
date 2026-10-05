@@ -122,7 +122,7 @@ export function createToken(
     ip,
   });
 
-  log.info("Auth", `Personal token "${name}" created for "${user.username}"`);
+  log.info("Auth", `Personal token ${id} created for account ${user.id}`);
   return { id, name, token, tokenPrefix, expiresAt, readOnly };
 }
 

@@ -86,7 +86,7 @@ connectorsRouter.post(
     const created = await createConnector(scope, req.body, req.ip ?? null);
     log.info(
       "Connectors",
-      `[${rid}] POST /api/connectors → "${created.name}" (${created.id})`,
+      `[${rid}] POST /api/connectors → ${created.kind} ${created.id}`,
     );
     res.status(201).json(created);
   }),

@@ -255,7 +255,7 @@ ${UNTRUSTED_DATA_RULE}`;
 
   log.info(
     "AIService",
-    `parseContactRecord → "${clean.name}" via ${result.model} in ${result.latencyMs}ms | Tokens: ${result.tokenCount ?? "?"}`,
+    `parseContactRecord → one record via ${result.model} in ${result.latencyMs}ms | Tokens: ${result.tokenCount ?? "?"}`,
   );
   recordInvocation({
     operation: "parse",

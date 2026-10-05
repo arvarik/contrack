@@ -85,7 +85,7 @@ export async function extractFacts(
   if (dropped.length > 0)
     log.warn(
       label,
-      `${contact.name}: ${result.model} wrote values the schema refused; left out: ${dropped.join(", ")}`,
+      `${contact.id}: ${result.model} wrote values the schema refused; left out: ${dropped.join(", ")}`,
     );
   return {
     data: tidyExtraction(data, contact) as Record<string, unknown>,

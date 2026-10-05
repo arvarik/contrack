@@ -750,10 +750,7 @@ export async function generateAndStoreEmbedding(
     );
     if (replaced(embedder)) return false;
     storeEmbedding(contactId, embedding);
-    log.debug(
-      "DedupeEmbeddings",
-      `Embedded contact ${contactId} (${normalized.nameNorm})`,
-    );
+    log.debug("DedupeEmbeddings", `Embedded contact ${contactId}`);
     return true;
   } catch (err: unknown) {
     if (isRefused(err)) return false;

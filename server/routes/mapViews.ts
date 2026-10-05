@@ -27,10 +27,7 @@ mapViewsRouter.post(
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
     const view = mapViewService.createMapView(scopeOf(req), req.body);
-    log.info(
-      "API",
-      `[${rid}] POST /api/map/views → "${view.name}" (${view.id})`,
-    );
+    log.info("API", `[${rid}] POST /api/map/views → ${view.id}`);
     res.status(201).json(view);
   }),
 );
@@ -47,7 +44,7 @@ mapViewsRouter.patch(
     );
     log.info(
       "API",
-      `[${rid}] PATCH /api/map/views/${String(req.params.id)} → "${view.name}"`,
+      `[${rid}] PATCH /api/map/views/${String(req.params.id)} → updated`,
     );
     res.json(view);
   }),

@@ -480,8 +480,11 @@ export async function runNow(
   let config: Record<string, unknown> = {};
   try {
     config = JSON.parse(connector.config || "{}");
-  } catch (err) {
-    log.error("Connectors", "Failed to parse connector config", { error: err });
+  } catch {
+    log.error(
+      "Connectors",
+      `The config of connector ${connector.id} is not JSON`,
+    );
   }
 
   // Decrypt secret if present
@@ -491,9 +494,14 @@ export async function runNow(
       const opened = secretBox.open(connector.secret);
       secret = JSON.parse(opened);
     } catch (err) {
-      log.error("Connectors", "Failed to decrypt connector secret", {
-        error: err,
-      });
+      log.error(
+        "Connectors",
+        `Failed to open the secret of connector ${connector.id}`,
+        {
+          // The parse message would quote the decrypted secret.
+          error: err instanceof SyntaxError ? "The secret is not JSON" : err,
+        },
+      );
       const finishIso = new Date().toISOString();
       const authErrMsg =
         "Secret encryption key is unavailable or changed. Reconnect required.";
@@ -584,7 +592,7 @@ export async function runNow(
     since,
     selfAddresses: { emails: selfEmails, phones: selfPhones },
     signal,
-    log: (msg: string) => log.info("Connectors", `[${connector.name}] ${msg}`),
+    log: (msg: string) => log.info("Connectors", `[${connector.id}] ${msg}`),
     accountId: scope.ownerId,
     isContactParticipant: (p: Participant) =>
       Boolean(matcher.resolveContactId(p)),
@@ -673,7 +681,7 @@ export async function runNow(
     const errMsg = (err as Error).message || String(err);
     log.error(
       "Connectors",
-      `Sync failed for connector ${connector.name}: ${errMsg}`,
+      `Sync failed for connector ${connector.id}: ${errMsg}`,
       {
         error: err,
       },

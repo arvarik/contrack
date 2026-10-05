@@ -72,5 +72,14 @@ services:
       - SEARCH_RERANK_BUDGET_MS=${SEARCH_RERANK_BUDGET_MS:-}
       - CONNECTOR_SYNC_CONCURRENCY=${CONNECTOR_SYNC_CONCURRENCY:-}
       - JOB_CONCURRENCY=${JOB_CONCURRENCY:-}
+      - LOG_LEVEL=${LOG_LEVEL:-}
       - CONNECTORS_ALLOW_PRIVATE_HOSTS=${CONNECTORS_ALLOW_PRIVATE_HOSTS:-}
     restart: unless-stopped
+    # Docker keeps every log line unless told otherwise. These keep three files
+    # of 10 MB and drop the oldest lines. The log holds ids and counts, not
+    # names or notes, but it need not grow for ever.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

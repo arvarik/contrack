@@ -3,7 +3,6 @@
 // =============================================================================
 
 import { log } from "../../utils/logger.ts";
-import { getErrorMessage } from "../../utils/helpers.ts";
 import { isAnyProviderConfigured } from "../gateway.ts";
 
 /** Returns true when the AI provider has no valid API key and will use mock responses. */
@@ -20,10 +19,11 @@ export function safeParseJson<T>(text: string, context: string): T | null {
   if (!text?.trim()) return null;
   try {
     return JSON.parse(text) as T;
-  } catch (err: unknown) {
+  } catch {
+    // The parse message quotes the output, so the line gives its length.
     log.error(
       "AIService",
-      `[${context}] JSON.parse failed: ${getErrorMessage(err)}. Raw: ${text.slice(0, 200)}`,
+      `[${context}] The model output (${text.length} characters) is not JSON`,
     );
     return null;
   }

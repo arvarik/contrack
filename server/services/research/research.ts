@@ -162,7 +162,7 @@ export async function research(
       const read = await extractFacts(run, outcome.facts, ctx, technique.name);
       log.info(
         "Research",
-        `${request.contact.name} (${technique.name}, ${depth}): read by ${read.model} in ${read.latencyMs}ms; ${meter.usage.calls} calls, ${meter.usage.searches} searches`,
+        `${request.contact.id} (${technique.name}, ${depth}): read by ${read.model} in ${read.latencyMs}ms; ${meter.usage.calls} calls, ${meter.usage.searches} searches`,
       );
       return foundResult(outcome, read, meter, depth, startMs);
     },

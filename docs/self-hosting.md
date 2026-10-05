@@ -355,7 +355,20 @@ lists the folders and the order in which the server reads them.
     their errors. `JOB_CONCURRENCY` sets how many jobs run at once.
 - The server writes its log to standard output: the terminal, or
   `docker logs contrack`. Each line has the time, the level and the area, such
-  as `[WARN] [Auth]`.
+  as `[WARN] [Auth]`. Colours appear only in a terminal.
+- `LOG_LEVEL` sets how much it writes: `error`, `warn`, `info` (the default)
+  or `debug`. Each request is one `info` line, with the client's IP address,
+  the path and no query string.
+- The log says what happened, to which record id, how many and how long. It
+  never holds a name, an email address, a phone number, a street address, a
+  note or its title, a search or an Ask question, a file name, a pasted link
+  or what a model wrote.
+- Docker Compose keeps the log in three files of 10 MB. When they are full,
+  Docker drops the oldest lines, so the log reaches back about 30 MB, however
+  many days that is. Change `max-size` and `max-file` under `logging:` in
+  `docker-compose.yml`. With `docker run`, add
+  `--log-opt max-size=10m --log-opt max-file=3`, because Docker otherwise
+  keeps every line for as long as the container exists.
 - On SIGTERM or SIGINT (`docker stop`, or `Ctrl+C`), the server finishes open
   requests, closes the database and exits. After 8 seconds it forces the
   close. A second signal exits at once.
