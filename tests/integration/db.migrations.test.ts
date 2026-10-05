@@ -6,25 +6,21 @@
 //
 //   1. A new database ends at the last migration, and its schema is the
 //      fixture of d67c8a9 plus what the later migrations add.
-//   2. A database built from that fixture, which is what every 2.0 database
-//      at d67c8a9 holds, upgrades to the schema of a new one, and keeps its
-//      FTS index rather than rebuilding it.
+//   2. A database with tables but no ledger, which Contrack 2 did not make,
+//      is refused before anything is written.
 //   3. A migration that throws leaves no change and no row, and the error
 //      names it.
 //   4. server/db/schema.ts names every table and column of the migrated
 //      database, and nothing more.
 //
 // tests/fixtures/schema/v2.0-d67c8a9.sql was written from the code at
-// d67c8a9, before the boot code moved. Its header says how.
+// d67c8a9. Its header says how.
 // =============================================================================
 
-import { describe, it, expect, vi } from "vitest";
-import crypto from "node:crypto";
+import { describe, it, expect } from "vitest";
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
-import * as sqliteVec from "sqlite-vec";
 import { is } from "drizzle-orm";
 import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
 import { sqlite } from "../../server/db.ts";
@@ -99,7 +95,7 @@ function schemaOf(db: Database.Database): MasterRow[] {
 function fixtureRows(): MasterRow[] {
   const rows: MasterRow[] = [];
   for (const block of fs.readFileSync(FIXTURE, "utf8").split(/\n\n+/)) {
-    const [first, ...rest] = block.split("\n");
+    const [first, ...rest] = block.trimEnd().split("\n");
     const marker =
       /^-- (table|virtual table|shadow table|index|trigger) (\S+)$/.exec(first);
     if (!marker) continue;
@@ -137,63 +133,13 @@ describe("a new database", () => {
   });
 });
 
-describe("a database built from the fixture", () => {
-  it("upgrades to the schema of a new database, and keeps its FTS index", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "contrack-fixture-"));
-    const built = new Database(path.join(dir, "curator.db"));
-    sqliteVec.load(built);
-    built.exec(fs.readFileSync(FIXTURE, "utf8"));
-    // A contact with a search expansion, the way a d67c8a9 database holds
-    // one. An FTS rebuild clears that column and refills the index from
-    // contacts, so the word is still found only when the upgrade kept both.
-    const owner = crypto.randomUUID();
-    built
-      .prepare(
-        `INSERT INTO users (id, email, username, displayName, passwordHash, role, credentialState)
-         VALUES (?, 'local@contrack.local', 'local', 'This device', 'none$', 'admin', 'none')`,
-      )
-      .run(owner);
-    built
-      .prepare(
-        "INSERT INTO contacts (id, name, ownerId, searchExpansion) VALUES ('kept', 'Kept Person', ?, 'violinist')",
-      )
-      .run(owner);
-    built.close();
-
-    // A fresh module registry, so server/db.ts boots over the built file.
-    const dataDir = process.env.DATA_DIR;
-    process.env.DATA_DIR = dir;
-    vi.resetModules();
-    const { sqlite: upgraded } = await import("../../server/db.ts");
-    process.env.DATA_DIR = dataDir;
-
-    try {
-      expect(appliedMigrations(upgraded)).toEqual(migrationIds());
-      expect(schemaOf(upgraded)).toEqual(schemaOf(sqlite));
-      const drizzleRows = (db: Database.Database) =>
-        db
-          .prepare(
-            'SELECT id, hash, created_at FROM "__drizzle_migrations" ORDER BY created_at',
-          )
-          .all();
-      expect(drizzleRows(upgraded)).toEqual(drizzleRows(sqlite));
-
-      expect(
-        upgraded
-          .prepare("SELECT searchExpansion FROM contacts WHERE id = 'kept'")
-          .get(),
-      ).toEqual({ searchExpansion: "violinist" });
-      expect(
-        upgraded
-          .prepare(
-            "SELECT contactId FROM contacts_fts WHERE contacts_fts MATCH 'violinist'",
-          )
-          .all(),
-      ).toEqual([{ contactId: "kept" }]);
-    } finally {
-      upgraded.close();
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
+describe("a database that Contrack 2 did not make", () => {
+  it("is refused before anything is written", () => {
+    const foreign = new Database(":memory:");
+    foreign.exec("CREATE TABLE contacts (id TEXT PRIMARY KEY, name TEXT)");
+    expect(() => runMigrations(foreign, MIGRATIONS)).toThrow(/did not create/);
+    expect(schemaOf(foreign).map((row) => row.name)).toEqual(["contacts"]);
+    foreign.close();
   });
 });
 

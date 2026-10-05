@@ -24,15 +24,11 @@ import crypto from "crypto";
 import { runMigrations } from "./db/runner.ts";
 import { MIGRATIONS } from "./db/migrations/index.ts";
 import { installIndexes } from "./db/indexes.ts";
-import { backfillMentionRows as backfillMentionRowsOn } from "./db/helpers.ts";
 import {
   ensureLocalOwner as ensureLocalOwnerOn,
   primaryAdminId as primaryAdminIdOn,
 } from "./db/owners.ts";
-import {
-  rebuildVecTable as rebuildVecTableOn,
-  tableExists as tableExistsOn,
-} from "./db/vec.ts";
+import { tableExists as tableExistsOn } from "./db/vec.ts";
 
 // =============================================================================
 // 1. Open SQLite Connection
@@ -191,12 +187,9 @@ export const db = drizzle(sqlite, { schema });
 runMigrations(sqlite, MIGRATIONS);
 installIndexes(sqlite);
 
-export { TENANCY_SCHEMA_VERSION } from "./db/indexes.ts";
 export {
   contactEditColumns,
-  deleteRetiredSettings,
   PIN_COLUMNS,
-  RETIRED_SETTING_KEYS,
   SCORE_COLUMNS,
 } from "./db/helpers.ts";
 export {
@@ -213,8 +206,7 @@ export {
  * Tables that carry `ownerId`. Every row in each has an owner after boot.
  *
  * The live list. A migration that adds an owned table adds it here too, and
- * the ownership guard in §3 checks every table in it on every boot. The
- * baseline migration keeps its own copy, frozen as it was at d67c8a9.
+ * the ownership guard in §3 checks every table in it on every boot.
  */
 export const OWNED_TABLES = [
   "contacts",
@@ -255,45 +247,9 @@ export function ensureLocalOwner(): string {
   return ensureLocalOwnerOn(sqlite);
 }
 
-/**
- * Assign every unowned row to `ownerId`.
- *
- * Lives here rather than in authService because db.ts cannot import that
- * module: authService imports `sqlite` from this file and prepares statements
- * at its top level.
- *
- * @returns rows claimed, per table
- */
-export function claimUnownedData(ownerId: string): Record<string, number> {
-  const claimed: Record<string, number> = {};
-  sqlite.transaction(() => {
-    for (const table of OWNED_TABLES) {
-      const result = sqlite
-        .prepare(
-          // tenant-lint: allow boot migration
-          `UPDATE ${table} SET ownerId = ? WHERE ownerId IS NULL`,
-        )
-        .run(ownerId);
-      if (result.changes > 0) claimed[table] = result.changes;
-    }
-  })();
-  return claimed;
-}
-
 /** True when the named table is already in this database. */
 export function tableExists(name: string): boolean {
   return tableExistsOn(sqlite, name);
-}
-
-/**
- * Read a vec0 table out, drop it, recreate it in the current shape and put
- * the rows back. Returns what moved, or null when the table was already
- * current. See server/db/vec.ts.
- */
-export function rebuildVecTable(
-  table: string,
-): ReturnType<typeof rebuildVecTableOn> {
-  return rebuildVecTableOn(sqlite, table);
 }
 
 /**
@@ -321,11 +277,6 @@ export function assertVecVersion(version: string, minimum = [0, 1, 6]): void {
   }
 }
 
-/** Add the mention rows that notes saved before the extraction lack. */
-export function backfillMentionRows(): number {
-  return backfillMentionRowsOn(sqlite);
-}
-
 // =============================================================================
 // 3. Every boot
 // =============================================================================
@@ -339,7 +290,6 @@ export function backfillMentionRows(): number {
 // - §10, because ghost contacts from mentions and connectors are written with
 //   no `phoneticHash`, and only this fills it.
 //
-// Everything else that used to run here runs once, in the baseline migration.
 // =============================================================================
 
 // =============================================================================

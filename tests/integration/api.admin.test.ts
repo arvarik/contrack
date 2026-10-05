@@ -509,8 +509,6 @@ describe("an account whose password an admin chose", () => {
   let admin: Handle;
   let created: { id: string; temporaryPassword: string };
   let cookie: string[];
-  /** A forced-change account that is also an admin. */
-  let adminCookie: string[];
 
   beforeAll(async () => {
     admin = await freshInstance("forceadmin");
@@ -524,20 +522,6 @@ describe("an account whose password an admin chose", () => {
       temporaryPassword: res.body.temporaryPassword,
     };
     cookie = await signIn("forceduser", created.temporaryPassword);
-
-    // A second account with the same forced change and the admin role, for
-    // the routes a member would be refused on for the other reason.
-    const asAdminToo = await as(admin)(
-      request(app).post("/api/admin/users").send({
-        email: "forcedadmin@example.com",
-        username: "forcedadmin",
-        role: "admin",
-      }),
-    );
-    adminCookie = await signIn(
-      "forcedadmin",
-      asAdminToo.body.temporaryPassword as string,
-    );
   });
 
   it.each([
@@ -584,26 +568,6 @@ describe("an account whose password an admin chose", () => {
       .set("Authorization", `Bearer ${secret}`);
     expect(res.status).toBe(403);
     expect(res.body.error.code).toBe("PASSWORD_CHANGE_REQUIRED");
-  });
-
-  it("cannot write an instance setting from inside the auth namespace", async () => {
-    // PUT /api/auth/session-policy is instance administration that happens to
-    // live in the auth router, and that router is mounted ahead of the gate.
-    // Somebody holding only a hand-over password could otherwise set every
-    // future session on the instance to a year.
-    const before = await as(admin)(
-      request(app).get("/api/auth/session-policy"),
-    );
-
-    const res = await request(app)
-      .put("/api/auth/session-policy")
-      .set("Cookie", adminCookie)
-      .send({ sessionTtlDays: 365 });
-    expect(res.status).toBe(403);
-    expect(res.body.error.code).toBe("PASSWORD_CHANGE_REQUIRED");
-
-    const after = await as(admin)(request(app).get("/api/auth/session-policy"));
-    expect(after.body.sessionTtlDays).toBe(before.body.sessionTtlDays);
   });
 
   it("still needs the temporary password to replace it", async () => {
@@ -1641,7 +1605,7 @@ describe("the audit log", () => {
       request(app).delete(`/api/admin/invitations/${invitation.body.id}`),
     );
     await as(admin)(
-      request(app).put("/api/auth/session-policy").send({ sessionTtlDays: 14 }),
+      request(app).put("/api/admin/settings").send({ sessionTtlDays: 14 }),
     );
     await as(admin)(request(app).post("/api/backups"));
 

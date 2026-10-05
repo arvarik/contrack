@@ -19,12 +19,7 @@
 // =============================================================================
 
 import fs from "fs";
-import {
-  OWNED_TABLES,
-  VEC_VERSION,
-  sqlite,
-  TENANCY_SCHEMA_VERSION,
-} from "../db.ts";
+import { OWNED_TABLES, VEC_VERSION, sqlite } from "../db.ts";
 import { indexVersions } from "../db/indexes.ts";
 import { LATEST_MIGRATION } from "../db/migrations/index.ts";
 import { appliedMigrations } from "../db/runner.ts";
@@ -48,9 +43,6 @@ interface Account {
 }
 
 export interface SchemaVersions {
-  /** The tenancy version this database has reached, and the one we expect. */
-  tenancy: number;
-  tenancyExpected: number;
   /** The version the FTS tables are built at, and the one we expect. */
   fts: number;
   ftsExpected: number;
@@ -203,8 +195,6 @@ function schemaVersions(): SchemaVersions {
     indexes.find((index) => index.id === id)?.version ?? 0;
   const migration = appliedMigrations(sqlite).at(-1) ?? null;
   return {
-    tenancy: versionOf("tenancy"),
-    tenancyExpected: TENANCY_SCHEMA_VERSION,
     fts: versionOf("contacts_fts"),
     ftsExpected: FTS_SCHEMA_VERSION,
     migration,

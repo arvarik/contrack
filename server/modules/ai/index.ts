@@ -13,7 +13,6 @@ import { aiSettingsRouter } from "../../routes/aiSettings.ts";
 import { aiStatsRouter } from "../../routes/aiStats.ts";
 import { aiRouter } from "../../routes/ai.ts";
 import { AI_JOBS } from "../../jobs/ai.ts";
-import { migrateResearchOff } from "../../services/aiSettingsService.ts";
 
 export const aiModule = defineModule({
   id: "ai",
@@ -23,5 +22,4 @@ export const aiModule = defineModule({
     { path: "/api/ai", router: aiRouter },
   ],
   jobs: AI_JOBS,
-  onStart: migrateResearchOff,
 });

@@ -13,6 +13,7 @@ import {
   SETTING_KEYS,
 } from "../../server/services/settingsService.ts";
 import { invalidateProviderCache } from "../../server/ai/providerRegistry.ts";
+import { seal } from "../../server/utils/secretBox.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { localOwnerId } from "./tenancy/helpers.ts";
 import { contactRepo } from "../../server/repositories/contactRepository.ts";
@@ -133,7 +134,9 @@ describe("POST /api/ai-search", () => {
     });
     // A provider that can ground makes the default two-pass. Without one the
     // default is already searxng, and an ignored request would still pass.
-    setSetting(SETTING_KEYS.aiProviderKeys, { gemini: "test-gemini-key" });
+    setSetting(SETTING_KEYS.aiProviderKeys, {
+      gemini: seal("test-gemini-key"),
+    });
     invalidateProviderCache();
 
     const byDefault = await request(app)
@@ -163,15 +166,15 @@ describe("POST /api/ai-search", () => {
       },
     ]);
     setSetting(SETTING_KEYS.aiSearxng, { url: "http://127.0.0.1:8888" });
-    // The setup of the SearXNG test above, plus the admin's choice of Off.
+    // The setup of the SearXNG test above, and web search turned off.
     setSetting(SETTING_KEYS.aiCapabilities, {
       deep: {
         mode: "pinned",
         providerId: "custom:local-ollama",
         model: "local-test",
       },
-      research: { mode: "disabled" },
     });
+    setSetting(SETTING_KEYS.aiWebSearch, { off: true });
     invalidateProviderCache();
 
     for (const body of [
@@ -196,9 +199,7 @@ describe("POST /api/ai-search", () => {
 
   it("stops a SearXNG batch that started before research was turned off", async () => {
     setSetting(SETTING_KEYS.aiSearxng, { url: "http://127.0.0.1:8888" });
-    setSetting(SETTING_KEYS.aiCapabilities, {
-      research: { mode: "disabled" },
-    });
+    setSetting(SETTING_KEYS.aiWebSearch, { off: true });
     const contact = contactRepo.hydrate(
       contactRepo.findOwned(scope(), contactId),
     )!;

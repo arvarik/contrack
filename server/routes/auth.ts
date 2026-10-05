@@ -54,7 +54,6 @@ import {
 } from "../services/userPreferencesService.ts";
 import { mailService } from "../services/mailService.ts";
 import {
-  requireAdmin,
   requirePasswordCurrent,
   requireSession,
   isAuthRequired,
@@ -86,12 +85,7 @@ import {
   resetUserPasswordWithToken,
   getUserById,
   setUserAvatar,
-  getSessionTtlDays,
-  setSessionTtlDays,
   type User,
-  MIN_SESSION_TTL_DAYS,
-  MAX_SESSION_TTL_DAYS,
-  DEFAULT_SESSION_TTL_DAYS,
 } from "../services/authService.ts";
 import fs from "fs";
 import multer from "multer";
@@ -229,9 +223,6 @@ router.get("/status", (req, res) => {
     hasAccounts: passwordAccounts > 0,
     user: user ? publicUser(user) : null,
     deviceContacts,
-    // The pre-2.0 name. It is removed in 3.0; sending both means the current
-    // frontend keeps working until Phase 4 switches to the new one.
-    existingContacts: deviceContacts,
     // Whether the sign-in screen should offer to create an account.
     registrationOpen: isRegistrationOpen(),
     // Whether mail can carry a reset or sign-in link, which also needs
@@ -917,51 +908,6 @@ router.delete(
   requireSession,
   asyncHandler(async (req, res) => {
     res.json(revokeToken(currentUser(req)!, String(req.params.id), ipOf(req)));
-  }),
-);
-
-// =============================================================================
-// Session policy
-// =============================================================================
-
-/**
- * How long new sessions last.
- *
- * Reading is open to any signed-in account. Writing is an instance setting, so
- * Phase 3 put `requireAdmin` in front of it, as the route manifest has said
- * since Phase 2. The endpoint is deprecated in favour of
- * `PUT /api/admin/settings` and stays for one release.
- */
-router.get("/session-policy", requireSession, (_req, res) => {
-  res.json({
-    sessionTtlDays: getSessionTtlDays(),
-    min: MIN_SESSION_TTL_DAYS,
-    max: MAX_SESSION_TTL_DAYS,
-    default: DEFAULT_SESSION_TTL_DAYS,
-  });
-});
-
-router.put(
-  "/session-policy",
-  requireSession,
-  requireAdmin,
-  // This router is mounted ahead of the middleware copy of this guard, so
-  // the one route in it that writes an instance setting carries the guard
-  // itself. Without it an account still holding the password an admin chose
-  // could set every future session on the instance to a year.
-  requirePasswordCurrent,
-  asyncHandler(async (req, res) => {
-    const body = (req.body ?? {}) as Record<string, unknown>;
-    const sessionTtlDays = setSessionTtlDays(body.sessionTtlDays);
-    auditService.record({
-      actorUserId: currentUser(req)!.id,
-      action: "settings.changed",
-      targetType: "setting",
-      targetId: "auth.sessionTtlDays",
-      details: { sessionTtlDays },
-      ip: ipOf(req),
-    });
-    res.json({ sessionTtlDays });
   }),
 );
 

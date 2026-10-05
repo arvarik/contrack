@@ -72,8 +72,6 @@ interface AuthStatus {
    * is what securing the instance will carry over.
    */
   deviceContacts: number;
-  /** The pre-2.0 name for `deviceContacts`. Removed in 3.0. */
-  existingContacts: number;
   /** An admin has opened this instance to anyone who reaches the sign-in page. */
   registrationOpen: boolean;
   /**

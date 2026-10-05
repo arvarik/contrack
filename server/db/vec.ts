@@ -1,7 +1,7 @@
 // =============================================================================
 // The vec0 vector stores
 // =============================================================================
-// Moved from server/db.ts (§9f, §9k and §9k-b), with the connection as a
+// Moved from server/db.ts (§9f and §9k-b), with the connection as a
 // parameter. server/db.ts re-exports these names, bound to its connection
 // where a function needs one, so callers import them from there as before.
 //
@@ -15,19 +15,12 @@
 // =============================================================================
 
 import type Database from "better-sqlite3";
-import {
-  UNIT_SCALE,
-  VECTOR_SCALE_KEY,
-  floatsOf,
-  quantize,
-  scaleFor,
-} from "../services/search/vectorScale.ts";
 import { log } from "../utils/logger.ts";
 
 /**
- * Create both stores when they are missing, rebuild one that is not in the
- * current shape, and install the triggers that keep their status columns
- * true. Runs on every boot, from server/db/indexes.ts.
+ * Create both stores when they are missing, and install the triggers that
+ * keep their status columns true. Runs on every boot, from
+ * server/db/indexes.ts.
  */
 export function installVectorStores(sqlite: Database.Database): void {
   if (!tableExists(sqlite, "contact_embeddings")) {
@@ -47,19 +40,6 @@ export function installVectorStores(sqlite: Database.Database): void {
     "Database",
     `search_embeddings vec0 table ready (${vecTableWidth(sqlite, "search_embeddings")}-dim ${vecElementOf(tableDdl(sqlite, "search_embeddings"))}, search)`,
   );
-
-  for (const table of ["search_embeddings", "contact_embeddings"]) {
-    const started = performance.now();
-    const result = rebuildVecTable(sqlite, table);
-    if (!result) continue;
-
-    log.info(
-      "Database",
-      `Rebuilt ${table} as ${result.element} with a partition key and status columns: ${result.copied} vectors copied at ${result.dimension} dim` +
-        `${result.scale !== null ? `, scale ${result.scale.toFixed(2)}` : ""}` +
-        `${result.dropped > 0 ? `, ${result.dropped} orphan(s) dropped` : ""} in ${(performance.now() - started).toFixed(0)}ms`,
-    );
-  }
 
   installVecStatusTriggers(sqlite);
 }
@@ -84,21 +64,6 @@ export function vecTableWidth(
     .get(table) as { sql?: string } | undefined;
   return row?.sql?.match(/(?:FLOAT|INT8)\[(\d+)\]/i)?.[1] ?? "unknown";
 }
-
-// =============================================================================
-// 9k. vec0 partition-key rebuild
-// =============================================================================
-// A table created before 2.0 has no partition key, and sqlite-vec refuses to
-// add one: ALTER TABLE on a vec0 table returns OK, leaves the shadow tables
-// under the old name, and the next read fails with "no such table". So the
-// rows are read out, the table is dropped, a partitioned one is created at the
-// same width, and the rows go back in. All inside one transaction per table.
-//
-// No embedding is recomputed. The stored `ai.embeddingsState` signature and
-// dimension are untouched, so ensureEmbeddingStore and
-// ensureDedupeEmbeddingStore see no change on the next boot and no provider
-// API call happens.
-// =============================================================================
 
 /**
  * The three status columns every vec0 table carries beside its vector.
@@ -214,152 +179,6 @@ export function tableExists(sqlite: Database.Database, name: string): boolean {
       )
       .get(name) !== undefined
   );
-}
-
-/**
- * Whether a vec0 table has to be read out, dropped and rebuilt.
- *
- * Three reasons, none of which sqlite-vec can fix with ALTER TABLE: a table
- * created before 2.0 has no partition key, one created before the metadata
- * columns has no status to filter on, and one created before int8 search
- * vectors stores floats. ALTER TABLE on a vec0 table returns OK, leaves the
- * shadow tables under the old name, and the next read fails with "no such
- * table".
- */
-function vecTableNeedsRebuild(ddl: string, element: VecElement): boolean {
-  if (!/PARTITION KEY/i.test(ddl)) return true;
-  if (vecElementOf(ddl) !== element) return true;
-  return VEC_METADATA_COLUMNS.some(
-    (column) => !new RegExp(`\\b${column}\\s+INTEGER`, "i").test(ddl),
-  );
-}
-
-/**
- * Read a vec0 table out, drop it, recreate it in the current shape and put the
- * rows back. Returns what moved, or null when the table was already current.
- *
- * Exported so the upgrade path can be tested against a table built in an old
- * shape, rather than only through a whole-database fixture. Callers at boot
- * pass the two real tables.
- *
- * No embedding is recomputed. The stored `ai.embeddingsState` signature and
- * dimension are untouched, so ensureEmbeddingStore and
- * ensureDedupeEmbeddingStore see no change on the next boot and no provider
- * API call happens.
- *
- * A float `search_embeddings` becomes int8 here: one scale over every vector
- * it holds goes into `app_settings` as `search.vectorScale`, and each vector
- * goes back in quantized with it, in the same transaction.
- */
-export function rebuildVecTable(
-  sqlite: Database.Database,
-  table: string,
-): {
-  copied: number;
-  dropped: number;
-  dimension: number;
-  element: VecElement;
-  scale: number | null;
-} | null {
-  const ddl = tableDdl(sqlite, table);
-  const element = vecElementFor(table);
-  if (!ddl || !vecTableNeedsRebuild(ddl, element)) return null;
-  const from = vecElementOf(ddl);
-  if (from === "int8" && element === "float") {
-    throw new Error(
-      `Cannot rebuild ${table} from int8 to float: the float vectors are gone. Drop the table and re-embed.`,
-    );
-  }
-  const quantizing = from === "float" && element === "int8";
-
-  const width = vecTableWidth(sqlite, table);
-  const dimension = Number.parseInt(width, 10);
-  if (!Number.isFinite(dimension) || dimension <= 0) {
-    throw new Error(
-      `Cannot rebuild ${table}: its DDL does not declare a vector width (read "${width}"). Refusing to guess a dimension.`,
-    );
-  }
-
-  let copied = 0;
-  let dropped = 0;
-  let scale: number | null = null;
-  sqlite.transaction(() => {
-    // A row whose contact is gone is already an orphan. It is left behind
-    // rather than given a NULL partition, which query 9 of the verification
-    // script would then flag forever.
-    const rows = sqlite
-      .prepare(
-        // tenant-lint: allow boot migration
-        `SELECT e.contactId AS contactId, c.ownerId AS ownerId, e.embedding AS embedding,
-                c.isGhost AS isGhost,
-                COALESCE(c.isArchived, 0) AS isArchived,
-                (c.deletedAt IS NULL AND c.canonicalId IS NULL) AS active
-           FROM ${table} e JOIN contacts c ON c.id = e.contactId`,
-      )
-      .all() as {
-      contactId: string;
-      ownerId: string;
-      embedding: Buffer;
-      isGhost: number;
-      isArchived: number;
-      active: number;
-    }[];
-    const total = (
-      sqlite.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as {
-        n: number;
-      }
-    ).n;
-    dropped = total - rows.length;
-
-    // Float to int8: one scale over every vector, stored before a row goes
-    // back in. The floats are read once and kept for the quantizing below.
-    const floats = quantizing ? rows.map((row) => floatsOf(row.embedding)) : [];
-    if (quantizing) {
-      scale = scaleFor(floats);
-      if (scale !== null)
-        sqlite
-          .prepare(
-            `INSERT INTO app_settings (key, value, updatedAt) VALUES (?, ?, ?)
-             ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = excluded.updatedAt`,
-          )
-          .run(
-            VECTOR_SCALE_KEY,
-            JSON.stringify(scale),
-            new Date().toISOString(),
-          );
-    }
-
-    sqlite.exec(`DROP TABLE ${table}`);
-    sqlite.exec(vecTableDdl(table, dimension, element));
-
-    // The three status values are bound as BigInt. better-sqlite3 binds every
-    // JavaScript number as REAL, and sqlite-vec answers a REAL for an INTEGER
-    // metadata column with "Expected integer ... received FLOAT". Every other
-    // write path reads them straight out of `contacts` in an INSERT..SELECT,
-    // where SQLite keeps the column type; this one cannot, because the rows
-    // were read before the table was dropped.
-    //
-    // An int8 vector is bound through `vec_int8(?)`. sqlite-vec reads a bare
-    // blob as float32 and refuses it for an INT8 column.
-    const insert = sqlite.prepare(
-      `INSERT INTO ${table} (contactId, ownerId, isGhost, isArchived, active, embedding)
-       VALUES (?, ?, ?, ?, ?, ${element === "int8" ? "vec_int8(?)" : "?"})`,
-    );
-    rows.forEach((row, i) => {
-      insert.run(
-        row.contactId,
-        row.ownerId,
-        BigInt(row.isGhost ?? 0),
-        BigInt(row.isArchived ?? 0),
-        BigInt(row.active ?? 1),
-        // Every vector zero leaves no scale, and zero is zero at any scale.
-        quantizing ? quantize(floats[i], scale ?? UNIT_SCALE) : row.embedding,
-      );
-      copied++;
-    });
-  })();
-
-  return { copied, dropped, dimension, element, scale };
 }
 
 // =============================================================================

@@ -110,8 +110,6 @@ export const UNCONTRACTED: readonly string[] = [
   "PATCH /api/auth/me",
   "POST /api/auth/me/avatar",
   "DELETE /api/auth/me/avatar",
-  "GET /api/auth/session-policy",
-  "PUT /api/auth/session-policy",
   "DELETE /api/auth/sessions",
   "GET /api/auth/sessions",
   "POST /api/auth/register",
@@ -213,4 +211,4 @@ export const UNCONTRACTED: readonly string[] = [
  * it here instead means raising this number, which is a decision for the
  * review.
  */
-export const UNCONTRACTED_CEILING = 143;
+export const UNCONTRACTED_CEILING = 141;

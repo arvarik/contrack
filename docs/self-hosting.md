@@ -90,9 +90,10 @@ NODE_ENV=production node server.ts
 ## What happens on first boot
 
 1. Contrack checks `PUBLIC_URL`, `CONTRACK_SECRET_KEY` and `TRUST_PROXY_HOPS`.
-   A bad value, or a set `AUTH_TOKEN`, stops the start with a message.
-2. It creates or upgrades the database, and limits its data files to its own
-   user.
+   A bad value stops the start with a message.
+2. It creates the database, or applies the migrations a newer release added,
+   and limits its data files to its own user. A database it did not create,
+   such as one from Contrack 1, stops the start, and nothing in it changes.
 3. It starts to listen, and logs `Contrack CRM running on http://localhost:3210`.
 4. In the background, it loads the search models and indexes your contacts,
    places addresses on the map, loads the AI model lists, starts connector
@@ -279,7 +280,7 @@ In Docker on Linux, the file must belong to user ID 1000:
 
 ## Upgrade
 
-Contrack upgrades the database when it starts. Back up first: choose
+Contrack applies new migrations when it starts. Back up first: choose
 **Snapshot now**, and copy the snapshot or the data folder to another machine.
 The [changelog](../CHANGELOG.md) lists what each release changes.
 
@@ -299,9 +300,12 @@ After the start, `/healthz` shows the last migration that the database applied
 (`schema.migration`) beside the last migration that the build holds
 (`schema.expects`). They match when the upgrade is complete. A migration that
 fails stops the start, keeps nothing it changed, and names itself in the log.
-From this release on, a build refuses to start on a database that a newer
-build has migrated: restore the backup that you took before the upgrade. The
-release before the migration ledger does not check, and starts.
+A build refuses to start on a database that a newer build has migrated:
+restore the backup that you took before the upgrade.
+
+Contrack 2 is a new start. It does not open a data folder from Contrack 1:
+it stops with a message and changes nothing. Give Contrack 2 an empty
+`DATA_DIR`, and keep the old folder if you may go back to 1.x.
 
 ## Offline installs
 
@@ -378,9 +382,8 @@ use another port: set `PORT`, or with Docker change only the host side, as in
 
 The log names the variable:
 
-- `AUTH_TOKEN`: remove it. Scripts and MCP clients use a
-  [personal token](mcp.md#create-a-token). `API_TOKEN` still works, but it is
-  deprecated.
+- `DATA_DIR` holds tables that Contrack 2 did not create: start with an empty
+  folder. A data folder from Contrack 1 is one of these.
 - `PUBLIC_URL`: use an `http` or `https` origin with no path, such as
   `https://crm.example.com`.
 - `TRUST_PROXY_HOPS`: use a whole number from 0 to 10.

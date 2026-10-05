@@ -50,6 +50,16 @@ function hasLedger(db: Database.Database): boolean {
   );
 }
 
+function hasTables(db: Database.Database): boolean {
+  return (
+    db
+      .prepare(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' LIMIT 1",
+      )
+      .get() !== undefined
+  );
+}
+
 /** The ids of the migrations this database has applied, in id order. */
 export function appliedMigrations(db: Database.Database): string[] {
   if (!hasLedger(db)) return [];
@@ -97,8 +107,10 @@ export function recordIndexVersion(
 /**
  * Apply every listed migration that has no row, in list order.
  *
- * Refuses to start when the database holds a migration this list does not
- * have: a newer build applied it, and this build cannot know what it did.
+ * Refuses to start, before it writes anything, on a database that has tables
+ * but no ledger: another program, or Contrack 1, made it. Refuses as well
+ * when the database holds a migration this list does not have: a newer build
+ * applied it, and this build cannot know what it did.
  *
  * @returns the ids applied by this call
  */
@@ -115,6 +127,11 @@ export function runMigrations(
     }
   }
 
+  if (!hasLedger(db) && hasTables(db)) {
+    throw new Error(
+      `${db.name} holds tables that Contrack 2 did not create, so it will not change them. Start Contrack with an empty DATA_DIR.`,
+    );
+  }
   ensureLedger(db);
   const known = new Set(migrations.map((migration) => migration.id));
   const applied = appliedMigrations(db);

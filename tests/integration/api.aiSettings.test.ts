@@ -122,19 +122,6 @@ describe("capability assignment", () => {
     expect(after.body.capabilities.deep.assignment.model).toBe("claude-opus-5");
   });
 
-  it("refuses the old research Off, and names the switch that replaced it", async () => {
-    const research = await request(app)
-      .put("/api/settings/ai/capabilities/research")
-      .send({ mode: "disabled" });
-    expect(research.status).toBe(400);
-    expect(research.body.error.message).toMatch(/web-search/);
-    const fast = await request(app)
-      .put("/api/settings/ai/capabilities/quick")
-      .send({ mode: "disabled" });
-    expect(fast.status).toBe(400);
-    expect(fast.body.error.message).toMatch(/cannot be turned off/);
-  });
-
   it("rejects an unknown mode", async () => {
     const res = await request(app)
       .put("/api/settings/ai/capabilities/quick")
@@ -655,28 +642,6 @@ describe("web search", () => {
         .send(body);
       expect(res.status, JSON.stringify(body)).toBe(400);
     }
-  });
-
-  it("moves an instance that turned research off the old way to the switch", async () => {
-    sqlite
-      .prepare(
-        "INSERT INTO app_settings (key, value) VALUES ('ai.capabilities', ?)",
-      )
-      .run(JSON.stringify({ research: { mode: "disabled" } }));
-    const { clearSettingsCache } =
-      await import("../../server/services/settingsService.ts");
-    clearSettingsCache();
-    // Off before the move too: the old mode still counts.
-    expect((await webSearch()).allowed).toBe(false);
-
-    const { migrateResearchOff } =
-      await import("../../server/services/aiSettingsService.ts");
-    migrateResearchOff();
-    const view = await request(app).get("/api/settings/ai");
-    expect(view.body.webSearch.allowed).toBe(false);
-    expect(view.body.capabilities.research.assignment).toEqual({
-      mode: "auto",
-    });
   });
 
   it("says where each model came from, and the variable that stands in for Automatic", async () => {

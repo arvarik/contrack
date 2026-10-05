@@ -48,11 +48,10 @@ export type AICapability = "quick" | "deep" | "research" | "embeddings";
 /** How a capability is configured. */
 export interface CapabilityAssignment {
   /**
-   * - "auto":     resolve from available providers (default)
-   * - "pinned":   use `providerId` + `model` exactly
-   * - "disabled": capability turned off (research only)
+   * - "auto":   resolve from available providers (default)
+   * - "pinned": use `providerId` + `model` exactly
    */
-  mode: "auto" | "pinned" | "disabled";
+  mode: "auto" | "pinned";
   providerId?: string;
   model?: string;
 }
@@ -141,18 +140,13 @@ export function getCapabilityAssignment(
 }
 
 /**
- * True when an admin turned "Allow web search" off (webSearchPolicy.ts), or
- * turned research off the way it was done before that switch: the research
- * capability's mode "disabled".
+ * True when an admin turned "Allow web search" off (webSearchPolicy.ts).
  *
  * Research through SearXNG resolves no provider, so `resolveCapability`
  * alone cannot stop it. Every research path asks this as well.
  */
 export function isResearchOff(): boolean {
-  return (
-    getWebSearchPolicy().off ||
-    getCapabilityAssignment("research").mode === "disabled"
-  );
+  return getWebSearchPolicy().off;
 }
 
 /**
@@ -221,8 +215,6 @@ export function resolveCapability(
 
   const modelClass = CAPABILITY_CLASS[capability];
   const assignment = getCapabilityAssignment(capability);
-
-  if (assignment.mode === "disabled") return null;
 
   // 1. Explicit pin
   if (assignment.mode === "pinned" && assignment.providerId) {

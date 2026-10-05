@@ -117,11 +117,11 @@ SQL, and tests prove it.
   migration once, in order, in one transaction with its row in
   `schema_migrations`, and a failure stops the boot with its id. Mirror every
   table and column in `server/db/schema.ts`. Never edit a shipped migration.
-  `0001_baseline` is the boot code of 2.0 at `d67c8a9`, and
-  `tests/fixtures/schema/v2.0-d67c8a9.sql` is the schema it must produce.
-- A migration never reads a list that later code extends. The baseline keeps
-  frozen copies of the owned-table lists, and `server/db.ts` keeps the live
-  `OWNED_TABLES`.
+  `0001_baseline` is the schema of a new database, and
+  `tests/fixtures/schema/v2.0-d67c8a9.sql` is the schema it must produce. A
+  database with tables but no `schema_migrations` refuses to start.
+- A migration never reads a list that later code extends. `server/db.ts`
+  keeps the live `OWNED_TABLES`.
 - Derived structures are rebuilt from code by `server/db/indexes.ts` on every
   boot, each with an `index` row and a version in `schema_migrations`:
   - `contacts_fts` and `interactions_fts` (FTS5). Bump `FTS_SCHEMA_VERSION`
@@ -214,7 +214,7 @@ measured in CI without keys.
   `server/events/contactSubscribers.ts`, not inline calls. Payloads carry ids
   and field names only (`shared/contracts/events.ts`).
 - Background work is a job in the `jobs` table (`server/jobs/runner.ts`),
-  never a `setInterval`. At boot: migrations and ownership reconcile, the
+  never a `setInterval`. At boot: migrations and the local owner, the
   runner requeues `running` rows, the search module loads the local models
   and runs the embedding backfills, and the start-up jobs geocode missing
   pins and copy stored photos. Recurring jobs: the connector tick (60 s), the

@@ -282,11 +282,12 @@ has no row in `schema_migrations`.
   keeps nothing, and the boot stops with an error that names it.
 - A database that holds a migration this build does not have refuses to
   start. A newer build wrote it.
-- `0001_baseline` holds the boot code of 2.0 up to `d67c8a9`, in the order it
-  ran. A new database runs it to build its schema. A database from `d67c8a9`
-  runs it once and ends with the same schema.
+- `0001_baseline` is the schema of a new database: its tables, indexes and
+  triggers, and the local owner.
   `tests/fixtures/schema/v2.0-d67c8a9.sql` is that schema, and the migration
   test compares the stored SQL of every table, index and trigger with it.
+- A database that has tables but no `schema_migrations` refuses to start,
+  before anything is written. Contrack 1, or another program, made it.
 - `npm run db:new <name>` writes the next file from a template and adds it to
   the list. A migration writes its own SQL and imports no service.
 - The derived structures are rebuilt from code, not migrated: the FTS tables,
@@ -298,8 +299,7 @@ has no row in `schema_migrations`.
   needs them: the `nextFollowUpAt` backfill, the check that every owned table
   has `ownerId`, `ANALYZE` with `PRAGMA optimize`, and the phonetic hash of
   new ghost contacts.
-- Drizzle stays for typed queries. An older database keeps its
-  `__drizzle_migrations` table, and nothing reads it.
+- Drizzle stays for typed queries. It does not manage the schema.
 
 ### Events
 

@@ -97,9 +97,9 @@ the change. Say why in the pull request.
   `npm run knip`.
 - **Migrations** (`db.migrations.test.ts`): a new database ends at the last
   migration with the schema of `tests/fixtures/schema/v2.0-d67c8a9.sql` plus
-  what later migrations add, byte for byte. A database built from that
-  fixture upgrades to the same schema and keeps its FTS index. A migration
-  that throws keeps nothing. `server/db/schema.ts` names every table and
+  what later migrations add, byte for byte. A database with tables but no
+  ledger is refused before anything is written. A migration that throws
+  keeps nothing. `server/db/schema.ts` names every table and
   column. A new migration adds the name of each object it creates to
   `ADDED_SINCE_FIXTURE`. `tenancy.schema.test.ts` boots the same database
   twice and checks that the second boot changes nothing.

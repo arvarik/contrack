@@ -472,12 +472,10 @@ export const contacts = sqliteTable("contacts", {
 // and must outlive them. Nothing to join through, so its owner is copied from
 // the surviving contact at write time rather than filled by a trigger.
 //
-// THE INVARIANT: `ownerId IS NULL` means "unowned — belongs to whoever owns
-// this instance". Every row starts that way, and stays that way for as long
-// as the instance has no accounts. Creating the first account claims all of
-// them (see server/services/authService.ts → claimUnownedData), and a boot
-// reconcile re-claims anything written while signed out. So NULL is a valid,
-// meaningful state rather than a bug to be defended against.
+// THE INVARIANT: every owned row has an owner. A top-level table refuses a
+// row without one (the `_owner_required` triggers), and a child table copies
+// it from its contact (`_owner_fill`). While nobody signs in, the owner is the
+// local owner (server/db/owners.ts).
 //
 // ON DELETE RESTRICT, not CASCADE. Cascade is what a mature multi-tenant app
 // wants — remove an account, remove its data — but it is the wrong default to

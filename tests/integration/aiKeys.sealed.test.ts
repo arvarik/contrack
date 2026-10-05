@@ -1,11 +1,9 @@
 // =============================================================================
 // Integration: AI keys saved in Settings are sealed at rest
 // =============================================================================
-// Keys entered on the AI providers page sat in app_settings as plain text, and
-// so in every backup and every copy of the database. SMTP passwords, connector
-// feeds and Google OAuth were already sealed with the instance secret. AI keys
-// are now sealed the same way. A key saved before this change still works,
-// and a boot pass seals it.
+// Keys entered on the AI providers page are sealed with the instance secret,
+// as SMTP passwords, connector feeds and Google OAuth are, so a backup or a
+// copy of the database holds no key in plain text.
 //
 // Built-in keys are saved through the service, not the route, because the
 // route checks the key against the real vendor.
@@ -25,10 +23,7 @@ import {
   getProviderConfig,
   invalidateProviderCache,
 } from "../../server/ai/providerRegistry.ts";
-import {
-  sealStoredAiKeys,
-  setProviderKey,
-} from "../../server/services/aiSettingsService.ts";
+import { setProviderKey } from "../../server/services/aiSettingsService.ts";
 import { seal } from "../../server/utils/secretBox.ts";
 
 const app = makeTestApp();
@@ -88,37 +83,10 @@ describe("AI keys at rest", () => {
     expect(getProviderConfig("custom:local")?.apiKey).toBe("sk-endpoint-8765");
   });
 
-  it("reads a key saved as plain text, and the boot pass seals it", () => {
-    setSetting(SETTING_KEYS.aiProviderKeys, { openai: "sk-legacy-1111" });
-    setSetting(SETTING_KEYS.aiCustomEndpoints, [
-      {
-        id: "old",
-        label: "Old",
-        baseUrl: UNREACHABLE,
-        apiKey: "sk-legacy-2222",
-      },
-      { id: "keyless", label: "Keyless", baseUrl: UNREACHABLE },
-    ]);
-    expect(getProviderConfig("openai")?.apiKey).toBe("sk-legacy-1111");
+  it("treats a key that is not sealed, or sealed with another secret, as no key", () => {
+    setSetting(SETTING_KEYS.aiProviderKeys, { openai: "sk-plain-1111" });
+    expect(getProviderConfig("openai")).toBeNull();
 
-    expect(sealStoredAiKeys()).toBe(2);
-
-    const keys = stored(SETTING_KEYS.aiProviderKeys);
-    const endpoints = stored(SETTING_KEYS.aiCustomEndpoints);
-    expect(keys + endpoints).not.toContain("sk-legacy");
-    expect(JSON.parse(endpoints)[1].apiKey).toBeUndefined();
-
-    reload();
-    expect(getProviderConfig("openai")?.apiKey).toBe("sk-legacy-1111");
-    expect(getProviderConfig("custom:old")?.apiKey).toBe("sk-legacy-2222");
-    expect(getProviderConfig("custom:keyless")?.apiKey).toBeUndefined();
-
-    // The next boot finds nothing to seal, and changes nothing.
-    expect(sealStoredAiKeys()).toBe(0);
-    expect(stored(SETTING_KEYS.aiProviderKeys)).toBe(keys);
-  });
-
-  it("treats a key sealed with a different secret as no key", () => {
     // What a lost DATA_DIR/secret.key or a changed CONTRACK_SECRET_KEY
     // leaves behind. The provider must read as not connected, so the user
     // enters the key again, rather than send the sealed text as the key.

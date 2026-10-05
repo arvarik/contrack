@@ -29,6 +29,7 @@ const { resolveCapability, capabilityAvailability } =
   await import("../../../../server/ai/capabilities.ts");
 const { getProviderConfigs, invalidateProviderCache } =
   await import("../../../../server/ai/providerRegistry.ts");
+const { seal } = await import("../../../../server/utils/secretBox.ts");
 
 /**
  * Connect a custom endpoint the way saving one in Settings does: the endpoint
@@ -108,7 +109,7 @@ describe("provider registry", () => {
   });
 
   it("picks up keys stored via settings, marking their source", () => {
-    settingsStore.set("ai.providerKeys", { openai: "stored-key" });
+    settingsStore.set("ai.providerKeys", { openai: seal("stored-key") });
     const configs = getProviderConfigs();
     expect(configs).toHaveLength(1);
     expect(configs[0].id).toBe("openai");
@@ -197,13 +198,6 @@ describe("capability resolution — explicit configuration", () => {
       quick: { mode: "pinned", providerId: "openai", model: "gpt-5.6-luna" },
     });
     expect(resolveCapability("quick")?.providerId).toBe("gemini");
-  });
-
-  it("treats a disabled capability as unavailable", () => {
-    process.env.GEMINI_API_KEY = "g-key";
-    settingsStore.set("ai.capabilities", { research: { mode: "disabled" } });
-    expect(resolveCapability("research")).toBeNull();
-    expect(resolveCapability("quick")).not.toBeNull();
   });
 
   it("applies env model overrides (bare model uses the default provider)", () => {

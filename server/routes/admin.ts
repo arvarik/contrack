@@ -375,9 +375,7 @@ router.get(
 /**
  * Change one or both instance settings.
  *
- * This is where the session lifetime lives from 2.0 on.
- * `PUT /api/auth/session-policy` still writes the same value and is removed
- * in 3.0, which is why both exist and both are `admin`.
+ * The session lifetime is one of them.
  *
  * The audit row names the keys that changed and not what they changed to for
  * the same reason the AI settings rows do: the key is what an operator needs

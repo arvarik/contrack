@@ -242,12 +242,14 @@ const SchemaCard = ({ health }: { health: InstanceHealth }) => {
       }
     >
       <Row
-        label="Tenancy"
-        tone={schema.tenancy < schema.tenancyExpected ? "warning" : "normal"}
+        label="Migration"
+        tone={
+          schema.migration === schema.migrationExpected ? "normal" : "warning"
+        }
       >
-        v{schema.tenancy}
-        {schema.tenancy < schema.tenancyExpected &&
-          ` of v${schema.tenancyExpected}`}
+        {schema.migration ?? "None"}
+        {schema.migration !== schema.migrationExpected &&
+          ` of ${schema.migrationExpected}`}
       </Row>
       <Row
         label="Search index"

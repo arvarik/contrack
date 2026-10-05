@@ -2,10 +2,10 @@
 
 ## Where v2 stands
 
-- Version 2 is built on the `v2.0` branch, and pull requests target it.
-  `main` holds the 1.5 line. The repository allows squash merges only.
-- `package.json` still says 1.5.5. The release bumps it to 2.0.0 and moves the
-  `[Unreleased]` section of `CHANGELOG.md` under that version.
+- Version 2 is on `main`, and pull requests target `main`. The repository
+  squash-merges pull requests.
+- Version 2 is a new start. It does not open a Contrack 1 database, and no
+  code reads 1.x data.
 - `CHANGELOG.md` summarizes what v2 changes, by area. The pull requests hold
   the details, and the summary below is the map.
 

@@ -13,6 +13,10 @@ These changes ship as version 2.0.0. Version 2 turns Contrack into a server
 that several people can share and reach from the internet. It also rebuilds
 search, Pulse, the map, research and the contact page.
 
+**Version 2 is a new start.** It does not open or convert a Contrack 1 data
+folder. It stops with a message and changes nothing in it. Start Contrack 2
+with an empty `DATA_DIR`.
+
 ### Accounts and sign-in
 
 - Several accounts can share one instance. Each account sees only its own
@@ -167,6 +171,7 @@ search, Pulse, the map, research and the contact page.
   component page at `/dev`.
 - The move of 1.x settings out of browser storage, and the redirects from 1.x
   paths.
+- `GET` and `PUT /api/auth/session-policy`. Use `/api/admin/settings`.
 
 ## [1.5.5] - 2026-08-09
 

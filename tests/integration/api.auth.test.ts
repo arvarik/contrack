@@ -18,7 +18,6 @@ import { makeTestApp } from "./helpers.ts";
 import { ensureLocalOwner, sqlite } from "../../server/db.ts";
 import { __resetAuthRateLimits } from "../../server/routes/auth.ts";
 import {
-  assertNoLegacyAuthToken,
   requireAdmin,
   __resetAuthWarnings,
 } from "../../server/middleware/auth.ts";
@@ -469,39 +468,6 @@ describe("API token", () => {
     }
   });
 
-  it("no longer honours the AUTH_TOKEN name, which 2.0 removed", async () => {
-    delete process.env.API_TOKEN;
-    process.env.AUTH_TOKEN = "legacy-token-value";
-    try {
-      const res = await request(app)
-        .get("/api/contacts")
-        .set("Authorization", "Bearer legacy-token-value");
-      expect(res.status).toBe(401);
-    } finally {
-      delete process.env.AUTH_TOKEN;
-    }
-  });
-
-  it("refuses to boot at all while AUTH_TOKEN is set", () => {
-    // Not silently ignored. An instance still setting the old name would
-    // otherwise start with no credential and no explanation, and an operator
-    // who believes their instance is protected is the worst of the three
-    // possible outcomes. `server.ts` calls this before anything else looks at
-    // a credential.
-    process.env.AUTH_TOKEN = "legacy-token-value";
-    try {
-      expect(() => assertNoLegacyAuthToken()).toThrow(/AUTH_TOKEN was removed/);
-    } finally {
-      delete process.env.AUTH_TOKEN;
-    }
-  });
-
-  it("boots without complaint when AUTH_TOKEN is absent", () => {
-    delete process.env.AUTH_TOKEN;
-
-    expect(() => assertNoLegacyAuthToken()).not.toThrow();
-  });
-
   it("cannot reach account endpoints — a token is not a session", async () => {
     // The account exists now, so the refusal is about the credential rather
     // than the account: a token must not be able to change the password that
@@ -899,34 +865,6 @@ describe("data ownership", () => {
 
     sqlite.prepare("DELETE FROM lists WHERE id = 'own-list'").run();
   });
-
-  it("still claims a row written with no owner at all", async () => {
-    // The invariant triggers make this state unreachable through SQL, so the
-    // claim is proven through the boot path that would meet it: a row from a
-    // 1.x database. reconcileOwnership runs on every boot for exactly this.
-    const { reconcileOwnership } =
-      await import("../../server/services/authService.ts");
-    sqlite.exec("DROP TRIGGER contacts_owner_required");
-    try {
-      sqlite
-        .prepare(
-          "INSERT INTO contacts (id, name) VALUES ('own-null', 'From 1.x')",
-        )
-        .run();
-    } finally {
-      sqlite.exec(`CREATE TRIGGER contacts_owner_required BEFORE INSERT ON contacts
-        WHEN NEW.ownerId IS NULL
-        BEGIN SELECT RAISE(ABORT, 'contacts.ownerId is required'); END;`);
-    }
-
-    reconcileOwnership();
-    const row = sqlite
-      .prepare("SELECT ownerId FROM contacts WHERE id = 'own-null'")
-      .get() as { ownerId: string | null };
-    expect(row.ownerId).toBe(localOwner().id);
-
-    sqlite.prepare("DELETE FROM contacts WHERE id = 'own-null'").run();
-  });
 });
 
 /** Count accounts directly — the service caches nothing, so this is truth. */
@@ -953,7 +891,7 @@ function countSignInAccounts(): number {
 
 // =============================================================================
 
-describe("session policy", () => {
+describe("session lifetime", () => {
   let cookie: string[];
 
   beforeEach(async () => {
@@ -971,17 +909,9 @@ describe("session policy", () => {
     clearSettingsCache();
   });
 
-  it("defaults to 30 days and reports its range", async () => {
-    const res = await request(app)
-      .get("/api/auth/session-policy")
-      .set("Cookie", cookie);
-    expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ sessionTtlDays: 30, min: 1, max: 365 });
-  });
-
   it("changes the lifetime of sessions created afterwards", async () => {
     const put = await request(app)
-      .put("/api/auth/session-policy")
+      .put("/api/admin/settings")
       .set("Cookie", cookie)
       .send({ sessionTtlDays: 1 });
     expect(put.status, JSON.stringify(put.body)).toBe(200);
@@ -1007,7 +937,7 @@ describe("session policy", () => {
       .get() as { expiresAt: string };
 
     await request(app)
-      .put("/api/auth/session-policy")
+      .put("/api/admin/settings")
       .set("Cookie", cookie)
       .send({ sessionTtlDays: 1 });
 
@@ -1020,33 +950,6 @@ describe("session policy", () => {
     expect(
       (await request(app).get("/api/contacts").set("Cookie", cookie)).status,
     ).toBe(200);
-  });
-
-  it("rejects values outside the supported range", async () => {
-    for (const bad of [0, -5, 366, 1.5, "thirty", null]) {
-      const res = await request(app)
-        .put("/api/auth/session-policy")
-        .set("Cookie", cookie)
-        .send({ sessionTtlDays: bad });
-      expect(res.status, `value ${String(bad)}`).toBe(400);
-    }
-    // ...and the stored value is untouched.
-    const res = await request(app)
-      .get("/api/auth/session-policy")
-      .set("Cookie", cookie);
-    expect(res.body.sessionTtlDays).toBe(30);
-  });
-
-  it("needs an account, not just a token", async () => {
-    process.env.API_TOKEN = "policy-token";
-    try {
-      const res = await request(app)
-        .get("/api/auth/session-policy")
-        .set("Authorization", "Bearer policy-token");
-      expect(res.status).toBe(403);
-    } finally {
-      delete process.env.API_TOKEN;
-    }
   });
 });
 
@@ -1074,8 +977,6 @@ describe("setup reports what is waiting", () => {
     const res = await request(app).get("/api/auth/status");
     expect(res.body.setupRequired).toBe(true);
     expect(res.body.deviceContacts).toBeGreaterThanOrEqual(2);
-    // The pre-2.0 name is still sent so the current frontend keeps working.
-    expect(res.body.existingContacts).toBe(res.body.deviceContacts);
     sqlite.exec("DELETE FROM contacts WHERE id IN ('cnt-1','cnt-2')");
   });
 

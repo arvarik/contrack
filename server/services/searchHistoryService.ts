@@ -6,7 +6,6 @@ import {
   type HistoryMode,
   type RecordHistoryInput,
 } from "../../shared/searchHistory.ts";
-import { getPreferences, deletePreference } from "./userPreferencesService.ts";
 
 export interface SearchHistoryRow {
   id: string;
@@ -274,93 +273,9 @@ export function clear(
          WHERE ownerId = ?`,
       )
       .run(ownerId);
-    // Clear legacy preferences to prevent resurrection on subsequent GET
-    deletePreference(ownerId, "searchHistory");
   }
 
   return { deleted: result.changes };
-}
-
-/**
- * One-time backfill: import searchHistory preference entries into search_history
- * if the owner has no rows.
- *
- * Normal and action entries are imported as mode 'palette'.
- * AI entries are imported as mode 'people' with leading '? ' stripped.
- * Idempotent via the (ownerId, mode, normalizedQuery) unique constraint.
- */
-export function backfillFromPreferences(ownerId: string): number {
-  const existing = sqlite
-    .prepare(`SELECT 1 FROM search_history WHERE ownerId = ? LIMIT 1`)
-    .get(ownerId);
-
-  if (existing) {
-    return 0;
-  }
-
-  const prefs = getPreferences(ownerId);
-  const legacy = prefs.searchHistory;
-  if (!legacy || legacy.length === 0) {
-    return 0;
-  }
-
-  const insertStmt = sqlite.prepare(
-    `INSERT INTO search_history (
-       id, ownerId, mode, query, normalizedQuery,
-       resultCount, resultIds, fallback, pinned, runCount,
-       createdAt, lastRunAt
-     ) VALUES (
-       ?, ?, ?, ?, ?,
-       NULL, NULL, 0, 0, 1,
-       ?, ?
-     )
-     ON CONFLICT(ownerId, mode, normalizedQuery) DO NOTHING`,
-  );
-
-  let inserted = 0;
-  const runTransaction = sqlite.transaction(() => {
-    for (const item of legacy) {
-      let mode: HistoryMode;
-      let queryText: string;
-
-      if (item.mode === "ai") {
-        mode = "people";
-        queryText = item.query.replace(/^\s*\?\s+/, "").trim();
-      } else {
-        mode = "palette";
-        queryText = item.query.trim();
-      }
-
-      if (!queryText) continue;
-      const normalized = normalizeQuery(queryText);
-      if (!normalized) continue;
-
-      const timestamp =
-        typeof item.timestamp === "number" &&
-        !isNaN(item.timestamp) &&
-        item.timestamp > 0
-          ? new Date(item.timestamp).toISOString()
-          : new Date().toISOString();
-
-      const res = insertStmt.run(
-        crypto.randomUUID(),
-        ownerId,
-        mode,
-        queryText,
-        normalized,
-        timestamp,
-        timestamp,
-      );
-      if (res.changes > 0) {
-        inserted++;
-      }
-    }
-  });
-
-  runTransaction();
-  // Clear legacy preferences once backfilled so it never repeats or resurrects
-  deletePreference(ownerId, "searchHistory");
-  return inserted;
 }
 
 export const searchHistoryService = {
@@ -369,5 +284,4 @@ export const searchHistoryService = {
   setPinned,
   remove,
   clear,
-  backfillFromPreferences,
 };

@@ -29,18 +29,11 @@ const VERSION = FTS_SCHEMA_VERSION;
 const INDEX_ID = "contacts_fts";
 
 /**
- * The version this database's FTS tables were built at.
- *
- * The `contacts_fts` row of schema_migrations. Before that row exists, on the
- * first boot of the ledger over an older database, the one fallback:
- * `PRAGMA user_version`, where every build before the ledger kept it. A new
- * database reads 0 there and builds the tables.
+ * The version this database's FTS tables were built at: the `contacts_fts`
+ * row of schema_migrations, or 0 on a new database, which builds them.
  */
 function builtVersion(sqlite: Database.Database): number {
-  return (
-    readIndexVersion(sqlite, INDEX_ID) ??
-    Number(sqlite.pragma("user_version", { simple: true }))
-  );
+  return readIndexVersion(sqlite, INDEX_ID) ?? 0;
 }
 
 /**

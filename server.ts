@@ -12,10 +12,7 @@ import { log } from "./server/utils/logger.ts";
 import { sqlite } from "./server/db.ts";
 import { createApp, finalizeApp, notFoundHandler } from "./server/app.ts";
 import { serveClient } from "./server/serveClient.ts";
-import {
-  assertNoLegacyAuthToken,
-  isAuthRequired,
-} from "./server/middleware/auth.ts";
+import { isAuthRequired } from "./server/middleware/auth.ts";
 import { countUsers } from "./server/services/authService.ts";
 import { getErrorMessage } from "./server/utils/helpers.ts";
 import {
@@ -27,7 +24,6 @@ import { makeDataPrivate } from "./server/utils/privateFiles.ts";
 import { DATA_DIR } from "./server/utils/paths.ts";
 import { mailService } from "./server/services/mailService.ts";
 import { validateSecretKey } from "./server/utils/secretBox.ts";
-import { warnRetiredEnv } from "./server/utils/retiredEnv.ts";
 import { stopConnectorScheduler } from "./server/connectors/scheduler.ts";
 import { dispatchEvents, registerSubscribers } from "./server/events/index.ts";
 import {
@@ -45,7 +41,6 @@ validatePublicUrl(process.env.PUBLIC_URL);
 validateSecretKey(process.env.CONTRACK_SECRET_KEY);
 // A typo stops the boot here, rather than trusting no proxy or every one.
 trustProxyHops();
-warnRetiredEnv();
 
 // Owner-only modes for the database, backups, uploads and key, and for every
 // file written from here on. See privateFiles.ts.
@@ -108,11 +103,6 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3210;
 const HOST = process.env.HOST ?? "127.0.0.1";
 
 async function startServer() {
-  // Before anything else looks at a credential. An instance still setting the
-  // name 1.x used would otherwise boot with no token at all, and an operator
-  // who believes their instance is protected would have no way to find out.
-  assertNoLegacyAuthToken();
-
   // ── Events and jobs ─────────────────────────────────────────────────────
   // The reactions to writes and the background work that the modules
   // declare (server/modules/). Both registrations are idempotent, and the
@@ -123,19 +113,6 @@ async function startServer() {
   // Boot catches up from the cursors: the reactions to writes that the last
   // process committed and did not get to.
   dispatchEvents();
-
-  // AI keys saved in Settings before 2.0 are plain text in app_settings, and
-  // so in every backup. Seal them once, the way other stored secrets are.
-  try {
-    const { sealStoredAiKeys } =
-      await import("./server/services/aiSettingsService.ts");
-    sealStoredAiKeys();
-  } catch (err) {
-    log.warn(
-      "Server",
-      `Could not encrypt saved AI keys: ${getErrorMessage(err)}`,
-    );
-  }
 
   // Report the auth posture at boot rather than leaving it to be discovered on
   // the first request — "why is it asking me to sign in" and "why is it NOT"

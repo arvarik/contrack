@@ -18,7 +18,7 @@ import type {
 export type AICapability = "quick" | "deep" | "research" | "embeddings";
 
 export interface CapabilityAssignment {
-  mode: "auto" | "pinned" | "disabled";
+  mode: "auto" | "pinned";
   providerId?: string;
   model?: string;
 }

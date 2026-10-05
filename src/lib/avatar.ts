@@ -3,12 +3,9 @@
  *
  * They point at the app's own avatar route, which generates the SVG
  * in-process (see server/services/avatarService). The one exception is
- * `signedOutAccountAvatarUrl`, which draws the monogram in the browser.
- *
- * This used to return an `api.dicebear.com` URL with the contact's name in the
- * query string, so rendering the contact list announced the name of every
- * person the user knows to a third party — and broke entirely offline. Same
- * artwork, same deterministic faces, no request leaving the machine.
+ * `signedOutAccountAvatarUrl`, which draws the monogram in the browser. So
+ * drawing a list of contacts sends no name to a third party, and works
+ * offline.
  */
 import { monogramSvg } from "../../shared/monogram";
 
@@ -53,15 +50,11 @@ export function fallbackAvatarUrl(name: string): string {
 }
 
 /**
- * True when the avatar is drawn by the app and not a photo of the person.
- *
- * No URL at all draws the fallback. The app's own route draws the rest, and
- * the boot migration in server/db.ts moved every stored DiceBear URL onto that
- * route. The host test stays for a backup restored from before it.
+ * True when the avatar is drawn by the app and not a photo of the person: no
+ * URL at all draws the fallback, and the app's own route draws the rest.
  */
 export function isGeneratedAvatar(url: string | null | undefined): boolean {
-  if (!url) return true;
-  return url.startsWith("/api/avatar/") || url.includes("api.dicebear.com/");
+  return !url || url.startsWith("/api/avatar/");
 }
 
 /**

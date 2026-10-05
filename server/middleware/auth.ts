@@ -118,29 +118,6 @@ export function resolveApiToken(): string | null {
 }
 
 /**
- * `AUTH_TOKEN` is gone.
- *
- * It was this variable's name before accounts existed, when it was the only
- * credential in the product. 1.x renamed it to `API_TOKEN` and went on
- * honouring the old name with a warning at every boot, which is the right
- * thing to do inside a major version and the wrong thing to carry across one.
- *
- * It is not silently ignored. An instance that still sets it would otherwise
- * start with no credential at all and no explanation, which for an operator
- * who believes their instance is protected is the worst of the three possible
- * outcomes. The boot refuses instead, and says the one thing that fixes it.
- */
-export function assertNoLegacyAuthToken(): void {
-  if (!process.env.AUTH_TOKEN?.trim()) return;
-  throw new Error(
-    "AUTH_TOKEN was removed in 2.0. Rename it to API_TOKEN. It identifies " +
-      "machine clients (scripts, MCP); people sign in with an account. " +
-      "API_TOKEN is itself deprecated and goes away in 3.0, so a personal " +
-      "token created in Settings, Account, API tokens is the better move.",
-  );
-}
-
-/**
  * The environment token is deprecated as a whole from 2.0, not just its old
  * name. It belongs to no account, so it acts as the primary admin and every
  * row it writes lands there, which is the wrong answer the moment a second
@@ -473,16 +450,13 @@ export function requireAuth(
  * The `implicit` local owner never carries the flag: it has no password at
  * all, so nobody could have chosen one for it.
  *
- * Mounted after `requireAuth` on `/api` and `/uploads`, and also on the one
- * route inside `/api/auth` that writes an instance setting. The auth router
- * is mounted ahead of the middleware, so its routes never reach the mounted
- * copy at all, which is why that route carries the guard itself.
+ * Mounted after `requireAuth` on `/api` and `/uploads`. The auth router is
+ * mounted ahead of it, so its routes never reach the mounted copy, and a
+ * route there that needs the guard carries it itself.
  *
- * The exemption is a list of paths rather than the `/api/auth` prefix. The
- * prefix was the first shape and it was wrong: `PUT /api/auth/session-policy`
- * is instance administration that happens to live in the auth router, and an
- * account holding a password somebody else chose could stretch every future
- * session on the instance to a year before changing it.
+ * The exemption is a list of paths rather than the `/api/auth` prefix, so a
+ * route in the auth router is guarded unless it is one of the paths an
+ * account needs to change its password.
  *
  * It reads `originalUrl` rather than `path`, because Express strips the mount
  * prefix before a middleware sees `req.path`, which would make

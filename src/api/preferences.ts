@@ -27,13 +27,6 @@ export type MotionPreference = "system" | "reduced";
 /** How much the corvid moves. `off` is the static mark. */
 export type MascotMotion = "full" | "subtle" | "off";
 
-interface SearchHistoryEntry {
-  query: string;
-  mode: "normal" | "ai" | "action";
-  /** Epoch milliseconds. */
-  timestamp: number;
-}
-
 export type PulseColumn = "focus" | "network" | "intel";
 
 export interface PulseLayout {
@@ -49,7 +42,6 @@ export interface Preferences {
   recentLimit: number;
   dedupePreset: MergePreset;
   tempUnit: TempUnit;
-  searchHistory: SearchHistoryEntry[];
   pulseLayout: PulseLayout;
   askHistoryOpen: boolean;
   mapPaneOpen: boolean;
@@ -102,7 +94,6 @@ export const DEFAULT_PREFERENCES: Preferences = {
   recentLimit: 3,
   dedupePreset: "default",
   tempUnit: "celsius",
-  searchHistory: [],
   pulseLayout: {
     hidden: [],
     order: {},

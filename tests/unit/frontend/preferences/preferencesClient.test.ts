@@ -16,15 +16,11 @@
 // whatever is left is readable by whoever signs in next.
 // =============================================================================
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import {
   isDefaultValue,
   DEFAULT_PREFERENCES,
 } from "../../../../src/api/preferences";
-import {
-  forgetLegacyKeys,
-  LEGACY_KEYS,
-} from "../../../../src/lib/forgetLegacyKeys";
 import { defaultPreferences } from "../../../../server/services/userPreferencesService.ts";
 
 beforeEach(() => {
@@ -39,49 +35,12 @@ describe("the browser's defaults", () => {
 
 describe("the server's defaults", () => {
   it("are fresh objects on every call", () => {
-    // A shared `searchHistory` array would let one account's push land in
-    // every other account's default.
+    // A shared `pulseLayout` would let one account's change land in every
+    // other account's default.
     const a = defaultPreferences();
     const b = defaultPreferences();
-    a.searchHistory.push({ query: "x", mode: "normal", timestamp: 1 });
-    expect(b.searchHistory).toEqual([]);
-  });
-});
-
-describe("forgetLegacyKeys", () => {
-  it("removes every key 1.x wrote", () => {
-    for (const key of Object.values(LEGACY_KEYS)) {
-      localStorage.setItem(key, "compact");
-    }
-    forgetLegacyKeys();
-    for (const key of Object.values(LEGACY_KEYS)) {
-      expect(localStorage.getItem(key), key).toBeNull();
-    }
-  });
-
-  it("leaves every other key alone", () => {
-    localStorage.setItem("contrack_list_density", "compact");
-    localStorage.setItem("contrack:theme-cache", "kept");
-    forgetLegacyKeys();
-    expect(localStorage.getItem("contrack:theme-cache")).toBe("kept");
-  });
-
-  it("does nothing in a browser that has nothing", () => {
-    expect(() => forgetLegacyKeys()).not.toThrow();
-    expect(localStorage.length).toBe(0);
-  });
-
-  it("survives storage that refuses", () => {
-    const spy = vi
-      .spyOn(Storage.prototype, "removeItem")
-      .mockImplementation(() => {
-        throw new Error("storage is unavailable");
-      });
-    try {
-      expect(() => forgetLegacyKeys()).not.toThrow();
-    } finally {
-      spy.mockRestore();
-    }
+    a.pulseLayout.hidden.push("inbox");
+    expect(b.pulseLayout.hidden).toEqual([]);
   });
 });
 

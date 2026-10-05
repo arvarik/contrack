@@ -20,7 +20,6 @@ import {
   getProviderConfigs,
   getCachedModels,
   invalidateProviderCache,
-  isSealed,
   providerEnvVariable,
   readStoredKey,
   type CustomEndpointConfig,
@@ -36,7 +35,6 @@ import {
 import {
   classForCapability,
   envOverrideVariable,
-  getCapabilityAssignment,
   getCapabilityAssignments,
   isResearchOff,
   type AICapability,
@@ -176,48 +174,6 @@ export function deleteCustomEndpoint(id: string): void {
   aiCache.invalidateAll();
 }
 
-/**
- * Seal every key the settings store still holds as plain text. Keys saved
- * before 2.0 were stored that way. Runs at boot, and returns how many keys
- * it sealed.
- *
- * A sealed key is left as it is, so the pass is safe on every boot and from
- * a second instance on the same data. The value is sealed exactly as stored,
- * so the key sent to the provider does not change.
- */
-export function sealStoredAiKeys(): number {
-  const plain = (value: unknown): value is string =>
-    typeof value === "string" && value.length > 0 && !isSealed(value);
-
-  const keys = getSetting<Record<string, string>>(SETTING_KEYS.aiProviderKeys);
-  const plainKeys = Object.entries(keys ?? {}).filter(([, v]) => plain(v));
-  if (plainKeys.length > 0) {
-    const next = { ...keys };
-    for (const [id, value] of plainKeys) next[id] = seal(value);
-    setSetting(SETTING_KEYS.aiProviderKeys, next);
-  }
-
-  const endpoints = listCustomEndpoints();
-  const plainEndpoints = endpoints.filter((e) => plain(e.apiKey)).length;
-  if (plainEndpoints > 0) {
-    setSetting(
-      SETTING_KEYS.aiCustomEndpoints,
-      endpoints.map((e) =>
-        plain(e.apiKey) ? { ...e, apiKey: seal(e.apiKey) } : e,
-      ),
-    );
-  }
-
-  const sealed = plainKeys.length + plainEndpoints;
-  if (sealed > 0) {
-    log.info(
-      "AISettings",
-      `Encrypted ${sealed} saved AI key(s) that were stored as plain text`,
-    );
-  }
-  return sealed;
-}
-
 // ---------------------------------------------------------------------------
 // The instance switch
 // ---------------------------------------------------------------------------
@@ -256,15 +212,6 @@ export function setCapabilityAssignment(
   if (!VALID_CAPABILITIES.includes(capability)) {
     throw new ValidationError(`Unknown capability "${capability}"`);
   }
-  if (assignment.mode === "disabled") {
-    // Web search has its own switch, which keeps a pinned model, and no
-    // other model can be turned off.
-    throw new ValidationError(
-      capability === "research"
-        ? 'Turn web search off with PUT /api/settings/ai/web-search { "allowed": false }'
-        : `The ${capability} model cannot be turned off`,
-    );
-  }
   if (!["auto", "pinned"].includes(assignment.mode)) {
     throw new ValidationError(`Unknown mode "${assignment.mode}"`);
   }
@@ -277,45 +224,16 @@ export function setCapabilityAssignment(
   aiCache.invalidateAll();
 }
 
-/**
- * Allow or stop web search, or choose the instance's engine.
- *
- * Turning web search back on also clears the research capability's old
- * "disabled" mode, which was the way to turn it off before the switch.
- */
+/** Allow or stop web search, or choose the instance's engine. */
 export function setWebSearch(patch: {
   allowed?: boolean;
   engine?: WebSearchEngine;
 }): void {
-  if (patch.allowed === true) clearLegacyResearchOff();
   setWebSearchPolicy({
     ...(patch.allowed !== undefined && { off: !patch.allowed }),
     ...(patch.engine !== undefined && { engine: patch.engine }),
   });
   aiCache.invalidateAll();
-}
-
-/** Give the research capability Automatic again if it holds the old "disabled". */
-function clearLegacyResearchOff(): void {
-  if (getCapabilityAssignment("research").mode !== "disabled") return;
-  const assignments = getCapabilityAssignments();
-  assignments.research = { mode: "auto" };
-  setSetting(SETTING_KEYS.aiCapabilities, assignments);
-}
-
-/**
- * Move an instance that turned research off the old way, with the research
- * capability's mode "disabled", to the web search switch. Run once at boot:
- * the switch is then off, and the web search model is Automatic again.
- */
-export function migrateResearchOff(): void {
-  if (getCapabilityAssignment("research").mode !== "disabled") return;
-  setWebSearchPolicy({ off: true });
-  clearLegacyResearchOff();
-  log.info(
-    "AISettings",
-    "Research was off: web search is now off by its switch, and the web search model is Automatic",
-  );
 }
 
 /**

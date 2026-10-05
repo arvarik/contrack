@@ -13,8 +13,6 @@
 //   contacts_fts          FTS_SCHEMA_VERSION. A different recorded version
 //                         drops and refills contacts_fts and interactions_fts
 //                         (installSearchIndex in services/search/ftsIndex.ts).
-//                         With no row yet, it reads PRAGMA user_version, where
-//                         every build before the ledger kept it.
 //   search_embeddings,    1. A store whose DDL is not the current shape is
 //   contact_embeddings    read out, dropped and built again (rebuildVecTable
 //                         in server/db/vec.ts), whatever the version says.
@@ -24,10 +22,6 @@
 // Only contacts_fts rebuilds when its version changes. A later change that
 // needs another structure rebuilt raises that version here and gives its
 // installer the rebuild.
-//
-// `tenancy` is the ownership columns, their triggers and the composite
-// indexes. The baseline migration builds them and records the row, and
-// TENANCY_SCHEMA_VERSION is the version this build expects.
 // =============================================================================
 
 import type Database from "better-sqlite3";
@@ -39,9 +33,6 @@ import {
 import { installPassageIndex } from "../services/search/passageIndex.ts";
 import { readIndexVersion, recordIndexVersion } from "./runner.ts";
 import { installVectorStores, vecTableWidth } from "./vec.ts";
-
-/** The tenancy version this build expects the database to have reached. */
-export const TENANCY_SCHEMA_VERSION = 2;
 
 /** A derived structure's row in schema_migrations, at this build's version. */
 export interface IndexVersion {
@@ -78,11 +69,10 @@ const INSTALLERS: readonly Installer[] = [
   },
 ];
 
-/** Every index row this build expects, the tenancy row first. */
-export const INDEXES: readonly IndexVersion[] = [
-  { id: "tenancy", version: TENANCY_SCHEMA_VERSION },
-  ...INSTALLERS.flatMap((installer) => installer.indexes),
-];
+/** Every index row this build expects. */
+export const INDEXES: readonly IndexVersion[] = INSTALLERS.flatMap(
+  (installer) => installer.indexes,
+);
 
 /** Run every installer, then record the version each one built. */
 export function installIndexes(db: Database.Database): void {

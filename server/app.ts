@@ -44,10 +44,8 @@ import { authRouter } from "./routes/auth.ts";
 import { healthRouter } from "./routes/health.ts";
 import { hostGuard } from "./middleware/hostGuard.ts";
 import { mountModules } from "./modules/index.ts";
-import {
-  countPasswordAccounts,
-  reconcileOwnership,
-} from "./services/authService.ts";
+import { countPasswordAccounts } from "./services/authService.ts";
+import { ensureLocalOwner } from "./db.ts";
 import {
   aiEndpointRateLimit,
   aiUserRateLimit,
@@ -150,11 +148,10 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   // relative to this one does not matter. The rules are in compression.ts.
   app.use(compressResponses);
 
-  // Claim rows written while nobody was signed in. Idempotent, and a no-op
-  // after the first boot because every row already has an owner. Lives here
-  // rather than in server.ts so that tests, which build the app directly, get
-  // the same behaviour.
-  reconcileOwnership();
+  // The account that owns the data while nobody signs in. The baseline
+  // migration makes it, and this keeps it after a test empties the users.
+  // Here rather than in server.ts, so tests that build the app get it too.
+  ensureLocalOwner();
 
   // Auth-off mode is valid only while the local owner is the only account.
   // With a real account present there is no answer to "who is the caller with

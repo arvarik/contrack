@@ -68,8 +68,7 @@ A pre-commit hook runs Oxlint and Prettier on the staged files.
 
 ## Make a change
 
-1. Branch from `v2.0`. Version 2 pull requests target `v2.0`, and `main` holds
-   the 1.5 line.
+1. Branch from `main`, and target `main` with the pull request.
 2. Keep one change per pull request.
 3. Add or change tests with the code. A bug fix comes with a test that fails
    without it.
@@ -213,8 +212,8 @@ with its own floor for `server/`. `.agent/TESTING.md` has the rest.
 
 ## Continuous integration
 
-`.github/workflows/ci.yml` runs on pull requests into `main` and `v2.0`, on
-pushes to them, on `v*` tags, and by hand.
+`.github/workflows/ci.yml` runs on pull requests into `main`, on pushes to it,
+on `v*` tags, and by hand.
 
 - `build-and-test`: lint, the format check, the tests with coverage, and a
   production build.
