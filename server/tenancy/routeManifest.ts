@@ -851,6 +851,8 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     isolated: false,
   },
   { method: "GET", path: "/api/geo/status", class: "scoped", isolated: true },
+  { method: "GET", path: "/api/geo/lookups", class: "admin", isolated: false },
+  { method: "PUT", path: "/api/geo/lookups", class: "admin", isolated: false },
   {
     method: "GET",
     path: "/api/imports",

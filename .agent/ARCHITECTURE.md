@@ -148,7 +148,11 @@ SQL, and tests prove it.
 - A bulk boot step must not stamp `updatedAt`: a stale-looking contact is
   re-embedded, which can bill a paid provider.
 - Deletes are soft: `DELETE /api/contacts/:id` moves a contact to the trash,
-  and a daily sweep purges it after the retention period.
+  and a daily sweep purges it after the retention period. A purge
+  (`hardDeleteContact`) also takes every contact merged into it and the
+  merge log entries that name them, and unlinks their uploads after the
+  commit, keeping any file a row still names (`contactPurge.ts` and
+  `uploadCleanup.ts` in `server/services/`).
 
 ## 6. Search
 
@@ -220,7 +224,8 @@ measured in CI without keys.
   and runs the embedding backfills, and the start-up jobs geocode missing
   pins and copy stored photos. Recurring jobs: the connector tick (60 s), the
   score sweeps (hourly, daily), backups (`BACKUP_INTERVAL_HOURS`), the trash
-  purge, maintenance, model catalogs and planner statistics. The duplicate
+  purge, the merge purge, the upload sweep, the geocode cache prune,
+  maintenance, model catalogs and planner statistics. The duplicate
   check is an on-demand job. `DISABLE_BACKGROUND_JOBS=true` runs none of
   them, and `runJobNow` still works.
 

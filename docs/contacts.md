@@ -307,6 +307,10 @@ ask first, and the toast offers **Undo** for 10 seconds.
 - **Restore** brings the contact back, with its history and its pin.
 - **Delete forever** asks first, then removes the contact and every
   interaction, note and follow-up it had. This cannot be undone.
+- Removing a contact for good also removes every contact that was merged
+  into it, the merge history that names them, and their files: photos,
+  attachments and link-preview images. A file that another contact still
+  shows stays. See [Privacy](privacy.md#what-a-delete-removes).
 - The trash removes a contact for good after 30 days. An admin can set 1 to
   365 days in **Trash** on **Settings → Administration → General**, unless
   the server's configuration sets the number.

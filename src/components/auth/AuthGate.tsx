@@ -73,6 +73,8 @@ import { MagicLinkLanding } from "./MagicLinkLanding";
 import { ForgotPassword } from "./ForgotPassword";
 import { passkeysSupported, listPasskeys } from "../../api/passkeys";
 import { PreferencesProvider } from "../../contexts/PreferencesContext";
+import { clearAccountDrafts } from "../../lib/composerDrafts";
+import { clearLastView } from "../../views/map/lastView";
 
 /**
  * Where an app's OAuth sign-in asks the person to approve it. It stands
@@ -362,10 +364,14 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
       // staring at a "Sign out" button that did nothing is worse.
     }
     queryClient.clear();
+    // A deliberate sign-out leaves no note draft and no map view behind for
+    // the next person at this browser. The remembered sign-in name stays.
+    clearAccountDrafts(user?.id);
+    clearLastView();
     setUser(null);
     setSignInReason(null); // deliberate sign-out, not an expiry
     setState(authRequired ? "signin" : "open");
-  }, [authRequired, queryClient]);
+  }, [authRequired, queryClient, user?.id]);
 
   // A 401 from anywhere means the credential stopped being accepted. A
   // 403 ACCOUNT_DISABLED means it was accepted and the account behind it is

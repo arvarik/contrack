@@ -23,6 +23,7 @@ port, the data folder and sign-in, and setups that never open the app.
 | A model: Fast, Strong, web search or embedding | `AI_QUICK_MODEL`, `AI_DEEP_MODEL`, `AI_RESEARCH_MODEL`, `AI_EMBEDDINGS_MODEL` | A model pinned in the app. With none, the variable, and the select says **From AI_QUICK_MODEL** or its own variable       |
 | **SearXNG address**                            | `SEARXNG_URL`                                                                 | The variable. The field is locked                                                                                         |
 | **Use AI on this instance**                    | `AI_DISABLED`                                                                 | The variable holds AI off, and the switch is locked                                                                       |
+| **Look up addresses for the map**              | `GEOCODING_DISABLED`                                                          | The variable holds lookups off, and the switch is locked                                                                  |
 | **Outgoing mail**                              | `SMTP_URL`, with `MAIL_FROM` and `MAIL_REPLY_TO`                              | The variable. The page shows its values read only                                                                         |
 | **Google OAuth client**                        | `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET`                     | The variables, when both are set. The field is locked                                                                     |
 | **Trash**, **Backups**, **Snapshots to keep**  | `TRASH_RETENTION_DAYS`, `BACKUP_INTERVAL_HOURS`, `BACKUP_KEEP`                | A value saved in the app, then the variable, then the default. While the variable is set, the app cannot change the field |
@@ -66,6 +67,8 @@ value saved earlier keeps winning.
 | `CONNECTORS_ALLOW_PRIVATE_HOSTS` | `true` lets the **Calendar** and **Mailbox (IMAP)** connectors reach private network addresses. The server logs a warning at start                                                                                                                                                                                                                                                                                                                                                                                             | `false`                                         |
 | `MAP_STYLE_LIGHT`                | The basemap style for the light palette: an `https://` URL or a root-relative path such as `/map/style.json`                                                                                                                                                                                                                                                                                                                                                                                                                   | OpenFreeMap `positron`                          |
 | `MAP_STYLE_DARK`                 | The basemap style for the dark palette, with the same rule                                                                                                                                                                                                                                                                                                                                                                                                                                                                     | OpenFreeMap `dark`                              |
+| `NOMINATIM_URL`                  | The base URL of your own Nominatim, such as `http://nominatim:8080`. Address lookups go there instead of `nominatim.openstreetmap.org`. A value that is not an `http` or `https` URL turns lookups off                                                                                                                                                                                                                                                                                                                         |
+| `GEOCODING_DISABLED`             | `true` or `1` turns address lookups off for the whole instance. **Look up addresses for the map** cannot turn them back on. No address leaves the server                                                                                                                                                                                                                                                                                                                                                                       |
 | `DATA_DIR`                       | The folder for the database, uploads, backups, model files and `secret.key`                                                                                                                                                                                                                                                                                                                                                                                                                                                    | The working folder (image: `/app/data`)         |
 | `CONTRACK_SECRET_KEY`            | 64 hex characters that encrypt the credentials the database stores. A bad value stops the start                                                                                                                                                                                                                                                                                                                                                                                                                                | A key in `DATA_DIR/secret.key`                  |
 | `TRASH_RETENTION_DAYS`           | Days a deleted contact stays in **Trash**, from 1 to 365                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `30`                                            |
@@ -305,11 +308,17 @@ Contrack places addresses on the map with Nominatim (OpenStreetMap). It needs
 no key and no setting.
 
 - The server sends each address to `nominatim.openstreetmap.org` in the
-  background, one request a second.
+  background, one request a second. `NOMINATIM_URL` sends them to your own
+  Nominatim instead.
+- An admin turns lookups off with **Look up addresses for the map** in
+  **Settings → Administration → General**, or with `GEOCODING_DISABLED=true`.
+  Then no address leaves the server. A pin comes from an earlier lookup or by
+  hand, and the map's place search answers only from the cache.
 - When an address finds nothing, the server tries a broader one: it drops the
   first part before a comma, up to four tries.
 - Answers are cached for every account. An address that found nothing is tried
-  again after 7 days.
+  again after 7 days. A daily job deletes the answers that no contact uses.
+- The log names the contact, never the address.
 - At start, the server queues contacts that have an address and no pin.
 - The geocoder never moves a pin that a person placed (see
   [Move a pin by hand](map.md#move-a-pin-by-hand)).
@@ -365,10 +374,17 @@ variables are not stored.
 | Revoked or expired invitations  | 30 days                                    | None                                                |
 | Sign-in and reset link records  | 30 days                                    | None                                                |
 | Weekly score snapshots          | 26 weeks                                   | None                                                |
+| Merge history                   | 90 days, the time a merge can be undone    | None                                                |
+| Cached address lookups          | While a contact uses the address           | None                                                |
+| Uploaded files that no row uses | 2 days, 31 for a link preview              | None                                                |
 
 The trash cleanup runs at start and every 24 hours. A daily sweep removes the
 other rows and expired sessions, and checkpoints the database's write-ahead
-log. The snapshot schedule is in [Backups and restore](self-hosting.md#backups-and-restore).
+log. Daily jobs also delete a merged-away contact once its merge can no
+longer be undone, the cached address lookups that no contact uses, and the
+uploaded files that no row uses. [Privacy](privacy.md#how-long-data-stays)
+lists what each delete removes. The snapshot schedule is in
+[Backups and restore](self-hosting.md#backups-and-restore).
 
 ## Personal settings
 
@@ -435,6 +451,7 @@ Administration**.
 | **Trash**                                   | General       | 30 days                   | 1 to 365 days                                                        | `TRASH_RETENTION_DAYS`                                  |
 | **Backups**                                 | General       | 24 hours                  | 0 to 168 hours. Off is 0                                             | `BACKUP_INTERVAL_HOURS`                                 |
 | **Snapshots to keep**                       | General       | 7                         | 1 to 50 in the app, 1 to 100 by variable                             | `BACKUP_KEEP`                                           |
+| **Look up addresses for the map**           | General       | On                        | On, Off                                                              | `GEOCODING_DISABLED`                                    |
 | **Google OAuth client**                     | General       | None                      | A client ID and a client secret                                      | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`  |
 | Mail server                                 | Outgoing mail | None                      | Host, port, TLS, user, password, sender, Reply-To                    | `SMTP_URL`, `MAIL_FROM`, `MAIL_REPLY_TO`                |
 | **Use AI on this instance**                 | AI            | On                        | On, Off                                                              | `AI_DISABLED`                                           |

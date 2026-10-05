@@ -3257,6 +3257,47 @@
         }
       }
     },
+    "/api/geo/lookups": {
+      "get": {
+        "summary": "Whether the server sends addresses to Nominatim (admin)",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AddressLookups" }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Turn address lookups off or on for every account (admin)",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "off": { "type": "boolean" } },
+                "required": ["off"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AddressLookups" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/geo/status": {
       "get": {
         "summary": "The contacts with an address and no pin, and why each has none",
@@ -4348,6 +4389,16 @@
         ],
         "additionalProperties": false
       },
+      "AddressLookups": {
+        "type": "object",
+        "properties": {
+          "off": { "type": "boolean" },
+          "lockedByEnv": { "type": "boolean" },
+          "host": { "type": ["string", "null"] }
+        },
+        "required": ["off", "lockedByEnv", "host"],
+        "additionalProperties": false
+      },
       "ApiToken": {
         "type": "object",
         "properties": {
@@ -4832,7 +4883,10 @@
           "isTracked": { "type": "boolean" },
           "lat": { "type": "null" },
           "lng": { "type": "null" },
-          "reason": { "type": "string", "enum": ["pending", "not-found"] }
+          "reason": {
+            "type": "string",
+            "enum": ["pending", "not-found", "off"]
+          }
         },
         "required": [
           "id",

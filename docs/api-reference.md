@@ -998,6 +998,8 @@ snapshots exist.
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
 | `GET /api/geo/search`       | Find a place by name: `q` (2 to 120 characters). See the answers below. It reads no contacts.                                                                                    | any signed-in caller |
 | `GET /api/geo/status`       | Your contacts with address text and no pin: `{ contacts }`. See the rows below.                                                                                                  | your data            |
+| `GET /api/geo/lookups`      | Whether the server sends addresses to Nominatim: `{ off, lockedByEnv, host }`.                                                                                                   | admin                |
+| `PUT /api/geo/lookups`      | Turn address lookups off or on for every account: `{ off }`. `409 SET_BY_ENVIRONMENT` while `GEOCODING_DISABLED` holds them off or `NOMINATIM_URL` is not a URL.                 | admin                |
 | `GET /api/map/views`        | Your saved map views: `{ views }`.                                                                                                                                               | your data            |
 | `POST /api/map/views`       | Save a view: `name` (1 to 60 characters), `query` (up to 200), `layer` (`pins` or `heat`) and `bounds` `[west, south, east, north]`. `201`. `409 TOO_MANY_VIEWS` past 100 views. | your data            |
 | `PATCH /api/map/views/:id`  | Change `name`, `query`, `layer` or `bounds`. `sortOrder` moves the view to that place in the list (0 is first), and the others keep their order.                                 | your data            |
@@ -1012,13 +1014,14 @@ when the contact has no address text to read.
 A place search answers `{ query, lat, lng, provider, cached, displayName }`.
 `displayName` is the place Nominatim matched. `404 NO_RESULT` means nothing
 matches, and `503 GEOCODER_UNAVAILABLE` means Nominatim is busy or does not
-answer. A search that finds nothing is remembered for 7 days. A search that
-gets no answer is not.
+answer. With address lookups off, only the cache answers, and a search it
+cannot answer is `503 GEOCODING_OFF`. A search that finds nothing is
+remembered for 7 days. A search that gets no answer is not.
 
 Each row of `GET /api/geo/status` has `id`, `name`, `company`, `avatarUrl`,
 `location` (the text the geocoder reads), `isTracked`, `lat` and `lng` (both
-null), and `reason`: `pending` (not tried yet, or queued) or `not-found` (the
-geocoder found nothing).
+null), and `reason`: `pending` (not tried yet, or queued), `not-found` (the
+geocoder found nothing) or `off` (address lookups are off).
 
 ## Connectors
 

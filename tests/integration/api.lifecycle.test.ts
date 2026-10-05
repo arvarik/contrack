@@ -9,8 +9,33 @@ import path from "path";
 import { makeTestApp } from "./helpers.ts";
 import { sqlite } from "../../server/db.ts";
 import { contactService } from "../../server/services/contactService.ts";
+import { sweepOrphanUploads } from "../../server/services/uploadCleanup.ts";
+import { resolveUploadPath } from "../../server/utils/paths.ts";
 
 const app = makeTestApp();
+
+const PNG_1X1 = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+/** Give a contact a photo, and answer the photo's URL. */
+async function addPhoto(id: string): Promise<string> {
+  const res = await request(app)
+    .post(`/api/contacts/${id}/avatar`)
+    .attach("avatar", PNG_1X1, "photo.png");
+  expect(res.status).toBe(200);
+  return res.body.avatarUrl as string;
+}
+
+async function merge(primaryId: string, duplicateId: string) {
+  const res = await request(app)
+    .post("/api/contacts/merge")
+    .send({ primaryId, duplicateId });
+  expect(res.status).toBe(200);
+}
+
+const onDisk = (url: string) => fs.existsSync(resolveUploadPath(url)!);
 
 async function createContact(body: Record<string, unknown>): Promise<string> {
   const res = await request(app).post("/api/contacts").send(body);
@@ -162,17 +187,6 @@ describe("trash: soft delete → restore", () => {
 });
 
 describe("trash: permanent purge", () => {
-  it("DELETE /api/trash/:id hard-deletes a trashed contact", async () => {
-    const id = await createContact({ name: "Purge Me" });
-    await request(app).delete(`/api/contacts/${id}`);
-
-    const purge = await request(app).delete(`/api/trash/${id}`);
-    expect(purge.status).toBe(200);
-
-    const row = sqlite.prepare("SELECT id FROM contacts WHERE id = ?").get(id);
-    expect(row).toBeUndefined();
-  });
-
   it("refuses to purge an active contact", async () => {
     const id = await createContact({ name: "Still Active" });
     const res = await request(app).delete(`/api/trash/${id}`);
@@ -180,6 +194,105 @@ describe("trash: permanent purge", () => {
 
     const row = sqlite.prepare("SELECT id FROM contacts WHERE id = ?").get(id);
     expect(row).toBeTruthy();
+  });
+
+  it("delete forever takes the contacts merged into it, their merge log entries and their files", async () => {
+    const kept = await createContact({ name: "Forever Kept" });
+    const gone = await createContact({
+      name: "Forever Merged Away",
+      about: "Words only this contact had",
+    });
+    const photo = await addPhoto(gone);
+    const mail = await request(app)
+      .post(`/api/contacts/${gone}/attachments`)
+      .attach("attachment", Buffer.from("Subject: Hi\r\n\r\nBody"), "a.eml")
+      .expect(201);
+    await merge(kept, gone);
+
+    await request(app).delete(`/api/contacts/${kept}`).expect(200);
+    await request(app).delete(`/api/trash/${kept}`).expect(200);
+
+    const left = sqlite
+      .prepare(
+        `SELECT (SELECT COUNT(*) FROM contacts WHERE id IN (?, ?))
+              + (SELECT COUNT(*) FROM dedupe_merge_log WHERE duplicateId = ?) AS n`,
+      )
+      .get(kept, gone, gone) as { n: number };
+    expect(left.n).toBe(0);
+    expect([photo, mail.body.fileUrl].map(onDisk)).toEqual([false, false]);
+    expect((await request(app).get(mail.body.fileUrl)).status).toBe(404);
+    const exported = await request(app).get("/api/export/json");
+    expect(exported.text).not.toContain("Words only this contact had");
+  });
+
+  it("a merge undoes inside its window, and after it the merged-away row goes but a photo still in use stays", async () => {
+    const ids: string[] = [];
+    for (const name of ["Recent Kept", "Recent Gone", "Old Kept", "Old Gone"])
+      ids.push(await createContact({ name: `Window ${name}` }));
+    const [recentKept, recentGone, oldKept, oldGone] = ids;
+    await merge(recentKept, recentGone);
+    // With no photo of its own, the kept contact takes this one in the
+    // merge, so both rows name one file.
+    sqlite
+      .prepare("UPDATE contacts SET avatarUrl = NULL WHERE id = ?")
+      .run(oldKept);
+    const photo = await addPhoto(oldGone);
+    await merge(oldKept, oldGone);
+    sqlite
+      .prepare(
+        `UPDATE dedupe_merge_log SET mergedAt = datetime('now', '-91 days')
+          WHERE duplicateId = ?`,
+      )
+      .run(oldGone);
+
+    contactService.purgeExpiredMerges();
+
+    expect(
+      sqlite
+        .prepare("SELECT id, avatarUrl FROM contacts WHERE id IN (?, ?)")
+        .all(oldKept, oldGone),
+    ).toEqual([{ id: oldKept, avatarUrl: photo }]);
+    expect(onDisk(photo)).toBe(true);
+    const log = await request(app).get("/api/dedupe/merge-log?limit=200");
+    const entries = log.body.entries as { id: string; duplicateId: string }[];
+    expect(entries.map((e) => e.duplicateId)).not.toContain(oldGone);
+    const recent = entries.find((e) => e.duplicateId === recentGone)!;
+    await request(app)
+      .post(`/api/dedupe/merge-log/${recent.id}/undo`)
+      .expect(200);
+  });
+
+  it("the daily upload sweep removes only old files that no row uses, and a deleted note takes its preview image", async () => {
+    const id = await createContact({ name: "Sweep Owner" });
+    const photo = await addPhoto(id);
+    const inNote = photo.replace(/avatars\/.*/, "previews/kept.jpg");
+    const note = await request(app)
+      .post(`/api/contacts/${id}/interactions`)
+      .send({ type: "note", title: "Link", content: `<p>${inNote}</p>` })
+      .expect(201);
+    const age = (url: string, days: number) => {
+      const file = resolveUploadPath(url)!;
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      if (!fs.existsSync(file)) fs.writeFileSync(file, "x");
+      const when = new Date(Date.now() - days * 86_400_000);
+      fs.utimesSync(file, when, when);
+      return url;
+    };
+    const oldOrphan = age(photo.replace(/[^/]+$/, "old.jpg"), 3);
+    const newOrphan = age(photo.replace(/[^/]+$/, "new.jpg"), 0);
+    age(photo, 40);
+    age(inNote, 40);
+
+    sweepOrphanUploads();
+
+    expect([oldOrphan, newOrphan, photo, inNote].map(onDisk)).toEqual([
+      false,
+      true,
+      true,
+      true,
+    ]);
+    await request(app).delete(`/api/interactions/${note.body.id}`).expect(200);
+    expect(onDisk(inNote)).toBe(false);
   });
 
   it("purgeExpiredTrash removes only entries past the retention window", async () => {

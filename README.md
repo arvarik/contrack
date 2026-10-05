@@ -239,6 +239,7 @@ Full documentation lives in the [`docs/`](docs/README.md) directory:
 | [Getting Started](docs/getting-started.md)             | Installation, first steps, the main screens               |
 | [Self-Hosting](docs/self-hosting.md)                   | Docker, remote access, backups, upgrades, troubleshooting |
 | [Configuration](docs/configuration.md)                 | Environment variables, AI provider setup, model choice    |
+| [Privacy](docs/privacy.md)                             | What leaves the server, retention, and what deletes do    |
 | [Architecture](docs/architecture.md)                   | System overview, data flow, schema, search and AI         |
 | [API Reference](docs/api-reference.md)                 | Complete REST API with curl examples                      |
 | [CI & Release](CONTRIBUTING.md#continuous-integration) | Pipeline, published images, release procedure             |

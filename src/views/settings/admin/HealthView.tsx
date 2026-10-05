@@ -173,9 +173,12 @@ const JOB_NAMES: Record<string, string> = {
   "backup.startup": "Startup backup",
   "maintenance.daily": "Daily cleanup",
   "contacts.trashPurge": "Trash purge",
+  "contacts.mergePurge": "Expired merges",
+  "uploads.orphanSweep": "Unused files",
   "ai.modelCatalogs": "AI model lists",
   "database.plannerStats": "Database statistics",
   "geocode.startup": "Map pins",
+  "geocode.cachePrune": "Address cache",
   "dedupe.check": "Duplicate check",
 };
 

@@ -1,8 +1,9 @@
 /**
  * PlatformIcon — Resolves a social platform name to the appropriate icon.
- * Uses Lucide-style icons for known platforms, falls back to a favicon proxy or Globe.
+ * Uses Lucide-style icons for known platforms, falls back to the site's icon
+ * from this server's logo route, or a globe.
  */
-import React from "react";
+import React, { useState } from "react";
 import { Globe } from "lucide-react";
 import {
   Facebook,
@@ -33,25 +34,22 @@ export const PLATFORM_COLORS: Record<string, string> = {
   youtube: "text-[#FF0000]",
 };
 
+/** The host names the logo route accepts (server/routes/logos.ts). */
+const LOGO_DOMAIN = /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/;
+
 /**
- * Extract domain from a URL for favicon resolution.
+ * The site's icon from this server's logo route, or null for a URL with no
+ * such host. The server fetches the icon once and keeps it, so the browser
+ * never asks a third party about the people in the list.
  */
-function getDomainFromUrl(url: string): string | null {
+function faviconUrl(url: string): string | null {
+  let host: string;
   try {
-    const parsed = new URL(url);
-    return parsed.hostname;
+    host = new URL(url).hostname.toLowerCase();
   } catch {
     return null;
   }
-}
-
-/**
- * Get a favicon URL for a domain using Google's favicon service.
- */
-function getFaviconUrl(url: string): string | null {
-  const domain = getDomainFromUrl(url);
-  if (!domain) return null;
-  return `https://www.google.com/s2/favicons?domain=${domain}&sz=32`;
+  return LOGO_DOMAIN.test(host) ? `/api/logos/${host}` : null;
 }
 
 /**
@@ -81,26 +79,32 @@ export const PlatformIcon = ({
     return <Icon className={className} />;
   }
 
-  // For unknown platforms with a URL, try to show the favicon
-  if (useFavicon && url) {
-    const faviconUrl = getFaviconUrl(url);
-    if (faviconUrl) {
-      return (
-        <img
-          src={faviconUrl}
-          alt={platform}
-          className="w-4 h-4 rounded-sm"
-          onError={(e) => {
-            // Fall back to Globe icon on favicon load failure
-            const parent = (e.target as HTMLElement).parentElement;
-            if (parent) {
-              (e.target as HTMLElement).style.display = "none";
-            }
-          }}
-        />
-      );
-    }
-  }
+  // For unknown platforms with a URL, try to show the site's icon
+  const icon = useFavicon && url ? faviconUrl(url) : null;
+  if (icon) return <SiteIcon src={icon} alt={platform} className={className} />;
 
   return <Globe className={className} />;
 };
+
+/** The site's icon, or the globe when the server has none. */
+function SiteIcon({
+  src,
+  alt,
+  className,
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <Globe className={className} />;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      className="w-4 h-4 rounded-sm"
+      onError={() => setFailed(true)}
+    />
+  );
+}

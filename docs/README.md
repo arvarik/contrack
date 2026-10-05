@@ -27,6 +27,7 @@ is optional.
 
 - [Self-hosting](self-hosting.md): install, remote access, backups, upgrades, and troubleshooting
 - [Accounts and sign-in](accounts.md): sign-in, passkeys, API tokens, and administration
+- [Privacy](privacy.md): what the server keeps, what leaves it, who can see what, and what a delete removes
 - [Configuration reference](configuration.md): every environment variable and setting
 
 ## Build on Contrack

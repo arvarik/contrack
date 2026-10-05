@@ -575,6 +575,7 @@ describe("OpenAI stream", () => {
         { role: "system", content: "Be brief." },
         { role: "user", content: "Who is Ada?" },
       ],
+      store: false,
       stream: true,
       stream_options: { include_usage: true },
       // "low" reasons, so the budget has room for the reasoning.

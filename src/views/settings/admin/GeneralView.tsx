@@ -7,7 +7,8 @@
  *   2. Sign-in: whether anyone can create an account, sign in by emailed
  *      link, and how long a sign-in lasts.
  *   3. Data: how long Trash keeps a contact, and the backup schedule.
- *   4. Integrations: self-hosted search and the Google OAuth client.
+ *   4. Integrations: address lookups for the map and the Google OAuth
+ *      client.
  *
  * Every row is a `SettingRow`, so each one is a search result's target
  * (`#name`, `#registration`, `#session-length`, `#trash`, `#backups`) and
@@ -29,6 +30,7 @@ import {
   useUpdateIntegrations,
   type InstanceSettings,
 } from "../../../api/admin";
+import { useAddressLookups, useSetAddressLookups } from "../../../api/geo";
 import { TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
@@ -448,6 +450,51 @@ const Data = ({ data }: { data: InstanceSettings | undefined }) => {
 
 // ─── 4. Integrations ─────────────────────────────────────────────────────────
 
+/** The map's address lookups, which send each address to Nominatim. */
+const AddressLookups = () => {
+  const { data, isError, refetch } = useAddressLookups();
+  const save = useSetAddressLookups();
+  if (isError) return <ReadFailed onRetry={() => void refetch()} />;
+  const on = data ? !data.off : false;
+  return (
+    <SettingRow
+      id="address-lookups"
+      title="Look up addresses for the map"
+      description={
+        <>
+          Sends each contact&apos;s address to{" "}
+          {data?.host ?? "OpenStreetMap's Nominatim"} to place its pin. Off, no
+          address leaves this server, and a pin comes from an earlier lookup or
+          by hand
+          {data?.lockedByEnv && (
+            <span className={cn(NOTE, "mt-2")}>
+              Set by GEOCODING_DISABLED in the environment
+            </span>
+          )}
+        </>
+      }
+      inline
+    >
+      <Switch
+        checked={on}
+        label="Look up addresses for the map"
+        disabled={!data || save.isPending || data.lockedByEnv}
+        onChange={() =>
+          save.mutate(on, {
+            onSuccess: (state) =>
+              toast.success(
+                state.off
+                  ? "Address lookups are off. No address leaves this server"
+                  : "Address lookups are on",
+              ),
+            onError: (error: Error) => toast.error(error.message),
+          })
+        }
+      />
+    </SettingRow>
+  );
+};
+
 const GoogleRow = () => {
   const { data, isLoading } = useIntegrations();
   const update = useUpdateIntegrations();
@@ -726,6 +773,7 @@ export const GeneralView = () => {
         </>
       )}
       <Section title="Integrations" id="integrations">
+        <AddressLookups />
         <Integrations />
       </Section>
     </div>

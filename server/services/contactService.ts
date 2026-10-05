@@ -31,6 +31,15 @@ import { importService } from "./importService.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { getPreferences } from "./userPreferencesService.ts";
 import { trashRetentionDays } from "./lifecycleSettings.ts";
+import {
+  expiredMergedContacts,
+  forgetExpiredMerges,
+  forgetPurgedContacts,
+  MERGE_UNDO_DAYS,
+  mergedChain,
+  uploadsOfContacts,
+} from "./contactPurge.ts";
+import { removeUploads } from "./uploadCleanup.ts";
 import { AppError } from "../utils/AppError.ts";
 import { dispatchEvents, recordEvent } from "../events/index.ts";
 // The reactions to a contact write: the search index, the dedupe vector and
@@ -267,20 +276,32 @@ function releaseMovedPin(scope: Scope, id: string, before: PinState): boolean {
   return true;
 }
 
-/** Permanently delete a contact row (children cascade; embeddings purged). */
-function hardDeleteContact(scope: Scope, id: string): boolean {
-  purgeContactSearchArtifacts(id);
-  const result = db
-    .delete(schema.contacts)
-    .where(
-      and(
-        eq(schema.contacts.id, id),
-        eq(schema.contacts.ownerId, scope.ownerId),
-      ),
+/**
+ * Permanently delete a contact, every contact merged into it, and the merge
+ * log entries that name them (contactPurge.ts). Children cascade, and the
+ * vectors go here. Runs inside the caller's transaction.
+ *
+ * @returns the upload URLs the deleted rows named, for `removeUploads` after
+ *   the commit, or null when the contact is not the caller's.
+ */
+function hardDeleteContact(scope: Scope, id: string): string[] | null {
+  const ids = mergedChain(scope, id);
+  if (ids.length === 0) return null;
+  const uploads = uploadsOfContacts(scope, ids);
+  for (const each of ids) purgeContactSearchArtifacts(each);
+  forgetPurgedContacts(scope, ids);
+  sqlite
+    .prepare(
+      `DELETE FROM contacts
+        WHERE ownerId = ? AND id IN (${ids.map(() => "?").join(", ")})`,
     )
-    .returning()
-    .get();
-  return !!result;
+    .run(scope.ownerId, ...ids);
+  return uploads;
+}
+
+/** Unlink each owner's collected uploads, after the purge committed. */
+function removePurgedUploads(byOwner: Map<string, string[]>): void {
+  for (const [ownerId, urls] of byOwner) removeUploads(ownerId, urls);
 }
 
 // ---------------------------------------------------------------------------
@@ -728,11 +749,14 @@ export const contactService = {
     }[];
   },
 
-  /** Permanently delete one trashed contact ("delete forever"). */
+  /**
+   * Permanently delete one trashed contact ("delete forever"), with the
+   * contacts merged into it, and then its files.
+   */
   purgeTrashedContact(scope: Scope, id: string) {
     const existing = contactRepo.findOwned(scope, id);
     if (!existing?.deletedAt) return false; // only trashed rows can be purged
-    const ok = sqlite.transaction(() => {
+    const uploads = sqlite.transaction(() => {
       const deleted = hardDeleteContact(scope, id);
       if (deleted) {
         recordEvent(scope, "contact.deleted", id, { permanent: true });
@@ -740,7 +764,43 @@ export const contactService = {
       return deleted;
     })();
     dispatchEvents();
-    return ok;
+    if (!uploads) return false;
+    removeUploads(scope.ownerId, uploads);
+    return true;
+  },
+
+  /**
+   * Delete the merged-away contacts whose merge can no longer be undone,
+   * with their files, and the merge log entries older than the undo window
+   * (MERGE_UNDO_DAYS). The surviving contact keeps what the merge gave it.
+   * Run daily by the job `contacts.mergePurge`.
+   *
+   * @returns the number of merged-away contacts deleted.
+   */
+  purgeExpiredMerges(days = MERGE_UNDO_DAYS) {
+    const expired = expiredMergedContacts(days);
+    const uploads = new Map<string, string[]>();
+    let entries = 0;
+    sqlite.transaction(() => {
+      for (const row of expired) {
+        const removed = hardDeleteContact(scopeForOwnerId(row.ownerId), row.id);
+        if (removed) {
+          uploads.set(row.ownerId, [
+            ...(uploads.get(row.ownerId) ?? []),
+            ...removed,
+          ]);
+        }
+      }
+      entries = forgetExpiredMerges(days);
+    })();
+    removePurgedUploads(uploads);
+    if (expired.length > 0 || entries > 0) {
+      log.info(
+        "ContactService",
+        `Merge undo window passed: deleted ${expired.length} merged-away contact(s) and ${entries} merge log entries`,
+      );
+    }
+    return expired.length;
   },
 
   /**
@@ -762,11 +822,17 @@ export const contactService = {
     // The sweep is instance-wide, so each row is deleted in its own owner's
     // scope rather than in one caller's. Retention is a property of the row,
     // not of whoever happens to trigger the daily job.
+    const uploads = new Map<string, string[]>();
     const txn = sqlite.transaction(() => {
       for (const row of expired) {
         const scope = scopeForOwnerId(row.ownerId);
-        if (hardDeleteContact(scope, row.id)) {
+        const removed = hardDeleteContact(scope, row.id);
+        if (removed) {
           recordEvent(scope, "contact.deleted", row.id, { permanent: true });
+          uploads.set(row.ownerId, [
+            ...(uploads.get(row.ownerId) ?? []),
+            ...removed,
+          ]);
         }
       }
     });
@@ -774,6 +840,7 @@ export const contactService = {
     // The sweep spans accounts, and each event names its own owner, so each
     // owner it touched loses its own cache entries, once.
     dispatchAsBatch();
+    removePurgedUploads(uploads);
     log.info(
       "ContactService",
       `Purged ${expired.length} trashed contact(s) older than ${days} days`,
