@@ -11,8 +11,5 @@ import { registerActionItemTools } from "../../mcp/tools/actions.ts";
 export const actionItemsModule = defineModule({
   id: "action-items",
   routers: [{ path: "/api", router: actionItemsRouter }],
-  mcpTools: [
-    ({ server, scope, onError }) =>
-      registerActionItemTools(server, scope, onError),
-  ],
+  mcpTools: [registerActionItemTools],
 });

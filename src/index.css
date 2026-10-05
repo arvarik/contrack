@@ -1424,6 +1424,121 @@ html[data-text-scale="large"] {
   animation: modal-fade-in var(--dur-fast) var(--ease);
 }
 
+@keyframes modal-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* On a phone a dialog is a sheet: it rises from the bottom and goes back
+   down. A drag that closes it starts the way down from where the finger
+   let go (`--sheet-drag`, set by Modal.tsx). */
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes sheet-down {
+  from {
+    transform: translateY(var(--sheet-drag, 0px));
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+/* Only a phone's sheet animates its way out. Radix keeps a closing dialog
+   mounted until its animation ends, and on a desktop a key pressed in that
+   moment, such as Escape, would go to a dialog that is already leaving. */
+@media (max-width: 639px) {
+  .sheet[data-state="open"] {
+    animation: sheet-up var(--dur-slow) var(--ease-out);
+  }
+  .sheet[data-state="closed"] {
+    animation: sheet-down var(--dur-base) var(--ease) forwards;
+  }
+  .modal-fade[data-state="closed"]:not(.sheet) {
+    animation: modal-fade-out var(--dur-base) var(--ease) forwards;
+  }
+  .sheet {
+    transition: transform var(--dur-base) var(--ease);
+  }
+}
+/* With less motion asked for, a sheet appears and goes where it stands. A
+   very short slide would still draw its first frame off the screen. */
+@media (prefers-reduced-motion: reduce) {
+  .sheet,
+  .modal-fade {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+:root[data-motion="reduced"] .sheet,
+:root[data-motion="reduced"] .modal-fade {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* =====================================================================
+ * PHONE: THE KEYBOARD, THE SAFE AREAS, AND THE PAGE'S EDGES
+ * =====================================================================
+ * `useSoftKeyboard` sets `data-typing` on the root while a field that opens
+ * the keyboard has focus on a touch screen, and `--keyboard-inset` to the
+ * height the keyboard covers where the page does not resize for it (iOS).
+ */
+:root {
+  --keyboard-inset: 0px;
+  /* The phone tab bar's height: 3 rem of tab, 0.375 rem above it, and the
+     larger of 0.75 rem and the home indicator below (MobileNav.tsx). */
+  --tabbar-space: calc(
+    3.375rem +
+      max(0.75rem, env(safe-area-max-inset-bottom, env(safe-area-inset-bottom)))
+  );
+}
+/* While a person types, the tab bar steps aside, so the field and its Save
+   button have the room above the keyboard. */
+:root[data-typing] {
+  --tabbar-space: 0px;
+}
+@media (max-width: 767px) {
+  :root[data-typing] .mobile-tabbar {
+    display: none;
+  }
+  /* The contact pane keeps the line being typed above the composer's
+     sticky Save bar (and above the keyboard on iOS), not under them. */
+  :root[data-typing] .contact-scroller {
+    scroll-padding-bottom: calc(6rem + var(--keyboard-inset));
+  }
+}
+
+/* iOS zooms the page into a field whose text is under 16 px, and does not
+   zoom back out. On a touch screen a field drawn at a small size, and the
+   note editor, are 16 px. Larger fields keep their size. Unlayered, so it
+   wins over the `text-sm` utility it replaces. */
+@media (pointer: coarse) {
+  :is(input, textarea, select)[class*="text-xs"],
+  :is(input, textarea, select)[class*="text-sm"],
+  .ProseMirror,
+  .composer-line {
+    font-size: 16px;
+  }
+  /* A field that takes its parent's size, such as a contact's phone being
+     edited in place: 1em here is the parent's size, so a large field stays
+     large and a small one reaches 16 px. */
+  :is(input, textarea)[class*="text-inherit"] {
+    font-size: max(16px, 1em);
+  }
+}
+
+/* The app scrolls inside its panes. On a touch screen the page itself does
+   not bounce or pull, which moved the whole app, tab bar and all. Only the
+   vertical axis, and not with a trackpad, whose sideways swipe is Back. */
+@media (pointer: coarse) {
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
+}
+
 /* =====================================================================
  * SETTINGS: THE SLIDE BETWEEN THE LIST AND A PAGE (below lg)
  * =====================================================================

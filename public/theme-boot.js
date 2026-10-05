@@ -23,6 +23,11 @@
 
     if (cached.theme === "light" || cached.theme === "dark") {
       root.setAttribute("data-theme", cached.theme);
+      // The browser bar follows the chosen palette too (syncThemeColor in
+      // src/lib/theme.ts), before the first frame.
+      var bar = cached.theme === "dark" ? "#0f1315" : "#f8f6f2";
+      var metas = document.querySelectorAll('meta[name="theme-color"]');
+      for (var i = 0; i < metas.length; i++) metas[i].content = bar;
     }
 
     // A cached accent belongs to the palette it was derived for. When the

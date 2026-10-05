@@ -254,7 +254,7 @@ works. Each route then checks what it needs.
 
 | Endpoint                                 | What it does                                                                                                                                                                                                                                                                                                                                         | Access |
 | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| `GET /api/auth/status`                   | Everything the sign-in screen needs: `authRequired`, `authenticated`, `setupRequired`, `hasAccounts`, `user`, `registrationOpen`, `mailConfigured`, `magicLinkSignIn`, `localOwnerPresent`, `legacyTokenConfigured`, `instanceName`, `deviceContacts`, and the basemap style URLs in `map`.                                                          | public |
+| `GET /api/auth/status`                   | Everything the sign-in screen needs: `authRequired`, `authenticated`, `setupRequired`, `hasAccounts`, `user`, `registrationOpen`, `mailConfigured`, `magicLinkSignIn`, `localOwnerPresent`, `legacyTokenConfigured`, `publicUrl`, `instanceName`, `deviceContacts`, and the basemap style URLs in `map`.                                             | public |
 | `POST /api/auth/setup`                   | Create the first account: `email`, `username`, `password`, `displayName`. The account is an admin and is signed in (`201 { user }`). On a used instance it takes over the local owner and keeps its data. `409 SETUP_COMPLETE` once an account with a password exists.                                                                               | public |
 | `POST /api/auth/login`                   | Sign in with `identifier` (username or email) and `password`. `remember: false` sets a cookie that ends with the browser. Answers `{ user }`. `401 INVALID_CREDENTIALS` for a wrong password and for an unknown account alike. `403 ACCOUNT_DISABLED` for a disabled account. With sign-in off it answers `{ "authRequired": false, "user": null }`. | public |
 | `POST /api/auth/logout`                  | End this session and clear the cookie.                                                                                                                                                                                                                                                                                                               | public |
@@ -320,7 +320,34 @@ curl -X POST http://localhost:3210/api/auth/tokens \
 Keep `token` somewhere safe. The server stores only its SHA-256 hash, and it
 never shows the token again. `GET /api/auth/tokens` answers `{ tokens }`. Each
 row has `id`, `name`, `tokenPrefix`, `createdAt`, `lastUsedAt`, `expiresAt`,
-`revokedAt` and `readOnly`.
+`revokedAt`, `readOnly` and `kind`. `kind` is `personal` for a token you made
+and `oauth` for an app you approved, whose `tokenPrefix` is the host it signs
+in from. `DELETE /api/auth/tokens/:id` disconnects such an app.
+
+### Apps that sign in with OAuth
+
+An MCP client such as Claude or ChatGPT can sign in with OAuth 2.1 instead of
+a token. OAuth is on when sign-in is on and `PUBLIC_URL` is an `https`
+address, or an `http` address on `localhost` for a local client. While it is
+off, every route below answers `404`. Each answer to a client uses OAuth's
+own field names and errors, such as `{"error":"invalid_grant"}`.
+
+| Route                                               | What it does                                                                                                                             |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /.well-known/oauth-protected-resource/api/mcp` | The MCP endpoint's metadata (RFC 9728): its resource, its authorization server and its scopes. A `401` from `/api/mcp` names this URL    |
+| `GET /.well-known/oauth-protected-resource`         | The same metadata at the root                                                                                                            |
+| `GET /.well-known/oauth-authorization-server`       | The authorization server's metadata (RFC 8414)                                                                                           |
+| `GET /oauth/authorize`                              | Starts a sign-in with PKCE (S256). It sends the browser to the consent page, or back to the client with an error                         |
+| `POST /oauth/token`                                 | A form body. Trades a code for an access token and a refresh token, or rotates a refresh token                                           |
+| `POST /oauth/register`                              | Registers a public client (RFC 7591). A client may instead use the https URL of its metadata document as its `client_id`                 |
+| `POST /oauth/revoke`                                | Gives a token back (RFC 7009). The whole grant ends                                                                                      |
+| `GET /api/auth/oauth/requests/:id`                  | For the consent page: the app, where it sends you back, and whether it asked to write                                                    |
+| `POST /api/auth/oauth/requests/:id`                 | For the consent page: `{"decision":"allow","access":"read"}` or `"deny"`. Answers `{ redirectTo }`, the address the browser goes to next |
+
+The scopes are `contrack:read` and `contrack:write`. An access token lasts an
+hour and works on `/api/mcp` only. A refresh token lasts 30 days from its last
+use and works once: the next one replaces it. A refresh token that comes back
+after its replacement was used ends the grant.
 
 The examples below use a token in the `CONTRACK_TOKEN` variable. With sign-in
 off, leave out the `Authorization` header.

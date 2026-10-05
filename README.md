@@ -131,7 +131,7 @@ Multi-pass engine utilizing Double Metaphone phonetic matching, Levenshtein dist
 
 ### More Capabilities
 
-- **MCP Server** — Built-in Model Context Protocol server (`POST /api/mcp`) running Streamable HTTP with 18 tools, prompts (`catch_me_up`, `weekly_review`), and resources for Claude Code, Claude Desktop, and Cursor integration. A read-only token sees only the read-only tools
+- **MCP Server** — Built-in Model Context Protocol server (`POST /api/mcp`) running Streamable HTTP with 18 tools, prompts (`catch_me_up`, `weekly_review`), and resources. **Settings → MCP and API** sets up Claude Code, Claude Desktop, Cursor, VS Code, Codex and Gemini CLI in a few steps. A read-only token sees only the read-only tools
 - **Add from text** — Paste unstructured text, AI extracts a structured contact
 - **Capability-Based AI** — connect Gemini, OpenAI, Anthropic, or any OpenAI-compatible server (Ollama, vLLM, LM Studio); assign a model per task from Settings, or just set one key and let it choose
 - **Automatic model choice** — With one key, every task runs on a fitting model from that provider. Pin a model per task when you want to

@@ -18,10 +18,7 @@ import { SCORING_JOBS } from "../../jobs/scoring.ts";
 export const contactsModule = defineModule({
   id: "contacts",
   routers: [{ path: "/api", router: contactsRouter }],
-  mcpTools: [
-    ({ server, scope, onError }) =>
-      registerContactTools(server, scope, onError),
-  ],
+  mcpTools: [registerContactTools],
   subscribers: CONTACT_SUBSCRIBERS,
   jobs: SCORING_JOBS,
 });

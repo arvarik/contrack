@@ -39,6 +39,24 @@ export async function serveClient(
   }
 
   const distPath = options.distPath ?? path.join(process.cwd(), "dist");
+  // Vite names every file under /assets by the hash of its content, so a
+  // file there never changes. A browser keeps it for a year and asks no
+  // more: a phone used to send some 85 revalidations on every load. The
+  // rest, index.html first, is checked every time, so a deploy shows at
+  // once.
+  app.use(
+    "/assets",
+    express.static(path.join(distPath, "assets"), {
+      immutable: true,
+      maxAge: "1y",
+    }),
+  );
+  // A file the build no longer has, such as an old chunk an open tab asks
+  // for after a deploy, is a plain 404. Never the app's HTML, which the
+  // browser would try to run as script.
+  app.use("/assets", (_req, res) => {
+    res.status(404).type("text/plain").send("Not found");
+  });
   app.use(express.static(distPath));
   // SPA fallback for navigation only. This used to answer EVERY method —
   // a POST to any unknown path returned index.html with a 200, which reads

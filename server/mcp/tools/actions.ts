@@ -12,129 +12,105 @@
 
 import { z } from "zod";
 import { startOfDay, isBefore, isSameDay, isAfter, addDays } from "date-fns";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Scope } from "../../tenancy/scope.ts";
+import type { McpToolContext } from "../../modules/module.ts";
 import { actionItemService } from "../../services/actionItemService.ts";
-import { NotFoundError, ValidationError } from "../../utils/AppError.ts";
+import {
+  AppError,
+  NotFoundError,
+  ValidationError,
+} from "../../utils/AppError.ts";
 import { actionItemRoutes } from "../../../shared/contracts/actionItems.ts";
-import { MCP_TOOL_DESCRIPTIONS } from "../../../shared/mcpTools.ts";
-import { trackedTool, type ErrorTracker } from "../errors.ts";
+import { answer, count, cursorInput, pageOf } from "../tool.ts";
 
 // The REST bodies of the same writes. A tool's title and due date are checked
 // exactly as the routes check them.
 const createBody = actionItemRoutes.create.body.shape;
 const updateBody = actionItemRoutes.update.body.shape;
 
-export function registerActionItemTools(
-  server: McpServer,
-  scope: Scope,
-  onError: ErrorTracker,
-): void {
-  server.registerTool(
+type Due = "overdue" | "today" | "week" | "all";
+
+/** Whether a follow-up due at `dueAt` falls in the urgency filter. */
+function isDue(dueAt: string | null, due: Due, today: Date): boolean {
+  if (due === "all") return true;
+  if (!dueAt) return false;
+  const day = startOfDay(new Date(dueAt));
+  if (due === "overdue") return isBefore(day, today);
+  if (due === "today") return isSameDay(day, today);
+  return !isAfter(day, addDays(today, 7));
+}
+
+export function registerActionItemTools({ tool, scope }: McpToolContext): void {
+  tool(
     "list_action_items",
     {
-      description: MCP_TOOL_DESCRIPTIONS.list_action_items,
-      inputSchema: {
-        due: z
-          .enum(["overdue", "today", "week", "all"])
-          .default("all")
-          .optional()
-          .describe("Urgency filter: overdue, today, week, or all"),
-      },
-      annotations: {
-        readOnlyHint: true,
-      },
+      due: z
+        .enum(["overdue", "today", "week", "all"])
+        .default("all")
+        .optional()
+        .describe("Urgency filter: overdue, today, week, or all"),
+      cursor: cursorInput,
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(100)
+        .default(50)
+        .optional()
+        .describe("Maximum follow-ups to return (default 50, max 100)"),
     },
-    trackedTool(onError, async ({ due }) => {
-      const allPending = actionItemService.getAllPending(scope) as Array<{
-        id: string;
-        contactId: string;
-        title: string;
-        dueAt: string | null;
-        [key: string]: unknown;
-      }>;
+    ({ due, cursor, limit }) => {
       const filter = due ?? "all";
       const today = startOfDay(new Date());
-      const weekFromNow = addDays(today, 7);
-
-      let filtered = allPending;
-      if (filter === "overdue") {
-        filtered = allPending.filter((item) => {
-          if (!item.dueAt) return false;
-          return isBefore(startOfDay(new Date(item.dueAt)), today);
-        });
-      } else if (filter === "today") {
-        filtered = allPending.filter((item) => {
-          if (!item.dueAt) return false;
-          return isSameDay(startOfDay(new Date(item.dueAt)), today);
-        });
-      } else if (filter === "week") {
-        filtered = allPending.filter((item) => {
-          if (!item.dueAt) return false;
-          return !isAfter(startOfDay(new Date(item.dueAt)), weekFromNow);
-        });
-      }
-
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `${filtered.length} pending action items (${filter})`,
-          },
-        ],
-        structuredContent: {
-          actionItems: filtered,
-          total: filtered.length,
+      const pending = (
+        actionItemService.getAllPending(scope) as Array<{
+          dueAt: string | null;
+        }>
+      ).filter((item) => isDue(item.dueAt, filter, today));
+      const { page, nextCursor } = pageOf(pending, cursor, limit ?? 50);
+      return answer(
+        `${count(pending.length, "pending follow-up")} (${filter})`,
+        {
+          actionItems: page,
+          total: pending.length,
           filter,
+          nextCursor,
         },
-      };
-    }),
+      );
+    },
   );
 
-  server.registerTool(
+  tool(
     "create_action_item",
     {
-      description: MCP_TOOL_DESCRIPTIONS.create_action_item,
-      inputSchema: {
-        contactId: z.string().min(1).describe("Contact ID"),
-        title: createBody.title.describe("Title of the action item"),
-        // The REST route's rule. A value such as "next Friday" would be
-        // saved, and then never count as overdue or due today.
-        dueAt: createBody.dueAt.describe(
-          "Due date in ISO 8601: a day (2026-11-03) or a date and time",
-        ),
-      },
+      contactId: z.string().min(1).describe("Contact ID"),
+      title: createBody.title.describe("Title of the action item"),
+      // The REST route's rule. A value such as "next Friday" would be
+      // saved, and then never count as overdue or due today.
+      dueAt: createBody.dueAt.describe(
+        "Due date in ISO 8601: a day (2026-11-03) or a date and time",
+      ),
     },
-    trackedTool(onError, async ({ contactId, title, dueAt }) => {
+    ({ contactId, title, dueAt }) => {
+      // An unknown contact throws NOT_FOUND inside create.
       const created = actionItemService.create(scope, contactId, title, dueAt);
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Created action item "${created?.title ?? title}" due at ${dueAt}`,
-          },
-        ],
-        structuredContent: (created ?? {}) as Record<string, unknown>,
-      };
-    }),
+      if (!created) throw new AppError("The follow-up was not saved", 500);
+      return answer(
+        `Created follow-up "${created.title}" due ${dueAt}`,
+        created,
+      );
+    },
   );
 
-  server.registerTool(
+  tool(
     "update_action_item",
     {
-      description: MCP_TOOL_DESCRIPTIONS.update_action_item,
-      inputSchema: {
-        id: z.string().min(1).describe("Action item ID to change"),
-        title: updateBody.title.describe("The new title"),
-        dueAt: updateBody.dueAt.describe(
-          "The new due date in ISO 8601: a day (2026-11-03) or a date and time",
-        ),
-      },
-      annotations: {
-        idempotentHint: true,
-      },
+      id: z.string().min(1).describe("Action item ID to change"),
+      title: updateBody.title.describe("The new title"),
+      dueAt: updateBody.dueAt.describe(
+        "The new due date in ISO 8601: a day (2026-11-03) or a date and time",
+      ),
     },
-    trackedTool(onError, async ({ id, title, dueAt }) => {
+    ({ id, title, dueAt }) => {
       if (title === undefined && dueAt === undefined) {
         throw new ValidationError("Give a new title, a new dueAt, or both.");
       }
@@ -142,43 +118,24 @@ export function registerActionItemTools(
       if (!updated) {
         throw new NotFoundError("ActionItem", id);
       }
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Updated action item "${updated.title}", due at ${updated.dueAt}`,
-          },
-        ],
-        structuredContent: updated as unknown as Record<string, unknown>,
-      };
-    }),
+      return answer(
+        `Updated follow-up "${updated.title}", due ${updated.dueAt}`,
+        updated,
+      );
+    },
   );
 
-  server.registerTool(
+  tool(
     "complete_action_item",
     {
-      description: MCP_TOOL_DESCRIPTIONS.complete_action_item,
-      inputSchema: {
-        id: z.string().min(1).describe("Action item ID to complete"),
-      },
-      annotations: {
-        idempotentHint: true,
-      },
+      id: z.string().min(1).describe("Action item ID to complete"),
     },
-    trackedTool(onError, async ({ id }) => {
+    ({ id }) => {
       const completed = actionItemService.complete(scope, id);
       if (!completed) {
         throw new NotFoundError("ActionItem", id);
       }
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: `Marked action item ${id} as completed`,
-          },
-        ],
-        structuredContent: completed as unknown as Record<string, unknown>,
-      };
-    }),
+      return answer(`Marked follow-up ${id} as completed`, completed);
+    },
   );
 }

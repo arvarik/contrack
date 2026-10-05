@@ -45,6 +45,9 @@ search, Pulse, the map, research and the contact page.
   connectors.
 - Docker Compose publishes the port on `127.0.0.1` only, and the CSV export
   neutralizes spreadsheet formulas.
+- While sign-in is off, the server answers only local host names, the
+  `PUBLIC_URL` host and `ALLOWED_HOSTS`, so a web page cannot reach it through
+  DNS rebinding. `/api/mcp` refuses a request from another site's page.
 
 ### Search and Ask Contrack
 
@@ -80,6 +83,10 @@ search, Pulse, the map, research and the contact page.
 - On a phone, a contact's phone and email are one tap from a call, a text or
   a mail, **Share contact** sends a vCard, and the Network list keeps its
   place and opens the command palette.
+- On a phone, dialogs are sheets that drag closed, Back on Android closes
+  them, and Save stays above the keyboard while the tab bar steps aside.
+  The app keeps clear of the status bar and a side cutout, and a contact
+  opens without its timeline jumping.
 
 ### AI and research
 
@@ -117,11 +124,25 @@ search, Pulse, the map, research and the contact page.
 - The built-in MCP server (`POST /api/mcp`) offers 18 tools, two prompts and
   resources to Claude, Cursor and other clients. A read-only token sees only
   the 9 read-only tools.
+- **Settings → MCP and API** sets up Claude Code, Claude Desktop, Cursor, VS
+  Code, Codex and Gemini CLI. It makes a token for the client and fills in
+  the command, the config or a one-press install link.
+- Claude on the web, Claude Desktop, the Claude phone app and ChatGPT
+  connect by address and sign in with OAuth, with a consent page that offers
+  read only. Approved apps show in the token list, where one press
+  disconnects them. OAuth needs sign-in on and an https `PUBLIC_URL`.
+- Each tool has a title and hints that say whether it reads, adds, or can
+  overwrite. Results leave out the fields only the server reads, and a
+  refused call answers with its code and what to do next.
 - The routes for contacts, notes, follow-ups, lists, tags and tokens share
   one contract with the app and the MCP tools. `docs/openapi.json` describes
   them in OpenAPI 3.1.
 
 ### Install and operations
+
+- The built files under `/assets` are cached for a year, as their names
+  change with their content, so a phone loads the app with far fewer
+  requests. The Home Screen app has shortcuts to Pulse, Ask and the map.
 
 - Node.js 26.10 or later is required. Node runs the TypeScript itself, so the
   server has no build step.

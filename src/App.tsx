@@ -60,6 +60,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AISearchProvider } from "./contexts/AISearchContext";
 import { DedupeProvider } from "./contexts/DedupeContext";
 import { SessionProvider, useRecent } from "./contexts/SessionContext";
+import { useSoftKeyboard } from "./hooks/useSoftKeyboard";
 
 const ResponsiveLayout = () => {
   const location = useLocation();
@@ -189,7 +190,10 @@ const ResponsiveLayout = () => {
           : null;
 
   return (
-    <div className="h-dvh w-full flex overflow-hidden bg-surface text-on-surface font-body font-medium">
+    // The safe areas: the status bar and the camera's cutout, when the page
+    // fills the screen (`viewport-fit=cover`). On its side, a phone's cutout
+    // is at the left or the right, and the sidebar sat under it.
+    <div className="h-dvh w-full flex overflow-hidden bg-surface text-on-surface font-body font-medium pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       {/*
         The sidebar used to be suppressed (`hidden lg:flex`) whenever a contact
         was open, which meant that between 768 and 1023 px — an iPad in
@@ -385,6 +389,8 @@ const ResponsiveLayout = () => {
 };
 
 export default function App() {
+  // `data-typing` and `--keyboard-inset` for the phone's CSS (index.css).
+  useSoftKeyboard();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [quickNoteOpen, setQuickNoteOpen] = useState(false);
   const [quickNoteContactId, setQuickNoteContactId] = useState<
@@ -485,7 +491,11 @@ export default function App() {
           // The mobile tab bar is fixed to the bottom of the viewport, so a
           // default-offset toast lands underneath it and the user never sees
           // the confirmation they just triggered.
-          mobileOffset={{ bottom: "96px", left: "12px", right: "12px" }}
+          mobileOffset={{
+            bottom: "calc(var(--tabbar-space) + var(--keyboard-inset) + 12px)",
+            left: "12px",
+            right: "12px",
+          }}
           className="font-body"
           toastOptions={{
             className: "glass-panel shadow-lg !border-none",

@@ -36,6 +36,7 @@ import {
   ServerCog,
   ShieldOff,
   Terminal,
+  AppWindow,
   TriangleAlert,
   Upload,
   UserRound,
@@ -656,10 +657,14 @@ const TokenRow = ({
   onRevoke: () => void;
 }) => {
   const state = tokenState(token);
+  // An app approved with OAuth, such as Claude, rather than a token the
+  // person made. Its prefix line holds the host it signs in from.
+  const app = token.kind === "oauth";
+  const Icon = app ? AppWindow : Terminal;
   return (
     <li className="flex items-start gap-3 px-4 sm:px-6 py-3.5">
       <span className={ROW_ICON}>
-        <Terminal className="w-[18px] h-[18px]" />
+        <Icon className="w-[18px] h-[18px]" />
       </span>
       <div className="flex-1 min-w-0">
         <p className="flex items-center gap-2 min-w-0">
@@ -667,11 +672,18 @@ const TokenRow = ({
             {token.name}
           </span>
           <TokenStateBadge state={state} />
+          {app && <Badge tone="neutral">app</Badge>}
           {token.readOnly && <Badge tone="primary">read-only</Badge>}
         </p>
-        <p className="text-xs text-on-surface-variant font-mono truncate">
-          {token.tokenPrefix}…
-        </p>
+        {app ? (
+          <p className="text-xs text-on-surface-variant truncate">
+            Signs in from {token.tokenPrefix}
+          </p>
+        ) : (
+          <p className="text-xs text-on-surface-variant font-mono truncate">
+            {token.tokenPrefix}…
+          </p>
+        )}
         <p className="text-xs text-on-surface-variant mt-0.5">
           {token.lastUsedAt
             ? `Last used ${formatWhen(token.lastUsedAt)}`
@@ -691,7 +703,7 @@ const TokenRow = ({
           onClick={onRevoke}
           className="btn-secondary btn-sm shrink-0 text-error"
         >
-          Revoke
+          {app ? "Disconnect" : "Revoke"}
         </button>
       )}
     </li>
@@ -919,14 +931,21 @@ const ApiTokensCard = () => {
         onClose={() => setRevoking(null)}
         onConfirm={() => revoking && revoke.mutate(revoking.id)}
         busy={revoke.isPending}
-        title="Revoke this token?"
-        confirmLabel="Revoke token"
+        title={
+          revoking?.kind === "oauth"
+            ? "Disconnect this app?"
+            : "Revoke this token?"
+        }
+        confirmLabel={
+          revoking?.kind === "oauth" ? "Disconnect app" : "Revoke token"
+        }
         description={
           <>
             <p>
               <strong className="text-on-surface">{revoking?.name}</strong>{" "}
-              stops working immediately. Anything using it — a script, an MCP
-              client — starts failing on its next request
+              {revoking?.kind === "oauth"
+                ? "stops working immediately. To use it again, connect it again from the app"
+                : "stops working immediately. Anything using it — a script, an MCP client — starts failing on its next request"}
             </p>
             <p>
               The entry stays in this list, marked revoked, so you can see what

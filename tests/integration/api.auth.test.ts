@@ -24,6 +24,7 @@ import {
 } from "../../server/middleware/auth.ts";
 import type { AppError } from "../../server/utils/AppError.ts";
 import { clearSettingsCache } from "../../server/services/settingsService.ts";
+import { __resetHostGuard } from "../../server/middleware/hostGuard.ts";
 
 const app = makeTestApp();
 
@@ -184,6 +185,25 @@ describe("first-run setup", () => {
       const { res } = await signIn(identifier, ACCOUNT.password);
       expect(res.status, `identifier ${identifier}`).toBe(200);
     }
+  });
+
+  it("refuses setup from a name a web page can own, until an account exists", async () => {
+    // With sign-in on and no account yet, setup is open to anyone, so a DNS
+    // rebinding page could claim the instance and everything the local owner
+    // wrote.
+    __resetHostGuard();
+    const rebound = await request(app)
+      .post("/api/auth/setup")
+      .set("Host", "evil.example")
+      .send(ACCOUNT);
+    expect(rebound.status).toBe(403);
+    expect(rebound.body.error.message).toContain("until its first account");
+    expect(countSignInAccounts()).toBe(0);
+    await setupAccount();
+    const after = await request(app)
+      .get("/api/auth/status")
+      .set("Host", "evil.example");
+    expect(after.status).toBe(200);
   });
 
   it("closes setup once an account exists", async () => {

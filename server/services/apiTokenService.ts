@@ -42,6 +42,11 @@ export interface TokenSummary {
   revokedAt: string | null;
   /** True when the token may only read. See `guardReadOnlyToken`. */
   readOnly: boolean;
+  /**
+   * `personal` for a token the person made, `oauth` for an app they approved
+   * (oauthService.ts). An app's `tokenPrefix` is the host it signs in from.
+   */
+  kind: "personal" | "oauth";
 }
 
 function hashToken(token: string): string {
@@ -125,7 +130,7 @@ export function createToken(
 export function listTokens(userId: string): TokenSummary[] {
   const rows = sqlite
     .prepare(
-      `SELECT id, name, tokenPrefix, createdAt, lastUsedAt, expiresAt, revokedAt, readOnly
+      `SELECT id, name, tokenPrefix, createdAt, lastUsedAt, expiresAt, revokedAt, readOnly, kind
          FROM api_tokens WHERE userId = ? ORDER BY createdAt DESC`,
     )
     .all(userId) as (Omit<TokenSummary, "readOnly"> & { readOnly: number })[];
@@ -200,8 +205,9 @@ export function resolveToken(
       // formats, and a value it cannot read becomes NULL, which makes the
       // comparison false and refuses the token. That is the safe direction
       // for a credential.
+      // An app's grant is never a personal token, whatever is presented.
       `SELECT id, userId, readOnly FROM api_tokens
-        WHERE tokenHash = ? AND revokedAt IS NULL
+        WHERE tokenHash = ? AND revokedAt IS NULL AND kind = 'personal'
           AND (expiresAt IS NULL OR datetime(expiresAt) > datetime('now'))`,
     )
     .get(hashToken(presented)) as

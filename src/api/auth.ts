@@ -83,6 +83,10 @@ interface AuthStatus {
   localOwnerPresent: boolean;
   /** The deprecated instance-wide `API_TOKEN` is still set on the server. */
   legacyTokenConfigured: boolean;
+  /** PUBLIC_URL's origin, or null when the operator has not set it. */
+  publicUrl?: string | null;
+  /** An MCP client can sign in with OAuth here. */
+  mcpOAuth?: boolean;
   /**
    * What this instance calls itself, or "" when nobody has named it.
    *

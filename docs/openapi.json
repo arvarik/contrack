@@ -6,6 +6,174 @@
     "description": "The routes with a contract in shared/contracts/. `npm run api:openapi` writes this file from them, so change a contract rather than the file. docs/api-reference.md describes every route, how to authenticate and the error envelope."
   },
   "paths": {
+    "/.well-known/oauth-authorization-server": {
+      "get": {
+        "summary": "The authorization server metadata (RFC 8414)",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "issuer": { "type": "string" },
+                    "authorization_endpoint": { "type": "string" },
+                    "token_endpoint": { "type": "string" },
+                    "registration_endpoint": { "type": "string" },
+                    "revocation_endpoint": { "type": "string" },
+                    "response_types_supported": {
+                      "type": "array",
+                      "items": { "type": "string", "const": "code" }
+                    },
+                    "response_modes_supported": {
+                      "type": "array",
+                      "items": { "type": "string", "const": "query" }
+                    },
+                    "grant_types_supported": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "code_challenge_methods_supported": {
+                      "type": "array",
+                      "items": { "type": "string", "const": "S256" }
+                    },
+                    "token_endpoint_auth_methods_supported": {
+                      "type": "array",
+                      "items": { "type": "string", "const": "none" }
+                    },
+                    "revocation_endpoint_auth_methods_supported": {
+                      "type": "array",
+                      "items": { "type": "string", "const": "none" }
+                    },
+                    "scopes_supported": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": ["contrack:read", "contrack:write"]
+                      }
+                    },
+                    "client_id_metadata_document_supported": {
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "authorization_response_iss_parameter_supported": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "issuer",
+                    "authorization_endpoint",
+                    "token_endpoint",
+                    "registration_endpoint",
+                    "revocation_endpoint",
+                    "response_types_supported",
+                    "response_modes_supported",
+                    "grant_types_supported",
+                    "code_challenge_methods_supported",
+                    "token_endpoint_auth_methods_supported",
+                    "revocation_endpoint_auth_methods_supported",
+                    "scopes_supported",
+                    "client_id_metadata_document_supported",
+                    "authorization_response_iss_parameter_supported"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/oauth-protected-resource": {
+      "get": {
+        "summary": "The same metadata at the root path",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "resource": { "type": "string" },
+                    "authorization_servers": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "scopes_supported": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": ["contrack:read", "contrack:write"]
+                      }
+                    },
+                    "bearer_methods_supported": {
+                      "type": "array",
+                      "items": { "type": "string", "const": "header" }
+                    },
+                    "resource_name": { "type": "string" }
+                  },
+                  "required": [
+                    "resource",
+                    "authorization_servers",
+                    "scopes_supported",
+                    "bearer_methods_supported",
+                    "resource_name"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/oauth-protected-resource/api/mcp": {
+      "get": {
+        "summary": "The MCP endpoint's protected resource metadata (RFC 9728). 404 while OAuth is off",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "resource": { "type": "string" },
+                    "authorization_servers": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "scopes_supported": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": ["contrack:read", "contrack:write"]
+                      }
+                    },
+                    "bearer_methods_supported": {
+                      "type": "array",
+                      "items": { "type": "string", "const": "header" }
+                    },
+                    "resource_name": { "type": "string" }
+                  },
+                  "required": [
+                    "resource",
+                    "authorization_servers",
+                    "scopes_supported",
+                    "bearer_methods_supported",
+                    "resource_name"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/action-items": {
       "get": {
         "summary": "Every pending follow-up, soonest due first",
@@ -240,6 +408,70 @@
                     }
                   },
                   "required": ["recurring", "failed"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/oauth/requests/{id}": {
+      "get": {
+        "summary": "A sign-in waiting for the person's answer, for the consent page",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/OAuthConsentRequest" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Allow or deny a sign-in. Answers the address the browser goes to next",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "decision": { "type": "string", "enum": ["allow", "deny"] },
+                  "access": { "type": "string", "enum": ["read", "write"] }
+                },
+                "required": ["decision"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "redirectTo": { "type": "string" } },
+                  "required": ["redirectTo"],
                   "additionalProperties": false
                 }
               }
@@ -3972,6 +4204,116 @@
           }
         }
       }
+    },
+    "/oauth/authorize": {
+      "get": {
+        "summary": "Start a sign-in. Answers 303 to the consent page, or to the client with an error",
+        "responses": {
+          "303": {
+            "description": "Success",
+            "content": { "application/json": { "schema": { "type": "null" } } }
+          }
+        }
+      }
+    },
+    "/oauth/register": {
+      "post": {
+        "summary": "Register a public client (RFC 7591). Unused, it goes after a day",
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "client_id": { "type": "string" },
+                    "client_id_issued_at": { "type": "integer" },
+                    "client_name": { "type": "string" },
+                    "redirect_uris": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "grant_types": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "response_types": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    },
+                    "token_endpoint_auth_method": {
+                      "type": "string",
+                      "const": "none"
+                    }
+                  },
+                  "required": [
+                    "client_id",
+                    "client_id_issued_at",
+                    "client_name",
+                    "redirect_uris",
+                    "grant_types",
+                    "response_types",
+                    "token_endpoint_auth_method"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/revoke": {
+      "post": {
+        "summary": "Give a token back (RFC 7009). Its whole grant ends",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {},
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/token": {
+      "post": {
+        "summary": "Trade a code, or rotate a refresh token. A form body, as OAuth sends it",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "access_token": { "type": "string" },
+                    "token_type": { "type": "string", "const": "Bearer" },
+                    "expires_in": { "type": "integer" },
+                    "refresh_token": { "type": "string" },
+                    "scope": { "type": "string" }
+                  },
+                  "required": [
+                    "access_token",
+                    "token_type",
+                    "expires_in",
+                    "refresh_token",
+                    "scope"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4016,7 +4358,8 @@
           "lastUsedAt": { "type": ["string", "null"] },
           "expiresAt": { "type": ["string", "null"] },
           "revokedAt": { "type": ["string", "null"] },
-          "readOnly": { "type": "boolean" }
+          "readOnly": { "type": "boolean" },
+          "kind": { "type": "string", "enum": ["personal", "oauth"] }
         },
         "required": [
           "id",
@@ -4026,7 +4369,8 @@
           "lastUsedAt",
           "expiresAt",
           "revokedAt",
-          "readOnly"
+          "readOnly",
+          "kind"
         ],
         "additionalProperties": false
       },
@@ -4501,6 +4845,35 @@
           "lng",
           "reason"
         ],
+        "additionalProperties": false
+      },
+      "OAuthConsentRequest": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "client": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "host": { "type": ["string", "null"] },
+              "verified": { "type": "boolean" }
+            },
+            "required": ["name", "host", "verified"],
+            "additionalProperties": false
+          },
+          "redirect": {
+            "type": "object",
+            "properties": {
+              "host": { "type": "string" },
+              "kind": { "type": "string", "enum": ["web", "loopback", "app"] }
+            },
+            "required": ["host", "kind"],
+            "additionalProperties": false
+          },
+          "canWrite": { "type": "boolean" },
+          "expiresAt": { "type": "string" }
+        },
+        "required": ["id", "client", "redirect", "canWrite", "expiresAt"],
         "additionalProperties": false
       },
       "QueuedActionItem": {

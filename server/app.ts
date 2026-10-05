@@ -42,6 +42,7 @@ import {
 import { aiCache } from "./utils/aiCache.ts";
 import { authRouter } from "./routes/auth.ts";
 import { healthRouter } from "./routes/health.ts";
+import { hostGuard } from "./middleware/hostGuard.ts";
 import { mountModules } from "./modules/index.ts";
 import {
   countPasswordAccounts,
@@ -205,6 +206,11 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   // Liveness probe, mounted OUTSIDE /api so the auth gate never touches it.
   // Docker's HEALTHCHECK holds no credential.
   app.use(healthRouter);
+
+  // While sign-in is off, answer only the names a web page cannot own, so a
+  // DNS rebinding page cannot act as the owner (hostGuard.ts). After the
+  // health check, which a probe reaches by any name.
+  app.use(hostGuard);
 
   // Identify the caller before anything else looks at the request. Never
   // rejects — it only decides *who* is asking, which the auth routes need to

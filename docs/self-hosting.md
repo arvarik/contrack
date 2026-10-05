@@ -200,6 +200,34 @@ line shows as soon as it is written, also behind nginx's default buffering. If
 you turn on compression in the proxy anyway, leave out `text/event-stream` and
 `application/x-ndjson`.
 
+### Claude on the web, Claude on your phone, and ChatGPT
+
+These assistants call Contrack from their own servers on the internet, and
+they sign in with OAuth. Your computer is not the one that connects. So they
+need three things:
+
+1. Sign-in is on (`AUTH_REQUIRED=true`).
+2. `PUBLIC_URL` is the `https` address of Contrack.
+3. That address answers from the public internet, through a reverse proxy
+   with a certificate, or a tunnel such as Cloudflare Tunnel or Tailscale
+   Funnel. An address on a VPN or your home network only is not enough.
+
+Then add `https://<your address>/api/mcp` in the assistant, as
+[Connect Claude or ChatGPT](mcp.md#connect-claude-or-chatgpt) says, and sign
+in to Contrack when it asks. The OAuth routes are `/.well-known/oauth-*`
+and `/oauth/*`, so a proxy that forwards only `/api` must forward those too.
+
+Claude's servers connect from the address range `160.79.104.0/21`. To allow
+only that range at the proxy, limit `/api/mcp`, `/oauth/token`,
+`/oauth/register` and `/oauth/revoke` to it. Leave the rest open to your
+own browser: it opens `/oauth/authorize`, the consent page and the sign-in
+page itself.
+
+Claude Code, Cursor, VS Code and Gemini CLI run on your own computer. They
+can sign in with OAuth too, and they need only an address that computer can
+reach. For a local test, `PUBLIC_URL=http://localhost:3210` turns OAuth on
+for them.
+
 ## Backups and restore
 
 By default, Contrack takes a snapshot of the whole database every 24 hours,

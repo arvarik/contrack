@@ -148,7 +148,9 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
         )}
       </AnimatePresence>
 
-      <Suspense fallback={<ComposerPlaceholder />}>
+      <Suspense
+        fallback={<ComposerPlaceholder collapsed={composerCollapsible} />}
+      >
         <InteractionComposer
           contactId={contactId}
           collapsible={composerCollapsible}

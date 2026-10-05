@@ -19,9 +19,8 @@
 // =============================================================================
 
 import type { Request, Router } from "express";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Scope } from "../tenancy/scope.ts";
-import type { ErrorTracker } from "../mcp/errors.ts";
+import type { DefineTool } from "../mcp/tool.ts";
 import type { JobDefinition } from "../jobs/runner.ts";
 import type { Subscriber } from "../events/dispatcher.ts";
 
@@ -33,10 +32,10 @@ export interface ModuleRouter {
 
 /** What an MCP tool group needs to register its tools for one request. */
 export interface McpToolContext {
-  server: McpServer;
+  /** Registers one tool (server/mcp/tool.ts). */
+  tool: DefineTool;
   scope: Scope;
   req: Request;
-  onError: ErrorTracker;
 }
 
 /** Registers one group of MCP tools. */
