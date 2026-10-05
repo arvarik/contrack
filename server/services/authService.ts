@@ -164,10 +164,7 @@ export function setInstanceName(value: unknown): string {
     );
   }
   setSetting(INSTANCE_NAME_SETTING, cleaned);
-  log.info(
-    "Auth",
-    cleaned ? `Instance name set to "${cleaned}"` : "Instance name cleared",
-  );
+  log.info("Auth", cleaned ? "Instance name set" : "Instance name cleared");
   return cleaned;
 }
 
@@ -473,10 +470,7 @@ export async function createUser(input: {
     return getUserById(id)!;
   })();
 
-  log.info(
-    "Auth",
-    `Created ${created.role} account "${created.username}" (${created.id})`,
-  );
+  log.info("Auth", `Created ${created.role} account ${created.id}`);
   return created;
 }
 
@@ -514,7 +508,7 @@ export async function verifyCredentials(
           `UPDATE users SET passwordHash = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`,
         )
         .run(upgraded, row.id);
-      log.info("Auth", `Upgraded password hash for "${row.username}"`);
+      log.info("Auth", `Upgraded password hash for account ${row.id}`);
     } catch (err) {
       // A failed upgrade must not fail the sign-in — the old hash still works.
       log.warn("Auth", `Password hash upgrade failed: ${String(err)}`);
@@ -672,7 +666,7 @@ export async function changePassword(
       )
       .run(id);
   })();
-  log.info("Auth", `Password changed for "${row.username}"`);
+  log.info("Auth", `Password changed for account ${row.id}`);
 }
 
 /**
@@ -743,7 +737,7 @@ export async function resetUserPasswordWithToken(
       .run(userId);
   })();
 
-  log.info("Auth", `Password reset with token for "${row.username}"`);
+  log.info("Auth", `Password reset with token for account ${row.id}`);
   return stripHash(row);
 }
 
@@ -971,7 +965,7 @@ export async function convertLocalOwner(input: {
   const converted = getUserById(local.id)!;
   log.info(
     "Auth",
-    `Secured this instance as "${converted.username}" (${converted.id}), keeping its data`,
+    `Secured this instance as account ${converted.id}, keeping its data`,
   );
   return converted;
 }

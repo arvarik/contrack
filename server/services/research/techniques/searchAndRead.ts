@@ -449,10 +449,7 @@ async function searchAndReadPages(
         } catch (err) {
           signal?.throwIfAborted();
           errors.push(err);
-          log.warn(
-            "SearchAndRead",
-            `Search failed for "${query}": ${getErrorMessage(err)}`,
-          );
+          log.warn("SearchAndRead", `A search failed: ${getErrorMessage(err)}`);
           return [];
         }
       }),
@@ -498,7 +495,7 @@ async function searchAndReadPages(
     if (read.length === 0 && snippets.length === 0) {
       log.info(
         "SearchAndRead",
-        `${contact.name}: ${results.length} results from ${queries.length} searches, none shares a detail with the records`,
+        `${contact.id}: ${results.length} results from ${queries.length} searches, none shares a detail with the records`,
       );
       return {
         kind: "no-match",
@@ -509,7 +506,7 @@ async function searchAndReadPages(
     }
     log.info(
       "SearchAndRead",
-      `${contact.name}: ${results.length} results from ${queries.length} searches, ${found.length - results.length} other people's LinkedIn profiles left out, ${naming.length} name the person; read ${read.length} of ${tried} pages tried in ${Date.now() - startMs}ms`,
+      `${contact.id}: ${results.length} results from ${queries.length} searches, ${found.length - results.length} other people's LinkedIn profiles left out, ${naming.length} name the person; read ${read.length} of ${tried} pages tried in ${Date.now() - startMs}ms`,
     );
 
     // ── Reading (pages → fact lines) ────────────────────────────────────
@@ -551,7 +548,7 @@ async function searchAndReadPages(
     if (parts.length > 1)
       log.info(
         "SearchAndRead",
-        `${contact.name}: read in ${parts.length} parts of up to ${size.partChars} characters; ${readErrors.length} failed`,
+        `${contact.id}: read in ${parts.length} parts of up to ${size.partChars} characters; ${readErrors.length} failed`,
       );
     const text = answers.join("\n");
     const models = [web.id, readModel];

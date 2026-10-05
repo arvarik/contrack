@@ -516,7 +516,7 @@ router.post(
           if (!sent) {
             log.warn(
               "Auth",
-              `Failed to send password reset email to ${user.email}`,
+              `Failed to send the password reset email for account ${user.id}`,
             );
           }
         }
@@ -612,7 +612,7 @@ router.post(
           if (!sent) {
             log.warn(
               "Auth",
-              `Failed to send magic link email to ${user.email}`,
+              `Failed to send the sign-in link email for account ${user.id}`,
             );
           }
         }

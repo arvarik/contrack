@@ -457,7 +457,7 @@ export const contactService = {
             importService.rowFailed(scope, importId, index, c.name, message, c);
             log.warn(
               "ContactService",
-              `Import ${importId} row ${index} ("${c.name}") failed: ${message}`,
+              `Import ${importId} row ${index} failed: ${message}`,
             );
             continue;
           }

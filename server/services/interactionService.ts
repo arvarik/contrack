@@ -158,7 +158,7 @@ async function runMentionExtraction(
           if (linked) {
             log.info(
               "AI Service",
-              `Mention "${m.name}" resolved to ${linked.name} ` +
+              `Mention resolved to ${linked.id} ` +
                 `(${resolution.match.tier}, ${Math.round(resolution.match.confidence * 100)}%)`,
             );
             mappedMentions.push({
@@ -214,11 +214,11 @@ async function runMentionExtraction(
           );
           log.info(
             "AI Service",
-            `Mention "${m.name}" may be ${resolution.match.name} ` +
+            `Mention may be ${resolution.match.contactId} ` +
               `(${Math.round(resolution.match.confidence * 100)}%) — queued for review`,
           );
         } else {
-          log.info("AI Service", `Inferred ghost contact: ${m.name}`);
+          log.info("AI Service", `Inferred ghost contact ${ghostId}`);
         }
 
         mappedMentions.push({
@@ -455,7 +455,7 @@ export const interactionService = {
         });
         log.info(
           "Interactions",
-          `Created action item "${body.actionItem.title}" alongside interaction`,
+          `Created action item ${actionItemId} alongside interaction ${id}`,
         );
       }
 

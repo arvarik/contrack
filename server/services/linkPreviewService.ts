@@ -6,11 +6,7 @@ import { AppError, ValidationError } from "../utils/AppError.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { ownerUploadDir, ownerUploadUrl } from "../utils/paths.ts";
-import {
-  ensureLocalImage,
-  imageHost,
-  urlDigest,
-} from "../utils/remoteImage.ts";
+import { ensureLocalImage, urlDigest } from "../utils/remoteImage.ts";
 import { readBodyCapped, safeFetch } from "../utils/urlSafety.ts";
 import type { Scope } from "../tenancy/scope.ts";
 
@@ -63,7 +59,7 @@ async function localPreviewImage(
   } catch (err) {
     log.debug(
       "LinkPreview",
-      `Preview image from ${imageHost(imageUrl)} was not saved: ${getErrorMessage(err)}`,
+      `A preview image was not saved: ${getErrorMessage(err)}`,
     );
     return null;
   }

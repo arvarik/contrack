@@ -152,7 +152,7 @@ async function searchWithProvider(
   if (!answers.some(cites)) {
     log.info(
       "ProviderSearch",
-      `${answers[0].model} ${answers.some((answer) => answer.text.trim()) ? "cited no pages" : "returned no answer"} for ${contact.name}; asking twice more, at once`,
+      `${answers[0].model} ${answers.some((answer) => answer.text.trim()) ? "cited no pages" : "returned no answer"} for ${contact.id}; asking twice more, at once`,
     );
     const laterRound = await ask([led, short]);
     signal?.throwIfAborted();
@@ -185,7 +185,7 @@ async function searchWithProvider(
     if (noMatch) {
       log.info(
         "ProviderSearch",
-        `No page matched ${contact.name}: nothing to extract`,
+        `No page matched ${contact.id}: nothing to extract`,
       );
       return {
         kind: "no-match",
@@ -252,7 +252,7 @@ async function searchWithProvider(
   );
   log.info(
     "ProviderSearch",
-    `${contact.name} (${depth}): ${findings.length} facts from ${citations.length} pages via ${cited[0].model}; ${cited.length} of ${answers.length} asks cited pages`,
+    `${contact.id} (${depth}): ${findings.length} facts from ${citations.length} pages via ${cited[0].model}; ${cited.length} of ${answers.length} asks cited pages`,
   );
   return {
     kind: "facts",

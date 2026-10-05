@@ -346,7 +346,7 @@ export function parseAIJson<T = unknown>(raw: string, context?: string): T {
     throw new AppError("AI provider returned malformed JSON", 502, {
       code: "AI_INVALID_JSON",
       details: { context, snippet: text.slice(0, 200) },
-      cause: (firstErr as Error)?.message,
+      cause: `${(firstErr as Error)?.name ?? "Error"} on ${text.length} characters`,
     });
   }
 }

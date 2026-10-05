@@ -916,7 +916,7 @@ export function exchangeCode(
     sqlite
       .prepare(`UPDATE oauth_requests SET grantId = ? WHERE id = ?`)
       .run(grantId, row.id);
-    log.info("OAuth", `"${row.clientName}" connected to "${user.username}"`);
+    log.info("OAuth", `"${row.clientName}" connected to account ${user.id}`);
     auditService.record({
       actorUserId: user.id,
       action: "auth.oauth.granted",

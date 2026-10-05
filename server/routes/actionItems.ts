@@ -157,7 +157,7 @@ router.post(
     );
     log.info(
       "API",
-      `[${rid}] POST /api/contacts/${String(req.params.id)}/action-items → "${title}"`,
+      `[${rid}] POST /api/contacts/${String(req.params.id)}/action-items → ${item?.id}`,
     );
     res.status(201).json(item);
   }),

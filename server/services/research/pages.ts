@@ -33,7 +33,7 @@ async function fetchPageText(
     }
     return pageText(await readBodyCapped(response, signal));
   } catch (err) {
-    log.debug("Research", `Skipped ${pageUrl}: ${getErrorMessage(err)}`);
+    log.debug("Research", `Skipped a page: ${getErrorMessage(err)}`);
     return null;
   }
 }

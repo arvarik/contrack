@@ -18,10 +18,7 @@ router.get(
     // The preview image is saved in the caller's own uploads folder, so the
     // service needs to know whose request this is.
     const result = await linkPreviewService.unfurlUrl(scopeOf(req), targetUrl);
-    log.debug(
-      "API",
-      `[${rid}] GET /api/link-preview/unfurl extracted ${result.title}`,
-    );
+    log.debug("API", `[${rid}] GET /api/link-preview/unfurl → unfurled`);
     res.json(result);
   }),
 );

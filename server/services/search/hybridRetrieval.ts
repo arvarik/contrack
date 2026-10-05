@@ -549,7 +549,7 @@ function buildTraitBoosts(
     } catch (err: unknown) {
       log.warn(
         "HybridRetrieval",
-        `Trait boost failed for "${trait}": ${getErrorMessage(err)}`,
+        `A trait boost failed: ${getErrorMessage(err)}`,
       );
     }
   }
@@ -812,7 +812,7 @@ export async function hybridRetrieval(
       const elapsed = Date.now() - t0;
       log.info(
         "HybridRetrieval",
-        `[${rid}] "${query.slice(0, 60)}" → 0 candidates ` +
+        `[${rid}] 0 candidates ` +
           `(hard filter excluded all: ${hardFilterSummary}, conf=${plan.confidence}) ` +
           `in ${elapsed}ms`,
       );
@@ -878,7 +878,7 @@ export async function hybridRetrieval(
   const elapsed = Date.now() - t0;
   log.info(
     "HybridRetrieval",
-    `[${rid}] "${query.slice(0, 60)}" → ` +
+    `[${rid}] ` +
       `FTS:${local.lexical.length} + Vec:${local.dense.length}` +
       ` + Traits:${traitBoosts.length}ch ` +
       `→ ${fused.length} fused in ${elapsed}ms ` +

@@ -94,9 +94,8 @@ export function buildProductionCsp(
 }
 
 // Morgan's `:url` token is `req.originalUrl`, query string included, and both
-// formats this app uses carry it. An invitation link puts its secret in that
-// query string, so the invitee opening the link would write the one value the
-// invitation system keeps out of the database into the access log instead.
+// formats this app uses carry it. The query string holds invitation secrets,
+// palette searches and pasted URLs, so the access log writes the path alone.
 // Overriding the built-in token covers every format rather than one of them.
 morgan.token("url", (req) =>
   redactUrlForLog((req as express.Request).originalUrl),
@@ -188,14 +187,20 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   }
 
   if (options.enableRequestLogging) {
+    // `dev` colours its status codes, so it runs only on a terminal.
     const morganFormat =
-      process.env.NODE_ENV === "production" ? "short" : "dev";
+      process.env.NODE_ENV !== "production" && process.stdout.isTTY
+        ? "dev"
+        : "short";
     app.use(
       morgan(morganFormat, {
         skip: (req) =>
           req.url.includes("node_modules") ||
           req.url.includes("@vite") ||
           req.url.includes("src/"),
+        // Through the logger, so an access line is an `info` line: it has a
+        // time and a level, and LOG_LEVEL=warn leaves it out.
+        stream: { write: (line: string) => log.info("HTTP", line.trimEnd()) },
       }),
     );
   }

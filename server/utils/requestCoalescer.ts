@@ -76,7 +76,7 @@ export class RequestCoalescer {
     } else {
       log.debug(
         "Coalescer",
-        `Sharing in-flight request for key "${key.slice(0, 60)}" (${entry.callers.size + 1} waiting callers)`,
+        `Sharing an in-flight request (${entry.callers.size + 1} waiting callers)`,
       );
     }
 
@@ -104,7 +104,7 @@ export class RequestCoalescer {
           if (currentEntry.callers.size === 0) {
             log.debug(
               "Coalescer",
-              `All callers aborted for key "${key.slice(0, 60)}". Aborting underlying work.`,
+              "All callers aborted. Aborting underlying work.",
             );
             currentEntry.abortController.abort(signal.reason);
             if (this.inFlight.get(key) === currentEntry) {

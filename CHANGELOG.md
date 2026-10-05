@@ -156,6 +156,8 @@ with an empty `DATA_DIR`.
   last one, and a build refuses to open a database that a newer build changed.
 - Background work runs as jobs that **Instance health** lists, and
   `JOB_CONCURRENCY` sets how many run at once.
+- The server log holds ids and counts, never names, notes or searches.
+  `LOG_LEVEL` sets how much it writes, and Docker Compose keeps 30 MB of it.
 - Backups are checked against the live database after each snapshot, and
   responses are compressed.
 - The docs are rewritten as task pages, which also build as a GitHub wiki.

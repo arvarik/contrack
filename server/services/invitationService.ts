@@ -151,12 +151,12 @@ export async function createInvitation(
         html: template.html,
       });
       if (!sent) {
-        log.warn("Admin", `Failed to send invitation email to ${email}`);
+        log.warn("Admin", `Failed to send the email for invitation ${id}`);
       }
     } else {
       log.warn(
         "Admin",
-        `Cannot send invitation email to ${email}: ${mailOrigin ? "mail is not configured" : "PUBLIC_URL is not set"}`,
+        `Cannot send the email for invitation ${id}: ${mailOrigin ? "mail is not configured" : "PUBLIC_URL is not set"}`,
       );
     }
   }
@@ -174,7 +174,7 @@ export async function createInvitation(
 
   log.info(
     "Admin",
-    `Invitation ${id} created for ${email ?? "anyone"} (sent: ${sent})`,
+    `Invitation ${id} created for ${email ? "one address" : "anyone"} (sent: ${sent})`,
   );
   return { id, link, expiresAt, sent };
 }
@@ -302,7 +302,7 @@ export async function acceptInvitation(
     ip,
   });
 
-  log.info("Auth", `Invitation ${row.id} accepted by "${user.username}"`);
+  log.info("Auth", `Invitation ${row.id} accepted by account ${user.id}`);
   return user;
 }
 

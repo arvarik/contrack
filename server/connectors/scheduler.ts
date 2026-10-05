@@ -112,7 +112,7 @@ export async function tickScheduler(): Promise<void> {
         } catch (err: unknown) {
           log.error(
             "Connectors",
-            `Scheduler run failed for ${candidate.name}`,
+            `Scheduler run failed for connector ${candidate.id}`,
             {
               error: err,
             },

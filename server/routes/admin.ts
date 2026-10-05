@@ -220,7 +220,7 @@ router.post(
     if (!sent) {
       log.warn(
         "Admin",
-        `Failed to send password reset email to ${target.email}`,
+        `Failed to send the password reset email for account ${target.id}`,
       );
     }
     auditService.record({

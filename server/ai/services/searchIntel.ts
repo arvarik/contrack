@@ -287,7 +287,7 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
       droppedNoEvidence++;
       log.debug(
         "Reranker",
-        `Dropped ${cand.name}: claimed ${field}="${value}" not found in actual ${field}="${fieldVal}"`,
+        `Dropped ${cand.id}: the claimed ${field} is not in the record`,
       );
       continue;
     }
@@ -314,7 +314,7 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
       droppedHardConstraint++;
       log.debug(
         "Reranker",
-        `Dropped ${cand.name}: neither the location nor an address fits the place`,
+        `Dropped ${cand.id}: neither the location nor an address fits the place`,
       );
       continue;
     }
@@ -356,7 +356,7 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
       droppedUnsafe++;
       log.warn(
         "Reranker",
-        `Dropped ${cand.name}: evidence contained adversarial or invalid content`,
+        `Dropped ${cand.id}: evidence contained adversarial or invalid content`,
       );
       continue;
     }
@@ -376,7 +376,7 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
 
   log.info(
     "AIService",
-    `Reranker "${query}" → ${filtered.length}/${candidates.length} verified ` +
+    `Reranker → ${filtered.length}/${candidates.length} verified ` +
       `(LLM said ${parsed.length}, dropped: ${droppedNoEvidence} no-evidence, ` +
       `${droppedHardConstraint} hard-constraint, ${droppedUnsafe} unsafe, ${droppedHallucinated} hallucinated) ` +
       `in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`,
@@ -599,7 +599,7 @@ Write a 2-3 sentence executive brief. Every claim must be true for the contacts 
 
     log.info(
       "AIService",
-      `synthesizeSearchResults "${query}" → ${text.length} chars in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`,
+      `synthesizeSearchResults → ${text.length} chars in ${result.latencyMs}ms via ${result.model} | Tokens: ${result.tokenCount ?? "?"}`,
     );
     recordInvocation({
       operation: "synthesis",
@@ -829,7 +829,7 @@ Return the structured QueryPlan JSON.`;
 
     log.debug(
       "AIService",
-      `parseSearchQuery "${trimmed.slice(0, 50)}" → conf=${cleaned.confidence} ` +
+      `parseSearchQuery → conf=${cleaned.confidence} ` +
         `loc:${cleaned.must.locationMatchers?.length ?? 0} ` +
         `co:${cleaned.must.companyMatchers?.length ?? 0} ` +
         `role:${cleaned.must.roleMatchers?.length ?? 0} ` +

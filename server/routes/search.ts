@@ -66,10 +66,7 @@ router.get(
       }
     }
     const results = searchService.searchFts(scope, q, filters);
-    log.debug(
-      "API",
-      `[${rid}] GET /api/search?q="${q.replace(/["']/g, "")}" → ${results.length}`,
-    );
+    log.debug("API", `[${rid}] GET /api/search → ${results.length}`);
     res.json(results);
   }),
 );
@@ -92,7 +89,7 @@ router.get(
     const result = searchInteractions(scope, params);
     log.debug(
       "API",
-      `[${rid}] GET /api/search/interactions q="${(params.q ?? "").replace(/["']/g, "")}" ` +
+      `[${rid}] GET /api/search/interactions ` +
         `mode=${result.query.mode} range=${result.query.range ? result.query.range.source : "none"} → ${result.hits.length} of ${result.total}`,
     );
     res.json(result);

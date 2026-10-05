@@ -27,7 +27,7 @@ router.post(
     const { name, icon } = req.body;
 
     const list = listService.createList(scopeOf(req), name, icon);
-    log.info("API", `[${rid}] POST /api/lists → "${name.trim()}" (${list.id})`);
+    log.info("API", `[${rid}] POST /api/lists → ${list.id}`);
     res.status(201).json(list);
   }),
 );
@@ -97,7 +97,7 @@ router.delete(
 
     log.info(
       "API",
-      `[${rid}] DELETE /api/lists/${String(req.params.id)} → deleted "${deleted.name}"`,
+      `[${rid}] DELETE /api/lists/${String(req.params.id)} → deleted`,
     );
     res.json({ success: true, message: `Deleted list "${deleted.name}"` });
   }),
