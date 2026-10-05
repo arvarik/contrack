@@ -4,7 +4,8 @@
  * Activated by pressing `→` on a focused search result.
  * Provides quick actions without leaving the command palette:
  *   👤 View profile (Enter), 📝 Log note (N), 📞 Log call (C),
- *   ✨ Catch me up (B), 📋 Add to list (L), ◎ Track or Untrack (T)
+ *   ✨ Catch me up (B), 📋 Add to list (L), ⟳ Refresh from the web (R, with
+ *   AI on and lookups left), ◎ Track or Untrack (T)
  *
  * Track reads the contact's flag from the contact cache, flips it with the
  * same toast and Undo as the header button, and closes the palette. A
@@ -15,6 +16,7 @@
 import React, {
   useEffect,
   useCallback,
+  useId,
   useMemo,
   useState,
   useRef,
@@ -28,6 +30,7 @@ import {
   ListPlus,
   ArrowLeft,
   Radar,
+  RefreshCw,
 } from "lucide-react";
 import { ICON_BTN, KBD_SM, SELECTED_ROW } from "../../lib/styles";
 import { fallbackAvatarUrl } from "../../lib/avatar";
@@ -35,6 +38,7 @@ import { DURATION, EASE } from "../../lib/motion";
 import { cn } from "../../lib/utils";
 import { useContacts } from "../../api/contacts";
 import { useTrackToggle } from "../../hooks/useTrackToggle";
+import { useEnrichContact, useGroundingCapacity } from "../../api/enrichment";
 import { InlineNoteComposer } from "./InlineNoteComposer";
 import { ListPicker } from "./ListPicker";
 
@@ -50,6 +54,14 @@ interface ActionSubMenuProps {
   onCatchMeUp: () => void;
   onBack: () => void;
   onClose: () => void;
+  /**
+   * Puts the focus back in the palette's input. A note, a call or a list
+   * has a field or keys of its own, and when it closes its focus went with
+   * it, onto the dialog: the next key went nowhere.
+   */
+  onReturnFocus?: () => void;
+  /** AI is on for the account: the row can refresh from the web. */
+  aiAllowed?: boolean;
 }
 
 interface ActionItem {
@@ -70,9 +82,20 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
   onCatchMeUp,
   onBack,
   onClose,
+  onReturnFocus,
+  aiAllowed = false,
 }) => {
   const [mode, setMode] = useState<SubMenuMode>("actions");
+  // Back from a note, a call or a list: the input takes the keys again.
+  const previousModeRef = useRef(mode);
+  useEffect(() => {
+    if (previousModeRef.current !== "actions" && mode === "actions") {
+      onReturnFocus?.();
+    }
+    previousModeRef.current = mode;
+  }, [mode, onReturnFocus]);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const listboxId = useId();
   const actionsRef = useRef<HTMLDivElement>(null);
 
   // ── Track ───────────────────────────────────────────────────────────────
@@ -100,6 +123,19 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
     onClose,
   ]);
   const canTrack = !contact?.isGhost;
+
+  // ── Refresh from the web ────────────────────────────────────────────────
+  // It was a button inside a stale row's chip, and a row holds no second
+  // control. Here every contact has it, while the day's web lookups last.
+  const enrich = useEnrichContact();
+  const { data: capacity } = useGroundingCapacity();
+  const canRefresh =
+    aiAllowed && (capacity?.hasCapacity ?? false) && !enrich.isPending;
+  const refresh = useCallback(() => {
+    if (!canRefresh) return;
+    enrich.mutate(contactId);
+    onClose();
+  }, [canRefresh, enrich, contactId, onClose]);
 
   // ── Action items ────────────────────────────────────────────────────────
   // Memoized: this array feeds the keyboard handler's dependency list, and a
@@ -142,6 +178,17 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
         shortcut: "L",
         handler: () => setMode("list"),
       },
+      ...(canRefresh
+        ? [
+            {
+              id: "refresh",
+              label: "Refresh from the web",
+              icon: <RefreshCw className="w-4 h-4" />,
+              shortcut: "R",
+              handler: refresh,
+            },
+          ]
+        : []),
       ...(canTrack
         ? [
             {
@@ -154,7 +201,15 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
           ]
         : []),
     ],
-    [onViewProfile, onCatchMeUp, canTrack, isTracked, track],
+    [
+      onViewProfile,
+      onCatchMeUp,
+      canTrack,
+      isTracked,
+      track,
+      canRefresh,
+      refresh,
+    ],
   );
 
   // ── Keyboard handling ───────────────────────────────────────────────────
@@ -176,10 +231,14 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
       // menu shows, its keys belong to the menu. Before, B typed a "b" into
       // the box, and the typing closed the menu. A key the menu does not use
       // still types, and a new search closes the menu.
-      const target = e.target as HTMLElement;
-      const isField =
-        target.tagName === "INPUT" || target.tagName === "TEXTAREA";
-      if (isField && !target.hasAttribute("cmdk-input")) return;
+      // A focused button, such as Back, keeps Enter and Space as well.
+      const target = e.target instanceof Element ? e.target : null;
+      if (
+        target &&
+        !target.hasAttribute("cmdk-input") &&
+        target.closest("input, textarea, select, button, a[href]")
+      )
+        return;
       // ⌘C in the search box copies. It must not open Log call.
       if (e.metaKey || e.ctrlKey || e.altKey) return;
 
@@ -188,6 +247,11 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
           e.preventDefault();
           e.stopPropagation();
           onBack();
+          break;
+        case "Home":
+        case "End":
+          e.preventDefault();
+          setSelectedIndex(e.key === "Home" ? 0 : actions.length - 1);
           break;
         case "ArrowDown":
           e.preventDefault();
@@ -234,9 +298,25 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
           e.preventDefault();
           track();
           break;
+        case "r":
+        case "R":
+          if (!canRefresh) break;
+          e.preventDefault();
+          refresh();
+          break;
       }
     },
-    [mode, selectedIndex, actions, onBack, onCatchMeUp, canTrack, track],
+    [
+      mode,
+      selectedIndex,
+      actions,
+      onBack,
+      onCatchMeUp,
+      canTrack,
+      track,
+      canRefresh,
+      refresh,
+    ],
   );
 
   useEffect(() => {
@@ -289,10 +369,10 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
         <button
           onClick={onBack}
           onMouseDown={(e) => e.preventDefault()}
-          className={cn(ICON_BTN, "sm:p-1 -ml-1")}
+          className={cn(ICON_BTN, "pointer-fine:p-1 -ml-1")}
           aria-label="Back to results"
         >
-          <ArrowLeft className="w-5 h-5 sm:w-4 sm:h-4" />
+          <ArrowLeft className="w-5 h-5 pointer-fine:w-4 pointer-fine:h-4" />
         </button>
         <img
           src={contactAvatarUrl || fallbackAvatarUrl(contactName)}
@@ -309,15 +389,29 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
         </div>
       </div>
 
-      {/* Action items. The one the arrow keys are on is the selected row. */}
-      <div className="space-y-0.5">
+      {/* Action items. The one the arrow keys are on is the selected row.
+          A listbox the palette's input names the current row of
+          (`aria-activedescendant`, synced in CommandPalette): a screen
+          reader heard nothing here. The rows are not Tab stops. */}
+      <div
+        role="listbox"
+        id={listboxId}
+        aria-label={`Actions for ${contactName}`}
+        data-palette-popup=""
+        className="space-y-0.5"
+      >
         {actions.map((action, i) => (
           <button
             key={action.id}
+            type="button"
+            role="option"
+            id={`${listboxId}-${action.id}`}
+            aria-selected={i === selectedIndex}
+            tabIndex={-1}
             onClick={action.handler}
             onMouseDown={(e) => e.preventDefault()}
             className={cn(
-              "state-layer w-full flex items-center gap-3 px-3 py-3 sm:py-2.5 rounded-xl text-sm transition-colors",
+              "state-layer w-full flex items-center gap-3 px-3 py-3 pointer-fine:py-2.5 rounded-xl text-sm transition-colors",
               i === selectedIndex
                 ? cn(SELECTED_ROW, "text-on-primary-wash")
                 : "text-on-surface",
@@ -336,20 +430,11 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
               {action.icon}
             </span>
             <span className="flex-1 text-left font-medium">{action.label}</span>
-            <kbd className={`${KBD_SM} hidden sm:inline-flex`}>
+            <kbd className={`${KBD_SM} hidden pointer-fine:inline-flex`}>
               {action.shortcut}
             </kbd>
           </button>
         ))}
-      </div>
-
-      {/* Footer hint */}
-      <div className="hidden sm:flex items-center justify-center gap-2 px-3 pt-3 pb-1 text-[11px] text-on-surface-variant">
-        <kbd className={KBD_SM}>↑↓</kbd> navigate
-        <span>·</span>
-        <kbd className={KBD_SM}>←</kbd> back
-        <span>·</span>
-        letter to quick-select
       </div>
     </motion.div>
   );

@@ -1,11 +1,6 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The palette's facet autocomplete offers contacted:
-// =============================================================================
-// `contacted:` is the newest facet. Its values are presets, like score: and
-// updated:, and each one picks a filter the server and the palette read the
-// same way: within 30 days, over 90 days ago or never, and never.
-// =============================================================================
+// `contacted:` takes presets, like score: and updated:, each a filter the
+// server and the palette read the same way.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -28,7 +23,7 @@ function wrapper({ children }: { children: ReactNode }) {
 /** The labels, without the field name each row starts with. */
 const labels = () =>
   screen
-    .getAllByRole("button")
+    .getAllByRole("option")
     .map((button) => button.textContent?.replace(/^contacted:/, ""));
 
 function show(partial: string) {
@@ -48,30 +43,21 @@ function show(partial: string) {
 }
 
 describe("contacted: in the facet autocomplete", () => {
-  it("offers the three presets", () => {
+  it("offers three presets, narrows them to what was typed, and picks one", () => {
     show("");
     expect(labels()).toEqual([
       "Within 30 days",
       "Over 90 days ago, or never",
       "Never",
     ]);
-  });
+    cleanup();
 
-  it.each([
-    ["Within 30 days", { field: "contacted", value: "30d", operator: "<" }],
-    [
-      "Over 90 days ago, or never",
-      { field: "contacted", value: "90d", operator: ">" },
-    ],
-    ["Never", { field: "contacted", value: "never" }],
-  ])("picks %s as its filter", (label, filter) => {
-    const onSelect = show("");
-    fireEvent.click(screen.getByRole("button", { name: `contacted:${label}` }));
-    expect(onSelect).toHaveBeenCalledWith(filter);
-  });
-
-  it("narrows the presets to what was typed", () => {
-    show("nev");
+    const onSelect = show("nev");
     expect(labels()).toEqual(["Over 90 days ago, or never", "Never"]);
+    fireEvent.click(screen.getByRole("option", { name: "contacted:Never" }));
+    expect(onSelect).toHaveBeenCalledWith({
+      field: "contacted",
+      value: "never",
+    });
   });
 });

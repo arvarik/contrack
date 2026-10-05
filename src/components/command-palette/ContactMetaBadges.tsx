@@ -13,11 +13,11 @@
  *
  * @module src/components/command-palette/ContactMetaBadges
  */
-import React from "react";
+import type { ReactNode } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { Clock, RefreshCw } from "lucide-react";
-import { CorvidThinking } from "../brand/CorvidThinking";
+import { Clock } from "lucide-react";
 import { TONE_DOT, TONE_WASH } from "../../lib/styles";
+import { MATCH_BADGE } from "./utils";
 import { cn } from "../../lib/utils";
 import { describeScore, scoreView } from "../../../shared/scoreBand";
 
@@ -46,7 +46,7 @@ interface ScoreDotProps {
  * strokes with, so the palette and the ring agree on the colour as well as
  * the cut points.
  */
-export const ScoreDot = ({ contact }: ScoreDotProps) => {
+const ScoreDot = ({ contact }: ScoreDotProps) => {
   const view = scoreView(contact);
   if (view.kind !== "scored" || view.score === 0) return null;
 
@@ -71,7 +71,7 @@ interface LastContactLineProps {
  * Returns null for never-contacted contacts — avoids a wall of alarming
  * "Never contacted" labels when users import hundreds of contacts at once.
  */
-export const LastContactLine = ({ lastContactedAt }: LastContactLineProps) => {
+const LastContactLine = ({ lastContactedAt }: LastContactLineProps) => {
   if (!lastContactedAt) return null;
 
   let text: string;
@@ -93,7 +93,7 @@ export const LastContactLine = ({ lastContactedAt }: LastContactLineProps) => {
 
   return (
     <span
-      className={`text-[11px] flex items-center gap-1 ${isStale ? "text-error" : "text-on-surface-variant"}`}
+      className={`shrink-0 text-[11px] flex items-center gap-1 ${isStale ? "text-error" : "text-on-surface-variant"}`}
     >
       <Clock className="w-2.5 h-2.5 shrink-0" />
       {text}
@@ -103,91 +103,73 @@ export const LastContactLine = ({ lastContactedAt }: LastContactLineProps) => {
 
 // ─── Stale Data Chip ─────────────────────────────────────────────────────────
 
-interface StaleChipProps {
-  contactId: string;
-  updatedAt: string | null | undefined;
-  /** From useGroundingCapacity() — whether refresh is possible */
-  hasGroundingCapacity: boolean;
-  /** From useEnrichContact().isPending */
-  isEnriching: boolean;
-  /** Contact ID currently being enriched (to target loading state) */
-  enrichingContactId: string | null;
-  /** Callback to trigger enrichment */
-  onRefresh?: (contactId: string) => void;
-}
-
 /**
- * Inline chip showing data staleness with a refresh action.
- * Only renders when data is > 6 months old.
- * The ⟳ button triggers single-contact AI enrichment via TwoPassStrategy.
+ * "7mo old" after the name, for a contact nobody updated in six months or
+ * more. Text only: a row is an option, and an option holds no second
+ * control. Its refresh button moved to the row's actions (→, then R).
  */
-export const StaleChip = ({
-  contactId,
-  updatedAt,
-  hasGroundingCapacity,
-  isEnriching,
-  enrichingContactId,
-  onRefresh,
-}: StaleChipProps) => {
+const StaleChip = ({ updatedAt }: { updatedAt: string | null | undefined }) => {
   if (!updatedAt) return null;
-
-  const ms = Date.now() - new Date(updatedAt).getTime();
-  const months = Math.floor(ms / (1000 * 60 * 60 * 24 * 30));
+  const months = Math.floor(
+    (Date.now() - new Date(updatedAt).getTime()) / (1000 * 60 * 60 * 24 * 30),
+  );
   if (months < 6) return null;
-
-  const isThisEnriching = isEnriching && enrichingContactId === contactId;
-  const ageLabel =
-    months >= 12 ? `${Math.floor(months / 12)}y old` : `${months}mo old`;
-
-  const disabled = !hasGroundingCapacity || isEnriching;
-  const tooltip = isThisEnriching
-    ? "Refreshing…"
-    : !hasGroundingCapacity
-      ? "Grounding quota exhausted for today"
-      : `Refresh data for this contact`;
-
-  const handleClick = (e: React.MouseEvent) => {
-    e.stopPropagation(); // Don't trigger the result's onSelect
-    e.preventDefault();
-    if (!disabled && onRefresh) {
-      onRefresh(contactId);
-    }
-  };
-
   return (
     <span
       className={cn(
         TONE_WASH.warning,
-        "inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-md font-medium",
+        "shrink-0 text-[11px] px-1.5 py-0.5 rounded-md font-medium",
       )}
     >
-      {ageLabel}
-      {onRefresh && (
-        <button
-          type="button"
-          title={tooltip}
-          onClick={handleClick}
-          disabled={disabled}
-          className={cn(
-            "hit-area state-layer inline-flex items-center justify-center w-4 h-4 rounded transition-colors",
-            disabled
-              ? "text-on-surface-variant/30 cursor-not-allowed"
-              : "text-warning cursor-pointer",
-          )}
-        >
-          {/*
-            The bird thinks while this contact refreshes. Decorative, because
-            the button's own title already says "Refreshing…". The icon box
-            grew from 14 to 16 px so the glyph still reads as a bird; the tap
-            box is unchanged at 44 px, from `hit-area`.
-          */}
-          {isThisEnriching ? (
-            <CorvidThinking decorative size={16} />
-          ) : (
-            <RefreshCw className="w-2.5 h-2.5" />
-          )}
-        </button>
-      )}
+      {months >= 12 ? `${Math.floor(months / 12)}y old` : `${months}mo old`}
     </span>
+  );
+};
+
+// ─── A person's row ──────────────────────────────────────────────────────────
+
+/**
+ * The two lines of a person's row, for the people search and AI's answer:
+ * the name with its dot and badges, then the role, the company and the last
+ * contact. A row used to take four lines, so the list showed five people.
+ */
+export const ContactRowBody = ({
+  contact,
+  children,
+}: {
+  contact: {
+    name: string;
+    role?: string | null;
+    company?: string | null;
+    isTracked: boolean;
+    relationshipScore?: number | null;
+    lastContactedAt?: string | null;
+    updatedAt?: string | null;
+    approximate?: boolean;
+  };
+  /** A line under the two, such as AI's reason. */
+  children?: ReactNode;
+}) => {
+  const work = [contact.role, contact.company].filter(Boolean).join(" · ");
+  return (
+    <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="font-bold text-sm truncate">{contact.name}</span>
+        <ScoreDot contact={contact} />
+        {contact.approximate && (
+          <span className={cn(TONE_WASH.primary, MATCH_BADGE)}>
+            Approximate
+          </span>
+        )}
+        <StaleChip updatedAt={contact.updatedAt} />
+      </div>
+      {(work || contact.lastContactedAt) && (
+        <div className="flex items-center gap-2 min-w-0 text-xs text-on-surface-variant">
+          {work && <span className="truncate">{work}</span>}
+          <LastContactLine lastContactedAt={contact.lastContactedAt} />
+        </div>
+      )}
+      {children}
+    </div>
   );
 };

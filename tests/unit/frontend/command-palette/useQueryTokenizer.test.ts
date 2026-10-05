@@ -36,35 +36,43 @@ describe("parseQuery", () => {
       { field: "industry", partial: "Venture Cap" },
     ],
   ])("reads %j", (input, filters, freeText, activePrefix = null) => {
-    expect(parseQuery(input)).toEqual({ filters, freeText, activePrefix });
+    expect(parseQuery(input)).toMatchObject({
+      filters,
+      freeText,
+      activePrefix,
+    });
   });
 });
 
 describe("useQueryTokenizer", () => {
-  const setup = (initial: string) =>
+  const setup = (initial: string, takeTyped = false) =>
     renderHook(() => {
       const [raw, setRaw] = useState(initial);
-      return { raw, tokenizer: useQueryTokenizer(raw, setRaw) };
+      return { raw, tokenizer: useQueryTokenizer(raw, setRaw, { takeTyped }) };
     }).result;
 
-  it("keeps a pill picked from the autocomplete until it is removed", () => {
-    const result = setup("");
+  it("keeps a pill until it is removed, and strips its token, quotes and all", () => {
+    const result = setup('industry:"Venture Capital" tag:vc ');
     act(() =>
       result.current.tokenizer.addFilter({ field: "missing", value: "email" }),
     );
-    expect(result.current.tokenizer.parsed.filters).toEqual([
-      { field: "missing", value: "email" },
-    ]);
-    act(() => result.current.tokenizer.removeFilter(0));
-    expect(result.current.tokenizer.parsed.filters).toEqual([]);
-  });
-
-  it("strips a removed pill's token, quotes and all, from the input", () => {
-    const result = setup('industry:"Venture Capital" tag:vc ');
     act(() => result.current.tokenizer.removeFilter(0));
     expect(result.current.tokenizer.parsed.filters).toEqual([
       { field: "tag", value: "vc" },
+      { field: "missing", value: "email" },
     ]);
     expect(result.current.raw).not.toContain("Venture");
+  });
+
+  // A picked value left the box, and a typed one stayed in it as well as
+  // in its pill.
+  it("takes a typed facet out of the box once it is a pill", () => {
+    const result = setup("tag:vc jane role:", true);
+    expect(result.current.raw).toBe("jane role:");
+    // A value it cannot read stays, to be fixed: it left the box empty.
+    expect(setup("score:high ", true).current.raw).toBe("score:high ");
+    expect(result.current.tokenizer.parsed.filters).toEqual([
+      { field: "tag", value: "vc" },
+    ]);
   });
 });

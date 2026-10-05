@@ -268,18 +268,21 @@ test.describe("desktop", () => {
     await page.keyboard.press("ControlOrMeta+k");
     const palette = page.getByRole("dialog");
     await expect(palette).toHaveAttribute("data-state", "open");
-    await expect(palette.getByText("Recent searches")).toBeVisible();
+    await expect(palette.getByText("Recent", { exact: true })).toBeVisible();
     await expect(palette.getByText("who knows python")).toBeVisible();
 
     // 3. Ask a ? question in the palette
     const paletteInput = palette.getByRole("combobox");
     await page.waitForTimeout(1100);
     await paletteInput.fill("? who understands compilers");
+    await page.keyboard.press("Enter");
     // Wait for AI results to settle in palette and call addEntry
     await expect(palette.getByText("Ada Lovelace")).toBeVisible();
     await page.waitForTimeout(600);
 
-    // Close palette
+    // Close palette: the first Escape clears the question.
+    await page.keyboard.press("Escape");
+    await expect(paletteInput).toHaveValue("");
     await page.keyboard.press("Escape");
     await expect(palette).toHaveCount(0);
 

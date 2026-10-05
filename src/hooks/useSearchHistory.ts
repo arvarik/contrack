@@ -1,5 +1,5 @@
 /**
- * useSearchHistory — persistent search history with terminal-style ↑/↓ recall.
+ * useSearchHistory — the account's recent searches, for the palette.
  *
  * Design decisions:
  * - Stored on the account, not in the browser. A search history is a list of
@@ -10,21 +10,16 @@
  * - Case-insensitive deduplication: "VCs in SF" and "vcs in sf" are the same.
  * - Max 20 stored, max 5 displayed in the zero state. The extra headroom keeps
  *   the display list from feeling stale after a few evictions.
- * - Terminal-style ↑/↓: `historyIndex` tracks position in the stack. -1 is not
- *   navigating, 0 is the most recent entry. `navigateHistory` returns the query
- *   to fill into the input, or null at the bounds.
+ * - No ↑/↓ recall. ↑ on an empty palette used to fill the input with the
+ *   last query, and took the key from the list under it. The recent searches
+ *   are rows in the empty palette instead.
  * - No restore when the palette opens again. It opens with an empty box each
- *   time, and ↑ brings back the last query. A 30-second restore used to be
- *   here, and nothing called it.
+ *   time. A 30-second restore used to be here, and nothing called it.
  *
  * @module src/hooks/useSearchHistory
  */
-import { useState, useCallback, useRef, useMemo } from "react";
-import {
-  useSearchHistoryList,
-  useRecordSearch,
-  useClearHistory,
-} from "../api/searchHistory";
+import { useCallback, useMemo } from "react";
+import { useSearchHistoryList, useRecordSearch } from "../api/searchHistory";
 import { useHiddenPendingIds } from "../lib/pendingDeletes";
 import { parseServerTime } from "../lib/datetime";
 import type { HistoryMode } from "../../shared/searchHistory";
@@ -43,7 +38,6 @@ const MAX_QUERY_LENGTH = 200;
 export const useSearchHistory = () => {
   const { data } = useSearchHistoryList();
   const recordMutation = useRecordSearch();
-  const clearMutation = useClearHistory();
 
   const hiddenIds = useHiddenPendingIds();
 
@@ -71,15 +65,6 @@ export const useSearchHistory = () => {
         };
       });
   }, [data, hiddenIds]);
-
-  const [historyIndex, setHistoryIndex] = useState(-1);
-  // Stash the user's typed text before they started ↑/↓, so ↓ past 0 restores it.
-  const stashedInputRef = useRef<string>("");
-
-  // `entries` in a ref as well, so `addEntry` and `navigateHistory` read the
-  // current list without being rebuilt on every keystroke that changes it.
-  const entriesRef = useRef(entries);
-  entriesRef.current = entries;
 
   /**
    * Record a successful search. Calls useRecordSearch with:
@@ -116,48 +101,6 @@ export const useSearchHistory = () => {
     [recordMutation],
   );
 
-  /** Clear all search history. */
-  const clearHistory = useCallback(() => {
-    clearMutation.mutate(undefined);
-    setHistoryIndex(-1);
-  }, [clearMutation]);
-
-  /**
-   * Terminal-style ↑/↓ navigation through history.
-   *
-   * @param direction - 'up' to go back in history, 'down' to go forward
-   * @param currentInput - the current search input value (stashed on first ↑)
-   * @returns the query string to fill into the input, or null if at bounds
-   */
-  const navigateHistory = useCallback(
-    (direction: "up" | "down", currentInput: string): string | null => {
-      const currentEntries = entriesRef.current;
-      if (currentEntries.length === 0) return null;
-
-      if (direction === "up") {
-        const nextIndex = historyIndex + 1;
-        if (nextIndex >= currentEntries.length) return null; // At oldest entry.
-        if (historyIndex === -1) stashedInputRef.current = currentInput;
-        setHistoryIndex(nextIndex);
-        return currentEntries[nextIndex].query;
-      }
-
-      if (historyIndex <= -1) return null; // Already at the bottom.
-      const nextIndex = historyIndex - 1;
-      setHistoryIndex(nextIndex);
-      // Back at the "live" input — restore the stashed text.
-      if (nextIndex === -1) return stashedInputRef.current;
-      return currentEntries[nextIndex].query;
-    },
-    [historyIndex],
-  );
-
-  /** Reset navigation state. Call when the user types or closes the palette. */
-  const resetNavigation = useCallback(() => {
-    setHistoryIndex(-1);
-    stashedInputRef.current = "";
-  }, []);
-
   /** Top N entries for the zero-state display. */
   const recentDisplay = useMemo(() => entries.slice(0, MAX_DISPLAY), [entries]);
 
@@ -165,9 +108,5 @@ export const useSearchHistory = () => {
     entries,
     recentDisplay,
     addEntry,
-    clearHistory,
-    historyIndex,
-    navigateHistory,
-    resetNavigation,
   };
 };

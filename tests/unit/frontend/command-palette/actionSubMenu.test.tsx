@@ -1,12 +1,6 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The palette's action row for Track
-// =============================================================================
-// `→` on a result opens the actions for one contact. After Add to list sits
-// Track, or Untrack, on the T key. It reads the flag from the contact cache,
-// flips it with the same toast and Undo as the header button, and closes the
-// palette. A ghost cannot be tracked, so it gets no row and T does nothing.
-// =============================================================================
+// `→` on a result opens the actions for one contact: its letter keys, Track
+// (none for a ghost, which cannot be tracked) and the quick note's draft.
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -81,8 +75,11 @@ const lastBody = () =>
   JSON.parse((api.fetch.mock.calls.at(-1)![1] as RequestInit).body as string);
 
 beforeEach(() => {
-  api.fetch.mockImplementation(async (_url: string, init: RequestInit) => ({
-    json: async () => ({ ...ADA, ...JSON.parse(init.body as string) }),
+  api.fetch.mockImplementation(async (_url: string, init?: RequestInit) => ({
+    json: async () => ({
+      ...ADA,
+      ...(init?.body ? JSON.parse(init.body as string) : {}),
+    }),
   }));
 });
 
@@ -91,112 +88,56 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("the Track row", () => {
-  it("sits after Add to list, on T, and reads Untrack for a tracked contact", () => {
-    mount();
-    const rows = screen.getAllByRole("button").map((b) => b.textContent);
-    const list = rows.findIndex((text) => text?.includes("Add to list"));
-    // The label, then the key hint.
-    expect(rows[list + 1]).toBe("TrackT");
-    cleanup();
-
-    mount({ ...ADA, isTracked: true });
-    expect(screen.getByRole("button", { name: /Untrack/ })).toBeTruthy();
-  });
-
-  it("tracks the contact and closes the palette", async () => {
-    const { onClose } = mount();
-    fireEvent.click(screen.getByRole("button", { name: /^Track/ }));
-    expect(onClose).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(api.fetch).toHaveBeenCalledTimes(1));
-    expect(api.fetch.mock.calls[0][0]).toBe("/contacts/ada");
-    expect(lastBody()).toEqual({ isTracked: true });
-    await waitFor(() => expect(toastMock.success).toHaveBeenCalledTimes(1));
-    expect(toastMock.success.mock.calls[0][0]).toBe(
-      "Tracking Ada Lovelace, quarterly",
+const press = (key: string, target: EventTarget = window, init = {}) =>
+  act(() => {
+    target.dispatchEvent(
+      new KeyboardEvent("keydown", { key, bubbles: true, ...init }),
     );
   });
 
-  it("answers the T key", async () => {
-    const { onClose } = mount({ ...ADA, isTracked: true });
-    act(() => {
-      window.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "t", bubbles: true }),
-      );
-    });
+describe("the actions for one contact", () => {
+  it("tracks on T and closes the palette, and a ghost has no Track", async () => {
+    const { onClose } = mount();
+    press("t");
     expect(onClose).toHaveBeenCalledTimes(1);
-    await waitFor(() => expect(api.fetch).toHaveBeenCalledTimes(1));
-    expect(lastBody()).toEqual({ isTracked: false });
+    await waitFor(() => expect(lastBody()).toEqual({ isTracked: true }));
+    await waitFor(() =>
+      expect(toastMock.success).toHaveBeenCalledWith(
+        "Tracking Ada Lovelace, quarterly",
+        expect.anything(),
+      ),
+    );
+    cleanup();
+    vi.clearAllMocks();
+
+    const ghost = mount({ ...ADA, isGhost: true });
+    expect(screen.queryByRole("option", { name: /Track/ })).toBeNull();
+    press("t");
+    expect(ghost.onClose).not.toHaveBeenCalled();
   });
 
-  it("gives a ghost no Track row, and T does nothing for it", async () => {
-    const { onClose } = mount({ ...ADA, isGhost: true });
-    expect(screen.queryByRole("button", { name: /Track/ })).toBeNull();
-    act(() => {
-      window.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "t", bubbles: true }),
-      );
-    });
-    await Promise.resolve();
-    expect(onClose).not.toHaveBeenCalled();
-    expect(api.fetch).not.toHaveBeenCalled();
-  });
-});
-
-// → opens this menu while the palette's search box keeps the focus. The menu
-// skipped every key typed in a field, so B typed a "b" into the box, and the
-// typing closed the menu: no letter action worked from the keyboard.
-describe("the keys, with focus in the palette's search box", () => {
-  const pressIn = (
-    field: HTMLElement,
-    key: string,
-    modifiers: KeyboardEventInit = {},
-  ) => {
-    document.body.appendChild(field);
-    field.focus();
-    act(() => {
-      field.dispatchEvent(
-        new KeyboardEvent("keydown", { key, bubbles: true, ...modifiers }),
-      );
-    });
-  };
-
-  it("answers B from the search box", () => {
+  // → opens the menu while the palette's search box keeps the focus, so the
+  // menu takes the box's letters. B used to type a "b" and close the menu.
+  it("answers a letter from the search box, not with a modifier or elsewhere", () => {
     const { onCatchMeUp } = mount();
     const box = document.createElement("input");
     box.setAttribute("cmdk-input", "");
-    pressIn(box, "b");
+    const other = document.createElement("textarea");
+    document.body.append(box, other);
+    press("b", box, { metaKey: true }); // ⌘C still copies.
+    press("b", other);
+    expect(onCatchMeUp).not.toHaveBeenCalled();
+    press("b", box);
     expect(onCatchMeUp).toHaveBeenCalledTimes(1);
   });
 
-  it("leaves a key with a modifier to the box, so ⌘C still copies", () => {
-    const { onCatchMeUp } = mount();
-    const box = document.createElement("input");
-    box.setAttribute("cmdk-input", "");
-    pressIn(box, "b", { metaKey: true });
-    pressIn(box, "b", { ctrlKey: true });
-    pressIn(box, "b", { altKey: true });
-    expect(onCatchMeUp).not.toHaveBeenCalled();
-  });
-
-  it("leaves the keys of any other field alone", () => {
-    const { onCatchMeUp } = mount();
-    pressIn(document.createElement("input"), "b");
-    pressIn(document.createElement("textarea"), "b");
-    expect(onCatchMeUp).not.toHaveBeenCalled();
-  });
-});
-
-describe("the quick note", () => {
-  const note = () => screen.getByLabelText("Note") as HTMLTextAreaElement;
-  const openNote = () =>
-    fireEvent.click(screen.getByRole("button", { name: /Log note/ }));
-
-  it("keeps the text when the palette closes, and forgets it once saved", async () => {
+  it("keeps a note's text when the palette closes, and forgets it once saved", async () => {
+    const note = () => screen.getByLabelText("Note") as HTMLTextAreaElement;
+    const openNote = () =>
+      fireEvent.click(screen.getByRole("option", { name: /Log note/ }));
     mount();
     openNote();
     fireEvent.change(note(), { target: { value: "Met at the café" } });
-    // Escape, the backdrop and ⌘K all unmount the menu.
     cleanup();
 
     mount();

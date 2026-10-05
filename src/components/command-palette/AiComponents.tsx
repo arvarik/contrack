@@ -1,14 +1,13 @@
 import React from "react";
 import { Command } from "cmdk";
 import { motion } from "motion/react";
-import { Briefcase, Building, HelpCircle, Sparkles } from "lucide-react";
+import { HelpCircle, Sparkles } from "lucide-react";
 import type { SemanticMatch } from "../../types";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 import { DURATION, EASE } from "../../lib/motion";
-import { TONE_WASH } from "../../lib/styles";
 import { cn } from "../../lib/utils";
-import { ScoreDot, LastContactLine, StaleChip } from "./ContactMetaBadges";
-import { ITEM_CURRENT, MATCH_BADGE, isUnverified } from "./utils";
+import { ContactRowBody } from "./ContactMetaBadges";
+import { ITEM_CURRENT, isUnverified } from "./utils";
 
 export const AIShimmerRow = ({ delay = 0 }: { delay?: number }) => (
   <motion.div
@@ -33,11 +32,11 @@ interface AIResultCardProps {
   onSelect: () => void;
   /** The chunk's `fallback`. It decides the badge when the match has no `verified`. */
   isFallback: boolean;
-  /** Enrichment props for StaleChip */
-  hasGroundingCapacity: boolean;
-  isEnriching: boolean;
-  enrichingContactId: string | null;
-  onRefresh?: (contactId: string) => void;
+  /**
+   * AI is set up. Without it the reason under the name comes from rules
+   * only, and it takes the plain ink, not the AI colour and its sparkle.
+   */
+  ai?: boolean;
 }
 
 export const AIResultCard = ({
@@ -45,17 +44,14 @@ export const AIResultCard = ({
   index,
   onSelect,
   isFallback,
-  hasGroundingCapacity,
-  isEnriching,
-  enrichingContactId,
-  onRefresh,
+  ai = true,
 }: AIResultCardProps) => (
   <Command.Item
     key={match.id}
     value={`ai_${match.id}_${match.name}`}
     onSelect={onSelect}
     className={cn(
-      "flex items-start gap-3 px-3 py-3 rounded-xl cursor-default select-none transition-colors text-on-surface group",
+      "flex items-start gap-3 px-3 py-2 rounded-xl cursor-default select-none transition-colors text-on-surface group",
       ITEM_CURRENT,
     )}
   >
@@ -78,50 +74,8 @@ export const AIResultCard = ({
         className="w-8 h-8 mt-0.5 shrink-0 rounded-full bg-surface-container-highest object-cover"
       />
 
-      <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-        {/* Name + Score Dot + Match Badge */}
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-sm truncate">{match.name}</span>
-          <ScoreDot contact={match} />
-          {match.approximate && (
-            <span className={cn(TONE_WASH.primary, MATCH_BADGE)}>
-              Approximate
-            </span>
-          )}
-        </div>
-
-        {/* Role + Company */}
-        {(match.role || match.company) && (
-          <span className="text-xs text-on-surface-variant flex items-center gap-2 truncate">
-            {match.role && (
-              <span className="flex items-center gap-1">
-                <Briefcase className="w-3 h-3" />
-                {match.role}
-              </span>
-            )}
-            {match.company && (
-              <span className="flex items-center gap-1">
-                <Building className="w-3 h-3" />
-                {match.company}
-              </span>
-            )}
-          </span>
-        )}
-
-        {/* Last Contact Line */}
-        <LastContactLine lastContactedAt={match.lastContactedAt} />
-
-        {/* Stale Data Chip */}
-        <StaleChip
-          contactId={match.id}
-          updatedAt={match.updatedAt}
-          hasGroundingCapacity={hasGroundingCapacity}
-          isEnriching={isEnriching}
-          enrichingContactId={enrichingContactId}
-          onRefresh={onRefresh}
-        />
-
-        {/* AI reason: a model wrote this line, so it wears the AI colour. */}
+      <ContactRowBody contact={match}>
+        {/* The reason: the AI colour while AI answers, plain without it. */}
         {match.aiReason && (
           <motion.span
             initial={{ opacity: 0, y: 2 }}
@@ -131,13 +85,16 @@ export const AIResultCard = ({
               duration: DURATION.slow,
               ease: EASE,
             }}
-            className="text-xs text-ai italic flex items-center gap-1 mt-0.5"
+            className={cn(
+              "text-xs italic flex items-center gap-1 mt-0.5",
+              ai ? "text-ai" : "text-on-surface-variant",
+            )}
           >
-            <Sparkles className="w-3 h-3 text-ai shrink-0" />
+            {ai && <Sparkles className="w-3 h-3 text-ai shrink-0" />}
             {match.aiReason}
           </motion.span>
         )}
-      </div>
+      </ContactRowBody>
 
       {/*
         The question mark of a match AI did not verify, in the top right

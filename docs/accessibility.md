@@ -85,17 +85,18 @@ CSP on) on a free port, with a new temporary `DATA_DIR`. The suite runs with
 reduced motion, the `en-US` locale and the `America/Los_Angeles` time zone.
 The report is uploaded on every run.
 
-| Spec                           | What it holds                                                                                                                       |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `axe.spec.ts`                  | Eight screens against WCAG 2.2 AA, four of them in dark too. Landmark and heading rules on six screens and two phone screens        |
-| `keyboard.spec.ts`             | The skip link, the sidebar in order with a visible ring in both themes, `/`, the list's arrow keys and the Tab budget               |
-| `contact.spec.ts`              | Focus when a contact opens, the list keys, the header menu, tracking, the timeline, the composer and Back on a phone                |
-| `dialogs.spec.ts`              | Four dialogs: focus in, `Tab` kept inside, `Esc`, focus back, and a scan while open                                                 |
-| `search-announcements.spec.ts` | The status messages and alerts of People and Notes searches                                                                         |
-| `mobile-forms.spec.ts`         | A Pixel 7: the tab bar, the new contact sheet with 16 px fields, and setup errors tied to their fields                              |
-| `metrics.spec.ts`              | A 390 px phone: 44 px targets and 11 px text on seven screens                                                                       |
-| `phone-shell.spec.ts`          | Typing hides the tab bar and keeps Save in view, a sheet drags closed, the browser bar's theme, asset caching, the rail on its side |
-| `account-transitions.spec.ts`  | A gated instance: setup, sign out, sign in, an expired session and a forced password change                                         |
+| Spec                           | What it holds                                                                                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `axe.spec.ts`                  | Eight screens against WCAG 2.2 AA, four of them in dark too. Landmark and heading rules on six screens and two phone screens          |
+| `keyboard.spec.ts`             | The skip link, the sidebar in order with a visible ring in both themes, `/`, the list's arrow keys and the Tab budget                 |
+| `contact.spec.ts`              | Focus when a contact opens, the list keys, the header menu, tracking, the timeline, the composer and Back on a phone                  |
+| `dialogs.spec.ts`              | Four dialogs: focus in, `Tab` kept inside, `Esc`, focus back, and a scan while open                                                   |
+| `search-announcements.spec.ts` | The status messages and alerts of People and Notes searches                                                                           |
+| `palette-keys.spec.ts`         | The command palette: the arrows, `Esc` one layer at a time, `aria-activedescendant` in every list it shows, focus kept and given back |
+| `mobile-forms.spec.ts`         | A Pixel 7: the tab bar, the new contact sheet with 16 px fields, and setup errors tied to their fields                                |
+| `metrics.spec.ts`              | A 390 px phone: 44 px targets and 11 px text on seven screens                                                                         |
+| `phone-shell.spec.ts`          | Typing hides the tab bar and keeps Save in view, a sheet drags closed, the browser bar's theme, asset caching, the rail on its side   |
+| `account-transitions.spec.ts`  | A gated instance: setup, sign out, sign in, an expired session and a forced password change                                           |
 
 Most other specs, such as Pulse, the map and Settings, also scan the screens
 they reach. In the unit suite, `tests/unit/frontend/style/stylesFloor.test.ts`

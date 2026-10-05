@@ -46,6 +46,7 @@ import { MIN_OPEN_PX, measureInsets, paddingFor } from "./insets";
 import { cn } from "../../lib/utils";
 import { SELECTED_TINT, TONE_WASH } from "../../lib/styles";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { PaletteButton } from "../../components/command-palette/PaletteButton";
 
 const LAYER_OPTIONS: readonly SegmentedOption<MapLayer>[] = [
   { value: "pins", label: "Pins" },
@@ -299,6 +300,10 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
         >
           <Maximize2 className="w-4 h-4" />
         </button>
+
+        {/* The map has no page header: a touch screen opens the palette
+            here, or from the phone's top bar, as the sheet is a dialog. */}
+        {!isMobile && <PaletteButton className="shrink-0" />}
       </div>
 
       {/* Place Not Found Error */}
@@ -529,6 +534,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
               <span>Insights</span>
             </button>
           )}
+          <PaletteButton className="glass-panel shadow-lg rounded-xl border border-outline-variant/30" />
         </div>
       )}
 

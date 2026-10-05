@@ -30,6 +30,10 @@ export function isTypingTarget(e?: KeyboardEvent): boolean {
   // cmdk search input (used by CommandPalette)
   if (el.closest("[cmdk-input]")) return true;
 
+  // Anywhere in the open command palette: its keys are its own. Focus can
+  // land on the dialog itself, and then `j` opened a contact behind it.
+  if (el.closest("[cmdk-dialog]")) return true;
+
   return false;
 }
 

@@ -144,6 +144,9 @@ test("the command palette opens on the shortcut with its combobox focused", asyn
   await page.keyboard.type("Grace");
   await expect(palette.getByText("Grace Hopper")).toBeVisible();
 
+  // The first Escape clears the input, the second closes the palette.
+  await page.keyboard.press("Escape");
+  await expect(palette.getByRole("combobox")).toHaveValue("");
   await page.keyboard.press("Escape");
   await expect(palette).toHaveCount(0);
 });

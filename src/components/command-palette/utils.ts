@@ -80,9 +80,20 @@ export function aiResultsHeading(
   fallback: boolean,
   shown: number,
   total: number,
+  /** AI is set up. Without it, rules answered, and the heading says so. */
+  ai = true,
 ): string {
-  const heading = fallback ? "Not verified by AI" : "AI query results";
+  const heading = fallback ? "Not verified by AI" : ai ? "AI answer" : "Answer";
   return total > shown
     ? `${heading} · ${shown} of ${total.toLocaleString()}`
     : heading;
 }
+
+/**
+ * The words read as a question: "who works at Stripe", "list investors?".
+ * The people search then offers no new contact by that name.
+ */
+export const looksLikeQuestion = (words: string): boolean =>
+  /^(who|whom|whose|what|which|where|when|why|how|list|find|show)\b|\?$/i.test(
+    words.trim(),
+  );

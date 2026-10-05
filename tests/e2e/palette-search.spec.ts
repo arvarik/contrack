@@ -48,7 +48,7 @@ async function openPalette(page: Page) {
 }
 
 const person = (palette: ReturnType<Page["getByRole"]>, name: string) =>
-  palette.getByRole("option", { name: new RegExp(name) });
+  palette.getByRole("option", { name: new RegExp(`^${name}`) });
 
 /**
  * The scan for the parts this spec covers: the pills, the input, the facet
@@ -116,20 +116,23 @@ test("shows four of the account's own questions in AI mode", async ({
   await page.keyboard.type("?");
   const group = page.getByRole("group", { name: "Try asking" });
   await expect(group).toBeVisible();
-  const buttons = group.getByRole("button");
-  await expect(buttons).toHaveCount(4);
+  const rows = group.getByRole("option");
+  await expect(rows).toHaveCount(4);
 
-  const shown = (await buttons.allTextContents()).map((text) =>
-    text.replace(/^\?\s*/, ""),
-  );
+  const shown = await rows.allTextContents();
   expect(new Set(shown).size).toBe(4);
   for (const text of shown) {
     expect(questions.map((q) => q.text)).toContain(text);
   }
 
-  // A press puts the question after the question mark, as typing it would.
-  await buttons.first().dispatchEvent("mousedown");
-  await expect(palette.getByRole("combobox")).toHaveValue(`? ${shown[0]}`);
+  // The starters are rows: ↓ reaches the second, and Enter puts it after
+  // the question mark, as typing it would.
+  // The first row sets AI up, as this instance has no model.
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("ArrowDown");
+  await expect(rows.nth(1)).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("Enter");
+  await expect(palette.getByRole("combobox")).toHaveValue(`? ${shown[1]}`);
 });
 
 test("shows a person the server finds by company", async ({ page }) => {

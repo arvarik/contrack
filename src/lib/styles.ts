@@ -434,14 +434,15 @@ export const MENU_PANEL =
   "menu-panel menu-enter p-1 min-w-[13rem] max-w-[min(20rem,calc(100vw-2rem))] max-h-[min(24rem,calc(100vh-4rem))] overflow-y-auto";
 
 /**
- * One row. 44 px tall on a phone, 36 px from `sm`. The keyboard ring is
+ * One row. 44 px tall on a touch screen, a phone on its side too, and 36 px
+ * for a mouse. The keyboard ring is
  * drawn inside the row, because the rows touch and an outside ring would be
  * cut off by the panel's edge. The tint on `:focus` (not only
  * `:focus-visible`) is what shows where the arrow keys start after a click
  * opened the menu, since the browser draws no ring for that.
  */
 export const MENU_ITEM =
-  "w-full min-h-[44px] sm:min-h-[36px] flex items-center gap-2.5 px-2.5 rounded-md text-sm font-medium text-left text-on-surface transition-colors hover:bg-surface-container-high focus:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary";
+  "w-full min-h-[44px] pointer-fine:min-h-[36px] flex items-center gap-2.5 px-2.5 rounded-md text-sm font-medium text-left text-on-surface transition-colors hover:bg-surface-container-high focus:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary";
 
 /** A destructive row: the error colour, on its own tint. */
 export const MENU_ITEM_DANGER =

@@ -203,6 +203,8 @@ test.describe("the wait for AI", () => {
     const palette = page.getByRole("dialog");
     await expect(palette.getByRole("combobox")).toBeFocused();
     await page.keyboard.type("? who likes espresso");
+    // The palette asks on Enter, not when the typing stops.
+    await page.keyboard.press("Enter");
 
     await expect(palette.getByText("Asking AI…")).toBeVisible();
     await page.waitForTimeout(900);
@@ -440,6 +442,8 @@ test.describe("a list AI did not check", () => {
     const palette = page.getByRole("dialog");
     await expect(palette.getByRole("combobox")).toBeFocused();
     await page.keyboard.type("? who likes espresso");
+    // The palette asks on Enter, not when the typing stops.
+    await page.keyboard.press("Enter");
 
     const row = palette.getByRole("option", { name: /Ada Lovelace/ });
     await expect(row).toBeVisible();
@@ -447,9 +451,11 @@ test.describe("a list AI did not check", () => {
       row.getByRole("img", { name: "Not verified by AI" }),
     ).toBeVisible();
     await expect(palette.getByText("Not verified by AI").first()).toBeVisible();
+    // The suite's instance has no AI model: the palette says so, rather
+    // than that AI failed this time.
     await expect(
       palette.getByText(
-        "AI could not check these people this time. They match your words or their meaning",
+        "No AI model is set up. These are the closest matches to your words, and may not fit",
       ),
     ).toBeVisible();
   });
@@ -609,6 +615,7 @@ test.describe("screenshots", () => {
           const palette = page.getByRole("dialog");
           await expect(palette.getByRole("combobox")).toBeFocused();
           await page.keyboard.type("? who likes espresso");
+          await page.keyboard.press("Enter");
           await expect(
             palette.getByRole("img", { name: "Not verified by AI" }).first(),
           ).toBeVisible();

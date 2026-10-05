@@ -108,7 +108,6 @@ import { useRecent } from "../../contexts/SessionContext";
 import { NAMES, TRACKED_INTRO } from "../../lib/names";
 import { ActionMenu } from "../../components/ui/ActionMenu";
 import { useSwapFocus } from "../../components/bulk/useSwapFocus";
-import { openCommandPalette } from "../../lib/appEvents";
 import { settleSlide } from "../settings/slide";
 
 /** The space under each row of the list, in px: `space-y-2`. */
@@ -1179,20 +1178,9 @@ export const ContactList = () => {
                 and still says what it does. The gap keeps the three 44 px
                 tap boxes apart.
 
-                A touch screen has no ⌘K, so it gets one more button first:
-                the command palette, which finds a person and acts on them.
-                A mouse and a keyboard do not see it.
+                A touch screen also gets the command palette's button first,
+                from PageHeader, as on every page.
               */}
-              <button
-                key="palette"
-                type="button"
-                onClick={openCommandPalette}
-                className={cn(ICON_BTN, "hidden pointer-coarse:inline-flex")}
-                aria-label="Command palette"
-                title="Command palette"
-              >
-                <Search className="w-5 h-5" aria-hidden="true" />
-              </button>
               <button
                 key="select"
                 ref={selectButtonRef}

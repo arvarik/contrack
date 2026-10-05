@@ -134,7 +134,7 @@ interface ModelGroup {
 const KEY = ["ai-settings"] as const;
 const INSTANCE_KEY = ["ai-instance"] as const;
 
-export const useAISettings = () =>
+export const useAISettings = ({ enabled = true } = {}) =>
   useQuery({
     queryKey: KEY,
     queryFn: async ({ signal }): Promise<AISettings> => {
@@ -142,6 +142,7 @@ export const useAISettings = () =>
       return res.json();
     },
     staleTime: 30_000,
+    enabled,
   });
 
 /**

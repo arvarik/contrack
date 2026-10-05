@@ -2,10 +2,12 @@
  * ZeroStateView — Intelligent zero-state for the Cmd+K command palette.
  *
  * Rendered when the search input is empty and mode is 'normal'. Shows:
- *   1. Recently viewed contacts (from useRecentContacts hook)
- *   2. Search history (from useSearchHistory hook)
+ *   1. Start here, until there is anything recent: ask AI, or log
+ *   2. Recent: the contacts last opened, then the last searches, six rows
+ *      at most (useRecentContacts, useSearchHistory)
  *   3. CRM intelligence insights (from useZeroState API hook)
- *   4. Navigation shortcuts (static list)
+ *   4. The five destinations (`GoToGroup`, which also lists the pages a
+ *      typed word matches)
  *
  * All items are Command.Item elements — fully keyboard-navigable with ↑/↓/Enter.
  */
@@ -54,7 +56,38 @@ interface ZeroStateViewProps {
   onSelectHistory: (query: string, mode?: string) => void;
   onSelectInsight: (insight: ZeroStateInsight) => void;
   onNavigate: (path: string) => void;
+  /** A "Start here" row: ask AI or log. */
+  onStart: (what: "ai" | "log") => void;
 }
+
+/**
+ * For a person with nothing recent yet: the two things the palette does
+ * besides finding people, as rows a keyboard reaches. Filters are taught
+ * in one place, the Filter chip: a row and a footer tip said it again.
+ */
+const START_ROWS = [
+  { what: "ai", label: "Ask AI about your network", icon: Sparkles, hint: "?" },
+  {
+    what: "log",
+    label: "Log a note, call, meeting or email",
+    icon: Zap,
+    hint: ">",
+  },
+] as const;
+
+/** Recent contacts and searches, together, as one short group. */
+const RECENT_ROWS = 6;
+
+/**
+ * A recent search as it reads in the list. A question keeps its `?` and a
+ * notes search says so: the three kinds only differed by a 12 px icon.
+ */
+const historyLabel = (entry: SearchHistoryEntry) =>
+  entry.mode === "ai"
+    ? `? ${stripModePrefix(entry.query)}`
+    : entry.mode === "notes"
+      ? `Notes: ${stripModePrefix(entry.query)}`
+      : stripModePrefix(entry.query);
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -101,7 +134,7 @@ const insightLook = (type: string): { icon: LucideIcon; tone: Tone } => {
 
 /** A row in the palette's vertical lists. */
 const ROW =
-  "flex items-center gap-3 px-3 min-h-[44px] sm:min-h-0 rounded-xl cursor-default select-none transition-colors";
+  "flex items-center gap-3 px-3 min-h-[44px] pointer-fine:min-h-0 rounded-xl cursor-default select-none transition-colors";
 
 /** A destination row: the variant ink, and the wash's ink when current. */
 const NAV_ROW =
@@ -155,73 +188,74 @@ export const ZeroStateView = ({
   onSelectHistory,
   onSelectInsight,
   onNavigate,
+  onStart,
 }: ZeroStateViewProps) => {
-  const { isAdmin, authRequired } = useAuth();
   const hasRecent = recentContacts.length > 0;
   const hasHistory = historyEntries.length > 0;
   const hasInsights = insights.length > 0;
 
-  const settingsNavItems = SETTINGS_PAGES.filter((page) => {
-    if (page.admin && !isAdmin) return false;
-    if (page.needsAccount && !authRequired) return false;
-    if (page.id === "ai-usage" && isAdmin) return false;
-    return true;
-  });
-
   return (
     <>
-      {/* ── Recently Viewed ── */}
-      {hasRecent && (
-        <Command.Group
-          heading="Recently viewed"
-          className={GROUP_HEADING_DEFAULT}
-        >
-          <div className="flex gap-2 px-3 py-1">
-            {recentContacts.map((c) => (
-              <Command.Item
-                key={`recent_${c.id}`}
-                value={`recent_${c.id}_${c.name}`}
-                onSelect={() => onSelectContact(c.id)}
-                // A chip in a row, not a row in a list: the current one takes
-                // the selected tint (`SELECTED_TINT`).
-                className="flex items-center gap-2 px-3 py-2 min-h-[44px] sm:min-h-0 rounded-xl cursor-default select-none aria-selected:bg-primary/10 aria-selected:text-on-primary-wash transition-colors text-on-surface shrink-0"
-              >
-                <img
-                  src={c.avatarUrl || fallbackAvatarUrl(c.name)}
-                  alt=""
-                  className="w-6 h-6 rounded-full bg-surface-container-highest object-cover"
-                />
-                <span className="text-xs font-bold truncate max-w-[100px]">
-                  {c.name}
-                </span>
-              </Command.Item>
-            ))}
-          </div>
+      {!hasRecent && !hasHistory && (
+        <Command.Group heading="Start here" className={GROUP_HEADING_DEFAULT}>
+          {START_ROWS.map(({ what, label, icon: Icon, hint }) => (
+            <Command.Item
+              key={what}
+              value={`start_${what}`}
+              onSelect={() => onStart(what)}
+              className={cn(ROW, "py-2 text-on-surface", ITEM_CURRENT)}
+            >
+              <Icon className="w-4 h-4 shrink-0 text-primary" />
+              <span className="text-sm flex-1 truncate">{label}</span>
+              <kbd className={cn(KBD_SM, "hidden pointer-fine:inline-flex")}>
+                {hint}
+              </kbd>
+            </Command.Item>
+          ))}
         </Command.Group>
       )}
 
-      {/* ── Search History ── */}
-      {hasHistory && (
-        <Command.Group
-          heading="Recent searches"
-          className={GROUP_HEADING_DEFAULT}
-        >
-          {historyEntries.map((entry, i) => (
+      {/* ── Recent: contacts, then searches, six rows at most. They were
+          two groups of up to eight rows. ── */}
+      {(hasRecent || hasHistory) && (
+        <Command.Group heading="Recent" className={GROUP_HEADING_DEFAULT}>
+          {recentContacts.slice(0, RECENT_ROWS).map((c) => (
             <Command.Item
-              key={`history_${i}_${entry.timestamp}`}
-              value={`history_${entry.query}`}
-              onSelect={() => onSelectHistory(entry.query, entry.mode)}
+              key={`recent_${c.id}`}
+              value={`recent_${c.id}_${c.name}`}
+              onSelect={() => onSelectContact(c.id)}
               className={cn(ROW, "py-2 text-on-surface", ITEM_CURRENT)}
             >
-              <div className="w-6 h-6 flex items-center justify-center rounded-full bg-surface-container-high shrink-0">
-                {modeIcon(entry.mode)}
-              </div>
-              <span className="text-sm truncate flex-1">
-                {stripModePrefix(entry.query)}
-              </span>
-              <Clock className="w-3 h-3 text-on-surface-variant shrink-0" />
+              <img
+                src={c.avatarUrl || fallbackAvatarUrl(c.name)}
+                alt=""
+                className="w-6 h-6 rounded-full bg-surface-container-highest object-cover shrink-0"
+              />
+              <span className="text-sm truncate flex-1">{c.name}</span>
             </Command.Item>
           ))}
+          {historyEntries
+            .slice(0, Math.max(0, RECENT_ROWS - recentContacts.length))
+            .map((entry, i) => (
+              <Command.Item
+                key={`history_${i}_${entry.timestamp}`}
+                // With the mode: a people search and a notes search can hold
+                // the same words, and two rows with one value are both
+                // highlighted at once, which stops the arrow keys between
+                // them.
+                value={`history_${entry.mode}_${entry.query}`}
+                onSelect={() => onSelectHistory(entry.query, entry.mode)}
+                className={cn(ROW, "py-2 text-on-surface", ITEM_CURRENT)}
+              >
+                <div className="w-6 h-6 flex items-center justify-center rounded-full bg-surface-container-high shrink-0">
+                  {modeIcon(entry.mode)}
+                </div>
+                <span className="text-sm truncate flex-1">
+                  {historyLabel(entry)}
+                </span>
+                <Clock className="w-3 h-3 text-on-surface-variant shrink-0" />
+              </Command.Item>
+            ))}
         </Command.Group>
       )}
 
@@ -253,45 +287,107 @@ export const ZeroStateView = ({
         </Command.Group>
       )}
 
-      {/* ── Navigation ── */}
-      <Command.Group heading="Go to" className={GROUP_HEADING_DEFAULT}>
-        {NAV_ITEMS.map((item) => (
+      {/* ── Navigation: the five destinations. Settings pages come up
+          when their name is typed (`GoToGroup`). ── */}
+      <GoToGroup query="" onNavigate={onNavigate} />
+    </>
+  );
+};
+
+/**
+ * Does a destination match the typed words? Each word must start a word of
+ * its name or of a keyword: "exp" finds Export, and "port" does not. At
+ * least `min` characters, so one letter does not list every page.
+ */
+export function matchesDestination(
+  query: string,
+  label: string,
+  keywords: readonly string[] = [],
+  min = 2,
+): boolean {
+  const typed = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (typed.join(" ").length < min) return false;
+  const words = [label, ...keywords]
+    .join(" ")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/);
+  return typed.every((part) => words.some((word) => word.startsWith(part)));
+}
+
+/**
+ * The "Go to" rows. With no words, the five destinations. With words, the
+ * destinations and the Settings pages they match, or nothing. Typing
+ * "pulse" used to offer only to create a contact named "pulse".
+ */
+export const GoToGroup = ({
+  query,
+  onNavigate,
+}: {
+  query: string;
+  onNavigate: (path: string) => void;
+}) => {
+  const { isAdmin, authRequired } = useAuth();
+  const typed = query.trim();
+  const destinations = typed
+    ? NAV_ITEMS.filter((item) => matchesDestination(typed, item.label))
+    : NAV_ITEMS;
+  // "settings privacy": the rows say "Settings: …", so people type the
+  // word. It names the group, not the page, so the rest is matched.
+  const [first = "", ...others] = typed.toLowerCase().split(/\s+/);
+  const pageWords =
+    others.length > 0 && first.length >= 3 && "settings".startsWith(first)
+      ? others.join(" ")
+      : typed;
+  const settingsPages = typed
+    ? SETTINGS_PAGES.filter((page) => {
+        if (page.admin && !isAdmin) return false;
+        if (page.needsAccount && !authRequired) return false;
+        if (page.id === "ai-usage" && isAdmin) return false;
+        // Three characters for these: they are many, and below the people.
+        // The title and keywords, not the word "Settings" every row
+        // starts with: "set" listed all 26 pages.
+        return matchesDestination(pageWords, page.title, page.keywords, 3);
+      }).slice(0, 5)
+    : [];
+  if (destinations.length === 0 && settingsPages.length === 0) return null;
+
+  return (
+    <Command.Group heading="Go to" className={GROUP_HEADING_DEFAULT}>
+      {destinations.map((item) => (
+        <Command.Item
+          key={`nav_${item.path}`}
+          value={`nav_${item.label}`}
+          onSelect={() => onNavigate(item.path)}
+          className={cn(ROW, NAV_ROW, ITEM_CURRENT)}
+        >
+          <item.icon className="w-4 h-4 shrink-0" />
+          <span className="text-sm flex-1">{item.label}</span>
+          {item.shortcut && (
+            <kbd
+              className={cn(
+                KBD_SM,
+                "text-on-surface-variant hidden pointer-fine:inline-flex",
+              )}
+            >
+              {item.shortcut}
+            </kbd>
+          )}
+        </Command.Item>
+      ))}
+      {settingsPages.map((page) => {
+        const Icon = page.icon;
+        return (
           <Command.Item
-            key={`nav_${item.path}`}
-            value={`nav_${item.label}`}
-            onSelect={() => onNavigate(item.path)}
+            key={`nav_${page.path}`}
+            value={`Settings: ${page.title}`}
+            onSelect={() => onNavigate(page.path)}
             className={cn(ROW, NAV_ROW, ITEM_CURRENT)}
           >
-            <item.icon className="w-4 h-4 shrink-0" />
-            <span className="text-sm flex-1">{item.label}</span>
-            {item.shortcut && (
-              <kbd
-                className={cn(
-                  KBD_SM,
-                  "text-on-surface-variant hidden sm:inline-flex",
-                )}
-              >
-                {item.shortcut}
-              </kbd>
-            )}
+            <Icon className="w-4 h-4 shrink-0" />
+            <span className="text-sm flex-1">Settings: {page.title}</span>
           </Command.Item>
-        ))}
-        {settingsNavItems.map((page) => {
-          const Icon = page.icon;
-          return (
-            <Command.Item
-              key={`nav_${page.path}`}
-              value={`Settings: ${page.title}`}
-              keywords={page.keywords}
-              onSelect={() => onNavigate(page.path)}
-              className={cn(ROW, NAV_ROW, ITEM_CURRENT)}
-            >
-              <Icon className="w-4 h-4 shrink-0" />
-              <span className="text-sm flex-1">Settings: {page.title}</span>
-            </Command.Item>
-          );
-        })}
-      </Command.Group>
-    </>
+        );
+      })}
+    </Command.Group>
   );
 };
