@@ -1,5 +1,6 @@
 import React, {
   useEffect,
+  useId,
   useLayoutEffect,
   useState,
   useMemo,
@@ -30,18 +31,15 @@ import {
   Briefcase,
   Building,
   Zap,
-  MessageSquare,
-  Phone,
-  Calendar,
-  Mail,
   Sparkles,
   HelpCircle,
   ArrowUpRight,
   ChevronsRight,
+  X,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
-import { KBD, KBD_SM, SECTION_BG, TONE_WASH } from "../../lib/styles";
+import { ICON_BTN, KBD, TONE_WASH } from "../../lib/styles";
 import { DURATION, EASE } from "../../lib/motion";
 import { cn } from "../../lib/utils";
 import { CLOSE_PALETTE_EVENT, OPEN_PALETTE_EVENT } from "../../lib/appEvents";
@@ -51,14 +49,16 @@ import {
   getMode,
   GROUP_HEADING_DEFAULT,
   GROUP_HEADING_PRIMARY,
-  GROUP_HEADING_EMERALD,
   ITEM_CURRENT,
   MATCH_BADGE,
   insightPath,
 } from "./utils";
 import { AIShimmerRow, AIResultCard } from "./AiComponents";
 import { AiStarters } from "./AiStarters";
-import { ZeroStateView } from "./ZeroStateView";
+import { GoToGroup, NAV_ITEMS, ZeroStateView } from "./ZeroStateView";
+import { LogMode } from "./LogMode";
+import type { LogKind } from "./actionMode";
+import { PaletteFooter, enterActionFor } from "./PaletteFooter";
 import { ScoreDot, LastContactLine, StaleChip } from "./ContactMetaBadges";
 import { useGroundingCapacity, useEnrichContact } from "../../api/enrichment";
 import { ResultPeek } from "./ResultPeek";
@@ -69,6 +69,7 @@ import { FacetPills } from "./FacetPills";
 import { FacetAutocomplete } from "./FacetAutocomplete";
 import { ActionSubMenu } from "./ActionSubMenu";
 import { usePreferences } from "../../contexts/PreferencesContext";
+import { NAMES } from "../../lib/names";
 
 /** The icon at the start of the input, swapped when the mode changes. */
 const ICON_SWAP = {
@@ -80,6 +81,28 @@ const ICON_SWAP = {
 
 /** The 11 px uppercase type of a badge or a status line in the list. */
 const SMALL_CAPS = "text-[11px] font-bold uppercase tracking-[0.08em]";
+
+/** The mode chips under the input. `active` is the look of the current one. */
+const MODE_CHIPS = [
+  {
+    id: "normal",
+    label: "Search",
+    icon: Search,
+    active: "bg-surface-container-high text-on-surface font-bold",
+  },
+  {
+    id: "ai",
+    label: "? Ask AI",
+    icon: Sparkles,
+    active: "bg-primary/10 text-on-primary-wash font-bold",
+  },
+  {
+    id: "action",
+    label: "> Log",
+    icon: Zap,
+    active: "bg-success/10 text-success font-bold",
+  },
+] as const;
 
 /** No pills: one array, so a question without pills keeps one identity. */
 const NO_FILTERS: FacetFilter[] = [];
@@ -313,29 +336,6 @@ export const CommandPalette = () => {
     addEntry,
   ]);
 
-  // Action mode (> prefix)
-  const isAction = mode === "action";
-  const actionMatch = useMemo(() => {
-    if (!isAction) return null;
-    const regex = /^>\s*(note|call|meeting|email)\s+([^:]+):\s*(.*)$/i;
-    const match = search.match(regex);
-    if (!match) return null;
-    const [_, type, nameStr, content] = match;
-    const typeLower = type.toLowerCase() as
-      "note" | "call" | "meeting" | "email";
-    const targetContact = allContacts.find((c) =>
-      c.name?.toLowerCase().includes(nameStr.toLowerCase().trim()),
-    );
-    if (targetContact && content.trim()) {
-      return {
-        type: typeLower,
-        contact: targetContact,
-        content: content.trim(),
-      };
-    }
-    return null;
-  }, [search, allContacts, isAction]);
-
   // Global ⌘K / Ctrl+K listener.
   // Always opens with a fresh empty input — matches Spotlight/Linear/Raycast.
   // The empty palette lists the recent searches, to pick from.
@@ -442,49 +442,40 @@ export const CommandPalette = () => {
     }
   };
 
-  const handleActionExecute = async () => {
-    if (!actionMatch) return;
+  // `>` mode: log what `LogMode` built.
+  const handleLog = async ({
+    kind,
+    contact,
+    text,
+  }: {
+    kind: LogKind;
+    contact: { id: string; name: string };
+    text: string;
+  }) => {
     try {
-      const titleMap: Record<string, string> = {
+      const titleMap: Record<LogKind, string> = {
         note: "Quick Note",
         call: "Phone Call logged",
         meeting: "Meeting summary",
         email: "Email sent",
       };
       await addInteraction.mutateAsync({
-        contactId: actionMatch.contact.id,
+        contactId: contact.id,
         data: {
-          type: actionMatch.type,
-          title: titleMap[actionMatch.type],
-          content: actionMatch.content,
+          type: kind,
+          title: titleMap[kind],
+          content: text,
           date: new Date().toISOString(),
         },
       });
-      // Record action to history
-      searchHistory.addEntry(search, "action");
+      // Not kept as a recent search: it is not one. The note's text sat in
+      // "Recent searches", and picking it filled the box to log it again.
       handleClose();
-      toast.success(
-        `Logged ${actionMatch.type} for ${actionMatch.contact.name}`,
-      );
+      toast.success(`Logged ${kind} for ${contact.name}`);
     } catch (e: unknown) {
       toast.error(
         `Failed to log interaction: ${e instanceof Error ? e.message : String(e)}`,
       );
-    }
-  };
-
-  const getLogIcon = (type: string) => {
-    switch (type) {
-      case "note":
-        return <MessageSquare className="w-4 h-4" />;
-      case "email":
-        return <Mail className="w-4 h-4" />;
-      case "call":
-        return <Phone className="w-4 h-4" />;
-      case "meeting":
-        return <Calendar className="w-4 h-4" />;
-      default:
-        return <Zap className="w-4 h-4" />;
     }
   };
 
@@ -582,6 +573,25 @@ export const CommandPalette = () => {
   // Is the input empty? (determines zero-state vs search results)
   const isEmptyInput = search.trim() === "" && !hasFilters;
 
+  const facetMenuOpen = !!parsed.activePrefix && !facetMenuDismissed;
+  const typedWords = parsed.freeText.trim().toLowerCase();
+  /** The words are a destination's whole name: its row comes first. */
+  const exactPage = NAV_ITEMS.some(
+    (item) => item.label.toLowerCase() === typedWords,
+  );
+  /**
+   * Offer a new contact by the typed name, unless somebody has it. Not
+   * while the server may still find one, when nobody is listed yet, so a
+   * quick Enter cannot make a duplicate.
+   */
+  const canCreate =
+    typedWords.length > 0 &&
+    !hasFilters &&
+    !instantSearch.results.some(
+      (c) => c.name?.trim().toLowerCase() === typedWords,
+    ) &&
+    (instantSearch.results.length > 0 || !instantSearch.isFtsLoading);
+
   // ── → key handler: enter sub-menu on focused result ──
   useEffect(() => {
     if (!open || subMenuContactId) return;
@@ -639,6 +649,22 @@ export const CommandPalette = () => {
     },
     [subMenuContactId, closeSubMenu],
   );
+
+  const modeChipsId = useId();
+
+  /** A mode chip: its sign in front of the words, or none for Search. */
+  const switchMode = (target: (typeof MODE_CHIPS)[number]["id"]) => {
+    const words = search.replace(/^\s*[?>]\s*/, "");
+    setSearch(
+      target === "ai" ? `? ${words}` : target === "action" ? "> " : words,
+    );
+    setFacetMenuDismissed(false);
+    if (subMenuContactId) {
+      subMenuRowRef.current = "";
+      closeSubMenu();
+    }
+    inputRef.current?.focus();
+  };
 
   // A new query puts the highlight back on the top row, as cmdk does.
   useEffect(() => {
@@ -712,6 +738,32 @@ export const CommandPalette = () => {
 
   // AI loading: mutation is pending AND query is long enough
   const isAiLoading = mode === "ai" && semanticSearch.isPending;
+
+  /**
+   * What a screen reader hears about the list (WCAG 4.1.3, as on the Ask
+   * page): the count once it settles, not the instant rows that change
+   * with each key, and the AI wait. The palette said nothing at all.
+   */
+  const peopleCount = (n: number) =>
+    n === 0 ? "No people found" : `${n} ${n === 1 ? "person" : "people"} found`;
+  const listSettled =
+    !parsed.freeText.trim() ||
+    (!instantSearch.isInstant && !instantSearch.isFtsLoading);
+  const statusText = subMenuContactId
+    ? ""
+    : mode === "ai"
+      ? aiQuery.length < 3
+        ? ""
+        : isAiLoading
+          ? "Asking AI"
+          : semanticSearch.isSuccess
+            ? aiResults.length === 0
+              ? "No matches found"
+              : peopleCount(aiResults.length)
+            : ""
+      : mode === "normal" && !isEmptyInput && listSettled
+        ? peopleCount(instantSearch.results.length)
+        : "";
 
   // ── Shift-to-peek: the highlighted contact ──
   // A people row's value is its id and name, an AI row's `ai_<id>_<name>`.
@@ -866,38 +918,58 @@ export const CommandPalette = () => {
                       // The palette exists to be typed into the instant it opens.
                       // eslint-disable-next-line jsx-a11y/no-autofocus
                       autoFocus
+                      // Short, so a phone shows it whole. The mode chips
+                      // under it name `?` and `>`.
                       placeholder={
                         hasFilters
-                          ? "Add more filters or search..."
-                          : "Search contacts, ? to ask AI, > for actions..."
+                          ? "Add more filters or search…"
+                          : "Search people and pages…"
                       }
-                      className="flex-1 min-h-[44px] sm:min-h-0 bg-transparent border-none outline-none text-on-surface placeholder:text-on-surface-variant text-lg"
+                      aria-describedby={modeChipsId}
+                      className="flex-1 min-w-0 min-h-[44px] sm:min-h-0 bg-transparent border-none outline-none text-on-surface placeholder:text-on-surface-variant text-lg"
                     />
-                    {/* A touch screen has no Esc key: a tap outside closes. */}
-                    <div className="flex items-center gap-1.5 opacity-50 pointer-coarse:hidden">
-                      <kbd className={KBD}>ESC</kbd>
-                    </div>
+                    {/* Full ink: at half opacity it failed contrast. */}
+                    <kbd className={cn(KBD, "pointer-coarse:hidden")}>Esc</kbd>
+                    {/* A touch screen has no Esc key. */}
+                    <button
+                      type="button"
+                      onClick={handleClose}
+                      aria-label="Close command palette"
+                      className={cn(
+                        ICON_BTN,
+                        "hidden pointer-coarse:inline-flex",
+                      )}
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
                   </div>
 
-                  {/* ── Mode indicator ribbon ── */}
-                  <div className="flex items-center gap-3 px-4 py-1.5 bg-surface-container-low/50 text-[11px] border-t border-surface-container">
-                    <span
-                      className={`flex items-center gap-1 ${mode === "normal" ? "text-on-surface font-bold" : "text-on-surface-variant"}`}
-                    >
-                      <Search className="w-3 h-3" /> Search
-                    </span>
-                    <span className="text-on-surface-variant/20">•</span>
-                    <span
-                      className={`flex items-center gap-1 ${mode === "ai" ? "text-primary font-bold" : "text-on-surface-variant"}`}
-                    >
-                      <Sparkles className="w-3 h-3" /> ? AI query
-                    </span>
-                    <span className="text-on-surface-variant/20">•</span>
-                    <span
-                      className={`flex items-center gap-1 ${mode === "action" ? "text-success font-bold" : "text-on-surface-variant"}`}
-                    >
-                      <Zap className="w-3 h-3" /> &gt; Actions
-                    </span>
+                  {/*
+                    The modes, as buttons: a touch screen could reach `?`
+                    and `>` only by switching keyboards, and a label that
+                    looks like a tab but does nothing taught nobody. Each
+                    puts its sign in front of the words already typed.
+                  */}
+                  <div
+                    id={modeChipsId}
+                    role="group"
+                    aria-label="Mode"
+                    className="flex items-center gap-1 px-3 py-1.5 bg-surface-container-low/50 text-[11px] border-t border-surface-container"
+                  >
+                    {MODE_CHIPS.map(({ id, label, icon: Icon, active }) => (
+                      <button
+                        key={id}
+                        type="button"
+                        aria-pressed={mode === id}
+                        onClick={() => switchMode(id)}
+                        className={cn(
+                          "hit-area state-layer flex items-center gap-1 px-2 py-0.5 rounded-full transition-colors",
+                          mode === id ? active : "text-on-surface-variant",
+                        )}
+                      >
+                        <Icon className="w-3 h-3" aria-hidden="true" /> {label}
+                      </button>
+                    ))}
                   </div>
 
                   {/* ── Result list ── */}
@@ -972,7 +1044,7 @@ export const CommandPalette = () => {
                             <div className="pt-6 pb-3 text-center text-sm text-on-surface-variant">
                               <Sparkles className="w-8 h-8 text-primary mx-auto mb-3" />
                               <p className="font-bold text-on-surface mb-1">
-                                AI query mode
+                                Ask AI
                               </p>
                               <p className="text-xs">
                                 Ask anything about your network in plain English
@@ -986,9 +1058,23 @@ export const CommandPalette = () => {
                         {aiQuery.length > 0 && aiQuery.length < 3 && (
                           <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
                             <Sparkles className="w-6 h-6 text-primary mx-auto mb-2" />
-                            <p className="text-xs">Keep typing to search…</p>
+                            <p className="text-xs">
+                              Keep typing your question…
+                            </p>
                           </Command.Empty>
                         )}
+
+                        {/* Typed, not asked yet. The palette asks when the
+                            typing stops, and the panel was blank until then. */}
+                        {aiQuery.length >= 3 &&
+                          !isAiLoading &&
+                          !semanticSearch.isSuccess &&
+                          !semanticSearch.isError && (
+                            <div className="py-10 text-center text-xs text-on-surface-variant">
+                              <Sparkles className="w-6 h-6 text-primary mx-auto mb-2" />
+                              Asks when you stop typing…
+                            </div>
+                          )}
 
                         {/*
                     Loading shimmer, for the whole wait. The first list the
@@ -1075,7 +1161,7 @@ export const CommandPalette = () => {
                             />
                           )}
 
-                        {/* "Open in full-page search" bridge (Feature 11C) */}
+                        {/* The same question on the Ask Contrack page (Feature 11C) */}
                         {aiQuery.length >= 3 &&
                           !isAiLoading &&
                           aiResults.length > 0 && (
@@ -1101,7 +1187,7 @@ export const CommandPalette = () => {
                                 }}
                                 className="hit-area text-xs text-primary flex items-center gap-1 group"
                               >
-                                Open in full-page search
+                                Open in {NAMES.ask.label}
                                 <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                               </button>
                             </div>
@@ -1136,65 +1222,15 @@ export const CommandPalette = () => {
                       </>
                     )}
 
-                    {/* ═══════════════ ACTION MODE ═══════════════ */}
-                    {!subMenuContactId && mode === "action" && !actionMatch && (
-                      <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
-                        <Zap className="w-8 h-8 text-on-surface-variant/30 mx-auto mb-3" />
-                        <p className="font-bold text-on-surface">
-                          Action mode active
-                        </p>
-                        <p className="mt-1">
-                          Syntax:{" "}
-                          <code className="text-primary bg-primary/10 px-1 rounded">
-                            &gt; [type] [name]: [content]
-                          </code>
-                        </p>
-                        <p className="mt-2 text-xs">
-                          Types: note, call, meeting, email
-                        </p>
-                        <p className="mt-1 text-xs text-on-surface-variant">
-                          Example:{" "}
-                          <code>
-                            &gt; note Julian: Left a voicemail regarding Q3
-                            targets
-                          </code>
-                        </p>
-                      </Command.Empty>
-                    )}
-
-                    {!subMenuContactId && mode === "action" && actionMatch && (
-                      <Command.Group
-                        heading="Action engine"
-                        className={GROUP_HEADING_EMERALD}
-                      >
-                        <Command.Item
-                          value={`action_${actionMatch.type}_${actionMatch.contact.id}`}
-                          onSelect={handleActionExecute}
-                          className={cn(
-                            "flex items-center gap-4 px-3 py-4 rounded-xl cursor-default select-none bg-success/10 transition-colors text-on-surface",
-                            ITEM_CURRENT,
-                          )}
-                        >
-                          <div className="w-10 h-10 flex items-center justify-center bg-success/20 text-success rounded-full shrink-0">
-                            {getLogIcon(actionMatch.type)}
-                          </div>
-                          <div className="flex-1 min-w-0 flex flex-col">
-                            <span className="font-bold text-sm block truncate">
-                              Log {actionMatch.type} for{" "}
-                              <span className="text-success">
-                                {actionMatch.contact.name}
-                              </span>
-                            </span>
-                            <span className="text-sm text-on-surface-variant truncate mt-0.5">
-                              "{actionMatch.content}"
-                            </span>
-                          </div>
-                          <div className="shrink-0 opacity-50 px-2 flex items-center justify-center space-x-1">
-                            <span className="text-xs">Press</span>
-                            <kbd className={KBD}>Enter</kbd>
-                          </div>
-                        </Command.Item>
-                      </Command.Group>
+                    {/* ═══════════════ LOG MODE (> prefix) ═══════════════ */}
+                    {!subMenuContactId && mode === "action" && (
+                      <LogMode
+                        input={search}
+                        contacts={allContacts}
+                        recentContacts={recentContacts}
+                        onFill={setSearch}
+                        onLog={handleLog}
+                      />
                     )}
 
                     {/* ═══════════════ NORMAL MODE (with search text or facets) ═══════════════ */}
@@ -1202,27 +1238,30 @@ export const CommandPalette = () => {
                       mode === "normal" &&
                       !isEmptyInput && (
                         <>
-                          <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
-                            {instantSearch.isFtsLoading
-                              ? "Searching..."
-                              : "No results found"}
-                          </Command.Empty>
+                          {/* Not under the open facet values: they are
+                              what to pick, not a search that found nothing. */}
+                          {!facetMenuOpen && (
+                            <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
+                              {instantSearch.isFtsLoading
+                                ? "Searching…"
+                                : "No people found"}
+                            </Command.Empty>
+                          )}
+
+                          {exactPage && (
+                            <GoToGroup
+                              query={parsed.freeText}
+                              onNavigate={handleNavigate}
+                            />
+                          )}
 
                           {instantSearch.results.length > 0 && (
                             <Command.Group
+                              // No "instant" mark: it pulsed on every key,
+                              // and nobody could say what it meant.
                               heading={
                                 <span className="flex items-center gap-1.5">
                                   Contacts
-                                  {instantSearch.isInstant && (
-                                    <span
-                                      className={cn(
-                                        SMALL_CAPS,
-                                        "text-warning animate-pulse",
-                                      )}
-                                    >
-                                      ⚡ instant
-                                    </span>
-                                  )}
                                   {hasFilters && (
                                     <span
                                       className={cn(SMALL_CAPS, "text-primary")}
@@ -1312,7 +1351,7 @@ export const CommandPalette = () => {
                                       openSubMenu(contact);
                                     }}
                                     onMouseDown={(e) => e.preventDefault()}
-                                    className="hit-area state-layer shrink-0 flex items-center gap-1 sm:opacity-0 sm:group-hover/result:opacity-50 sm:aria-selected:opacity-50 opacity-40 pointer-coarse:opacity-40 active:opacity-80 transition-opacity text-[11px] text-on-surface-variant self-center p-1.5 -mr-1 rounded-lg sm:p-0 sm:mr-0"
+                                    className="hit-area state-layer shrink-0 flex items-center gap-1 sm:opacity-0 sm:group-hover/result:opacity-50 sm:group-aria-selected/result:opacity-50 opacity-40 pointer-coarse:opacity-40 active:opacity-80 transition-opacity text-[11px] text-on-surface-variant self-center p-1.5 -mr-1 rounded-lg sm:p-0 sm:mr-0"
                                     aria-label={`Actions for ${contact.name}`}
                                   >
                                     <ChevronsRight className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
@@ -1322,62 +1361,83 @@ export const CommandPalette = () => {
                             </Command.Group>
                           )}
 
-                          {parsed.freeText.trim().length > 0 &&
-                            instantSearch.results.length === 0 &&
-                            !instantSearch.isFtsLoading && (
-                              <Command.Group
-                                heading="Actions"
-                                className={`mt-2 text-on-surface-variant ${GROUP_HEADING_DEFAULT}`}
+                          {/* Pages and Settings pages the words name:
+                              "pulse" used to offer only a new contact. A
+                              page named exactly comes before the people. */}
+                          {!exactPage && (
+                            <GoToGroup
+                              query={parsed.freeText}
+                              onNavigate={handleNavigate}
+                            />
+                          )}
+
+                          {/* Last, and only when nobody has the name: an
+                              approximate match hid it, so "Nancy Drew" could
+                              not be made while "Nancy Drews" was a result.
+                              Never with pills, which it would not keep. */}
+                          {canCreate && (
+                            <Command.Group
+                              heading="Create"
+                              className={GROUP_HEADING_DEFAULT}
+                            >
+                              <Command.Item
+                                value={`create_${search}`}
+                                onSelect={handleCreateContact}
+                                className={cn(
+                                  "flex items-center gap-3 px-3 py-2 rounded-xl cursor-default select-none transition-colors text-on-surface",
+                                  ITEM_CURRENT,
+                                )}
                               >
-                                <Command.Item
-                                  value={`create_${search}`}
-                                  onSelect={handleCreateContact}
-                                  className={cn(
-                                    "flex items-center gap-3 px-3 py-3 rounded-xl cursor-default select-none transition-colors text-on-surface",
-                                    ITEM_CURRENT,
-                                  )}
-                                >
-                                  <div className="w-8 h-8 flex items-center justify-center bg-surface-container-highest rounded-full">
-                                    <UserPlus className="w-4 h-4 text-primary" />
-                                  </div>
-                                  <span className="text-sm">
-                                    Create new contact{" "}
-                                    <span className="font-bold whitespace-nowrap overflow-hidden text-ellipsis max-w-[200px] inline-block align-bottom">
-                                      "{parsed.freeText}"
-                                    </span>
+                                <div className="w-8 h-8 flex items-center justify-center bg-surface-container-highest rounded-full shrink-0">
+                                  <UserPlus className="w-4 h-4 text-primary" />
+                                </div>
+                                <span className="text-sm truncate">
+                                  Create contact{" "}
+                                  <span className="font-bold">
+                                    "{parsed.freeText.trim()}"
                                   </span>
-                                </Command.Item>
-                              </Command.Group>
-                            )}
+                                </span>
+                              </Command.Item>
+                            </Command.Group>
+                          )}
                         </>
                       )}
                   </Command.List>
 
+                  <div
+                    role="status"
+                    aria-label="Palette status"
+                    className="sr-only"
+                  >
+                    {statusText}
+                  </div>
+
                   {/* ── Shift-to-peek, in a portal on the body ── */}
                   <ResultPeek contact={peekContact} visible={peekVisible} />
 
-                  {/* ── Footer ── */}
-                  <div
-                    className={`px-4 py-2.5 ${SECTION_BG} text-[11px] text-on-surface-variant hidden sm:flex items-center justify-between`}
-                  >
-                    <span className="flex items-center gap-2">
-                      Use <kbd className={KBD_SM}>↑</kbd>{" "}
-                      <kbd className={KBD_SM}>↓</kbd> to navigate
-                    </span>
-                    <span className="flex items-center gap-1">
-                      {!isEmptyInput && !subMenuContactId && (
-                        <span className="text-on-surface-variant mr-2">
-                          <kbd className={KBD_SM}>→</kbd> actions
+                  {/* ── Footer: the keys that work on this row ── */}
+                  <PaletteFooter
+                    enter={subMenuContactId ? null : enterActionFor(activeRow)}
+                    canAct={
+                      mode === "normal" && !subMenuContactId && !!peekContact
+                    }
+                    canPeek={!subMenuContactId && !!peekContact}
+                    escape={
+                      subMenuContactId
+                        ? "back"
+                        : search !== "" || hasFilters
+                          ? "clear"
+                          : "close"
+                    }
+                    tip={
+                      isEmptyInput && mode === "normal" ? (
+                        <span>
+                          Filter with <code>tag:</code>, <code>role:</code> or{" "}
+                          <code>company:</code>
                         </span>
-                      )}
-                      {!isEmptyInput && peekContact && !subMenuContactId && (
-                        <span className="text-on-surface-variant mr-2">
-                          Hold <kbd className={KBD_SM}>Shift</kbd> to peek
-                        </span>
-                      )}
-                      <kbd className={KBD_SM}>Enter</kbd> to select
-                    </span>
-                  </div>
+                      ) : undefined
+                    }
+                  />
                 </motion.div>
               </Command>
             </Dialog.Content>

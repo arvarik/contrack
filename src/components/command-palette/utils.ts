@@ -81,7 +81,7 @@ export function aiResultsHeading(
   shown: number,
   total: number,
 ): string {
-  const heading = fallback ? "Not verified by AI" : "AI query results";
+  const heading = fallback ? "Not verified by AI" : "AI answer";
   return total > shown
     ? `${heading} · ${shown} of ${total.toLocaleString()}`
     : heading;

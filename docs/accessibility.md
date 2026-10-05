@@ -92,6 +92,7 @@ The report is uploaded on every run.
 | `contact.spec.ts`              | Focus when a contact opens, the list keys, the header menu, tracking, the timeline, the composer and Back on a phone                |
 | `dialogs.spec.ts`              | Four dialogs: focus in, `Tab` kept inside, `Esc`, focus back, and a scan while open                                                 |
 | `search-announcements.spec.ts` | The status messages and alerts of People and Notes searches                                                                         |
+| `palette-keys.spec.ts`         | The command palette: the arrows, `Esc` one layer at a time, `aria-activedescendant` on the highlighted row, focus kept in the input |
 | `mobile-forms.spec.ts`         | A Pixel 7: the tab bar, the new contact sheet with 16 px fields, and setup errors tied to their fields                              |
 | `metrics.spec.ts`              | A 390 px phone: 44 px targets and 11 px text on seven screens                                                                       |
 | `phone-shell.spec.ts`          | Typing hides the tab bar and keeps Save in view, a sheet drags closed, the browser bar's theme, asset caching, the rail on its side |

@@ -5,7 +5,8 @@
  *   1. Recently viewed contacts (from useRecentContacts hook)
  *   2. Search history (from useSearchHistory hook)
  *   3. CRM intelligence insights (from useZeroState API hook)
- *   4. Navigation shortcuts (static list)
+ *   4. The five destinations (`GoToGroup`, which also lists the pages a
+ *      typed word matches)
  *
  * All items are Command.Item elements — fully keyboard-navigable with ↑/↓/Enter.
  */
@@ -156,17 +157,9 @@ export const ZeroStateView = ({
   onSelectInsight,
   onNavigate,
 }: ZeroStateViewProps) => {
-  const { isAdmin, authRequired } = useAuth();
   const hasRecent = recentContacts.length > 0;
   const hasHistory = historyEntries.length > 0;
   const hasInsights = insights.length > 0;
-
-  const settingsNavItems = SETTINGS_PAGES.filter((page) => {
-    if (page.admin && !isAdmin) return false;
-    if (page.needsAccount && !authRequired) return false;
-    if (page.id === "ai-usage" && isAdmin) return false;
-    return true;
-  });
 
   return (
     <>
@@ -252,45 +245,97 @@ export const ZeroStateView = ({
         </Command.Group>
       )}
 
-      {/* ── Navigation ── */}
-      <Command.Group heading="Go to" className={GROUP_HEADING_DEFAULT}>
-        {NAV_ITEMS.map((item) => (
+      {/* ── Navigation: the five destinations. Settings pages come up
+          when their name is typed (`GoToGroup`). ── */}
+      <GoToGroup query="" onNavigate={onNavigate} />
+    </>
+  );
+};
+
+/**
+ * Does a destination match the typed words? Each word must be in its name
+ * or in one of its keywords. Two characters at least, so one letter does
+ * not list every page.
+ */
+export function matchesDestination(
+  query: string,
+  label: string,
+  keywords: readonly string[] = [],
+): boolean {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.join(" ").length < 2) return false;
+  const haystack = [label, ...keywords].join(" ").toLowerCase();
+  return words.every((word) => haystack.includes(word));
+}
+
+/**
+ * The "Go to" rows. With no words, the five destinations. With words, the
+ * destinations and the Settings pages they match, or nothing. Typing
+ * "pulse" used to offer only to create a contact named "pulse".
+ */
+export const GoToGroup = ({
+  query,
+  onNavigate,
+}: {
+  query: string;
+  onNavigate: (path: string) => void;
+}) => {
+  const { isAdmin, authRequired } = useAuth();
+  const typed = query.trim();
+  const destinations = typed
+    ? NAV_ITEMS.filter((item) => matchesDestination(typed, item.label))
+    : NAV_ITEMS;
+  const settingsPages = typed
+    ? SETTINGS_PAGES.filter((page) => {
+        if (page.admin && !isAdmin) return false;
+        if (page.needsAccount && !authRequired) return false;
+        if (page.id === "ai-usage" && isAdmin) return false;
+        return matchesDestination(
+          typed,
+          `Settings ${page.title}`,
+          page.keywords,
+        );
+      })
+    : [];
+  if (destinations.length === 0 && settingsPages.length === 0) return null;
+
+  return (
+    <Command.Group heading="Go to" className={GROUP_HEADING_DEFAULT}>
+      {destinations.map((item) => (
+        <Command.Item
+          key={`nav_${item.path}`}
+          value={`nav_${item.label}`}
+          onSelect={() => onNavigate(item.path)}
+          className={cn(ROW, NAV_ROW, ITEM_CURRENT)}
+        >
+          <item.icon className="w-4 h-4 shrink-0" />
+          <span className="text-sm flex-1">{item.label}</span>
+          {item.shortcut && (
+            <kbd
+              className={cn(
+                KBD_SM,
+                "text-on-surface-variant hidden sm:inline-flex",
+              )}
+            >
+              {item.shortcut}
+            </kbd>
+          )}
+        </Command.Item>
+      ))}
+      {settingsPages.map((page) => {
+        const Icon = page.icon;
+        return (
           <Command.Item
-            key={`nav_${item.path}`}
-            value={`nav_${item.label}`}
-            onSelect={() => onNavigate(item.path)}
+            key={`nav_${page.path}`}
+            value={`Settings: ${page.title}`}
+            onSelect={() => onNavigate(page.path)}
             className={cn(ROW, NAV_ROW, ITEM_CURRENT)}
           >
-            <item.icon className="w-4 h-4 shrink-0" />
-            <span className="text-sm flex-1">{item.label}</span>
-            {item.shortcut && (
-              <kbd
-                className={cn(
-                  KBD_SM,
-                  "text-on-surface-variant hidden sm:inline-flex",
-                )}
-              >
-                {item.shortcut}
-              </kbd>
-            )}
+            <Icon className="w-4 h-4 shrink-0" />
+            <span className="text-sm flex-1">Settings: {page.title}</span>
           </Command.Item>
-        ))}
-        {settingsNavItems.map((page) => {
-          const Icon = page.icon;
-          return (
-            <Command.Item
-              key={`nav_${page.path}`}
-              value={`Settings: ${page.title}`}
-              keywords={page.keywords}
-              onSelect={() => onNavigate(page.path)}
-              className={cn(ROW, NAV_ROW, ITEM_CURRENT)}
-            >
-              <Icon className="w-4 h-4 shrink-0" />
-              <span className="text-sm flex-1">Settings: {page.title}</span>
-            </Command.Item>
-          );
-        })}
-      </Command.Group>
-    </>
+        );
+      })}
+    </Command.Group>
   );
 };

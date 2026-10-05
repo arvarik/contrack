@@ -15,9 +15,7 @@ import type { HistoryEntry } from "../../../../shared/searchHistory";
 
 describe("aiResultsHeading", () => {
   it("says how many a cut list holds, and nothing more for a whole one", () => {
-    expect(aiResultsHeading(false, 30, 1501)).toBe(
-      "AI query results · 30 of 1,501",
-    );
+    expect(aiResultsHeading(false, 30, 1501)).toBe("AI answer · 30 of 1,501");
     expect(aiResultsHeading(true, 3, 3)).toBe("Not verified by AI");
   });
 });
@@ -347,6 +345,27 @@ describe("ZeroStateView", () => {
     // Selecting the notes entry passes "quarterly sync" and "notes"
     fireEvent.click(screen.getByText("quarterly sync"));
     expect(onSelectHistory).toHaveBeenCalledWith("quarterly sync", "notes");
+  });
+});
+
+describe("matchesDestination", () => {
+  it("matches each typed word in the name or a keyword, ignoring case", async () => {
+    const { matchesDestination } =
+      await import("../../../../src/components/command-palette/ZeroStateView");
+    expect(matchesDestination("pulse", "Pulse")).toBe(true);
+    expect(matchesDestination("PUL", "Pulse")).toBe(true);
+    expect(
+      matchesDestination("backup", "Settings Export", ["backup my contacts"]),
+    ).toBe(true);
+    expect(matchesDestination("settings exp", "Settings Export")).toBe(true);
+    expect(matchesDestination("settings zz", "Settings Export")).toBe(false);
+  });
+
+  it("needs two characters, so one letter does not list every page", async () => {
+    const { matchesDestination } =
+      await import("../../../../src/components/command-palette/ZeroStateView");
+    expect(matchesDestination("p", "Pulse")).toBe(false);
+    expect(matchesDestination("  ", "Pulse")).toBe(false);
   });
 });
 

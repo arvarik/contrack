@@ -285,16 +285,25 @@ test("Escape in the note composer goes back to the actions, with the input focus
 
 test("→ then Escape keeps the highlight on the row the actions opened from", async ({
   page,
+  instance,
 }) => {
   // The actions menu takes the rows' place. cmdk re-checks only the last
   // row to go, so when that was the highlighted one it forgot the
-  // highlight, and back from the menu it sat on the top row.
+  // highlight, and back from the menu it sat on the top row. Two people
+  // of this test's own, so the highlighted row is the last one: the exact
+  // name leaves out the create row, and no page has the words.
+  for (const name of ["Zara Quill", "Zara Quillon"]) {
+    const { id } = await instance.api<{ id: string }>("POST", "/contacts", {
+      name,
+    });
+    created.push({ instance, path: `/contacts/${id}` });
+  }
   const palette = await openPalette(page);
-  await page.keyboard.type("ace");
-  const rows = palette.getByRole("option");
-  await expect(rows).toHaveCount(2);
-  await expect(palette.getByText("Ada Lovelace")).toBeVisible();
-  await expect(palette.getByText("Grace Hopper")).toBeVisible();
+  await page.keyboard.type("Zara Quill");
+  await expect(
+    palette.getByRole("status", { name: "Palette status" }),
+  ).toHaveText("2 people found");
+  await expect(palette.getByRole("option")).toHaveCount(2);
   await page.keyboard.press("ArrowDown");
   await expect.poll(() => highlightIndex(page)).toBe(1);
   const [before] = await highlighted(page);
