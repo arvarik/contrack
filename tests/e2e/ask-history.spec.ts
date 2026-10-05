@@ -279,7 +279,9 @@ test.describe("desktop", () => {
     await expect(palette.getByText("Ada Lovelace")).toBeVisible();
     await page.waitForTimeout(600);
 
-    // Close palette
+    // Close palette: the first Escape clears the question.
+    await page.keyboard.press("Escape");
+    await expect(paletteInput).toHaveValue("");
     await page.keyboard.press("Escape");
     await expect(palette).toHaveCount(0);
 

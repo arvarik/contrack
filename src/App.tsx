@@ -24,6 +24,7 @@ import { QuickInteractionModal } from "./components/QuickInteractionModal";
 import {
   OPEN_SHORTCUTS_EVENT,
   OPEN_QUICK_NOTE_EVENT,
+  closeCommandPalette,
   type OpenQuickNoteDetail,
 } from "./lib/appEvents";
 import { NAMES } from "./lib/names";
@@ -432,13 +433,9 @@ export default function App() {
       // Either case: with Shift held, a browser may report the key as "I".
       if (e.key.toLowerCase() === "i" && isNavChord(e)) {
         e.preventDefault();
-        // If Cmd+K is open, close it first
-        const cmdkDialog = document.querySelector("[cmdk-dialog]");
-        if (cmdkDialog) {
-          cmdkDialog.dispatchEvent(
-            new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
-          );
-        }
+        // If Cmd+K is open, close it first. Not with an Escape: that only
+        // clears a palette that holds text.
+        closeCommandPalette();
         setQuickNoteOpen((prev) => !prev);
         return;
       }

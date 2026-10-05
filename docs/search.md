@@ -22,7 +22,7 @@ The box reads facets too, except `near:`. The page address keeps your search, so
 
 ## Command palette
 
-Press `Cmd+K` on any page to open the palette. Press it again, or press `Esc`, to close it. The palette opens with an empty box each time. On a touch screen, press **Command palette**, the first button above the Network list.
+Press `Cmd+K` on any page to open the palette. Press it again to close it. `Esc` steps back one layer at a time: it closes the facet values or the actions, then clears the box and its pills, and on an empty box it closes the palette. The palette opens with an empty box each time. On a touch screen, press **Command palette**, the first button above the Network list.
 
 The first character you type sets the mode:
 
@@ -82,7 +82,7 @@ The palette shows a row such as "Log note for Julian Moreau". It picks the first
 With the box empty, the palette shows these groups:
 
 - **Recently viewed**: the last three contacts you opened.
-- **Recent searches**: your five latest searches from the palette and from Ask Contrack. Press `↑` in the empty box to step back through your searches, and `↓` to step forward.
+- **Recent searches**: your five latest searches from the palette and from Ask Contrack. Select one to search again.
 - **Insights**: the follow-ups that are due, and the two tracked contacts furthest past their cadence. It also names a person you mention often who is not in your network, and it counts the contacts with stale data and the possible duplicates.
 - **Go to**: the five destinations and every page in Settings.
 
@@ -96,7 +96,7 @@ Facet pills go with the question. When you add or remove a pill, the palette ask
 
 A facet is a filter that you type as `name:value`. Type a facet and then a space, and it becomes a pill. `Backspace` in an empty box removes the last pill. Select a pill to remove it.
 
-Type a facet name and its colon to see values to pick. The text facets list the values in your contacts. Use `↑`/`↓` to choose, `Enter` or `Tab` to pick a value, and `Esc` to close the list.
+Type a facet name and its colon to see values to pick. The text facets list the values in your contacts. Use `↑`/`↓` to choose, `Enter` or `Tab` to pick a value, and `Esc` to close the list. Type again to see it again.
 
 | Facet        | Example            | Keeps the contacts                                                                                       |
 | ------------ | ------------------ | -------------------------------------------------------------------------------------------------------- |

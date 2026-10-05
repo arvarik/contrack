@@ -238,78 +238,12 @@ describe("useSearchHistory", () => {
     });
   });
 
-  it("navigateHistory steps through history and restores stashed input", async () => {
+  it("clearHistory calls the clear mutation", async () => {
     const { result } = renderHook(() => useSearchHistory(), { wrapper });
 
     await waitFor(() => {
       expect(result.current.entries).toHaveLength(2);
     });
-
-    let navResult: string | null = null;
-    act(() => {
-      navResult = result.current.navigateHistory("up", "typed query");
-    });
-    expect(navResult).toBe("? who knows quantum");
-    expect(result.current.historyIndex).toBe(0);
-
-    act(() => {
-      navResult = result.current.navigateHistory("up", "typed query");
-    });
-    expect(navResult).toBe("jane doe");
-    expect(result.current.historyIndex).toBe(1);
-
-    act(() => {
-      navResult = result.current.navigateHistory("up", "typed query");
-    });
-    expect(navResult).toBeNull();
-
-    act(() => {
-      navResult = result.current.navigateHistory("down", "typed query");
-    });
-    expect(navResult).toBe("? who knows quantum");
-    expect(result.current.historyIndex).toBe(0);
-
-    act(() => {
-      navResult = result.current.navigateHistory("down", "typed query");
-    });
-    expect(navResult).toBe("typed query");
-    expect(result.current.historyIndex).toBe(-1);
-
-    act(() => {
-      navResult = result.current.navigateHistory("down", "typed query");
-    });
-    expect(navResult).toBeNull();
-  });
-
-  it("resetNavigation clears index and stashed input", async () => {
-    const { result } = renderHook(() => useSearchHistory(), { wrapper });
-
-    await waitFor(() => {
-      expect(result.current.entries).toHaveLength(2);
-    });
-
-    act(() => {
-      result.current.navigateHistory("up", "typed query");
-    });
-    expect(result.current.historyIndex).toBe(0);
-
-    act(() => {
-      result.current.resetNavigation();
-    });
-    expect(result.current.historyIndex).toBe(-1);
-  });
-
-  it("clearHistory calls clear mutation and resets navigation index", async () => {
-    const { result } = renderHook(() => useSearchHistory(), { wrapper });
-
-    await waitFor(() => {
-      expect(result.current.entries).toHaveLength(2);
-    });
-
-    act(() => {
-      result.current.navigateHistory("up", "typed query");
-    });
-    expect(result.current.historyIndex).toBe(0);
 
     act(() => {
       result.current.clearHistory();
@@ -318,7 +252,6 @@ describe("useSearchHistory", () => {
     await waitFor(() => {
       expect(deletedUrls.length).toBeGreaterThanOrEqual(1);
     });
-    expect(result.current.historyIndex).toBe(-1);
   });
 
   it("handles note mode entries without adding ? prefix", async () => {

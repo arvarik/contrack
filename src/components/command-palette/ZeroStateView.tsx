@@ -209,7 +209,10 @@ export const ZeroStateView = ({
           {historyEntries.map((entry, i) => (
             <Command.Item
               key={`history_${i}_${entry.timestamp}`}
-              value={`history_${entry.query}`}
+              // With the mode: a people search and a notes search can hold
+              // the same words, and two rows with one value are both
+              // highlighted at once, which stops the arrow keys between them.
+              value={`history_${entry.mode}_${entry.query}`}
               onSelect={() => onSelectHistory(entry.query, entry.mode)}
               className={cn(ROW, "py-2 text-on-surface", ITEM_CURRENT)}
             >

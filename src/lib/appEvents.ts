@@ -31,6 +31,13 @@ export const OPEN_QUICK_NOTE_EVENT = "contrack:open-quick-note";
  */
 export const OPEN_PALETTE_EVENT = "contrack:open-palette";
 
+/**
+ * Close the command palette, whatever it holds. A shortcut that opens a
+ * dialog of its own sends it first. Escape is not the same: it clears the
+ * input before it closes anything. Owned by the palette.
+ */
+export const CLOSE_PALETTE_EVENT = "contrack:close-palette";
+
 export interface OpenQuickNoteDetail {
   contactId?: string;
 }
@@ -124,6 +131,11 @@ export const emitAuthStatusStale = (): void => {
  */
 export const openCommandPalette = (): void => {
   window.dispatchEvent(new Event(OPEN_PALETTE_EVENT));
+};
+
+/** Close the command palette from anywhere. See {@link CLOSE_PALETTE_EVENT}. */
+export const closeCommandPalette = (): void => {
+  window.dispatchEvent(new Event(CLOSE_PALETTE_EVENT));
 };
 
 /** Ask App to open the quick note modal, optionally pre-selecting a contact. */

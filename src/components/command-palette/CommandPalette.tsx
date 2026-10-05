@@ -1,10 +1,12 @@
 import React, {
   useEffect,
+  useLayoutEffect,
   useState,
   useMemo,
   useRef,
   useCallback,
 } from "react";
+import * as Dialog from "@radix-ui/react-dialog";
 import { Command } from "cmdk";
 import { useNavigate } from "react-router-dom";
 import {
@@ -42,7 +44,7 @@ import { toast } from "sonner";
 import { KBD, KBD_SM, SECTION_BG, TONE_WASH } from "../../lib/styles";
 import { DURATION, EASE } from "../../lib/motion";
 import { cn } from "../../lib/utils";
-import { OPEN_PALETTE_EVENT } from "../../lib/appEvents";
+import { CLOSE_PALETTE_EVENT, OPEN_PALETTE_EVENT } from "../../lib/appEvents";
 import type { SemanticMatch, ZeroStateInsight } from "../../types";
 import {
   aiResultsHeading,
@@ -89,6 +91,12 @@ export const CommandPalette = () => {
   const aiAllowed = preferences.aiAssist;
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
+  // The highlighted row, by its cmdk value. The palette holds it, rather
+  // than cmdk alone, so it can put the highlight back on a row when the row
+  // it was on leaves the list (see the layout effect below).
+  const [activeRow, setActiveRow] = useState("");
+  // Escape hid the facet suggestions. Typing shows them again.
+  const [facetMenuDismissed, setFacetMenuDismissed] = useState(false);
   const navigate = useNavigate();
 
   // ── Mode detection ──
@@ -141,7 +149,7 @@ export const CommandPalette = () => {
   // re-firing on every render the way depending on the wrapper object would.
   const { mutate: runSemanticSearch, reset: resetSemanticSearch } =
     semanticSearch;
-  const { addEntry, resetNavigation, historyIndex } = searchHistory;
+  const { addEntry } = searchHistory;
 
   // Enrichment hooks for StaleChip refresh action
   const { data: groundingCapacity } = useGroundingCapacity();
@@ -161,10 +169,10 @@ export const CommandPalette = () => {
   );
 
   // ── Shift-to-peek state ──
-  const [peekContact, setPeekContact] = useState<PeekContact | null>(null);
   const [peekVisible, setPeekVisible] = useState(false);
   const peekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   // Resolve recent contact IDs to full contact objects for rendering
   const recentContacts = useMemo(() => {
@@ -328,7 +336,7 @@ export const CommandPalette = () => {
 
   // Global ⌘K / Ctrl+K listener.
   // Always opens with a fresh empty input — matches Spotlight/Linear/Raycast.
-  // Power-users can press ↑ to recall prior queries from history.
+  // The empty palette lists the recent searches, to pick from.
   // A touch screen has no ⌘K: the Network header's button sends
   // `OPEN_PALETTE_EVENT` (`openCommandPalette`), which only opens.
   useEffect(() => {
@@ -347,17 +355,51 @@ export const CommandPalette = () => {
     };
   }, []);
 
-  const handleClose = useCallback(() => {
-    setOpen(false);
-    setSearch("");
-    prevAiQueryRef.current = "";
-    lastRecordedAiRef.current = "";
-    resetNavigation();
-    clearFilters();
+  const closeSubMenu = useCallback(() => {
     setSubMenuContactId(null);
     setSubMenuContactName("");
     setSubMenuContactAvatar(null);
-  }, [clearFilters, resetNavigation]);
+  }, []);
+
+  const handleClose = useCallback(() => {
+    setOpen(false);
+    setSearch("");
+    setActiveRow("");
+    setFacetMenuDismissed(false);
+    setPeekVisible(false);
+    prevAiQueryRef.current = "";
+    lastRecordedAiRef.current = "";
+    clearFilters();
+    closeSubMenu();
+  }, [clearFilters, closeSubMenu]);
+
+  // Another shortcut that opens a dialog of its own closes the palette
+  // first (`closeCommandPalette`). It used to send an Escape, which now
+  // clears the input before it closes anything.
+  useEffect(() => {
+    window.addEventListener(CLOSE_PALETTE_EVENT, handleClose);
+    return () => window.removeEventListener(CLOSE_PALETTE_EVENT, handleClose);
+  }, [handleClose]);
+
+  /**
+   * Escape steps back one layer at a time. The facet suggestions and the
+   * actions menu take their own Escape first. Then Escape clears the text
+   * and the pills, and on an empty palette it closes. Radix asks here
+   * before it closes the dialog, and a prevented Escape keeps it open.
+   */
+  const handleEscape = (e: KeyboardEvent) => {
+    if (subMenuContactId) {
+      e.preventDefault();
+      closeSubMenu();
+      return;
+    }
+    if (search !== "" || hasFilters) {
+      e.preventDefault();
+      setSearch("");
+      clearFilters();
+      setFacetMenuDismissed(false);
+    }
+  };
 
   const handleCreateContact = async () => {
     if (!search.trim()) return;
@@ -434,8 +476,6 @@ export const CommandPalette = () => {
     [navigate, handleClose, recordVisit],
   );
 
-  const isNavigatingHistoryRef = useRef(false);
-
   const handleSelectHistory = useCallback(
     (query: string, entryMode?: string) => {
       if (entryMode === "notes") {
@@ -445,9 +485,8 @@ export const CommandPalette = () => {
         return;
       }
       setSearch(query);
-      resetNavigation();
     },
-    [navigate, handleClose, resetNavigation],
+    [navigate, handleClose],
   );
 
   // Commit-on-selection recording for normal-mode contact picks.
@@ -487,12 +526,19 @@ export const CommandPalette = () => {
     [navigate, handleClose],
   );
 
-  // ── Terminal-style ↑/↓ history navigation ──
+  // ── Keys in the input ──
+  //
+  // ↑ and ↓ always move the highlight, which cmdk does. ↑ on an empty input
+  // used to bring back the last search instead, so ↓ then ↑ in the empty
+  // palette swapped its list for that search's results. The recent searches
+  // are rows in the empty palette instead.
+
+  /** The person moved the highlight since the query last changed. */
+  const movedHighlightRef = useRef(false);
 
   const handleSearchInputKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      // The actions menu took the key: ↑ and ↓ move its rows, and must not
-      // also bring back another query under it.
+      // The actions menu took the key: ↑ and ↓ move its rows.
       if (e.defaultPrevented) return;
       // Backspace on empty input deletes the last facet pill
       if (e.key === "Backspace" && search === "" && hasFilters) {
@@ -500,31 +546,11 @@ export const CommandPalette = () => {
         removeLastFilter();
         return;
       }
-
-      // Handle ↑/↓ when input is empty (zero-state) OR when actively navigating history
-      const isNavigatingHistory = searchHistory.historyIndex >= 0;
-      if (!hasFilters && (search.trim() === "" || isNavigatingHistory)) {
-        if (e.key === "ArrowUp") {
-          const historyQuery = searchHistory.navigateHistory("up", search);
-          if (historyQuery !== null) {
-            e.preventDefault();
-            isNavigatingHistoryRef.current = true;
-            setSearch(historyQuery);
-          }
-          return;
-        }
-        if (e.key === "ArrowDown" && isNavigatingHistory) {
-          const historyQuery = searchHistory.navigateHistory("down", search);
-          if (historyQuery !== null) {
-            e.preventDefault();
-            isNavigatingHistoryRef.current = true;
-            setSearch(historyQuery);
-          }
-          return;
-        }
+      if (["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) {
+        movedHighlightRef.current = true;
       }
     },
-    [search, searchHistory, hasFilters, removeLastFilter],
+    [search, hasFilters, removeLastFilter],
   );
 
   // Is the input empty? (determines zero-state vs search results)
@@ -553,16 +579,9 @@ export const CommandPalette = () => {
       // Only in normal mode with results showing
       if (mode !== "normal" || isEmptyInput) return;
 
-      // Find the currently focused result
-      const selected = listRef.current?.querySelector(
-        '[aria-selected="true"]',
-      ) as HTMLElement | null;
-      if (!selected) return;
-
-      // Extract contact ID from data-value
-      const value = selected.getAttribute("data-value") || "";
+      // The highlighted row's value holds its contact's id.
       for (const contact of instantSearch.results) {
-        if (value.includes(contact.id)) {
+        if (activeRow.includes(contact.id)) {
           e.preventDefault();
           setSubMenuContactId(contact.id);
           setSubMenuContactName(contact.name);
@@ -574,72 +593,109 @@ export const CommandPalette = () => {
 
     window.addEventListener("keydown", handleArrowRight);
     return () => window.removeEventListener("keydown", handleArrowRight);
-  }, [open, subMenuContactId, mode, isEmptyInput, instantSearch.results]);
+  }, [
+    open,
+    subMenuContactId,
+    mode,
+    isEmptyInput,
+    instantSearch.results,
+    activeRow,
+  ]);
 
-  // Reset history navigation when user types
   const handleSearchChange = useCallback(
     (value: string) => {
       setSearch(value);
-      if (isNavigatingHistoryRef.current) {
-        isNavigatingHistoryRef.current = false;
-      } else if (historyIndex >= 0) {
-        resetNavigation();
-      }
+      setFacetMenuDismissed(false);
       // Clear sub-menu if user starts typing again
       if (subMenuContactId) {
         setSubMenuContactId(null);
       }
     },
-    [historyIndex, resetNavigation, subMenuContactId],
+    [subMenuContactId],
   );
+
+  // A new query puts the highlight back on the top row, as cmdk does.
+  useEffect(() => {
+    movedHighlightRef.current = false;
+  }, [search, parsed.filters]);
+
+  /**
+   * Keep one row highlighted, and keep it on the top row until the person
+   * moves it.
+   *
+   * cmdk follows the highlighted row by its value. When the server's people
+   * replace the instant ones, that row can leave the list, and cmdk then
+   * highlights nothing, because it re-checks only the last row to unmount.
+   * Enter did nothing until an arrow key picked a row. And when the server
+   * ranks a row the instant list had on top lower down, the highlight went
+   * with it, so Enter opened a row that was no longer on top.
+   *
+   * After every commit, once cmdk has given each row its value: the rows
+   * come from a dozen sources. No list of dependencies on purpose. It
+   * cannot loop: it saves the top row only when the highlight is elsewhere,
+   * and the next commit finds it there.
+   */
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!open || !list) return;
+    const rows = list.querySelectorAll(
+      '[cmdk-item]:not([aria-disabled="true"])',
+    );
+    if (!rows.length) return;
+    const values = Array.from(rows, (row) => row.getAttribute("data-value"));
+    const keep = movedHighlightRef.current && values.includes(activeRow);
+    if (!keep && values[0] && values[0] !== activeRow) {
+      setActiveRow(values[0]);
+      // With its group's heading, which sits above it.
+      list.scrollTop = 0;
+    }
+  });
+
+  /**
+   * The input names the highlighted row in `aria-activedescendant`, which a
+   * screen reader announces. cmdk works it out before the rows show a new
+   * highlight, so it was missing on open, after typing and after the
+   * server's answer, until an arrow key was pressed. This follows the rows
+   * themselves, and puts it back when cmdk writes a stale one.
+   *
+   * The list mounts a render after the palette opens, inside a portal, so
+   * this runs after every render and watches the nodes it finds.
+   */
+  useLayoutEffect(() => {
+    const input = inputRef.current;
+    const list = listRef.current;
+    if (!input || !list) return;
+    const sync = () => {
+      const row = list.querySelector('[cmdk-item][aria-selected="true"]');
+      if (!row?.id) input.removeAttribute("aria-activedescendant");
+      else if (input.getAttribute("aria-activedescendant") !== row.id) {
+        input.setAttribute("aria-activedescendant", row.id);
+      }
+    };
+    sync();
+    const observer = new MutationObserver(sync);
+    observer.observe(list, {
+      subtree: true,
+      childList: true,
+      attributeFilter: ["aria-selected"],
+    });
+    observer.observe(input, { attributeFilter: ["aria-activedescendant"] });
+    return () => observer.disconnect();
+  });
 
   // AI loading: mutation is pending AND query is long enough
   const isAiLoading = mode === "ai" && semanticSearch.isPending;
 
-  // ── Shift-to-peek: track focused result via MutationObserver ──
-  useEffect(() => {
-    if (!open) {
-      setPeekContact(null);
-      setPeekVisible(false);
-      return;
+  // ── Shift-to-peek: the highlighted contact ──
+  // A people row's value is its id and name, an AI row's `ai_<id>_<name>`.
+  const peekContact = useMemo(() => {
+    if (!open) return null;
+    for (const [id, contact] of resultMap) {
+      if (activeRow.includes(id)) return contact;
     }
-
-    const checkFocused = () => {
-      const el = listRef.current;
-      if (!el) return;
-      const selected = el.querySelector(
-        '[aria-selected="true"]',
-      ) as HTMLElement | null;
-      if (!selected) {
-        setPeekContact(null);
-        return;
-      }
-      // Extract contact ID from the cmdk value attribute
-      const value = selected.getAttribute("data-value") || "";
-      // FTS results use "id + name" as value, AI uses "ai_id_name"
-      // Try to find a matching contact from our result map
-      for (const [id, contact] of resultMap) {
-        if (value.includes(id)) {
-          setPeekContact(contact);
-          return;
-        }
-      }
-      setPeekContact(null);
-    };
-
-    // Observe aria-selected changes
-    const el = listRef.current;
-    if (!el) return;
-    const observer = new MutationObserver(checkFocused);
-    observer.observe(el, {
-      attributes: true,
-      attributeFilter: ["aria-selected"],
-      subtree: true,
-    });
-    checkFocused(); // Initial check
-
-    return () => observer.disconnect();
-  }, [open, resultMap]);
+    return null;
+  }, [open, activeRow, resultMap]);
 
   // Shift-to-peek.
   // We originally bound this to Space, but the input always has focus inside
@@ -683,56 +739,62 @@ export const CommandPalette = () => {
   return (
     <AnimatePresence>
       {open && (
-        <Command.Dialog
-          open={open}
+        // cmdk's own `Command.Dialog` is these same Radix parts, with no way
+        // to hear Escape before the dialog closes. Built here, the content
+        // takes `onEscapeKeyDown`, which `handleEscape` needs.
+        <Dialog.Root
+          open
           onOpenChange={(v) => {
-            if (!v) {
-              // Escape stack: sub-menu open → close sub-menu, not palette
-              if (subMenuContactId) {
-                setSubMenuContactId(null);
-                setSubMenuContactName("");
-                setSubMenuContactAvatar(null);
-                return;
-              }
-              handleClose();
-            } else {
-              setOpen(true);
-            }
+            if (!v) handleClose();
           }}
-          label="Global command palette"
-          // Only the action rows are left to cmdk's fuzzy filter. The people
-          // rows arrive filtered and ranked, by the instant filter or by the
-          // server, and cmdk scores only a row's id and name: it hid every
-          // match on a company, a nickname, a misspelling or a phone number.
-          shouldFilter={
-            mode === "action" &&
-            !isEmptyInput &&
-            !subMenuContactId &&
-            !hasFilters
-          }
-          // Backdrop click-to-dismiss. The dialog content fills the viewport
-          // (inset-0) which means Radix's built-in pointer-down-outside never
-          // fires — there's nothing outside it. We close manually when the
-          // click target is the backdrop itself (not the inner panel, which
-          // stops propagation through its own click handlers / motion.div).
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) {
-              handleClose();
-            }
-          }}
-          className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4 backdrop-blur-md bg-surface/40"
         >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: -20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: -20 }}
-            transition={{ duration: DURATION.fast, ease: EASE }}
-            className="w-full max-w-2xl glass-panel shadow-2xl rounded-3xl overflow-hidden flex flex-col font-body"
-          >
-            {/* ── Facet pills (Feature 5) ── */}
-            <FacetPills filters={parsed.filters} onRemove={removeFilter} />
+          <Dialog.Portal>
+            <Dialog.Overlay cmdk-overlay="" />
+            <Dialog.Content
+              aria-label="Global command palette"
+              cmdk-dialog=""
+              onEscapeKeyDown={handleEscape}
+            >
+              <Command
+                label="Global command palette"
+                value={activeRow}
+                onValueChange={setActiveRow}
+                // Only the action rows are left to cmdk's fuzzy filter. The people
+                // rows arrive filtered and ranked, by the instant filter or by the
+                // server, and cmdk scores only a row's id and name: it hid every
+                // match on a company, a nickname, a misspelling or a phone number.
+                shouldFilter={
+                  mode === "action" &&
+                  !isEmptyInput &&
+                  !subMenuContactId &&
+                  !hasFilters
+                }
+                // Backdrop click-to-dismiss. The dialog content fills the viewport
+                // (inset-0) which means Radix's built-in pointer-down-outside never
+                // fires — there's nothing outside it. We close manually when the
+                // click target is the backdrop itself (not the inner panel, which
+                // stops propagation through its own click handlers / motion.div).
+                onMouseDown={(e) => {
+                  if (e.target === e.currentTarget) {
+                    handleClose();
+                  }
+                }}
+                className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4 backdrop-blur-md bg-surface/40"
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: -20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95, y: -20 }}
+                  transition={{ duration: DURATION.fast, ease: EASE }}
+                  className="w-full max-w-2xl glass-panel shadow-2xl rounded-3xl overflow-hidden flex flex-col font-body"
+                >
+                  {/* ── Facet pills (Feature 5) ── */}
+                  <FacetPills
+                    filters={parsed.filters}
+                    onRemove={removeFilter}
+                  />
 
-            {/*
+                  {/*
               Search input row: the mode icon, the input and the Escape hint.
               The input draws no ring, the one exception to the app's focus
               ring besides menu rows: the palette is a dialog with one field
@@ -740,531 +802,553 @@ export const CommandPalette = () => {
               go away and would say nothing. Its caret and the open panel say
               where the typing goes.
             */}
-            <div className="flex items-center px-4 py-2 sm:py-4 bg-surface-container-low gap-3">
-              <AnimatePresence mode="wait">
-                {mode === "ai" ? (
-                  <motion.div key="ai-icon" {...ICON_SWAP}>
-                    <Sparkles
-                      className={`w-5 h-5 text-primary ${isAiLoading ? "animate-pulse" : ""}`}
+                  <div className="flex items-center px-4 py-2 sm:py-4 bg-surface-container-low gap-3">
+                    <AnimatePresence mode="wait">
+                      {mode === "ai" ? (
+                        <motion.div key="ai-icon" {...ICON_SWAP}>
+                          <Sparkles
+                            className={`w-5 h-5 text-primary ${isAiLoading ? "animate-pulse" : ""}`}
+                          />
+                        </motion.div>
+                      ) : mode === "action" ? (
+                        <motion.div key="action-icon" {...ICON_SWAP}>
+                          <Zap className="w-5 h-5 text-success animate-pulse" />
+                        </motion.div>
+                      ) : (
+                        <motion.div key="search-icon" {...ICON_SWAP}>
+                          <Search className="w-5 h-5 text-on-surface-variant" />
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    <Command.Input
+                      ref={inputRef}
+                      value={search}
+                      onValueChange={handleSearchChange}
+                      onKeyDown={handleSearchInputKeyDown}
+                      // The palette exists to be typed into the instant it opens.
+                      // eslint-disable-next-line jsx-a11y/no-autofocus
+                      autoFocus
+                      placeholder={
+                        hasFilters
+                          ? "Add more filters or search..."
+                          : "Search contacts, ? to ask AI, > for actions..."
+                      }
+                      className="flex-1 min-h-[44px] sm:min-h-0 bg-transparent border-none outline-none text-on-surface placeholder:text-on-surface-variant text-lg"
                     />
-                  </motion.div>
-                ) : mode === "action" ? (
-                  <motion.div key="action-icon" {...ICON_SWAP}>
-                    <Zap className="w-5 h-5 text-success animate-pulse" />
-                  </motion.div>
-                ) : (
-                  <motion.div key="search-icon" {...ICON_SWAP}>
-                    <Search className="w-5 h-5 text-on-surface-variant" />
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                    {/* A touch screen has no Esc key: a tap outside closes. */}
+                    <div className="flex items-center gap-1.5 opacity-50 pointer-coarse:hidden">
+                      <kbd className={KBD}>ESC</kbd>
+                    </div>
+                  </div>
 
-              <Command.Input
-                value={search}
-                onValueChange={handleSearchChange}
-                onKeyDown={handleSearchInputKeyDown}
-                // The palette exists to be typed into the instant it opens.
-                // eslint-disable-next-line jsx-a11y/no-autofocus
-                autoFocus
-                placeholder={
-                  hasFilters
-                    ? "Add more filters or search..."
-                    : "Search contacts, ? to ask AI, > for actions..."
-                }
-                className="flex-1 min-h-[44px] sm:min-h-0 bg-transparent border-none outline-none text-on-surface placeholder:text-on-surface-variant text-lg"
-              />
-              {/* A touch screen has no Esc key: a tap outside closes. */}
-              <div className="flex items-center gap-1.5 opacity-50 pointer-coarse:hidden">
-                <kbd className={KBD}>ESC</kbd>
-              </div>
-            </div>
+                  {/* ── Mode indicator ribbon ── */}
+                  <div className="flex items-center gap-3 px-4 py-1.5 bg-surface-container-low/50 text-[11px] border-t border-surface-container">
+                    <span
+                      className={`flex items-center gap-1 ${mode === "normal" ? "text-on-surface font-bold" : "text-on-surface-variant"}`}
+                    >
+                      <Search className="w-3 h-3" /> Search
+                    </span>
+                    <span className="text-on-surface-variant/20">•</span>
+                    <span
+                      className={`flex items-center gap-1 ${mode === "ai" ? "text-primary font-bold" : "text-on-surface-variant"}`}
+                    >
+                      <Sparkles className="w-3 h-3" /> ? AI query
+                    </span>
+                    <span className="text-on-surface-variant/20">•</span>
+                    <span
+                      className={`flex items-center gap-1 ${mode === "action" ? "text-success font-bold" : "text-on-surface-variant"}`}
+                    >
+                      <Zap className="w-3 h-3" /> &gt; Actions
+                    </span>
+                  </div>
 
-            {/* ── Mode indicator ribbon ── */}
-            <div className="flex items-center gap-3 px-4 py-1.5 bg-surface-container-low/50 text-[11px] border-t border-surface-container">
-              <span
-                className={`flex items-center gap-1 ${mode === "normal" ? "text-on-surface font-bold" : "text-on-surface-variant"}`}
-              >
-                <Search className="w-3 h-3" /> Search
-              </span>
-              <span className="text-on-surface-variant/20">•</span>
-              <span
-                className={`flex items-center gap-1 ${mode === "ai" ? "text-primary font-bold" : "text-on-surface-variant"}`}
-              >
-                <Sparkles className="w-3 h-3" /> ? AI query
-              </span>
-              <span className="text-on-surface-variant/20">•</span>
-              <span
-                className={`flex items-center gap-1 ${mode === "action" ? "text-success font-bold" : "text-on-surface-variant"}`}
-              >
-                <Zap className="w-3 h-3" /> &gt; Actions
-              </span>
-            </div>
-
-            {/* ── Result list ── */}
-            {/* ── Facet autocomplete dropdown (Feature 5) ── */}
-            {parsed.activePrefix && (
-              <FacetAutocomplete
-                field={parsed.activePrefix.field}
-                partial={parsed.activePrefix.partial}
-                // `addFilter` also clears the partial from the input. A second
-                // clear here used `\S*`, which stops at a space, so a quoted
-                // partial such as `industry:"Venture Cap` stayed in the box.
-                onSelect={addFilter}
-                onDismiss={() => {
-                  // Remove the active prefix from input
-                  setSearch(search.replace(/\b\w+:$/, "").trim());
-                }}
-              />
-            )}
-
-            <Command.List
-              ref={listRef}
-              className="max-h-[380px] overflow-y-auto p-2 scrollbar-hide"
-            >
-              {/* ═══════════════ ACTION SUB-MENU (Feature 4) ═══════════════ */}
-              {subMenuContactId && (
-                <ActionSubMenu
-                  contactId={subMenuContactId}
-                  contactName={subMenuContactName}
-                  contactAvatarUrl={subMenuContactAvatar}
-                  onViewProfile={() => {
-                    recordVisit(subMenuContactId);
-                    navigate(`/contact/${subMenuContactId}`);
-                    handleClose();
-                  }}
-                  onCatchMeUp={() => {
-                    recordVisit(subMenuContactId);
-                    navigate(`/contact/${subMenuContactId}?brief=1`);
-                    handleClose();
-                  }}
-                  onBack={() => {
-                    setSubMenuContactId(null);
-                    setSubMenuContactName("");
-                    setSubMenuContactAvatar(null);
-                  }}
-                  onClose={handleClose}
-                />
-              )}
-
-              {/* ═══════════════ ZERO STATE (empty input, normal mode) ═══════════════ */}
-              {!subMenuContactId && mode === "normal" && isEmptyInput && (
-                <ZeroStateView
-                  recentContacts={recentContacts}
-                  historyEntries={searchHistory.recentDisplay}
-                  insights={zeroState?.insights ?? []}
-                  onSelectContact={handleSelectContact}
-                  onSelectHistory={handleSelectHistory}
-                  onSelectInsight={handleSelectInsight}
-                  onNavigate={handleNavigate}
-                />
-              )}
-
-              {/* ═══════════════ AI MODE ═══════════════ */}
-              {!subMenuContactId && mode === "ai" && (
-                <>
-                  {/* Empty / typing prompt */}
-                  {aiQuery.length === 0 && (
-                    <Command.Empty className="py-8 text-center text-sm text-on-surface-variant">
-                      <Sparkles className="w-8 h-8 text-primary mx-auto mb-3" />
-                      <p className="font-bold text-on-surface mb-1">
-                        AI query mode
-                      </p>
-                      <p className="text-xs mb-4">
-                        Ask anything about your network in plain English
-                      </p>
-                      <AiStarters onPick={(q) => setSearch(`? ${q}`)} />
-                    </Command.Empty>
+                  {/* ── Result list ── */}
+                  {/* ── Facet autocomplete dropdown (Feature 5) ── */}
+                  {parsed.activePrefix && !facetMenuDismissed && (
+                    <FacetAutocomplete
+                      field={parsed.activePrefix.field}
+                      partial={parsed.activePrefix.partial}
+                      // `addFilter` also clears the partial from the input. A second
+                      // clear here used `\S*`, which stops at a space, so a quoted
+                      // partial such as `industry:"Venture Cap` stayed in the box.
+                      onSelect={addFilter}
+                      // Escape hides the suggestions and leaves the text. It used
+                      // to strip a bare `role:` and do nothing to `role:eng`, so
+                      // the suggestions stayed and took every Escape after it.
+                      onDismiss={() => setFacetMenuDismissed(true)}
+                    />
                   )}
 
-                  {/* Short query — waiting for more input */}
-                  {aiQuery.length > 0 && aiQuery.length < 3 && (
-                    <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
-                      <Sparkles className="w-6 h-6 text-primary mx-auto mb-2" />
-                      <p className="text-xs">Keep typing to search…</p>
-                    </Command.Empty>
-                  )}
+                  <Command.List
+                    ref={listRef}
+                    // The pointer moved the highlight: the layout effect above
+                    // keeps it where the pointer put it.
+                    onPointerMove={() => {
+                      movedHighlightRef.current = true;
+                    }}
+                    className="max-h-[380px] overflow-y-auto p-2 scrollbar-hide"
+                  >
+                    {/* ═══════════════ ACTION SUB-MENU (Feature 4) ═══════════════ */}
+                    {subMenuContactId && (
+                      <ActionSubMenu
+                        contactId={subMenuContactId}
+                        contactName={subMenuContactName}
+                        contactAvatarUrl={subMenuContactAvatar}
+                        onViewProfile={() => {
+                          recordVisit(subMenuContactId);
+                          navigate(`/contact/${subMenuContactId}`);
+                          handleClose();
+                        }}
+                        onCatchMeUp={() => {
+                          recordVisit(subMenuContactId);
+                          navigate(`/contact/${subMenuContactId}?brief=1`);
+                          handleClose();
+                        }}
+                        onBack={() => {
+                          setSubMenuContactId(null);
+                          setSubMenuContactName("");
+                          setSubMenuContactAvatar(null);
+                        }}
+                        onClose={handleClose}
+                      />
+                    )}
 
-                  {/*
+                    {/* ═══════════════ ZERO STATE (empty input, normal mode) ═══════════════ */}
+                    {!subMenuContactId && mode === "normal" && isEmptyInput && (
+                      <ZeroStateView
+                        recentContacts={recentContacts}
+                        historyEntries={searchHistory.recentDisplay}
+                        insights={zeroState?.insights ?? []}
+                        onSelectContact={handleSelectContact}
+                        onSelectHistory={handleSelectHistory}
+                        onSelectInsight={handleSelectInsight}
+                        onNavigate={handleNavigate}
+                      />
+                    )}
+
+                    {/* ═══════════════ AI MODE ═══════════════ */}
+                    {!subMenuContactId && mode === "ai" && (
+                      <>
+                        {/* Empty / typing prompt */}
+                        {aiQuery.length === 0 && (
+                          <Command.Empty className="py-8 text-center text-sm text-on-surface-variant">
+                            <Sparkles className="w-8 h-8 text-primary mx-auto mb-3" />
+                            <p className="font-bold text-on-surface mb-1">
+                              AI query mode
+                            </p>
+                            <p className="text-xs mb-4">
+                              Ask anything about your network in plain English
+                            </p>
+                            <AiStarters onPick={(q) => setSearch(`? ${q}`)} />
+                          </Command.Empty>
+                        )}
+
+                        {/* Short query — waiting for more input */}
+                        {aiQuery.length > 0 && aiQuery.length < 3 && (
+                          <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
+                            <Sparkles className="w-6 h-6 text-primary mx-auto mb-2" />
+                            <p className="text-xs">Keep typing to search…</p>
+                          </Command.Empty>
+                        )}
+
+                        {/*
                     Loading shimmer, for the whole wait. The first list the
                     server streams is a guess AI has not checked yet, so the
                     palette keeps it back and shows AI's answer only.
                   */}
-                  {aiQuery.length >= 3 && isAiLoading && (
-                    <div className="px-1 py-2 space-y-1">
-                      <div
-                        className={cn(
-                          SMALL_CAPS,
-                          "px-3 py-2 text-primary flex items-center gap-1.5",
-                        )}
-                      >
-                        <Sparkles className="w-3 h-3 animate-pulse" /> Asking
-                        AI…
-                      </div>
-                      <AIShimmerRow delay={0} />
-                      <AIShimmerRow delay={0.08} />
-                      <AIShimmerRow delay={0.16} />
-                    </div>
-                  )}
-
-                  {/* AI results */}
-                  {aiQuery.length >= 3 &&
-                    !isAiLoading &&
-                    aiResults.length > 0 && (
-                      <Command.Group
-                        heading={aiResultsHeading(
-                          aiFallback,
-                          aiResults.length,
-                          aiTotal,
-                        )}
-                        className={GROUP_HEADING_PRIMARY}
-                      >
-                        {aiFallback && (
-                          <div className="flex items-start gap-1.5 px-3 pb-1 text-xs text-warning">
-                            <HelpCircle
-                              className="w-3.5 h-3.5 mt-px shrink-0"
-                              aria-hidden="true"
-                            />
-                            <span>
-                              {aiAllowed
-                                ? "AI could not check these people this time. They match your words or their meaning"
-                                : "AI is off for your account. These people match your words or their meaning"}
-                            </span>
+                        {aiQuery.length >= 3 && isAiLoading && (
+                          <div className="px-1 py-2 space-y-1">
+                            <div
+                              className={cn(
+                                SMALL_CAPS,
+                                "px-3 py-2 text-primary flex items-center gap-1.5",
+                              )}
+                            >
+                              <Sparkles className="w-3 h-3 animate-pulse" />{" "}
+                              Asking AI…
+                            </div>
+                            <AIShimmerRow delay={0} />
+                            <AIShimmerRow delay={0.08} />
+                            <AIShimmerRow delay={0.16} />
                           </div>
                         )}
-                        {aiResults.map((match, i) => (
-                          <AIResultCard
-                            key={match.id}
-                            match={match}
-                            index={i}
-                            isFallback={aiFallback}
-                            onSelect={() => {
-                              recordVisit(match.id);
-                              navigate(`/contact/${match.id}`);
-                              handleClose();
-                            }}
-                            hasGroundingCapacity={
-                              groundingCapacity?.hasCapacity ?? false
-                            }
-                            isEnriching={enrichContact.isPending}
-                            enrichingContactId={enrichingContactId}
-                            onRefresh={
-                              aiAllowed ? handleRefreshContact : undefined
-                            }
-                          />
-                        ))}
-                      </Command.Group>
+
+                        {/* AI results */}
+                        {aiQuery.length >= 3 &&
+                          !isAiLoading &&
+                          aiResults.length > 0 && (
+                            <Command.Group
+                              heading={aiResultsHeading(
+                                aiFallback,
+                                aiResults.length,
+                                aiTotal,
+                              )}
+                              className={GROUP_HEADING_PRIMARY}
+                            >
+                              {aiFallback && (
+                                <div className="flex items-start gap-1.5 px-3 pb-1 text-xs text-warning">
+                                  <HelpCircle
+                                    className="w-3.5 h-3.5 mt-px shrink-0"
+                                    aria-hidden="true"
+                                  />
+                                  <span>
+                                    {aiAllowed
+                                      ? "AI could not check these people this time. They match your words or their meaning"
+                                      : "AI is off for your account. These people match your words or their meaning"}
+                                  </span>
+                                </div>
+                              )}
+                              {aiResults.map((match, i) => (
+                                <AIResultCard
+                                  key={match.id}
+                                  match={match}
+                                  index={i}
+                                  isFallback={aiFallback}
+                                  onSelect={() => {
+                                    recordVisit(match.id);
+                                    navigate(`/contact/${match.id}`);
+                                    handleClose();
+                                  }}
+                                  hasGroundingCapacity={
+                                    groundingCapacity?.hasCapacity ?? false
+                                  }
+                                  isEnriching={enrichContact.isPending}
+                                  enrichingContactId={enrichingContactId}
+                                  onRefresh={
+                                    aiAllowed ? handleRefreshContact : undefined
+                                  }
+                                />
+                              ))}
+                            </Command.Group>
+                          )}
+
+                        {/* Synthesis executive brief (Feature 6) */}
+                        {aiAllowed &&
+                          aiQuery.length >= 3 &&
+                          !isAiLoading &&
+                          !aiFallback &&
+                          aiResults.length > 0 && (
+                            <SynthesisBar
+                              query={aiAnsweredQuery}
+                              contacts={aiResults}
+                              resultCount={aiResults.length}
+                              compact
+                            />
+                          )}
+
+                        {/* "Open in full-page search" bridge (Feature 11C) */}
+                        {aiQuery.length >= 3 &&
+                          !isAiLoading &&
+                          aiResults.length > 0 && (
+                            <div className="px-3 py-2 flex flex-wrap justify-end gap-x-4 gap-y-1">
+                              <button
+                                onClick={() => {
+                                  navigate(
+                                    `/search?mode=notes&q=${encodeURIComponent(aiQuery)}`,
+                                  );
+                                  handleClose();
+                                }}
+                                className="hit-area text-xs text-primary flex items-center gap-1 group"
+                              >
+                                Search notes
+                                <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  navigate(
+                                    `/search?q=${encodeURIComponent(aiQuery)}`,
+                                  );
+                                  handleClose();
+                                }}
+                                className="hit-area text-xs text-primary flex items-center gap-1 group"
+                              >
+                                Open in full-page search
+                                <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                              </button>
+                            </div>
+                          )}
+
+                        {/* No AI matches */}
+                        {semanticSearch.isError && (
+                          <div
+                            role="alert"
+                            className="px-4 py-3 text-sm text-error"
+                          >
+                            {semanticSearch.error?.message ||
+                              "Search failed. Try again"}
+                          </div>
+                        )}
+                        {aiQuery.length >= 3 &&
+                          !isAiLoading &&
+                          aiResults.length === 0 &&
+                          !semanticSearch.isPending &&
+                          semanticSearch.isSuccess && (
+                            <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
+                              <Sparkles className="w-8 h-8 text-on-surface-variant/20 mx-auto mb-3" />
+                              <p className="font-bold text-on-surface mb-1">
+                                No matches found
+                              </p>
+                              <p className="text-xs">
+                                Try rephrasing your query, or use the regular
+                                search
+                              </p>
+                            </Command.Empty>
+                          )}
+                      </>
                     )}
 
-                  {/* Synthesis executive brief (Feature 6) */}
-                  {aiAllowed &&
-                    aiQuery.length >= 3 &&
-                    !isAiLoading &&
-                    !aiFallback &&
-                    aiResults.length > 0 && (
-                      <SynthesisBar
-                        query={aiAnsweredQuery}
-                        contacts={aiResults}
-                        resultCount={aiResults.length}
-                        compact
-                      />
-                    )}
-
-                  {/* "Open in full-page search" bridge (Feature 11C) */}
-                  {aiQuery.length >= 3 &&
-                    !isAiLoading &&
-                    aiResults.length > 0 && (
-                      <div className="px-3 py-2 flex flex-wrap justify-end gap-x-4 gap-y-1">
-                        <button
-                          onClick={() => {
-                            navigate(
-                              `/search?mode=notes&q=${encodeURIComponent(aiQuery)}`,
-                            );
-                            handleClose();
-                          }}
-                          className="hit-area text-xs text-primary flex items-center gap-1 group"
-                        >
-                          Search notes
-                          <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            navigate(
-                              `/search?q=${encodeURIComponent(aiQuery)}`,
-                            );
-                            handleClose();
-                          }}
-                          className="hit-area text-xs text-primary flex items-center gap-1 group"
-                        >
-                          Open in full-page search
-                          <ArrowUpRight className="w-3 h-3 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
-                        </button>
-                      </div>
-                    )}
-
-                  {/* No AI matches */}
-                  {semanticSearch.isError && (
-                    <div role="alert" className="px-4 py-3 text-sm text-error">
-                      {semanticSearch.error?.message ||
-                        "Search failed. Try again"}
-                    </div>
-                  )}
-                  {aiQuery.length >= 3 &&
-                    !isAiLoading &&
-                    aiResults.length === 0 &&
-                    !semanticSearch.isPending &&
-                    semanticSearch.isSuccess && (
+                    {/* ═══════════════ ACTION MODE ═══════════════ */}
+                    {!subMenuContactId && mode === "action" && !actionMatch && (
                       <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
-                        <Sparkles className="w-8 h-8 text-on-surface-variant/20 mx-auto mb-3" />
-                        <p className="font-bold text-on-surface mb-1">
-                          No matches found
+                        <Zap className="w-8 h-8 text-on-surface-variant/30 mx-auto mb-3" />
+                        <p className="font-bold text-on-surface">
+                          Action mode active
                         </p>
-                        <p className="text-xs">
-                          Try rephrasing your query, or use the regular search
+                        <p className="mt-1">
+                          Syntax:{" "}
+                          <code className="text-primary bg-primary/10 px-1 rounded">
+                            &gt; [type] [name]: [content]
+                          </code>
+                        </p>
+                        <p className="mt-2 text-xs">
+                          Types: note, call, meeting, email
+                        </p>
+                        <p className="mt-1 text-xs text-on-surface-variant">
+                          Example:{" "}
+                          <code>
+                            &gt; note Julian: Left a voicemail regarding Q3
+                            targets
+                          </code>
                         </p>
                       </Command.Empty>
                     )}
-                </>
-              )}
 
-              {/* ═══════════════ ACTION MODE ═══════════════ */}
-              {!subMenuContactId && mode === "action" && !actionMatch && (
-                <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
-                  <Zap className="w-8 h-8 text-on-surface-variant/30 mx-auto mb-3" />
-                  <p className="font-bold text-on-surface">
-                    Action mode active
-                  </p>
-                  <p className="mt-1">
-                    Syntax:{" "}
-                    <code className="text-primary bg-primary/10 px-1 rounded">
-                      &gt; [type] [name]: [content]
-                    </code>
-                  </p>
-                  <p className="mt-2 text-xs">
-                    Types: note, call, meeting, email
-                  </p>
-                  <p className="mt-1 text-xs text-on-surface-variant">
-                    Example:{" "}
-                    <code>
-                      &gt; note Julian: Left a voicemail regarding Q3 targets
-                    </code>
-                  </p>
-                </Command.Empty>
-              )}
-
-              {!subMenuContactId && mode === "action" && actionMatch && (
-                <Command.Group
-                  heading="Action engine"
-                  className={GROUP_HEADING_EMERALD}
-                >
-                  <Command.Item
-                    value={`action_${actionMatch.type}_${actionMatch.contact.id}`}
-                    onSelect={handleActionExecute}
-                    className={cn(
-                      "flex items-center gap-4 px-3 py-4 rounded-xl cursor-default select-none bg-success/10 transition-colors text-on-surface",
-                      ITEM_CURRENT,
-                    )}
-                  >
-                    <div className="w-10 h-10 flex items-center justify-center bg-success/20 text-success rounded-full shrink-0">
-                      {getLogIcon(actionMatch.type)}
-                    </div>
-                    <div className="flex-1 min-w-0 flex flex-col">
-                      <span className="font-bold text-sm block truncate">
-                        Log {actionMatch.type} for{" "}
-                        <span className="text-success">
-                          {actionMatch.contact.name}
-                        </span>
-                      </span>
-                      <span className="text-sm text-on-surface-variant truncate mt-0.5">
-                        "{actionMatch.content}"
-                      </span>
-                    </div>
-                    <div className="shrink-0 opacity-50 px-2 flex items-center justify-center space-x-1">
-                      <span className="text-xs">Press</span>
-                      <kbd className={KBD}>Enter</kbd>
-                    </div>
-                  </Command.Item>
-                </Command.Group>
-              )}
-
-              {/* ═══════════════ NORMAL MODE (with search text or facets) ═══════════════ */}
-              {!subMenuContactId && mode === "normal" && !isEmptyInput && (
-                <>
-                  <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
-                    {instantSearch.isFtsLoading
-                      ? "Searching..."
-                      : "No results found"}
-                  </Command.Empty>
-
-                  {instantSearch.results.length > 0 && (
-                    <Command.Group
-                      heading={
-                        <span className="flex items-center gap-1.5">
-                          Contacts
-                          {instantSearch.isInstant && (
-                            <span
-                              className={cn(
-                                SMALL_CAPS,
-                                "text-warning animate-pulse",
-                              )}
-                            >
-                              ⚡ instant
-                            </span>
-                          )}
-                          {hasFilters && (
-                            <span className={cn(SMALL_CAPS, "text-primary")}>
-                              filtered
-                            </span>
-                          )}
-                        </span>
-                      }
-                      className={GROUP_HEADING_DEFAULT}
-                    >
-                      {instantSearch.results.map((contact) => (
-                        <Command.Item
-                          key={contact.id}
-                          value={contact.id + contact.name}
-                          onSelect={() => handleSelectFtsContact(contact.id)}
-                          className={cn(
-                            "flex items-start gap-3 px-3 py-3 rounded-xl cursor-default select-none aria-selected:text-on-primary-wash transition-colors text-on-surface group/result",
-                            ITEM_CURRENT,
-                          )}
-                        >
-                          <img
-                            src={
-                              contact.avatarUrl ||
-                              fallbackAvatarUrl(contact.name)
-                            }
-                            alt=""
-                            className="w-8 h-8 mt-0.5 shrink-0 rounded-full bg-surface-container-highest object-cover"
-                          />
-                          <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-sm truncate">
-                                {contact.name}
-                              </span>
-                              <ScoreDot contact={contact} />
-                              {contact.approximate && (
-                                <span
-                                  className={cn(TONE_WASH.primary, MATCH_BADGE)}
-                                >
-                                  Approximate
-                                </span>
-                              )}
-                            </div>
-                            {(contact.role || contact.company) && (
-                              <span className="text-xs text-on-surface-variant flex items-center gap-2 truncate">
-                                {contact.role && (
-                                  <span className="flex items-center gap-1">
-                                    <Briefcase className="w-3 h-3" />
-                                    {contact.role}
-                                  </span>
-                                )}
-                                {contact.company && (
-                                  <span className="flex items-center gap-1">
-                                    <Building className="w-3 h-3" />
-                                    {contact.company}
-                                  </span>
-                                )}
-                              </span>
-                            )}
-                            <LastContactLine
-                              lastContactedAt={contact.lastContactedAt}
-                            />
-                            <StaleChip
-                              contactId={contact.id}
-                              updatedAt={contact.updatedAt}
-                              hasGroundingCapacity={
-                                groundingCapacity?.hasCapacity ?? false
-                              }
-                              isEnriching={enrichContact.isPending}
-                              enrichingContactId={enrichingContactId}
-                              onRefresh={
-                                aiAllowed ? handleRefreshContact : undefined
-                              }
-                            />
-                          </div>
-                          {/* → action button: always visible on a touch screen, hover-reveal under a mouse from sm */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSubMenuContactId(contact.id);
-                              setSubMenuContactName(contact.name);
-                              setSubMenuContactAvatar(contact.avatarUrl);
-                            }}
-                            onMouseDown={(e) => e.preventDefault()}
-                            className="hit-area state-layer shrink-0 flex items-center gap-1 sm:opacity-0 sm:group-hover/result:opacity-50 sm:aria-selected:opacity-50 opacity-40 pointer-coarse:opacity-40 active:opacity-80 transition-opacity text-[11px] text-on-surface-variant self-center p-1.5 -mr-1 rounded-lg sm:p-0 sm:mr-0"
-                            aria-label={`Actions for ${contact.name}`}
-                          >
-                            <ChevronsRight className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
-                          </button>
-                        </Command.Item>
-                      ))}
-                    </Command.Group>
-                  )}
-
-                  {parsed.freeText.trim().length > 0 &&
-                    instantSearch.results.length === 0 &&
-                    !instantSearch.isFtsLoading && (
+                    {!subMenuContactId && mode === "action" && actionMatch && (
                       <Command.Group
-                        heading="Actions"
-                        className={`mt-2 text-on-surface-variant ${GROUP_HEADING_DEFAULT}`}
+                        heading="Action engine"
+                        className={GROUP_HEADING_EMERALD}
                       >
                         <Command.Item
-                          value={`create_${search}`}
-                          onSelect={handleCreateContact}
+                          value={`action_${actionMatch.type}_${actionMatch.contact.id}`}
+                          onSelect={handleActionExecute}
                           className={cn(
-                            "flex items-center gap-3 px-3 py-3 rounded-xl cursor-default select-none transition-colors text-on-surface",
+                            "flex items-center gap-4 px-3 py-4 rounded-xl cursor-default select-none bg-success/10 transition-colors text-on-surface",
                             ITEM_CURRENT,
                           )}
                         >
-                          <div className="w-8 h-8 flex items-center justify-center bg-surface-container-highest rounded-full">
-                            <UserPlus className="w-4 h-4 text-primary" />
+                          <div className="w-10 h-10 flex items-center justify-center bg-success/20 text-success rounded-full shrink-0">
+                            {getLogIcon(actionMatch.type)}
                           </div>
-                          <span className="text-sm">
-                            Create new contact{" "}
-                            <span className="font-bold whitespace-nowrap overflow-hidden text-ellipsis max-w-[200px] inline-block align-bottom">
-                              "{parsed.freeText}"
+                          <div className="flex-1 min-w-0 flex flex-col">
+                            <span className="font-bold text-sm block truncate">
+                              Log {actionMatch.type} for{" "}
+                              <span className="text-success">
+                                {actionMatch.contact.name}
+                              </span>
                             </span>
-                          </span>
+                            <span className="text-sm text-on-surface-variant truncate mt-0.5">
+                              "{actionMatch.content}"
+                            </span>
+                          </div>
+                          <div className="shrink-0 opacity-50 px-2 flex items-center justify-center space-x-1">
+                            <span className="text-xs">Press</span>
+                            <kbd className={KBD}>Enter</kbd>
+                          </div>
                         </Command.Item>
                       </Command.Group>
                     )}
-                </>
-              )}
-            </Command.List>
 
-            {/* ── Shift-to-peek, in a portal on the body ── */}
-            <ResultPeek contact={peekContact} visible={peekVisible} />
+                    {/* ═══════════════ NORMAL MODE (with search text or facets) ═══════════════ */}
+                    {!subMenuContactId &&
+                      mode === "normal" &&
+                      !isEmptyInput && (
+                        <>
+                          <Command.Empty className="py-10 text-center text-sm text-on-surface-variant">
+                            {instantSearch.isFtsLoading
+                              ? "Searching..."
+                              : "No results found"}
+                          </Command.Empty>
 
-            {/* ── Footer ── */}
-            <div
-              className={`px-4 py-2.5 ${SECTION_BG} text-[11px] text-on-surface-variant hidden sm:flex items-center justify-between`}
-            >
-              <span className="flex items-center gap-2">
-                Use <kbd className={KBD_SM}>↑</kbd>{" "}
-                <kbd className={KBD_SM}>↓</kbd> to navigate
-                {isEmptyInput && searchHistory.entries.length > 0 && (
-                  <span className="text-on-surface-variant ml-1">
-                    • ↑ for history
-                  </span>
-                )}
-              </span>
-              <span className="flex items-center gap-1">
-                {!isEmptyInput && !subMenuContactId && (
-                  <span className="text-on-surface-variant mr-2">
-                    <kbd className={KBD_SM}>→</kbd> actions
-                  </span>
-                )}
-                {!isEmptyInput && peekContact && !subMenuContactId && (
-                  <span className="text-on-surface-variant mr-2">
-                    Hold <kbd className={KBD_SM}>Shift</kbd> to peek
-                  </span>
-                )}
-                <kbd className={KBD_SM}>Enter</kbd> to select
-              </span>
-            </div>
-          </motion.div>
-        </Command.Dialog>
+                          {instantSearch.results.length > 0 && (
+                            <Command.Group
+                              heading={
+                                <span className="flex items-center gap-1.5">
+                                  Contacts
+                                  {instantSearch.isInstant && (
+                                    <span
+                                      className={cn(
+                                        SMALL_CAPS,
+                                        "text-warning animate-pulse",
+                                      )}
+                                    >
+                                      ⚡ instant
+                                    </span>
+                                  )}
+                                  {hasFilters && (
+                                    <span
+                                      className={cn(SMALL_CAPS, "text-primary")}
+                                    >
+                                      filtered
+                                    </span>
+                                  )}
+                                </span>
+                              }
+                              className={GROUP_HEADING_DEFAULT}
+                            >
+                              {instantSearch.results.map((contact) => (
+                                <Command.Item
+                                  key={contact.id}
+                                  value={contact.id + contact.name}
+                                  onSelect={() =>
+                                    handleSelectFtsContact(contact.id)
+                                  }
+                                  className={cn(
+                                    "flex items-start gap-3 px-3 py-3 rounded-xl cursor-default select-none aria-selected:text-on-primary-wash transition-colors text-on-surface group/result",
+                                    ITEM_CURRENT,
+                                  )}
+                                >
+                                  <img
+                                    src={
+                                      contact.avatarUrl ||
+                                      fallbackAvatarUrl(contact.name)
+                                    }
+                                    alt=""
+                                    className="w-8 h-8 mt-0.5 shrink-0 rounded-full bg-surface-container-highest object-cover"
+                                  />
+                                  <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-bold text-sm truncate">
+                                        {contact.name}
+                                      </span>
+                                      <ScoreDot contact={contact} />
+                                      {contact.approximate && (
+                                        <span
+                                          className={cn(
+                                            TONE_WASH.primary,
+                                            MATCH_BADGE,
+                                          )}
+                                        >
+                                          Approximate
+                                        </span>
+                                      )}
+                                    </div>
+                                    {(contact.role || contact.company) && (
+                                      <span className="text-xs text-on-surface-variant flex items-center gap-2 truncate">
+                                        {contact.role && (
+                                          <span className="flex items-center gap-1">
+                                            <Briefcase className="w-3 h-3" />
+                                            {contact.role}
+                                          </span>
+                                        )}
+                                        {contact.company && (
+                                          <span className="flex items-center gap-1">
+                                            <Building className="w-3 h-3" />
+                                            {contact.company}
+                                          </span>
+                                        )}
+                                      </span>
+                                    )}
+                                    <LastContactLine
+                                      lastContactedAt={contact.lastContactedAt}
+                                    />
+                                    <StaleChip
+                                      contactId={contact.id}
+                                      updatedAt={contact.updatedAt}
+                                      hasGroundingCapacity={
+                                        groundingCapacity?.hasCapacity ?? false
+                                      }
+                                      isEnriching={enrichContact.isPending}
+                                      enrichingContactId={enrichingContactId}
+                                      onRefresh={
+                                        aiAllowed
+                                          ? handleRefreshContact
+                                          : undefined
+                                      }
+                                    />
+                                  </div>
+                                  {/* → action button: always visible on a touch screen, hover-reveal under a mouse from sm */}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSubMenuContactId(contact.id);
+                                      setSubMenuContactName(contact.name);
+                                      setSubMenuContactAvatar(
+                                        contact.avatarUrl,
+                                      );
+                                    }}
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    className="hit-area state-layer shrink-0 flex items-center gap-1 sm:opacity-0 sm:group-hover/result:opacity-50 sm:aria-selected:opacity-50 opacity-40 pointer-coarse:opacity-40 active:opacity-80 transition-opacity text-[11px] text-on-surface-variant self-center p-1.5 -mr-1 rounded-lg sm:p-0 sm:mr-0"
+                                    aria-label={`Actions for ${contact.name}`}
+                                  >
+                                    <ChevronsRight className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                                  </button>
+                                </Command.Item>
+                              ))}
+                            </Command.Group>
+                          )}
+
+                          {parsed.freeText.trim().length > 0 &&
+                            instantSearch.results.length === 0 &&
+                            !instantSearch.isFtsLoading && (
+                              <Command.Group
+                                heading="Actions"
+                                className={`mt-2 text-on-surface-variant ${GROUP_HEADING_DEFAULT}`}
+                              >
+                                <Command.Item
+                                  value={`create_${search}`}
+                                  onSelect={handleCreateContact}
+                                  className={cn(
+                                    "flex items-center gap-3 px-3 py-3 rounded-xl cursor-default select-none transition-colors text-on-surface",
+                                    ITEM_CURRENT,
+                                  )}
+                                >
+                                  <div className="w-8 h-8 flex items-center justify-center bg-surface-container-highest rounded-full">
+                                    <UserPlus className="w-4 h-4 text-primary" />
+                                  </div>
+                                  <span className="text-sm">
+                                    Create new contact{" "}
+                                    <span className="font-bold whitespace-nowrap overflow-hidden text-ellipsis max-w-[200px] inline-block align-bottom">
+                                      "{parsed.freeText}"
+                                    </span>
+                                  </span>
+                                </Command.Item>
+                              </Command.Group>
+                            )}
+                        </>
+                      )}
+                  </Command.List>
+
+                  {/* ── Shift-to-peek, in a portal on the body ── */}
+                  <ResultPeek contact={peekContact} visible={peekVisible} />
+
+                  {/* ── Footer ── */}
+                  <div
+                    className={`px-4 py-2.5 ${SECTION_BG} text-[11px] text-on-surface-variant hidden sm:flex items-center justify-between`}
+                  >
+                    <span className="flex items-center gap-2">
+                      Use <kbd className={KBD_SM}>↑</kbd>{" "}
+                      <kbd className={KBD_SM}>↓</kbd> to navigate
+                    </span>
+                    <span className="flex items-center gap-1">
+                      {!isEmptyInput && !subMenuContactId && (
+                        <span className="text-on-surface-variant mr-2">
+                          <kbd className={KBD_SM}>→</kbd> actions
+                        </span>
+                      )}
+                      {!isEmptyInput && peekContact && !subMenuContactId && (
+                        <span className="text-on-surface-variant mr-2">
+                          Hold <kbd className={KBD_SM}>Shift</kbd> to peek
+                        </span>
+                      )}
+                      <kbd className={KBD_SM}>Enter</kbd> to select
+                    </span>
+                  </div>
+                </motion.div>
+              </Command>
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
       )}
     </AnimatePresence>
   );
