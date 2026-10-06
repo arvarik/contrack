@@ -43,7 +43,7 @@ import {
 } from "../lib/styles";
 import { DURATION, EASE } from "../lib/motion";
 import { cn } from "../lib/utils";
-import { Modal } from "./ui/Modal";
+import { DialogCloseButton, Modal } from "./ui/Modal";
 import { IconButton } from "./ui/IconButton";
 import { ComposerPlaceholder } from "./ComposerPlaceholder";
 import { composerChunk } from "./composerChunk";
@@ -216,14 +216,7 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
             Log an interaction
           </h2>
         </div>
-        <IconButton
-          aria-label="Close dialog"
-          tone="subtle"
-          onClick={onClose}
-          className="-mr-2"
-        >
-          <X className="w-5 h-5" />
-        </IconButton>
+        <DialogCloseButton onClick={onClose} />
       </div>
 
       {/* Who */}
