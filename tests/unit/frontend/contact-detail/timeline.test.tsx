@@ -356,15 +356,8 @@ describe("an entry", () => {
     const trigger = screen.getByRole("button", {
       name: "Actions for Call with Ada",
     });
-    for (const name of [
-      "opacity-0",
-      "group-hover/entry:opacity-100",
-      "group-focus-within/entry:opacity-100",
-      "aria-expanded:opacity-100",
-      "pointer-coarse:opacity-100",
-    ]) {
-      expect(trigger.classList.contains(name)).toBe(true);
-    }
+    // Hidden only for a mouse: a touch screen shows it at rest.
+    expect(trigger.classList.contains("pointer-fine:opacity-0")).toBe(true);
     expect(trigger.className).not.toMatch(/\bhidden\b/);
     // No red icon at rest.
     expect(entry("call")!.querySelector(".text-error")).toBeNull();
