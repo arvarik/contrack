@@ -457,14 +457,45 @@ const ResponsiveLayout = () => {
   );
 };
 
-export default function App() {
-  // `data-typing` and `--keyboard-inset` for the phone's CSS (index.css).
-  useSoftKeyboard();
+/**
+ * The toasts, in a component of their own: a dialog opening or a preference
+ * changing redraws them, not the whole app under `App`.
+ */
+const AppToaster = () => {
   const { mode } = usePreferences();
   // A phone's dialog is a sheet from the bottom, with Save at its foot.
   const dialogOpen = useDialogOpen();
   const centredDialogs = useMediaQuery("(min-width: 640px)");
   const sheetOpen = dialogOpen && !centredDialogs;
+  return (
+    <Toaster
+      // The app's own palette, not the system's: a dark page drew dark
+      // grey descriptions on the dark glass of a light-theme toast.
+      theme={mode}
+      position={sheetOpen ? "top-center" : "bottom-right"}
+      // The mobile tab bar is fixed to the bottom of the viewport, so a
+      // default-offset toast lands underneath it and the user never sees
+      // the confirmation they just triggered.
+      mobileOffset={{
+        top: "calc(env(safe-area-inset-top) + 12px)",
+        bottom: "calc(var(--tabbar-space) + var(--keyboard-inset) + 12px)",
+        left: "12px",
+        right: "12px",
+      }}
+      className="font-body"
+      toastOptions={{
+        className: "glass-panel shadow-lg !border-none",
+        style: {
+          color: "var(--color-on-surface)",
+        },
+      }}
+    />
+  );
+};
+
+export default function App() {
+  // `data-typing` and `--keyboard-inset` for the phone's CSS (index.css).
+  useSoftKeyboard();
   useToastFocusReturn();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [quickNoteOpen, setQuickNoteOpen] = useState(false);
@@ -557,28 +588,7 @@ export default function App() {
           them. It renders nothing until somebody calls `flyCorvid()`.
         */}
         <CorvidFlight />
-        <Toaster
-          // The app's own palette, not the system's: a dark page drew dark
-          // grey descriptions on the dark glass of a light-theme toast.
-          theme={mode}
-          position={sheetOpen ? "top-center" : "bottom-right"}
-          // The mobile tab bar is fixed to the bottom of the viewport, so a
-          // default-offset toast lands underneath it and the user never sees
-          // the confirmation they just triggered.
-          mobileOffset={{
-            top: "calc(env(safe-area-inset-top) + 12px)",
-            bottom: "calc(var(--tabbar-space) + var(--keyboard-inset) + 12px)",
-            left: "12px",
-            right: "12px",
-          }}
-          className="font-body"
-          toastOptions={{
-            className: "glass-panel shadow-lg !border-none",
-            style: {
-              color: "var(--color-on-surface)",
-            },
-          }}
-        />
+        <AppToaster />
       </SessionProvider>
     </Router>
   );
