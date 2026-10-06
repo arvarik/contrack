@@ -24,6 +24,7 @@ import {
 import { PasskeyButton } from "./PasskeyButton";
 import { ForgotPassword } from "./ForgotPassword";
 import { requestMagicLink } from "../../api/authLinks";
+import { NO_AUTOCORRECT } from "../ui/SearchField";
 
 /** Why this screen appeared, when it was not the user's own doing. */
 type SignInReason = "expired" | "disabled" | null;
@@ -280,9 +281,7 @@ export const SignIn = ({
             setIdentifier(e.target.value);
           }}
           autoComplete={isPasskeySupported ? "username webauthn" : "username"}
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
+          {...NO_AUTOCORRECT}
           required
           // The sign-in screen is the whole page and has one starting point.
           // Focus password if prefilled; otherwise start on identifier. Not

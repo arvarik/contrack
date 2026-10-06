@@ -357,7 +357,11 @@ describe("the Tracked contacts page", () => {
     expect(
       screen.getByRole("heading", { name: 'No one matches "zzz"' }),
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    // The field's X and the empty state's button share the name: the
+    // empty state's is the last.
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Clear search" }).at(-1)!,
+    );
     expect(heading(/^At risk/)).toBeTruthy();
   });
 

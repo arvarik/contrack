@@ -71,7 +71,6 @@ import {
   Globe,
   History,
   Radar,
-  Search,
   SearchX,
   Square,
   Users,
@@ -114,7 +113,6 @@ import {
   BTN_QUIET,
   CARD,
   ICON_BTN,
-  SEARCH_INPUT,
   SECTION_HEADING,
   SELECTED_ROW,
   SELECTED_TINT,
@@ -124,6 +122,7 @@ import type { Contact } from "../types";
 import { SelectedCount } from "./contact-list/BulkActionToolbar";
 import { SettingsHeaderActions } from "./settings/SettingsHeader";
 import { SETTINGS_BOX } from "./settings/layout";
+import { SearchField } from "../components/ui/SearchField";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // The groups
@@ -784,23 +783,15 @@ export const TrackedContactsView = () => {
             the number it would show, as on the Enrichment page. */}
         <div className={cn(CARD, "p-4 space-y-3")}>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 min-w-[12rem]">
-              <Search
-                aria-hidden="true"
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant"
-              />
-              <input
-                type="search"
-                aria-label="Search tracked contacts"
-                placeholder="Search by name, company or role"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className={SEARCH_INPUT}
-                spellCheck={false}
-                autoCorrect="off"
-                autoCapitalize="off"
-              />
-            </div>
+            <SearchField
+              className="flex-1 min-w-[12rem]"
+              type="search"
+              aria-label="Search tracked contacts"
+              placeholder="Search by name, company or role"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onClear={() => setQuery("")}
+            />
             <Segmented
               label="Order"
               value={order}

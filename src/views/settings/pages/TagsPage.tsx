@@ -17,7 +17,6 @@ import {
   Loader2,
   Merge,
   Pencil,
-  Search,
   Tag,
   Trash2,
   X,
@@ -32,17 +31,14 @@ import {
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { Modal } from "../../../components/ui/Modal";
-import {
-  CARD,
-  FORM_INPUT,
-  FORM_LABEL,
-  SEARCH_INPUT,
-} from "../../../lib/styles";
+import { CARD, FORM_INPUT, FORM_LABEL } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { tagFilterPath } from "../../contact-list/hooks/useContactListFilters";
 import { SETTINGS_INPUT, SETTINGS_PAGE } from "../layout";
 import { errorText } from "../../../lib/errorText";
 import { LoadFailed } from "../../../components/ui/LoadFailed";
+import { SearchField } from "../../../components/ui/SearchField";
+import { NO_AUTOCORRECT } from "../../../components/ui/SearchField";
 
 /** A tag row's icon buttons: flat, with the one hover layer. */
 const ROW_ACTION =
@@ -189,20 +185,15 @@ export const TagsPage = () => {
       ) : (
         <div className="space-y-4">
           {tags.length > 5 && (
-            <div className="relative max-w-sm">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Filter tags"
-                className={SEARCH_INPUT}
-                aria-label="Filter tags"
-                spellCheck={false}
-                autoCorrect="off"
-                autoCapitalize="off"
-              />
-            </div>
+            <SearchField
+              className="max-w-sm"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Filter tags"
+              aria-label="Filter tags"
+              onClear={() => setSearchQuery("")}
+              clearLabel="Clear filter text"
+            />
           )}
 
           {/* One card, a row for each tag, spaced apart with no line. */}
@@ -221,7 +212,9 @@ export const TagsPage = () => {
                   className="flex items-center justify-between gap-3 px-4 sm:px-6 py-2.5"
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <span className="p-2 rounded-lg bg-surface-container text-on-surface-variant shrink-0">
+                    {/* The mark steps aside on a phone, where the three
+                        buttons leave the name little room. */}
+                    <span className="hidden sm:block p-2 rounded-lg bg-surface-container text-on-surface-variant shrink-0">
                       <Hash className="w-4 h-4" />
                     </span>
 
@@ -273,7 +266,7 @@ export const TagsPage = () => {
                         title="See who has this tag"
                         className="hit-area group/tag flex items-center gap-3 min-w-0 rounded-md"
                       >
-                        <span className="font-semibold text-sm text-on-surface truncate underline-offset-2 group-hover/tag:underline">
+                        <span className="font-semibold text-sm text-on-surface break-words min-w-0 underline-offset-2 group-hover/tag:underline">
                           {item.tag}
                         </span>
                         <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-primary/10 text-on-primary-wash shrink-0">
@@ -364,9 +357,7 @@ export const TagsPage = () => {
                 onChange={(e) => setMergeTarget(e.target.value)}
                 placeholder="Choose or enter tag name…"
                 className={FORM_INPUT}
-                spellCheck={false}
-                autoCorrect="off"
-                autoCapitalize="off"
+                {...NO_AUTOCORRECT}
               />
               <datalist id="existing-tags">
                 {tags

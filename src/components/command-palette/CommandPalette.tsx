@@ -52,6 +52,7 @@ import { ActionSubMenu } from "./ActionSubMenu";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import { useCloseRequest } from "../../hooks/useCloseRequest";
 import { errorText } from "../../lib/errorText";
+import { NO_AUTOCORRECT } from "../ui/SearchField";
 
 /** The icon at the start of the input, swapped when the mode changes. */
 const ICON_SWAP = {
@@ -1078,9 +1079,8 @@ export const CommandPalette = () => {
                       // The palette exists to be typed into the instant it opens.
                       // eslint-disable-next-line jsx-a11y/no-autofocus
                       autoFocus
-                      // cmdk turns spell check and auto-correct off. A
-                      // phone would still capitalize "tag:" into "Tag:".
-                      autoCapitalize="off"
+                      // A phone would capitalize "tag:" into "Tag:".
+                      {...NO_AUTOCORRECT}
                       // Short, so a phone shows it whole. The mode chips
                       // under it name `?` and `>`.
                       placeholder={

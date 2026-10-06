@@ -44,6 +44,7 @@ import {
   AdminRow,
   RolePicker,
 } from "./AdminShell";
+import { NO_AUTOCORRECT } from "../../../components/ui/SearchField";
 
 const COLUMNS = "sm:grid-cols-[minmax(0,2fr)_120px_minmax(0,1fr)_auto]";
 
@@ -165,8 +166,7 @@ const NewInvitationModal = ({
               aria-describedby="invite-email-hint"
               className={SETTINGS_INPUT}
               autoComplete="off"
-              autoCapitalize="none"
-              spellCheck={false}
+              {...NO_AUTOCORRECT}
               // The dialog opens on this field.
               // eslint-disable-next-line jsx-a11y/no-autofocus
               autoFocus

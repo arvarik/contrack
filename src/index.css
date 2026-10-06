@@ -1552,6 +1552,12 @@ html[data-text-scale="large"] {
   }
 }
 
+/* A search field has one clear button, the app's own (`ClearButton`), and
+   not the browser's as well. */
+input[type="search"]::-webkit-search-cancel-button {
+  appearance: none;
+}
+
 /* The app scrolls inside its panes. On a touch screen the page itself does
    not bounce or pull, which moved the whole app, tab bar and all. Only the
    vertical axis, and not with a trackpad, whose sideways swipe is Back. */

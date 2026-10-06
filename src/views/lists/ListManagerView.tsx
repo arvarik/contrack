@@ -2,8 +2,9 @@
  * ListManagerView — Settings sub-page for managing all contact lists.
  *
  * Responsive layout:
- *  - Mobile: shows list OR detail panel (never both), with slide transitions
- *  - Desktop (md+): side-by-side — narrow list panel + full detail panel
+ *  - A narrow page (a phone, or a laptop beside the Settings rail): the list
+ *    OR the open list, never both, with slide transitions
+ *  - A page of 672 px or more (`@2xl`): the lists beside the open list
  *
  * A mouse reorders by drag. Each row's menu has Move up and Move down, for a
  * finger and for the keyboard, which a drag leaves out.
@@ -88,8 +89,23 @@ export const ListManagerView = () => {
     [createList],
   );
 
+  /**
+   * Close the open list, and put focus on its row, or on the first row when
+   * it was deleted. The panel took the focus with it, and a keyboard was left
+   * on the page. Each layout draws the rows, so the visible one is chosen.
+   */
+  const closeList = (focusId?: string) => {
+    setSelectedListId(null);
+    requestAnimationFrame(() => {
+      const rows = Array.from(
+        document.querySelectorAll<HTMLElement>("[data-list-row]"),
+      ).filter((row) => row.offsetParent !== null);
+      (rows.find((row) => row.dataset.listRow === focusId) ?? rows[0])?.focus();
+    });
+  };
+
   const handleListDeleted = (id: string) => {
-    if (selectedListId === id) setSelectedListId(null);
+    if (selectedListId === id) closeList();
   };
 
   // -- List panel (shared between mobile and desktop) -------------------------
@@ -104,7 +120,7 @@ export const ListManagerView = () => {
           It shows while the lists load, without its count, so the rows
           arrive where the skeleton was instead of 68 px lower. */}
       {(isLoading || lists.length > 0) && (
-        <div className="pt-5 pb-4 px-4 md:px-5 shrink-0 flex items-center gap-3">
+        <div className="pt-5 pb-4 px-4 @2xl:px-5 shrink-0 flex items-center gap-3">
           <p className="flex-1 min-w-0 text-xs text-on-surface-variant">
             {!isLoading && (
               <>
@@ -133,7 +149,7 @@ export const ListManagerView = () => {
       )}
 
       {/* List rows */}
-      <div className="flex-1 overflow-y-auto py-3 px-4 md:px-2">
+      <div className="flex-1 overflow-y-auto py-3 px-4 @2xl:px-2">
         {isLoading ? (
           <div className="space-y-2 p-1">
             {[1, 2, 3].map((i) => (
@@ -183,6 +199,7 @@ export const ListManagerView = () => {
                 >
                   <button
                     type="button"
+                    data-list-row={list.id}
                     aria-pressed={isSelected}
                     onClick={() =>
                       setSelectedListId(isSelected ? null : list.id)
@@ -208,7 +225,7 @@ export const ListManagerView = () => {
                     <span className="flex-1 min-w-0">
                       <span
                         className={cn(
-                          "block font-bold text-sm truncate",
+                          "block font-bold text-sm break-words",
                           isSelected && "text-on-primary-wash",
                         )}
                       >
@@ -226,7 +243,7 @@ export const ListManagerView = () => {
                       className={cn(
                         "w-4 h-4 shrink-0 transition-[color,rotate]",
                         isSelected
-                          ? "text-on-primary-wash md:rotate-90"
+                          ? "text-on-primary-wash @2xl:rotate-90"
                           : "text-on-surface-variant/30 group-hover:text-on-surface-variant",
                       )}
                     />
@@ -261,19 +278,22 @@ export const ListManagerView = () => {
   );
 
   return (
-    <>
-      {/* ── From md: the lists and the open list, two cards side by side in
+    // The two panes need the page's width, not the window's: at 1024 px the
+    // Settings rail leaves the page about 520 px, where the open list was
+    // 280 px wide and its icons shrank to dots.
+    <div className="@container h-full">
+      {/* ── From @2xl: the lists and the open list, two cards side by side in
           the settings box, like every other settings page. The box sits in
           a scrollbar's lane, as the shell's header does, so its edges line
           up with the title's. ── */}
-      <div className="hidden md:block h-full overflow-hidden [scrollbar-gutter:stable]">
+      <div className="hidden @2xl:block h-full overflow-hidden [scrollbar-gutter:stable]">
         <div className={cn(SETTINGS_BOX, "flex gap-4 h-full pt-4 pb-10")}>
           {/* The lists: the whole box, or a column beside the open list. */}
           <div
             className={cn(
               CARD,
               "p-0 h-full flex flex-col overflow-hidden transition-all duration-(--dur-slow)",
-              selectedListId ? "w-64 xl:w-80 shrink-0" : "flex-1 min-w-0",
+              selectedListId ? "w-64 @4xl:w-80 shrink-0" : "flex-1 min-w-0",
             )}
           >
             {ListPanel}
@@ -295,7 +315,7 @@ export const ListManagerView = () => {
               >
                 <ListDetailPanel
                   list={selectedList}
-                  onClose={() => setSelectedListId(null)}
+                  onClose={() => closeList(selectedList.id)}
                   onDeleted={() => handleListDeleted(selectedList.id)}
                   onViewInNetwork={() => navigate(`/?list=${selectedList.id}`)}
                 />
@@ -305,8 +325,8 @@ export const ListManagerView = () => {
         </div>
       </div>
 
-      {/* ── MOBILE layout: full-screen stack ──────────────────────────────── */}
-      <div className="md:hidden h-full overflow-hidden relative">
+      {/* ── A narrow page: one pane at a time ──────────────────────────────── */}
+      <div className="@2xl:hidden h-full overflow-hidden relative">
         <AnimatePresence initial={false}>
           {!selectedList ? (
             /* Mobile: List view */
@@ -334,7 +354,7 @@ export const ListManagerView = () => {
               <div className="flex items-center gap-2 px-3 pt-3 pb-0 bg-surface-container-low shrink-0">
                 <button
                   type="button"
-                  onClick={() => setSelectedListId(null)}
+                  onClick={() => closeList(selectedList.id)}
                   aria-label="Back to all lists"
                   className="hit-area state-layer flex items-center gap-1.5 py-2 px-3 rounded-xl text-sm font-bold text-on-surface-variant hover:text-on-surface transition-colors"
                 >
@@ -347,7 +367,7 @@ export const ListManagerView = () => {
               <div className="h-[calc(100%-48px)] overflow-hidden">
                 <ListDetailPanel
                   list={selectedList}
-                  onClose={() => setSelectedListId(null)}
+                  onClose={() => closeList(selectedList.id)}
                   onDeleted={() => handleListDeleted(selectedList.id)}
                   onViewInNetwork={() => navigate(`/?list=${selectedList.id}`)}
                   hideMobileHeader
@@ -364,6 +384,6 @@ export const ListManagerView = () => {
         onCreate={handleCreate}
         isPending={createList.isPending}
       />
-    </>
+    </div>
   );
 };

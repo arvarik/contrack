@@ -1,15 +1,16 @@
 import { useDeferredValue, useMemo, useState } from "react";
-import { Search, Users, X } from "lucide-react";
+import { Users, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import type { Contact } from "../../../types";
 import { useContacts } from "../../../api";
 import { ContactMiniCard } from "./shared/ContactMiniCard";
-import { LABEL, SEARCH_INPUT, SELECTED_TINT } from "../../../lib/styles";
+import { LABEL, SELECTED_TINT } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
 import { VirtualRows } from "../../../components/ui/VirtualRows";
 import { roomAtTop } from "../utils/stickyRoom";
 import { useRovingFocus } from "../../search/useRovingFocus";
+import { SearchField } from "../../../components/ui/SearchField";
 
 // =============================================================================
 // ContactPicker — Searchable multi-select contact selector
@@ -123,34 +124,19 @@ export const ContactPicker = ({
           )}
         </AnimatePresence>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
-          <input
-            aria-label="Search contacts to merge"
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key !== "ArrowDown") return;
-              e.preventDefault();
-              roving.focusAt(0);
-            }}
-            placeholder="Search contacts by name, email, company…"
-            className={SEARCH_INPUT}
-            spellCheck={false}
-            autoCorrect="off"
-            autoCapitalize="off"
-          />
-          {query && (
-            <button
-              onClick={() => setQuery("")}
-              aria-label="Clear search"
-              className="hit-area state-layer absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full"
-            >
-              <X className="w-3.5 h-3.5 text-on-surface-variant" />
-            </button>
-          )}
-        </div>
+        <SearchField
+          aria-label="Search contacts to merge"
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== "ArrowDown") return;
+            e.preventDefault();
+            roving.focusAt(0);
+          }}
+          placeholder="Search contacts by name, email, company…"
+          onClear={() => setQuery("")}
+        />
       </div>
 
       {/* Selection status */}

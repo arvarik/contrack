@@ -57,18 +57,13 @@ import { SELECTED_TINT, TONE_WASH } from "../../lib/styles";
 import { useMediaQuery, WIDE_QUERY } from "../../hooks/useMediaQuery";
 import { PaletteButton } from "../../components/command-palette/PaletteButton";
 import { errorText } from "../../lib/errorText";
+import { NO_AUTOCORRECT } from "../../components/ui/SearchField";
+import { ClearButton } from "../../components/ui/SearchField";
 
 const LAYER_OPTIONS: readonly SegmentedOption<MapLayer>[] = [
   { value: "pins", label: "Pins" },
   { value: "heat", label: "Heat" },
 ];
-
-/** Search fields take no spelling help: names and places are not words. */
-const SEARCH_FIELD = {
-  spellCheck: false,
-  autoCorrect: "off",
-  autoCapitalize: "off",
-} as const;
 
 /** What the page asks of the toolbar: "/" puts the focus in the filter. */
 export interface MapToolbarHandle {
@@ -263,7 +258,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
                 key="filter"
                 ref={isMobile ? undefined : barInput}
                 type="text"
-                {...SEARCH_FIELD}
+                {...NO_AUTOCORRECT}
                 // Only when asked: back from Go to, or "/" in the sheet.
                 // eslint-disable-next-line jsx-a11y/no-autofocus
                 autoFocus={focusFilter}
@@ -295,14 +290,10 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
                 className="w-full bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/70 py-2 pl-9 pr-8"
               />
               {filter.rawInput && (
-                <button
-                  type="button"
+                <ClearButton
+                  label="Clear filter text"
                   onClick={() => filter.setRawInput("")}
-                  aria-label="Clear filter text"
-                  className="state-layer absolute right-2.5 p-1 text-on-surface-variant hover:text-on-surface rounded-full cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
+                />
               )}
             </>
           ) : (
@@ -311,7 +302,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
               <input
                 key="goto"
                 type="text"
-                {...SEARCH_FIELD}
+                {...NO_AUTOCORRECT}
                 // It mounts when a person asks for it, so it takes the
                 // focus: the toggle kept it, and typing went nowhere.
                 // eslint-disable-next-line jsx-a11y/no-autofocus
@@ -338,17 +329,13 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
                 <Loader2 className="absolute right-2.5 w-4 h-4 text-primary animate-spin" />
               ) : (
                 gotoQuery && (
-                  <button
-                    type="button"
+                  <ClearButton
+                    label="Clear place search"
                     onClick={() => {
                       setGotoQuery("");
                       setGotoError(null);
                     }}
-                    aria-label="Clear place search"
-                    className="state-layer absolute right-2.5 p-1 text-on-surface-variant hover:text-on-surface rounded-full cursor-pointer"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                  />
                 )
               )}
             </>

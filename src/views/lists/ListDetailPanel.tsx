@@ -7,11 +7,11 @@
  *  - "Add people" finds contacts by name and adds them (`AddPeople`).
  *  - Remove takes a member out at once, with Undo in its toast.
  *  - "View in Network" opens the Network page filtered to the list.
- *  - Delete asks first, in place.
+ *  - Delete asks first, in a dialog.
  */
 import { useMemo, useRef, useState } from "react";
 import { X, ExternalLink, Trash2, UserMinus } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import { toast } from "sonner";
 import {
   useAddToList,
@@ -32,6 +32,7 @@ import {
   SWATCH_SELECTED,
 } from "../../lib/styles";
 import { AddPeople } from "./AddPeople";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 
 /** The icons a list can wear, by the names `ListIcon` draws. */
 const ICON_OPTIONS = [
@@ -324,9 +325,11 @@ export const ListDetailPanel = ({
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-sm truncate">{contact.name}</p>
+                    <p className="font-bold text-sm break-words">
+                      {contact.name}
+                    </p>
                     {(contact.role || contact.company) && (
-                      <p className="text-xs text-on-surface-variant truncate">
+                      <p className="text-xs text-on-surface-variant break-words">
                         {[contact.role, contact.company]
                           .filter(Boolean)
                           .join(" · ")}
@@ -358,67 +361,27 @@ export const ListDetailPanel = ({
 
         {/* ── Delete List ──────────────────────────────────────────────────── */}
         <section className="px-5 pb-8">
-          <div className="bg-error/5 rounded-xl px-4 py-2.5 flex items-center gap-3 min-h-[44px]">
-            <Trash2 className="w-3.5 h-3.5 text-error shrink-0" />
-            <AnimatePresence mode="wait" initial={false}>
-              {!showDeleteConfirm ? (
-                <motion.div
-                  key="delete-trigger"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="flex items-center justify-between flex-1 gap-3"
-                >
-                  <span className="text-xs text-error font-medium">
-                    Delete this list
-                  </span>
-                  {/* Not final yet: it asks first, so it is the quiet
-                      destructive button. */}
-                  <button
-                    type="button"
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="btn-secondary btn-sm text-error shrink-0"
-                  >
-                    Delete
-                  </button>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="delete-confirm"
-                  initial={{ opacity: 0, x: 8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0 }}
-                  className="flex items-center justify-between flex-1 gap-3"
-                >
-                  <span className="text-xs text-on-surface-variant">
-                    Remove{" "}
-                    <span className="font-bold text-on-surface">
-                      "{list.name}"
-                    </span>
-                    ? Contacts kept
-                  </span>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setShowDeleteConfirm(false)}
-                      className="btn-secondary btn-sm"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleDelete}
-                      disabled={deleteList.isPending}
-                      className="btn-danger btn-sm"
-                    >
-                      {deleteList.isPending ? "…" : "Delete"}
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          {/* It asks first, in a dialog that names the list. The people on
+              it stay. The inline question that was here took the focus
+              away with the button that opened it. */}
+          <button
+            type="button"
+            onClick={() => setShowDeleteConfirm(true)}
+            className="btn-secondary btn-sm text-error"
+          >
+            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+            Delete list
+          </button>
         </section>
+        <ConfirmDialog
+          isOpen={showDeleteConfirm}
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={() => void handleDelete()}
+          title={`Delete the list "${list.name}"?`}
+          description="The people on it stay in your network. This cannot be undone"
+          confirmLabel="Delete list"
+          busy={deleteList.isPending}
+        />
       </div>
     </div>
   );

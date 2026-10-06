@@ -57,6 +57,7 @@ import {
   type McpClient,
   type McpClientId,
 } from "./clients";
+import { NO_AUTOCORRECT } from "../../../components/ui/SearchField";
 
 /** A value or a snippet, on the card's wash, in the code face. */
 const CODE_BOX =
@@ -258,7 +259,7 @@ const TokenStep = ({
             id="mcp-token-input"
             type="password"
             autoComplete="off"
-            spellCheck="false"
+            {...NO_AUTOCORRECT}
             value={pasted}
             onChange={(e) => {
               const value = e.target.value.trim();

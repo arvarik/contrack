@@ -65,13 +65,7 @@ import type { Contact, ContactList as ContactListType } from "../../types";
 import { ContextMenu, useContextMenu } from "../../components/ui/ContextMenu";
 import { AnimatePresence } from "motion/react";
 import { toast } from "sonner";
-import {
-  SEARCH_INPUT,
-  filterPill,
-  ICON_BTN,
-  LABEL,
-  PAGE_TOP,
-} from "../../lib/styles";
+import { filterPill, ICON_BTN, LABEL, PAGE_TOP } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { usePageTitle } from "../../hooks/usePageTitle";
@@ -117,6 +111,7 @@ import { useSwapFocus } from "../../components/bulk/useSwapFocus";
 import { settleSlide } from "../settings/slide";
 import { errorText } from "../../lib/errorText";
 import { LoadFailed } from "../../components/ui/LoadFailed";
+import { SearchField } from "../../components/ui/SearchField";
 
 /**
  * What to try when a search matches no one. A facet value the search does
@@ -1341,50 +1336,34 @@ export const ContactList = () => {
       >
         <LiveStatus label="Contact search" message={searchAnnouncement} />
         <div className="flex gap-1.5 items-center">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
-            <input
-              aria-label="Search contacts"
-              id="search-input"
-              type="text"
-              enterKeyHint="search"
-              placeholder="Search…"
-              // Names and companies, not prose: no red underline under a
-              // surname, and no phone changing a name it does not know.
-              spellCheck={false}
-              autoCorrect="off"
-              autoCapitalize="off"
-              value={inputValue}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Escape") {
-                  setSearchQuery("");
-                  e.currentTarget.blur();
-                } else if (e.key === "ArrowDown" && !e.altKey) {
-                  // ↓ goes on to the results: the list's current row, or
-                  // the list itself while that row is scrolled out, which
-                  // hands focus to the row.
-                  const list = document.getElementById("contact-list");
-                  const row =
-                    list?.querySelector<HTMLElement>('[tabindex="0"]') ??
-                    (list?.tabIndex === 0 ? list : null);
-                  if (!row) return;
-                  e.preventDefault();
-                  row.focus();
-                }
-              }}
-              className={SEARCH_INPUT}
-            />
-            {inputValue && (
-              <button
-                onClick={() => setSearchQuery("")}
-                className="hit-area absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors"
-                aria-label="Clear search"
-              >
-                ×
-              </button>
-            )}
-          </div>
+          <SearchField
+            className="flex-1"
+            aria-label="Search contacts"
+            id="search-input"
+            type="text"
+            enterKeyHint="search"
+            placeholder="Search…"
+            value={inputValue}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                setSearchQuery("");
+                e.currentTarget.blur();
+              } else if (e.key === "ArrowDown" && !e.altKey) {
+                // ↓ goes on to the results: the list's current row, or
+                // the list itself while that row is scrolled out, which
+                // hands focus to the row.
+                const list = document.getElementById("contact-list");
+                const row =
+                  list?.querySelector<HTMLElement>('[tabindex="0"]') ??
+                  (list?.tabIndex === 0 ? list : null);
+                if (!row) return;
+                e.preventDefault();
+                row.focus();
+              }
+            }}
+            onClear={() => setSearchQuery("")}
+          />
           {/* Sort ActionMenu. The trigger shows the order, and its name says
               what the control is: "A to Z" alone does not. */}
           <ActionMenu

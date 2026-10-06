@@ -32,6 +32,7 @@ import { flyToContact } from "./flyTo";
 import type { MiniMapContact } from "./LocationMiniMap";
 import { CONTACT_ZOOM } from "./mapMath";
 import { errorText } from "../../lib/errorText";
+import { NO_AUTOCORRECT } from "../../components/ui/SearchField";
 
 /** Where a pin is, or is about to be. */
 interface PinPosition {
@@ -227,9 +228,7 @@ export const AdjustPinModal = ({
             }}
             placeholder="Find a place, for example Lisbon"
             aria-label="Find a place"
-            spellCheck={false}
-            autoCorrect="off"
-            autoCapitalize="off"
+            {...NO_AUTOCORRECT}
             maxLength={120}
             className={cn(FORM_INPUT, "min-w-0")}
           />

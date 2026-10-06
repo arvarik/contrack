@@ -9,16 +9,12 @@
  * @module views/lists/AddPeople
  */
 import { useDeferredValue, useId, useMemo, useState } from "react";
-import { Search } from "lucide-react";
+
 import { toast } from "sonner";
 import { useAddToList, useContacts } from "../../api";
-import {
-  MENU_ITEM,
-  MENU_ITEM_SELECTED,
-  MENU_PANEL,
-  SEARCH_INPUT,
-} from "../../lib/styles";
+import { MENU_ITEM, MENU_ITEM_SELECTED, MENU_PANEL } from "../../lib/styles";
 import { cn } from "../../lib/utils";
+import { SearchField } from "../../components/ui/SearchField";
 
 /** The most people the suggestions show. A longer name narrows them. */
 const MAX_SHOWN = 6;
@@ -64,46 +60,35 @@ export const AddPeople = ({ list, memberIds }: AddPeopleProps) => {
   };
 
   return (
-    <div className="relative">
-      <Search
-        aria-hidden="true"
-        className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant pointer-events-none"
-      />
-      <input
-        type="text"
-        role="combobox"
-        aria-label="Add people"
-        aria-autocomplete="list"
-        aria-expanded={matches.length > 0}
-        aria-controls={listboxId}
-        aria-activedescendant={
-          current ? `${listboxId}-${current.id}` : undefined
+    <SearchField
+      type="text"
+      role="combobox"
+      aria-label="Add people"
+      aria-autocomplete="list"
+      aria-expanded={matches.length > 0}
+      aria-controls={listboxId}
+      aria-activedescendant={current ? `${listboxId}-${current.id}` : undefined}
+      placeholder="Add people…"
+      value={query}
+      onChange={(e) => {
+        setQuery(e.target.value);
+        setActive(0);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+          if (matches.length === 0) return;
+          e.preventDefault();
+          const step = e.key === "ArrowDown" ? 1 : -1;
+          setActive((i) => (i + step + matches.length) % matches.length);
+        } else if (e.key === "Enter" && current) {
+          e.preventDefault();
+          choose(current);
+        } else if (e.key === "Escape" && query) {
+          e.preventDefault();
+          setQuery("");
         }
-        placeholder="Add people…"
-        spellCheck={false}
-        autoCorrect="off"
-        autoCapitalize="off"
-        value={query}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setActive(0);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-            if (matches.length === 0) return;
-            e.preventDefault();
-            const step = e.key === "ArrowDown" ? 1 : -1;
-            setActive((i) => (i + step + matches.length) % matches.length);
-          } else if (e.key === "Enter" && current) {
-            e.preventDefault();
-            choose(current);
-          } else if (e.key === "Escape" && query) {
-            e.preventDefault();
-            setQuery("");
-          }
-        }}
-        className={SEARCH_INPUT}
-      />
+      }}
+    >
       {matches.length > 0 && (
         <ul
           id={listboxId}
@@ -141,6 +126,6 @@ export const AddPeople = ({ list, memberIds }: AddPeopleProps) => {
           ))}
         </ul>
       )}
-    </div>
+    </SearchField>
   );
 };

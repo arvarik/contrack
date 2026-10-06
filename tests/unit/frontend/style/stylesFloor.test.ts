@@ -474,6 +474,36 @@ describe("the shared helpers", () => {
     expect(usersOutside("components/ui/Modal.tsx", /Close dialog/)).toEqual([]);
   });
 
+  it("turns a field's spelling help off through NO_AUTOCORRECT", () => {
+    expect(
+      usersOutside(
+        "components/ui/SearchField.tsx",
+        /spellCheck=|autoCorrect=|autoCapitalize="(?:off|none)"/,
+      ),
+    ).toEqual([]);
+  });
+
+  it("draws a search box with SearchField, and every search input takes NO_AUTOCORRECT", () => {
+    expect(
+      usersOutside("components/ui/SearchField.tsx", /\bSEARCH_INPUT\b/),
+    ).toEqual(["lib/styles.ts"]);
+    // A search by its type, its role, its Enter key or its name.
+    const search =
+      /type="search"|role="combobox"|enterKeyHint="search"|aria-label="(?:Search|Filter|Find)/;
+    const offenders: string[] = [];
+    for (const file of sourceFiles()) {
+      if (!file.endsWith(".tsx")) continue;
+      const source = fs.readFileSync(file, "utf8");
+      for (const input of source.matchAll(/<input\b[\s\S]*?\/>/g)) {
+        if (search.test(input[0]) && !input[0].includes("NO_AUTOCORRECT")) {
+          const line = source.slice(0, input.index).split("\n").length;
+          offenders.push(`${rel(file)}:${line}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it("reads an error's words through errorText, which drops the closing period", () => {
     // ListPicker.tsx is reserved in PR #196. It leaves this list when it
     // moves to errorText.

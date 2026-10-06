@@ -78,6 +78,7 @@ import {
   SETTINGS_SECTION_HEADING,
 } from "./layout";
 import { LoadFailed } from "../../components/ui/LoadFailed";
+import { NO_AUTOCORRECT } from "../../components/ui/SearchField";
 
 /** The tile beside a session or a token: the primary wash with its ink. */
 const ROW_ICON = cn(
@@ -416,9 +417,7 @@ const ProfileCard = () => {
         onChange={(e) => setUsername(e.target.value)}
         hint="You can sign in with this or your email"
         autoComplete="username"
-        autoCapitalize="none"
-        autoCorrect="off"
-        spellCheck={false}
+        {...NO_AUTOCORRECT}
       />
       <Field
         id="account-email"
@@ -427,9 +426,7 @@ const ProfileCard = () => {
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         autoComplete="email"
-        autoCapitalize="none"
-        autoCorrect="off"
-        spellCheck={false}
+        {...NO_AUTOCORRECT}
       />
       <div className="flex justify-end">
         <SaveButton busy={save.isPending} disabled={!dirty}>

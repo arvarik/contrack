@@ -18,6 +18,7 @@ import { AccountPhotoField } from "./AccountPhotoField";
 import { toast } from "sonner";
 import { AuthField, touchFirst } from "./AuthShell";
 import { PasswordStrengthMeter } from "../../lib/passwordStrength";
+import { NO_AUTOCORRECT } from "../ui/SearchField";
 
 /** Kept in step with USERNAME_PATTERN in server/services/authService.ts. */
 const USERNAME_PATTERN = /^[a-z0-9](?:[a-z0-9._-]{1,30}[a-z0-9])?$/;
@@ -281,9 +282,7 @@ export const AccountFields = ({
         onBlur={form.blur("email")}
         error={form.errorFor("email")}
         autoComplete="email"
-        autoCapitalize="none"
-        autoCorrect="off"
-        spellCheck={false}
+        {...NO_AUTOCORRECT}
         required
       />
       <AuthField
@@ -296,9 +295,7 @@ export const AccountFields = ({
         onBlur={form.blur("username")}
         error={form.errorFor("username")}
         autoComplete="username"
-        autoCapitalize="none"
-        autoCorrect="off"
-        spellCheck={false}
+        {...NO_AUTOCORRECT}
         required
       />
       <AuthField

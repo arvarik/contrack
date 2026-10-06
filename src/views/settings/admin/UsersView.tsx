@@ -74,6 +74,7 @@ import {
   AdminRow,
   RolePicker,
 } from "./AdminShell";
+import { NO_AUTOCORRECT } from "../../../components/ui/SearchField";
 
 /** Name, role, holdings, last seen, and the row menu. */
 const COLUMNS =
@@ -306,9 +307,7 @@ const CreateUserModal = ({
             onChange={(e) => setEmail(e.target.value)}
             hint="Used to sign in"
             autoComplete="off"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
+            {...NO_AUTOCORRECT}
             required
             // The dialog opens on this field with nothing else to do.
             // eslint-disable-next-line jsx-a11y/no-autofocus
@@ -322,9 +321,7 @@ const CreateUserModal = ({
             hint="Lowercase letters, numbers, dots, dashes, underscores"
             maxLength={32}
             autoComplete="off"
-            autoCapitalize="none"
-            autoCorrect="off"
-            spellCheck={false}
+            {...NO_AUTOCORRECT}
             required
           />
           <AdminField
