@@ -858,7 +858,8 @@ export function listCorrespondents(
          cl.localId,
          cl.seenCount,
          cl.lastSeenAt,
-         cl.ignoredAt
+         cl.ignoredAt,
+         cl.displayName
        FROM connector_links cl
        JOIN connectors c ON c.id = cl.connectorId
         WHERE cl.ownerId = ? AND cl.kind = 'correspondent' AND cl.ignoredAt IS NULL AND cl.localId IS NULL
@@ -880,6 +881,7 @@ export function listCorrespondents(
     seenCount: number;
     lastSeenAt: string;
     ignoredAt: string | null;
+    displayName: string | null;
   }>;
 
   return rows.map((row) => {
@@ -903,7 +905,8 @@ export function listCorrespondents(
       externalId: row.externalId,
       email,
       phone,
-      name,
+      // The name the mail or meeting gave, or the name the link is keyed by.
+      name: row.displayName ?? name,
       localId: row.localId,
       seenCount: row.seenCount,
       lastSeenAt: row.lastSeenAt,

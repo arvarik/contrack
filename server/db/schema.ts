@@ -1223,6 +1223,8 @@ export const connectorLinks = sqliteTable(
       .notNull()
       .default(sql`(CURRENT_TIMESTAMP)`),
     ignoredAt: text("ignoredAt"),
+    /** A correspondent's name, as its mail or meeting gave it. */
+    displayName: text("displayName"),
   },
   (table) => ({
     pk: primaryKey({

@@ -2,7 +2,11 @@
  * CorrespondentsView — Review unconfirmed correspondents discovered by connectors.
  *
  * Displays people seen in incoming/outgoing messages or calendar meetings who
- * are not yet contacts in Contrack. Provides 1-click "Add as contact" and "Ignore".
+ * are not yet contacts in Contrack. Provides "Add as contact" and "Ignore".
+ *
+ * "Add as contact" uses the name the mail or meeting gave. With only an
+ * address it asks for a name first, filled in from the address ("rowan.vale"
+ * gives "Rowan Vale"): it once made a contact named by its email address.
  *
  * @module views/settings/connectors/CorrespondentsView
  */
@@ -24,16 +28,33 @@ import {
 } from "../../../api/connectors";
 import { useCreateContact } from "../../../api/contacts";
 import { EmptyState } from "../../../components/ui/EmptyState";
+import { Modal } from "../../../components/ui/Modal";
 import type { Correspondent } from "../../../../shared/connectors";
 import { SETTINGS_PAGE } from "../layout";
 import { formatRelative } from "../../../lib/datetime";
 import {
   BTN_QUIET,
   CARD,
+  FORM_INPUT,
+  FORM_LABEL,
   SECTION_HEADING,
   TONE_WASH,
 } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
+
+/**
+ * A name to start from, out of an address's local part: "rowan.vale" and
+ * "rowan_vale+news" give "Rowan Vale". The person can change it.
+ */
+function nameFromAddress(email: string): string {
+  return email
+    .split("@")[0]
+    .replace(/\+.*$/, "")
+    .split(/[._-]+/)
+    .filter((part) => /[a-z]/i.test(part))
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
 
 export const CorrespondentsView: React.FC = () => {
   const navigate = useNavigate();
@@ -48,11 +69,18 @@ export const CorrespondentsView: React.FC = () => {
   const ignoreCorrespondent = useIgnoreCorrespondent();
 
   const [processingId, setProcessingId] = useState<string | null>(null);
+  // A correspondent with only an address, and the name typed for them.
+  const [naming, setNaming] = useState<Correspondent | null>(null);
+  const [draftName, setDraftName] = useState("");
 
-  const handleAddContact = async (c: Correspondent) => {
+  const askForName = (c: Correspondent) => {
+    setNaming(c);
+    setDraftName(c.email ? nameFromAddress(c.email) : "");
+  };
+
+  const handleAddContact = async (c: Correspondent, displayName: string) => {
     const key = `${c.connectorId}:${c.externalId}`;
     setProcessingId(key);
-    const displayName = c.name || c.email || c.phone || "Unknown correspondent";
 
     try {
       await createContact.mutateAsync({
@@ -68,7 +96,9 @@ export const CorrespondentsView: React.FC = () => {
       toast.success(`Added ${displayName} as a contact`);
       void refetch();
     } catch (err) {
-      toast.error((err as Error).message || "Failed to add contact");
+      toast.error(
+        `Could not add ${displayName}${(err as Error).message ? `: ${(err as Error).message}` : ""}`,
+      );
     } finally {
       setProcessingId(null);
     }
@@ -87,7 +117,9 @@ export const CorrespondentsView: React.FC = () => {
       toast.success(`Ignored ${displayName}`);
       void refetch();
     } catch (err) {
-      toast.error((err as Error).message || "Failed to ignore correspondent");
+      toast.error(
+        `Could not ignore ${displayName}${(err as Error).message ? `: ${(err as Error).message}` : ""}`,
+      );
     } finally {
       setProcessingId(null);
     }
@@ -193,7 +225,9 @@ export const CorrespondentsView: React.FC = () => {
                     <button
                       type="button"
                       disabled={isBusy}
-                      onClick={() => handleAddContact(c)}
+                      onClick={() =>
+                        c.name ? handleAddContact(c, c.name) : askForName(c)
+                      }
                       className="btn-primary btn-sm"
                     >
                       {isBusy ? (
@@ -210,6 +244,58 @@ export const CorrespondentsView: React.FC = () => {
           </div>
         </div>
       )}
+
+      <Modal
+        isOpen={naming !== null}
+        onClose={() => setNaming(null)}
+        title="Add as contact"
+      >
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const name = draftName.trim();
+            if (!naming || !name) return;
+            setNaming(null);
+            void handleAddContact(naming, name);
+          }}
+        >
+          <div>
+            <label htmlFor="correspondent-name" className={FORM_LABEL}>
+              Name
+            </label>
+            <input
+              id="correspondent-name"
+              required
+              // The one field: a dialog opened to type a name.
+              // eslint-disable-next-line jsx-a11y/no-autofocus
+              autoFocus
+              value={draftName}
+              onChange={(e) => setDraftName(e.target.value)}
+              className={FORM_INPUT}
+            />
+            <p className="mt-1.5 text-xs text-on-surface-variant">
+              {naming?.email ?? naming?.phone}
+            </p>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setNaming(null)}
+              className="btn-secondary"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={!draftName.trim()}
+              className="btn-primary"
+            >
+              Add contact
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {!isLoading && !isError && !hasCorrespondents && (
         <EmptyState
