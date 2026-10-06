@@ -121,7 +121,7 @@ export const HistoryEntryRow = React.memo(
             Delete took the taps at a row's end. A touch screen has no hover,
             so there they always show. Each glyph is 24 px on screen with a
             44 px tap box. */}
-        <div className="absolute right-2 bottom-1.5 flex items-center gap-0.5 transition-opacity opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto">
+        <div className="absolute right-2 bottom-1.5 flex items-center gap-0.5 transition-opacity pointer-fine:opacity-0 pointer-fine:pointer-events-none pointer-fine:group-hover:opacity-100 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-focus-within:opacity-100 pointer-fine:group-focus-within:pointer-events-auto">
           <button
             type="button"
             aria-label={entry.pinned ? "Unpin question" : "Pin question"}

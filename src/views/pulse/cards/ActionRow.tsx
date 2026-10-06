@@ -265,13 +265,12 @@ export const ActionRow = memo(
           "shrink-0",
           compact
             ? "ml-auto"
-            : cn(
-                "absolute right-2 top-1/2 -translate-y-1/2 rounded-lg bg-surface-container-low/95 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100",
-                "pointer-coarse:static pointer-coarse:ml-auto pointer-coarse:translate-y-0 pointer-coarse:bg-transparent pointer-coarse:opacity-100",
-              ),
+            : // At rest on a touch screen. For a mouse it waits over the
+              // row's end until the row is hovered or holds focus.
+              "ml-auto transition-opacity pointer-fine:ml-0 pointer-fine:absolute pointer-fine:right-2 pointer-fine:top-1/2 pointer-fine:-translate-y-1/2 pointer-fine:rounded-lg pointer-fine:bg-surface-container-low/95 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100",
         )}
         triggerClassName={
-          compact ? "-my-1.5" : "p-1 rounded-lg pointer-coarse:-my-1.5"
+          compact ? "-my-1.5" : "p-1 rounded-lg -my-1.5 pointer-fine:my-0"
         }
       />
     ) : null;

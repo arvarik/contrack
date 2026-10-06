@@ -151,8 +151,8 @@ export const AccountPhotoField = ({
           <div
             className={cn(
               "absolute inset-0 bg-black/25 flex items-center justify-center",
-              "opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 pointer-coarse:opacity-100 transition-opacity",
-              isDragActive && "opacity-100 bg-primary/20",
+              "pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-visible:opacity-100 transition-opacity",
+              isDragActive && "pointer-fine:opacity-100 bg-primary/20",
             )}
           >
             <Camera className="w-5 h-5 text-white drop-shadow" />

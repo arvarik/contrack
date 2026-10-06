@@ -381,6 +381,19 @@ describe("the one look", () => {
     expect(css).not.toMatch(/box-shadow:\s*inset\s+\d+px\s+0\s+0/);
   });
 
+  it("hides a control until hover only for a mouse", () => {
+    // `opacity-0` with `pointer-coarse:opacity-100` hid the control on any
+    // screen that is not coarse. A control shows for keyboard focus too,
+    // which a tooltip on hover does not, so the focus reveal names it.
+    const hidden = /(?<![-:\w/])opacity-0(?![-\w])/;
+    const focusReveal =
+      /(?:group-)?focus(?:-within|-visible)?(?:\/\w+)?:opacity-100(?![-\w])/;
+    const offenders = everyClassString()
+      .filter(({ text }) => hidden.test(text) && focusReveal.test(text))
+      .map(({ file, line }) => `${file}:${line}`);
+    expect([...new Set(offenders)]).toEqual([]);
+  });
+
   it("lifts only through the two lift classes", () => {
     // A tile rises with `lift`, a card with `card-interactive` (STYLE.md,
     // "Elevation"). A hand-rolled translate or shadow on hover is a third
