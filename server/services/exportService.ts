@@ -26,6 +26,18 @@ export interface FullExport {
 }
 
 /**
+ * The account name in a download filename: two accounts make two files a day,
+ * and a date alone would let the second overwrite the first in the downloads
+ * folder. Anything outside `[A-Za-z0-9._-]` is stripped, because the value
+ * lands in a quoted `Content-Disposition` header, where a stray quote would end
+ * the filename.
+ */
+export function exportFileSlug(username: string | undefined): string {
+  const slug = (username ?? "").replace(/[^A-Za-z0-9._-]/g, "").slice(0, 40);
+  return slug || "account";
+}
+
+/**
  * One account's data, hydrated, archived and trashed rows included. Every table
  * filters by the caller. `list_members` has no `ownerId`, so it reaches the
  * owner through its list; filtering by `contactId` instead would drop a

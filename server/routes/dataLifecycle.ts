@@ -2,7 +2,6 @@ import { idsSchema } from "../../shared/contracts/common.ts";
 // Data lifecycle routes: trash (undoable deletes), backups and full export.
 
 import { Router } from "express";
-import type { Request } from "express";
 import { z } from "zod";
 import { log } from "../utils/logger.ts";
 import { AppError } from "../utils/AppError.ts";
@@ -18,6 +17,7 @@ import {
   buildFullExport,
   buildContactsCsv,
   buildContactsVcf,
+  exportFileSlug,
 } from "../services/exportService.ts";
 
 const router = Router();
@@ -148,19 +148,6 @@ router.post(
 
 // Export
 
-/**
- * The account name in the download filename. Two accounts make two files a day,
- * and a date alone would let the second overwrite the first in the downloads
- * folder. `validateUsername` already limits account names, and this strips
- * anything else anyway: the value lands in a quoted `Content-Disposition`
- * header, where a stray quote would end the filename.
- */
-function exportOwnerSlug(req: Request): string {
-  const raw = req.principal?.user.username ?? "";
-  const slug = raw.replace(/[^A-Za-z0-9._-]/g, "").slice(0, 40);
-  return slug || "account";
-}
-
 router.get(
   "/export/json",
   asyncHandler(async (req, res) => {
@@ -170,7 +157,7 @@ router.get(
     res.setHeader("Content-Type", "application/json");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="contrack-export-${exportOwnerSlug(req)}-${stamp}.json"`,
+      `attachment; filename="contrack-export-${exportFileSlug(req.principal?.user.username)}-${stamp}.json"`,
     );
     log.info(
       "API",
@@ -189,7 +176,7 @@ router.get(
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="contrack-contacts-${exportOwnerSlug(req)}-${stamp}.csv"`,
+      `attachment; filename="contrack-contacts-${exportFileSlug(req.principal?.user.username)}-${stamp}.csv"`,
     );
     log.info("API", `[${rid}] GET /api/export/csv`);
     res.send(csv);
@@ -207,7 +194,7 @@ router.get(
     res.setHeader("Content-Type", "text/vcard; charset=utf-8");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="contrack-contacts-${exportOwnerSlug(req)}-${stamp}.vcf"`,
+      `attachment; filename="contrack-contacts-${exportFileSlug(req.principal?.user.username)}-${stamp}.vcf"`,
     );
     log.info("API", `[${rid}] GET /api/export/vcard`);
     res.send(vcf);

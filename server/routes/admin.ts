@@ -83,6 +83,7 @@ import {
   ADMIN_RESET_LINK_TTL_SECONDS,
 } from "../services/authLinkService.ts";
 import { snapshotFile } from "../services/backupService.ts";
+import { exportFileSlug } from "../services/exportService.ts";
 
 const router = Router();
 
@@ -256,7 +257,7 @@ router.get(
     res.setHeader("Content-Type", "application/json");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="contrack-export-${exportSlug(username)}-${stamp}.json"`,
+      `attachment; filename="contrack-export-${exportFileSlug(username)}-${stamp}.json"`,
     );
     log.info(
       "API",
@@ -293,16 +294,6 @@ router.get(
     res.download(file, filename);
   }),
 );
-
-/**
- * The account name in a download filename. As in the self-service export, it
- * lands inside a quoted `Content-Disposition` header, where a stray quote would
- * end the filename.
- */
-function exportSlug(username: string): string {
-  const slug = username.replace(/[^A-Za-z0-9._-]/g, "").slice(0, 40);
-  return slug || "account";
-}
 
 router.delete(
   "/users/:id",
