@@ -25,11 +25,14 @@ import {
   storeSuggestions,
   clearStaleSuggestions,
   clearAllPendingSuggestions,
+  liveContactId,
 } from "./suggestions.ts";
 import { softMergeContacts, mergeContacts } from "./merging.ts";
+import { pairKey } from "./blocking.ts";
 import {
   autoMergeThresholdFor,
   DEFAULT_AUTO_MERGE_THRESHOLD,
+  reasonWithCaveat,
 } from "./policy.ts";
 import type { DedupeScanMode, RawPair, MatchType } from "./types.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
@@ -51,6 +54,14 @@ export { DEFAULT_AUTO_MERGE_THRESHOLD };
  * look at. A merge that throws becomes a pending suggestion too, because the
  * pair is still a pair even when the merge could not be completed.
  *
+ * Every pair is stored against the contacts that are live now. Merges run
+ * first, and each id is followed to the contact it lives on, so "X shares a
+ * phone with C" becomes "B shares a phone with C" once X merged into B. The
+ * pair used to be stored as found, against the hidden X, where it waited in
+ * the review list for a contact nobody could see, and its merge did nothing.
+ * A pair whose two sides are one contact now is done, and a pair the account
+ * kept apart stays apart.
+ *
  * Returns what went where, so a batch can add up its own summary, and adds
  * every merged-away contact to `corpus.retired` so later contacts in the same
  * batch stop being offered a contact that is no longer there.
@@ -65,24 +76,24 @@ function persistIncrementalPairs(
   let autoMerged = 0;
   let pending = 0;
 
-  const qualifying = pairs.filter((p) => p.confidence >= autoMergeThreshold);
-  for (const pair of pairs) {
-    if (pair.confidence >= autoMergeThreshold) continue;
-    storeSuggestion(scope, pair, "pending");
-    pending++;
-  }
+  const live = (found: RawPair): RawPair | null => {
+    const idA = liveContactId(scope, found.idA);
+    const idB = liveContactId(scope, found.idB);
+    if (!idA || !idB || idA === idB) return null;
+    if (corpus.distinctPairs.has(pairKey(idA, idB))) return null;
+    return { ...found, idA, idB };
+  };
 
-  if (qualifying.length === 0) return { autoMerged, pending };
-
-  const ids = [...new Set(qualifying.flatMap((p) => [p.idA, p.idB]))];
-  const hydrated = new Map(
-    contactRepo
-      .hydrateMany(contactRepo.findManyOwned(scope, ids))
-      .map((c) => [c.id, c]),
-  );
-
-  for (const pair of qualifying) {
+  for (const found of pairs) {
+    if (found.confidence < autoMergeThreshold) continue;
+    const pair = live(found);
+    if (!pair) continue;
     try {
+      const hydrated = new Map(
+        contactRepo
+          .hydrateMany(contactRepo.findManyOwned(scope, [pair.idA, pair.idB]))
+          .map((c) => [c.id, c]),
+      );
       const rawA = hydrated.get(pair.idA);
       const rawB = hydrated.get(pair.idB);
       if (!rawA || !rawB) continue;
@@ -97,7 +108,7 @@ function persistIncrementalPairs(
         primaryId,
         duplicateId,
         pair.confidence,
-        pair.reasoning,
+        reasonWithCaveat(pair.reasoning, pair.caveat),
         rid,
       );
       storeSuggestion(scope, pair, "auto_merged");
@@ -111,6 +122,14 @@ function persistIncrementalPairs(
       storeSuggestion(scope, pair, "pending");
       pending++;
     }
+  }
+
+  for (const found of pairs) {
+    if (found.confidence >= autoMergeThreshold) continue;
+    const pair = live(found);
+    if (!pair) continue;
+    storeSuggestion(scope, pair, "pending");
+    pending++;
   }
 
   return { autoMerged, pending };
@@ -193,7 +212,7 @@ export const dedupeService = {
     try {
       dedupeQueue.update(scanId, {
         phase: "normalizing",
-        phaseName: "Normalizing contacts…",
+        phaseName: "Reading contacts",
       });
 
       const ctx = buildPassContext(scope, rid);
@@ -215,10 +234,7 @@ export const dedupeService = {
         if (needsBackfill) {
           dedupeQueue.update(scanId, {
             phase: "normalizing",
-            phaseName:
-              mode === "full"
-                ? "Re-embedding all contacts…"
-                : "Generating contact embeddings…",
+            phaseName: "Preparing contacts for comparison",
           });
 
           try {
@@ -234,7 +250,7 @@ export const dedupeService = {
               scope,
               (done, total) => {
                 dedupeQueue.update(scanId, {
-                  phaseName: `Embedding contacts (${done}/${total})…`,
+                  phaseName: `Preparing contacts for comparison (${done} of ${total})`,
                 });
               },
             );
@@ -291,7 +307,7 @@ export const dedupeService = {
 
       dedupeQueue.update(scanId, {
         phase: "deterministic",
-        phaseName: "Scanning for exact matches (email, phone, name)…",
+        phaseName: "Looking for the same email, phone or name",
         contactsScanned: 0,
       });
 
@@ -315,7 +331,7 @@ export const dedupeService = {
 
       dedupeQueue.update(scanId, {
         phase: "clustering",
-        phaseName: "Grouping duplicates into clusters…",
+        phaseName: "Grouping",
         totalPairs: allPairs.length,
       });
 
@@ -323,7 +339,7 @@ export const dedupeService = {
 
       dedupeQueue.update(scanId, {
         phase: "persisting",
-        phaseName: "Persisting suggestions and auto-merging…",
+        phaseName: "Saving",
       });
 
       clearStaleSuggestions(scope);
@@ -351,6 +367,7 @@ export const dedupeService = {
               confidence: pair.confidence,
               reasoning: pair.reasoning,
               matchedField: pair.matchedField,
+              caveat: pair.caveat,
             });
           }
         } else {
@@ -362,6 +379,7 @@ export const dedupeService = {
               confidence: pair.confidence,
               reasoning: pair.reasoning,
               matchedField: pair.matchedField,
+              caveat: pair.caveat,
             });
           }
         }
@@ -396,7 +414,7 @@ export const dedupeService = {
             primaryId,
             duplicateId,
             pair.confidence,
-            pair.reasoning,
+            reasonWithCaveat(pair.reasoning, pair.caveat),
             rid,
           );
           merged.push(pair);

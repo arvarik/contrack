@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-09-14T16:19:00.169Z",
+  "recordedAt": "2026-10-06T01:23:36.587Z",
   "corpus": {
     "contacts": 745,
     "duplicatePairs": 221,
@@ -24,7 +24,7 @@
         "autoTruePositives": 109,
         "autoFalsePositives": 14,
         "autoPrecision": 0.8862,
-        "meanConfidence": 0.9335
+        "meanConfidence": 0.9275
       },
       "recallByKind": {
         "cross-source": 1,
@@ -120,7 +120,7 @@
         "autoTruePositives": 109,
         "autoFalsePositives": 14,
         "autoPrecision": 0.8862,
-        "meanConfidence": 0.8759
+        "meanConfidence": 0.8709
       },
       "recallByKind": {
         "cross-source": 1,
@@ -168,7 +168,7 @@
         "autoTruePositives": 125,
         "autoFalsePositives": 14,
         "autoPrecision": 0.8993,
-        "meanConfidence": 0.9343
+        "meanConfidence": 0.9288
       },
       "recallByKind": {
         "cross-source": 1,

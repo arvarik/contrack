@@ -12,6 +12,7 @@ import { sqlite } from "../db.ts";
 import { CATCH_UP_DAYS_SINCE, CATCH_UP_WHERE } from "./catchUp.ts";
 import { log } from "../utils/logger.ts";
 import type { Scope } from "../tenancy/scope.ts";
+import { getPendingClusterCount } from "./dedupe/suggestions.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -86,12 +87,6 @@ const stmts = {
       AND isGhost = 0
       AND (isArchived = 0 OR isArchived IS NULL)
       AND canonicalId IS NULL
-  `),
-
-  pendingDedupeCount: sqlite.prepare(`
-    SELECT COUNT(*) as count
-    FROM dedupe_suggestions
-    WHERE ownerId = ? AND status = 'pending'
   `),
 };
 
@@ -168,18 +163,17 @@ export const zeroStateService = {
       });
     }
 
-    // 5. Pending dedupe suggestions
-    const dedupe = stmts.pendingDedupeCount.get(scope.ownerId) as {
-      count: number;
-    };
-    if (dedupe.count > 0) {
+    // 5. Possible duplicates, counted the way Pulse and the review count
+    //    them: one for each group the review shows, not one for each pair.
+    const duplicates = getPendingClusterCount(scope);
+    if (duplicates > 0) {
       insights.push({
         type: "dedupe",
         label:
-          dedupe.count === 1
-            ? "1 potential duplicate detected"
-            : `${dedupe.count} potential duplicates detected`,
-        count: dedupe.count,
+          duplicates === 1
+            ? "Review 1 possible duplicate"
+            : `Review ${duplicates} possible duplicates`,
+        count: duplicates,
       });
     }
 

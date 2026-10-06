@@ -23,9 +23,7 @@
 // `tests/integration/dedupe.import.test.ts` holds the numbers.
 // =============================================================================
 
-import { sqlite } from "../../db.ts";
 import { log } from "../../utils/logger.ts";
-import { contactRepo } from "../../repositories/contactRepository.ts";
 import {
   isNicknameMatch,
   isMiddleNameExtension,
@@ -38,29 +36,34 @@ import {
   isEmbeddingAvailable,
 } from "./embeddings.ts";
 import { loadNegativeConstraints, pairKey } from "./blocking.ts";
-import { normalizeContactById, normalizeContacts } from "./normalization.ts";
+import {
+  loadProfileUrls,
+  normalizeContactById,
+  normalizeContacts,
+} from "./normalization.ts";
 import {
   countValues,
   generationsContradict,
   NAME_CONFIDENCE,
   weighAnchor,
   weighName,
-  withCaveat,
+  weighNameOnly,
 } from "./policy.ts";
 import {
-  classifyPair,
   computeCompositeScore,
   computeMatchSignals,
   distanceToSimilarity,
+  unverifiedConfidence,
 } from "./scoring.ts";
-import { buildScoringReasoning } from "./passes.ts";
+import {
+  buildScoringReasoning,
+  crossSourceReason,
+  nicknameReason,
+  REASON,
+  scoringCaveat,
+} from "./reasons.ts";
 import type { Scope } from "../../tenancy/scope.ts";
-import type {
-  ContactRow,
-  NormalizedContact,
-  RawPair,
-  ValueFrequency,
-} from "./types.ts";
+import type { NormalizedContact, RawPair, ValueFrequency } from "./types.ts";
 
 /** How many vector neighbours one new contact is compared with. */
 const KNN_LIMIT = 5;
@@ -81,7 +84,10 @@ export interface IncrementalCorpus {
   contactsByPhone: Map<string, string[]>;
   /** Lowercased email to the contacts that carry it. */
   contactsByEmail: Map<string, string[]>;
+  /** Normalized personal profile links, by contact (`loadProfileUrls`). */
   socialUrlsByContact: Map<string, string[]>;
+  /** A normalized profile link to the active contacts that carry it. */
+  contactsBySocial: Map<string, string[]>;
   /** How widely each address, number and name is shared in the account. */
   frequency: ValueFrequency;
   /** True while the vector store can answer, checked once. */
@@ -130,18 +136,15 @@ export function buildIncrementalCorpus(
     }
   }
 
-  const socialUrlsByContact = new Map<string, string[]>();
-  const socialRows = sqlite
-    .prepare(
-      `SELECT sl.contactId, LOWER(TRIM(sl.url)) AS url FROM contact_social_links sl
-       JOIN contacts c ON c.id = sl.contactId WHERE c.ownerId = ?`,
-    )
-    .all(scope.ownerId) as { contactId: string; url: string }[];
-  for (const row of socialRows) {
-    if (!socialUrlsByContact.has(row.contactId)) {
-      socialUrlsByContact.set(row.contactId, []);
+  // Every contact's links, the new ones included, and an index of the links
+  // the active contacts carry, which is what a new contact is matched with.
+  const socialUrlsByContact = loadProfileUrls(scope);
+  const contactsBySocial = new Map<string, string[]>();
+  for (const contact of normalized) {
+    for (const url of socialUrlsByContact.get(contact.id) ?? []) {
+      if (!contactsBySocial.has(url)) contactsBySocial.set(url, []);
+      contactsBySocial.get(url)!.push(contact.id);
     }
-    socialUrlsByContact.get(row.contactId)!.push(row.url);
   }
 
   const corpus: IncrementalCorpus = {
@@ -153,6 +156,7 @@ export function buildIncrementalCorpus(
     contactsByPhone,
     contactsByEmail,
     socialUrlsByContact,
+    contactsBySocial,
     frequency: countValues(normalized),
     embeddingsAvailable: isEmbeddingAvailable(),
     retired: new Set(),
@@ -250,7 +254,9 @@ export function findIncrementalPairs(
       claim(otherId, {
         matchType: "email",
         confidence: weighed.confidence,
-        reasoning: withCaveat("Shared email address", weighed),
+        reasoning: REASON.email,
+        matchedField: email,
+        caveat: weighed.caveat,
       });
     }
   }
@@ -272,7 +278,34 @@ export function findIncrementalPairs(
       claim(otherId, {
         matchType: "phone",
         confidence: weighed.confidence,
-        reasoning: withCaveat("Shared phone number", weighed),
+        reasoning: REASON.phone,
+        matchedField: phone,
+        caveat: weighed.caveat,
+      });
+    }
+  }
+
+  // 2b. The same personal profile link. Same rule as the scan's D2b: one
+  //     LinkedIn page on a new contact and an old one is one person, whatever
+  //     form the name took, and a link three contacts carry asks.
+  for (const url of corpus.socialUrlsByContact.get(contactId) ?? []) {
+    const carriers = corpus.contactsBySocial.get(url) ?? [];
+    for (const otherId of carriers) {
+      if (!isCandidate(corpus, otherId, contactId, seen)) continue;
+      const other = corpus.normalizedById.get(otherId);
+      if (!other) continue;
+      const weighed = weighAnchor(
+        "social",
+        target,
+        other,
+        Math.max(2, new Set([...carriers, contactId]).size),
+      );
+      claim(otherId, {
+        matchType: "social",
+        confidence: weighed.confidence,
+        reasoning: REASON.social,
+        matchedField: url,
+        caveat: weighed.caveat,
       });
     }
   }
@@ -314,12 +347,21 @@ export function findIncrementalPairs(
           target.sources.length > 0 &&
           other.sources.length > 0 &&
           !target.sources.some((s) => other.sources.includes(s));
+        //
+        // Without the company the name is the whole claim, so a different
+        // employer or city on the two records caps it for review, the same
+        // rule as the scan's D3.
         const carriers = corpus.frequency.names.get(target.nameNorm) ?? 2;
         const weighed = sameCompany
           ? weighName(NAME_CONFIDENCE.nameCompany, carriers)
           : isCrossSource
-            ? weighName(NAME_CONFIDENCE.crossSource, carriers)
-            : weighName(NAME_CONFIDENCE.name, carriers);
+            ? weighNameOnly(
+                NAME_CONFIDENCE.crossSource,
+                carriers,
+                target,
+                other,
+              )
+            : weighNameOnly(NAME_CONFIDENCE.name, carriers, target, other);
         claim(other.id, {
           matchType: sameCompany
             ? "name_company"
@@ -327,14 +369,15 @@ export function findIncrementalPairs(
               ? "cross_source"
               : "name",
           confidence: weighed.confidence,
-          reasoning: withCaveat(
-            sameCompany
-              ? "Exact name match with same company"
-              : isCrossSource
-                ? `Exact name match across different sources (${target.sources[0]} ↔ ${other.sources[0]})`
-                : "Exact name match",
-            weighed,
-          ),
+          reasoning: sameCompany
+            ? REASON.nameCompany
+            : isCrossSource
+              ? crossSourceReason(
+                  [...target.sources].sort(),
+                  [...other.sources].sort(),
+                )
+              : REASON.name,
+          caveat: weighed.caveat,
         });
         continue;
       }
@@ -346,10 +389,17 @@ export function findIncrementalPairs(
         other.firstNameNorm &&
         isNicknameMatch(target.firstNameNorm, other.firstNameNorm)
       ) {
+        const weighed = weighNameOnly(
+          NAME_CONFIDENCE.nickname,
+          2,
+          target,
+          other,
+        );
         claim(other.id, {
           matchType: "nickname",
-          confidence: NAME_CONFIDENCE.nickname,
-          reasoning: `Nickname match ("${target.firstNameNorm}" ↔ "${other.firstNameNorm}")`,
+          confidence: weighed.confidence,
+          reasoning: nicknameReason(target.firstNameNorm, other.firstNameNorm),
+          caveat: weighed.caveat,
         });
         continue;
       }
@@ -358,10 +408,17 @@ export function findIncrementalPairs(
       // arrives: one export writes "Anton Kovacs" and the next writes "Anton
       // Peter Kovacs", and without this the second one lands as a new person.
       if (isMiddleNameExtension(target.nameTokens, other.nameTokens)) {
+        const weighed = weighNameOnly(
+          NAME_CONFIDENCE.middleName,
+          2,
+          target,
+          other,
+        );
         claim(other.id, {
           matchType: "middle_name",
-          confidence: NAME_CONFIDENCE.middleName,
-          reasoning: `Same name with a middle name added ("${target.nameNorm}" ↔ "${other.nameNorm}")`,
+          confidence: weighed.confidence,
+          reasoning: REASON.middleName,
+          caveat: weighed.caveat,
         });
       }
     }
@@ -400,23 +457,17 @@ export function findIncrementalPairs(
           corpus.socialUrlsByContact.get(other.id) ?? [],
           corpus.frequency,
         );
-        const score = computeCompositeScore(signals);
-        if (classifyPair(score) === "discard") continue;
+        // No model checks a pair here, so the floor and the weight of a scan
+        // without a provider apply: an unclear pair is kept from 0.75, at 0.7
+        // of its score, and a pair below that is dropped.
+        const confidence = unverifiedConfidence(computeCompositeScore(signals));
+        if (confidence === null) continue;
 
-        const rawA =
-          (contactRepo.findOwned(
-            corpus.scope,
-            contactId,
-          ) as ContactRow | null) ?? undefined;
-        const rawB =
-          (contactRepo.findOwned(
-            corpus.scope,
-            neighbor.contactId,
-          ) as ContactRow | null) ?? undefined;
         claim(neighbor.contactId, {
           matchType: "fuzzy",
-          confidence: score,
-          reasoning: buildScoringReasoning(signals, score, rawA, rawB),
+          confidence,
+          reasoning: buildScoringReasoning(signals),
+          caveat: scoringCaveat(signals),
         });
       }
     } catch (err: unknown) {

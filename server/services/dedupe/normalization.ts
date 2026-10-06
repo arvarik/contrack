@@ -402,6 +402,85 @@ export function normalizeContacts(scope: Scope): NormalizedContact[] {
 }
 
 // =============================================================================
+// Profile links
+// =============================================================================
+
+/**
+ * A profile link reduced to what names the page: host and path, lowercased,
+ * with no protocol, no `www.` or mobile host, no query, no fragment and no
+ * trailing slash. A LinkedIn profile is `linkedin.com/in/<handle>`, whatever
+ * country host or extra path it was saved with.
+ *
+ * Two exports of one person write their link a little differently, and a
+ * comparison of the raw strings missed "linkedin.com/in/priya-raman-42"
+ * beside the same link with a slash at the end.
+ */
+export function normalizeProfileUrl(url: string): string {
+  const raw = url
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z][a-z0-9+.-]*:\/\//, "");
+  // The one profile whose query is the person: facebook.com/profile.php?id=.
+  const facebookId =
+    /^(?:www\.|m\.)?facebook\.com\/profile\.php\?(?:[^#]*&)?id=(\d+)/.exec(raw);
+  if (facebookId) return `facebook.com/profile.php?id=${facebookId[1]}`;
+  const bare = raw
+    .replace(/[?#].*$/, "")
+    .replace(/^(www|m|mobile)\./, "")
+    .replace(/\/+$/, "");
+  const linkedIn = /^(?:[a-z]{2}\.)?linkedin\.com\/in\/([^/]+)/.exec(bare);
+  if (!linkedIn) return bare;
+  let handle = linkedIn[1];
+  try {
+    handle = decodeURIComponent(handle);
+  } catch {
+    // A malformed escape stays as it was written.
+  }
+  return `linkedin.com/in/${handle}`;
+}
+
+/**
+ * Whether a normalized link names one person rather than a group or a site.
+ *
+ * A company page, a school or a group is shared by everybody who works or
+ * studied there, so two colleagues who both saved it are not one person. A
+ * bare host, such as a site's front page, names nobody.
+ */
+export function isPersonalProfile(normalized: string): boolean {
+  const slash = normalized.indexOf("/");
+  if (slash < 0 || slash === normalized.length - 1) return false;
+  if (/^(?:[a-z]{2}\.)?linkedin\.com\//.test(normalized)) {
+    return normalized.startsWith("linkedin.com/in/");
+  }
+  return !/\/(company|school|groups?|pages|showcase|events|jobs)(\/|$)/.test(
+    normalized,
+  );
+}
+
+/**
+ * Every personal profile link the account's contacts carry, normalized, by
+ * contact. One scoped read for the scan and the import check alike.
+ */
+export function loadProfileUrls(scope: Scope): Map<string, string[]> {
+  const rows = sqlite
+    .prepare(
+      `SELECT sl.contactId, sl.url FROM contact_social_links sl
+       JOIN contacts c ON c.id = sl.contactId WHERE c.ownerId = ?`,
+    )
+    .all(scope.ownerId) as { contactId: string; url: string | null }[];
+  const byContact = new Map<string, string[]>();
+  for (const row of rows) {
+    if (!row.url) continue;
+    const url = normalizeProfileUrl(row.url);
+    if (!isPersonalProfile(url)) continue;
+    const urls = byContact.get(row.contactId);
+    if (!urls) byContact.set(row.contactId, [url]);
+    else if (!urls.includes(url)) urls.push(url);
+  }
+  return byContact;
+}
+
+// =============================================================================
 // Utility: Normalize a Single Contact by ID (for incremental checks)
 // =============================================================================
 

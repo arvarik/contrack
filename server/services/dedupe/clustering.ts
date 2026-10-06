@@ -105,71 +105,42 @@ export function selectBestPrimary(
   return best;
 }
 
+/** What each kind of match says, in the summary of a group. */
+const SUMMARY_PHRASE: Partial<Record<ClusterPair["matchType"], string>> = {
+  email: "same email address",
+  phone: "same phone number",
+  social: "same profile link",
+  name: "same name",
+  name_company: "same name",
+  cross_source: "same name",
+  nickname: "a nickname",
+  middle_name: "a middle name added",
+  fuzzy: "similar details",
+  ai: "checked by AI",
+  mention: "mentioned in a note",
+};
+
 /**
- * Generate a human-readable summary describing why the cluster was grouped.
+ * Why a group was put together, in plain words: "Same email address" for a
+ * pair, "3 contacts: same email address, similar details" for a group. The
+ * matched values stay in each pair's `matchedField`.
  */
 export function generateClusterSummary(
   contacts: HydratedContact[],
   pairs: ClusterPair[],
 ): string {
-  const parts: string[] = [];
-
-  const emailPairs = pairs.filter((p) => p.matchType === "email");
-  if (emailPairs.length > 0) {
-    const emails = [
-      ...new Set(emailPairs.map((p) => p.matchedField).filter(Boolean)),
-    ];
-    parts.push(
-      `shared email${emails.length > 1 ? "s" : ""} ${emails.join(", ")}`,
-    );
+  const phrases = [
+    ...new Set(
+      pairs
+        .map((p) => SUMMARY_PHRASE[p.matchType])
+        .filter((p): p is string => !!p),
+    ),
+  ];
+  const list = phrases.length > 0 ? phrases.join(", ") : "may be one person";
+  if (contacts.length <= 2) {
+    return `${list.charAt(0).toUpperCase()}${list.slice(1)}`;
   }
-
-  const phonePairs = pairs.filter((p) => p.matchType === "phone");
-  if (phonePairs.length > 0) {
-    const phones = [
-      ...new Set(phonePairs.map((p) => p.matchedField).filter(Boolean)),
-    ];
-    parts.push(
-      `shared phone${phones.length > 1 ? "s" : ""} ${phones.join(", ")}`,
-    );
-  }
-
-  const namePairs = pairs.filter(
-    (p) => p.matchType === "name" || p.matchType === "name_company",
-  );
-  if (namePairs.length > 0) {
-    parts.push("exact name match");
-  }
-
-  const nickPairs = pairs.filter((p) => p.matchType === "nickname");
-  if (nickPairs.length > 0) {
-    const names = [...new Set(contacts.map((c) => c.name))];
-    parts.push(`nickname match (${names.join(" ↔ ")})`);
-  }
-
-  const crossPairs = pairs.filter((p) => p.matchType === "cross_source");
-  if (crossPairs.length > 0) {
-    parts.push("same name from different import sources");
-  }
-
-  const fuzzyPairs = pairs.filter((p) => p.matchType === "fuzzy");
-  if (fuzzyPairs.length > 0) {
-    parts.push("high composite similarity");
-  }
-
-  const aiPairs = pairs.filter((p) => p.matchType === "ai");
-  if (aiPairs.length > 0 && namePairs.length === 0 && nickPairs.length === 0) {
-    const names = [...new Set(contacts.map((c) => c.name))];
-    if (names.length > 1) {
-      parts.push(`AI-confirmed match (${names.join(" ↔ ")})`);
-    }
-  }
-
-  if (parts.length === 0) {
-    return `${contacts.length} contacts may represent the same person.`;
-  }
-
-  return `These ${contacts.length} contacts have ${parts.join(" and ")}.`;
+  return `${contacts.length} contacts: ${list}`;
 }
 
 /** Clusters above this size require explicit user confirmation before merging */
@@ -220,6 +191,7 @@ export function buildClusters(
         confidence: p.confidence,
         reasoning: p.reasoning,
         matchedField: p.matchedField,
+        caveat: p.caveat ?? null,
       }));
 
     const primary = selectBestPrimary(scope, contacts);

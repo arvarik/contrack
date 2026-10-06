@@ -624,6 +624,8 @@ export const contactRoutes = {
     response: z.strictObject({
       success: z.literal(true),
       contact: contactSchema,
+      /** The merge-history row, for Undo. */
+      mergeLogId: z.string(),
     }),
   }),
   mergeCluster: route({
@@ -637,6 +639,8 @@ export const contactRoutes = {
       failed: z.number().int(),
       /** The primary after the last merge that worked, or null. */
       contact: contactSchema.nullable(),
+      /** The merge-history rows of the merges that worked, in merge order. */
+      mergeLogIds: z.array(z.string()),
     }),
   }),
   mergeClusters: route({
@@ -650,6 +654,8 @@ export const contactRoutes = {
           primaryId: z.string(),
           merged: z.number().int(),
           failed: z.number().int(),
+          /** This cluster's merge-history rows, in merge order. */
+          mergeLogIds: z.array(z.string()),
         }),
       ),
       totalMerged: z.number().int(),

@@ -794,6 +794,12 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     isolated: true,
   },
   {
+    method: "GET",
+    path: "/api/dedupe/merged-into/:contactId",
+    class: "scoped",
+    isolated: true,
+  },
+  {
     method: "POST",
     path: "/api/dedupe/merge-log/:id/undo",
     class: "scoped",
@@ -838,6 +844,12 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
   {
     method: "POST",
     path: "/api/dedupe/suggestions/:id/merge",
+    class: "scoped",
+    isolated: true,
+  },
+  {
+    method: "POST",
+    path: "/api/dedupe/suggestions/:id/restore",
     class: "scoped",
     isolated: true,
   },

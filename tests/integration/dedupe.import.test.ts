@@ -76,12 +76,13 @@ interface SuggestionRow {
   matchType: string;
   confidence: number;
   status: string;
+  caveat: string | null;
 }
 
 function suggestions(): SuggestionRow[] {
   return sqlite
     .prepare(
-      `SELECT contactIdA, contactIdB, matchType, confidence, status
+      `SELECT contactIdA, contactIdB, matchType, confidence, status, caveat
          FROM dedupe_suggestions WHERE ownerId = ?
         ORDER BY confidence DESC, matchType`,
     )
@@ -209,15 +210,15 @@ describe("dedupeService.runImportScan, what it finds", () => {
 
     const result = await dedupeService.runImportScan(scope, [imported], "test");
 
-    // 0.90 is under every auto-merge preset on purpose: two people can
-    // share a name, and merging them would lose one of them. The scan has
-    // always scored a bare name match 0.90, and this path now reads the same
-    // table rather than its own 0.92.
+    // Two people can share a name, and merging them would lose one of them.
+    // A bare name match is 0.90, under the balanced preset, and here the two
+    // records name two employers, which caps it at 0.85, under every preset.
     expect(result.autoMerged).toBe(0);
     expect(result.pending).toBe(1);
     const rows = suggestions();
     expect(rows[0].matchType).toBe("name");
-    expect(rows[0].confidence).toBeCloseTo(0.9, 5);
+    expect(rows[0].confidence).toBeCloseTo(0.85, 5);
+    expect(rows[0].caveat).toBe("Different companies");
     expect(rows[0].status).toBe("pending");
     expect(canonicalIdOf(imported)).toBeNull();
   });
@@ -457,11 +458,13 @@ describe("POST /api/contacts/bulk with a stream", () => {
     // exact name match at 0.95 and merged it, on the reasoning that a name
     // that already exists is "almost certainly a duplicate". Two people can
     // share a name, and a merge is how one of them stops existing. Every
-    // path now scores a bare name match 0.90, the scan's number, and asks.
+    // path scores a bare name match 0.90, the scan's number, and two
+    // employers on the records cap it at 0.85, below every preset.
     expect(summary.autoMerged).toBe(0);
     expect(summary.needsReview).toBe(1);
     expect(canonicalIdOf(existing)).toBeNull();
-    expect(suggestions()[0].confidence).toBeCloseTo(0.9, 5);
+    expect(suggestions()[0].confidence).toBeCloseTo(0.85, 5);
+    expect(suggestions()[0].caveat).toBe("Different companies");
   });
 });
 
