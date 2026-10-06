@@ -39,7 +39,7 @@ export function enterActionFor(row: string): EnterAction {
   if (!row) return null;
   const prefix = row.slice(0, row.indexOf("_") + 1);
   return (
-    PREFIX_ACTION[prefix] ?? (row.startsWith("Settings: ") ? "go" : "open")
+    PREFIX_ACTION[prefix] ?? (row.startsWith("Settings → ") ? "go" : "open")
   );
 }
 

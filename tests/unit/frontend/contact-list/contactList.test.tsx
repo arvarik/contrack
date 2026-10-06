@@ -61,6 +61,10 @@ vi.mock("../../../../src/contexts/PreferencesContext", async () => {
 vi.mock("../../../../src/contexts/SessionContext", () => ({
   useRecent: () => ({ lastContactId: null, setLastContactId: vi.fn() }),
 }));
+// The header's tooltips press too: kept out of the row count below.
+vi.mock("../../../../src/components/ui/RailTooltip", () => ({
+  RailTooltip: ({ children }: { children: React.ReactNode }) => children,
+}));
 /** Each row's wrapper calls this once per render. */
 const rowRenders = vi.hoisted(() => ({ count: 0 }));
 vi.mock("../../../../src/hooks/useLongPress", () => ({

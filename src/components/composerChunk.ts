@@ -13,7 +13,7 @@
  */
 import type { ComponentProps } from "react";
 import { preloadable } from "../lib/preloadable";
-import type { InteractionComposer } from "./InteractionComposer";
+import type { InteractionComposer, NoteEditor } from "./InteractionComposer";
 
 export const composerChunk = preloadable<
   ComponentProps<typeof InteractionComposer>
@@ -21,4 +21,10 @@ export const composerChunk = preloadable<
   import("./InteractionComposer").then((m) => ({
     default: m.InteractionComposer,
   })),
+);
+
+/** The editor alone, from the same chunk, for the timeline's note overlay. */
+export const noteEditorChunk = preloadable<ComponentProps<typeof NoteEditor>>(
+  () =>
+    import("./InteractionComposer").then((m) => ({ default: m.NoteEditor })),
 );

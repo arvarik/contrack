@@ -282,6 +282,14 @@ export const BTN_QUIET =
   "hit-area state-layer inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-semibold text-on-surface-variant hover:text-on-surface transition-colors whitespace-nowrap";
 
 /**
+ * A link inside a sentence: "Connect a provider in Settings → Administration
+ * → AI". Underlined at rest, so it is told from the text by more than its
+ * colour.
+ */
+export const TEXT_LINK =
+  "font-semibold text-primary underline underline-offset-2";
+
+/**
  * The mark on a setting that is not at its default: a 6 px accent dot after
  * the title. `SettingRow` draws it with a name for a screen reader and a
  * tooltip, and the page ends with one "Reset to defaults" button while any
@@ -333,6 +341,14 @@ export const SEARCH_INPUT =
 /** Inline editable field input — appears on click-to-edit */
 export const EDITABLE_INPUT =
   "bg-surface-container-high border-none rounded px-2 py-0.5 max-w-full text-inherit font-inherit leading-inherit";
+
+/**
+ * A value's field in the Details card, opened in the value's place: a
+ * birthday, a follow-up's date, a new email or phone. 44 px tall with 16 px
+ * text on a touch screen, so iOS does not zoom, and 14 px for a mouse.
+ */
+export const INLINE_INPUT =
+  "min-h-[44px] sm:pointer-fine:min-h-0 rounded-md bg-surface-container-high px-2 py-1 text-base sm:text-sm font-medium text-on-surface border-none";
 
 // ─── Keyboard shortcut hints ─────────────────────────────────────────────────
 
@@ -429,16 +445,18 @@ export const MENU_PANEL =
  * One row. 44 px tall on a touch screen, a phone on its side too, and 36 px
  * for a mouse. The keyboard ring is
  * drawn inside the row, because the rows touch and an outside ring would be
- * cut off by the panel's edge. The tint on `:focus` (not only
- * `:focus-visible`) is what shows where the arrow keys start after a click
- * opened the menu, since the browser draws no ring for that.
+ * cut off by the panel's edge. With a mouse the tint on `:focus` (not only
+ * `:focus-visible`) shows where the arrow keys start after a click opened
+ * the menu. After a tap it would grey the first row beside the checked one,
+ * so a touch screen tints only for a keyboard. A row that waits is half
+ * opacity, in every menu.
  */
 export const MENU_ITEM =
-  "w-full min-h-[44px] pointer-fine:min-h-[36px] flex items-center gap-2.5 px-2.5 rounded-md text-sm font-medium text-left text-on-surface transition-colors hover:bg-surface-container-high focus:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary";
+  "w-full min-h-[44px] pointer-fine:min-h-[36px] flex items-center gap-2.5 px-2.5 rounded-md text-sm font-medium text-left text-on-surface transition-colors hover:bg-surface-container-high pointer-fine:focus:bg-surface-container-high focus-visible:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed";
 
 /** A destructive row: the error colour, on its own tint. */
 export const MENU_ITEM_DANGER =
-  "text-error hover:bg-error/10 focus:bg-error/10";
+  "text-error hover:bg-error/10 pointer-fine:focus:bg-error/10 focus-visible:bg-error/10";
 
 /** A row that is the current choice. */
 export const MENU_ITEM_SELECTED = SELECTED_TINT;
@@ -486,6 +504,13 @@ export const FORM_INPUT =
   "w-full rounded-xl px-3.5 py-2.5 text-base sm:text-sm bg-surface-container text-on-surface transition-colors";
 
 /**
+ * A dialog's buttons: Cancel then the action, at the right from `sm`, and
+ * stacked with the action on top on a phone, where the thumb is.
+ */
+export const DIALOG_ACTIONS =
+  "flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2";
+
+/**
  * A field a model filled in — returns additional classes when a field was
  * auto-populated. AI-derived data, so the AI colour: its wash and a 1 px
  * inset edge, still. It used to be a pulsing primary glow, which said
@@ -512,4 +537,4 @@ export const ADD_BUTTON_SMALL = cn(ADD_BUTTON, "text-xs px-2 mx-0 py-1");
  * stops iOS zooming in. From `sm` it is 32 px tall with 12 px text.
  */
 export const ADD_FIELD =
-  "min-h-[44px] sm:min-h-[32px] w-40 max-w-full rounded-md bg-surface-container-high px-3 text-base sm:text-xs font-medium text-on-surface placeholder:text-on-surface-variant border-none";
+  "min-h-[44px] sm:pointer-fine:min-h-[32px] w-40 max-w-full rounded-md bg-surface-container-high px-3 text-base sm:text-xs font-medium text-on-surface placeholder:text-on-surface-variant border-none";

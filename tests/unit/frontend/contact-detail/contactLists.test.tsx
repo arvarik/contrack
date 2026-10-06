@@ -49,10 +49,10 @@ describe("ContactListsSection", () => {
     // The chip for the list the contact is on, with its remove button.
     const remove = screen.getByRole("button", { name: "Remove from Pioneers" });
     fireEvent.click(remove);
-    expect(mockRemove).toHaveBeenCalledWith({
-      listId: "l-1",
-      contactId: "c-1",
-    });
+    expect(mockRemove).toHaveBeenCalledWith(
+      { listId: "l-1", contactId: "c-1" },
+      expect.any(Object),
+    );
 
     const trigger = screen.getByRole("button", { name: "Add to a list" });
     expect(trigger.getAttribute("aria-haspopup")).toBe("menu");

@@ -22,9 +22,11 @@
  * that runs is SearXNG or both, the heading says so: "Depth · with
  * SearXNG". While this contact's research runs, the button reads
  * "Enriching…" and waits, so a second press cannot queue the contact twice.
- * Without AI, outside the AI Search provider, or for a ghost, it is not
- * there. The times show only when research runs on Gemini, where they were
- * measured (`depthFiguresApply`).
+ * With the account's AI off, outside the AI Search provider, or for a
+ * ghost, it is not there. With no model or no web search set up, it waits,
+ * and its tooltip and name say why (`useBlockedAi`): it used to look ready
+ * and fail after the press. The times show only when research runs on
+ * Gemini, where they were measured (`depthFiguresApply`).
  *
  * @module views/contact-detail/components/EnrichMenu
  */
@@ -35,6 +37,7 @@ import {
   type ActionMenuItem,
 } from "../../../components/ui/ActionMenu";
 import { useAiAllowed } from "../../../hooks/useAiAllowed";
+import { aiSetupLine, useBlockedAi } from "../../../hooks/useAiSetup";
 import {
   isEnriching,
   useOptionalAISearch,
@@ -74,8 +77,10 @@ export function EnrichMenu({
 }: EnrichMenuProps) {
   const search = useOptionalAISearch();
   const canEnrich = useCanEnrich(contact);
+  const blocked = useBlockedAi("research");
   if (!search || !canEnrich) return null;
   const enriching = isEnriching(search, contact.id);
+  const why = blocked && aiSetupLine(blocked);
 
   const items: ActionMenuItem[] = DEPTH_ORDER.map((depth) => ({
     id: depth,
@@ -97,12 +102,19 @@ export function EnrichMenu({
     <ActionMenu
       // The name starts with the words on the button, so a person who says
       // what they see reaches it (WCAG 2.5.3).
-      label={enriching ? words : `${label}, choose how deep`}
+      label={
+        why
+          ? `${label}, ${why}`
+          : enriching
+            ? words
+            : `${label}, choose how deep`
+      }
+      title={why || undefined}
       heading={heading}
       items={items}
       align="end"
       variant={variant}
-      disabled={enriching}
+      disabled={enriching || !!blocked}
       className={className}
       triggerContent={
         <>

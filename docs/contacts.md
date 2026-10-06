@@ -26,12 +26,17 @@ phone, a contact opens over the list.
 - **Recent**: the contacts you opened last, at the top. **Recent contacts**
   on the same settings page sets how many, and 0 hides the row.
 - **Letter rail**: in a list sorted by name, with no search and 15 or more
-  people. Tap or drag a letter to jump to it.
+  people. Tap or drag a letter to jump to it. A short window, such as a phone
+  on its side, has no room for it and does not show it.
+- **List chips**: a mouse wheel scrolls the row of chips. To move a list's
+  chip, drag it with a mouse, or open its menu with a right click or a long
+  press and choose **Move left** or **Move right**.
 - **Row menu**: right-click a row for **View contact**, **Copy email** and
   **Archive**. For the list's keys, see
   [Keyboard shortcuts](keyboard-shortcuts.md#network).
 - **Command palette**: on a touch screen, the first button above the list
-  opens the [command palette](search.md#command-palette).
+  opens the [command palette](search.md#command-palette). With a mouse, the
+  sidebar's **Command palette** button does.
 
 ### Select several contacts
 
@@ -42,15 +47,15 @@ phone, a contact opens over the list.
    and **Select all** selects every contact the list shows.
 3. Press a button in the bar at the bottom, then **Done** or `Esc`.
 
-| Button                   | What it does                                                                                         |
-| ------------------------ | ---------------------------------------------------------------------------------------------------- |
-| **Track** or **Untrack** | Tracks the selection at your default cadence, with **Undo**. **Untrack** shows when all are tracked. |
-| **Archive**              | Archives the selection, with **Undo**.                                                               |
-| **List**                 | Adds the selection to a list.                                                                        |
-| **Field**                | Sets **Role / title**, **Company**, **Industry** or **Location** for all of them, with **Undo**.     |
-| **Color**                | Sets the page colour of each contact.                                                                |
-| **CSV**                  | Copies the name, role, company, location, first email and first phone to the clipboard.              |
-| **Delete**               | Moves the selection to the trash, with **Undo**.                                                     |
+| Button                         | What it does                                                                                                                                             |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Track** or **Stop tracking** | Tracks the selection at your default cadence, with **Undo**. The toast says how many were tracked already. **Stop tracking** shows when all are tracked. |
+| **Archive**                    | Archives the selection, with **Undo**.                                                                                                                   |
+| **Add to list**                | Adds the selection to a list.                                                                                                                            |
+| **Edit field**                 | Sets **Role / title**, **Company**, **Industry** or **Location** for all of them, with **Undo**.                                                         |
+| **Colour**                     | Sets the page colour of each contact.                                                                                                                    |
+| **Copy CSV**                   | Copies the name, role, company, location, first email and first phone to the clipboard.                                                                  |
+| **Delete**                     | Moves the selection to the trash, with **Undo**.                                                                                                         |
 
 ## Add a contact
 
@@ -60,7 +65,8 @@ Press **New**, the plus button above the list.
   **Save contact**. In the list, `N` opens the form too.
 - **Add from text**: paste an email signature, a bio or rough notes, and
   press **Extract contact**. AI fills in the **New contact** form for you to
-  check. `V` opens it too. It needs an AI provider. See
+  check. `V` opens it too. It needs an AI provider: without one, the dialog
+  says what is missing and links to the fix. See
   [Connect a provider](ai.md#connect-a-provider).
 - **New list**: see [Lists](#lists).
 
@@ -123,16 +129,16 @@ The **Contact actions** menu, the three dots, holds these items in order:
 
 ### The Details card
 
-| Field              | What it holds                                                                   |
-| ------------------ | ------------------------------------------------------------------------------- |
-| **Location**       | Addresses, each labelled home, work or other. The first one places the map pin. |
-| **Email**          | Email addresses, each labelled work, personal or other.                         |
-| **Phone**          | Phone numbers, each labelled mobile, work, home or other.                       |
-| **Birthday**       | A date. A badge shows when the birthday is within 30 days.                      |
-| **Industry**       | One industry. The box suggests common ones.                                     |
-| **Preferences**    | Short notes, such as "Tea" or "Morning calls".                                  |
-| **Interests**      | Topics the person cares about.                                                  |
-| **Next follow-up** | The date of the next open follow-up, when there is one.                         |
+| Field              | What it holds                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------- |
+| **Location**       | Addresses, each labelled home, work or other. The first one places the map pin.                   |
+| **Email**          | Email addresses, each labelled work, personal or other.                                           |
+| **Phone**          | Phone numbers, each labelled mobile, work, home or other.                                         |
+| **Birthday**       | A day, with a year or without: "May 14", "May 14, 1990". A badge shows when it is within 30 days. |
+| **Industry**       | One industry. The box suggests common ones.                                                       |
+| **Preferences**    | Short notes, such as "Tea" or "Morning calls".                                                    |
+| **Interests**      | Topics the person cares about.                                                                    |
+| **Next follow-up** | The next open follow-up and its day. Its menu changes the date or marks it done.                  |
 
 - **Edit**: click a value, or give it focus and press `Enter`. `Enter` saves
   and `Esc` cancels. Press a row's label to change the label.
@@ -141,7 +147,7 @@ The **Contact actions** menu, the three dots, holds these items in order:
   edit one, press the pencil after it. The phone field opens the phone
   keyboard on a phone. With a mouse, a click on the value edits it.
 - **Row menu**: **Message** (a phone, on a touch screen), **Make primary**,
-  **Show on map** and **Remove**, with **Undo** for 7 seconds. The first
+  **Show on map** and **Remove**, with **Undo** for 10 seconds. The first
   email and phone are the primary ones, and the first address places the pin
   and says **Map pin**.
 - **Order**: open a row's menu and drag the row by its handle, or press
@@ -164,26 +170,32 @@ under **This week** and then one heading per month. The week starts on the
 day set in **Week starts on**, in **Settings → Network and contacts**.
 
 1. Open the contact. The composer is at the top of the **Timeline** tab. On a
-   phone it is one line, "Write a quick note...", until you tap it.
-2. Write the note. Type `@` to mention someone.
-3. Optional: write the next step with a date in the next action line, such as
-   "Send the deck next Tuesday".
+   phone it is one line, "Write a quick note…", until you tap it.
+2. Write the note. Type `@` to mention someone by any part of their name.
+3. Optional: write the next step with a date in the **Follow-up** line, such
+   as "Send the deck next Tuesday". A weekday is always the next one: on a
+   Monday, "Friday" is this Friday. A follow-up needs a date. With only a
+   follow-up and no note, Save adds the follow-up alone, and "last
+   contacted" does not change.
 4. Choose **Note**, **Call**, **Meeting** or **Email**.
 5. Press **Save**, or `Cmd+Enter` (`Ctrl+Enter` on Windows and Linux).
 
-The entry takes a title from its type, such as "Quick Note" or "Logged call".
+The entry takes its type as its title: "Note", "Call", "Meeting" or "Email".
 Until you save, your draft stays on this device for up to 30 days. To log from
 any page, press **Log note** on Pulse, or `Cmd+Shift+I` (`Ctrl+Alt+I` on
 Windows and Linux), and choose the contact in the **Log an interaction**
-dialog.
+dialog. On a contact's page that dialog opens for that contact. It keeps an
+unsaved note when it closes, for the next time it opens.
 
 - **Open**: press an entry's title to see the full text, its follow-ups,
-  **Edit** and **Delete**. **Edit** changes the title and the text only.
+  **Edit** and **Delete**. **Edit** changes the title and the text, in the
+  same editor as the composer. Press a follow-up to mark it done, with
+  **Undo**.
 - **Delete**: asks "Delete this interaction?". Press **Delete interaction**.
   The toast offers **Undo** for 10 seconds. After that the delete is final,
   and an attached file goes with the entry.
-- **Files**: drop files on the **Timeline** tab to attach them, up to 50 MB
-  each. Contrack takes PDFs, PNG, JPEG, GIF and WebP images, `.txt`, `.md`
+- **Files**: drop files on the **Timeline** tab, or press **Attach a file**,
+  to attach them, up to 50 MB each. Contrack takes PDFs, PNG, JPEG, GIF and WebP images, `.txt`, `.md`
   and `.csv` files, and `.eml` email files. An `.eml` file becomes an email
   entry. With AI on, AI writes a summary of the thread into it. With AI off,
   the entry holds the file with no summary.
@@ -203,15 +215,18 @@ follow-up, [select them on the map](map.md#select-contacts-on-the-map).
   there. See [The Pulse page](pulse.md#the-pulse-page).
 - The contact page shows the follow-up band, and **Next follow-up** in
   **Details**. A Network row with an open follow-up has a calendar mark.
-- In an entry's dialog, press a follow-up under **Follow-up** to complete it.
+- In an entry's dialog, press a follow-up under **Follow-up** to mark it done.
+  **Next follow-up** in **Details** has **Mark done** too. Each offers
+  **Undo**. A due date names its weekday, such as "Fri, Oct 9", so a wrong
+  day shows at once.
 
 ## @mentions
 
-In the composer, type `@` and the start of a name. A list shows up to five
-contacts whose names start with what you typed, and marks a ghost **Ghost**.
-Press `↑`, `↓` and `Enter`, or click a name. `Esc` closes the list. The note
-then shows on the mentioned person's timeline too, with a **via** button that
-opens the contact you logged it on.
+In the composer, type `@` and the start of any word of a name: `@vale` and
+`@rowan v` both find Rowan Vale. A list shows up to eight contacts, and marks a
+ghost **Not added**. Press `↑`, `↓` and `Enter`, or choose a name. `Esc`
+closes the list. The note then shows on the mentioned person's timeline too,
+with a **via** button that opens the contact you logged it on.
 
 ## Ghosts
 
@@ -228,8 +243,8 @@ A ghost is a person Contrack has seen, but that you have not added yet.
 A ghost's picture has a sparkle badge. Point at it to see where the ghost came
 from. Ghosts stay out of the Network list and the map, and you cannot track or
 research one. Under a note, the dashed names in **Mentioned:** are ghosts. To
-make a ghost a full contact, open it and press **Promote to contact**, or
-press its dashed name under a note.
+make a ghost a full contact, open it and press **Add to Network**, or press
+its dashed name under a note.
 
 ## The Dossier tab
 
@@ -247,12 +262,15 @@ press its dashed name under a note.
   their pages, and every source. **Enrich again** runs it again. A contact
   with nothing to show says "No dossier yet" and offers **Enrich contact**.
   See [Research contacts](ai.md#research-contacts).
+- With no AI model or web search set up, **Generate briefing**, **Enrich
+  contact** and **Enrich again** wait. A line under each says why, and an
+  admin gets a link to the page that fixes it.
 
 ## Avatars
 
-Press the pencil on the picture to open **Edit avatar**. **Choose avatar**
-shows faces in the styles **Cartoon**, **Illustrated** and **Bot**.
-**Upload image** takes a JPEG, PNG, GIF, WebP or AVIF photo of up to 10 MB.
+Press the pencil on the picture to open **Edit avatar**. **Choose an avatar**
+shows faces in the styles **Cartoon**, **Illustrated** and **Bot**. **Upload
+a photo** takes a JPEG, PNG, GIF, WebP or AVIF photo of up to 10 MB.
 Then press **Apply**.
 
 A contact with no picture gets a cartoon face that your own server draws, so
@@ -281,7 +299,7 @@ list, or **New list** on **Settings → Lists**. Choose an icon, type the
 
 A tag is a short label on a contact, such as "investor". On the contact page,
 press **+ tag**, type the tag and press `Enter`. Press the × on a tag to
-remove it, and the toast offers **Undo** for 7 seconds.
+remove it, and the toast offers **Undo** for 10 seconds.
 
 **Settings → Tags** lists every tag with the number of contacts that have it,
 not counting archived and deleted contacts. **Filter tags** narrows the list,

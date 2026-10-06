@@ -7,8 +7,9 @@
  * A thin wrapper. The dialog adds two things to the compact
  * {@link InteractionComposer}: a header, and the "Who?" picker that chooses
  * the contact. Everything a person writes in, the editor with @mentions, the
- * type control, the next-action line and Save, is the composer the contact
- * page uses. The dialog used to have its own textarea with no mentions and
+ * type control, the follow-up line and Save, is the composer the contact
+ * page uses. A note typed here is kept as a draft, so a close by Escape, a
+ * tap outside or Back loses nothing: it is there on the next open. The dialog used to have its own textarea with no mentions and
  * no follow-up, so the same act behaved two ways.
  *
  * `initialContactId` opens the dialog for one person: the contact is chosen
@@ -42,7 +43,7 @@ import {
 } from "../lib/styles";
 import { DURATION, EASE } from "../lib/motion";
 import { cn } from "../lib/utils";
-import { Modal } from "./ui/Modal";
+import { DialogCloseButton, Modal } from "./ui/Modal";
 import { IconButton } from "./ui/IconButton";
 import { ComposerPlaceholder } from "./ComposerPlaceholder";
 import { composerChunk } from "./composerChunk";
@@ -84,6 +85,7 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
   const [focusComposer, setFocusComposer] = useState(false);
 
   const contactInputRef = useRef<HTMLInputElement>(null);
+  const listId = React.useId();
 
   const { data: contacts } = useContactNames();
 
@@ -214,14 +216,7 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
             Log an interaction
           </h2>
         </div>
-        <IconButton
-          aria-label="Close dialog"
-          tone="subtle"
-          onClick={onClose}
-          className="-mr-2"
-        >
-          <X className="w-5 h-5" />
-        </IconButton>
+        <DialogCloseButton onClick={onClose} />
       </div>
 
       {/* Who */}
@@ -278,6 +273,15 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
                   />
                   <input
                     aria-label="Search for a contact"
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-expanded={dropdownOpen}
+                    aria-controls={dropdownOpen ? listId : undefined}
+                    aria-activedescendant={
+                      dropdownOpen && filteredContacts[highlightIndex]
+                        ? `${listId}-${highlightIndex}`
+                        : undefined
+                    }
                     ref={contactInputRef}
                     value={contactQuery}
                     onChange={(e) => setContactQuery(e.target.value)}
@@ -287,6 +291,9 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
                     // focus (which would otherwise rescale the bottom sheet).
                     className="flex-1 bg-transparent border-none text-base sm:text-sm text-on-surface placeholder:text-on-surface-variant"
                     autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
                     inputMode="search"
                   />
                 </div>
@@ -294,6 +301,7 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
                 <AnimatePresence>
                   {dropdownOpen && (
                     <motion.div
+                      id={listId}
                       role="listbox"
                       aria-label="Matching contacts"
                       initial={{ opacity: 0, y: -4 }}
@@ -310,6 +318,7 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
                       {filteredContacts.map((contact, i) => (
                         <button
                           key={contact.id}
+                          id={`${listId}-${i}`}
                           type="button"
                           role="option"
                           aria-selected={i === highlightIndex}

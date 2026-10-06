@@ -18,7 +18,7 @@ describe("the avatar picker's upload tab", () => {
 
   it("lists every format the server accepts, AVIF included", async () => {
     render(<AvatarPickerModal isOpen onClose={vi.fn()} contactId="c-1" />);
-    fireEvent.click(screen.getByRole("button", { name: /Upload image/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Upload a photo/ }));
 
     // server/utils/avatarProcessor.ts: JPEG, PNG, GIF, WebP and AVIF.
     // The new tab enters after the old one has left.

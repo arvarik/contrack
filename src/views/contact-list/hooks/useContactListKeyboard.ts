@@ -6,8 +6,8 @@
  * and `Escape` to exit select mode.
  *
  * NOTE: This hook attaches a window-level keydown listener. It checks
- * `isTypingTarget()` to avoid capturing events while the user is typing
- * in an input, textarea, or contentEditable element.
+ * `isPageKeyTaken()`, so it leaves alone a key typed in a field, a key
+ * with a modifier, and every key while a dialog or a menu is open.
  *
  * The listener is attached once and reads the latest values from a ref
  * that is written in the same commit as the page. It used to be attached
@@ -28,7 +28,11 @@
  * @param params.onSmartPaste - Callback to open the smart paste modal.
  */
 import { useEffect, useLayoutEffect, useRef } from "react";
-import { isActivationTarget, isTypingTarget } from "../../../lib/keyboard";
+import {
+  isActivationTarget,
+  isPageKeyTaken,
+  isScroller,
+} from "../../../lib/keyboard";
 import { useSingleKeyShortcuts } from "../../../hooks/useSingleKeyShortcuts";
 import type { Contact } from "../../../types";
 
@@ -96,27 +100,19 @@ export function useContactListKeyboard({
         onSmartPaste,
         singleKeys,
       } = latest.current;
-      if (isTypingTarget(e)) return;
-      // A row or the letter rail already answered this key: the arrows
-      // move focus inside the list, and a letter is type-ahead there.
-      if (e.defaultPrevented) return;
+      // A row or the letter rail already answered this key (the arrows
+      // move focus inside the list, and a letter is type-ahead there), or
+      // it holds a modifier, or a field, a dialog or a menu has it.
+      if (isPageKeyTaken(e)) return;
+      // Caps Lock on: "J" is still j.
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      if (!singleKeys && /^[/nvjk]$/.test(key)) return;
 
-      if (
-        !singleKeys &&
-        (e.key === "/" ||
-          e.key === "n" ||
-          e.key === "v" ||
-          e.key === "j" ||
-          e.key === "k")
-      ) {
-        return;
-      }
-
-      if (e.key === "Escape" && isSelectMode) {
+      if (key === "Escape" && isSelectMode) {
         exitSelectMode();
         return;
       }
-      if (e.key === "Enter") {
+      if (key === "Enter") {
         // Enter on a focused link or button is that control's own press.
         // Only an Enter that would otherwise do nothing jumps to the
         // composer, which is what the shortcut was for.
@@ -126,23 +122,28 @@ export function useContactListKeyboard({
         if (editor) editor.focus();
         return;
       }
-      if (e.key === "/") {
+      if (key === "/") {
         e.preventDefault();
         document.getElementById("search-input")?.focus();
         return;
       }
-      if (e.key === "n") {
+      if (key === "n") {
         e.preventDefault();
         onNewContact();
         return;
       }
-      if (e.key === "v") {
+      if (key === "v") {
         e.preventDefault();
         onSmartPaste();
         return;
       }
 
-      if (e.key === "ArrowDown" || e.key === "j") {
+      // The arrows scroll a scroller that has focus: a click on blank space
+      // in a contact focuses the page's scroller (App.tsx).
+      if (key.startsWith("Arrow") && isScroller(document.activeElement)) {
+        return;
+      }
+      if (key === "ArrowDown" || key === "j") {
         e.preventDefault();
         if (filteredContacts.length === 0) return;
         const currentIndex = filteredContacts.findIndex(
@@ -153,7 +154,7 @@ export function useContactListKeyboard({
             ? 0
             : Math.min(currentIndex + 1, filteredContacts.length - 1);
         navigate(`/contact/${filteredContacts[nextIndex].id}${locationSearch}`);
-      } else if (e.key === "ArrowUp" || e.key === "k") {
+      } else if (key === "ArrowUp" || key === "k") {
         e.preventDefault();
         if (filteredContacts.length === 0) return;
         const currentIndex = filteredContacts.findIndex(

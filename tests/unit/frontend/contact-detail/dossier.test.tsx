@@ -1,6 +1,19 @@
 // @vitest-environment jsdom
 import React from "react";
 import { afterEach, describe, it, expect, vi } from "vitest";
+// AI is set up unless a test says otherwise.
+const aiSetup = vi.hoisted(() => ({
+  current: null as null | {
+    why: "model";
+    state: "setup";
+    fix?: { label: string; path: string };
+  },
+}));
+vi.mock("../../../../src/hooks/useAiSetup", () => ({
+  useAiSetup: () => aiSetup.current,
+  useBlockedAi: () => aiSetup.current,
+  aiSetupLine: () => "No AI model is set up. Ask an admin to set one up",
+}));
 import {
   act,
   cleanup,
@@ -21,7 +34,10 @@ vi.mock("../../../../src/api/contacts", () => ({
 
 import { THINKING_CLASS } from "../../../../src/components/brand/CorvidThinking";
 import type { Contact } from "../../../../src/types";
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  aiSetup.current = null;
+});
 /** A research record with two runs, as the enrichment merge writes it. */
 const RECORD = JSON.stringify({
   version: 1,
@@ -226,6 +242,17 @@ describe("the briefing card", () => {
     expect(generate.mutate).toHaveBeenCalledWith("test", expect.any(Object));
   });
 
+  it("waits, and says why, when no AI model is set up", () => {
+    aiSetup.current = { why: "model", state: "setup" };
+    renderTab(BLANK, briefing());
+    expect(
+      screen.getByRole("button", { name: "Generate briefing" }),
+    ).toHaveProperty("disabled", true);
+    expect(
+      screen.getAllByText("No AI model is set up. Ask an admin to set one up"),
+    ).not.toHaveLength(0);
+  });
+
   it("shows an error line when the briefing cannot be written", () => {
     const generate = briefing();
     renderTab(BLANK, generate);
@@ -234,7 +261,7 @@ describe("the briefing card", () => {
       .calls[0];
     act(() => options.onError(new Error("Failed to generate briefing")));
     expect(screen.getByRole("alert").textContent).toBe(
-      "Could not write the briefing. Check that AI is set up in Settings, then try again",
+      "Could not write the briefing. Try again",
     );
   });
 

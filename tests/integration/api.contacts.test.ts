@@ -45,6 +45,38 @@ describe("POST /api/contacts", () => {
     expect(res.body.error.requestId).toMatch(/^[0-9a-f]{8}$/);
   });
 
+  it("refuses an email or a phone that is no address or number, and an import leaves it out", async () => {
+    // Any text saved, and the duplicate scan then matched people on "n/a".
+    const one = await request(app)
+      .post("/api/contacts")
+      .send({ name: "Rowan Vale", emails: ["n/a"] });
+    expect(one.status).toBe(400);
+    expect(one.body.error.details[0].message).toMatch(/email address/);
+
+    const bulk = await request(app)
+      .post("/api/contacts/bulk")
+      .send([
+        {
+          name: "Rowan Vale",
+          emails: ["n/a", "rowan@example.com"],
+          phones: ["none", "+1 415 555 0100"],
+        },
+      ]);
+    expect(bulk.status).toBe(201);
+    expect(bulk.body.count).toBe(1);
+    const list = await request(app).get("/api/contacts");
+    const id = list.body.find(
+      (c: { name: string }) => c.name === "Rowan Vale",
+    ).id;
+    const saved = await request(app).get(`/api/contacts/${id}`);
+    expect(saved.body.emails.map((e: { email: string }) => e.email)).toEqual([
+      "rowan@example.com",
+    ]);
+    expect(saved.body.phones.map((p: { phone: string }) => p.phone)).toEqual([
+      "+1 415 555 0100",
+    ]);
+  });
+
   it("uses defaultCadenceDays from preferences when cadenceDays is omitted", async () => {
     // Default without preference is 90
     const res1 = await request(app)

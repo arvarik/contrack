@@ -367,6 +367,12 @@
     @apply bg-surface text-on-surface font-body antialiased;
   }
 
+  /* A quick second tap on a control is a second press, not a zoom. Pan and
+   * pinch still work, so the page can still be zoomed. */
+  :where(a, button, input, select, textarea, label, summary, [role="button"]) {
+    touch-action: manipulation;
+  }
+
   /* ── Scrollbars: one bar everywhere ─────────────────────────────────
    * The Network list's bar, on every scroller: thin, the hairline token for
    * the thumb, no track, so it reads on the page and on a card in both

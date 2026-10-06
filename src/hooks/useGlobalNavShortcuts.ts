@@ -30,7 +30,7 @@ import { useNavigate } from "react-router-dom";
 import { QueryClientContext } from "@tanstack/react-query";
 import { markPendingNav } from "../lib/pendingNav";
 import { warmPage } from "../views/pages";
-import { chordLabel, isNavChord, NAV_MODIFIERS } from "../lib/platform";
+import { chordLabel, NAV_MODIFIERS, navChordKey } from "../lib/platform";
 
 /** The label of a navigation chord on this platform: ⌘⇧H, or Ctrl+Alt+H. */
 const navLabel = (key: string) => chordLabel([...NAV_MODIFIERS, key]);
@@ -42,6 +42,15 @@ export const NAV_SHORTCUTS: Record<string, { keys: string }> = {
   "/map": { keys: navLabel("M") },
   "/search": { keys: navLabel("S") },
   "/settings": { keys: navLabel(",") },
+};
+
+/** The page each chord's key opens. */
+const CHORD_PATHS: Record<string, string> = {
+  h: "/",
+  p: "/pulse",
+  m: "/map",
+  s: "/search",
+  ",": "/settings",
 };
 
 export const useGlobalNavShortcuts = () => {
@@ -60,31 +69,11 @@ export const useGlobalNavShortcuts = () => {
 
     const handler = (e: KeyboardEvent) => {
       // ── Cmd+Shift+Letter, or Ctrl+Alt+Letter, navigation ──
-      if (isNavChord(e)) {
-        const key = e.key.toLowerCase();
-
-        switch (key) {
-          case "h":
-            e.preventDefault();
-            go("/");
-            return;
-          case "p":
-            e.preventDefault();
-            go("/pulse");
-            return;
-          case "m":
-            e.preventDefault();
-            go("/map");
-            return;
-          case "s":
-            e.preventDefault();
-            go("/search");
-            return;
-          case ",":
-            e.preventDefault();
-            go("/settings");
-            return;
-        }
+      const path = CHORD_PATHS[navChordKey(e)];
+      if (path) {
+        e.preventDefault();
+        go(path);
+        return;
       }
 
       // ── Cmd+[ / Cmd+] browser navigation ──

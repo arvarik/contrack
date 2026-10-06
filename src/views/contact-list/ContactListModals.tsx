@@ -16,6 +16,8 @@ import React, { useEffect, useRef, useState, type RefObject } from "react";
 import { toast } from "sonner";
 import { motion } from "motion/react";
 import { FileText, Sparkles } from "lucide-react";
+import { useBlockedAi } from "../../hooks/useAiSetup";
+import { AiSetupNote } from "../../components/AiSetupNote";
 import { useCreateContact, useParseContactText } from "../../api";
 import type {
   ContactList as ContactListType,
@@ -52,6 +54,8 @@ interface ContactListModalsProps {
    * focus back to it, and so does the form a successful extraction opens.
    */
   returnFocusRef: RefObject<HTMLElement | null>;
+  /** Where focus goes after a bulk dialog: the Select button, once back. */
+  bulkReturnFocusRef: RefObject<HTMLElement | null>;
   // New contact
   isModalOpen: boolean;
   onCloseModal: () => void;
@@ -88,6 +92,7 @@ export const ContactListModals = ({
   onBulkEditApply,
   isBulkEditPending,
   returnFocusRef,
+  bulkReturnFocusRef,
   isModalOpen,
   onCloseModal,
   onContactCreated,
@@ -107,6 +112,9 @@ export const ContactListModals = ({
 
   const createContact = useCreateContact();
   const parseContactText = useParseContactText();
+  // Add from text needs a Fast model. Without one the dialog says why and
+  // how to fix it, where Extract used to fail after the click.
+  const aiBlocked = useBlockedAi("text", isSmartPasteOpen);
 
   // What an extraction found, shared with the New contact form: when it
   // succeeds, Add from text closes and the form opens with these fields.
@@ -136,10 +144,12 @@ export const ContactListModals = ({
       if (!smartPasteOpen.current) return;
       setParsedData(res);
       onSmartPasteExtracted();
-      toast.success("Contact details extracted — review and save");
-    } catch {
+      toast.success("Contact details found. Check them and save");
+    } catch (err) {
       if (!smartPasteOpen.current) return;
-      toast.error("Extraction failed. Is your API key configured?");
+      toast.error(
+        `Could not read the text: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   };
 
@@ -174,7 +184,7 @@ export const ContactListModals = ({
       if (newContact?.id) onContactCreated(newContact.id);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      toast.error(`Failed to create contact: ${message}`);
+      toast.error(`Could not create the contact: ${message}`);
     }
   };
 
@@ -199,6 +209,7 @@ export const ContactListModals = ({
         onCloseBulkEdit={onCloseBulkEdit}
         onBulkEditApply={onBulkEditApply}
         isBulkEditPending={isBulkEditPending}
+        returnFocusRef={bulkReturnFocusRef}
       />
 
       {/* ── New Contact Modal ──────────────────────────────────────────── */}
@@ -322,7 +333,7 @@ export const ContactListModals = ({
               disabled={createContact.isPending}
               className="btn-primary w-full"
             >
-              {createContact.isPending ? "Saving..." : "Save contact"}
+              {createContact.isPending ? "Saving…" : "Save contact"}
             </button>
           </div>
         </form>
@@ -343,7 +354,7 @@ export const ContactListModals = ({
               className="space-y-4 pt-2"
             >
               <div className="flex items-center gap-2 text-primary text-sm font-bold pb-2">
-                <Sparkles className="w-4 h-4" /> Extracting details with AI...
+                <Sparkles className="w-4 h-4" /> Reading the text…
               </div>
               <div className="space-y-4">
                 <AnimatedSkeleton
@@ -360,12 +371,17 @@ export const ContactListModals = ({
                 </div>
               </div>
             </motion.div>
+          ) : aiBlocked ? (
+            <AiSetupNote
+              setup={aiBlocked}
+              onNavigate={onCloseSmartPaste}
+              className="text-sm leading-relaxed"
+            />
           ) : (
             <>
               <p className="text-sm text-on-surface-variant leading-relaxed">
-                Paste anything — an email signature, a LinkedIn bio, a text
-                snippet, or rough notes — and AI will pull out the contact
-                details for you
+                Paste an email signature, a LinkedIn bio or rough notes, and AI
+                picks out the contact's details
               </p>
               <textarea
                 aria-label="Paste contact details"
@@ -380,17 +396,19 @@ export const ContactListModals = ({
               />
             </>
           )}
-          <div className="flex justify-end pt-2">
-            <button
-              type="button"
-              onClick={handleExtract}
-              disabled={!smartPasteText.trim() || parseContactText.isPending}
-              className="btn-primary"
-            >
-              <FileText className="w-4 h-4" />
-              {parseContactText.isPending ? "Extracting…" : "Extract contact"}
-            </button>
-          </div>
+          {!aiBlocked && (
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={handleExtract}
+                disabled={!smartPasteText.trim() || parseContactText.isPending}
+                className="btn-primary"
+              >
+                <FileText className="w-4 h-4" />
+                {parseContactText.isPending ? "Extracting…" : "Extract contact"}
+              </button>
+            </div>
+          )}
         </div>
       </Modal>
 
@@ -403,10 +421,11 @@ export const ContactListModals = ({
       />
 
       {/* ── Import Contacts Modal ────────────────────────────────────────── */}
+      {/* The import's own summary says how it went: no second toast. */}
       <ImportModal
         isOpen={isImportOpen}
         onClose={onCloseImport}
-        onSuccess={() => toast.success("Import complete!")}
+        onSuccess={() => {}}
       />
     </>
   );

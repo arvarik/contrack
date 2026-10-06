@@ -117,6 +117,11 @@ interface ContactProfileProps {
   /** The name of the page Back goes to, for the Back button's text. */
   backLabel?: string;
   showNetworkButton?: boolean;
+  /**
+   * Runs after a delete instead of going to Network: the card over Ask or
+   * Archived closes, and the person stays where they were, Undo included.
+   */
+  onDeleted?: () => void;
 }
 
 /** The page's outer box, the same while it loads and once it has. */
@@ -162,6 +167,7 @@ export const ContactProfile = ({
   onClose,
   backLabel,
   showNetworkButton = false,
+  onDeleted,
 }: ContactProfileProps) => {
   const navigate = useNavigate();
   const { mode } = usePreferences();
@@ -200,7 +206,7 @@ export const ContactProfile = ({
   const { mutate: deleteContact } = useDeleteContact();
   const { mutate: restoreContact } = useRestoreContact();
   const { mutateAsync: deleteInteraction } = useDeleteInteraction();
-  const { mutate: updateInteraction } = useUpdateInteraction();
+  const { mutateAsync: updateInteraction } = useUpdateInteraction();
   const generateBriefing = useGenerateBriefing();
   const { mutate: promoteGhost, isPending: promoting } = usePromoteGhost();
   const { mutate: archiveContact, isPending: archiving } = useArchiveContact();
@@ -283,8 +289,8 @@ export const ContactProfile = ({
           const isEml = file.name.toLowerCase().endsWith(".eml");
           const toastId = toast.loading(
             isEml && aiAllowed
-              ? `Summarizing email thread with AI...`
-              : `Uploading "${file.name}"...`,
+              ? `Summarizing the email with AI…`
+              : `Uploading "${file.name}"…`,
           );
 
           addAttachment(
@@ -294,14 +300,14 @@ export const ContactProfile = ({
                 toast.dismiss(toastId);
                 toast.success(
                   isEml && interaction.content
-                    ? `Email imported & summarized!`
+                    ? `Email attached and summarized`
                     : `Attached "${file.name}"`,
                 );
               },
               onError: (err) => {
                 toast.dismiss(toastId);
                 toast.error(
-                  `Upload failed: ${err instanceof Error ? err.message : String(err)}`,
+                  `Could not attach "${file.name}": ${err instanceof Error ? err.message : String(err)}`,
                 );
               },
             },
@@ -312,7 +318,12 @@ export const ContactProfile = ({
     [id, addAttachment, aiAllowed],
   );
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const {
+    getRootProps,
+    getInputProps,
+    isDragActive,
+    open: chooseFiles,
+  } = useDropzone({
     onDrop,
     noClick: true,
     noKeyboard: true,
@@ -324,13 +335,15 @@ export const ContactProfile = ({
   });
 
   // ── Event handlers ────────────────────────────────────────────────────
+  // A failed save answers with its error, so a field can show the server's
+  // reason ("Name is required"): it said only "Save failed".
   const handleUpdate = useCallback(
     async (field: string, val: string) => {
       try {
         await saveContact({ id, data: { [field]: val } });
         return true;
-      } catch {
-        return false;
+      } catch (err) {
+        return err instanceof Error ? err : false;
       }
     },
     [id, saveContact],
@@ -357,7 +370,11 @@ export const ContactProfile = ({
           retentionDays,
           onUndo: () => {
             restoreContact(id, {
-              onSuccess: () => navigate(`/contact/${id}`),
+              // On its own page, Undo opens the contact again. Over another
+              // page, the person stays on that page.
+              onSuccess: onDeleted
+                ? undefined
+                : () => navigate(`/contact/${id}`),
               onError: (err) =>
                 toast.error(
                   `Could not restore: ${err instanceof Error ? err.message : String(err)}`,
@@ -365,15 +382,16 @@ export const ContactProfile = ({
             });
           },
         });
+        if (onDeleted) return onDeleted();
         navigate("/");
         if (onClose) onClose();
       },
       onError: (err) =>
         toast.error(
-          `Delete failed: ${err instanceof Error ? err.message : String(err)}`,
+          `Could not delete: ${err instanceof Error ? err.message : String(err)}`,
         ),
     });
-  }, [id, name, deleteContact, restoreContact, navigate, onClose]);
+  }, [id, name, deleteContact, restoreContact, navigate, onClose, onDeleted]);
 
   // ── Theme ─────────────────────────────────────────────────────────────
   // The vibe replaces the primary palette for this page only, so it has to be
@@ -588,6 +606,7 @@ export const ContactProfile = ({
                       isDragActive={isDragActive}
                       getRootProps={getRootProps}
                       getInputProps={getInputProps}
+                      onAttach={chooseFiles}
                       deleteInteraction={deleteInteraction}
                       updateInteraction={updateInteraction}
                       promoteGhost={promoteGhost}

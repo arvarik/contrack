@@ -19,6 +19,7 @@
 import { type ReactNode } from "react";
 import { Loader2 } from "lucide-react";
 import { Modal } from "./Modal";
+import { DIALOG_ACTIONS } from "../../lib/styles";
 
 export const ConfirmDialog = ({
   isOpen,
@@ -53,7 +54,7 @@ export const ConfirmDialog = ({
         </div>
       )}
       {children}
-      <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
+      <div className={DIALOG_ACTIONS}>
         <button
           type="button"
           onClick={onClose}

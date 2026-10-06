@@ -25,7 +25,7 @@ import {
 } from "../../../scripts/bench/profiles.ts";
 import { defaultAvatarUrl } from "../../../server/utils/avatarUrl.ts";
 import { classifyName } from "../../../server/utils/smartAvatar.ts";
-import { parseBirthday } from "../../../src/lib/birthday";
+import { parseBirthday } from "../../../shared/birthday.ts";
 
 const NOW = new Date("2026-09-30T12:00:00.000Z");
 const SEED = "test-seed";

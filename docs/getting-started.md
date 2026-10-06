@@ -64,8 +64,8 @@ The sidebar on a wide screen, and the tab bar on a phone, lead to five places:
 | **Ask Contrack** | Ask a question about your network in plain words        |
 | **Settings**     | Your preferences, your data and this instance           |
 
-- The Pulse icon shows a red dot when a follow-up is due today or late, and a
-  number when possible duplicates wait for you.
+- The Pulse icon shows a red dot when a follow-up is due today or late.
+  Possible duplicates show their count on the **Inbox** card on Pulse.
 - The foot of the sidebar holds **Keyboard shortcuts**, **Settings** and,
   when sign-in is on, your account with **Sign out**.
 - The corvid at the top of the sidebar is Contrack's mark. Press it to let

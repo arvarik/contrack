@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type RefObject } from "react";
 import { Pencil } from "lucide-react";
 import { Modal } from "./ui/Modal";
 import { Select } from "./ui/Select";
@@ -59,6 +59,8 @@ interface Props {
   selectedCount: number;
   onApply: (field: string, value: string | number) => void;
   isPending: boolean;
+  /** Where focus goes when it closes, when not to the button that opened it. */
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }
 
 export const BulkEditFieldModal = ({
@@ -67,6 +69,7 @@ export const BulkEditFieldModal = ({
   selectedCount,
   onApply,
   isPending,
+  returnFocusRef,
 }: Props) => {
   const [selectedField, setSelectedField] = useState<Field>(EDITABLE_FIELDS[0]);
   const [value, setValue] = useState("");
@@ -92,7 +95,12 @@ export const BulkEditFieldModal = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} title="Edit field">
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Edit field"
+      returnFocusRef={returnFocusRef}
+    >
       <div className="space-y-5 pt-2">
         <p className="text-sm sm:text-xs text-on-surface-variant">
           Apply a value to{" "}

@@ -156,11 +156,12 @@ function formattersFor(timeZone: string): ZoneFormatters {
   let formatters = formattersByZone.get(timeZone);
   if (!formatters) {
     formatters = {
-      time: new Intl.DateTimeFormat("en-US", {
+      // The reader's own clock: 15:21 where people say so, 3:21 PM where
+      // they do not. It was always 12-hour English.
+      time: new Intl.DateTimeFormat(undefined, {
         timeZone,
         hour: "numeric",
         minute: "2-digit",
-        hour12: true,
       }),
       // For day or night. `h23` counts midnight as 0: with `hour12: false`
       // an engine may say "24".

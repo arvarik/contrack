@@ -14,16 +14,24 @@ Every page works with no pointer. See
 
 - The first `Tab` on a page shows **Skip to main content**. It moves focus to
   the contact's name on a contact page, to the current row on the Network
-  page, and to the main part of every other page.
+  page, past the page list in Settings, and to the main part of every other
+  page.
 - A ring marks the control that has keyboard focus, in both themes. A click
   does not show it, but a text field shows it on any focus.
 - The Network list and its letter rail are one `Tab` stop each. The arrow
   keys, `Home`, `End` and the letters move inside them.
 - Opening a contact moves focus to its name. On a phone, **Back** puts focus
   on the row you opened.
-- A dialog keeps focus inside while it is open. `Esc` closes it, and focus
-  returns to the control that opened it. A menu takes the arrow keys, `Home`,
-  `End` and a letter, and `Esc` returns focus to its button.
+- A dialog opens with focus in its first field, or on the dialog itself when
+  it has no field, never on **Close**. It keeps focus inside while it is
+  open. `Esc` closes it, and focus returns to the control that opened it. A
+  menu, the right-click menu too, takes the arrow keys, `Home`, `End` and a
+  letter, and `Esc` returns focus to its button. While a dialog or a menu is
+  open, the page's own keys wait.
+- After a click on blank space, `Space`, `Page Down` and the arrow keys scroll
+  the part of the page you clicked.
+- `Alt T` (`⌥ T` on a Mac) moves focus to the notifications. After **Undo**,
+  focus goes back to where it was.
 
 ### Screen readers
 
@@ -62,12 +70,17 @@ focus. The tab bar marks the current page.
 
 - Dialogs are sheets that rise from the bottom of the screen. Drag one down
   by its handle or its title to close it. On Android, **Back** closes an open
-  sheet or menu instead of leaving the page.
+  sheet or menu instead of leaving the page, in browsers that have
+  `CloseWatcher` (Chrome, Edge and Samsung Internet). While a sheet is open,
+  notifications show at the top of the screen, clear of its buttons.
+- On a touch screen, controls keep their 44 px size at every width, a tablet
+  too, and no control waits for a hover. A long press on an icon button shows
+  its name.
 - While you type, the tab bar steps aside, and the note's **Save** bar and a
   sheet's buttons stay above the keyboard.
 - The app keeps clear of the status bar, the home indicator and, on a phone
-  on its side, the camera cutout. On its side the rail scrolls, so Settings
-  stays in reach.
+  on its side, the camera cutout. On its side the rail packs tight, so
+  Settings stays in reach.
 - Added to the Home Screen, Contrack opens as an app, with shortcuts to
   Pulse, Ask Contrack and the map. The browser bar takes the theme you chose
   in the app.
@@ -134,11 +147,12 @@ screenshots save them in `test-results/docs-screenshots/`, or in
   `title` alone, and put an explanation in `InfoTip`. One `:focus-visible`
   rule in `src/index.css` draws every ring, and `.focus-frame` draws it on a
   composite field.
-- **Tab budget**: from the top of the page, a contact's name is within 20
-  presses of `Tab`, and the first Network row within 17. A new stop in front
+- **Tab budget**: from the top of the page, a contact's name is within 21
+  presses of `Tab`, and the first Network row within 18. A new stop in front
   of the content raises the budget in `keyboard.spec.ts`, with the reason in
   the pull request.
-- **Phones**: 44 px targets, with `hit-area` for a small control, and 16 px
+- **Phones**: 44 px targets on every touch screen (`sm:pointer-fine:` drops
+  them only for a mouse), with `hit-area` for a small control, and 16 px
   fields below `sm`. See `.agent/STYLE.md`.
 
 ## What a person still checks

@@ -570,7 +570,7 @@ export const interactionService = {
           contactId,
           ownerId: scope.ownerId,
           type: isEmail ? "email" : "note",
-          title: `${isEmail ? "Email Import" : "Attached File"}: ${file.originalname}`,
+          title: `${isEmail ? "Email" : "File"}: ${file.originalname}`,
           date: now,
           content,
           fileUrl: ownerUploadUrl(scope.ownerId, "files", file.filename),

@@ -48,6 +48,28 @@ export function formatDay(
 }
 
 /**
+ * A follow-up's due date, with its weekday so a wrong day shows: "Fri, Oct
+ * 9, 2:00 PM", or "Fri, Oct 9" for a calendar day with no time. The year
+ * shows when it is not this one. The composer, the Details card and the
+ * note's dialog all say a due date this way.
+ */
+export function formatDue(
+  value: string | null | undefined,
+  now: Date = new Date(),
+): string {
+  const date = parseServerTime(value);
+  if (!date) return "Unknown";
+  const dayOnly = /^\d{4}-\d{2}-\d{2}$/.test(value ?? "");
+  return date.toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    ...(date.getFullYear() !== now.getFullYear() && { year: "numeric" }),
+    ...(!dayOnly && { hour: "numeric", minute: "2-digit" }),
+  });
+}
+
+/**
  * A date in a few characters, for a narrow badge: "Jan 20" in this year,
  * and "Dec 2025" before it, where a day without its year would mislead.
  */

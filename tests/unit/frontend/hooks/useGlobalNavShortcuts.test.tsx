@@ -75,13 +75,24 @@ describe("useGlobalNavShortcuts", () => {
     expect(event.defaultPrevented).toBe(false);
   });
 
-  it("leaves a character typed with AltGr in the field", () => {
+  it("leaves a character typed with AltGr in a field, and reads the key elsewhere", () => {
     // Polish AltGr+S types "ś". Windows reports AltGr as Ctrl Alt, so the
     // modifiers match and only the key tells the two apart.
     const path = mount();
-    const event = press("ś", { ctrlKey: true, altKey: true });
+    const field = document.body.appendChild(document.createElement("input"));
+    field.focus();
+    const typed = press("ś", { ctrlKey: true, altKey: true, code: "KeyS" });
     expect(path()).toBe("/");
-    expect(event.defaultPrevented).toBe(false);
+    expect(typed.defaultPrevented).toBe(false);
+    field.remove();
+    press("µ", { ctrlKey: true, altKey: true, code: "KeyM" });
+    expect(path()).toBe("/map");
+  });
+
+  it("goes to Settings on ⌘ ⇧ , where Shift turns the comma into <", () => {
+    const path = mount();
+    press("<", { metaKey: true, shiftKey: true, code: "Comma" });
+    expect(path()).toBe("/settings");
   });
 
   it("labels the chords with the keys of this platform", () => {

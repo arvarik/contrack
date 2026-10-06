@@ -60,6 +60,7 @@ import {
   type ActionMenuItem,
 } from "../../../components/ui/ActionMenu";
 import { cn } from "../../../lib/utils";
+import { INLINE_INPUT } from "../../../lib/styles";
 import { mailtoHref, smsHref, telHref } from "../../../lib/contactLinks";
 import { useMediaQuery } from "../../../hooks/useMediaQuery";
 import { EditableField, INPUT_KIND } from "./EditableField";
@@ -268,8 +269,9 @@ const SortableRow = ({
           inputLabel={`Edit ${noun}`}
           kind={kind && INPUT_OF[kind]}
           href={kind && HREF_OF[kind](item.value)}
-          // An email or a phone number has no spaces to wrap at.
-          className={cn(FIELD_VALUE, "max-w-full", !isAddress && "break-all")}
+          // An email has no spaces to wrap at: it breaks inside only where
+          // it would overflow, never at any letter (`break-all`).
+          className={cn(FIELD_VALUE, "max-w-full", !isAddress && "break-words")}
         />
       </div>
       <CustomSelect
@@ -678,7 +680,7 @@ export const MultiValueField = ({
             }}
             placeholder={inputPlaceholder}
             // 16 px on a phone, so iOS does not zoom in on focus.
-            className="flex-1 min-w-[10rem] min-h-[44px] sm:min-h-0 text-base sm:text-sm bg-surface-container-high rounded px-2 py-1 border-none"
+            className={cn(INLINE_INPUT, "flex-1 min-w-[10rem]")}
           />
         </div>
       ) : (

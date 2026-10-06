@@ -28,7 +28,7 @@
  *
  * @module components/ScoreRingAvatar
  */
-import React from "react";
+import React, { useState } from "react";
 
 import { describeScore, scoreView } from "../../shared/scoreBand";
 import { fallbackAvatarUrl, isGeneratedAvatar } from "../lib/avatar";
@@ -82,6 +82,11 @@ export const ScoreRingAvatar: React.FC<ScoreRingAvatarProps> = ({
   // Without a ring it takes the whole box.
   const picture = tracked ? size - strokeWidth * 4 : size;
   const photo = !isGeneratedAvatar(contact.avatarUrl);
+  const src = contact.avatarUrl || fallbackAvatarUrl(contact.name);
+  // A picture that did not load, such as every avatar while the server is
+  // down: the first letter on the plain circle, not a broken image.
+  const [brokenSrc, setBrokenSrc] = useState<string | null>(null);
+  const broken = brokenSrc === src;
 
   return (
     <div
@@ -131,19 +136,30 @@ export const ScoreRingAvatar: React.FC<ScoreRingAvatarProps> = ({
       <div
         className={cn(
           "absolute m-auto overflow-hidden rounded-full flex items-center justify-center shrink-0",
-          !photo && "bg-surface-container-highest",
+          (!photo || broken) && "bg-surface-container-highest",
         )}
         style={{ width: picture, height: picture }}
       >
         {/* The name is always printed beside the picture, so the picture
             itself says nothing more. A loaded picture is held in memory, so
             a list built again paints it with its row (`keptImages`). */}
-        <img
-          src={contact.avatarUrl || fallbackAvatarUrl(contact.name)}
-          alt=""
-          onLoad={keepLoadedImage}
-          className="w-full h-full object-cover shrink-0"
-        />
+        {broken ? (
+          <span
+            aria-hidden="true"
+            className="font-headline font-bold text-on-surface-variant"
+            style={{ fontSize: Math.max(11, picture * 0.4) }}
+          >
+            {contact.name.trim().charAt(0).toUpperCase()}
+          </span>
+        ) : (
+          <img
+            src={src}
+            alt=""
+            onLoad={keepLoadedImage}
+            onError={() => setBrokenSrc(src)}
+            className="w-full h-full object-cover shrink-0"
+          />
+        )}
       </div>
     </div>
   );

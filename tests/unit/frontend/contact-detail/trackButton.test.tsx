@@ -220,12 +220,13 @@ describe("TrackButton", () => {
     expect(visibleWord(button)).toBe("45 days");
   });
 
-  it("draws the glyph and the chevron alone when compact, with the words in the name and the tooltip", () => {
+  it("draws the glyph, the cadence and the chevron when compact, with the words in the name and the tooltip", () => {
     mount(<TrackButton contact={TRACKED} compact />);
     const button = screen.getByRole("button", {
       name: "Tracking quarterly, change or stop",
     });
-    expect(button.textContent).toBe("");
+    // A phone saw no cadence.
+    expect(button.textContent).toBe("Quarterly");
     expect(button.getAttribute("title")).toBe(
       "Tracking quarterly, change or stop",
     );
@@ -239,13 +240,14 @@ describe("the menu before the contact is tracked", () => {
     const menu = openMenu("Track, choose how often");
     expect(within(menu).getByText("Keep up")).toBeTruthy();
     // Plain items, not checkboxes: there is no cadence yet to be checked.
-    expect(within(menu).queryAllByRole("menuitemcheckbox")).toHaveLength(0);
+    expect(within(menu).queryAllByRole("menuitemradio")).toHaveLength(0);
     const items = within(menu).getAllByRole("menuitem");
     expect(items.map((item) => item.textContent)).toEqual([
       "Weekly",
       "Monthly",
       "QuarterlyDefault",
       "Yearly",
+      "Custom…",
     ]);
     // The hint is heard too, after a pause.
     expect(
@@ -269,6 +271,7 @@ describe("the menu before the contact is tracked", () => {
       "Quarterly",
       "Every 6 monthsDefault",
       "Yearly",
+      "Custom…",
     ]);
   });
 
@@ -304,7 +307,7 @@ describe("the menu while tracked", () => {
     mount(<TrackButton contact={TRACKED} />);
     const menu = openMenu(/^Tracking/);
     expect(within(menu).getByText("Keep up")).toBeTruthy();
-    const rows = within(menu).getAllByRole("menuitemcheckbox");
+    const rows = within(menu).getAllByRole("menuitemradio");
     expect(rows.map((row) => row.textContent)).toEqual([
       "Weekly",
       "Monthly",
@@ -318,7 +321,10 @@ describe("the menu while tracked", () => {
       "false",
     ]);
     const actions = within(menu).getAllByRole("menuitem");
-    expect(actions.map((item) => item.textContent)).toEqual(["Stop tracking"]);
+    expect(actions.map((item) => item.textContent)).toEqual([
+      "Custom…",
+      "Stop tracking",
+    ]);
     // Last in the menu, after the cadences.
     expect(
       rows[3].compareDocumentPosition(actions[0]) &
@@ -328,7 +334,7 @@ describe("the menu while tracked", () => {
 
   it("shows a cadence off the list as one more checked row, in its place", () => {
     mount(<TrackButton contact={{ ...TRACKED, cadenceDays: 60 }} />);
-    const rows = within(openMenu(/^Tracking/)).getAllByRole("menuitemcheckbox");
+    const rows = within(openMenu(/^Tracking/)).getAllByRole("menuitemradio");
     expect(rows.map((row) => row.textContent)).toEqual([
       "Weekly",
       "Monthly",
@@ -347,7 +353,7 @@ describe("the menu while tracked", () => {
   it("writes another cadence and toasts the contact and the word", async () => {
     mount(<TrackButton contact={TRACKED} />);
     fireEvent.click(
-      within(openMenu(/^Tracking/)).getByRole("menuitemcheckbox", {
+      within(openMenu(/^Tracking/)).getByRole("menuitemradio", {
         name: "Monthly",
       }),
     );
@@ -365,7 +371,7 @@ describe("the menu while tracked", () => {
   it("does nothing when the current cadence is chosen again", async () => {
     mount(<TrackButton contact={TRACKED} />);
     fireEvent.click(
-      within(openMenu(/^Tracking/)).getByRole("menuitemcheckbox", {
+      within(openMenu(/^Tracking/)).getByRole("menuitemradio", {
         name: "Quarterly",
       }),
     );

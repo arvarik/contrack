@@ -36,7 +36,8 @@ import {
   writeDraft,
 } from "../../lib/composerDrafts";
 import { useAuth } from "../auth/AuthGate";
-import { LOG_TITLES, type LogKind } from "./actionMode";
+import { INTERACTION_LABELS } from "../../lib/interactionKinds";
+import type { LogKind } from "./actionMode";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -118,7 +119,7 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
         contactId,
         data: {
           type,
-          title: LOG_TITLES[type],
+          title: INTERACTION_LABELS[type],
           content: content.trim(),
           date: new Date().toISOString(),
         },
@@ -129,7 +130,7 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
       onComplete();
     } catch (err: unknown) {
       toast.error(
-        `Failed to log ${type}: ${err instanceof Error ? err.message : String(err)}`,
+        `Could not log the ${type}: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }, [

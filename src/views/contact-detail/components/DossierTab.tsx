@@ -41,6 +41,8 @@ import { CorvidThinking } from "../../../components/brand/CorvidThinking";
 import { useAiAllowed } from "../../../hooks/useAiAllowed";
 import { ResearchCard } from "./ResearchCard";
 import { EnrichMenu } from "./EnrichMenu";
+import { AiSetupNote } from "../../../components/AiSetupNote";
+import { useBlockedAi } from "../../../hooks/useAiSetup";
 import type { ResearchAnchor } from "../../../lib/research";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -91,6 +93,7 @@ interface DossierTabProps {
 const EmptyDossier = ({ contact }: { contact: Contact }) => {
   const aiAllowed = useAiAllowed();
   const canEnrich = aiAllowed && !contact.isGhost;
+  const research = useBlockedAi("research");
   const first = contact.firstName || contact.name.split(" ")[0];
   return (
     <motion.div
@@ -114,6 +117,7 @@ const EmptyDossier = ({ contact }: { contact: Contact }) => {
         label="Enrich contact"
         variant="primaryLarge"
       />
+      {canEnrich && research && <AiSetupNote setup={research} />}
       {canEnrich && (
         <p className="text-xs text-on-surface-variant max-w-sm text-pretty">
           Or add a city, an email or a link by hand
@@ -150,6 +154,9 @@ function BriefingCard({
   /** The request answered last. StrictMode runs a mount effect twice. */
   const answeredRef = useRef<number | null>(null);
   const aiAllowed = useAiAllowed();
+  // No model to write it: the button waits and says why, where it looked
+  // ready and then failed.
+  const blocked = useBlockedAi("briefings");
   const [failed, setFailed] = useState(false);
   const pending = generateBriefing?.isPending ?? false;
 
@@ -164,7 +171,7 @@ function BriefingCard({
   const hasBriefing = points.length > 0;
 
   const generate = () => {
-    if (!generateBriefing || pending || !aiAllowed) return;
+    if (!generateBriefing || pending || !aiAllowed || blocked) return;
     setFailed(false);
     generateBriefing.mutate(contact.id, {
       onSuccess: () => setFailed(false),
@@ -249,8 +256,7 @@ function BriefingCard({
 
       {failed && !pending && (
         <p role="alert" className="mt-3 text-sm font-medium text-error">
-          Could not write the briefing. Check that AI is set up in Settings,
-          then try again
+          Could not write the briefing. Try again
         </p>
       )}
 
@@ -268,7 +274,7 @@ function BriefingCard({
             <button
               type="button"
               onClick={generate}
-              disabled={pending}
+              disabled={pending || !!blocked}
               aria-busy={pending}
               className={cn(
                 hasBriefing ? "btn-secondary" : "btn-primary",
@@ -288,6 +294,11 @@ function BriefingCard({
               )}
             </button>
           )}
+        </div>
+      )}
+      {generateBriefing && aiAllowed && blocked && (
+        <div className="mt-2 flex justify-end">
+          <AiSetupNote setup={blocked} />
         </div>
       )}
     </section>

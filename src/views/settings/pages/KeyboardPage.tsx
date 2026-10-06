@@ -18,6 +18,7 @@ import {
 } from "../layout";
 import { SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
+import { useMediaQuery } from "../../../hooks/useMediaQuery";
 
 /** The chip after a shortcut's name. */
 const CHIP =
@@ -27,6 +28,9 @@ export const KeyboardPage = () => {
   const { preferences, setPreference } = usePreferences();
   const singleKeysEnabled = preferences.singleKeyShortcuts;
   const groups = groupedShortcuts();
+  // A phone with no keyboard has none of these keys. A tablet with one does,
+  // so the page stays and says so.
+  const touchOnly = useMediaQuery("(any-hover: none)");
 
   return (
     <div className={cn(SETTINGS_PAGE, "space-y-8")}>
@@ -35,7 +39,7 @@ export const KeyboardPage = () => {
           id="single-key-shortcuts"
           title="Single-key shortcuts"
           prefKey="singleKeyShortcuts"
-          description="Use keys like /, N, V, J and K without holding a modifier. Turn this off if you set them off by mistake"
+          description="Use keys like /, N, V, J and K without holding a modifier. Turn this off if you press them by mistake"
           inline
         >
           <Switch
@@ -52,6 +56,8 @@ export const KeyboardPage = () => {
         </h2>
         <div className={cn(SETTINGS_CARD, "space-y-6")}>
           <p className="text-xs sm:text-sm text-on-surface-variant text-pretty">
+            {touchOnly &&
+              "These keys work when a keyboard is connected to this device. "}
             The switch above turns off every key marked &ldquo;Single key&rdquo;
           </p>
 

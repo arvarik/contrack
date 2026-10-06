@@ -53,12 +53,15 @@ interface AlphabetRailProps {
   activeBucket: string | null;
   /** Scroll the list so `index` is the first visible row. */
   onJump: (index: number) => void;
+  /** The room a bar over the list's end takes, so no letter sits under it. */
+  bottomRoom?: number;
 }
 
 const AlphabetRailInner = ({
   index,
   activeBucket,
   onJump,
+  bottomRoom,
 }: AlphabetRailProps) => {
   const buttons = useRef(new Map<string, HTMLButtonElement>());
   const lastJumped = useRef<string | null>(null);
@@ -199,8 +202,12 @@ const AlphabetRailInner = ({
       // The bottom padding matches the list's own `pb-24`: the rail spans the
       // full list area, which on a phone extends underneath the fixed tab bar,
       // so without it the last few letters are rendered where they cannot be
-      // tapped.
-      className="absolute right-0 top-0 bottom-0 z-20 flex w-6 select-none touch-none flex-col items-center justify-center pt-2 pb-24 md:pb-2"
+      // tapped. While the bulk bar shows, it is the bar's room instead.
+      //
+      // A short window, a phone on its side, has no room for the letters:
+      // they ran into each other, so the rail is not drawn there.
+      className="absolute right-0 top-0 bottom-0 z-20 flex w-6 select-none touch-none flex-col items-center justify-center pt-2 pb-24 md:pb-2 [@media(max-height:499px)]:hidden"
+      style={bottomRoom ? { paddingBottom: bottomRoom } : undefined}
     >
       {letters.map((letter) => (
         <button
@@ -214,7 +221,10 @@ const AlphabetRailInner = ({
           tabIndex={letter === tabStop ? 0 : -1}
           aria-current={letter === activeBucket ? "true" : undefined}
           aria-label={letter === OTHER_BUCKET ? "# (other characters)" : letter}
-          onClick={() => jumpTo(letter)}
+          // A press jumped already, on pointerdown. Its click then went to
+          // whichever 44 px tap box was on top, the next letter's, and
+          // jumped again. So only a key's click (`detail` 0) jumps here.
+          onClick={(event) => event.detail === 0 && jumpTo(letter)}
           onKeyDown={handleKeyDown}
           // 24 px on screen. The tap box is 44 px on each side, so letters
           // closer than that share the gap. A thumb drag reads the nearest

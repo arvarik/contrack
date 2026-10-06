@@ -1,6 +1,6 @@
 /**
  * webSearchEngine: the words for what contact research searches the web
- * with, wherever an engine is named: Administration → AI → Web search, the
+ * with, wherever an engine is named: Settings → Administration → AI → Web search, the
  * Contact enrichment page, its confirmation, and a contact's Enrich menu.
  *
  * Three engines (`shared/webSearchEngine`): the web search model's own

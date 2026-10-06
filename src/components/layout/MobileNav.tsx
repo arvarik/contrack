@@ -18,7 +18,7 @@ import { Link, useLocation, useMatch } from "react-router-dom";
 import { QueryClientContext } from "@tanstack/react-query";
 import {
   Activity,
-  LayoutDashboard,
+  Users,
   Map,
   Settings as SettingsIcon,
   Sparkles,
@@ -73,7 +73,7 @@ export const MobileNav = () => {
             lastContactId && !isContactSelected
               ? `/contact/${lastContactId}`
               : "/",
-          icon: LayoutDashboard,
+          icon: Users,
           label: NAMES.network.label,
           active: isNetwork,
           badge: 0,
