@@ -41,23 +41,26 @@ export class ErrorBoundary extends Component<Props, State> {
               <AlertCircle className="w-8 h-8" />
             </div>
             <h1 className="text-2xl font-extrabold font-headline mb-3">
-              System crash
+              Something went wrong
             </h1>
+            {/* No "logged for review": on a self-hosted app nobody reviews
+                the browser's console. */}
             <p className="text-on-surface-variant mb-6 text-sm">
-              The application encountered an unexpected error. This has been
-              logged for review
+              Contrack hit an error it did not expect. Reload the page to try
+              again. Your data is safe
             </p>
             {this.state.error && (
               <div className="bg-surface-container-highest p-4 rounded-xl text-left mb-6 overflow-x-auto text-xs font-mono text-error">
                 {this.state.error.message}
               </div>
             )}
+            {/* The page that failed, not the start page. */}
             <button
-              onClick={() => (window.location.href = "/")}
+              onClick={() => window.location.reload()}
               className="btn-primary w-full"
             >
               <RefreshCw className="w-4 h-4" />
-              Reload application
+              Reload the page
             </button>
             {/*
               The red circle above stays: a mascot on a crash reads as a joke

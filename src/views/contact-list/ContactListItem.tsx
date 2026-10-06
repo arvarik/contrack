@@ -206,6 +206,10 @@ const ContactListItemInner = ({
       id={`${idPrefix}-${contact.id}`}
       aria-label={rowName}
       aria-current={active && !isSelectMode ? "page" : undefined}
+      // In select mode the row picks rather than opens: a checkbox, so a
+      // screen reader hears whether it is picked. Space and Enter press it.
+      role={isSelectMode ? "checkbox" : undefined}
+      aria-checked={isSelectMode ? isSelected : undefined}
       to={to}
       onClick={handleClick}
       tabIndex={tabIndex}
@@ -307,7 +311,7 @@ const ContactListItemInner = ({
         {contact.company ? (
           <p
             className={cn(
-              "text-xs text-on-surface-variant truncate font-medium flex items-center gap-1.5",
+              "text-xs text-on-surface-variant font-medium flex items-center gap-1.5",
               compact ? "mt-0" : "mt-0.5",
             )}
           >
@@ -317,22 +321,24 @@ const ContactListItemInner = ({
                 alt={`${contact.company} logo`}
                 onLoad={keepLoadedImage}
                 onError={handleLogoError}
-                className="w-4 h-4 rounded-full object-scale-down bg-transparent"
+                className="w-4 h-4 shrink-0 rounded-full object-scale-down bg-transparent"
               />
             ) : (
-              <Building className="w-3.5 h-3.5 opacity-60" />
+              <Building className="w-3.5 h-3.5 shrink-0 opacity-60" />
             )}
-            {contact.company}
+            {/* The words truncate in a box of their own: `truncate` on a
+                flex line clips with no ellipsis. */}
+            <span className="truncate">{contact.company}</span>
           </p>
         ) : contact.role ? (
           <p
             className={cn(
-              "text-xs text-on-surface-variant truncate flex items-center gap-1.5",
+              "text-xs text-on-surface-variant flex items-center gap-1.5",
               compact ? "mt-0" : "mt-0.5",
             )}
           >
-            <Briefcase className="w-3.5 h-3.5 opacity-60" />
-            {contact.role}
+            <Briefcase className="w-3.5 h-3.5 shrink-0 opacity-60" />
+            <span className="truncate">{contact.role}</span>
           </p>
         ) : null}
       </div>

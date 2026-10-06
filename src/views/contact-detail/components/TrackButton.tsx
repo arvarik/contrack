@@ -30,6 +30,7 @@
  *    value the API took, shows as one more checked row in its place in the
  *    order ("Every 2 months"), and the button says it short: "2 months".
  *    Untracked, an account default off the list is that extra row.
+ * 4. Custom… asks for a number of days, up to ten years.
  *
  * It was a split button: the word a toggle, and a caret behind a hairline
  * that held five cadences in sentences ("Every 3 months"). The owner asked
@@ -51,23 +52,26 @@
  * 110 px wide at its widest word. It is flat and hovers with the one state
  * layer, because it is a toggle's face, not a call to action. The menu is
  * as slim as its words (11 rem, where other menus start at 13). The narrow
- * header has room for the glyph and the chevron: the word moves into the
- * accessible name and the tooltip.
+ * header shows the glyph and, once tracked, the cadence in a word: a phone
+ * could not see how often it kept up.
  *
  * The `t` key stays a one-key toggle at the account's default cadence
  * (`useTrackShortcut`), as the palette's row is. The ring around the avatar
  * appears or goes with the flag, because both read the same contact. The
  * "Contact actions" menu gets no Track item: one control per concept.
  */
+import { useState, type FormEvent } from "react";
 import { ChevronDown, CircleSlash, Radar } from "lucide-react";
 import { toast } from "sonner";
 import {
   CADENCE_DAYS,
   DEFAULT_CADENCE_DAYS,
+  MAX_CADENCE_DAYS,
   cadenceOptions,
   describeCadence,
   shortCadence,
 } from "../../../../shared/cadence";
+import { Modal } from "../../../components/ui/Modal";
 import { useSetCadence } from "../../../api/contacts";
 import {
   useTrackToggle,
@@ -78,7 +82,7 @@ import {
   ActionMenu,
   type ActionMenuItem,
 } from "../../../components/ui/ActionMenu";
-import { SELECTED_TINT } from "../../../lib/styles";
+import { DIALOG_ACTIONS, FORM_INPUT, SELECTED_TINT } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 
 interface TrackButtonProps {
@@ -126,6 +130,8 @@ export const TrackButton = ({ contact, compact = false }: TrackButtonProps) => {
   const label = on ? trackingLabel(cadenceDays) : TRACK_LABEL;
   // A change on its way: the rows wait for it, so two presses cannot race.
   const busy = isPending || setCadence.isPending;
+  /** Custom… is asking for a number of days. */
+  const [asking, setAsking] = useState(false);
 
   const change = (days: number) => {
     if (days === cadenceDays) return;
@@ -154,6 +160,13 @@ export const TrackButton = ({ contact, compact = false }: TrackButtonProps) => {
     disabled: busy,
     onSelect: () => (on ? change(days) : trackAt(contact, days)),
   }));
+  items.push({
+    id: "custom",
+    label: "Custom…",
+    separatorBefore: true,
+    disabled: busy,
+    onSelect: () => setAsking(true),
+  });
   if (on) {
     items.push({
       id: "stop",
@@ -176,49 +189,99 @@ export const TrackButton = ({ contact, compact = false }: TrackButtonProps) => {
     />
   );
 
+  const saveCustom = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const days = Number(new FormData(event.currentTarget).get("days"));
+    setAsking(false);
+    if (on) change(days);
+    else trackAt(contact, days);
+  };
+
   return (
-    <ActionMenu
-      label={label}
-      title={compact ? label : undefined}
-      heading="Keep up"
-      items={items}
-      align="end"
-      panelClassName="min-w-44"
-      triggerClassName={cn(
-        SHAPE,
-        compact ? "px-2" : "pl-2 pr-1.5",
-        on ? ON : OFF,
-      )}
-      triggerContent={
-        <>
-          {compact ? (
-            glyph
-          ) : (
-            // One cell, many layers: the words it may show, invisible, set
-            // the width, and the glyph and the current word are drawn over
-            // them together, centred. A short word such as Track sits in
-            // the middle of the button, not against its left edge with a
-            // gap before the chevron. Each sizer leaves room for the glyph
-            // and the gap after it: `pl-5` is the 16 px glyph and 4 px.
-            <span className="grid">
-              {sizers.map((sizer) => (
-                <span
-                  key={sizer}
-                  aria-hidden="true"
-                  className="col-start-1 row-start-1 invisible whitespace-nowrap pl-5"
-                >
-                  {sizer}
-                </span>
-              ))}
-              <span className="col-start-1 row-start-1 flex items-center justify-center gap-1 whitespace-nowrap">
+    <>
+      <ActionMenu
+        label={label}
+        title={compact ? label : undefined}
+        heading="Keep up"
+        items={items}
+        align="end"
+        panelClassName="min-w-44"
+        triggerClassName={cn(
+          SHAPE,
+          compact ? "px-2" : "pl-2 pr-1.5",
+          on ? ON : OFF,
+        )}
+        triggerContent={
+          <>
+            {compact ? (
+              <span className="flex items-center gap-1 whitespace-nowrap">
                 {glyph}
-                {word}
+                {on && word}
               </span>
-            </span>
-          )}
-          <ChevronDown aria-hidden="true" className="w-3 h-3 shrink-0" />
-        </>
-      }
-    />
+            ) : (
+              // One cell, many layers: the words it may show, invisible, set
+              // the width, and the glyph and the current word are drawn over
+              // them together, centred. A short word such as Track sits in
+              // the middle of the button, not against its left edge with a
+              // gap before the chevron. Each sizer leaves room for the glyph
+              // and the gap after it: `pl-5` is the 16 px glyph and 4 px.
+              <span className="grid">
+                {sizers.map((sizer) => (
+                  <span
+                    key={sizer}
+                    aria-hidden="true"
+                    className="col-start-1 row-start-1 invisible whitespace-nowrap pl-5"
+                  >
+                    {sizer}
+                  </span>
+                ))}
+                <span className="col-start-1 row-start-1 flex items-center justify-center gap-1 whitespace-nowrap">
+                  {glyph}
+                  {word}
+                </span>
+              </span>
+            )}
+            <ChevronDown aria-hidden="true" className="w-3 h-3 shrink-0" />
+          </>
+        }
+      />
+      <Modal
+        isOpen={asking}
+        onClose={() => setAsking(false)}
+        title="How often to keep up"
+        size="sm"
+      >
+        {/* The browser holds the number to a whole one from 1 to ten years. */}
+        <form onSubmit={saveCustom} className="space-y-4">
+          <label className="flex items-center gap-2 text-sm text-on-surface">
+            Every
+            <input
+              name="days"
+              type="number"
+              inputMode="numeric"
+              required
+              min={1}
+              max={MAX_CADENCE_DAYS}
+              step={1}
+              defaultValue={on ? cadenceDays : defaultDays}
+              className={cn(FORM_INPUT, "w-24")}
+            />
+            days
+          </label>
+          <div className={DIALOG_ACTIONS}>
+            <button
+              type="button"
+              onClick={() => setAsking(false)}
+              className="btn-secondary"
+            >
+              Cancel
+            </button>
+            <button type="submit" className="btn-primary">
+              {on ? "Save" : "Track"}
+            </button>
+          </div>
+        </form>
+      </Modal>
+    </>
   );
 };

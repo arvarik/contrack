@@ -9,8 +9,8 @@
  *
  * One layout now:
  *
- *   back link                                            actions
- *   Title  suffix
+ *   back link
+ *   Title  suffix                                        actions
  *   One line of description
  *   children (a search box, filters, a form)
  *
@@ -129,24 +129,27 @@ export const PageHeader = ({
       className={cn("@container flex flex-col gap-4", className)}
     >
       {suffix === undefined ? (
-        // The row aligns to the top, so every page's title starts at the
-        // same height whatever sits beside it.
-        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
-          {/* The title block grows into the row and shrinks to its longest
-              word (no `min-w-0`, on purpose), so the actions stay at the
-              right and the sentence wraps beside them. They drop under the
-              block only when that word and the actions do not fit one row:
-              a phone. */}
-          <div className="flex flex-1 flex-col gap-1">
-            {backLink}
-            <Title className={TITLE}>{title}</Title>
-            {description && <p className={PAGE_DESCRIPTION}>{description}</p>}
-          </div>
-          {allActions && (
-            <div className={cn(ACTIONS, "sm:shrink-0", actionsClassName)}>
-              {allActions}
+        <div className="flex flex-col gap-1">
+          {backLink}
+          {/* The row aligns to the top, so every page's title starts at the
+              same height whatever sits beside it. The title grows into the
+              row and shrinks to its longest word (no `min-w-0` on its box,
+              on purpose), so the actions stay at the right. They drop under
+              it only when that word and the actions do not fit one row: a
+              phone. */}
+          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
+            <div className="flex-1">
+              <Title className={TITLE}>{title}</Title>
             </div>
-          )}
+            {allActions && (
+              <div className={cn(ACTIONS, "sm:shrink-0", actionsClassName)}>
+                {allActions}
+              </div>
+            )}
+          </div>
+          {/* Under the row, the page's width: beside a header button it was
+              squeezed into half of a phone's. */}
+          {description && <p className={PAGE_DESCRIPTION}>{description}</p>}
         </div>
       ) : (
         <div className="flex flex-col gap-1">

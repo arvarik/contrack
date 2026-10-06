@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
-  parseBirthday,
   getUpcomingBirthdayInfo,
   getUpcomingBirthdayDays,
-  toBirthdayInputValue,
   formatBirthdayDisplay,
+  birthdayText,
 } from "../../../../src/lib/birthday.ts";
+import { birthdayValue, parseBirthday } from "../../../../shared/birthday.ts";
 
 describe("pulse.birthdays parseBirthday", () => {
   it.each([
@@ -13,6 +13,11 @@ describe("pulse.birthdays parseBirthday", () => {
     ["05-14", null],
     ["May 14", null],
     ["May 14, 1990", 1990],
+    // Address books: Apple's "no year" is 1604, vCard 4 drops the year.
+    ["1604-05-14", null],
+    ["--0514", null],
+    ["--05-14", null],
+    ["19900514", 1990],
   ])("parses %s", (text, year) => {
     expect(parseBirthday(text)).toEqual({ year, month: 5, day: 14 });
   });
@@ -75,15 +80,18 @@ describe("pulse.birthdays upcoming calculations", () => {
   });
 });
 
-describe("toBirthdayInputValue and formatDisplay", () => {
-  it("normalizes to YYYY-MM-DD when year is known", () => {
-    expect(toBirthdayInputValue("1990-05-14")).toBe("1990-05-14");
-    expect(toBirthdayInputValue("May 14, 1990")).toBe("1990-05-14");
+describe("the birthday editor's text", () => {
+  it("keeps a day with no year year-less, on the way in and out", () => {
+    // It opened as 2001, and a save kept that year.
+    expect(birthdayText("05-14")).toBe("May 14");
+    expect(birthdayText("1990-05-14")).toBe("May 14, 1990");
+    expect(birthdayValue(parseBirthday("May 14")!)).toBe("05-14");
+    expect(birthdayValue(parseBirthday("May 14, 1990")!)).toBe("1990-05-14");
   });
 
   it("formats display cleanly", () => {
     expect(formatBirthdayDisplay("1990-05-14")).toContain("May");
-    expect(formatBirthdayDisplay("05-14")).not.toMatch(/\d{4}/);
+    expect(formatBirthdayDisplay("1604-05-14")).not.toMatch(/\d{4}/);
     expect(formatBirthdayDisplay(null)).toBeNull();
   });
 });

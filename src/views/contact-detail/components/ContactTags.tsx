@@ -7,7 +7,7 @@
  * of the Details tab. One component, so both places add and remove a tag the
  * same way, with the same undo.
  */
-import { toast } from "sonner";
+import { showUndoToast } from "./Field";
 
 import type { Contact, ContactUpdateData } from "../../../types";
 import { cn } from "../../../lib/utils";
@@ -25,20 +25,20 @@ export const ContactTags = ({
   updateContact,
   className,
 }: ContactTagsProps) => {
-  // Tags come from enrichment today, which is why they wear the AI colour.
+  // No AI colour: a tag records no source, and a person types, imports or
+  // researches them alike. The AI colour means a model wrote this.
   const tagChips: Chip[] = (contact.tags || []).map((t) => ({
     id: t.id,
     label: t.tag,
-    ai: true,
   }));
 
-  const addTag = (text: string) => {
+  const addTags = (texts: string[]) => {
     updateContact({
       id: contact.id,
       data: {
         tags: [
           ...(contact.tags || []).map((t) => ({ tag: t.tag })),
-          { tag: text },
+          ...texts.map((tag) => ({ tag })),
         ],
       },
     });
@@ -51,17 +51,12 @@ export const ContactTags = ({
       id: contact.id,
       data: { tags: after.map((tag) => ({ tag: tag.tag })) },
     });
-    toast("Tag removed", {
-      duration: 7000,
-      action: {
-        label: "Undo",
-        onClick: () =>
-          updateContact({
-            id: contact.id,
-            data: { tags: before.map((tag) => ({ tag: tag.tag })) },
-          }),
-      },
-    });
+    showUndoToast("Tag removed", () =>
+      updateContact({
+        id: contact.id,
+        data: { tags: before.map((tag) => ({ tag: tag.tag })) },
+      }),
+    );
   };
 
   // The row always shows, so "+ tag" is always there.
@@ -71,10 +66,11 @@ export const ContactTags = ({
     >
       <ChipInput
         chips={tagChips}
-        onAdd={addTag}
+        onAdd={addTags}
         onRemove={removeTag}
         noun="tag"
         addText="tag"
+        small
       />
       <ContactListsSection
         contactId={contact.id}

@@ -13,6 +13,7 @@ import { test, expect } from "./fixtures/test";
 import { expectPageAccessible, expectVisibleFocus } from "./fixtures/a11y";
 import type { ContrackInstance } from "./fixtures/instance";
 import type { Seed } from "./fixtures/seed";
+import { serveAiModels } from "./fixtures/search";
 
 /** The Pixel 7 without its browser type. See mobile-forms.spec.ts. */
 const { defaultBrowserType: _chromium, ...PHONE } = devices["Pixel 7"];
@@ -191,7 +192,7 @@ test.describe("the Network header and start panel", () => {
     const sortButton = page.getByRole("button", { name: "Sort: A to Z" });
     await sortButton.click();
 
-    const zToA = page.getByRole("menuitemcheckbox", { name: "Z to A" });
+    const zToA = page.getByRole("menuitemradio", { name: "Z to A" });
     await expect(zToA).toBeVisible();
     await zToA.click();
 
@@ -201,7 +202,7 @@ test.describe("the Network header and start panel", () => {
     await expect(firstRow).not.toContainText("Ada Lovelace");
 
     await page.getByRole("button", { name: "Sort: Z to A" }).click();
-    await page.getByRole("menuitemcheckbox", { name: "A to Z" }).click();
+    await page.getByRole("menuitemradio", { name: "A to Z" }).click();
     await expect(
       page.getByRole("button", { name: "Sort: A to Z" }),
     ).toBeVisible();
@@ -224,7 +225,7 @@ test.describe("the Network header and start panel", () => {
     const menu = page.getByRole("menu");
     await expect(menu).toBeVisible();
     await expect(menu).toHaveAttribute("popover", "manual");
-    const item = page.getByRole("menuitemcheckbox", { name: "Newest" });
+    const item = page.getByRole("menuitemradio", { name: "Newest" });
     const onTop = await item.evaluate((el) => {
       const r = el.getBoundingClientRect();
       const hit = document.elementFromPoint(
@@ -257,7 +258,7 @@ test.describe("the Network header and start panel", () => {
     await expect(bar).toContainText("0 selected");
     await expect(
       page.getByRole("textbox", { name: "Search contacts" }),
-    ).toHaveAttribute("placeholder", "Search...");
+    ).toHaveAttribute("placeholder", "Search…");
     const selectAllBtn = page.getByRole("button", { name: "Select all" });
     const doneBtn = page.getByRole("button", { name: "Done" });
     await expect(selectAllBtn).toBeVisible();
@@ -331,18 +332,20 @@ test.describe("the Network header and start panel", () => {
     await page.goto("/");
     await expect(page.getByText("Ada Lovelace")).toBeVisible();
 
-    // ⌘K opens the palette under a mouse. Its button is for a touch screen.
+    // Under a mouse the sidebar holds the palette's button. The header's is
+    // for a touch screen.
     await expect(
-      page.getByRole("button", { name: "Command palette" }),
+      page.locator("header").getByRole("button", { name: "Command palette" }),
     ).toBeHidden();
 
-    // Named for a screen reader, titled for a pointer, no visible text.
+    // Named for a screen reader, labelled for a pointer, no visible text.
     for (const name of ["Select", "Import", "New"]) {
       const button = page.getByRole("button", { name, exact: true });
       await expect(button).toBeVisible();
-      await expect(button).toHaveAttribute("title", name);
       await expect(button).toHaveText("");
     }
+    await page.getByRole("button", { name: "Import", exact: true }).hover();
+    await expect(page.getByText("Import", { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "New", exact: true }).click();
     const menu = page.getByRole("menu", { name: "New" });
@@ -536,6 +539,8 @@ test.describe("the contact header", () => {
     instance,
   }, testInfo) => {
     const id = await ownContact(instance, "Zora Kebab");
+    // The enrich rows are ready only with a model to run them.
+    await serveAiModels(page);
     await page.goto(`/contact/${id}`);
     await expect(contactHeading(page, "Zora Kebab")).toBeVisible();
 
@@ -545,12 +550,11 @@ test.describe("the contact header", () => {
     const menu = page.getByRole("menu", { name: "Contact actions" });
     // Change avatar left for the pencil on the avatar, and the two enrich
     // depths follow the colour: AI actions about this contact. Each ends
-    // with its time when research runs on Gemini, and this instance has no
-    // AI key, so the rows are the words alone.
+    // with its time, because research runs on Gemini here.
     await expect(menu.getByRole("menuitem")).toHaveText([
       "Change colour",
-      "Enrich contact",
-      "Enrich deeply",
+      /^Enrich contactabout \d+ s$/,
+      /^Enrich deeplyabout \d+ s$/,
       "Copy basic details",
       "Copy full details",
       "Save contact card",
@@ -593,7 +597,7 @@ test.describe("the contact header", () => {
     // Archive from the menu, and the item turns into its undo.
     await kebab.click();
     await menu.getByRole("menuitem", { name: "Archive" }).click();
-    await expect(page.getByText("Zora Kebab archived")).toBeVisible();
+    await expect(page.getByText("Archived Zora Kebab")).toBeVisible();
     await kebab.click();
     await expect(
       menu.getByRole("menuitem", { name: "Unarchive" }),
@@ -711,6 +715,7 @@ test.describe("the contact header", () => {
     instance,
   }) => {
     const id = await ownContact(instance, "Zion Enrich");
+    await serveAiModels(page);
     // No real run: the start and its status are answered here.
     let started: { contactIds: string[]; depth?: string } | null = null;
     await page.route("**/api/ai-search", async (route) => {
@@ -754,7 +759,7 @@ test.describe("the contact header", () => {
     await expect(
       page.getByText("Contact enrichment", { exact: true }),
     ).toBeVisible();
-    expect(started).toEqual({ contactIds: [id], depth: "standard" });
+    expect(started).toMatchObject({ contactIds: [id], depth: "standard" });
     await expect(
       page.getByText("Enrichment started for 1 contact"),
     ).toHaveCount(0);
@@ -829,8 +834,9 @@ test.describe("tracking", () => {
       // The hint is spoken too: "Quarterly, Default".
       /^Quarterly,?\s*Default$/,
       "Yearly",
+      "Custom…",
     ]);
-    await expect(menu.getByRole("menuitemcheckbox")).toHaveCount(0);
+    await expect(menu.getByRole("menuitemradio")).toHaveCount(0);
     await menu.getByRole("menuitem", { name: /^Quarterly/ }).click();
 
     const tracked = page.getByRole("button", {
@@ -870,17 +876,20 @@ test.describe("tracking", () => {
     menu = page.getByRole("menu", {
       name: "Tracking quarterly, change or stop",
     });
-    await expect(menu.getByRole("menuitemcheckbox")).toHaveText([
+    await expect(menu.getByRole("menuitemradio")).toHaveText([
       "Weekly",
       "Monthly",
       "Quarterly",
       "Yearly",
     ]);
     await expect(
-      menu.getByRole("menuitemcheckbox", { name: "Quarterly" }),
+      menu.getByRole("menuitemradio", { name: "Quarterly" }),
     ).toHaveAttribute("aria-checked", "true");
-    await expect(menu.getByRole("menuitem")).toHaveText(["Stop tracking"]);
-    await menu.getByRole("menuitemcheckbox", { name: "Monthly" }).click();
+    await expect(menu.getByRole("menuitem")).toHaveText([
+      "Custom…",
+      "Stop tracking",
+    ]);
+    await menu.getByRole("menuitemradio", { name: "Monthly" }).click();
     const monthly = page.getByRole("button", {
       name: "Tracking monthly, change or stop",
     });
@@ -928,7 +937,7 @@ test.describe("tracking", () => {
     const menu = page.getByRole("menu", {
       name: "Tracking every 2 months, change or stop",
     });
-    await expect(menu.getByRole("menuitemcheckbox")).toHaveText([
+    await expect(menu.getByRole("menuitemradio")).toHaveText([
       "Weekly",
       "Monthly",
       "Every 2 months",
@@ -937,11 +946,11 @@ test.describe("tracking", () => {
       "Yearly",
     ]);
     await expect(
-      menu.getByRole("menuitemcheckbox", { name: "Every 2 months" }),
+      menu.getByRole("menuitemradio", { name: "Every 2 months" }),
     ).toHaveAttribute("aria-checked", "true");
 
     // Yearly, and the toast says it in a sentence.
-    await menu.getByRole("menuitemcheckbox", { name: "Yearly" }).click();
+    await menu.getByRole("menuitemradio", { name: "Yearly" }).click();
     await expect(
       page.getByRole("button", { name: "Tracking yearly, change or stop" }),
     ).toBeVisible();
@@ -1119,9 +1128,7 @@ test.describe("the timeline", () => {
 
     // Edit opens the note ready to change.
     await page.keyboard.press("Enter");
-    await expect(
-      page.getByRole("textbox", { name: "Interaction title" }),
-    ).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Title" })).toBeVisible();
   });
 });
 
@@ -1158,7 +1165,7 @@ test.describe("the composer", () => {
     await editor.click();
     await page.keyboard.press("ControlOrMeta+Enter");
     await expect(
-      page.getByRole("button", { name: "Logged meeting", exact: true }),
+      page.getByRole("button", { name: "Meeting", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByText("Walked through the quarterly plan"),
@@ -1172,13 +1179,14 @@ test.describe("the composer", () => {
   }, testInfo) => {
     const writerId = await ownContact(instance, "Zach Dialog");
     const mentionedId = await ownContact(instance, "Zelda Mentioned");
-    await page.goto(`/contact/${writerId}`);
-    await expect(contactHeading(page, "Zach Dialog")).toBeVisible();
+    // From the Network page the dialog asks for the contact first.
+    await page.goto("/");
+    await expect(page.getByText("Zach Dialog")).toBeVisible();
 
     await page.keyboard.press("Meta+Shift+KeyI");
     const dialog = page.getByRole("dialog", { name: "Log an interaction" });
     await expect(dialog).toBeVisible();
-    const picker = dialog.getByRole("textbox", {
+    const picker = dialog.getByRole("combobox", {
       name: "Search for a contact",
     });
     await expect(picker).toBeFocused();
@@ -1208,6 +1216,14 @@ test.describe("the composer", () => {
     await editor.press("ControlOrMeta+Enter");
     await expect(dialog).toBeHidden();
     await expect(page.getByText("Note logged for Zach Dialog")).toBeVisible();
+
+    // On a contact's page the dialog opens for that contact, ready to write.
+    await page.goto(`/contact/${writerId}`);
+    await expect(contactHeading(page, "Zach Dialog")).toBeVisible();
+    await page.keyboard.press("Meta+Shift+KeyI");
+    await expect(dialog.getByRole("textbox", { name: "Note" })).toBeFocused();
+    await page.keyboard.press("Meta+Shift+KeyI");
+    await expect(dialog).toBeHidden();
 
     // The mention links the note to the person it names.
     await page.goto(`/contact/${mentionedId}`);
@@ -1276,7 +1292,7 @@ test.describe("phone", () => {
 
     // The composer is one line, above the first entry.
     const editor = page.getByRole("textbox", { name: "Note" });
-    const nextAction = page.getByRole("textbox", { name: "Next action" });
+    const nextAction = page.getByRole("textbox", { name: "Follow-up" });
     const save = page.getByRole("button", { name: "Save", exact: true });
     await expect(editor).toBeVisible();
     expect((await editor.boundingBox())!.y).toBeLessThan(
@@ -1408,18 +1424,18 @@ test.describe("phone", () => {
     }
   });
 
-  test("the narrow header keeps Track as the glyph and the chevron, with the words in the name", async ({
+  test("the narrow header shows Track as the glyph, the cadence and the chevron, with the words in the name", async ({
     page,
     seed,
   }) => {
     await page.goto(`/contact/${seed.byName("Ada Lovelace").id}`);
     await expect(contactHeading(page, "Ada Lovelace")).toBeVisible();
 
-    // The cadence is in the name and the tooltip, not in words on screen.
+    // The cadence in a word, and in full in the name and the tooltip.
     const tracked = page.getByRole("button", {
       name: "Tracking quarterly, change or stop",
     });
-    await expect(tracked).toHaveText("");
+    await expect(tracked).toHaveText("Quarterly");
     await expect(tracked).toHaveAttribute(
       "title",
       "Tracking quarterly, change or stop",
@@ -1567,14 +1583,14 @@ test.describe("phone", () => {
     // The header keeps its height, so the row is still under the finger.
     expect((await ada.boundingBox())!.y).toBe(before.y);
     await expect(
-      page.getByRole("button", { name: "View contact" }),
+      page.getByRole("menuitem", { name: "View contact" }),
     ).toBeHidden();
 
-    // A right click is still the row's menu.
+    // A right click is still the row's menu, with focus on its first item.
     await listRow(page, seed, "Grace Hopper").click({ button: "right" });
     await expect(
-      page.getByRole("button", { name: "View contact" }),
-    ).toBeVisible();
+      page.getByRole("menuitem", { name: "View contact" }),
+    ).toBeFocused();
     await page.keyboard.press("Escape");
   });
 

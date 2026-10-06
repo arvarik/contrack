@@ -27,6 +27,7 @@ import React, { useId } from "react";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { ADD_BUTTON, FIELD_LABEL } from "../../../lib/styles";
+import { withUndo } from "../../../lib/undoToast";
 
 /** The text of a value at rest: 14 px, medium weight, full contrast. */
 export const FIELD_VALUE = "text-sm font-medium text-on-surface";
@@ -77,17 +78,13 @@ export const Field = ({ label, children }: FieldProps) => {
 };
 
 /**
- * Offers "Undo" for 7 seconds after a value is removed.
+ * Offers "Undo" after a value is removed, for as long as every Undo in the
+ * app (`withUndo`).
  *
  * A remove saves at once and asks nothing first, so a slip of the thumb needs
- * a way back. Every remove in the card uses this one toast.
+ * a way back. Every remove on the contact page uses this one toast: a value
+ * in the card, a tag, a link, a list chip.
  */
 export const showUndoToast = (label: string, onUndo: () => void) => {
-  toast(label, {
-    duration: 7000,
-    action: {
-      label: "Undo",
-      onClick: onUndo,
-    },
-  });
+  toast(label, withUndo(onUndo));
 };

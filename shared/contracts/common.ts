@@ -127,19 +127,47 @@ export function queryInt(fallback: number, min: number, max: number) {
 // The child records of a contact body
 // =============================================================================
 
-const emailSchema = z.union([
-  z.string(),
+/**
+ * An email address in its plain shape: a name, an @, and a domain with a
+ * dot. Any text used to save, and the duplicate scan then matched people on
+ * "n/a". The domain's labels hold no dot, so the check takes one pass: with
+ * `[^\s@]+\.[^\s@]+` a long run of dots took minutes.
+ */
+const emailText = z
+  .string()
+  .trim()
+  .regex(
+    /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/,
+    "Enter an email address like name@example.com",
+  );
+
+/**
+ * A phone number: three digits or more, in any script. The rest is kept as
+ * written: a vCard 4 "tel:" link, an en dash, full-width digits and the
+ * invisible marks a phone's copy adds are all numbers people have, and an
+ * import dropped them.
+ */
+const phoneText = z
+  .string()
+  .trim()
+  .regex(
+    /^(?:\P{Nd}*\p{Nd}){3}/u,
+    "Enter a phone number with at least three digits",
+  );
+
+export const emailSchema = z.union([
+  emailText,
   z.object({
-    email: z.string().email().or(z.string().trim().min(1)),
+    email: emailText,
     label: z.string().nullable().optional(),
     isPrimary: stringToBool,
   }),
 ]);
 
-const phoneSchema = z.union([
-  z.string(),
+export const phoneSchema = z.union([
+  phoneText,
   z.object({
-    phone: z.string().trim().min(1),
+    phone: phoneText,
     label: z.string().nullable().optional(),
     isPrimary: stringToBool,
   }),

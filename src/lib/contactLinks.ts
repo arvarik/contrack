@@ -8,7 +8,7 @@
  *
  * @module lib/contactLinks
  */
-import { parseBirthday } from "./birthday";
+import { vcardBirthdayLine } from "../../shared/birthday";
 
 /** "x 123", "ext. 123" or "extension 123" at the end of a number. */
 const EXTENSION = /\s*(?:ext(?:ension)?\.?|x)\s*(\d+)\s*$/i;
@@ -152,24 +152,6 @@ function typeParam(types: (string | undefined)[], first: boolean): string {
   return list.length ? `;TYPE=${list.join(",")}` : "";
 }
 
-/** The year Apple's address books write for a birthday with no year. */
-const OMIT_YEAR = 1604;
-
-/**
- * The BDAY line: "BDAY:1990-05-14". vCard 3.0 has no date without a year,
- * and iCloud drops one, so a birthday with no year takes Apple's own form:
- * the year 1604, which the parameter says to leave out. Null for text that
- * is no date.
- */
-function birthdayLine(birthday: string): string | null {
-  const parsed = parseBirthday(birthday);
-  if (!parsed) return null;
-  const monthDay = `${String(parsed.month).padStart(2, "0")}-${String(parsed.day).padStart(2, "0")}`;
-  return parsed.year === null
-    ? `BDAY;X-APPLE-OMIT-YEAR=${OMIT_YEAR}:${OMIT_YEAR}-${monthDay}`
-    : `BDAY:${String(parsed.year).padStart(4, "0")}-${monthDay}`;
-}
-
 /**
  * A contact as a vCard 3.0 card, the version that iOS, Android and the
  * desktop address books all import.
@@ -233,7 +215,9 @@ export function buildVCard(contact: VCardSource): string {
     lines.push(`ADR${type}:;;${escapeText(address.trim())};;;;`);
   });
 
-  const birthday = contact.birthday ? birthdayLine(contact.birthday) : null;
+  const birthday = contact.birthday
+    ? vcardBirthdayLine(contact.birthday)
+    : null;
   if (birthday) lines.push(birthday);
   const urls = [
     contact.website,

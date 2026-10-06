@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   matchesFacet,
+  unknownFacetValue,
   type FacetContact,
 } from "../../../shared/searchFacets.ts";
 
@@ -332,5 +333,22 @@ describe("searchFacets matchesFacet", () => {
       expect(matchesFacet(never, filter)).toBe(false);
       expect(matchesFacet(recent, filter)).toBe(false);
     });
+  });
+});
+
+describe("unknownFacetValue", () => {
+  it("names the values a facet takes, only for a value it does not know", () => {
+    expect(unknownFacetValue({ field: "tracked", value: "maybe" })).toBe(
+      "yes or no",
+    );
+    expect(unknownFacetValue({ field: "tracked", value: "Yes" })).toBeNull();
+    expect(
+      unknownFacetValue({ field: "contacted", value: "never" }),
+    ).toBeNull();
+    expect(unknownFacetValue({ field: "updated", value: "soon" })).toBe(
+      "a time, such as >3m",
+    );
+    // A text facet takes any text.
+    expect(unknownFacetValue({ field: "company", value: "zz" })).toBeNull();
   });
 });

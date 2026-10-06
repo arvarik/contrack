@@ -17,6 +17,8 @@
 import { useRef } from "react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { RailTooltip } from "./RailTooltip";
 
 export interface SegmentedOption<T extends string | number> {
   value: T;
@@ -44,6 +46,7 @@ export const Segmented = <T extends string | number>({
   className?: string;
 }) => {
   const container = useRef<HTMLDivElement>(null);
+  const labelled = useMediaQuery("(min-width: 640px)");
 
   /**
    * Arrows move the selection, and take focus with it.
@@ -71,20 +74,21 @@ export const Segmented = <T extends string | number>({
   };
 
   return (
-    // Below `sm` each option is 44 px tall, the touch floor, so the trough
-    // grows around them. From `sm` the pointer look returns: a 36 px trough.
+    // On a touch screen each option is 44 px tall, the touch floor, so the
+    // trough grows around them. From `sm` with a mouse the pointer look
+    // returns: a 36 px trough.
     <div
       ref={container}
       role="radiogroup"
       aria-label={label}
       className={cn(
-        "flex bg-surface-container rounded-lg p-1 h-auto sm:h-9 w-full sm:w-auto",
+        "flex bg-surface-container rounded-lg p-1 h-auto sm:pointer-fine:h-9 w-full sm:w-auto",
         className,
       )}
     >
       {options.map((option) => {
         const Icon = option.icon;
-        return (
+        const button = (
           <button
             key={option.value}
             type="button"
@@ -96,11 +100,11 @@ export const Segmented = <T extends string | number>({
             onKeyDown={onKeyDown}
             onClick={() => onChange(option.value)}
             className={cn(
-              "flex-1 sm:flex-none px-3 sm:px-4 min-h-[44px] sm:min-h-0 sm:h-full rounded-md text-xs font-bold",
+              "flex-1 sm:flex-none px-3 sm:px-4 min-h-[44px] sm:pointer-fine:min-h-0 sm:pointer-fine:h-full rounded-md text-xs font-bold",
               "flex items-center justify-center whitespace-nowrap transition-colors",
               // A glyph alone is narrower than a thumb, so it gets the width
               // floor as well as the height.
-              Icon && "min-w-[44px] sm:min-w-0",
+              Icon && "min-w-[44px] sm:pointer-fine:min-w-0",
               // An option not chosen is a flat control in the trough: the
               // hover and press layer, like every flat control.
               value === option.value
@@ -117,6 +121,21 @@ export const Segmented = <T extends string | number>({
               option.label
             )}
           </button>
+        );
+        // Below `sm` a glyph stands alone, so a long press names it. From
+        // `sm` the label shows, and needs no tooltip.
+        return Icon ? (
+          <RailTooltip
+            key={option.value}
+            label={option.label}
+            side="bottom"
+            disabled={labelled}
+            className="flex-1 sm:flex-none"
+          >
+            {button}
+          </RailTooltip>
+        ) : (
+          button
         );
       })}
     </div>

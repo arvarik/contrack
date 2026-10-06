@@ -7,7 +7,8 @@
  *
  * Extracted from ContactProfile to keep each section focused and readable.
  */
-import React from "react";
+import React, { useState } from "react";
+import { CalendarCheck, CalendarClock } from "lucide-react";
 
 import type {
   Contact,
@@ -16,8 +17,16 @@ import type {
 } from "../../../types";
 import { cn } from "../../../lib/utils";
 import type { ResearchAnchor } from "../../../lib/research";
-import { formatWhen } from "../../../lib/datetime";
-import { CARD, SECTION_HEADING } from "../../../lib/styles";
+import { formatDue } from "../../../lib/datetime";
+import { toLocalDay } from "../../../../shared/pulse";
+import { useHiddenPendingIds } from "../../../lib/pendingDeletes";
+import {
+  useContactActionItems,
+  useUpdateActionItem,
+} from "../../../api/actionItems";
+import { useMarkFollowUpDone } from "../../../hooks/useMarkFollowUpDone";
+import { ActionMenu } from "../../../components/ui/ActionMenu";
+import { CARD, INLINE_INPUT, SECTION_HEADING } from "../../../lib/styles";
 
 import { LocationMiniMap } from "../../map/LocationMiniMap";
 import { IndustryField } from "./IndustryField";
@@ -114,10 +123,8 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
     label: text,
   }));
 
-  const addPreference = (text: string) => {
-    // "Tea, Jazz" is two preferences, and a comma inside one would split it
-    // on the next read anyway.
-    const next = splitPreferences([...preferences, text].join(","));
+  const addPreferences = (texts: string[]) => {
+    const next = splitPreferences([...preferences, ...texts].join(","));
     if (next.length === preferences.length) return;
     onUpdate("preferences", next.join(", "));
   };
@@ -143,10 +150,15 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
   const saveInterests = (next: ContactUpdateData["interests"]) =>
     updateContact({ id: contactId, data: { interests: next } });
 
-  const addInterest = (text: string) =>
+  const addInterests = (texts: string[]) =>
     saveInterests([
       ...interests,
-      { id: Math.random().toString(), interest: text, isAiGenerated: false },
+      ...texts.map((interest) => ({
+        // Not `crypto.randomUUID`: plain HTTP on a LAN has no secure context.
+        id: Math.random().toString(),
+        interest,
+        isAiGenerated: false,
+      })),
     ]);
 
   const removeInterest = (chip: Chip) => {
@@ -271,7 +283,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
       <Field label="Preferences">
         <ChipInput
           chips={preferenceChips}
-          onAdd={addPreference}
+          onAdd={addPreferences}
           onRemove={removePreference}
           noun="preference"
         />
@@ -280,20 +292,91 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
       <Field label="Interests">
         <ChipInput
           chips={interestChips}
-          onAdd={addInterest}
+          onAdd={addInterests}
           onRemove={removeInterest}
           noun="interest"
         />
       </Field>
 
-      {contact.nextFollowUpAt && (
-        <Field label="Next follow-up">
-          <span className={FIELD_VALUE}>
-            {formatWhen(contact.nextFollowUpAt)}
-          </span>
-        </Field>
-      )}
+      {contact.nextFollowUpAt && <NextFollowUp contactId={contactId} />}
     </div>
+  );
+};
+
+/**
+ * The next follow-up, and the way to fix it here: a new date, or done.
+ * It was read-only, so a wrong date (a weekday read as last week's) could
+ * be fixed only on Pulse. A date that only says a day showed "12:00 AM".
+ */
+const NextFollowUp = ({ contactId }: { contactId: string }) => {
+  const { data: items = [] } = useContactActionItems(contactId);
+  const done = useHiddenPendingIds();
+  const update = useUpdateActionItem();
+  const markDone = useMarkFollowUpDone();
+  const [editing, setEditing] = useState(false);
+  const next = items.find((item) => !item.completedAt && !done.has(item.id));
+  if (!next) return null;
+
+  // The local day: the UTC one is the next day on an evening in America.
+  const dueDay = toLocalDay(next.dueAt);
+
+  /** A new calendar day, from the field. Unchanged or empty saves nothing. */
+  const saveDate = (day: string) => {
+    setEditing(false);
+    if (day && day !== dueDay) {
+      update.mutate({ id: next.id, data: { dueAt: day } });
+    }
+  };
+
+  return (
+    <Field label="Next follow-up">
+      {editing ? (
+        <input
+          type="date"
+          aria-label={`New date for ${next.title}`}
+          // Opened by Change date.
+          // eslint-disable-next-line jsx-a11y/no-autofocus
+          autoFocus
+          defaultValue={dueDay}
+          // Saves on Enter or when focus leaves: a date field sends a change
+          // for each part typed.
+          onBlur={(e) => saveDate(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+            if (e.key === "Escape") {
+              e.preventDefault();
+              e.stopPropagation();
+              setEditing(false);
+            }
+          }}
+          className={cn(INLINE_INPUT, "w-fit")}
+        />
+      ) : (
+        <div className="flex items-center gap-1 min-w-0">
+          <span className={cn(FIELD_VALUE, "min-w-0 break-words")}>
+            {next.title} · {formatDue(next.dueAt)}
+          </span>
+          <ActionMenu
+            label={`Change follow-up: ${next.title}`}
+            iconClassName="w-4 h-4"
+            items={[
+              {
+                id: "date",
+                label: "Change date",
+                icon: CalendarClock,
+                onSelect: () => setEditing(true),
+              },
+              {
+                id: "done",
+                label: "Mark done",
+                icon: CalendarCheck,
+                onSelect: () => markDone(next.id),
+              },
+            ]}
+          />
+        </div>
+      )}
+    </Field>
   );
 };
 

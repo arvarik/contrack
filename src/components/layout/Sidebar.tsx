@@ -14,19 +14,21 @@
  */
 import { Link, useLocation } from "react-router-dom";
 import {
-  LayoutDashboard,
+  Users,
   Map,
   Settings as SettingsIcon,
   Sparkles,
   Activity,
   Keyboard,
+  Command,
 } from "lucide-react";
 import { useCallback } from "react";
 import { navLink, SECTION_BG } from "../../lib/styles";
 import { cn } from "../../lib/utils";
-import { useUrgentActionItemCount, useDedupeCount } from "../../api";
+import { useUrgentActionItemCount } from "../../api";
 import { useRecent } from "../../contexts/SessionContext";
-import { openKeyboardShortcuts } from "../../lib/appEvents";
+import { openCommandPalette, openKeyboardShortcuts } from "../../lib/appEvents";
+import { chordLabel, MOD_KEY } from "../../lib/platform";
 import { SidebarIdentity } from "../auth/AccountIdentity";
 import { CorvidMark } from "../brand/CorvidMark";
 import { perchProps } from "../brand/CorvidFlight";
@@ -136,27 +138,19 @@ export const Sidebar = () => {
   const { data: badge } = useUrgentActionItemCount();
   const urgentCount = badge?.count || 0;
 
-  const { data: dedupeCount } = useDedupeCount();
-  const pendingSuggestions = dedupeCount?.count || 0;
-
   /**
-   * The badges are `aria-hidden` graphics, so whatever they convey has to be
-   * said in the link's accessible name instead — otherwise a screen-reader
-   * user gets "Pulse" and no hint that anything is waiting. The name and the
-   * counts join with a comma, which a screen reader reads as a short pause.
+   * The dot is an `aria-hidden` graphic, so what it says is in the link's
+   * accessible name too: otherwise a screen-reader user gets "Pulse" and no
+   * hint that anything is due. A comma reads as a short pause.
    */
-  const pulseBadges = [
+  const urgent =
     urgentCount > 0 &&
-      `${urgentCount} urgent follow-up${urgentCount === 1 ? "" : "s"}`,
-    pendingSuggestions > 0 &&
-      `${pendingSuggestions} possible duplicate${pendingSuggestions === 1 ? "" : "s"}`,
-  ].filter(Boolean) as string[];
-
-  const pulseLabel = pulseBadges.length
-    ? `${NAMES.pulse.label}, ${pulseBadges.join(", ")}`
+    `${urgentCount} urgent follow-up${urgentCount === 1 ? "" : "s"}`;
+  const pulseLabel = urgent
+    ? `${NAMES.pulse.label}, ${urgent}`
     : NAMES.pulse.label;
-  const pulseTooltip = pulseBadges.length
-    ? `${NAMES.pulse.label} · ${pulseBadges.join(" · ")}`
+  const pulseTooltip = urgent
+    ? `${NAMES.pulse.label} · ${urgent}`
     : NAMES.pulse.label;
 
   const networkTo =
@@ -168,10 +162,11 @@ export const Sidebar = () => {
         SECTION_BG,
         // The height its parent leaves, which pads for the status bar, and
         // a scroll of its own on a short touch screen: a phone on its side
-        // is 393 px tall, and Settings sat below it. Only there, since a
-        // scroll box clips the labels that stand out to its right, and a
-        // short laptop window needs them.
-        "w-16 h-full min-h-0 [@media(max-height:40rem)_and_(pointer:coarse)]:overflow-y-auto scrollbar-hide hidden md:flex flex-col items-center pt-6 pb-3 gap-6 shrink-0 relative z-20",
+        // is 393 px tall. Only there, since a scroll box clips the labels
+        // that stand out to its right, and a short laptop window needs them.
+        // There the rail packs tight too, so Settings is on screen and not
+        // below a fold that nothing marks.
+        "w-16 h-full min-h-0 [@media(max-height:40rem)_and_(pointer:coarse)]:overflow-y-auto [@media(max-height:30rem)]:gap-1 [@media(max-height:30rem)]:pt-2 [@media(max-height:30rem)]:pb-1 scrollbar-hide hidden md:flex flex-col items-center pt-6 pb-3 gap-6 shrink-0 relative z-20",
       )}
     >
       {/*
@@ -202,7 +197,7 @@ export const Sidebar = () => {
           className={navLink(isHome)}
           aria-label={NAMES.network.label}
         >
-          <LayoutDashboard className="w-6 h-6" />
+          <Users className="w-6 h-6" />
         </Link>
       </RailTooltip>
 
@@ -221,19 +216,12 @@ export const Sidebar = () => {
             <Activity className="w-6 h-6" />
 
             {/*
-              Two different signals, so two different treatments.
-
-              Urgent follow-ups are about *time* — something is due — so they
-              keep the pinging red dot. A count would invite comparison
-              ("only 3") when the point is that any number above zero needs
-              attention today.
-
-              Pending duplicates are about *volume*: clearing 3 is a coffee
-              break and clearing 180 is an afternoon, and a dot renders those
-              identically. So that one carries the number.
-
-              They sit on opposite corners rather than side by side, because a
-              numeric pill next to a dot on a 24px icon reads as one smudge.
+              Urgent follow-ups are about time, so a dot and not a count: a
+              count invites comparison ("only 3") when any number above zero
+              needs attention today. The icon used to carry the number of
+              possible duplicates too, on the other corner, and the two read
+              as one smudge. Duplicates show their count where they are
+              decided: Pulse's inbox, Settings and the palette.
             */}
             {urgentCount > 0 && (
               <span
@@ -246,24 +234,6 @@ export const Sidebar = () => {
             )}
           </Link>
         </RailTooltip>
-
-        {/* A picture on the Pulse link, not a link of its own: an 18 px
-            link on top of the Pulse link was a target a finger missed and
-            axe refused (target-size). The Pulse link says the count, and
-            Pulse's inbox opens Possible duplicates. */}
-        {pendingSuggestions > 0 && (
-          <span
-            aria-hidden="true"
-            className={cn(
-              "absolute -top-0.5 -left-0.5 min-w-[18px] h-[18px] px-1 z-10 pointer-events-none",
-              "flex items-center justify-center rounded-full",
-              "bg-primary text-on-primary text-[11px] font-bold leading-none",
-              "tabular-nums ring-2 ring-surface-container",
-            )}
-          >
-            {pendingSuggestions > 99 ? "99+" : pendingSuggestions}
-          </span>
-        )}
       </div>
 
       <RailTooltip
@@ -316,7 +286,22 @@ export const Sidebar = () => {
       <div className="flex flex-col items-center gap-2 w-full">
         {/* Not on a device with no mouse or trackpad, such as a tablet on its
             own: there is no keyboard to use the shortcuts with. */}
-        <div className="[@media(not_(any-pointer:fine))]:hidden">
+        <div className="[@media(not_(any-pointer:fine))]:hidden flex flex-col items-center gap-2">
+          {/* The palette for a mouse. A touch screen has it in each page's
+              header (`PaletteButton`). */}
+          <RailTooltip
+            label="Command palette"
+            shortcut={chordLabel([MOD_KEY, "K"])}
+          >
+            <button
+              type="button"
+              onClick={openCommandPalette}
+              className={navLink(false)}
+              aria-label="Command palette"
+            >
+              <Command className="w-6 h-6" />
+            </button>
+          </RailTooltip>
           <RailTooltip label="Keyboard shortcuts" shortcut="?">
             <button
               type="button"

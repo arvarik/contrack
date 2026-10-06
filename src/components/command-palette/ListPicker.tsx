@@ -67,7 +67,7 @@ export const ListPicker: React.FC<ListPickerProps> = ({
         }
       } catch (err: unknown) {
         toast.error(
-          `Failed: ${err instanceof Error ? err.message : String(err)}`,
+          `Could not change the list: ${err instanceof Error ? err.message : String(err)}`,
         );
       } finally {
         setPendingListId(null);

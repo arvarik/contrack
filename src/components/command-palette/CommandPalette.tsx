@@ -34,10 +34,12 @@ import { CLOSE_PALETTE_EVENT, OPEN_PALETTE_EVENT } from "../../lib/appEvents";
 import type { SemanticMatch, ZeroStateInsight } from "../../types";
 import { formatFacet } from "../../../shared/facetQuery";
 import { getMode, insightPath, looksLikeQuestion } from "./utils";
-import { AiMode, useAiSetup } from "./AiMode";
+import { AiMode } from "./AiMode";
+import { useAiSetup } from "../../hooks/useAiSetup";
 import { NAV_ITEMS, ZeroStateView } from "./ZeroStateView";
 import { LogMode } from "./LogMode";
-import { LOG_TITLES, parseLogInput, type LogKind } from "./actionMode";
+import { parseLogInput, type LogKind } from "./actionMode";
+import { INTERACTION_LABELS } from "../../lib/interactionKinds";
 import { InlineNoteComposer } from "./InlineNoteComposer";
 import { PaletteFooter, enterActionFor } from "./PaletteFooter";
 import { PeopleMode } from "./PeopleMode";
@@ -167,7 +169,7 @@ export const CommandPalette = () => {
   const { addEntry } = searchHistory;
 
   // Why AI cannot answer, while the palette is in `?` mode.
-  const aiSetup = useAiSetup(open && mode === "ai", aiAllowed);
+  const aiSetup = useAiSetup("ask", open && mode === "ai");
 
   // ── Shift-to-peek state ──
   const [peekVisible, setPeekVisible] = useState(false);
@@ -494,7 +496,7 @@ export const CommandPalette = () => {
       toast.success(`Created contact ${newContact.name}`);
     } catch (e: unknown) {
       toast.error(
-        `Failed to create contact: ${e instanceof Error ? e.message : String(e)}`,
+        `Could not create the contact: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
   };
@@ -514,7 +516,7 @@ export const CommandPalette = () => {
         contactId: contact.id,
         data: {
           type: kind,
-          title: LOG_TITLES[kind],
+          title: INTERACTION_LABELS[kind],
           content: text,
           date: new Date().toISOString(),
         },
@@ -525,7 +527,7 @@ export const CommandPalette = () => {
       toast.success(`Logged ${kind} for ${contact.name}`);
     } catch (e: unknown) {
       toast.error(
-        `Failed to log interaction: ${e instanceof Error ? e.message : String(e)}`,
+        `Could not log the interaction: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
   };
@@ -1079,6 +1081,9 @@ export const CommandPalette = () => {
                       // The palette exists to be typed into the instant it opens.
                       // eslint-disable-next-line jsx-a11y/no-autofocus
                       autoFocus
+                      // cmdk turns spell check and auto-correct off. A
+                      // phone would still capitalize "tag:" into "Tag:".
+                      autoCapitalize="off"
                       // Short, so a phone shows it whole. The mode chips
                       // under it name `?` and `>`.
                       placeholder={

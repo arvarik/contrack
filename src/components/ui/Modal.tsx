@@ -1,12 +1,18 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import {
+  type ButtonHTMLAttributes,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type RefObject,
+  type Ref,
+  useEffect,
   useRef,
+  useSyncExternalStore,
 } from "react";
 import { useCloseRequest } from "../../hooks/useCloseRequest";
+import { IconButton } from "./IconButton";
+import { cn } from "../../lib/utils";
 
 const SIZE_MAP = {
   sm: "sm:max-w-sm",
@@ -16,6 +22,59 @@ const SIZE_MAP = {
   "2xl": "sm:max-w-5xl",
   full: "sm:max-w-[min(95vw,1280px)]",
 };
+
+/** A field a person types in: where focus goes when a dialog opens. */
+const FIRST_FIELD = [
+  'input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([tabindex="-1"]):not(:disabled)',
+  "textarea:not(:disabled)",
+  '[contenteditable="true"]',
+].join(", ");
+
+/** How many dialogs are open, for `useDialogOpen`. */
+let openDialogs = 0;
+const dialogListeners = new Set<() => void>();
+const subscribeDialogs = (listener: () => void) => {
+  dialogListeners.add(listener);
+  return () => dialogListeners.delete(listener);
+};
+const countDialogs = (step: number) => {
+  openDialogs += step;
+  for (const listener of dialogListeners) listener();
+};
+
+/**
+ * Whether any `Modal` is open. On a phone the app moves its toasts to the
+ * top while one is: a toast at the foot covered a sheet's Save row.
+ */
+export function useDialogOpen(): boolean {
+  return useSyncExternalStore(
+    subscribeDialogs,
+    () => openDialogs > 0,
+    () => false,
+  );
+}
+
+/**
+ * A dialog's X: one look and one name in every dialog. `Modal` draws it in
+ * its title bar, and a dialog with a header of its own (`ariaLabel`) puts
+ * it at the end of that header.
+ */
+export const DialogCloseButton = ({
+  ref,
+  ...props
+}: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & {
+  ref?: Ref<HTMLButtonElement>;
+}) => (
+  <IconButton
+    ref={ref}
+    aria-label="Close dialog"
+    tone="subtle"
+    {...props}
+    className={cn("-mr-2 shrink-0", props.className)}
+  >
+    <X aria-hidden="true" className="w-5 h-5" />
+  </IconButton>
+);
 
 /** A drag down this far, or this fast, closes the sheet. */
 const CLOSE_DISTANCE = 96;
@@ -64,11 +123,15 @@ export function Modal({
   returnFocusRef,
 }: ModalProps) {
   const previousFocus = useRef<HTMLElement | null>(null);
-  const closeButton = useRef<HTMLButtonElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const drag = useRef<{ y: number; at: number; dy: number } | null>(null);
 
   useCloseRequest(isOpen, onClose);
+  useEffect(() => {
+    if (!isOpen) return;
+    countDialogs(1);
+    return () => countDialogs(-1);
+  }, [isOpen]);
 
   // Where focus was before this opened, captured during the render that opens
   // it rather than in `onOpenAutoFocus`.
@@ -161,10 +224,15 @@ export function Modal({
           // title stays clear of it.
           className={`sheet fixed ${position} ${SIZE_MAP[size]} glass-panel shadow-2xl z-[201] flex flex-col max-h-[calc(100dvh-max(2rem,env(safe-area-inset-top)+0.5rem)-var(--keyboard-inset,0px)-var(--viewport-offset,0px))] overflow-hidden outline-none modal-fade`}
           onOpenAutoFocus={(event) => {
+            // Never the X: a space typed into what looked like the first
+            // field pressed it and closed the dialog. With a keyboard the
+            // first text field takes focus. On a touch screen the dialog
+            // itself does, so the on-screen keyboard does not cover it.
             event.preventDefault();
-            (closeButton.current ?? content.current)?.focus({
-              preventScroll: true,
-            });
+            const field = window.matchMedia?.("(pointer: fine)").matches
+              ? content.current?.querySelector<HTMLElement>(FIRST_FIELD)
+              : null;
+            (field ?? content.current)?.focus({ preventScroll: true });
           }}
           onCloseAutoFocus={(event) => {
             // Only take over when there is somewhere to put focus. Preventing
@@ -194,12 +262,8 @@ export function Modal({
               <Dialog.Title className="text-lg sm:text-xl font-bold font-headline">
                 {title}
               </Dialog.Title>
-              <Dialog.Close
-                ref={closeButton}
-                className="state-layer -mr-2 inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg transition-colors"
-                aria-label="Close dialog"
-              >
-                <X className="w-5 h-5" />
+              <Dialog.Close asChild>
+                <DialogCloseButton />
               </Dialog.Close>
             </div>
           ) : (

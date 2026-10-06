@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { cn } from "../../../lib/utils";
+import { AddButton } from "./Field";
 import { Combobox } from "../../../components/ui/Combobox";
 import { EditHint } from "./EditableField";
 
@@ -78,9 +78,22 @@ export const IndustryField = ({
       </div>
     );
   }
+  // The card's one "+ Add" look, as under every other empty field.
+  if (!value) {
+    return (
+      <AddButton
+        ref={button}
+        label="Add industry"
+        onClick={() => {
+          setIsEditing(true);
+          setTempVal("");
+        }}
+      />
+    );
+  }
   return (
     // 44 px tall on a phone, so the row gives the value's tap box room.
-    <div className="flex items-center min-h-[44px] sm:min-h-0">
+    <div className="flex items-center min-h-[44px] sm:pointer-fine:min-h-0">
       {/* A real button: Enter and Space open the editor with no key handler,
           and `group/edit` shows the pencil on keyboard focus. hit-area: a
           short value such as "Law" is narrower than a thumb. */}
@@ -91,19 +104,9 @@ export const IndustryField = ({
           setIsEditing(true);
           setTempVal(value || "");
         }}
-        className={cn(
-          "group/edit hit-area state-layer inline-flex w-fit max-w-full items-center gap-1.5 rounded text-left text-sm font-medium cursor-pointer transition-colors",
-          // Italic and the muted token, NOT opacity. Half-opacity text is half
-          // the contrast: this placeholder measured 2.86:1 on a white card, and
-          // a prompt somebody is meant to read and click is content rather than
-          // decoration. The browser audit found it on the contact detail route
-          // the first time that route was reachable.
-          value ? "text-on-surface" : "italic text-on-surface-variant",
-        )}
+        className="group/edit hit-area state-layer inline-flex w-fit max-w-full items-center gap-1.5 rounded text-left text-sm font-medium cursor-pointer transition-colors text-on-surface"
       >
-        <span className="min-w-0 whitespace-pre-wrap break-words">
-          {value || "Add industry"}
-        </span>
+        <span className="min-w-0 whitespace-pre-wrap break-words">{value}</span>
         <EditHint />
       </button>
     </div>

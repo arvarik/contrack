@@ -101,6 +101,13 @@ with an empty `DATA_DIR`.
   them, and Save stays above the keyboard while the tab bar steps aside.
   The app keeps clear of the status bar and a side cutout, and a contact
   opens without its timeline jumping.
+- "Follow up Friday" always means the next Friday, a follow-up alone no
+  longer counts as talking to someone, a birthday with no year keeps none,
+  and email and phone fields refuse text that is not an address or a number.
+- Dialogs open on their first field, keys wait while a dialog or a menu is
+  open, the page scrolls from the keyboard after a click, touch screens keep
+  44 px controls at every width, and an unknown address says "Page not
+  found".
 
 ### AI and research
 

@@ -88,11 +88,12 @@ describe("every surface uses the same name", () => {
   it("the sidebar links carry the same names", () => {
     render(createElement(MemoryRouter, null, createElement(Sidebar)));
 
-    // Exact names. The Pulse link adds its counts after a comma, because the
-    // badges are hidden from assistive tech and the name has to say them.
+    // Exact names. The Pulse link adds its count after a comma, because the
+    // dot is hidden from assistive tech and the name has to say it. Possible
+    // duplicates show their count where they are decided, not on the icon.
     for (const name of [
       NAMES.network.label,
-      `${NAMES.pulse.label}, 2 urgent follow-ups, 1 possible duplicate`,
+      `${NAMES.pulse.label}, 2 urgent follow-ups`,
       NAMES.map.label,
       NAMES.ask.label,
       NAMES.settings.label,

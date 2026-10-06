@@ -11,7 +11,7 @@
  *   </RouteErrorBoundary>
  */
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import { AlertCircle, CloudOff, RotateCcw } from "lucide-react";
+import { AlertCircle, CloudOff, RefreshCw, RotateCcw } from "lucide-react";
 import { TONE_WASH } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
@@ -99,12 +99,12 @@ export class RouteErrorBoundary extends Component<Props, State> {
               )}
             </div>
             <h2 className="text-lg font-bold font-headline">
-              {isChunk ? "Couldn't load this page" : "Something went wrong"}
+              {isChunk ? "Could not load this page" : "Something went wrong"}
             </h2>
             <p className="text-sm text-on-surface-variant leading-relaxed">
               {isChunk
-                ? "Contrack couldn't download the rest of the app — the server may be restarting. Your data is safe"
-                : "This view crashed unexpectedly. The rest of the app is still working — you can retry or navigate elsewhere"}
+                ? "Contrack could not download the rest of the app. The server may be restarting. Your data is safe"
+                : "This page hit an error. The rest of Contrack still works, so retry or go to another page"}
             </p>
             {/*
               The raw message helps on a real crash and only confuses on a
@@ -120,8 +120,13 @@ export class RouteErrorBoundary extends Component<Props, State> {
               onClick={isChunk ? this.handleReload : this.handleRetry}
               className="btn-primary"
             >
-              <RotateCcw className="w-4 h-4" />
-              {isChunk ? "Reload" : "Retry"}
+              {/* A reload in the app-wide error screen's words and glyph. */}
+              {isChunk ? (
+                <RefreshCw aria-hidden="true" className="w-4 h-4" />
+              ) : (
+                <RotateCcw aria-hidden="true" className="w-4 h-4" />
+              )}
+              {isChunk ? "Reload the page" : "Retry"}
             </button>
           </div>
         </div>

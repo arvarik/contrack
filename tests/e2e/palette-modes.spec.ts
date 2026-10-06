@@ -58,12 +58,12 @@ test("a Settings page comes up by a word it is known by, not before", async ({
   const palette = await openPalette(page);
   await expect(palette.getByText("Go to")).toBeVisible();
   await expect(
-    palette.getByRole("option", { name: /^Settings: / }),
+    palette.getByRole("option", { name: /^Settings → / }),
   ).toHaveCount(0);
 
   await page.keyboard.type("backup");
   await expect(
-    palette.getByRole("option", { name: /^Settings: / }).first(),
+    palette.getByRole("option", { name: /^Settings → / }).first(),
   ).toBeVisible();
 });
 
@@ -293,7 +293,7 @@ test("Settings pages come up after the word settings", async ({ page }) => {
   const palette = await openPalette(page);
   await page.keyboard.type("settings privacy");
   await expect(
-    palette.getByRole("option", { name: "Settings: Privacy and AI" }),
+    palette.getByRole("option", { name: "Settings → Privacy and AI" }),
   ).toBeVisible();
 });
 

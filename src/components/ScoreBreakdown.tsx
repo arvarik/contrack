@@ -18,6 +18,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Info, Loader2 } from "lucide-react";
 import { apiFetch } from "../api/client";
 import { usePanelPlacement } from "../hooks/usePanelPlacement";
+import { useCloseRequest } from "../hooks/useCloseRequest";
 import { cn } from "../lib/utils";
 
 interface ScoreComponent {
@@ -135,6 +136,7 @@ export const ScoreBreakdown = ({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const close = useCallback(() => setOpen(false), []);
+  useCloseRequest(open, close);
 
   const breakdown = useQuery({
     queryKey: ["contacts", contactId, "score"],

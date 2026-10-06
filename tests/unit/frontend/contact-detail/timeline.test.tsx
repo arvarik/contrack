@@ -41,10 +41,11 @@ vi.mock("sonner", () => ({ toast: toastMock }));
 // timeline.
 const completeActionItem = vi.hoisted(() => vi.fn());
 vi.mock("../../../../src/api", () => ({
-  useCompleteActionItem: () => ({ mutate: completeActionItem }),
+  useCompleteActionItem: () => ({ mutateAsync: completeActionItem }),
 }));
 
-// The real composer is tiptap. The timeline only needs to know what it passes.
+// The real composer and note editor are tiptap. The timeline only needs to
+// know what it passes.
 vi.mock("../../../../src/components/InteractionComposer", async () => {
   const { createElement } = await import("react");
   return {
@@ -52,6 +53,19 @@ vi.mock("../../../../src/components/InteractionComposer", async () => {
       createElement("div", {
         "data-testid": "composer",
         "data-collapsible": String(collapsible),
+      }),
+    NoteEditor: ({
+      html,
+      onChange,
+    }: {
+      html: string;
+      onChange: (html: string) => void;
+    }) =>
+      createElement("textarea", {
+        "aria-label": "Note",
+        value: html,
+        onChange: (e: { target: { value: string } }) =>
+          onChange(e.target.value),
       }),
   };
 });
@@ -65,6 +79,7 @@ import {
   resetPendingDeletes,
 } from "../../../../src/lib/pendingDeletes";
 import type { Interaction } from "../../../../src/types";
+import { formatDue } from "../../../../src/lib/datetime";
 
 /** An ISO instant for a local date and hour, so no test depends on the zone. */
 const at = (year: number, month: number, day: number, hour = 12) =>
@@ -145,8 +160,9 @@ function makeProps(overrides: Partial<TimelineTabProps> = {}) {
     isDragActive: false,
     getRootProps: () => ({}),
     getInputProps: () => ({}),
+    onAttach: vi.fn(),
     deleteInteraction: vi.fn(() => Promise.resolve({ success: true })),
-    updateInteraction: vi.fn(),
+    updateInteraction: vi.fn(() => Promise.resolve({})),
     promoteGhost: vi.fn(),
     ...overrides,
   } satisfies TimelineTabProps;
@@ -271,7 +287,7 @@ describe("the groups", () => {
     expect(aug.getByRole("link", { name: /deck\.pdf/ })).toBeTruthy();
     expect(within(entry("sqlite")!).getByAltText("photo.png")).toBeTruthy();
 
-    fireEvent.click(aug.getByTitle("Promote Grace to contact"));
+    fireEvent.click(aug.getByTitle("Add Grace to Network"));
     expect(props.promoteGhost).toHaveBeenCalledWith("g1", expect.any(Object));
     const [, options] = vi.mocked(props.promoteGhost).mock.calls[0];
     act(() => options?.onSuccess?.());
@@ -293,35 +309,46 @@ describe("an entry", () => {
     expect(
       screen.getByRole("heading", { level: 2, name: "Call with Ada" }),
     ).toBeTruthy();
-    expect(screen.queryByRole("textbox", { name: "Interaction title" })).toBe(
-      null,
-    );
+    expect(screen.getByRole("dialog", { name: "Call with Ada" })).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: "Title" })).toBe(null);
     // Date and time, from the one formatter.
     expect(screen.getByText(/Sep 15, 2026/)).toBeTruthy();
 
-    // The modal's own Edit switches to the fields in place.
+    // The modal's own Edit switches to the note editor in place.
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    const notes = screen.getByRole("textbox", { name: "Interaction content" });
+    const notes = await screen.findByRole("textbox", { name: "Note" });
     fireEvent.change(notes, { target: { value: "Agreed on dates" } });
-    expect((notes as HTMLTextAreaElement).value).toBe("Agreed on dates");
 
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
-    expect(
-      screen.queryByRole("heading", { level: 2, name: "Call with Ada" }),
-    ).toBeNull();
+    // A close with unsaved changes asks first, and keeps the edit.
+    fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
+    expect(screen.getByRole("alert").textContent).toBe("Discard your changes?");
+    expect((notes as HTMLTextAreaElement).value).toBe("Agreed on dates");
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("heading", { level: 2, name: "Call with Ada" }),
+      ).toBeNull(),
+    );
   });
 
-  it("completes a follow-up from the modal and shows its due day", async () => {
+  it("marks a follow-up done with Undo, and sends nothing until Undo is gone", async () => {
     await mount();
     fireEvent.click(screen.getByRole("button", { name: "Coffee in August" }));
-    expect(screen.getByText("Due Sep 20, 2026")).toBeTruthy();
-    const followUp = screen.getByRole("button", {
-      name: "Complete follow-up: Send deck",
-    });
-    fireEvent.click(followUp);
-    fireEvent.keyDown(followUp, { key: "Enter" });
-    expect(completeActionItem).toHaveBeenCalledTimes(2);
-    expect(completeActionItem).toHaveBeenCalledWith("a1");
+    // The weekday too, as the composer and Details say a due date.
+    expect(screen.getByText(`Due ${formatDue(at(2026, 9, 20))}`)).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Mark done: Send deck" }),
+    );
+    expect(toastMock.success).toHaveBeenCalledWith(
+      "Follow-up done",
+      expect.objectContaining({
+        action: expect.objectContaining({ label: "Undo" }),
+      }),
+    );
+    expect(
+      screen.getByRole("button", { name: "Send deck, done" }),
+    ).toHaveProperty("disabled", true);
+    expect(completeActionItem).not.toHaveBeenCalled();
   });
 
   it("has a kebab with Edit then Delete, hidden at rest but never removed", async () => {
@@ -353,7 +380,7 @@ describe("an entry", () => {
   it("opens the modal in edit mode from Edit, and saves the change", async () => {
     const { props } = await mount();
     chooseAction("Coffee in August", "Edit");
-    const field = screen.getByRole("textbox", { name: "Interaction title" });
+    const field = screen.getByRole("textbox", { name: "Title" });
     expect((field as HTMLInputElement).value).toBe("Coffee in August");
 
     fireEvent.change(field, { target: { value: "Coffee with Alan" } });
@@ -530,21 +557,15 @@ describe("delete", () => {
     fireEvent.click(screen.getByRole("button", { name: "Call with Ada" }));
     const remove = screen.getByRole("button", { name: "Delete" });
     expect(remove.className).not.toContain("text-error");
+    remove.focus();
     fireEvent.click(remove);
 
-    expect(
-      screen.queryByRole("heading", { level: 2, name: "Call with Ada" }),
-    ).toBeNull();
     const dialog = screen.getByRole("dialog", {
       name: "Delete this interaction?",
     });
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    // Cancel gives focus back to the entry the modal was opened from.
-    await waitFor(() =>
-      expect(document.activeElement).toBe(
-        screen.getByRole("button", { name: "Call with Ada" }),
-      ),
-    );
+    // The confirmation opens over the note, and Cancel goes back to it.
+    await waitFor(() => expect(document.activeElement).toBe(remove));
     expect(entry("call")).not.toBeNull();
     expect(props.deleteInteraction).not.toHaveBeenCalled();
   });
@@ -592,7 +613,7 @@ describe("the tab", () => {
 
   it("says it is loading instead of showing the empty state", async () => {
     await mount({ timeline: [], timelineLoading: true });
-    expect(screen.getByText("Loading timeline...")).toBeTruthy();
+    expect(screen.getByText("Loading timeline…")).toBeTruthy();
     expect(screen.queryByText("No interactions yet")).toBeNull();
   });
 

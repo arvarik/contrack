@@ -55,6 +55,9 @@ export type CadenceDays = (typeof CADENCE_DAYS)[number];
 /** The cadence a new account starts with. */
 export const DEFAULT_CADENCE_DAYS: CadenceDays = 90;
 
+/** The longest cadence a contact may have: ten years. */
+export const MAX_CADENCE_DAYS = 3650;
+
 export function isCadenceDays(value: unknown): value is CadenceDays {
   return (
     typeof value === "number" &&

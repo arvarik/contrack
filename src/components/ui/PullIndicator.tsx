@@ -37,10 +37,12 @@ export const PullIndicator = ({
               ? { duration: 0.8, repeat: Infinity, ease: "linear" }
               : { duration: 0 }
           }
-          className="p-2 rounded-full bg-surface-container-low shadow-sm"
+          // A raised circle on the list's near-white pane: the low surface
+          // and a 40 percent icon were all but invisible.
+          className="p-2 rounded-full bg-surface-container-highest shadow-md"
         >
           <RefreshCw
-            style={{ opacity: 0.4 + progress * 0.6 }}
+            style={{ opacity: 0.7 + progress * 0.3 }}
             className="w-4 h-4 text-primary"
           />
         </motion.div>

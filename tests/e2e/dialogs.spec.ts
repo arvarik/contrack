@@ -23,9 +23,8 @@ test("the keyboard shortcuts dialog traps focus and returns it on Escape", async
 
   const dialog = page.getByRole("dialog", { name: "Keyboard shortcuts" });
   await expect(dialog).toBeVisible();
-  await expect(
-    dialog.getByRole("button", { name: "Close dialog" }),
-  ).toBeFocused();
+  // A dialog with no field takes focus itself, never on Close.
+  await expect(dialog).toBeFocused();
   await expect(dialog.getByText("Go to Network")).toBeVisible();
 
   await expectFocusStaysWithin(page, dialog, 4);
@@ -64,11 +63,7 @@ test("the new contact form opens on N, names its fields, and closes on Escape", 
   await page.keyboard.press("n");
   const dialog = page.getByRole("dialog", { name: "New contact" });
   await expect(dialog).toBeVisible();
-  await expect(
-    dialog.getByRole("button", { name: "Close dialog" }),
-  ).toBeFocused();
-
-  await page.keyboard.press("Tab");
+  // The first field, so a typed space never presses Close.
   await expect(dialog.getByLabel("Full name")).toBeFocused();
   for (const label of ["Role", "Company", "Email", "Phone", "Location"]) {
     await expect(dialog.getByLabel(label)).toBeVisible();
@@ -107,9 +102,8 @@ test("a search result opens a contact dialog that returns focus to the result", 
 
   const dialog = page.getByRole("dialog", { name: "Contact details" });
   await expect(dialog).toBeVisible();
-  await expect(
-    dialog.getByRole("button", { name: "Close contact details" }),
-  ).toBeFocused();
+  // Focus on the card itself, as on a dialog with no field.
+  await expect(dialog).toBeFocused();
   // The contact's own header, with its actions menu, is inside the dialog.
   await expect(
     dialog.getByRole("button", { name: "Contact actions" }),
@@ -160,7 +154,7 @@ test("Escape in a list inside a dialog closes the list and keeps the dialog", as
   await page.getByRole("button", { name: "Select all" }).click();
   await page
     .getByRole("toolbar", { name: "Bulk actions" })
-    .getByRole("button", { name: "Field", exact: true })
+    .getByRole("button", { name: "Edit field", exact: true })
     .click();
 
   const dialog = page.getByRole("dialog", { name: "Edit field" });

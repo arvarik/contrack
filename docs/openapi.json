@@ -668,7 +668,11 @@
                   "website": { "type": ["string", "null"] },
                   "cadenceDays": {
                     "anyOf": [
-                      { "type": "integer", "exclusiveMinimum": 0 },
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 3650
+                      },
                       { "type": "null" }
                     ]
                   },
@@ -713,19 +717,16 @@
                     "type": "array",
                     "items": {
                       "anyOf": [
-                        { "type": "string" },
+                        {
+                          "type": "string",
+                          "pattern": "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$"
+                        },
                         {
                           "type": "object",
                           "properties": {
                             "email": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "format": "email",
-                                  "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-                                },
-                                { "type": "string", "minLength": 1 }
-                              ]
+                              "type": "string",
+                              "pattern": "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$"
                             },
                             "label": { "type": ["string", "null"] },
                             "isPrimary": {
@@ -748,11 +749,17 @@
                     "type": "array",
                     "items": {
                       "anyOf": [
-                        { "type": "string" },
+                        {
+                          "type": "string",
+                          "pattern": "^(?:\\P{Nd}*\\p{Nd}){3}"
+                        },
                         {
                           "type": "object",
                           "properties": {
-                            "phone": { "type": "string", "minLength": 1 },
+                            "phone": {
+                              "type": "string",
+                              "pattern": "^(?:\\P{Nd}*\\p{Nd}){3}"
+                            },
                             "label": { "type": ["string", "null"] },
                             "isPrimary": {
                               "anyOf": [
@@ -1036,7 +1043,11 @@
                   "website": { "type": ["string", "null"] },
                   "cadenceDays": {
                     "anyOf": [
-                      { "type": "integer", "exclusiveMinimum": 0 },
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 3650
+                      },
                       { "type": "null" }
                     ]
                   },
@@ -1081,19 +1092,16 @@
                     "type": "array",
                     "items": {
                       "anyOf": [
-                        { "type": "string" },
+                        {
+                          "type": "string",
+                          "pattern": "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$"
+                        },
                         {
                           "type": "object",
                           "properties": {
                             "email": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "format": "email",
-                                  "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-                                },
-                                { "type": "string", "minLength": 1 }
-                              ]
+                              "type": "string",
+                              "pattern": "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$"
                             },
                             "label": { "type": ["string", "null"] },
                             "isPrimary": {
@@ -1116,11 +1124,17 @@
                     "type": "array",
                     "items": {
                       "anyOf": [
-                        { "type": "string" },
+                        {
+                          "type": "string",
+                          "pattern": "^(?:\\P{Nd}*\\p{Nd}){3}"
+                        },
                         {
                           "type": "object",
                           "properties": {
-                            "phone": { "type": "string", "minLength": 1 },
+                            "phone": {
+                              "type": "string",
+                              "pattern": "^(?:\\P{Nd}*\\p{Nd}){3}"
+                            },
                             "label": { "type": ["string", "null"] },
                             "isPrimary": {
                               "anyOf": [
@@ -1380,7 +1394,11 @@
                   "website": { "type": ["string", "null"] },
                   "cadenceDays": {
                     "anyOf": [
-                      { "type": "integer", "exclusiveMinimum": 0 },
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 3650
+                      },
                       { "type": "null" }
                     ]
                   },
@@ -1425,19 +1443,16 @@
                     "type": "array",
                     "items": {
                       "anyOf": [
-                        { "type": "string" },
+                        {
+                          "type": "string",
+                          "pattern": "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$"
+                        },
                         {
                           "type": "object",
                           "properties": {
                             "email": {
-                              "anyOf": [
-                                {
-                                  "type": "string",
-                                  "format": "email",
-                                  "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-                                },
-                                { "type": "string", "minLength": 1 }
-                              ]
+                              "type": "string",
+                              "pattern": "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$"
                             },
                             "label": { "type": ["string", "null"] },
                             "isPrimary": {
@@ -1460,11 +1475,17 @@
                     "type": "array",
                     "items": {
                       "anyOf": [
-                        { "type": "string" },
+                        {
+                          "type": "string",
+                          "pattern": "^(?:\\P{Nd}*\\p{Nd}){3}"
+                        },
                         {
                           "type": "object",
                           "properties": {
-                            "phone": { "type": "string", "minLength": 1 },
+                            "phone": {
+                              "type": "string",
+                              "pattern": "^(?:\\P{Nd}*\\p{Nd}){3}"
+                            },
                             "label": { "type": ["string", "null"] },
                             "isPrimary": {
                               "anyOf": [
@@ -2318,7 +2339,11 @@
                     "website": { "type": ["string", "null"] },
                     "cadenceDays": {
                       "anyOf": [
-                        { "type": "integer", "exclusiveMinimum": 0 },
+                        {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 3650
+                        },
                         { "type": "null" }
                       ]
                     },
@@ -2368,23 +2393,21 @@
                       ]
                     },
                     "emails": {
+                      "description": "An item that cannot be read is left out, and the rest saves",
                       "maxItems": 100,
                       "type": "array",
                       "items": {
                         "anyOf": [
-                          { "type": "string" },
+                          {
+                            "type": "string",
+                            "pattern": "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$"
+                          },
                           {
                             "type": "object",
                             "properties": {
                               "email": {
-                                "anyOf": [
-                                  {
-                                    "type": "string",
-                                    "format": "email",
-                                    "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-                                  },
-                                  { "type": "string", "minLength": 1 }
-                                ]
+                                "type": "string",
+                                "pattern": "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$"
                               },
                               "label": { "type": ["string", "null"] },
                               "isPrimary": {
@@ -2403,15 +2426,22 @@
                       }
                     },
                     "phones": {
+                      "description": "An item that cannot be read is left out, and the rest saves",
                       "maxItems": 100,
                       "type": "array",
                       "items": {
                         "anyOf": [
-                          { "type": "string" },
+                          {
+                            "type": "string",
+                            "pattern": "^(?:\\P{Nd}*\\p{Nd}){3}"
+                          },
                           {
                             "type": "object",
                             "properties": {
-                              "phone": { "type": "string", "minLength": 1 },
+                              "phone": {
+                                "type": "string",
+                                "pattern": "^(?:\\P{Nd}*\\p{Nd}){3}"
+                              },
                               "label": { "type": ["string", "null"] },
                               "isPrimary": {
                                 "anyOf": [
@@ -2813,7 +2843,11 @@
                       "website": { "type": ["string", "null"] },
                       "cadenceDays": {
                         "anyOf": [
-                          { "type": "integer", "exclusiveMinimum": 0 },
+                          {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 3650
+                          },
                           { "type": "null" }
                         ]
                       },
@@ -2867,19 +2901,16 @@
                         "type": "array",
                         "items": {
                           "anyOf": [
-                            { "type": "string" },
+                            {
+                              "type": "string",
+                              "pattern": "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$"
+                            },
                             {
                               "type": "object",
                               "properties": {
                                 "email": {
-                                  "anyOf": [
-                                    {
-                                      "type": "string",
-                                      "format": "email",
-                                      "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
-                                    },
-                                    { "type": "string", "minLength": 1 }
-                                  ]
+                                  "type": "string",
+                                  "pattern": "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$"
                                 },
                                 "label": { "type": ["string", "null"] },
                                 "isPrimary": {
@@ -2902,11 +2933,17 @@
                         "type": "array",
                         "items": {
                           "anyOf": [
-                            { "type": "string" },
+                            {
+                              "type": "string",
+                              "pattern": "^(?:\\P{Nd}*\\p{Nd}){3}"
+                            },
                             {
                               "type": "object",
                               "properties": {
-                                "phone": { "type": "string", "minLength": 1 },
+                                "phone": {
+                                  "type": "string",
+                                  "pattern": "^(?:\\P{Nd}*\\p{Nd}){3}"
+                                },
                                 "label": { "type": ["string", "null"] },
                                 "isPrimary": {
                                   "anyOf": [

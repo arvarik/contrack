@@ -61,7 +61,7 @@ import {
 } from "../../../lib/pendingDeletes";
 import { ActionMenu } from "../../../components/ui/ActionMenu";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
-import { useCompleteActionItem } from "../../../api";
+import { useMarkFollowUpDone } from "../../../hooks/useMarkFollowUpDone";
 import { InteractionDetailModal } from "./InteractionDetailModal";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -82,11 +82,12 @@ export type DeleteInteraction = (args: {
   contactId: string;
 }) => Promise<unknown>;
 
+/** The update's `mutateAsync`: the note overlay keeps an edit that failed. */
 export type UpdateInteraction = (args: {
   id: string;
   contactId: string;
   data: { title?: string; content?: string | null };
-}) => void;
+}) => Promise<unknown>;
 
 export type PromoteGhost = (
   id: string,
@@ -302,6 +303,8 @@ interface TimelineEntryProps {
   onOpen: (item: Interaction, editing: boolean) => void;
   onAskDelete: (item: Interaction) => void;
   promoteGhost: PromoteGhost;
+  /** A follow-up marked done in its undo window reads as done here too. */
+  pending: ReadonlySet<string>;
 }
 
 const TimelineEntry = React.memo(
@@ -312,6 +315,7 @@ const TimelineEntry = React.memo(
     onOpen,
     onAskDelete,
     promoteGhost,
+    pending,
   }: TimelineEntryProps) => {
     const navigate = useNavigate();
     // Each entry animates in with a transform, which makes it a stacking
@@ -452,7 +456,7 @@ const TimelineEntry = React.memo(
                             navigate(`/contact/${mention.contactId}`),
                         })
                       }
-                      title={`Promote ${mention.name} to contact`}
+                      title={`Add ${mention.name} to Network`}
                       className="hit-area state-layer flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-container-low border border-dashed border-primary transition-colors group/ghost"
                     >
                       <div className="w-5 h-5 rounded-full bg-surface-container-highest flex items-center justify-center text-[11px] font-bold text-on-surface-variant opacity-70 group-hover/ghost:opacity-100 transition-opacity">
@@ -518,25 +522,28 @@ const TimelineEntry = React.memo(
                 <span className={cn(LABEL, "mr-2 flex items-center gap-1")}>
                   Follow-up:
                 </span>
-                {item.actionItems.map((action) => (
-                  <div
-                    key={action.id}
-                    className={cn(
-                      "flex items-center gap-1.5 px-2.5 py-1 rounded-md border transition-colors text-xs font-semibold select-none",
-                      action.completedAt
-                        ? "bg-surface-container text-on-surface-variant border-surface-container-high line-through opacity-60"
-                        : "bg-surface-container-lowest text-on-surface border-surface-container-high",
-                    )}
-                  >
-                    {action.completedAt && (
-                      <CalendarCheck
-                        aria-hidden="true"
-                        className="w-3 h-3 text-on-surface-variant opacity-60"
-                      />
-                    )}
-                    {action.title}
-                  </div>
-                ))}
+                {item.actionItems.map((action) => {
+                  const done = !!action.completedAt || pending.has(action.id);
+                  return (
+                    <div
+                      key={action.id}
+                      className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1 rounded-md border transition-colors text-xs font-semibold select-none",
+                        done
+                          ? "bg-surface-container text-on-surface-variant border-surface-container-high line-through opacity-60"
+                          : "bg-surface-container-lowest text-on-surface border-surface-container-high",
+                      )}
+                    >
+                      {done && (
+                        <CalendarCheck
+                          aria-hidden="true"
+                          className="w-3 h-3 text-on-surface-variant opacity-60"
+                        />
+                      )}
+                      {action.title}
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -567,7 +574,7 @@ export const Timeline = ({
   promoteGhost,
 }: TimelineProps) => {
   const hidden = useHiddenPendingIds();
-  const completeActionItem = useCompleteActionItem();
+  const markFollowUpDone = useMarkFollowUpDone();
   const headingPrefix = useId();
   const [confirming, setConfirming] = useState<Interaction | null>(null);
   /** The entry whose title takes focus after the next render. */
@@ -621,6 +628,7 @@ export const Timeline = ({
     focusAfterDelete.current =
       at === -1 ? null : (order[at + 1] ?? order[at - 1] ?? null);
     setConfirming(null);
+    if (opened?.interaction.id === item.id) onOpenedChange(null);
     startPendingDelete({
       id: item.id,
       send: () => deleteInteraction({ id: item.id, contactId }),
@@ -653,6 +661,7 @@ export const Timeline = ({
                       onOpen={open}
                       onAskDelete={askDelete}
                       promoteGhost={promoteGhost}
+                      pending={hidden}
                     />
                   ))}
                 </ul>
@@ -665,19 +674,20 @@ export const Timeline = ({
       <InteractionDetailModal
         isOpen={!!opened}
         onClose={() => onOpenedChange(null)}
-        interaction={opened?.interaction ?? null}
+        // The note as the timeline has it now: a Save or a done follow-up
+        // shows here as soon as the timeline refetches.
+        interaction={
+          (opened &&
+            timeline.find((item) => item.id === opened.interaction.id)) ??
+          opened?.interaction ??
+          null
+        }
         initialEditing={opened?.editing}
-        onCompleteActionItem={(id) => completeActionItem.mutate(id)}
+        onCompleteActionItem={markFollowUpDone}
         onUpdateInteraction={(id, data) =>
           updateInteraction({ id, contactId, data })
         }
-        onDelete={() => {
-          if (!opened) return;
-          // The modal has no focus return of its own. The entry's title is
-          // where the dialog gives focus back on Cancel.
-          titleButton(opened.interaction.id)?.focus();
-          setConfirming(opened.interaction);
-        }}
+        onDelete={() => opened && setConfirming(opened.interaction)}
       />
 
       <ConfirmDialog

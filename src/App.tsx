@@ -6,8 +6,8 @@ import {
   useLocation,
 } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { isTypingTarget } from "./lib/keyboard";
-import { isNavChord } from "./lib/platform";
+import { isScroller, isTypingTarget } from "./lib/keyboard";
+import { navChordKey } from "./lib/platform";
 import { whenIdle } from "./lib/idle";
 import { useSettlePendingNav } from "./lib/pendingNav";
 import { settingsShell, useWarmSettingsFromApp } from "./views/settings/warm";
@@ -28,7 +28,10 @@ import {
   type OpenQuickNoteDetail,
 } from "./lib/appEvents";
 import { NAMES } from "./lib/names";
+import { useToastFocusReturn } from "./lib/undoToast";
+import { usePreferences } from "./contexts/PreferencesContext";
 import { useMediaQuery, WIDE_QUERY } from "./hooks/useMediaQuery";
+import { useDialogOpen } from "./components/ui/Modal";
 
 // Route-level code splitting: secondary views load on demand so the initial
 // bundle only carries the ContactList/ContactDetail critical path. Each lazy
@@ -55,6 +58,7 @@ import {
 import { askPage, mapPage, pulsePage, useWarmPages } from "./views/pages";
 import { ConnectionBanner } from "./components/layout/ConnectionBanner";
 import { StartRedirect } from "./components/layout/StartRedirect";
+import { NotFoundPanel } from "./components/layout/StartPanel";
 import { RouteErrorBoundary } from "./components/layout/RouteErrorBoundary";
 import { starterQuestionsQuery } from "./api";
 import { useQueryClient } from "@tanstack/react-query";
@@ -63,8 +67,70 @@ import { DedupeProvider } from "./contexts/DedupeContext";
 import { SessionProvider, useRecent } from "./contexts/SessionContext";
 import { useSoftKeyboard } from "./hooks/useSoftKeyboard";
 
+/** A control that keeps the focus a click gives it. */
+const CONTROL =
+  'a[href], button, input, textarea, select, [contenteditable="true"]';
+
+/**
+ * A click on blank space focuses the scroller under it.
+ *
+ * The page's landmarks take focus by script, for the skip link, so a click
+ * on blank space inside one gave it focus. A landmark does not scroll: the
+ * scroller inside it does. So Space, PageDown and the arrows scrolled
+ * nothing on a contact, Settings, Pulse or Ask, and on a contact ↑ and ↓
+ * opened other contacts instead. Such a click now moves focus on to the
+ * scroller between the click and the landmark, and the keys scroll what the
+ * person clicked. The scroller takes no ring: a pointer put it there.
+ */
+function useClickFocusesScroller() {
+  useEffect(() => {
+    let pressed: Element | null = null;
+    const onPointerDown = (event: PointerEvent) => {
+      pressed = event.target as Element;
+      // The focus a press gives comes in the same task.
+      setTimeout(() => (pressed = null));
+    };
+    const onFocusIn = (event: FocusEvent) => {
+      const box = event.target as HTMLElement;
+      if (!pressed || !box.contains(pressed) || box.tabIndex !== -1) return;
+      if (box.matches(CONTROL)) return;
+      for (
+        let el: Element | null = pressed;
+        el !== box;
+        el = el.parentElement
+      ) {
+        if (!el) return;
+        if (isScroller(el)) {
+          // Taken back on blur: a scroller with a tabindex of -1 is one
+          // Chrome's Tab no longer reaches.
+          const scroller = el;
+          scroller.tabIndex = -1;
+          scroller.style.outline = "none";
+          scroller.addEventListener(
+            "blur",
+            () => {
+              scroller.removeAttribute("tabindex");
+              scroller.style.outline = "";
+            },
+            { once: true },
+          );
+          scroller.focus({ preventScroll: true });
+          return;
+        }
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("focusin", onFocusIn);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("focusin", onFocusIn);
+    };
+  }, []);
+}
+
 const ResponsiveLayout = () => {
   const location = useLocation();
+  useClickFocusesScroller();
   // Narrow context read — see SessionContext for the split rationale. This
   // component no longer re-renders on every AI-search keystroke.
   const { setLastContactId } = useRecent();
@@ -72,6 +138,7 @@ const ResponsiveLayout = () => {
   const matchContact = useMatch("/contact/:id");
   const matchMapContact = useMatch("/map/contact/:id");
   const isContactSelected = matchContact || matchMapContact;
+  const isHome = useMatch("/");
 
   // Track the most recently visited contact to restore it when clicking "Network"
   useEffect(() => {
@@ -132,6 +199,14 @@ const ResponsiveLayout = () => {
 
   // Full-page views (cleanup, search, pulse) take the full main area
   const isFullPage = isCleanup || isSearch || isPulse;
+  /**
+   * An address that names no page. The list is the catch-all, so it used to
+   * show with an empty pane beside it. The pane says "Page not found", and
+   * on a phone it shows in place of the list, as a contact does.
+   */
+  const isUnknown =
+    !isFullPage && !isMapActive && !isHome && !isContactSelected;
+  const showsPane = isContactSelected || isUnknown;
   const pageName = isCleanup
     ? NAMES.settings.label
     : isSearch
@@ -194,8 +269,10 @@ const ResponsiveLayout = () => {
     // The safe areas: the status bar and the camera's cutout, when the page
     // fills the screen (`viewport-fit=cover`). On its side, a phone's cutout
     // is at the left or the right, and the sidebar sat under it.
-    <div className="h-dvh w-full flex overflow-hidden bg-surface text-on-surface font-body font-medium pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
-      {/*
+    <div className="h-dvh w-full flex flex-col overflow-hidden bg-surface text-on-surface font-body font-medium pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+      <ConnectionBanner />
+      <div className="flex-1 min-h-0 flex">
+        {/*
         The sidebar used to be suppressed (`hidden lg:flex`) whenever a contact
         was open, which meant that between 768 and 1023 px — an iPad in
         portrait — opening a contact left the screen with no global navigation
@@ -203,12 +280,12 @@ const ResponsiveLayout = () => {
         The only way out was the in-page Back link. Navigation chrome is not
         something to reclaim space from; it stays mounted at every width.
       */}
-      <SkipLink />
-      <div className="hidden md:flex shrink-0">
-        <Sidebar />
-      </div>
+        <SkipLink />
+        <div className="hidden md:flex shrink-0">
+          <Sidebar />
+        </div>
 
-      {/*
+        {/*
         One page boundary for every route, and it stays mounted.
 
         Each lazy page used to sit in a Suspense of its own, new on each
@@ -223,16 +300,16 @@ const ResponsiveLayout = () => {
         The sidebar and the tab bar are outside it, and mark the page a
         person pressed at once (`lib/pendingNav`).
       */}
-      <Suspense
-        fallback={
-          <div className="flex-1 min-w-0 h-full overflow-hidden">
-            {fallbackVariant && <RouteFallback variant={fallbackVariant} />}
-          </div>
-        }
-      >
-        {fullPage || (
-          <>
-            {/*
+        <Suspense
+          fallback={
+            <div className="flex-1 min-w-0 h-full overflow-hidden">
+              {fallbackVariant && <RouteFallback variant={fallbackVariant} />}
+            </div>
+          }
+        >
+          {fullPage || (
+            <>
+              {/*
         Dynamic Middle/Main Panel mapping to either the List or the Map.
 
         On the map this pane is the main landmark. On the list it is the main
@@ -249,149 +326,188 @@ const ResponsiveLayout = () => {
         paint and on each frame of a drag (`LEFT_PANE` has the bounds, and
         the Settings list shares them).
       */}
-            <section
-              id={
-                isMapActive || (!isWide && !isContactSelected)
-                  ? MAIN_CONTENT_ID
-                  : undefined
-              }
-              data-pane="list"
-              role={isMapActive || !isWide ? "main" : "complementary"}
-              aria-label={
-                isMapActive
-                  ? NAMES.map.label
-                  : isWide
-                    ? "Contacts"
-                    : NAMES.network.label
-              }
-              tabIndex={-1}
-              className={`
-        ${isContactSelected && !isMapActive ? "hidden lg:flex" : "flex"}
+              <section
+                id={
+                  isMapActive || (!isWide && !showsPane)
+                    ? MAIN_CONTENT_ID
+                    : undefined
+                }
+                data-pane="list"
+                role={isMapActive || !isWide ? "main" : "complementary"}
+                aria-label={
+                  isMapActive
+                    ? NAMES.map.label
+                    : isWide
+                      ? "Contacts"
+                      : NAMES.network.label
+                }
+                tabIndex={-1}
+                className={`
+        ${showsPane && !isMapActive ? "hidden lg:flex" : "flex"}
         ${isMapActive ? "flex-1 z-0" : "flex-1 min-w-0 lg:flex-none lg:w-(--pane-width) bg-surface-container-lowest z-10 lg:z-[15]"}
         h-full flex-col relative outline-none
       `}
-            >
-              <Routes>
-                <Route
-                  path="/map"
-                  element={
-                    <RouteErrorBoundary viewName="Map">
-                      <MapView />
-                    </RouteErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/map/contact/:id"
-                  element={
-                    <RouteErrorBoundary viewName="Map">
-                      <MapView />
-                    </RouteErrorBoundary>
-                  }
-                />
-                <Route
-                  path="*"
-                  element={
-                    <RouteErrorBoundary viewName="ContactList">
-                      <ContactList />
-                    </RouteErrorBoundary>
-                  }
-                />
-              </Routes>
+              >
+                <Routes>
+                  <Route
+                    path="/map"
+                    element={
+                      <RouteErrorBoundary viewName="Map">
+                        <MapView />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/map/contact/:id"
+                    element={
+                      <RouteErrorBoundary viewName="Map">
+                        <MapView />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="*"
+                    element={
+                      <RouteErrorBoundary viewName="ContactList">
+                        <ContactList />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                </Routes>
 
-              {/* The list's right edge, from `lg`, where the list and the contact
+                {/* The list's right edge, from `lg`, where the list and the contact
             sit side by side. Below it the list fills the row. Inside the
             list's landmark, on its edge. From `lg` the list sits a layer
             over the contact (15 over 10), so the grip past the seam paints
             and takes the pointer, and under the sidebar (20), whose Account
             menu opens across the list. */}
-              {!isMapActive && (
-                <ResizeHandle
-                  {...LEFT_PANE}
-                  label="Resize the contact list"
-                  className="hidden lg:block absolute inset-y-0 right-0"
-                />
-              )}
-            </section>
+                {!isMapActive && (
+                  <ResizeHandle
+                    {...LEFT_PANE}
+                    label="Resize the contact list"
+                    className="hidden lg:block absolute inset-y-0 right-0"
+                  />
+                )}
+              </section>
 
-            {/* Right Pane: Standard Detail View */}
-            {!isMapActive && (
-              <main
-                id={isWide || isContactSelected ? MAIN_CONTENT_ID : undefined}
-                tabIndex={-1}
-                aria-label="Contact"
-                className={`
-          ${isContactSelected ? "flex" : "hidden lg:flex"}
+              {/* Right Pane: Standard Detail View */}
+              {!isMapActive && (
+                <main
+                  id={isWide || showsPane ? MAIN_CONTENT_ID : undefined}
+                  tabIndex={-1}
+                  aria-label="Contact"
+                  className={`
+          ${showsPane ? "flex" : "hidden lg:flex"}
           flex-1 min-w-0 bg-surface z-10 h-full overflow-hidden relative flex-col outline-none
         `}
-              >
-                <Routes location={location}>
-                  <Route path="/" element={<StartRedirect />} />
-                  <Route
-                    path="/contact/:id"
-                    element={
-                      <RouteErrorBoundary viewName="ContactDetail">
-                        <ContactDetail />
-                      </RouteErrorBoundary>
-                    }
-                  />
-                </Routes>
-              </main>
-            )}
+                >
+                  <Routes location={location}>
+                    <Route path="/" element={<StartRedirect />} />
+                    <Route
+                      path="/contact/:id"
+                      element={
+                        <RouteErrorBoundary viewName="ContactDetail">
+                          <ContactDetail />
+                        </RouteErrorBoundary>
+                      }
+                    />
+                    <Route path="*" element={<NotFoundPanel />} />
+                  </Routes>
+                </main>
+              )}
 
-            {/* Map Overlay Detail View */}
-            {isMapActive && (
-              <AnimatePresence>
-                {isContactSelected && (
-                  // A region inside the page rather than a second main: the map
-                  // stays the page's main content while a contact is open over it.
-                  <motion.section
-                    aria-label="Contact"
-                    // The map reads this to centre a pin beside the contact, not
-                    // under it (`insets.ts`). The panel sits flush with the map's
-                    // right edge, so its width is what it covers.
-                    data-covers-map="right"
-                    initial={{ x: "100%", opacity: 0.5 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    exit={{ x: "100%", opacity: 0 }}
-                    transition={{ type: "spring", bounce: 0, duration: 0.4 }}
-                    // z 40 on a phone, under the tab bar's 50, so the bar stays on
-                    // top and tappable over the contact, as it does over
-                    // /contact/:id. The map page is z 0, so 40 still covers every
-                    // pin and bar on it. From md there is no tab bar.
-                    className="absolute right-0 top-0 bottom-0 w-full md:w-[760px] lg:w-[860px] md:max-w-[calc(100vw-64px)] z-40 md:z-[100] shadow-2xl bg-surface overflow-hidden flex flex-col h-full"
-                  >
-                    <Routes location={location}>
-                      <Route
-                        path="/map/contact/:id"
-                        element={
-                          <RouteErrorBoundary viewName="ContactDetail">
-                            <ContactDetail />
-                          </RouteErrorBoundary>
-                        }
-                      />
-                    </Routes>
-                  </motion.section>
-                )}
-              </AnimatePresence>
-            )}
-          </>
-        )}
-      </Suspense>
+              {/* Map Overlay Detail View */}
+              {isMapActive && (
+                <AnimatePresence>
+                  {isContactSelected && (
+                    // A region inside the page rather than a second main: the map
+                    // stays the page's main content while a contact is open over it.
+                    <motion.section
+                      aria-label="Contact"
+                      // The map reads this to centre a pin beside the contact, not
+                      // under it (`insets.ts`). The panel sits flush with the map's
+                      // right edge, so its width is what it covers.
+                      data-covers-map="right"
+                      initial={{ x: "100%", opacity: 0.5 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      exit={{ x: "100%", opacity: 0 }}
+                      transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+                      // z 40 on a phone, under the tab bar's 50, so the bar stays on
+                      // top and tappable over the contact, as it does over
+                      // /contact/:id. The map page is z 0, so 40 still covers every
+                      // pin and bar on it. From md there is no tab bar.
+                      className="absolute right-0 top-0 bottom-0 w-full md:w-[760px] lg:w-[860px] md:max-w-[calc(100vw-64px)] z-40 md:z-[100] shadow-2xl bg-surface overflow-hidden flex flex-col h-full"
+                    >
+                      <Routes location={location}>
+                        <Route
+                          path="/map/contact/:id"
+                          element={
+                            <RouteErrorBoundary viewName="ContactDetail">
+                              <ContactDetail />
+                            </RouteErrorBoundary>
+                          }
+                        />
+                      </Routes>
+                    </motion.section>
+                  )}
+                </AnimatePresence>
+              )}
+            </>
+          )}
+        </Suspense>
 
-      {/*
+        {/*
         Mobile Nav — always mounted. It used to unmount on the detail view, so
         on a phone the screen users spend the most time on was also the one
         with no way to reach Pulse, Map, Ask Contrack, or Settings. The detail view
         already reserves `pb-32` at this width, so the bar has room to sit.
       */}
-      <MobileNav />
+        <MobileNav />
+      </div>
     </div>
+  );
+};
+
+/**
+ * The toasts, in a component of their own: a dialog opening or a preference
+ * changing redraws them, not the whole app under `App`.
+ */
+const AppToaster = () => {
+  const { mode } = usePreferences();
+  // A phone's dialog is a sheet from the bottom, with Save at its foot.
+  const dialogOpen = useDialogOpen();
+  const centredDialogs = useMediaQuery("(min-width: 640px)");
+  const sheetOpen = dialogOpen && !centredDialogs;
+  return (
+    <Toaster
+      // The app's own palette, not the system's: a dark page drew dark
+      // grey descriptions on the dark glass of a light-theme toast.
+      theme={mode}
+      position={sheetOpen ? "top-center" : "bottom-right"}
+      // The mobile tab bar is fixed to the bottom of the viewport, so a
+      // default-offset toast lands underneath it and the user never sees
+      // the confirmation they just triggered.
+      mobileOffset={{
+        top: "calc(env(safe-area-inset-top) + 12px)",
+        bottom: "calc(var(--tabbar-space) + var(--keyboard-inset) + 12px)",
+        left: "12px",
+        right: "12px",
+      }}
+      className="font-body"
+      toastOptions={{
+        className: "glass-panel shadow-lg !border-none",
+        style: {
+          color: "var(--color-on-surface)",
+        },
+      }}
+    />
   );
 };
 
 export default function App() {
   // `data-typing` and `--keyboard-inset` for the phone's CSS (index.css).
   useSoftKeyboard();
+  useToastFocusReturn();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [quickNoteOpen, setQuickNoteOpen] = useState(false);
   const [quickNoteContactId, setQuickNoteContactId] = useState<
@@ -429,13 +545,15 @@ export default function App() {
 
       // Cmd+Shift+I on a Mac, Ctrl+Alt+I on Windows and Linux, where the
       // browser keeps Ctrl+Shift+I for its developer tools (`lib/platform`).
-      // Conflict guard: close Cmd+K if open
-      // Either case: with Shift held, a browser may report the key as "I".
-      if (e.key.toLowerCase() === "i" && isNavChord(e)) {
+      if (navChordKey(e) === "i") {
         e.preventDefault();
         // If Cmd+K is open, close it first. Not with an Escape: that only
         // clears a palette that holds text.
         closeCommandPalette();
+        // On a contact page the note is about that contact.
+        setQuickNoteContactId(
+          window.location.pathname.match(/^\/(?:map\/)?contact\/([^/]+)/)?.[1],
+        );
         setQuickNoteOpen((prev) => !prev);
         return;
       }
@@ -461,7 +579,6 @@ export default function App() {
             <ResponsiveLayout />
           </DedupeProvider>
         </AISearchProvider>
-        <ConnectionBanner />
         <CommandPalette />
         <KeyboardShortcutsModal
           isOpen={shortcutsOpen}
@@ -482,25 +599,7 @@ export default function App() {
           them. It renders nothing until somebody calls `flyCorvid()`.
         */}
         <CorvidFlight />
-        <Toaster
-          theme="light"
-          position="bottom-right"
-          // The mobile tab bar is fixed to the bottom of the viewport, so a
-          // default-offset toast lands underneath it and the user never sees
-          // the confirmation they just triggered.
-          mobileOffset={{
-            bottom: "calc(var(--tabbar-space) + var(--keyboard-inset) + 12px)",
-            left: "12px",
-            right: "12px",
-          }}
-          className="font-body"
-          toastOptions={{
-            className: "glass-panel shadow-lg !border-none",
-            style: {
-              color: "var(--color-on-surface)",
-            },
-          }}
-        />
+        <AppToaster />
       </SessionProvider>
     </Router>
   );

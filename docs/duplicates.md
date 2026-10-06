@@ -97,7 +97,6 @@ It opens from:
 - **Settings → Duplicates**: **Review them**, while pairs wait.
 - Pulse: the **Inbox** card has a line with the count, such as "Review 4
   possible duplicates".
-- The sidebar: the number on the Pulse icon.
 - The command palette: when it opens empty, it can show a line such as "Review
   3 possible duplicates".
 - The end of an import: the button with the count, such as **Review 3

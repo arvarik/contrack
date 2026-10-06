@@ -47,7 +47,7 @@ export const ComposerPlaceholder = ({
           on screen must pass contrast, unlike the editor's own placeholder,
           which is a decoration. */}
       <div className="composer-line px-5 py-3 prose prose-sm max-w-none text-base sm:text-sm prose-p:my-1">
-        <p className="text-on-surface-variant">Write a quick note...</p>
+        <p className="text-on-surface-variant">Write a quick note…</p>
       </div>
     </div>
   ) : (
@@ -60,7 +60,7 @@ export const ComposerPlaceholder = ({
       aria-busy="true"
       aria-label="Loading the note composer"
     >
-      {/* Editor area — matches the composer's padding and typing height. */}
+      {/* Editor area: the composer's padding and typing height. */}
       <div className={cn("flex-1", compact ? "px-5 pt-2" : "p-5")}>
         {/* 80px matches the editor's own `min-h-[80px]` prose class exactly,
           so the swap is a pixel-for-pixel replacement. */}
@@ -71,16 +71,16 @@ export const ComposerPlaceholder = ({
           )}
         >
           <span className="text-on-surface-variant text-sm">
-            Write a quick note...
+            Write a quick note…
           </span>
         </div>
 
-        {/* Next-action row */}
+        {/* Follow-up row */}
         <div className="mt-4 flex items-center">
-          <div className="flex flex-1 items-center min-h-[44px] sm:min-h-0 px-3 sm:py-2.5 bg-surface-container-lowest rounded-xl shadow-sm">
+          <div className="flex flex-1 items-center min-h-[44px] sm:pointer-fine:min-h-0 px-3 sm:py-2.5 bg-surface-container-lowest rounded-xl shadow-sm">
             <CalendarClock className="w-4 h-4 text-primary mr-2.5 shrink-0" />
             <span className="text-xs font-semibold text-on-surface-variant">
-              Next action, like follow up Tuesday
+              Follow-up, like call back Tuesday
             </span>
           </div>
         </div>

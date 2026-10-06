@@ -24,6 +24,9 @@ export const MAIN_CONTENT_ID = "main-content";
 /** The open contact's name, the `h1` of a contact page. */
 export const CONTACT_HEADING_ID = "contact-heading";
 
+/** The Settings page beside the rail: its header and its body. */
+export const SETTINGS_CONTENT_ID = "settings-content";
+
 /** The scroller that holds the contact rows. */
 const CONTACT_LIST_ID = "contact-list";
 
@@ -35,7 +38,8 @@ const CONTACT_LIST_ID = "contact-list";
  * it is what a person came for, and on a contact page the main pane starts
  * with an avatar button and a colour picker before the name. So the link
  * follows the route: the contact's name on a contact page, the list's current
- * row on the Network page, and the main landmark everywhere else.
+ * row on the Network page, the page beside the rail in Settings, and the main
+ * landmark everywhere else.
  */
 function skipTarget(pathname: string): HTMLElement | null {
   if (/^\/(map\/)?contact\//.test(pathname)) {
@@ -50,6 +54,11 @@ function skipTarget(pathname: string): HTMLElement | null {
       list?.querySelector<HTMLElement>('[tabindex="0"]') ??
       (list?.getAttribute("tabindex") === "0" ? list : null);
     if (row) return row;
+  }
+  // Past the Settings rail, which holds every page's link.
+  if (pathname.startsWith("/settings")) {
+    const page = document.getElementById(SETTINGS_CONTENT_ID);
+    if (page) return page;
   }
   return document.getElementById(MAIN_CONTENT_ID);
 }

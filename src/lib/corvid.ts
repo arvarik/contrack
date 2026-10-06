@@ -27,6 +27,7 @@
 import type { MascotMotion, MotionPreference } from "../api/preferences";
 import type { CorvidReaction } from "./corvidBrain";
 import { between, type Rng } from "./corvidMotion";
+import { overlayIsOpen } from "./keyboard";
 import type { FlightBox, FlightKind } from "./corvidFlight";
 
 // ---------------------------------------------------------------------------
@@ -211,14 +212,6 @@ export function resetCorvidActivity(rng: Rng = Math.random): void {
   lastStir = -Infinity;
   lastSortie = -Infinity;
   lastReaction.clear();
-}
-
-/** Whether a dialog, a menu or the palette is open over the page. */
-function overlayIsOpen(): boolean {
-  if (typeof document === "undefined") return true;
-  return !!document.querySelector(
-    '[role="dialog"], [role="menu"], [cmdk-dialog]',
-  );
 }
 
 /**

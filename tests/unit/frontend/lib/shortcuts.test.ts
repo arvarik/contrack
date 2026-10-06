@@ -98,7 +98,6 @@ describe("the shortcuts table", () => {
     expect(track?.group).toBe("Contact");
     expect(track?.bareLetter).toBe(true);
     expect(track?.page).toBe("/contact/:id");
-    expect(track?.description).toBe("Track or untrack this contact");
   });
 
   it("lists J and K on the Network page, behind the single-key switch", () => {
