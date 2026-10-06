@@ -1,30 +1,21 @@
 /**
- * What a merge does to the contacts in it, worked out before it runs.
+ * What a merge will do, worked out before it runs. It must follow the
+ * server's merge (server/services/dedupe/merging.ts):
  *
- * A person choosing whether to merge asks "what will I lose?". The answer
- * follows the server's merge (server/services/dedupe/merging.ts):
- *
- * - The contact kept keeps its own value in every field. A field it has
- *   empty takes the first value the others have, in the order they merge.
- * - Every other value in such a field is not kept. Undo brings it back.
- * - Emails, phones, profile links and tags join the kept contact's, each
- *   once. Notes, follow-ups and list places move over whole.
- *
- * The review row, the contact page's banner and the manual merge all show
- * this, so the three say the same thing.
- *
- * @module views/dedupe/utils/mergeOutcome
+ * - The keeper keeps its own value in every field. An empty field takes the
+ *   first value the others have, in merge order. Other values are dropped,
+ *   and Undo brings them back.
+ * - Emails, phones, profile links and tags join the keeper's, each once.
+ *   Notes, follow-ups and list places move over whole.
  */
 import type { Contact, SuggestedContact } from "../../../types";
 
 /**
- * A contact as the duplicate screens get it. A suggestion's contacts also
- * count their open follow-ups. A contact from elsewhere, such as the
- * manual merge's list, does not, and none are promised.
+ * A contact on the duplicate screens. Only a suggestion's contacts count
+ * their open follow-ups (the manual merge's do not).
  */
 export type ReviewContact = SuggestedContact;
 
-/** A field that holds one value, and its name on screen. */
 const SINGLE_FIELDS = [
   { key: "name", label: "Name" },
   { key: "company", label: "Company" },
@@ -47,7 +38,6 @@ interface OutcomeLine {
   fromId: string;
 }
 
-/** What moves from the other contacts to the one kept. */
 export interface Moves {
   emails: number;
   phones: number;
@@ -133,7 +123,6 @@ export function mergeOutcome(
     followUps: 0,
     lists: 0,
   };
-  /** Count a value the kept contact does not have yet, once. */
   const take = (seen: Set<string>, key: string, kind: keyof Moves) => {
     if (!key || seen.has(key)) return;
     seen.add(key);
@@ -166,10 +155,7 @@ const NOUNS: Record<keyof Moves, [string, string]> = {
   tags: ["tag", "tags"],
 };
 
-/**
- * "3 notes, 1 follow-up and 2 lists", with what a person cares about most
- * first, or null when nothing moves.
- */
+/** "3 notes, 1 follow-up and 2 lists", most important first, or null. */
 export function movesSentence(moves: Moves): string | null {
   const parts = (Object.keys(NOUNS) as (keyof Moves)[])
     .filter((kind) => moves[kind] > 0)
@@ -186,10 +172,8 @@ export function movesSentence(moves: Moves): string | null {
 const INITIAL = /(^|\s)\p{L}\.?(\s|$)/u;
 
 /**
- * The contact to keep when nobody has chosen: the most complete one. An
- * uploaded photo counts most, because it is the one thing a person added
- * by hand that a merge cannot fill in. A full name beats an initial, since
- * the name kept is the one the contact goes by.
+ * The default keeper: the most complete contact. An uploaded photo counts
+ * most, since a merge cannot fill it in. A full name beats an initial.
  */
 export function suggestKeeper<T extends Contact>(contacts: T[]): T {
   const score = (c: Contact) =>

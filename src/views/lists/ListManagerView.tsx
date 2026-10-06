@@ -1,13 +1,9 @@
 /**
- * ListManagerView — Settings sub-page for managing all contact lists.
+ * The Settings page for contact lists. From a 672 px page (`@2xl`) the lists
+ * sit beside the open list. Narrower, one pane shows at a time.
  *
- * Responsive layout:
- *  - A narrow page (a phone, or a laptop beside the Settings rail): the list
- *    OR the open list, never both, with slide transitions
- *  - A page of 672 px or more (`@2xl`): the lists beside the open list
- *
- * A mouse reorders by drag. Each row's menu has Move up and Move down, for a
- * finger and for the keyboard, which a drag leaves out.
+ * A mouse reorders by drag. Each row's menu has Move up and Move down for a
+ * finger and the keyboard.
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -42,7 +38,6 @@ export const ListManagerView = () => {
   const [selectedListId, setSelectedListId] = useState<string | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
 
-  // Drag-to-reorder state
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
@@ -57,7 +52,6 @@ export const ListManagerView = () => {
     if (dragIdx === null || dragIdx === idx) return;
     setDragOverIdx(idx);
   };
-  /** Put the list at `from` at `to`, by a drop or a Move item. */
   const move = (from: number, to: number) => {
     if (from === to || to < 0 || to >= lists.length) return;
     const newOrder = [...lists];
@@ -89,14 +83,10 @@ export const ListManagerView = () => {
     [createList],
   );
 
-  /**
-   * Where focus goes once the open list has left the page: its row, or the
-   * first row after a delete, or the pane's first button (New list) when
-   * none is left. The panel took the focus with it, and a keyboard was left
-   * on the page. After a delete it waits for the refetch, so focus never
-   * lands on the deleted row, and for the panel's Delete dialog to finish
-   * its exit, because the dialog holds the focus until it is gone.
-   */
+  // When the open list closes, its panel takes focus with it. Focus goes to
+  // the list's row, or the first row after a delete, or New list. After a
+  // delete it waits for the refetch, and for the Delete dialog to leave,
+  // since the dialog holds focus until then.
   const pendingFocus = useRef<{ id?: string; gone?: string } | null>(null);
   useEffect(() => {
     const want = pendingFocus.current;
@@ -109,7 +99,7 @@ export const ListManagerView = () => {
         requestAnimationFrame(attempt);
         return;
       }
-      // Each layout draws the rows: the visible one is chosen.
+      // Both layouts draw the rows: take the visible ones.
       const shown = (el: HTMLElement) => el.offsetParent !== null;
       const rows = Array.from(
         document.querySelectorAll<HTMLElement>("[data-list-row]"),
@@ -135,25 +125,19 @@ export const ListManagerView = () => {
     if (selectedListId === id) closeList(undefined, id);
   };
 
-  // -- List panel (shared between mobile and desktop) -------------------------
+  // Shared by both layouts.
   const ListPanel = (
     <div data-list-pane className="h-full flex flex-col overflow-hidden">
-      {/* The count and New list, on the pane's own surface. No band and no
-          title of its own: the shell's header above already says "Lists".
-          On a phone the pane is the page and takes its gutter, so it lines
-          up with the title. From `md` it is a card, and a row's text lines
-          up with this line's. With no list yet the empty state says it and
-          offers New list, so this row said "0 lists" over a second New list.
-          It shows while the lists load, without its count, so the rows
-          arrive where the skeleton was instead of 68 px lower. */}
+      {/* The count and New list. Hidden with no lists, where the empty state
+          offers New list. Shown while loading, so the rows do not jump. */}
       {(isLoading || lists.length > 0) && (
         <div className="pt-5 pb-4 px-4 @2xl:px-5 shrink-0 flex items-center gap-3">
           <p className="flex-1 min-w-0 text-xs text-on-surface-variant">
             {!isLoading && (
               <>
                 {lists.length} {lists.length === 1 ? "list" : "lists"}
-                {/* Beside an open list the column is narrow, and the grips
-                    say it alone. A finger cannot drag: its way is the menu. */}
+                {/* Not beside an open list, where the column is narrow and
+                    the grips say it. A finger uses the menu. */}
                 {lists.length > 1 && !selectedListId && (
                   <span className="hidden pointer-fine:inline">
                     {" "}
@@ -175,7 +159,6 @@ export const ListManagerView = () => {
         </div>
       )}
 
-      {/* List rows */}
       <div className="flex-1 overflow-y-auto py-3 px-4 @2xl:px-2">
         {isLoading ? (
           <div className="space-y-2 p-1">
@@ -215,11 +198,8 @@ export const ListManagerView = () => {
                     "group flex items-center rounded-xl transition-all select-none",
                     isSelected && SELECTED_ROW,
                     isDragging && "opacity-40",
-                    // The row a drop lands on: a dashed outline, the drop
-                    // target's line. The focus ring is a solid one, so a solid
-                    // outline or a ring here read as keyboard focus. No fill
-                    // either, because a `bg-*` utility would replace the
-                    // selected row's tint.
+                    // Dashed, since a solid ring reads as keyboard focus. No
+                    // fill, which would replace the selected row's tint.
                     isDragTarget &&
                       "outline-2 outline-dashed outline-primary/60",
                   )}
@@ -233,7 +213,7 @@ export const ListManagerView = () => {
                     }
                     className="state-layer flex-1 min-w-0 flex items-center gap-3 p-3 rounded-xl text-left cursor-pointer"
                   >
-                    {/* The grip says a mouse can drag the row. A finger cannot. */}
+                    {/* For a mouse only: a finger cannot drag. */}
                     <GripVertical
                       aria-hidden="true"
                       className="hidden pointer-fine:block w-4 h-4 shrink-0 text-on-surface-variant/25 group-hover:text-on-surface-variant transition-colors cursor-grab"
@@ -305,17 +285,13 @@ export const ListManagerView = () => {
   );
 
   return (
-    // The two panes need the page's width, not the window's: at 1024 px the
-    // Settings rail leaves the page about 520 px, where the open list was
-    // 280 px wide and its icons shrank to dots.
+    // A container query: at 1024 px the Settings rail leaves the page about
+    // 520 px, too narrow for two panes.
     <div className="@container h-full">
-      {/* ── From @2xl: the lists and the open list, two cards side by side in
-          the settings box, like every other settings page. The box sits in
-          a scrollbar's lane, as the shell's header does, so its edges line
-          up with the title's. ── */}
+      {/* From @2xl: two cards side by side. The scrollbar gutter lines their
+          edges up with the title's. */}
       <div className="hidden @2xl:block h-full overflow-hidden [scrollbar-gutter:stable]">
         <div className={cn(SETTINGS_BOX, "flex gap-4 h-full pt-4 pb-10")}>
-          {/* The lists: the whole box, or a column beside the open list. */}
           <div
             className={cn(
               CARD,
@@ -326,7 +302,6 @@ export const ListManagerView = () => {
             {ListPanel}
           </div>
 
-          {/* Right detail panel */}
           <AnimatePresence>
             {selectedList && (
               <motion.div
@@ -352,14 +327,12 @@ export const ListManagerView = () => {
         </div>
       </div>
 
-      {/* ── A narrow page: one pane at a time. On a phone the pane is the
-          page. From `sm` it is one card in the page's gutter, so it lines up
-          with the title, as the two cards do. ── */}
+      {/* Narrower: one pane at a time. From `sm` it is a card in the page's
+          gutter. */}
       <div className="@2xl:hidden h-full sm:px-6 lg:px-10 sm:pt-4 sm:pb-10">
         <div className="h-full overflow-hidden relative sm:rounded-2xl sm:shadow-sm">
           <AnimatePresence initial={false}>
             {!selectedList ? (
-              /* Mobile: List view */
               <motion.div
                 key="mobile-list"
                 initial={{ x: "-100%" }}
@@ -371,7 +344,6 @@ export const ListManagerView = () => {
                 {ListPanel}
               </motion.div>
             ) : (
-              /* Mobile: Detail view — slides in from right */
               <motion.div
                 key={`mobile-detail-${selectedList.id}`}
                 initial={{ x: "100%" }}
@@ -380,7 +352,6 @@ export const ListManagerView = () => {
                 transition={{ type: "spring", stiffness: 380, damping: 38 }}
                 className="absolute inset-0 bg-surface-container-lowest"
               >
-                {/* Mobile back button row */}
                 <div className="flex items-center gap-2 px-3 pt-3 pb-0 bg-surface-container-low shrink-0">
                   <button
                     type="button"
@@ -388,8 +359,6 @@ export const ListManagerView = () => {
                     aria-label="Back to all lists"
                     className="hit-area state-layer flex items-center gap-1.5 py-2 px-3 rounded-xl text-sm font-bold text-on-surface-variant hover:text-on-surface transition-colors"
                   >
-                    {/* The chevron of every back link, "‹ Settings" above it
-                      included. */}
                     <ChevronLeft className="w-4 h-4" aria-hidden="true" />
                     All lists
                   </button>

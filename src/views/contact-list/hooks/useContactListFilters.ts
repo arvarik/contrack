@@ -1,19 +1,11 @@
 /**
- * useContactListFilters — Search, filter, and sort logic for the contact list.
+ * Search, filter and sort for the contact list.
  *
- * Extracted from ContactList.tsx to isolate the data-transformation pipeline
- * from the UI layer. This hook manages three orthogonal filter dimensions:
- *
- * 1. **Search** — Debounced text input synced to URL `?q=` for permalink persistence.
- *    Uses `useDeferredValue` so the expensive scoring pass never blocks the input.
- * 2. **List filter** — URL-persisted via `?list=` param. The value `tracked`
- *    is not a list: it keeps the contacts a person tracks (the Tracked chip).
- *    `?tag=` keeps the contacts with one tag, which is where a tag on the
- *    Tags settings page leads. The tag is one more filter mode
- *    (`tag:investor`), so every other chip replaces it.
- * 3. **Sort** — One of the sort menu's four choices, kept for the session.
- *
- * @returns Filtered, sorted contacts + all state setters for the UI to wire up.
+ * 1. Search: synced to `?q=` after a debounce, and deferred so scoring never
+ *    blocks the input.
+ * 2. Filter: `?list=` holds a list id, or `tracked` for the Tracked chip.
+ *    `?tag=` is one more filter mode (`tag:investor`), so any chip replaces it.
+ * 3. Sort: one of four choices, kept for the session.
  */
 import {
   useMemo,
@@ -43,14 +35,9 @@ interface SortChoice {
 }
 
 /**
- * The list orders by one of two things: the name, or the day the contact was
- * added. Each reads both ways, which is four choices and the whole menu.
- *
- * A fifth choice ordered by the relationship score. It was the only one that
- * needed a sentence to explain it, the score is already on every row as the
- * ring around the avatar, and Pulse ranks by score for the reader who wants
- * that. The labels are the shortest words that still say the order, because
- * the menu's trigger shows the current one.
+ * Name or date added, each both ways. No score order: every row shows its
+ * score ring, and Pulse ranks by score. Labels are short because the menu's
+ * trigger shows the current one.
  */
 export const SORT_CHOICES: readonly SortChoice[] = [
   { id: "name-asc", label: "A to Z", field: "name", dir: "asc" },
@@ -68,18 +55,13 @@ function getSortChoice(sortBy: SortField, sortDir: SortDir): SortChoice {
 
 const SESSION_SORT_KEY = "contrack.network_sort";
 
-/** The `filterMode` of the Tracked chip: the people a person keeps up with. */
+/** The `filterMode` of the Tracked chip. */
 export const TRACKED_FILTER = "tracked";
 
 /** The `filterMode` of one tag, `tag:investor`, read from `?tag=investor`. */
 export const TAG_FILTER_PREFIX = "tag:";
 
-/**
- * The link to the Network list filtered to one tag.
- *
- * @param tag - The tag, as it is written on the contacts.
- * @returns A path with the tag in `?tag=`.
- */
+/** The link to the Network list filtered to one tag. */
 export const tagFilterPath = (tag: string) =>
   `/?tag=${encodeURIComponent(tag)}`;
 
@@ -115,7 +97,6 @@ export function useContactListFilters(contacts: Contact[]) {
   const { preferences } = usePreferences();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // ── URL-persisted list filter ─────────────────────────────────────────
   const tag = searchParams.get("tag");
   const filterMode = tag
     ? `${TAG_FILTER_PREFIX}${tag}`
@@ -129,7 +110,6 @@ export function useContactListFilters(contacts: Contact[]) {
           if (mode.startsWith(TAG_FILTER_PREFIX)) {
             params.tag = mode.slice(TAG_FILTER_PREFIX.length);
           } else if (mode !== "all") params.list = mode;
-          // Preserve existing search query when changing filters
           const q = prev.get("q");
           if (q) params.q = q;
           return params;
@@ -140,19 +120,16 @@ export function useContactListFilters(contacts: Contact[]) {
     [setSearchParams],
   );
 
-  // ── Search: local state + debounced URL sync ──────────────────────────
-  // The input is controlled by fast local state to prevent character-dropping.
-  // URL params are updated after a 200ms debounce for permalink persistence.
-  // The expensive contact filter uses useDeferredValue so it never blocks typing.
+  // The input reads local state, so no keystroke drops. The URL follows
+  // after 200 ms.
   const [inputValue, setInputValue] = useState(
     () => searchParams.get("q") ?? "",
   );
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Track whether the URL change was initiated by our own typing (internal)
-  // vs a browser back/forward navigation (external). Only external changes
-  // should sync URL → local state — otherwise we overwrite characters typed
-  // during the debounce window, causing the "character deletion" bug.
+  // True when our own typing changed the URL. Only an outside change (Back,
+  // Forward) syncs the URL into the input, or it would erase letters typed
+  // during the debounce.
   const isInternalUpdateRef = useRef(false);
 
   useEffect(
@@ -162,7 +139,6 @@ export function useContactListFilters(contacts: Contact[]) {
     [],
   );
 
-  // Sync URL → local state ONLY for external navigation events
   useEffect(() => {
     if (isInternalUpdateRef.current) {
       isInternalUpdateRef.current = false;
@@ -173,7 +149,6 @@ export function useContactListFilters(contacts: Contact[]) {
     setInputValue((prev) => (prev === urlQ ? prev : urlQ));
   }, [searchParams]);
 
-  // Debounce local state → URL params (200ms)
   const syncQueryToUrl = useCallback(
     (val: string) => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -195,17 +170,15 @@ export function useContactListFilters(contacts: Contact[]) {
 
   const setSearchQuery = useCallback(
     (val: string) => {
-      setInputValue(val); // Instant — no lag
-      syncQueryToUrl(val); // Debounced — URL persistence
+      setInputValue(val);
+      syncQueryToUrl(val);
     },
     [syncQueryToUrl],
   );
 
-  // The actual query used for filtering — deferred so the heavy filter work
-  // doesn't block the input's render cycle on a 400+ contact list.
+  // Deferred, so filtering 400+ contacts does not block the input.
   const searchQuery = useDeferredValue(inputValue);
 
-  // ── Sort state ────────────────────────────────────────────────────────
   const [sortBy, setSortBy] = useState<SortField>(() => {
     const saved = getSessionSort();
     if (saved) {
@@ -248,13 +221,11 @@ export function useContactListFilters(contacts: Contact[]) {
     setSortDir(choice.dir);
   }, []);
 
-  // ── Filtered + sorted contacts ────────────────────────────────────────
   const filteredContacts = useMemo(() => {
     let result = contacts.filter(
       (contact) => !contact.isArchived && !contact.isGhost,
     );
 
-    // 1. Apply the Tracked chip, a tag, or a list filter
     if (filterMode === TRACKED_FILTER) {
       result = result.filter((contact) => contact.isTracked);
     } else if (filterMode.startsWith(TAG_FILTER_PREFIX)) {
@@ -266,11 +237,8 @@ export function useContactListFilters(contacts: Contact[]) {
       );
     }
 
-    // 2. Apply the facets, then the free text. A link to the list carries
-    //    a facet, `/?q=tracked:no` or `/?q=missing:company`, and the list
-    //    used to score "missing:company" as a name, which matched nobody. The
-    //    facets are the palette's, from `shared/searchFacets`. `near:` needs
-    //    a geocoder the list does not have, so it is left to the palette.
+    // Facets first (`/?q=missing:company`), then the free text. `near:`
+    // needs a geocoder, so only the palette applies it.
     const { filters, freeText } = parseFacetQuery(searchQuery);
     const facets = filters.filter((f) => f.field !== "near");
     if (facets.length > 0) {
@@ -289,14 +257,14 @@ export function useContactListFilters(contacts: Contact[]) {
         .map((c) => c.contact);
     }
 
-    // 3. Apply Sort (only when not actively searching — search has its own score sort)
+    // A text search keeps its score order.
     if (!freeText.trim()) {
       result.sort((a, b) => {
         let cmp = 0;
         if (sortBy === "name") {
           cmp = (a.name || "").localeCompare(b.name || "");
         } else {
-          // Date added — newer first by default (desc). ISO strings sort lexicographically without Date allocations.
+          // ISO strings sort as text.
           const da = a.addedAt || "";
           const db = b.addedAt || "";
           cmp = da.localeCompare(db);
@@ -309,19 +277,15 @@ export function useContactListFilters(contacts: Contact[]) {
   }, [contacts, searchQuery, filterMode, sortBy, sortDir]);
 
   return {
-    // Search
     inputValue,
     searchQuery,
     setSearchQuery,
-    // Filter
     filterMode,
     setFilterMode,
-    // Sort
     sortBy,
     sortDir,
     currentSort: getSortChoice(sortBy, sortDir),
     setSortOption,
-    // Results
     filteredContacts,
   };
 }

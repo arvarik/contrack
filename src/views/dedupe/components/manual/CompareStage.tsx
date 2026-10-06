@@ -16,10 +16,9 @@ interface CompareStageProps {
 }
 
 /**
- * The chosen contacts side by side, the one to keep, and what the merge
- * keeps. The picker's rows are the list's slim contacts, with no profile
- * links or sources, so each contact is read in full for the comparison, and
- * the slim one stands in until it arrives.
+ * The chosen contacts compared. The picker's slim contacts lack profile
+ * links and sources, so each is fetched in full, and the slim one stands in
+ * until it arrives.
  */
 export const CompareStage = ({
   selected,
@@ -51,8 +50,7 @@ export const CompareStage = ({
         />
       )}
 
-      {/* The page is the one scroller, so Merge sticks to the bottom of the
-          screen. Below md it sits on top of the tab bar. */}
+      {/* Sticks to the bottom of the screen, above the tab bar below md. */}
       <div
         ref={roomAtBottom}
         className="sticky bottom-[calc(3.375rem+max(0.75rem,env(safe-area-inset-bottom)))] md:bottom-0 z-10 py-4 bg-surface flex gap-3"

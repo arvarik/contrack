@@ -1,20 +1,11 @@
 /**
- * Scroll padding for a sticky block, kept on the scroller it sticks in.
+ * Scroll padding for a sticky block, set on the scroller it sticks in, so a
+ * control Tab reaches is not hidden under the block (WCAG 2.4.11).
  *
- * The Duplicates page is one scroller, and blocks stick to its edges: the
- * cluster list's bar and the picker's chips and search at the top, and
- * Compare at the bottom. The browser scrolls a control that Tab reaches to
- * the edge of the scroller's padding box. Without the padding, Shift+Tab up
- * the picker stopped a row under the search, and Tab down it stopped a row
- * under Compare (WCAG 2.4.11).
- *
- * The padding is the block's height, its sticky offset and an 8 px gap for
- * the focus ring. It is measured again when the block changes size: the
- * chips wrap, and the bar takes two lines on a phone. The block's `ref`
- * takes `roomAtTop` or `roomAtBottom`. A scroller that is not found, as in
- * a unit test, leaves the ref doing nothing.
- *
- * @module views/dedupe/utils/stickyRoom
+ * The padding is the block's height, its sticky offset and 8 px for the
+ * focus ring, measured again when the block resizes. Pass `roomAtTop` or
+ * `roomAtBottom` as the block's `ref`. With no scroller found, it does
+ * nothing.
  */
 
 import { scrollParent } from "../../../lib/scrollParent";
@@ -48,8 +39,6 @@ function stickyRoom(side: Side) {
   };
 }
 
-/** The ref for a block stuck to the top of the page's scroller. */
 export const roomAtTop = stickyRoom("top");
 
-/** The ref for a block stuck to the bottom of the page's scroller. */
 export const roomAtBottom = stickyRoom("bottom");

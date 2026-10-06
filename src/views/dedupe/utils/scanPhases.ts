@@ -1,17 +1,9 @@
-/**
- * The steps of a check for duplicates, as its progress shows them.
- *
- * Kept apart from the check's card so a unit test can hold them. A step
- * turns done only after its phase has run.
- *
- * @module views/dedupe/utils/scanPhases
- */
+/** The steps of a check for duplicates, as its progress shows them. */
 import type { DedupeScanMode, DedupeScanPhase } from "../../../types";
 
 /**
  * The order the server runs a check's phases in (server/services/dedupe,
- * `engine.ts` and `passes.ts`). Every mode runs the exact-match pass, and
- * every mode but Quick runs blocking, scoring and the AI pass after it.
+ * `engine.ts` and `passes.ts`). Quick skips blocking, scoring and AI.
  */
 const PHASE_ORDER: DedupeScanPhase[] = [
   "starting",
@@ -25,7 +17,7 @@ const PHASE_ORDER: DedupeScanPhase[] = [
   "complete",
 ];
 
-/** Whether the mode runs the AI pass: every mode but Quick (the server's `runScan`). */
+/** As the server's `runScan` decides. */
 export const runsAiPass = (mode: DedupeScanMode): boolean => mode !== "quick";
 
 /** One step of the progress: its words and the phases it spans. */
@@ -37,7 +29,6 @@ export interface CheckStep {
   ai: boolean;
 }
 
-/** The steps, in the words a person reads. */
 export const CHECK_STEPS: readonly CheckStep[] = [
   {
     label: "Same email, phone or name",
@@ -54,10 +45,7 @@ export const CHECK_STEPS: readonly CheckStep[] = [
   { label: "Grouping", from: "clustering", to: "clustering", ai: false },
 ];
 
-/**
- * A step's status: pending before the phase `from`, active from `from`
- * through `to`, done after `to`. An error leaves every step pending.
- */
+/** Pending before `from`, active through `to`, then done. An error: pending. */
 export const stepStatus = (
   phase: DedupeScanPhase,
   from: DedupeScanPhase,

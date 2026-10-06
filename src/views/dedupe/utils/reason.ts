@@ -1,14 +1,8 @@
 /**
  * Why two contacts look like one person, in the words a review row shows.
- *
- * The server writes the reason in plain words: "Same email address",
- * "Similar names, same company and city". An AI match carries the model's
- * own sentence. A pair stored before the plain words keeps its old line,
- * such as "High name similarity (94%), embedding similarity 94% (score:
- * 81%)", until the next check replaces it, so such a line is shown as the
- * plain words of its match type instead.
- *
- * @module views/dedupe/utils/reason
+ * The server writes plain words, and an AI match carries the model's
+ * sentence. A stored pair can still hold an engine line ("embedding
+ * similarity 94%") until the next check: it shows its match type's words.
  */
 import {
   AtSign,
@@ -21,7 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-/** The plain words of each match type, for a line that has none. */
+/** Each match type's words, for a line that has none. */
 const TYPE_WORDS: Record<string, string> = {
   email: "Same email address",
   phone: "Same phone number",
@@ -36,18 +30,13 @@ const TYPE_WORDS: Record<string, string> = {
   ai: "AI thinks they are one person",
 };
 
-/**
- * An engine line from before the plain words: a number, a score, a vector,
- * two normalized names joined by an arrow, or one of the old openings,
- * which named the value after a colon ("Shared phone number: 555 0142").
- */
+/** An engine line: a number, a score, an arrow, or an older opening. */
 const ENGINE_WORDS =
   /\d+%|\bscore\b|embedding|similarity|↔|^Shared (email|phone)|^Exact name match|^Nickname match/i;
 
 /**
- * The match type an old merge-history line names, for a merge recorded
- * before the line was plain: "Shared email address: …", "Exact name match
- * with same company". Merge history keeps no match type of its own.
+ * The match type a merge-history line names, in either wording. Merge
+ * history keeps no match type of its own.
  */
 export function guessMatchType(reasoning: string): string {
   const line = reasoning.trim();
@@ -81,16 +70,15 @@ export function plainReason(matchType: string, reasoning: string): string {
   if (!text || ENGINE_WORDS.test(text)) {
     return TYPE_WORDS[matchType] ?? "Similar details";
   }
-  // An old caveat followed the reason after a full stop, in lower case:
-  // "Same profile link. the first names differ". The caveat has its own
-  // place on the row now.
+  // Drop a caveat stored after the reason ("Same profile link. the first
+  // names differ"): the row shows caveats on their own.
   return text.replace(/\.\s+[a-z].*$/, "");
 }
 
 const capitalize = (word: string) =>
   word.charAt(0).toUpperCase() + word.slice(1);
 
-/** How an old line wrote a generation, and how the caveat writes it. */
+/** A generation in a stored line, and in caveat words. */
 const GENERATION: Record<string, string> = {
   jr: "Jr.",
   sr: "Sr.",
@@ -99,7 +87,7 @@ const GENERATION: Record<string, string> = {
   iv: "IV",
 };
 
-/** What an old line called the shared value, and what the caveat calls it. */
+/** A shared value's noun in a stored line, and in caveat words. */
 const SHARED_NOUN: Record<string, string> = {
   address: "email address",
   number: "phone number",
@@ -107,10 +95,7 @@ const SHARED_NOUN: Record<string, string> = {
   name: "name",
 };
 
-/**
- * The caveats of a pair, one a line. The server joins two with a full stop:
- * "First names differ: Ada and Ben. 3 contacts share this phone number".
- */
+/** A pair's caveats, one a line. The server joins them with a full stop. */
 export function pairCaveats(
   caveat: string | null | undefined,
   reasoning: string,
@@ -120,9 +105,8 @@ export function pairCaveats(
 }
 
 /**
- * The caveat of a pair: the server's own, or for a pair stored before the
- * caveat had its own field, the one its old line ended with, in the same
- * words the server writes now.
+ * A pair's caveat: the server's field, or else the one at the end of a
+ * stored reason line, in the server's caveat words.
  */
 export function pairCaveat(
   caveat: string | null | undefined,
@@ -150,7 +134,6 @@ export function pairCaveat(
   return null;
 }
 
-/** The glyph beside a reason: what the two contacts share. */
 export function reasonIcon(matchType: string): LucideIcon {
   switch (matchType) {
     case "email":

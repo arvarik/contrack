@@ -1,13 +1,7 @@
 /**
- * DuplicateDetail: one possible duplicate, opened. Why the contacts look
- * like one person, the comparison where the contact to keep is chosen, and
- * the two decisions.
- *
- * The review list shows it in the pane beside the list from `lg`, and in a
- * sheet below it. The two buttons stick to the bottom of the pane or the
- * sheet, so a long group never pushes them out of reach.
- *
- * @module views/dedupe/components/DuplicateDetail
+ * One possible duplicate, opened: why the contacts look like one person, the
+ * comparison, and the two decisions. The buttons are sticky, so a long group
+ * never pushes them out of reach.
  */
 import {
   AlertTriangle,
@@ -28,8 +22,8 @@ import { breakable, DuplicateComparison } from "./DuplicateComparison";
 const LARGE_GROUP = 5;
 
 /**
- * "Ada Quill and Ben Quill", "Morgan Ellery and 5 others", or, when every
- * name is the same, "2 contacts named Elena Marchetti".
+ * "Ada Quill and Ben Quill", "Ada Quill and 5 others", or, when every name
+ * is the same, "2 contacts named Ada Quill".
  */
 export function groupName(contacts: ReviewContact[]): string {
   const [first] = contacts;
@@ -50,15 +44,11 @@ interface DuplicateDetailProps {
   onKeepSeparate: () => void;
   onRemove: (contact: ReviewContact) => void;
   isBusy: boolean;
-  /** The pane names the group in a heading. The sheet's title does it there. */
+  /** False in a sheet, whose title names the group. */
   heading?: boolean;
-  /** The single-key shortcuts are on, so the buttons name their keys. */
+  /** The buttons name their single-key shortcuts. */
   showKeys?: boolean;
-  /**
-   * Where the two buttons go. The pane beside the list puts them at its top,
-   * beside the group's name, where they are on screen as soon as the group
-   * opens. The phone's sheet puts them at its bottom, under the thumb.
-   */
+  /** Top in the wide pane, by the name. Bottom in a sheet, by the thumb. */
   actionsAt?: "top" | "bottom";
   /** The first L opened this Check carefully group: say what the next does. */
   confirming?: boolean;
@@ -88,8 +78,8 @@ export const DuplicateDetail = ({
       : null;
   const caveatPrefix = `caveat-${group.key.replace(/[^a-z0-9]/gi, "").slice(0, 16)}`;
   const caveatIds = caveats.map((_, i) => `${caveatPrefix}-${i}`).join(" ");
-  // A group to check carefully: its Merge is not the page's blue call to
-  // action, and the keys take two steps to reach it (`DuplicateQueue`).
+  // A careful group's Merge is not the primary button, and takes two key
+  // presses (`DuplicateQueue`).
   const careful = group.level === "check";
 
   const actions = (
@@ -146,7 +136,6 @@ export const DuplicateDetail = ({
         <div
           className={cn(
             "flex flex-wrap items-start gap-3",
-            // The pane scrolls, and its name and buttons stay at its top.
             actionsAt === "top" &&
               "sticky top-0 z-10 -mx-4 sm:-mx-5 -mt-4 sm:-mt-5 px-4 sm:px-5 pt-4 sm:pt-5 pb-3 bg-surface-container-lowest",
           )}
@@ -173,7 +162,6 @@ export const DuplicateDetail = ({
         </div>
       )}
 
-      {/* A model's reason, in the color that means a model wrote it. */}
       {ai && (
         <div className="flex items-start gap-2.5 rounded-xl bg-ai/5 p-3">
           <Sparkles

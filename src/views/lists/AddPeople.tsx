@@ -1,12 +1,7 @@
 /**
- * AddPeople — find contacts by name and add them to the open list.
- *
- * The Lists page said "choose who is on each", and an empty list said "Add
- * contacts from the Network page": the page itself had no way to add anyone.
- * This is a combobox: type a name, and ↓, ↑ and Enter or a tap add the person.
- * The field keeps the focus, so the next name can follow at once.
- *
- * @module views/lists/AddPeople
+ * A combobox that finds contacts by name and adds them to the open list:
+ * ↓, ↑ and Enter, or a tap. The field keeps focus, so the next name can
+ * follow at once.
  */
 import { useDeferredValue, useId, useMemo, useState } from "react";
 
@@ -21,7 +16,7 @@ const MAX_SHOWN = 6;
 
 interface AddPeopleProps {
   list: { id: string; name: string };
-  /** Who is in the list already, so they are not offered. */
+  /** Not offered. */
   memberIds: ReadonlySet<string>;
 }
 
@@ -97,8 +92,8 @@ export const AddPeople = ({ list, memberIds }: AddPeopleProps) => {
           className={cn(MENU_PANEL, "absolute z-20 inset-x-0 top-full mt-1")}
         >
           {matches.map((person) => (
-            // The field keeps the focus, so the option is chosen by the
-            // field's keys or a tap, and a press must not take the focus.
+            // The field keeps focus and owns the keys, so a press must not
+            // take focus.
             // eslint-disable-next-line jsx-a11y/click-events-have-key-events
             <li
               key={person.id}

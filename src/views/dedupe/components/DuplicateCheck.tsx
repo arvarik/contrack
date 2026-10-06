@@ -1,32 +1,10 @@
 /**
- * DuplicateCheck: one button that checks every contact for duplicates, and
- * what the check is doing or found.
+ * One button that checks every contact for duplicates, and what the check is
+ * doing or found. With AI on it asks AI about unclear pairs. With AI off it
+ * finds exact matches only, and says so.
  *
- * There used to be three scans to choose from, Exact, AI and Full AI, and a
- * person could not choose well: the third only rebuilt the vectors, which a
- * check does by itself for any contact that changed. Now there is one check.
- * It asks AI about the unclear pairs when AI is on, and finds exact matches
- * only when it is off, and says so.
- *
- * ```
- * Check for duplicates                                     [ Check now ]
- * Contrack checks new contacts and imports by itself. A check compares
- * all your contacts again
- *
- * Checking 412 of 842 contacts                     (while it runs)
- * ▓▓▓▓▓▓▓░░░░░░░
- * ✓ Same email, phone or name  ◌ Close matches  ○ Grouping
- *
- * ✓ Checked 842 contacts just now                  (when it is done)
- *   2 merged automatically · 5 possible duplicates to review
- *   [ Review 5 possible duplicates → ]  [ Check again ]
- * ```
- *
- * The card is Settings' own. The review page shows the same check in one
- * line (`inline`) while it runs and once it is done, under its empty state's
- * Check now.
- *
- * @module views/dedupe/components/DuplicateCheck
+ * The card is for Settings. The review page shows it `inline` only while a
+ * check runs or once it is done.
  */
 import { formatDistanceToNowStrict } from "date-fns";
 import {
@@ -70,7 +48,7 @@ export function useDuplicateCheck() {
   };
 }
 
-/** "just now" or "4 minutes ago", from the check's end. */
+/** "just now" or "4 minutes ago". */
 function finishedAgo(scan: DedupeScanProgress): string {
   if (!scan.completedAt) return "just now";
   const at = new Date(scan.completedAt);
@@ -80,7 +58,6 @@ function finishedAgo(scan: DedupeScanProgress): string {
   return formatDistanceToNowStrict(at, { addSuffix: true });
 }
 
-/** The steps of a running check, each with its state. */
 function Steps({ scan }: { scan: DedupeScanProgress }) {
   const steps = CHECK_STEPS.filter((s) => !s.ai || runsAiPass(scan.mode));
   return (
@@ -150,7 +127,6 @@ function Bar({ scan }: { scan: DedupeScanProgress }) {
 }
 
 interface DuplicateCheckProps {
-  /** `card` in Settings, `inline` above the review list. */
   variant?: "card" | "inline";
 }
 
@@ -172,8 +148,7 @@ export const DuplicateCheck = ({ variant = "card" }: DuplicateCheckProps) => {
             ? "done"
             : "idle";
 
-  // The review page draws nothing until a check runs: its empty state
-  // holds the button.
+  // Inline, the empty state holds the button.
   if (inline && status === "idle") return null;
 
   const body = (() => {
@@ -193,8 +168,7 @@ export const DuplicateCheck = ({ variant = "card" }: DuplicateCheckProps) => {
         );
       case "running":
         return (
-          // One announcement when the check starts, not one for each step
-          // of the counter: the bar carries the numbers for a screen reader.
+          // One announcement at the start: the bar carries the numbers.
           <div className="space-y-3">
             <span role="status" className="sr-only">
               Checking for duplicates
@@ -274,8 +248,7 @@ export const DuplicateCheck = ({ variant = "card" }: DuplicateCheckProps) => {
                 </p>
               </div>
             </div>
-            {/* Review them is the page's own button, in the callout over
-                the card, so the card offers only to check again. */}
+            {/* The page callout holds Review: the card only checks again. */}
             {!inline && (
               <div className="sm:pl-7">
                 <button
@@ -314,8 +287,7 @@ export const DuplicateCheck = ({ variant = "card" }: DuplicateCheckProps) => {
                 )}
               </div>
             </div>
-            {/* The page's main action, unless duplicates wait: then
-                reviewing them is, and a check comes second. */}
+            {/* Secondary while duplicates wait for review. */}
             <button
               type="button"
               onClick={start}

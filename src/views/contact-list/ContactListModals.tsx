@@ -1,16 +1,6 @@
 /**
- * ContactListModals — All modal dialogs rendered by the Contact List view.
- *
- * Extracted to keep the main ContactList component focused on layout and
- * data wiring. Each modal is a self-contained render block with its own props.
- *
- * Modals included:
- * - Add to List picker
- * - Bulk Edit Field
- * - New Contact form (with Smart Paste AI extraction flow)
- * - Smart Paste text input
- * - Create List
- * - Import Contacts
+ * The contact list's dialogs: Add to list, Edit field, New contact, Add from
+ * text, New list and Import.
  */
 import React, { useEffect, useRef, useState, type RefObject } from "react";
 import { toast } from "sonner";
@@ -32,53 +22,35 @@ import { cn, errorText } from "../../lib/utils";
 import { CreateListModal } from "./CreateListModal";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 
-// =============================================================================
-// Props
-// =============================================================================
-
 interface ContactListModalsProps {
-  // Add to list
   selectedCount: number;
   isAddToListOpen: boolean;
   onCloseAddToList: () => void;
   lists: ContactListType[];
   onBulkAddToList: (listId: string) => void;
   isBulkAddToListPending: boolean;
-  // Bulk edit
   isBulkEditOpen: boolean;
   onCloseBulkEdit: () => void;
   onBulkEditApply: (field: string, value: string | number) => void;
   isBulkEditPending: boolean;
-  /**
-   * The control that opened New contact or Add from text. Both dialogs give
-   * focus back to it, and so does the form a successful extraction opens.
-   */
+  /** The control that opened New contact or Add from text, for focus return. */
   returnFocusRef: RefObject<HTMLElement | null>;
   /** Where focus goes after a bulk dialog: the Select button, once back. */
   bulkReturnFocusRef: RefObject<HTMLElement | null>;
-  // New contact
   isModalOpen: boolean;
   onCloseModal: () => void;
   onContactCreated: (id: string) => void;
-  // Smart paste
   isSmartPasteOpen: boolean;
-  /** The X, Escape or the overlay: close Add from text, and nothing else. */
   onCloseSmartPaste: () => void;
   /** The text was read: close Add from text and open the form, filled in. */
   onSmartPasteExtracted: () => void;
-  // Create list
   isCreateListOpen: boolean;
   onCloseCreateList: () => void;
   onCreateList: (name: string, icon: string) => Promise<void>;
   isCreateListPending: boolean;
-  // Import
   isImportOpen: boolean;
   onCloseImport: () => void;
 }
-
-// =============================================================================
-// Component
-// =============================================================================
 
 export const ContactListModals = ({
   selectedCount,
@@ -106,31 +78,24 @@ export const ContactListModals = ({
   isImportOpen,
   onCloseImport,
 }: ContactListModalsProps) => {
-  // ── Smart paste + create contact state ────────────────────────────────
   const [smartPasteText, setSmartPasteText] = useState("");
   const [parsedData, setParsedData] = useState<ParsedContactData | null>(null);
 
   const createContact = useCreateContact();
   const parseContactText = useParseContactText();
-  // Add from text needs a Fast model. Without one the dialog says why and
-  // how to fix it, where Extract used to fail after the click.
+  // Add from text needs a Fast model. Without one the dialog says how to
+  // set it up, before Extract is pressed.
   const aiBlocked = useBlockedAi("text", isSmartPasteOpen);
 
-  // What an extraction found, shared with the New contact form: when it
-  // succeeds, Add from text closes and the form opens with these fields.
+  // What an extraction found, which fills the New contact form.
   const pd = parsedData;
 
-  /**
-   * Whether Add from text is still open when an extraction returns. A person
-   * who closed it while the model read the text has canceled, so the form
-   * stays shut and no toast reports the result.
-   */
+  // Closing Add from text during an extraction cancels it: no form, no toast.
   const smartPasteOpen = useRef(isSmartPasteOpen);
   useEffect(() => {
     smartPasteOpen.current = isSmartPasteOpen;
   }, [isSmartPasteOpen]);
-  // Leaving the page with the dialog open cancels too: a result that
-  // arrives after the list is gone shows no toast on the next page.
+  // Leaving the page cancels too, so no toast shows on the next page.
   useEffect(
     () => () => {
       smartPasteOpen.current = false;
@@ -187,14 +152,8 @@ export const ContactListModals = ({
 
   return (
     <>
-      {/*
-        The bulk-delete confirmation modal used to live here. It has been
-        removed rather than reworded: delete is a soft delete into a 30-day
-        Trash, and the flow now deletes immediately and offers Undo in the
-        toast. See lib/undoToast for why that is the better trade.
-      */}
-
-      {/* ── Bulk Modals (Add to List, Bulk Edit) ────────────────────────── */}
+      {/* Bulk delete has no confirmation: it goes to a 30-day Trash and its
+          toast offers Undo (lib/undoToast). */}
       <BulkModals
         selectedCount={selectedCount}
         isAddToListOpen={isAddToListOpen}
@@ -209,7 +168,6 @@ export const ContactListModals = ({
         returnFocusRef={bulkReturnFocusRef}
       />
 
-      {/* ── New Contact Modal ──────────────────────────────────────────── */}
       <Modal
         isOpen={isModalOpen}
         onClose={() => {
@@ -229,9 +187,8 @@ export const ContactListModals = ({
               required
               name="name"
               type="text"
-              // A phone capitalizes each word of a name as it is typed.
-              // Autofill stays off on this form: it is another person's
-              // details, and autofill would offer the owner's own.
+              // Autofill stays off: these are another person's details, and
+              // autofill would offer the owner's own.
               autoCapitalize="words"
               autoComplete="off"
               defaultValue={(pd?.name as string) || ""}
@@ -336,7 +293,6 @@ export const ContactListModals = ({
         </form>
       </Modal>
 
-      {/* ── Smart Paste Modal ───────────────────────────────────────────── */}
       <Modal
         isOpen={isSmartPasteOpen}
         onClose={onCloseSmartPaste}
@@ -409,7 +365,6 @@ export const ContactListModals = ({
         </div>
       </Modal>
 
-      {/* ── Create List Modal ────────────────────────────────────────────── */}
       <CreateListModal
         isOpen={isCreateListOpen}
         onClose={onCloseCreateList}
@@ -417,7 +372,6 @@ export const ContactListModals = ({
         isPending={isCreateListPending}
       />
 
-      {/* ── Import Contacts Modal ────────────────────────────────────────── */}
       {/* The import's own summary says how it went: no second toast. */}
       <ImportModal
         isOpen={isImportOpen}

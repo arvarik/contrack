@@ -3,24 +3,17 @@ import { Segmented } from "../../components/ui/Segmented";
 import { DuplicateCheck } from "./components/DuplicateCheck";
 import { ManualMerge } from "./components/ManualMerge";
 
-// =============================================================================
-// DedupeView — check every contact for duplicates, or merge chosen ones by hand
-// =============================================================================
-
 type DedupeTab = "check" | "manual";
 
 /**
- * The Duplicates page's tool, inside the Settings shell. The tabs come
- * first, then the tab's body: the one check, or the manual merge. What a
- * check finds waits in Possible duplicates, the one place a person reviews.
+ * The Duplicates tool in Settings: run a check, or merge chosen contacts by
+ * hand. What a check finds waits in Possible duplicates.
  */
 export const DedupeView = () => {
   const [activeTab, setActiveTab] = useState<DedupeTab>("check");
 
   return (
-    // The settings page scrolls, so the tool takes its own height and clips
-    // only sideways. A clip on both axes would stop a sticky control inside
-    // it, Compare in the manual tab, from sticking.
+    // Clips only sideways: a clip on both axes stops Compare from sticking.
     <div className="flex flex-col overflow-x-clip">
       <Segmented
         label="Duplicates tool"
