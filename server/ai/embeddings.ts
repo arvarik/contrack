@@ -1,23 +1,17 @@
-// =============================================================================
-// AI Layer — Embeddings Capability
-// =============================================================================
-// Resolves the embeddings capability to a concrete backend and owns the
-// vector-dimension lifecycle. The vectors themselves come from the embedder
-// (`embedder.ts`), which picks its adapter from `resolveEmbeddings`.
+// The embeddings capability: which backend it resolves to, and the vector
+// width. The vectors themselves come from the embedder (`embedder.ts`), which
+// picks its adapter from `resolveEmbeddings`.
 //
-// Two backends:
-//   - "builtin"  → local Transformers.js model (Xenova/all-MiniLM-L6-v2,
-//                  384-dim). Zero config, offline, the default.
-//   - "provider" → any discovered embedding model on a configured provider
-//                  (Gemini Embedding 2, OpenAI text-embedding-*, or an
-//                  OpenAI-compatible endpoint such as Ollama's
-//                  nomic-embed-text).
+//   "builtin"  a local Transformers.js model (Xenova/all-MiniLM-L6-v2,
+//              384-dim). No config, offline, the default.
+//   "provider" any discovered embedding model on a configured provider
+//              (Gemini Embedding 2, OpenAI text-embedding-*, or an
+//              OpenAI-compatible endpoint such as Ollama's nomic-embed-text).
 //
-// Because `vec0` virtual tables have a FIXED dimension, switching models is a
-// migration: the table is recreated at the new dimension and every contact is
-// re-embedded. The dimension of an arbitrary model isn't knowable up front, so
-// it is *probed* once (embed a short string, measure the vector) and cached.
-// =============================================================================
+// `vec0` tables have a fixed width, so a new model is a migration: the table is
+// recreated at the new width and every contact embedded again. A model's width
+// is not known up front, so it is probed once (embed a short string, measure
+// the vector) and cached.
 
 import { getProvider } from "./providerRegistry.ts";
 import { getCapabilityAssignment, parseEnvOverride } from "./capabilities.ts";
@@ -81,13 +75,11 @@ const BUILTIN: ResolvedEmbeddings = {
 };
 
 /**
- * Resolve the configured embeddings backend.
- *
- * While AI is off for the instance this is the built-in model, whatever is
- * pinned: a provider model would send every contact's text to the provider.
- * The signature changes with it, so the vector stores are rebuilt at the
- * local model's width (ensureEmbeddingStore), and again at the provider's
- * when AI comes back on.
+ * Resolve the configured embeddings backend. While AI is off for the instance
+ * it is the built-in model, whatever is pinned, because a provider model would
+ * send every contact's text out. The signature changes with it, so the vector
+ * stores rebuild at the local width (ensureEmbeddingStore), and again at the
+ * provider's when AI comes back on.
  */
 export function resolveEmbeddings(): ResolvedEmbeddings {
   if (isAiOffForInstance()) return { ...BUILTIN };
@@ -208,15 +200,11 @@ export async function probeDimension(
   }
 }
 
-// ---------------------------------------------------------------------------
 // Migration state
-// ---------------------------------------------------------------------------
 
-/** What the search_embeddings table was last built with. */
 /**
  * Which vector store a build record belongs to. Search and dedupe share a
- * model but are rebuilt independently, so each records its own state — a
- * single record would make one store's rebuild look like the other's.
+ * model but rebuild independently, so each records its own state.
  */
 export type EmbeddingStore = "search" | "dedupe";
 

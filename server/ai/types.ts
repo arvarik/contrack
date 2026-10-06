@@ -1,34 +1,25 @@
-// =============================================================================
-// AI Layer — Provider-Agnostic Type Definitions
-// =============================================================================
-// These types are shared across the entire AI subsystem. They decouple
-// business-domain shapes from any specific LLM SDK (Gemini, OpenAI, etc.).
-// =============================================================================
+// Provider-agnostic types for the AI layer, so business code never depends on
+// an LLM SDK.
 
 /**
- * Options passed to any AIProvider's `generate` method.
- * Contains the prompt, desired response format, and an optional JSON schema
- * expressed in standard JSON Schema vocabulary (no provider-specific enums).
+ * Options for an AIProvider's `generate`. `jsonSchema` uses plain JSON Schema
+ * vocabulary, with no provider enums.
  */
 export interface AIGenerateOptions {
   /** The full task prompt string to send to the model. */
   prompt: string;
 
   /**
-   * Optional system-level instruction that sets the model's persona or
-   * behavioral constraints. Kept separate from the user-facing `prompt`
-   * because providers that support distinct system turns (e.g. OpenAI, Anthropic)
-   * respond better when persona and task are separated.
-   * Adapters that don't support a native system turn prepend this to `prompt`.
+   * A system instruction, kept apart from `prompt` because providers with a
+   * system turn (OpenAI, Anthropic) do better with persona and task apart.
+   * Adapters without one prepend it to `prompt`.
    */
   systemPrompt?: string;
 
   /**
-   * A plain JSON Schema object describing the expected response structure.
-   * Adapters translate this into their provider-specific schema format
-   * (e.g., Gemini's `Type.*` enums, OpenAI's `response_format`).
-   *
-   * When provided, `responseFormat` should be `'json'`.
+   * The expected response shape as plain JSON Schema, which each adapter
+   * translates (Gemini's `Type.*`, OpenAI's `response_format`). Set
+   * `responseFormat: 'json'` with it.
    */
   jsonSchema?: JsonSchemaNode;
 
@@ -36,12 +27,9 @@ export interface AIGenerateOptions {
   responseFormat: "json" | "text";
 
   /**
-   * When true, instructs the adapter to enable live web search grounding
-   * (where supported). Each adapter translates this to its native mechanism.
-   *
-   * ⚠️ Gemini API constraint: `enableSearchGrounding` is incompatible with
-   * `responseFormat: 'json'` / `jsonSchema`. Use a two-pass strategy
-   * (grounded text retrieval → separate structured extraction call).
+   * Turn on live web search grounding where the adapter supports it. Gemini
+   * cannot ground and return `json` / `jsonSchema` in one call, so grounded
+   * work runs two passes: grounded text, then a separate extraction.
    */
   enableSearchGrounding?: boolean;
 
@@ -54,28 +42,21 @@ export interface AIGenerateOptions {
   thinkingLevel?: "low" | "medium" | "high";
 
   /**
-   * Override the default model selection for this specific call.
-   * Used by callers that need to target specific models for each pass
-   * (e.g., contact research uses grounding-capable models for its search
-   * and cheaper models for the extraction). When set, the adapter skips its
-   * routing engine and uses this model directly.
+   * Use this model and skip routing, for a caller that picks a model per pass
+   * (research grounds with one and extracts with a cheaper one).
    */
   model?: string;
 
   /**
-   * Routing preferences that influence model selection in the SmartRouter.
-   * Only used when `model` is not set (explicit model overrides bypass routing).
-   * All fields are optional — omitting this gives default routing behavior.
+   * Routing preferences for the SmartRouter, used only when `model` is unset.
    */
   routing?: RoutingPolicy;
 
   /**
-   * Per-attempt timeout in milliseconds. Defaults to `AI_DEFAULTS.perAttemptTimeoutMs`
-   * (60s). Long-running grounded research calls may need to raise this.
-   *
-   * Hitting this limit aborts the underlying SDK call (via AbortSignal) and
-   * throws an `UpstreamTimeoutError`, which the retry layer treats as a
-   * transient failure and may re-issue against another model.
+   * Per-attempt timeout in milliseconds, `AI_DEFAULTS.perAttemptTimeoutMs` (60
+   * s) by default. Reaching it aborts the SDK call and throws
+   * `UpstreamTimeoutError`, which the retry layer treats as transient and may
+   * retry on another model.
    */
   timeoutMs?: number;
 
@@ -83,43 +64,32 @@ export interface AIGenerateOptions {
   maxOutputTokens?: number;
 
   /**
-   * Caller cancellation signal. When the signal aborts (e.g. the HTTP client
-   * disconnected) the active SDK call is canceled and no further retries
-   * are attempted. The thrown error is an `AppError` with code `"CANCELLED"`.
+   * Caller cancellation. When it aborts (the HTTP client disconnected, say) the
+   * SDK call is canceled, nothing is retried, and the error is an `AppError`
+   * with code `"CANCELLED"`.
    */
   signal?: AbortSignal;
 }
 
-// =============================================================================
-// Routing Policy
-// =============================================================================
-// Controls how the SmartRouter selects models for a given request.
-// Passed via `AIGenerateOptions.routing`. All fields are optional.
-// =============================================================================
+// Routing policy
 
 import type { ModelClass } from "./routing/registry.ts";
 
-/**
- * Caller-provided routing preferences that influence model selection.
- * All fields are optional — omitting them gives the default behavior.
- */
+/** Caller preferences for model selection. Every field is optional. */
 export interface RoutingPolicy {
   /**
-   * Preferred model class for this request.
-   *
-   * When set, the SmartRouter prioritizes models of this class and prefers
-   * newer generations (Gemini 3.8 before 3.5 before 2.5). If every model of
-   * the class is paused, the router falls back to the other classes.
-   *
-   * Example: `prefer: "lite"` → tries gemini-3.5-flash-lite first,
-   * then gemini-3.1-flash-lite, then any available model.
+   * Preferred model class. The SmartRouter tries this class first, newest
+   * generation first (Gemini 3.8 before 3.5 before 2.5), and falls back to the
+   * other classes when every model of it is paused. `prefer: "lite"` tries
+   * gemini-3.5-flash-lite, then gemini-3.1-flash-lite, then any available
+   * model.
    */
   prefer?: ModelClass;
 }
 
 /**
- * The result returned from any AIProvider's `generate` method.
- * Normalizes response metadata across providers.
+ * The result of any AIProvider's `generate`, with metadata normalized across
+ * providers.
  */
 export interface AIGenerateResult {
   /** Source links reported by the provider grounding metadata. */
@@ -151,12 +121,8 @@ export interface AIGenerateResult {
   latencyMs: number;
 }
 
-// =============================================================================
-// Generic JSON Schema Node
-// =============================================================================
-// A recursive type representing a subset of JSON Schema sufficient for
-// structured LLM output. Adapters map this to their native schema format.
-// =============================================================================
+// A subset of JSON Schema, enough for structured LLM output. Adapters map it to
+// their native schema.
 
 export interface JsonSchemaNode {
   type: "object" | "array" | "string" | "number" | "integer" | "boolean";
@@ -166,19 +132,14 @@ export interface JsonSchemaNode {
   nullable?: boolean;
   description?: string;
   /**
-   * Constrains the value to a fixed set of string constants.
-   * Translates to Gemini's `enum` field, OpenAI's `enum`, etc.
-   * Example: `{ type: "string", enum: ["work", "personal", "other"] }`
+   * A fixed set of string values, such as `{ type: "string", enum: ["work",
+   * "personal", "other"] }`.
    */
   enum?: string[];
 }
 
-// =============================================================================
-// Diagnostics Snapshot
-// =============================================================================
-// Typed return value for GeminiAdapter.getQuotaSnapshot(). What this process
-// has sent, for the /api/ai/diagnostics endpoint and the admin Health page.
-// =============================================================================
+// What GeminiAdapter.getQuotaSnapshot() reports this process has sent, for
+// /api/ai/diagnostics and the admin Health page.
 
 /** Per-model usage counters within the current tracking window. */
 export interface ModelUsageSnapshot {
@@ -206,13 +167,9 @@ export interface DiagnosticsSnapshot {
   freeTier?: boolean;
 }
 
-// =============================================================================
-// Business-Domain Types (AI Function Inputs & Outputs)
-// =============================================================================
+// Inputs and outputs of the AI functions
 
-/**
- * Structured contact data extracted from unstructured text by `parseContactRecord`.
- */
+/** Contact fields `parseContactRecord` extracts from free text. */
 export interface ParsedContact {
   name: string;
   firstName?: string;
@@ -246,19 +203,14 @@ export interface ParsedContact {
   }>;
 }
 
-/**
- * A single person entity extracted from a timeline note by `extractMentions`.
- */
+/** A person `extractMentions` found in a timeline note. */
 export interface MentionEntity {
   name: string;
   company?: string | null;
   context: string;
 }
 
-/**
- * Lightweight contact projection passed to the semantic search engine.
- * Nulls are stripped by the caller before passing here.
- */
+/** The slim contact sent to the reranker. The caller strips nulls. */
 export interface CompressedContact {
   id: string;
   headline?: string;
@@ -311,52 +263,37 @@ export interface QueryLocationConstraint {
 }
 
 /**
- * Structured query plan produced by `parseSearchQuery` (Plan-Filter-Rank-Verify
- * architecture, v5).
+ * The query plan `parseSearchQuery` produces, in two buckets:
  *
- * The plan is split into TWO buckets that drive different retrieval behavior:
+ * - `must`: hard constraints. Each populated `must.*Matchers` list becomes a
+ *   word-boundary regex applied to its field before FTS5 and vector search, and
+ *   a contact that fails any of them is never considered. That is what keeps
+ *   "Sydney" out of "Who lives in America?".
+ * - `should`: soft signals, used as extra RRF channels. Matching
+ *   `should.traits` ranks a contact higher without being required.
  *
- *  - `must`  — HARD constraints. Every populated `must.*Matchers` list is
- *              converted to a JS-side word-boundary regex and applied as a
- *              pre-filter against the relevant contact field BEFORE FTS5
- *              and vector search run. A contact that fails any active must
- *              dimension is never considered. This is what stops "Sydney"
- *              from leaking into "Who lives in America?" — the location
- *              filter is enforced, not merely boosted.
+ * `confidence` is the model's own rating. Low confidence skips the hard filter,
+ * so a vague question ("interesting people") is not over-filtered.
  *
- *  - `should` — SOFT signals. Used as additional RRF boost channels.
- *               Contacts matching `should.traits` rank higher but are not
- *               required to match. Used for descriptive intent the LLM
- *               can't confidently structurize.
- *
- * `confidence` is the LLM's self-rated quality of the parse — low confidence
- * skips the hard pre-filter to avoid over-zealous filtering on ambiguous
- * queries ("show me my network", "interesting people").
- *
- * Matcher arrays are inclusive synonym sets — the LLM expands a single
- * concept into all its plausible string representations. For "America" the
- * planner emits country names ("United States", "USA"), state names
- * ("California", "New York", ...), state abbreviations matched at word
- * boundary ("CA", "NY", ...), and major city names. The retrieval layer
- * then does case-insensitive word-boundary substring matching — a contact
- * passes if its field contains ANY matcher.
- *
- * All fields are optional. An empty plan (must={}, should={}) is valid and
- * means "no structured intent extracted — run pure hybrid search."
+ * Matcher lists are synonym sets. For "America" the planner writes country
+ * names ("United States", "USA"), states ("California", ...), state
+ * abbreviations matched at word boundaries ("CA", ...), and major cities. A
+ * contact passes when its field contains any matcher, ignoring case. An empty
+ * plan (must={}, should={}) means "no structured intent: run plain hybrid
+ * search".
  */
 export interface QueryPlan {
   evidence?: Partial<
     Record<"location" | "company" | "role" | "industry" | "temporal", string>
   >;
   /**
-   * HARD filters — a contact MUST satisfy every populated *Matchers list.
-   * Each list is OR-internally (any matcher hit passes that dimension);
-   * across dimensions it is AND (all populated dimensions must pass).
+   * Hard filters. Within a list any matcher passes; across lists every
+   * populated dimension must pass.
    */
   must: {
     /**
-     * Legacy display and matching values. Structured locations take precedence
-     * when present, so city and country parts do not become OR alternatives.
+     * Display and matching values. Structured `locations` take precedence when
+     * present, so city and country parts do not become OR alternatives.
      */
     locationMatchers?: string[];
     /** Explicit city, region, and country constraints from the query. */
@@ -374,15 +311,12 @@ export interface QueryPlan {
     };
   };
 
-  /**
-   * SOFT signals — RRF boost channels. Contacts matching these rank higher
-   * but are not gated on them.
-   */
+  /** Soft signals: RRF channels that raise a contact without gating it. */
   should: {
     /**
-     * Free-form descriptors that don't fit must.* — interests, hobbies,
+     * Free-form descriptors that fit no `must` list: interests, hobbies,
      * credentials, soft traits. Matched against `about`, `preferences`,
-     * `headline`, `searchExpansion`, tags, interests.
+     * `headline`, `searchExpansion`, tags and interests.
      */
     traits?: string[];
   };

@@ -1,16 +1,12 @@
-// =============================================================================
-// Routes — Imports: the record a bulk import leaves behind
-// =============================================================================
-// Mounted in server/app.ts at /api. `POST /api/contacts/bulk` writes the
-// record; these three read it back and act on it.
+// The record a bulk import leaves, mounted at /api. `POST /api/contacts/bulk`
+// writes it; these read it back and act on it:
 //
 //   GET  /api/imports/:id         where the import is, and its summary
 //   GET  /api/imports/:id/rows    the rows in one status, failed by default
 //   POST /api/imports/:id/retry   run the failed rows again
 //
-// Every handler resolves the import through the caller's scope, so an id
-// another account chose answers 404 exactly as an id nobody chose does.
-// =============================================================================
+// Every handler finds the import through the caller's scope, so another
+// account's id answers 404 like an id nobody chose.
 
 import { Router } from "express";
 import { z } from "zod";
@@ -81,12 +77,10 @@ router.get(
 );
 
 /**
- * Run the failed rows again.
- *
- * The rows are written and the response goes out. The duplicate check for
- * the new contacts runs afterwards, the way the JSON import's does, and the
- * record moves from `imported` back to `complete` when it finishes. A
- * browser that wants the summary polls `GET /api/imports/:id`.
+ * Run the failed rows again. The rows are written and the response goes out;
+ * the duplicate check runs afterwards, as for the JSON import, and the record
+ * moves from `imported` back to `complete` when it ends. A browser that wants
+ * the summary polls `GET /api/imports/:id`.
  */
 router.post(
   "/imports/:id/retry",

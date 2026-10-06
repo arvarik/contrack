@@ -1,14 +1,10 @@
 /**
- * server/connectors/email/normalize.ts — Email normalization for Contrack connectors.
- *
- * Normalizes email headers and bodies from IMAP (via imapflow/mailparser) and
- * Google Workspace (via Gmail API metadata or full format).
- *
- * Provides:
- * 1. NormalizedEmail shape matching Contrack's interaction requirements.
- * 2. Clean subject threading ("Re:", "Fwd:", brackets stripped).
- * 3. Direction resolution ("in" vs "out") based on account owner addresses and aliases.
- * 4. Header-only by default, body text extracted only when summaries are enabled.
+ * Email normalization for connectors, from IMAP (imapflow and mailparser) and
+ * Google Workspace (Gmail API metadata or full format):
+ * 1. A NormalizedEmail shape for interactions.
+ * 2. Clean thread subjects ("Re:", "Fwd:" and brackets stripped).
+ * 3. Direction ("in" or "out") from the account owner's addresses and aliases.
+ * 4. Headers only by default; body text only when summaries are on.
  *
  * @module server/connectors/email/normalize
  */

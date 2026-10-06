@@ -1,13 +1,8 @@
-// =============================================================================
-// Jobs: connectors
-// =============================================================================
-// The scheduler tick, at start and every minute: it starts the syncs that are
-// due, within the scheduler's own limits (CONNECTOR_SYNC_CONCURRENCY, one
-// connector per owner per tick), and returns. A failed tick is not retried,
-// because the next one is a minute away.
-//
-// The stored photo sweep, once, five seconds after boot.
-// =============================================================================
+// Connector jobs. The scheduler tick, at start and every minute, starts the due
+// syncs within the scheduler's limits (CONNECTOR_SYNC_CONCURRENCY, one
+// connector per owner per tick) and returns; a failed tick is not retried,
+// since the next is a minute away. The stored photo sweep runs once, five
+// seconds after boot.
 
 import { defineJob } from "./runner.ts";
 import { tickScheduler } from "../connectors/scheduler.ts";

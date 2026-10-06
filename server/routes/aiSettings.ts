@@ -1,10 +1,6 @@
-// =============================================================================
-// Routes — AI Settings (providers, capabilities, model discovery)
-// =============================================================================
-// Mounted at /api/settings/ai. Behind the auth gate like every other /api
-// route. API keys are write-only: responses only ever carry a redacted
-// preview (`••••1234`).
-// =============================================================================
+// /api/settings/ai: providers, capabilities and model discovery, behind the
+// auth gate. API keys are write-only: responses carry only a redacted preview
+// (`••••1234`).
 
 import { Router, type Request } from "express";
 import { z } from "zod";
@@ -49,12 +45,11 @@ import type { AICapability } from "../ai/capabilities.ts";
 
 const router = Router();
 
-// Reading this configuration is open to any signed-in account: the app has to
-// know which capabilities are available before it offers them. Writing it is
-// administration — provider keys, custom endpoints and capability
-// assignments are one shared configuration that everybody on the instance
-// runs on. Every write below carries `requireAdmin` and writes one
-// `settings.changed` audit row naming the setting key, never its value.
+// Any signed-in account may read this configuration, because the app must know
+// which capabilities exist before it offers them. Writing it is administration:
+// keys, custom endpoints and capability assignments are one configuration
+// everybody runs on. Every write carries `requireAdmin` and writes one
+// `settings.changed` audit row naming the key, never the value.
 
 /** Record a settings write. The key name only, never what was written. */
 function auditSettingChange(
@@ -73,13 +68,10 @@ function auditSettingChange(
 }
 
 /**
- * Rebuild both vector stores at the embedding model that now resolves.
- *
- * Search and dedupe share one model, so a change of model changes the
- * vector width of both. Reconciling only search leaves contact_embeddings at
- * the old width, and every later insert fails with "Expected 384 dimensions
- * but received 1536" until the process restarts. Runs in the background so
- * the request returns at once.
+ * Rebuild both vector stores for the embedding model that now resolves, in the
+ * background. Search and dedupe share the model, so a new model changes both
+ * widths; rebuilding only search would make every contact_embeddings insert
+ * fail with "Expected 384 dimensions but received 1536" until a restart.
  */
 function rebuildVectorStores(): void {
   Promise.all([ensureEmbeddingStore(), ensureDedupeEmbeddingStore()])
@@ -95,7 +87,7 @@ function rebuildVectorStores(): void {
     );
 }
 
-// ─── Overview ────────────────────────────────────────────────────────────────
+// Overview
 
 router.get(
   "/",
@@ -117,15 +109,15 @@ router.get(
   }),
 );
 
-// ─── Provider credentials ────────────────────────────────────────────────────
+// Provider credentials
 
 const providerKeySchema = z.object({
   apiKey: z.string().min(1, "API key is required"),
 });
 
 /**
- * Store a key and immediately validate it by discovering models — the
- * response doubles as the "✓ N models" confirmation in the UI.
+ * Store a key and validate it at once by discovering models; the response is
+ * the "✓ N models" confirmation in the UI.
  */
 router.put(
   "/providers/:id/key",
@@ -177,7 +169,7 @@ router.post(
   }),
 );
 
-// ─── Custom OpenAI-compatible endpoints ──────────────────────────────────────
+// Custom OpenAI-compatible endpoints
 
 const endpointSchema = z.object({
   id: z
@@ -219,7 +211,7 @@ router.delete(
   }),
 );
 
-// ─── Capability assignments ──────────────────────────────────────────────────
+// Capability assignments
 
 const assignmentSchema = z.object({
   mode: z.enum(["auto", "pinned", "disabled"]),
@@ -240,12 +232,11 @@ router.put(
     // is off for the instance nothing may reach a provider. Automatic needs
     // no test, so it can still be chosen.
     if (req.body.mode === "pinned") assertAiOnForInstance();
-    // An embeddings model is only usable if the endpoint really implements
-    // /v1/embeddings. Compat servers advertise bare model ids, so capability is
-    // guessed from the name — a model called "…-embed" on a server started
-    // without embeddings support looks fine until it is probed. Probe first and
-    // refuse the assignment, rather than saving a pin that quietly leaves the
-    // vector store on the previous model.
+    // An embeddings pin works only if the endpoint implements /v1/embeddings.
+    // Compatible servers list bare ids, so capability is guessed from the name,
+    // and a "…-embed" model on a server without embeddings looks fine until
+    // probed. Probe first and refuse, rather than save a pin that leaves the
+    // vector store on the old model.
     if (capability === "embeddings" && req.body.mode === "pinned") {
       const dimension = await probeDimension(
         String(req.body.providerId),
@@ -291,19 +282,17 @@ router.put(
   }),
 );
 
-// ─── The instance switch ─────────────────────────────────────────────────────
+// The instance switch
 
 const instanceSchema = z.object({
   aiOff: z.boolean(),
 });
 
 /**
- * Turn AI off, or back on, for every account on the instance.
- *
- * While it is off no provider call leaves the server (server/ai/
- * instanceSwitch.ts). AI_DISABLED in the environment holds it off, so a
- * request to turn AI on then answers 409: the page would say AI is on, and
- * the server would still send nothing.
+ * Turn AI off or on for every account on the instance. While it is off no
+ * provider call leaves the server (server/ai/instanceSwitch.ts). AI_DISABLED in
+ * the environment holds it off, so turning AI on then answers 409 rather than
+ * showing AI on while nothing is sent.
  */
 router.put(
   "/instance",
@@ -337,7 +326,7 @@ router.put(
   }),
 );
 
-// ─── Web search ──────────────────────────────────────────────────────────────
+// Web search
 
 const webSearchSchema = z
   .object({
@@ -368,7 +357,7 @@ router.put(
   }),
 );
 
-// ─── SearXNG (self-hosted web search) ────────────────────────────────────────
+// SearXNG (self-hosted web search)
 
 const searxngSchema = z.object({ url: searxngUrlSchema });
 

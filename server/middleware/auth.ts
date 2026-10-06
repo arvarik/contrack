@@ -1,30 +1,17 @@
-// =============================================================================
-// Authentication — accounts for people, tokens for machines
-// =============================================================================
-// Two credential kinds, because they are used by different things and want
-// different properties:
+// Authentication: accounts for people, tokens for machines.
 //
-//   • A SESSION belongs to a person. Username/email + password at a sign-in
-//     screen, exchanged for an HttpOnly cookie backed by a server-side row so
-//     it can actually be revoked.
+// - A SESSION belongs to a person: a sign-in exchanged for an HttpOnly cookie
+//   backed by a server-side row, so it can be revoked.
+// - An API TOKEN belongs to a script: high entropy, sent as `Authorization:
+//   Bearer <token>`, no expiry, no sign-in round trip, for MCP clients and cron
+//   jobs.
 //
-//   • An API TOKEN belongs to a script. High-entropy, sent as
-//     `Authorization: Bearer <token>`, never expires, no login round-trip.
-//     MCP clients and cron jobs want this; making them drive a password form
-//     would be strictly worse.
+// AUTH_REQUIRED turns enforcement on. It is off by default, Docker included,
+// because a container is usually reached only from its host. The server warns
+// at startup when it binds a non-loopback address with auth off.
 //
-// Enforcement is controlled by AUTH_REQUIRED (default false — see the note on
-// binding below).
-//
-// Every request carries a Principal describing who is asking. attachRequestContext
-// turns that Principal into a Scope and queries/mutations on owned tables
-// enforce ownership from it. See server/tenancy/scope.ts.
-//
-// Note on defaults: auth is off out of the box, including in Docker, because
-// the common case is a container reached only from its host. The server logs a
-// warning at startup when it binds a non-loopback address with auth off, which
-// is the case where that default is wrong.
-// =============================================================================
+// Every request carries a Principal. attachRequestContext turns it into a
+// Scope, which owned-table queries enforce (server/tenancy/scope.ts).
 
 import type { Request, Response, NextFunction } from "express";
 import { AppError } from "../utils/AppError.ts";
@@ -47,18 +34,12 @@ import { sqlite } from "../db.ts";
 
 export const COOKIE_NAME = "contrack_session";
 
-// =============================================================================
 // Principal
-// =============================================================================
 
 /**
- * Who is making this request.
- *
- * Every variant is a user. The `anonymous` and `service` kinds are gone: with
- * the local owner account there is always an account behind a request, so no
- * downstream code has to answer "which owner does a caller with no account
- * write for". `via` records how the caller proved who they are, which is what
- * requireSession gates on.
+ * Who is making this request. Every variant is a user: with the local owner
+ * there is always an account behind a request. `via` records how the caller
+ * proved who they are, which requireSession gates on.
  */
 export type Principal =
   /** Cookie `contrack_session`. The only kind that may manage the account. */
@@ -81,10 +62,8 @@ export type Principal =
 // other Request augmentations, rather than here.
 
 /**
- * The user behind this request.
- *
- * Returns null only when nothing authenticated the request at all, which
- * requireAuth has already refused for every gated route.
+ * The user behind this request. Null only when nothing authenticated it, which
+ * requireAuth has already refused on every gated route.
  */
 export function currentUser(req: Request): User | null {
   return req.principal?.user ?? null;
@@ -95,15 +74,13 @@ export function currentSessionId(req: Request): string | null {
   return req.principal?.via === "session" ? req.principal.sessionId : null;
 }
 
-// =============================================================================
 // Configuration
-// =============================================================================
 
 /**
- * Set when boot finds real accounts on an instance that asked for auth to be
- * off. Auth-off mode is only meaningful while the local owner is the only
- * account: with a second account there is no answer to "who is the caller with
- * no credential". See server/app.ts, which sets this.
+ * Set by server/app.ts when boot finds real accounts on an instance that asked
+ * for auth to be off. Auth-off mode works only while the local owner is the
+ * only account: with a second one there is no answer to "who is the caller with
+ * no credential".
  */
 let forcedAuth = false;
 
@@ -112,10 +89,8 @@ export function setForcedAuth(value: boolean): void {
 }
 
 /**
- * True when the instance requires a credential.
- *
- * Read per call rather than cached at import, so tests can turn enforcement
- * on and off with the environment variable.
+ * True when the instance requires a credential. Read per call, so tests can
+ * toggle the environment variable.
  */
 export function isAuthRequired(): boolean {
   return forcedAuth || process.env.AUTH_REQUIRED === "true";
@@ -126,15 +101,12 @@ export function __resetAuthWarnings(): void {
   forcedAuth = false;
 }
 
-// =============================================================================
-// Cookie handling
-// =============================================================================
+// Cookies
 
 /**
- * Minimal cookie parser (avoids a dependency for two cookies).
- *
- * A value that does not decode, such as `%E0%A4%A`, counts as no cookie.
- * `decodeURIComponent` throws on it, and every route answered 500.
+ * Minimal cookie parser (no dependency for two cookies). A value that does not
+ * decode, such as `%E0%A4%A`, counts as no cookie: `decodeURIComponent` throws
+ * on it, which made every route answer 500.
  */
 function readCookie(req: Request, name: string): string | null {
   const header = req.headers.cookie;
@@ -156,14 +128,13 @@ function readCookie(req: Request, name: string): string | null {
 /**
  * Cookie attributes.
  *
- * `SameSite=Strict` keeps the cookie off a request from another site. A page
- * on a sibling subdomain is the same site, though, so it still sends the
- * cookie. `refuseCrossSiteWrites` is the second half of the CSRF defense.
+ * `SameSite=Strict` keeps the cookie off a request from another site, but a
+ * sibling subdomain is the same site, so `refuseCrossSiteWrites` is the second
+ * half of the CSRF defense.
  *
- * `Secure` is set only when the request arrived over HTTPS. Hard-coding it
- * would break plain-HTTP local use (`http://localhost:3210`), which is the
- * default way this app is run; omitting it entirely would drop the flag on
- * the reverse-proxy deployments where it matters most.
+ * `Secure` is set only when the request arrived over HTTPS: always setting it
+ * breaks plain-HTTP local use (`http://localhost:3210`), and never setting it
+ * drops it behind the reverse proxies where it matters most.
  */
 function cookieAttributes(req: Request, maxAgeSeconds: number | null): string {
   const secure = isHttps(req) ? "; Secure" : "";
@@ -173,10 +144,9 @@ function cookieAttributes(req: Request, maxAgeSeconds: number | null): string {
 
 function isHttps(req: Request): boolean {
   if (req.secure) return true;
-  // Behind a reverse proxy Express only sees plain HTTP; the proxy reports the
-  // original scheme in this header. Trusted for the sole purpose of deciding
-  // whether to add `Secure`, where a wrong answer costs nothing an attacker
-  // could not already do on a plain-HTTP connection.
+  // Behind a reverse proxy Express sees plain HTTP, and the proxy reports the
+  // original scheme here. Trusted only to decide on `Secure`, where a wrong
+  // answer gives an attacker nothing a plain-HTTP connection does not.
   const forwarded = req.headers["x-forwarded-proto"];
   const value = Array.isArray(forwarded) ? forwarded[0] : forwarded;
   return typeof value === "string" && value.split(",")[0].trim() === "https";
@@ -216,9 +186,7 @@ export function presentedSessionSecret(req: Request): string | null {
   return readCookie(req, COOKIE_NAME);
 }
 
-// =============================================================================
 // Middleware
-// =============================================================================
 
 /**
  * True for the MCP endpoint, however the client spells it. Express matches
@@ -234,9 +202,7 @@ function isMcpPath(req: Request): boolean {
 /**
  * Resolve the caller and hang it on the request. Runs for every request,
  * including the pre-auth ones, so `/api/auth/status` can report who you are.
- *
- * Never rejects — deciding what to do about an unidentified caller is
- * `requireAuth`'s job, and the auth routes need to run without one.
+ * Never rejects: `requireAuth` decides what to do about an unknown caller.
  */
 export function attachPrincipal(
   req: Request,
@@ -248,9 +214,8 @@ export function attachPrincipal(
     ? header.slice(7).trim()
     : null;
 
-  // 1. A personal token. Looked up by SHA-256 of the presented value against a
-  //    unique index, so this is one probe and the plaintext is never stored.
-  //    The lookup lives in apiTokenService, which owns that table.
+  // 1. A personal token, looked up by its SHA-256 on a unique index
+  //    (apiTokenService). The plaintext is never stored.
   if (presented?.startsWith(TOKEN_PREFIX)) {
     const user = resolveToken(presented);
     if (user) {
@@ -282,10 +247,9 @@ export function attachPrincipal(
     }
   }
 
-  // 2. Session cookie. Resolved even when auth is off, so that someone who
-  //    signed in before enforcement was disabled is still identified and their
-  //    rows are stamped to them rather than to the local owner. Costs one
-  //    indexed lookup, and only when a cookie is actually present.
+  // 2. Session cookie. Resolved even when auth is off, so somebody who signed
+  //    in before enforcement was turned off still owns the rows they write. One
+  //    indexed lookup, only when a cookie is present.
   const secret = presentedSessionSecret(req);
   if (secret) {
     const resolved = resolveSession(secret);
@@ -312,21 +276,15 @@ export function attachPrincipal(
     }
   }
 
-  // Identified as nobody on a gated instance. Left unset rather than given a
-  // principal, because "auth is off" and "you failed to authenticate" must not
-  // look alike to anything downstream.
+  // Nobody, on a gated instance. Left unset rather than given a principal, so
+  // "auth is off" and "you failed to authenticate" never look alike downstream.
   next();
 }
 
 /**
- * The local owner account, read fresh on every request.
- *
- * This row is not cached in memory, on
- * purpose. `users` holds a handful of rows on a self-hosted personal CRM, so
- * the scan is a single page and costs less than the session lookup above it.
- * A cache would need invalidating the moment setup converts this account into
- * a real one, and a stale entry there would hand the implicit principal an
- * identity the database no longer agrees with. Not worth one page read.
+ * The local owner account, read on every request and not cached: `users` holds
+ * a handful of rows, so the read costs less than the session lookup, and a
+ * cache would go stale the moment setup converts this account.
  */
 const localOwnerStmt = sqlite.prepare(
   `SELECT id FROM users WHERE credentialState = 'none' LIMIT 1`,
@@ -343,15 +301,13 @@ export function isAuthenticated(req: Request): boolean {
 }
 
 /**
- * Gate for /api/* and /uploads/*. No-op when auth is disabled.
+ * Gate for /api/* and /uploads/*. No-op when auth is off. app.ts mounts the
+ * /api/auth/* endpoints before it, so sign-in and status stay reachable.
  *
- * The /api/auth/* endpoints are mounted BEFORE this in app.ts so sign-in and
- * status stay reachable.
- *
- * A 401 carries `WWW-Authenticate: Bearer`, which is how an MCP client or a
- * script learns that a token is what it lacks (RFC 6750). A token that was
- * sent and refused gets its own message, because "Authentication required"
- * tells somebody holding a revoked token nothing.
+ * A 401 carries `WWW-Authenticate: Bearer`, which tells an MCP client or a
+ * script that a token is what it lacks (RFC 6750). A token that was sent and
+ * refused gets its own message, because "Authentication required" tells
+ * somebody holding a revoked token nothing.
  */
 export function requireAuth(
   req: Request,
@@ -360,9 +316,9 @@ export function requireAuth(
 ): void {
   if (isAuthenticated(req)) return next();
   const sentToken = req.headers.authorization?.startsWith("Bearer ") === true;
-  // On the MCP endpoint, with OAuth on, the challenge also says where the
-  // OAuth metadata is (RFC 9728 §5.1). That is how Claude, ChatGPT and the
-  // editors find the sign-in page from the address alone.
+  // On the MCP endpoint with OAuth on, the challenge also names the OAuth
+  // metadata (RFC 9728 §5.1), which is how an MCP client finds the sign-in page
+  // from the address alone.
   const issuer = isMcpPath(req) ? oauthIssuer() : null;
   res.setHeader(
     "WWW-Authenticate",
@@ -392,29 +348,19 @@ export function requireAuth(
  * Gate for every data route while an account still holds a password somebody
  * else chose.
  *
- * An admin who creates an account, or resets one, sets a temporary password
- * and hands it over. Until the person replaces it, that password is known to
- * at least two people, so it buys access to the account's own settings and
- * nothing else. Every path outside `/api/auth/` answers
- * `403 PASSWORD_CHANGE_REQUIRED` until `POST /api/auth/change-password`
- * clears the flag.
- *
- * It applies to `session` and `token` principals alike, because the reason
- * is the password rather than the way it was presented.
- * The `implicit` local owner never carries the flag: it has no password at
- * all, so nobody could have chosen one for it.
+ * An admin who creates or resets an account hands over a temporary password,
+ * known to at least two people, so it buys the account's own settings and
+ * nothing else: every other path answers `403 PASSWORD_CHANGE_REQUIRED` until
+ * `POST /api/auth/change-password` clears the flag. It applies to sessions and
+ * tokens alike, because the reason is the password. The implicit local owner
+ * has no password, so it never carries the flag.
  *
  * Mounted after `requireAuth` on `/api` and `/uploads`. The auth router is
- * mounted ahead of it, so its routes never reach the mounted copy, and a
- * route there that needs the guard carries it itself.
- *
- * The exemption is a list of paths rather than the `/api/auth` prefix, so a
- * route in the auth router is guarded unless it is one of the paths an
- * account needs to change its password.
- *
- * It reads `originalUrl` rather than `path`, because Express strips the mount
- * prefix before a middleware sees `req.path`, which would make
- * `/api/auth/me` and `/uploads/auth/me` look alike.
+ * mounted ahead of it, so a route there that needs the guard carries it itself.
+ * The exemption is a list of paths, not the `/api/auth` prefix, so an auth
+ * route is guarded unless an account needs it to change its password. It reads
+ * `originalUrl`, because Express strips the mount prefix from `req.path`, which
+ * would make `/api/auth/me` and `/uploads/auth/me` alike.
  */
 
 /**
@@ -456,17 +402,13 @@ const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 /**
  * Gate for a read-only token: it reads, and it talks to the MCP server.
  *
- * The token may send `GET`, `HEAD` and `OPTIONS`, and `POST /api/mcp`. The
- * MCP server then lists only the tools that change nothing (see
- * `server/mcp/server.ts`). Every other request answers
- * `403 TOKEN_READ_ONLY`.
- *
- * The Google sign-in is refused although both of its routes are `GET`:
- * finishing one adds a connector, which then writes to the account.
- *
- * Mounted ahead of the auth router, so it also covers the preference routes
- * there, the ones a token may write to. The path is lowercased because
- * Express matches routes without regard to case.
+ * The token may send `GET`, `HEAD`, `OPTIONS` and `POST /api/mcp`, where the
+ * MCP server lists only the tools that change nothing (server/mcp/server.ts).
+ * Anything else answers `403 TOKEN_READ_ONLY`. The Google sign-in is refused
+ * although both its routes are `GET`, because finishing one adds a connector
+ * that writes to the account. Mounted ahead of the auth router, so it covers
+ * the preference routes there too. The path is lowercased because Express
+ * matches routes without regard to case.
  */
 export function guardReadOnlyToken(
   req: Request,
@@ -491,16 +433,11 @@ export function guardReadOnlyToken(
 }
 
 /**
- * Gate for endpoints that act on the account itself — profile edits, password
- * changes, session management.
- *
- * Only a cookie session passes. A token proves which account it belongs to but
- * not that a person is present, so it must not be able to change the password
- * that would revoke it. The implicit local owner has no password to change.
- *
- * Renamed from requireUser in Phase 1, and its code changed from
- * USER_REQUIRED to SESSION_REQUIRED, because every principal is now a user and
- * the old name said the opposite of what the gate checks.
+ * Gate for endpoints that act on the account itself: profile edits, password
+ * changes, session management. Only a cookie session passes. A token proves
+ * which account it belongs to but not that a person is present, so it must not
+ * change the password that would revoke it. The implicit local owner has no
+ * password to change.
  */
 export function requireSession(
   req: Request,
@@ -522,13 +459,11 @@ export function requireSession(
 }
 
 /**
- * Why this caller may not administer the instance, or null when it may.
- *
- * It takes an admin account, signed in. A token is refused even when its
- * account is an admin. A token proves which account it belongs to, not that
- * the person is there, and an admin's token in a script could otherwise
- * create an admin, reset the first admin's password and export any account.
- * The implicit local owner passes while sign-in is off, as in requireSession.
+ * Why this caller may not administer the instance, or null when it may. It
+ * takes an admin account, signed in. A token is refused even for an admin: it
+ * proves the account, not that the person is there, and in a script it could
+ * otherwise create an admin, reset the first admin's password and export any
+ * account. The implicit local owner passes while sign-in is off.
  */
 export function adminRefusal(req: Request): AppError | null {
   const principal = req.principal;
@@ -552,14 +487,12 @@ export function adminRefusal(req: Request): AppError | null {
 }
 
 /**
- * Gate for instance administration: user management, instance settings,
- * backups, the audit log. `adminRefusal` says who passes.
+ * Gate for instance administration: users, instance settings, backups, the
+ * audit log. `adminRefusal` says who passes.
  *
- * Mounted on each admin route individually rather than with `router.use`, so
- * that the route manifest test can look inside `route.stack` and fail when a
- * route classed `admin` does not carry it. That check only works while this
- * is a named function declaration: an arrow assigned to a const has an empty
- * `handle.name` and the test would see nothing.
+ * Mounted on each admin route, not with `router.use`, so the route manifest
+ * test can find it in `route.stack`. That needs a named function declaration:
+ * an arrow assigned to a const has an empty `handle.name`.
  */
 export function requireAdmin(
   req: Request,
@@ -576,19 +509,16 @@ const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 /**
  * Refuse a write that the session cookie signs when another site's page sent
- * it.
- *
- * `SameSite=Strict` keeps the cookie off a request from another site, but a
- * page on a sibling subdomain (`other-app.example.com` beside
- * `crm.example.com`) is the same site. A form there can send a `text/plain`
- * POST with the cookie, and one disabled an account. So a write with the
- * cookie must come from this server's own origin:
+ * it. `SameSite=Strict` does not cover a sibling subdomain
+ * (`other-app.example.com` beside `crm.example.com`), where a form can send a
+ * `text/plain` POST with the cookie. So a cookie write must come from this
+ * server's own origin:
  * - `Origin` present: it names this host or `PUBLIC_URL` (`isOwnOrigin`).
- * - `Origin` absent: `Sec-Fetch-Site` is `same-origin` or `none`, or absent.
- *   A client that sends neither header is not a browser.
+ * - `Origin` absent: `Sec-Fetch-Site` is `same-origin` or `none`, or absent. A
+ *   client that sends neither header is not a browser.
  *
- * A bearer token is not sent by a browser on its own, so a token request
- * passes. So do the OAuth endpoints, which are outside `/api`.
+ * A browser never sends a bearer token on its own, so a token request passes.
+ * So do the OAuth endpoints, which are outside `/api`.
  */
 export function refuseCrossSiteWrites(
   req: Request,

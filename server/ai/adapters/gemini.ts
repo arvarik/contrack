@@ -1,15 +1,10 @@
-// =============================================================================
-// AI Layer — Concrete Gemini Adapter (Smart Mesh v1.2)
-// =============================================================================
-// This is the ONLY file in the codebase that imports from `@google/genai`.
-// All Gemini SDK coupling is contained here. The rest of the AI layer
-// programs against the abstract AIProvider interface.
+// The Gemini adapter, the only file that imports `@google/genai`. The rest of
+// the AI layer programs against AIProvider.
 //
 // Routing: the SmartRouter picks the model for a class, a circuit breaker
 // pauses a model that answered 429, 5xx or timed out, for as long as Google
-// asks, and the retry goes to the next model. The QuotaTracker only counts
-// what was sent, for the Health page.
-// =============================================================================
+// asks, and the retry goes to the next model. The QuotaTracker only counts what
+// was sent, for the Health page.
 
 import {
   GoogleGenAI,
@@ -51,12 +46,7 @@ const GEMINI_TASK_TYPES: Record<EmbedUse, string> = {
   similarity: "SEMANTIC_SIMILARITY",
 };
 
-// ---------------------------------------------------------------------------
-// JSON Schema Translation (unchanged from v1.0)
-// ---------------------------------------------------------------------------
-// Converts a provider-agnostic JsonSchemaNode tree into Gemini's native
-// schema format that uses the `Type.*` enum vocabulary.
-// ---------------------------------------------------------------------------
+// JSON Schema translation: a JsonSchemaNode tree into Gemini's `Type.*` schema.
 
 /** Gemini SDK schema node — recursive Record type used by generateContent config. */
 type GeminiSchemaNode = {
@@ -100,13 +90,7 @@ function translateSchema(node: JsonSchemaNode): GeminiSchemaNode {
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
 // Constants
-// ---------------------------------------------------------------------------
 
 /** How long a model sits out after a 429, 5xx or timeout, when Google names no delay. */
 const CIRCUIT_BREAKER_DURATION_MS = 30_000;
@@ -116,11 +100,9 @@ const MIN_PAUSE_MS = 5_000;
 const MAX_PAUSE_MS = 15 * 60_000;
 
 /**
- * How long to pause a model after `error`.
- *
- * A Gemini 429 carries a `google.rpc.RetryInfo` detail, `"retryDelay": "37s"`,
- * which is Google's own answer to "when will this model take requests again".
- * Honoring it replaces the guessed per-tier limits the router used to hold.
+ * How long to pause a model after `error`. A Gemini 429 carries a
+ * `google.rpc.RetryInfo` detail, `"retryDelay": "37s"`: Google's own answer to
+ * when the model takes requests again.
  */
 export function pauseForError(error: unknown): number {
   const match = getErrorMessage(error).match(
@@ -132,11 +114,11 @@ export function pauseForError(error: unknown): number {
 }
 
 /**
- * The thinking level to ask a model for, or undefined to leave its default.
+ * The thinking level to ask a model for, or undefined for its default.
  *
- * Gemini counts thinking tokens against `maxOutputTokens`. At the default
- * level, 3.8 Flash thought for about 1,800 tokens on the research prompt,
- * hit a 2,500-token cap with `MAX_TOKENS` and never searched; 3.1 Pro did the
+ * Gemini counts thinking tokens against `maxOutputTokens`. At the default level
+ * 3.8 Flash thought for about 1,800 tokens on the research prompt, hit a
+ * 2,500-token cap with `MAX_TOKENS` and never searched, and 3.1 Pro did the
  * same. So deep and grounded work runs at "low", which every 3.x model takes.
  * Flash-Lite already defaults to "minimal", and 2.5 models take a thinking
  * budget, not a level, so both are left alone.
@@ -150,10 +132,9 @@ export function thinkingLevelFor(
   const config = getModelConfig(model);
   const generation = config?.generation ?? extractGeneration(model) ?? 0;
   if (generation < 3) return undefined;
-  // A caller that asks for a level gets it. Contact research's search pass
-  // asks for "high" with a 16,384-token budget: on the same research prompt,
-  // Gemini 3.8 Flash searched 0 of 3 times at "low" and 5 of 5 at "high"
-  // (2026-09-26).
+  // A caller that asks for a level gets it. On the research prompt, Gemini 3.8
+  // Flash searched 0 of 3 times at "low" and 5 of 5 at "high", so contact
+  // research asks for "medium" with a 16,384-token budget.
   if (requested) return requested;
   const cls = config?.modelClass ?? modelClass;
   if (!grounded && cls === "lite") return undefined;
@@ -188,22 +169,14 @@ function usageOf(
 }
 
 /**
- * Whether a discovered Gemini model can use the `googleSearch` tool.
- *
- * The list-models API says nothing about tool support, so this is derived:
- * the registry is authoritative for models we route to, and everything else
- * falls back to a family rule — the general-purpose `gemini-*` text models
- * take the `googleSearch` tool, and the specialist families do not.
- *
- * Excluded, and why: the open-weight Gemma and Lyria families and the
- * `deep-research-*` / `antigravity-*` agents are not `gemini-*` at all; and
- * within `gemini-*`, the embedding, image, video, speech, live-session,
- * retrieval (AQA), robotics, and computer-use variants are built for a
- * different job and reject or ignore a search tool.
- *
- * Getting this wrong in the permissive direction is what put non-grounding
- * models in the web-research dropdown, where picking one produced a setting
- * that saved cleanly and then failed on the first research call.
+ * Whether a discovered Gemini model can use the `googleSearch` tool. The
+ * list-models API says nothing about tools, so the registry decides for models
+ * it knows, and a family rule for the rest: general-purpose `gemini-*` text
+ * models take the tool. Gemma, Lyria and the `deep-research-*` /
+ * `antigravity-*` agents are not `gemini-*`, and the embedding, image, video,
+ * speech, live, retrieval (AQA), robotics and computer-use variants reject or
+ * ignore a search tool. Erring permissive would offer a model in the research
+ * picker that saves cleanly and fails on the first run.
  */
 function supportsGrounding(modelId: string): boolean {
   const known = getModelConfig(modelId);
@@ -214,9 +187,7 @@ function supportsGrounding(modelId: string): boolean {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Gemini Adapter (Smart Mesh v1.2)
-// ---------------------------------------------------------------------------
+// The adapter
 
 export class GeminiAdapter implements AIProvider {
   readonly name = "Gemini";
@@ -242,9 +213,9 @@ export class GeminiAdapter implements AIProvider {
   }
 
   /**
-   * The model the SmartRouter settles on for a class when nothing is
-   * paused. Under load the router may fall back to another model in the
-   * same class — this is the steady-state answer the settings UI shows.
+   * The model the SmartRouter settles on for a class when nothing is paused,
+   * shown in Settings. Under load the router may fall back to another model of
+   * the class.
    */
   defaultModelFor(
     modelClass: ModelClass,
@@ -295,11 +266,9 @@ export class GeminiAdapter implements AIProvider {
   }
 
   /**
-   * Enumerate models from the REST list endpoint.
-   *
-   * Uses fetch rather than the SDK because the REST response carries
-   * `supportedGenerationMethods`, which tells us *declaratively* whether a
-   * model does generation or embeddings — no name guessing needed.
+   * List models from the REST endpoint, not the SDK, because its
+   * `supportedGenerationMethods` says whether a model generates or embeds, with
+   * no name guessing.
    */
   async listModels(): Promise<ModelInfo[]> {
     const models: ModelInfo[] = [];
@@ -335,8 +304,8 @@ export class GeminiAdapter implements AIProvider {
         const methods = model.supportedGenerationMethods ?? [];
         const id = model.name.replace(/^models\//, "");
         const capabilities: ModelCapability[] = [];
-        // Gemini 1.x and 2.x are listed but answer a new project with 404
-        // "no longer available to new users", so they are not offered to chat.
+        // Gemini 1.x and 2.x are listed but answer a new project with 404 "no
+        // longer available to new users", so they are not offered for chat.
         if (methods.includes("generateContent") && !/^gemini-[12]\./.test(id))
           capabilities.push("chat");
         if (methods.includes("embedContent")) capabilities.push("embeddings");
@@ -360,14 +329,12 @@ export class GeminiAdapter implements AIProvider {
   }
 
   /**
-   * Embeddings via the Gemini embedding models.
-   *
-   * Each use is a task type. Measured on 2026-10-01 with
-   * gemini-embedding-001: on the search gate's corpus the retrieval types
-   * lift dense MRR from 0.858 to 0.899, and on the dedupe corpus
-   * SEMANTIC_SIMILARITY lifts the rank of a duplicate's partner from 0.809 to
-   * 0.892 MRR, where RETRIEVAL_DOCUMENT lowers it to 0.756. gemini-embedding-2
-   * answers the same with or without one. A call with no use sends none.
+   * Embeddings through the Gemini embedding models. Each use is a task type.
+   * With gemini-embedding-001 the retrieval types lift dense MRR on the search
+   * gate's corpus from 0.858 to 0.899, and on the dedupe corpus
+   * SEMANTIC_SIMILARITY lifts a duplicate's partner from 0.809 to 0.892 MRR,
+   * where RETRIEVAL_DOCUMENT lowers it to 0.756. gemini-embedding-2 answers the
+   * same either way. A call with no use sends none.
    */
   async embed(
     texts: string[],
@@ -376,9 +343,9 @@ export class GeminiAdapter implements AIProvider {
   ): Promise<number[][]> {
     const response = await this.client.models.embedContent({
       model,
-      // Each text must be its own Content. Passing `contents: texts` reads as
-      // ONE content with many parts and yields a single merged vector — which
-      // silently under-fills the batch instead of erroring.
+      // Each text must be its own Content: `contents: texts` reads as one
+      // content with many parts and returns one merged vector, a short batch
+      // with no error.
       contents: texts.map((text) => ({ parts: [{ text }] })),
       ...(use ? { config: { taskType: GEMINI_TASK_TYPES[use] } } : {}),
     });
@@ -393,9 +360,7 @@ export class GeminiAdapter implements AIProvider {
     };
   }
 
-  // ---------------------------------------------------------------------------
-  // Public API — AIProvider.generate()
-  // ---------------------------------------------------------------------------
+  // AIProvider.generate()
 
   async generate(options: AIGenerateOptions): Promise<AIGenerateResult> {
     options.signal?.throwIfAborted();
@@ -439,18 +404,14 @@ export class GeminiAdapter implements AIProvider {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // Public API: AIProvider.generateStream()
-  // ---------------------------------------------------------------------------
+  // AIProvider.generateStream()
 
   /**
-   * The same call, streamed: `onDelta` gets each piece of text as Gemini
-   * sends it. A JSON or grounded call is not streamed. It runs `generate`
-   * and sends the text as one piece.
-   *
-   * A stream that fails before its first piece falls back to `generate`,
-   * which retries on another model. After the first piece a failure is
-   * thrown, because a piece already sent cannot be taken back.
+   * The same call, streamed: `onDelta` gets each piece of text as Gemini sends
+   * it. A JSON or grounded call is not streamed: it runs `generate` and sends
+   * the text as one piece. A stream that fails before its first piece falls
+   * back to `generate`, which retries on another model. After the first piece a
+   * failure is thrown, because a sent piece cannot be taken back.
    */
   async generateStream(
     options: AIGenerateOptions,
@@ -526,12 +487,8 @@ export class GeminiAdapter implements AIProvider {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Internal — Execute a single API call against a specific model
-  // ---------------------------------------------------------------------------
-  // Shared by both routed and explicit-model codepaths.
-  // Contains the actual Gemini SDK call and response normalization.
-  // ---------------------------------------------------------------------------
+  // One API call against one model, for the routed and explicit-model paths
+  // alike: the SDK call and the response normalization.
 
   private async executeWithModel(
     options: AIGenerateOptions,
@@ -561,11 +518,9 @@ export class GeminiAdapter implements AIProvider {
     const usage = usageOf(metadata);
     const latencyMs = Date.now() - startMs;
 
-    // Validate JSON at the adapter boundary so downstream callers never
-    // crash on `JSON.parse` of a malformed model response, and hand them the
-    // parsed value re-serialized, so a fence or a stray sentence is gone.
-    // We deliberately do this for routed AND explicit-model paths so
-    // behavior is uniform.
+    // Validate JSON here, on both paths, so no caller crashes on `JSON.parse`
+    // of a malformed answer, and hand back the parsed value re-serialized,
+    // without a fence or a stray sentence.
     if (options.responseFormat === "json" && !options.enableSearchGrounding) {
       text = JSON.stringify(
         parseAIJson(text, `GeminiAdapter.executeWithModel(${model})`),
@@ -688,10 +643,9 @@ export class GeminiAdapter implements AIProvider {
     if (thinkingLevel) config.thinkingConfig = { thinkingLevel };
 
     if (options.enableSearchGrounding) {
-      // ⚠️ Gemini API constraint: googleSearch tool is incompatible with
-      // responseSchema. Must use text output for grounded retrieval.
-      // Contact research extracts into the schema in a call of its own
-      // (server/services/research/extract.ts).
+      // Gemini cannot combine the googleSearch tool with responseSchema, so
+      // grounded calls return text. Research extracts into the schema in a call
+      // of its own (server/services/research/extract.ts).
       config.tools = [{ googleSearch: {} }];
       config.responseMimeType = "text/plain";
     } else if (options.responseFormat === "json") {
@@ -703,9 +657,8 @@ export class GeminiAdapter implements AIProvider {
       config.responseMimeType = "text/plain";
     }
 
-    // Use native systemInstruction when a systemPrompt is provided.
-    // This gives the model a much cleaner signal than concatenating
-    // [SYSTEM]...[USER] markers into the prompt text, and saves tokens.
+    // A native systemInstruction, a cleaner signal than [SYSTEM]...[USER]
+    // markers in the prompt, and fewer tokens.
     if (options.systemPrompt) {
       config.systemInstruction = options.systemPrompt;
     }

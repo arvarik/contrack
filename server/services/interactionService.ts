@@ -31,9 +31,7 @@ import { NOW_ISO_SQL, lastContactedSql } from "./lastContacted.ts";
 // contact reactions register wherever this service can run.
 import "../events/contactSubscribers.ts";
 
-// =============================================================================
 // Interaction Payload Types
-// =============================================================================
 
 /** Payload for creating a new interaction. */
 interface CreateInteractionPayload {
@@ -59,28 +57,18 @@ interface UpdateInteractionPayload {
 }
 import { getErrorMessage } from "../utils/helpers.ts";
 
-// ---------------------------------------------------------------------------
 // Private helpers
-// ---------------------------------------------------------------------------
 
 /**
- * Background ghost-contact extraction from an interaction note.
- * Runs asynchronously via setTimeout(0) so it never blocks the HTTP response.
- * Errors are caught and logged — they must never surface to the caller.
+ * Extract the people a note mentions, in the background (setTimeout(0)), so the
+ * response never waits. Errors are logged, never surfaced to the caller.
  *
- * The scope arrives as an argument, not from the async context. A name the
- * model returns is matched against the caller's own contacts only, and a name
- * that matches nothing becomes a ghost the caller owns. Without the owner in
- * the match, a note saying "lunch with Sarah" would link to a stranger's
- * Sarah, and every later read of that mention would cross the boundary.
- *
- * The match itself is in `mentionResolution.ts`. It used to be
- * `eq(contacts.name, m.name)`, which missed "Jon" for "Jonathan Smith" and
- * made a second ghost every time.
- *
- * The note goes to a provider, so both AI switches are read here, when the
- * job runs: the instance switch and the owner's "Use AI for my account".
- * A note saved just before the owner turned AI off still stays on the server.
+ * The scope is an argument, not the async context. A name the model returns is
+ * matched against the caller's own contacts only (`mentionResolution.ts`), and
+ * a name that matches nothing becomes a ghost the caller owns, so "lunch with
+ * Sarah" never links to a stranger's Sarah. The note goes to a provider, so
+ * both AI switches are read when the job runs: the instance switch and the
+ * owner's "Use AI for my account".
  */
 async function runMentionExtraction(
   scope: Scope,
@@ -165,10 +153,9 @@ async function runMentionExtraction(
         });
 
         if (resolution.kind === "review") {
-          // Into the same queue as a duplicate, because that is what it is:
-          // two records that might be one person. Accepting it merges the
-          // ghost away and the mention follows, which `mergeContacts` already
-          // does for `interaction_mentions`.
+          // Into the same queue as a duplicate, because it is one: two records
+          // that may be one person. Accepting it merges the ghost away, and
+          // `mergeContacts` moves its `interaction_mentions`.
           storeSuggestion(
             scope,
             {
@@ -207,12 +194,11 @@ async function runMentionExtraction(
         .run();
 
       // The JSON above is what the note draws. The mention graph is
-      // `interaction_mentions`: a person's timeline shows the notes that
-      // mention them through it, and the Pulse Inbox counts a ghost's notes
-      // in it. Without a row, a person the model found showed in the note
-      // and nowhere else. Every id here is the caller's own: a link came
-      // from a scoped read, and a ghost was made for the caller above. The
-      // note's own contact owns the note already, so it gets no row.
+      // `interaction_mentions`: a timeline shows the notes that mention a
+      // person through it, and the Pulse Inbox counts a ghost's notes in it, so
+      // a person the model found needs a row. Every id here is the caller's own
+      // (a scoped read or a ghost made above). The note's own contact gets no
+      // row.
       const insertMention = sqlite.prepare(
         "INSERT OR IGNORE INTO interaction_mentions (interactionId, contactId) VALUES (?, ?)",
       );
@@ -255,10 +241,10 @@ function briefingSource(scope: Scope, contactId: string) {
 
 export const interactionService = {
   getTimeline(scope: Scope, contactId: string) {
-    // Every arm carries the owner. The timeline is a union of "interactions on
-    // this contact" and "interactions that mention it", and the second arm
-    // reaches through `interaction_mentions`, which has no owner column of its
-    // own. `i.ownerId` gates both arms at the row that does have one.
+    // Every arm carries the owner. The timeline is "interactions on this
+    // contact" plus "interactions that mention it", and the second arm goes
+    // through `interaction_mentions`, which has no owner, so `i.ownerId` gates
+    // both arms.
     const raw = sqlite
       .prepare(
         `
@@ -362,11 +348,9 @@ export const interactionService = {
           (m) => m[1],
         );
         if (explicitMentionIds.length > 0) {
-          // These ids come from the request body. Before this they were
-          // checked for existence alone, so any id at all linked a mention row
-          // to a contact the caller cannot see. One scoped statement returns
+          // These ids come from the request body. One scoped statement keeps
           // the subset the caller owns, and the rest are dropped in silence:
-          // reporting them would tell the caller which ids exist.
+          // reporting them would say which ids exist.
           const owned = contactRepo.findManyOwned(scope, explicitMentionIds);
           const insertStmt = sqlite.prepare(
             "INSERT OR IGNORE INTO interaction_mentions (interactionId, contactId) VALUES (?, ?)",
@@ -381,11 +365,10 @@ export const interactionService = {
 
       db.update(schema.contacts)
         .set({
-          // `sql.raw` for the clamp, and not `${NOW_ISO_SQL}`: drizzle binds
-          // an interpolated value as a parameter, so the expression went in as
-          // the literal string "strftime(...)" and MIN compared against that.
-          // A string beginning with a letter sorts above every timestamp, so
-          // the clamp silently did nothing.
+          // `sql.raw` for the clamp, not `${NOW_ISO_SQL}`: drizzle binds an
+          // interpolated value as a parameter, so the expression would be the
+          // string "strftime(...)", which sorts above every timestamp, and the
+          // clamp would do nothing.
           lastContactedAt: sql`MIN((SELECT MAX(date) FROM interactions WHERE contactId = ${contactId} AND ownerId = ${scope.ownerId}), ${sql.raw(NOW_ISO_SQL)})`,
           updatedAt: new Date().toISOString(),
           aiBriefing: null,
@@ -430,10 +413,9 @@ export const interactionService = {
       return res;
     })();
     dispatchEvents();
-    // Schedule background ghost-contact extraction — never blocks the response.
-    // The scope is captured here and passed in. AsyncLocalStorage does survive
-    // a timer, but rule 7 wants the owner to be an argument of the job rather
-    // than a property of whatever context happens to be current when it runs.
+    // Mention extraction runs in the background and never blocks the response.
+    // The scope is captured here and passed in, so the job carries its owner as
+    // an argument instead of reading whatever context is current.
     if (
       content &&
       !body.skipMentions &&
@@ -604,12 +586,9 @@ export const interactionService = {
   },
 
   /**
-   * Update an interaction's title and/or content.
-   *
-   * Only `title` and `content` are accepted — this is intentional.
-   * Fields like `type`, `date`, and `contactId` are immutable after creation
-   * to preserve audit-trail integrity. Any other keys in `body` are silently
-   * ignored to prevent accidental data corruption.
+   * Update an interaction's title and content, and nothing else. `type`, `date`
+   * and `contactId` do not change after creation, to keep the audit trail
+   * whole, and other keys in `body` are ignored.
    */
   updateInteraction(scope: Scope, id: string, body: UpdateInteractionPayload) {
     const existing = db
@@ -737,9 +716,9 @@ export const interactionService = {
 
   getRelationships(scope: Scope, contactId: string, limit: number) {
     // The mention graph reaches sideways through `interaction_mentions`, which
-    // carries no owner. Two of the three arms start at `interactions`, so they
-    // gate on `i.ownerId`. The third starts at a mention row, so the outer
-    // `c.ownerId` is what stops it, and it also covers the other two.
+    // has no owner. Two arms start at `interactions` and gate on `i.ownerId`.
+    // The third starts at a mention row, so the outer `c.ownerId` stops it, and
+    // covers the other two as well.
     return sqlite
       .prepare(
         `

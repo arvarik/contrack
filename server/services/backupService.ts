@@ -1,25 +1,16 @@
-// =============================================================================
-// Backup Service — scheduled SQLite snapshots, verified and rotated
-// =============================================================================
-// Uses better-sqlite3's online backup API (safe while the DB is in use, WAL
-// included) to snapshot curator.db into DATA_DIR/backups/. A CRM database is
-// irreplaceable personal data — backups turn a bad bulk operation or disk
-// failure from catastrophic into annoying.
-//
-// Every snapshot is opened again as soon as it is written. Until 2.0 nothing
-// ever did: the file was produced, rotated, and trusted, and the first person
-// to find out whether any of it worked would have been somebody restoring it
-// after losing the original. A backup nobody has opened is a hope.
+// Scheduled SQLite snapshots, verified and rotated. better-sqlite3's online
+// backup API (safe while the database is in use, WAL included) copies
+// curator.db into DATA_DIR/backups/, so a bad bulk operation or a disk failure
+// is annoying instead of catastrophic. Every snapshot is opened again as soon
+// as it is written: a backup nobody has opened is a hope.
 //
 // Config (env):
-//   BACKUP_INTERVAL_HOURS — schedule cadence (default 24; 0 disables schedule)
-//   BACKUP_KEEP           — rotation depth (default 7 most recent)
+//   BACKUP_INTERVAL_HOURS: schedule cadence (default 24; 0 turns it off)
+//   BACKUP_KEEP:           rotation depth (default 7 most recent)
 //
-// The schedule is two jobs (server/jobs/backups.ts): the startup snapshot,
-// 15 seconds after boot, and the scheduled backup, every interval. The
-// interval is a setting that can change at run time, and
-// `rescheduleBackups` moves the next run when it does.
-// =============================================================================
+// The schedule is two jobs (server/jobs/backups.ts): the startup snapshot 15
+// seconds after boot, and the scheduled backup every interval. The interval is
+// a setting, and `rescheduleBackups` moves the next run when it changes.
 
 import fs from "fs";
 import path from "path";
@@ -38,11 +29,9 @@ import { nextRunOf, scheduleNextRun } from "../jobs/runner.ts";
 export const BACKUPS_DIR = path.join(DATA_DIR, "backups");
 
 /**
- * The tables a snapshot is counted against.
- *
- * The eight that carry an owner, plus `users`. Between them they hold every
- * row somebody would be upset to lose, and a snapshot that reads cleanly but
- * holds none of them is the failure this check exists for.
+ * The tables a snapshot is counted against: the owned tables plus `users`,
+ * which hold every row somebody would hate to lose. A snapshot that reads
+ * cleanly and holds none of them is the failure this check exists for.
  */
 const COUNTED_TABLES = [...OWNED_TABLES, "users"] as const;
 
@@ -66,8 +55,8 @@ export interface BackupInfo {
   sizeBytes: number;
   createdAt: string;
   /**
-   * Null for a snapshot written before 2.0, or one whose sidecar was removed.
-   * Not the same as a failed check, and the view says so.
+   * Null for a snapshot with no sidecar (an older one, or one whose sidecar was
+   * removed). Not the same as a failed check, and the view says so.
    */
   verification: BackupVerification | null;
 }
@@ -92,24 +81,19 @@ function countRows(db: Database.Database, table: string): number | null {
 }
 
 /**
- * Open a snapshot and decide whether it is a backup or just a file.
+ * Open a snapshot and decide whether it is a backup or just a file. Three
+ * things can be wrong, each quieter than the last:
  *
- * Three things can be wrong, in increasing order of how quietly they fail:
- *
- * 1. The file does not open. A truncated or corrupted snapshot throws here
- *    rather than failing the integrity check below, so the open is inside the
- *    same try.
- * 2. `PRAGMA quick_check` reports damage. This reads every page and every
- *    index, which is the whole point of opening the file.
- * 3. The file is sound and empty. This is the one nobody would notice: a
- *    snapshot taken at the wrong moment, or of the wrong database, reads
- *    perfectly and restores nothing. A table that has rows in the live
+ * 1. The file does not open. A truncated or corrupted snapshot throws here, so
+ *    the open is inside the same try.
+ * 2. `PRAGMA quick_check` reports damage. It reads every page and index.
+ * 3. The file is sound and empty: a snapshot of the wrong moment or database
+ *    reads perfectly and restores nothing. A table with rows in the live
  *    database and none in the snapshot fails the check.
  *
- * sqlite-vec is deliberately NOT loaded. Nothing counted here is a virtual
- * table, `quick_check` covers the vec0 shadow tables as ordinary pages, and
- * not loading an extension into a file of unknown soundness is one less way
- * for this to be the thing that crashes.
+ * sqlite-vec is not loaded on purpose: nothing counted is a virtual table,
+ * `quick_check` reads the vec0 shadow tables as ordinary pages, and an
+ * extension in a file of unknown soundness is one more way to crash.
  */
 export function verifyBackup(file: string): BackupVerification {
   const checkedAt = new Date().toISOString();
@@ -120,15 +104,12 @@ export function verifyBackup(file: string): BackupVerification {
     liveRows[table] = countRows(sqlite, table) ?? 0;
   }
 
-  // Opening a snapshot creates its WAL companions, even read only: the file
-  // was copied from a database in WAL mode, so SQLite builds the shared
-  // memory index beside it. A read-only connection cannot clean them up when
-  // it closes, so without this the backups directory grows a 32 KB `-shm` and
-  // an empty `-wal` for every snapshot ever verified, and they outlive the
-  // snapshot they belong to because rotation is not looking for them.
-  //
-  // Only what this open created is removed. A companion that was already
-  // there belongs to somebody else and is left alone.
+  // Opening a snapshot creates its WAL companions, even read only, because it
+  // was copied from a WAL-mode database. A read-only connection cannot remove
+  // them when it closes, so without this every verified snapshot would leave a
+  // 32 KB `-shm` and an empty `-wal` that rotation never removes. Only what
+  // this open created is removed; a companion already there belongs to somebody
+  // else.
   const companions = [`${file}-shm`, `${file}-wal`].filter(
     (companion) => !fs.existsSync(companion),
   );
@@ -179,10 +160,9 @@ export function verifyBackup(file: string): BackupVerification {
   } finally {
     snapshot?.close();
     for (const companion of companions) {
-      // The `-wal` is empty by construction: a read-only connection cannot
-      // write to it. The size check is what makes that a fact rather than an
-      // assumption, because removing a WAL with anything in it would take the
-      // snapshot's most recent pages with it.
+      // A read-only connection cannot write the `-wal`, and the size check
+      // makes that a fact: removing a WAL with anything in it would take the
+      // snapshot's newest pages with it.
       try {
         if (fs.existsSync(companion) && fs.statSync(companion).size === 0) {
           fs.rmSync(companion, { force: true });
@@ -247,10 +227,9 @@ function rotateBackups(): void {
     try {
       const file = path.join(BACKUPS_DIR, backup.filename);
       fs.unlinkSync(file);
-      // The sidecar goes with the snapshot it describes. A verification left
-      // behind would be adopted by the next file to take that name, and a
-      // timestamped name only repeats if the clock goes backwards, which is
-      // exactly when a stale answer would be least welcome.
+      // The sidecar goes with its snapshot, or the next file to take that name
+      // would adopt a stale verification (a timestamped name repeats only when
+      // the clock goes backwards).
       fs.rmSync(sidecarPath(file), { force: true });
       // Anything a verification left beside an older snapshot goes with it.
       fs.rmSync(`${file}-shm`, { force: true });
@@ -284,8 +263,8 @@ function removePartials(): void {
 }
 
 /**
- * Take a snapshot now. Uses the online backup API — consistent even with
- * concurrent writers, and runs incrementally without blocking the event loop.
+ * Take a snapshot now with the online backup API: consistent with concurrent
+ * writers, and incremental, so the event loop is not blocked.
  */
 export async function runBackup(): Promise<BackupInfo> {
   if (activeBackupPromise) {
@@ -299,10 +278,9 @@ export async function runBackup(): Promise<BackupInfo> {
       const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
       const filename = `curator-${stamp}.db`;
       const dest = path.join(BACKUPS_DIR, filename);
-      // Written under a name the listing does not read, and renamed once it
-      // is whole and checked. A stop during the copy used to leave a partial
-      // file under the final name: the newest snapshot, kept by rotation,
-      // and the one a restore would reach for first.
+      // Written under a name the listing does not read, and renamed once whole
+      // and checked, so a stop during the copy never leaves a partial file as
+      // the newest snapshot, the one a restore reaches for first.
       const partial = `${dest}${PARTIAL}`;
       removePartials();
 
@@ -312,9 +290,7 @@ export async function runBackup(): Promise<BackupInfo> {
       try {
         await sqlite.backup(partial);
         stat = fs.statSync(partial);
-        // Opened again immediately. The check is worth almost nothing a week
-        // later and everything now, because now is when the snapshot can be
-        // taken again.
+        // Checked at once, while the snapshot can still be taken again.
         verification = verifyBackup(partial);
         fs.renameSync(partial, dest);
       } catch (err) {
@@ -365,13 +341,10 @@ export async function runBackup(): Promise<BackupInfo> {
 }
 
 /**
- * Complain at boot when the newest verified snapshot is too old.
- *
- * "Too old" is two intervals: one missed snapshot is a restart at the wrong
- * moment, two is a schedule that has stopped. Nothing here fixes anything —
- * the startup snapshot fifteen seconds later may well put it right — but the
- * log line is the only place an operator finds out that the backups they
- * think they have stopped happening some time ago.
+ * Warn at boot when the newest verified snapshot is more than two intervals
+ * old: one missed snapshot is a restart at the wrong moment, two is a schedule
+ * that stopped. The log line is where an operator finds out that the backups
+ * they think they have stopped some time ago.
  */
 function warnAboutStaleBackups(intervalHours: number): void {
   const verified = listBackups().filter((b) => b.verification?.ok);
@@ -402,10 +375,9 @@ function warnAboutStaleBackups(intervalHours: number): void {
 export const SCHEDULED_BACKUP_JOB = "backup.scheduled";
 
 /**
- * The gap between scheduled backups, in milliseconds, or null when the
- * interval setting turns them off (0, or a value that is not a number).
- * Read each time a backup is scheduled, so a changed setting applies to the
- * next one.
+ * The gap between scheduled backups in milliseconds, or null when the interval
+ * setting turns them off (0, or not a number). Read at each scheduling, so a
+ * changed setting applies to the next one.
  */
 export function backupIntervalMs(): number | null {
   const hours = backupIntervalHours().value;
@@ -414,11 +386,11 @@ export function backupIntervalMs(): number | null {
 
 /**
  * Move the next scheduled backup to one interval from now, or cancel it when
- * the interval is off. Runs when the setting changes. Does nothing when
+ * the interval is off, when the setting changes. Nothing when
  * DISABLE_BACKGROUND_JOBS is true.
  *
- * @returns when the next scheduled backup runs, in epoch milliseconds, or
- *   null when there is none.
+ * @returns when the next scheduled backup runs, in epoch milliseconds, or null
+ *   when there is none.
  */
 export function rescheduleBackups(): number | null {
   if (process.env.DISABLE_BACKGROUND_JOBS === "true") return null;
@@ -449,13 +421,13 @@ registerBackupIntervalChangeListener(() => {
 });
 
 /**
- * Boot: say when the backups seem to have stopped, and how often they run.
- * The runs themselves are jobs, which the runner schedules: the startup
- * snapshot 15 seconds after boot (so migrations and backfills settle first),
- * and the scheduled backup every interval.
+ * Boot: warn when the backups seem to have stopped, and log how often they run.
+ * The runner schedules the runs as jobs: the startup snapshot 15 seconds after
+ * boot, so migrations and backfills settle first, and the scheduled backup
+ * every interval.
  *
- * @returns the gap between scheduled backups in milliseconds, or null when
- *   they are off or background jobs are.
+ * @returns the gap between scheduled backups in milliseconds, or null when they
+ *   are off or background jobs are.
  */
 export function startBackupSchedule(): number | null {
   if (process.env.DISABLE_BACKGROUND_JOBS === "true") return null;

@@ -1,26 +1,17 @@
-// =============================================================================
-// AI Layer — Shared JSON-schema translation
-// =============================================================================
-// One translator for the internal JsonSchemaNode shape, replacing the three
-// per-adapter copies that had already drifted apart. The dialects differ in
-// exactly two documented ways; everything else identical in all three copies.
-//
-// The drift mattered once already: the OpenAI/compat copy returned early on
-// `nullable`, so a nullable OBJECT dropped its properties silently. No live
-// schema hits that today (nullables are all leaf strings), but three copies
-// meant a fix in one kept the bug alive in two.
-// =============================================================================
+// One translator from JsonSchemaNode to each provider's dialect. The dialects
+// differ in exactly two ways (below); everything else is shared, so a fix
+// reaches every adapter. A nullable object, for one, keeps its properties in
+// every dialect.
 
 import type { JsonSchemaNode } from "./types.ts";
 
 /**
- * How a dialect writes "this value may be null".
- *
- * - "type-array": `type: ["string", "null"]` — Anthropic's grammar compiler
- *   accepts the JSON-Schema union form directly.
- * - "anyOf": `anyOf: [<node>, {type:"null"}]` — OpenAI's structured-output
- *   validator rejects type arrays; the branch carries the FULL node, so a
- *   nullable object keeps its properties.
+ * How a dialect writes "this value may be null":
+ * - "type-array": `type: ["string", "null"]`. Anthropic's grammar compiler
+ *   takes the union form.
+ * - "anyOf": `anyOf: [<node>, {type:"null"}]`. OpenAI's validator refuses type
+ *   arrays; the branch carries the full node, so a nullable object keeps its
+ *   properties.
  */
 export type NullableStyle = "type-array" | "anyOf";
 
@@ -28,10 +19,10 @@ export interface TranslateOptions {
   nullableStyle: NullableStyle;
   /**
    * When to stamp `additionalProperties: false`:
-   * - "objects":         every `type: "object"` node (Anthropic — its grammar
-   *                      wants the constraint even on bare object nodes)
-   * - "with-properties": only nodes that declare properties (OpenAI/compat —
-   *                      the historical behavior, preserved exactly)
+   * - "objects":         every `type: "object"` node (Anthropic's grammar wants
+   *   it even on bare object nodes)
+   * - "with-properties": only nodes that declare properties (OpenAI and
+   *   compatible servers)
    */
   sealObjects: "objects" | "with-properties";
 }
@@ -77,20 +68,16 @@ export function translateSchemaNode(
   return result;
 }
 
-// =============================================================================
-// Root shape — OpenAI's structured output takes an object at the root
-// =============================================================================
+// Root shape: OpenAI's structured output wants an object root
 
 /** The property a non-object root travels under while it is wrapped. */
 const WRAPPED_KEY = "items";
 
 /**
- * Give a schema an object root, and say how to unwrap the answer.
- *
- * OpenAI's `json_schema` (Chat Completions and Responses alike) answers a
- * `type: "array"` root with a 400, "schema must be a JSON Schema of 'type:
- * "object"'". @mention extraction and the Catch-Me-Up briefing both ask for an
- * array, so both failed on OpenAI while working on Gemini.
+ * Give a schema an object root, and say how to unwrap the answer. OpenAI's
+ * `json_schema` (Chat Completions and Responses) answers a `type: "array"` root
+ * with a 400, "schema must be a JSON Schema of 'type: "object"'", and
+ * @mention extraction and the Catch-Me-Up briefing both ask for an array.
  */
 export function withObjectRoot(node: JsonSchemaNode): {
   schema: JsonSchemaNode;
@@ -110,9 +97,7 @@ export function withObjectRoot(node: JsonSchemaNode): {
   };
 }
 
-// =============================================================================
 // Anthropic's grammar limits
-// =============================================================================
 
 /** Claude compiles a schema with at most this many optional parameters. */
 export const ANTHROPIC_MAX_OPTIONAL = 24;
@@ -120,13 +105,11 @@ export const ANTHROPIC_MAX_OPTIONAL = 24;
 export const ANTHROPIC_MAX_UNIONS = 16;
 
 /**
- * Whether Claude will refuse to compile `node` as an output schema.
- *
- * Contrack's contact-parsing schema has 33 optional fields and the research
- * schema 32. Claude answers either with a 400, and the adapter used to learn
- * that by sending it, once per schema per process. Counting here goes
- * straight to prompt-guided JSON. Making the optional fields required and
- * nullable does not help: that trips the union limit instead.
+ * Whether Claude will refuse to compile `node` as an output schema. The
+ * contact-parsing schema has 33 optional fields and the research schema 32, and
+ * Claude answers either with a 400, so counting here goes straight to
+ * prompt-guided JSON without a failed request. Making optional fields required
+ * and nullable does not help: that trips the union limit instead.
  */
 export function exceedsAnthropicSchemaLimits(node: JsonSchemaNode): boolean {
   let optional = 0;

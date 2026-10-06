@@ -1,14 +1,10 @@
 import type { Request, Response, NextFunction, RequestHandler } from "express";
 
 /**
- * Wrap an async route handler so any rejected promise (or sync throw) is
- * forwarded to Express's error middleware via `next(err)`.
- *
- * Tighter than the previous version:
- * - Handler must return `Promise<unknown>` (or `unknown`). No accidental `void`.
- * - Returned function is typed as Express `RequestHandler`.
- * - Sync throws are caught too (they would otherwise crash the process when
- *   the handler is invoked outside the awaited promise chain).
+ * Wrap an async route handler so a rejected promise, or a sync throw, goes to
+ * Express's error middleware through `next(err)`. The handler must return a
+ * promise or a value (no accidental `void`), and the result is typed as an
+ * Express `RequestHandler`.
  */
 export const asyncHandler = (
   fn: (

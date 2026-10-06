@@ -1,20 +1,14 @@
-// =============================================================================
-// Map config — which basemap style each palette loads
-// =============================================================================
-// The map draws OpenFreeMap's public vector styles by default: no API key, no
-// registration, no request limits. An operator can point either palette at
-// another style, a self-hosted one included, with two env vars:
+// Which basemap style each palette loads. By default OpenFreeMap's public
+// vector styles: no API key, no registration, no request limits. An operator
+// can point either palette at another style, self-hosted included:
 //
 //   MAP_STYLE_LIGHT  default https://tiles.openfreemap.org/styles/positron
 //   MAP_STYLE_DARK   default https://tiles.openfreemap.org/styles/dark
 //
 // A value is an absolute https:// URL or a root-relative path such as
-// /map/style.json, which is a style served from public/ by this app. This
-// module is the one place both answers come from: GET /api/auth/status sends
-// the URLs to the client, and the production CSP allows their origins. The
-// style the client asks for and the origin the CSP allows therefore never
-// drift apart.
-// =============================================================================
+// /map/style.json (served from public/). Both GET /api/auth/status, which sends
+// the URLs to the client, and the CSP, which allows their origins, read them
+// here, so the two never drift apart.
 
 import type { MapStyleUrls } from "../../shared/geo.ts";
 import { log } from "./logger.ts";
@@ -28,11 +22,10 @@ export const DEFAULT_MAP_STYLE_DARK =
 const ROOT_RELATIVE = /^\/(?!\/)[^\s\\]*$/;
 
 /**
- * The style URL a value names, or null when it names none.
- *
- * An absolute URL must be https and carry no credentials, and it comes back
- * normalized. Its origin goes into a response header, so anything the URL
- * parser does not accept is refused here rather than escaped there.
+ * The style URL a value names, or null. An absolute URL must be https with no
+ * credentials, and comes back normalized. Its origin goes into a response
+ * header, so anything the URL parser refuses is refused here, not escaped
+ * there.
  */
 export function parseStyleUrl(value: string): string | null {
   const trimmed = value.trim();
@@ -62,11 +55,9 @@ function pick(name: string, raw: string | undefined, fallback: string): string {
 let cached: { key: string; styles: MapStyleUrls } | null = null;
 
 /**
- * The style URL for each palette.
- *
- * Read on every status request and every response header, so the result is
- * kept until the env values change, and an invalid value warns once rather
- * than once per request.
+ * The style URL for each palette, read on every status request and every
+ * response header, so the result is kept until the env values change, and an
+ * invalid value warns once.
  */
 export function getMapStyles(
   env: NodeJS.ProcessEnv = process.env,
@@ -87,11 +78,10 @@ export function getMapStyles(
 
 /**
  * The origins the CSP must allow in `connect-src` for these styles, each once.
- *
- * A style, its tiles, its glyphs and its sprite load through `fetch`. A
- * root-relative style is same-origin and adds nothing. A style can still name
- * tiles on another host, and an operator who does that adds the host here by
- * serving the style from it or by self-hosting the tiles too.
+ * A style, its tiles, glyphs and sprite load through `fetch`; a root-relative
+ * style is same-origin and adds nothing. A style can still name tiles on
+ * another host; an operator adds that host here by serving the style from it,
+ * or self-hosts the tiles too.
  */
 export function styleOrigins(styles: MapStyleUrls = getMapStyles()): string[] {
   const origins = new Set<string>();

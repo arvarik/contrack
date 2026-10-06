@@ -1,10 +1,6 @@
 import { z } from "zod";
-// =============================================================================
-// AI Services — Mention Extraction (ghost contacts from timeline notes)
-// =============================================================================
-// Extracted verbatim from aiService.ts in the domain split; the barrel there
-// re-exports this module, so import sites are unchanged.
-// =============================================================================
+// Mention extraction: the people a timeline note names. aiService.ts re-exports
+// it.
 
 import type { MentionEntity } from "../types.ts";
 import { log } from "../../utils/logger.ts";
@@ -16,8 +12,8 @@ import { generateFor } from "../gateway.ts";
 import { isMockMode, safeParseJson } from "./shared.ts";
 
 /**
- * Examines a timeline note and extracts distinct person entities along
- * with contextual mapping. Avoids the document author.
+ * The distinct people a timeline note names, with context, leaving out the
+ * note's author.
  */
 export async function extractMentions(text: string): Promise<MentionEntity[]> {
   if (isMockMode()) {

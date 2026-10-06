@@ -28,9 +28,7 @@ import { classifyQuery, nameSignals, type QueryIntent } from "./intent.ts";
 import type { ReasonEvidence } from "./reasons.ts";
 import type { CompiledFacets } from "./facetSql.ts";
 
-// =============================================================================
 // Types
-// =============================================================================
 
 /** The ranked lists reciprocal rank fusion combines. */
 export type FusionChannel = "lexical" | "dense" | "trait" | "passage";
@@ -50,9 +48,8 @@ export interface RetrievalResult {
   /** Pre-filter summary for logs and debug UI. */
   preFilterSummary: string;
   /**
-   * The LLM-extracted QueryPlan, or null when AI was unavailable / parse
-   * failed. Downstream stages (rerank, synthesis) consume this to verify
-   * candidates against the user's structured intent.
+   * The model's QueryPlan, or null when AI was unavailable or the parse failed.
+   * The rerank and synthesis stages check candidates against it.
    */
   plan: QueryPlan | null;
   queryVector?: Float32Array | null;
@@ -86,20 +83,17 @@ export interface FusionList {
   items: RankedItem[];
 }
 
-// =============================================================================
 // Constants
-// =============================================================================
 
 /**
- * RRF smoothing constant.
- * k=15 provides sharper discrimination than k=60 for ~960 rows:
- *   top-1 = 1/16 = 0.0625 vs top-10 = 1/25 = 0.04 (~36% drop)
- *   (k=60: top-1 = 0.0164 vs top-10 = 0.0143 — too flat)
+ * RRF smoothing constant. k=15 separates ranks more sharply than k=60 at about
+ * 1,000 rows: top-1 = 1/16 = 0.0625 against top-10 = 1/25 = 0.04, where k=60
+ * gives 0.0164 against 0.0143.
  *
- * Measured with the weighted lists on the 70 golden queries
- * (`node scripts/benchmark-search.ts --contacts N --rrf-k K`). Recall@10 was
- * 1.00 at every k. The fused MRR was 0.950, 0.942 and 0.942 at 300 contacts
- * and 0.917, 0.915 and 0.906 at 5,000 for k = 15, 30 and 60, so 15 stays.
+ * On the 70 golden queries with the weighted lists (`node
+ * scripts/benchmark-search.ts --contacts N --rrf-k K`), Recall@10 was 1.00 at
+ * every k, and the fused MRR was 0.950, 0.942 and 0.942 at 300 contacts and
+ * 0.917, 0.915 and 0.906 at 5,000 for k = 15, 30 and 60.
  */
 export const RRF_K = 15;
 
@@ -118,17 +112,11 @@ const BOOST_LIMIT = 50;
 /** Trait matches read before they are ranked and cut to BOOST_LIMIT. */
 const TRAIT_SCAN_LIMIT = 500;
 
-// =============================================================================
-// Phase 0: Hard Pre-Filter (QueryPlan.must → Set<contactId>)
-// =============================================================================
-// This is the core v5 change. When the planner produces a high-confidence
-// `must.*Matchers` list, we apply it as a HARD constraint against the
-// relevant contact column. Only contacts that pass become candidates for
-// FTS/vector retrieval.
-//
-// Matching is JS-side word-boundary regex (case-insensitive) so we can
-// safely include 2-letter codes ("CA", "NY") without false-matching
-// "Casablanca" or "Anywhere".
+// Phase 0: the hard pre-filter (QueryPlan.must → Set<contactId>). A
+// high-confidence `must.*Matchers` list is a hard constraint on its contact
+// column, and only contacts that pass reach FTS and vector retrieval. Matching
+// is a case-insensitive word-boundary regex in JavaScript, so 2-letter codes
+// ("CA", "NY") do not match "Casablanca" or "Anywhere".
 
 interface HardFilterResult {
   /** Set of contact IDs allowed downstream, or null = "no filter". */
@@ -150,16 +138,15 @@ function matchedText(re: RegExp, haystack: string): string | undefined {
 }
 
 /**
- * Active contacts only — ghosts, archived contacts, and soft-merged
- * (canonical replaced) contacts are excluded from all search results.
+ * Active contacts only: ghosts, archived and soft-merged contacts never reach a
+ * search result.
  */
 const ACTIVE_GATE_SQL = ACTIVE_CONTACT_SQL;
 
 /**
- * Compile a list of matchers into a single case-insensitive word-boundary
- * regex. Word boundary uses `(?:^|[^\\p{L}\\p{N}])` and `(?=[^\\p{L}\\p{N}]|$)`
- * (not \b) so that hyphenated/punctuated text matches correctly without
- * Unicode surprises.
+ * Compile matchers into one case-insensitive word-boundary regex. The boundary
+ * is `(?:^|[^\\p{L}\\p{N}])` and `(?=[^\\p{L}\\p{N}]|$)`, not \b, so hyphenated
+ * and Unicode text match correctly.
  */
 function buildMatcherRegex(matchers: string[]): RegExp | null {
   if (!matchers.length) return null;
@@ -177,9 +164,8 @@ function buildMatcherRegex(matchers: string[]): RegExp | null {
 }
 
 /**
- * Apply the QueryPlan's `must` filters as a hard pre-filter against the
- * active contact corpus. Returns the set of allowed contact IDs, or null
- * if no filters apply.
+ * Apply the plan's `must` filters to the active contacts. Null when no filter
+ * applies.
  */
 function applyHardFilters(
   scope: Scope,
@@ -236,9 +222,8 @@ function applyHardFilters(
     }
   }
 
-  // Fetch only the columns we need to evaluate the matchers; for industry,
-  // we also fetch tags + interests inline as a coalesced text blob. Only for
-  // industry: the two subqueries cost a lookup per contact.
+  // Only the columns the matchers read. Tags and interests come inline for
+  // industry alone, because the two subqueries cost a lookup per contact.
   const childText = indRe
     ? `COALESCE((SELECT GROUP_CONCAT(tag, ' ') FROM contact_tags WHERE contactId = c.id), '') AS tagsText,
         COALESCE((SELECT GROUP_CONCAT(interest, ' ') FROM contact_interests WHERE contactId = c.id), '') AS interestsText`
@@ -353,9 +338,7 @@ function applyHardFilters(
   };
 }
 
-// =============================================================================
-// Phase 1a: FTS5 Keyword Retrieval (Weighted BM25)
-// =============================================================================
+// Phase 1a: FTS5 keyword retrieval (weighted BM25)
 
 function ftsRetrieval(
   scope: Scope,
@@ -368,17 +351,15 @@ function ftsRetrieval(
   );
 }
 
-// =============================================================================
-// Phase 1b: Local Vector KNN Retrieval
-// =============================================================================
+// Phase 1b: local vector KNN retrieval
 
 /**
  * The vector of a question, or null when nothing here can embed it.
  *
- * The vector channel's own gates: an embedding backend is ready, the owner
- * has vectors to search, and with AI off only a local model may embed.
- * Ask computes it once, and the semantic cache, the local list and the model
- * stage all read the same vector. A failure is logged and counts as none.
+ * The vector channel's gates: an embedding backend is ready, the owner has
+ * vectors to search, and with AI off only a local model may embed. Ask computes
+ * it once, for the semantic cache, the local list and the model stage. A
+ * failure is logged and counts as none.
  */
 export async function embedQuery(
   scope: Scope,
@@ -392,11 +373,10 @@ export async function embedQuery(
   const embedder = currentEmbedder();
   if (!aiAllowed && !embedder.local) return null;
   try {
-    // A backfill can hold the worker queue. A query must not wait behind
-    // it before the planner's own budget even starts. Cancel queued local
-    // work after 100 ms and keep the keyword channel available. A local
-    // model always runs on that worker: the main thread never loads
-    // onnxruntime (`cpuWorker.ts`).
+    // A backfill can hold the worker queue, and a query must not wait behind
+    // it, so queued local work is canceled after 100 ms and the keyword channel
+    // answers. A local model always runs on that worker: the main thread never
+    // loads onnxruntime (`cpuWorker.ts`).
     return embedder.local
       ? await withTimeout(
           (budget) => embedText(text, budget, embedder),
@@ -422,8 +402,7 @@ async function vectorRetrieval(
   aiAllowed = true,
   facets?: CompiledFacets | null,
 ): Promise<{ items: RankedItem[]; vector: Float32Array | null }> {
-  // The count is per owner now. An account with no vectors of its own skips
-  // the channel instead of asking a partition that holds nothing.
+  // An account with no vectors of its own skips the channel.
   if (!isSearchEmbeddingReady() || getSearchEmbeddingCount(scope) === 0) {
     return { items: [], vector: null };
   }
@@ -472,14 +451,11 @@ async function vectorRetrieval(
   }
 }
 
-// =============================================================================
-// Phase 1c: Soft Boost Channels (should.traits)
-// =============================================================================
-// Traits are a SOFT signal — a contact matching multiple traits ranks
-// higher but is not gated on them. Each trait becomes its own ranked list
-// in the RRF fusion, labeled `trait`, and the lists share one weight.
-// Always intersected with the hard pre-filter set (if any) and the facets,
-// so boosts can't surface excluded contacts.
+// Phase 1c: soft boosts (should.traits). A contact matching more traits ranks
+// higher but is not gated on them. Each trait is its own ranked list in the
+// fusion, labeled `trait`, and the lists share one weight. The lists are always
+// cut to the hard filter and the facets, so a boost cannot surface an excluded
+// contact.
 
 function buildTraitBoosts(
   scope: Scope,
@@ -561,18 +537,14 @@ function buildTraitBoosts(
   }));
 }
 
-// =============================================================================
-// Reciprocal Rank Fusion (RRF)
-// =============================================================================
+// Reciprocal rank fusion
 
 /**
- * Weighted reciprocal rank fusion.
- *
- * `score(d)` is the sum over the lists that rank d of `weight / (k + rank)`,
- * with 1-based ranks. The weights come from the query's kind: a name leans
- * on the keyword list, a question on the vector list. A tie keeps the order
- * in which the lists first reached the contact, so the result is the same
- * on every run.
+ * Weighted reciprocal rank fusion: `score(d)` sums `weight / (k + rank)` over
+ * the lists that rank d, with 1-based ranks. The query's kind sets the weights:
+ * a name leans on the keyword list, a question on the vector list. A tie keeps
+ * the order in which the lists first reached the contact, so the result is
+ * stable.
  */
 export function reciprocalRankFusion(
   lists: FusionList[],
@@ -609,16 +581,13 @@ export function reciprocalRankFusion(
   return candidates;
 }
 
-// =============================================================================
-// The query's kind, from its strict keyword matches
-// =============================================================================
+// The query's kind
 
 /**
- * Classify a query from its strict keyword matches.
- *
- * `classifyQuery` needs local name evidence: the names of the contacts the
- * query matches exactly or approximately. Returns the strict matches too,
- * because they are the whole answer for a name, an email or a phone.
+ * Classify a query from its strict keyword matches. `classifyQuery` needs the
+ * names of the contacts the query matches exactly or approximately. The strict
+ * matches come back too, because they are the whole answer for a name, an email
+ * or a phone.
  */
 export function queryIntent(
   scope: Scope,
@@ -647,9 +616,7 @@ export function queryIntent(
   };
 }
 
-// =============================================================================
 // Local retrieval: keyword and vector channels, fused, with no plan
-// =============================================================================
 
 export interface LocalRetrievalOptions {
   /** Contacts a plan's hard filter allows, or null for no filter. */
@@ -699,12 +666,10 @@ function channelLists(
 }
 
 /**
- * Keyword and vector retrieval fused by weighted reciprocal rank, with no
- * model call.
- *
- * About 10 ms at 5,000 contacts. Ask Contrack shows this list before the
- * planner answers, and keeps it when the model fails. `hybridRetrieval`
- * runs the same arithmetic inside the plan's hard filter.
+ * Keyword and vector retrieval fused by weighted reciprocal rank, with no model
+ * call: about 10 ms at 5,000 contacts. Ask Contrack shows this list before the
+ * planner answers, and keeps it when the model fails. `hybridRetrieval` runs
+ * the same arithmetic inside the plan's hard filter.
  */
 export async function localRetrieval(
   scope: Scope,
@@ -755,15 +720,12 @@ export async function localRetrieval(
   };
 }
 
-// =============================================================================
-// Main Entry Point
-// =============================================================================
+// Main entry point
 
 export interface HybridRetrievalOptions {
   /**
-   * A query vector already computed, or being computed, and the text it
-   * embeds. The planner runs first, so a vector still on its way is ready by
-   * the time it is read.
+   * A query vector already computed, or on its way, and the text it embeds. The
+   * planner runs first, so a vector still on its way is ready when it is read.
    */
   vector?: {
     text: string;
@@ -795,7 +757,7 @@ export async function hybridRetrieval(
   const planned = Date.now();
   const facets = options.facets ?? null;
 
-  // ── Phase 0: hard pre-filter ──────────────────────────────────────────
+  // Phase 0: hard pre-filter
   let allowedIds: Set<string> | null = null;
   let allowed: AllowedContact[] | null = null;
   let evidence = new Map<string, ReasonEvidence[]>();
@@ -830,7 +792,7 @@ export async function hybridRetrieval(
   const embedInput = buildSearchEmbeddingInput(query, plan);
   const filtered = Date.now();
 
-  // ── Phase 1: parallel retrieval (within filtered corpus) ──────────────
+  // Phase 1: parallel retrieval (within filtered corpus)
   const local = await localRetrieval(scope, query, {
     allowedIds,
     intent: options.intent,
@@ -844,13 +806,13 @@ export async function hybridRetrieval(
     rrfK: options.rrfK,
   });
 
-  // ── Phase 1c: soft boost channels (traits) ─────────────────────────────
+  // Phase 1c: soft boost channels (traits)
   signal?.throwIfAborted();
   const traitBoosts = plan
     ? buildTraitBoosts(scope, plan, allowedIds, facets, local.candidates)
     : [];
 
-  // ── Phase 2: weighted RRF across keyword, vector and trait lists ──────
+  // Phase 2: weighted RRF across keyword, vector and trait lists
   const fused = traitBoosts.length
     ? reciprocalRankFusion(
         [
@@ -870,9 +832,8 @@ export async function hybridRetrieval(
       )
     : local.candidates;
 
-  // ── Phase 3: confidence assessment ─────────────────────────────────────
-  // A high FTS ratio does not prove a natural-language constraint.
-  // The service uses a separate local name-prefix shortcut.
+  // Phase 3: confidence. A high FTS ratio does not prove a natural-language
+  // constraint, and the service has its own name-prefix shortcut.
   const highConfidence = false;
 
   const elapsed = Date.now() - t0;

@@ -1,20 +1,15 @@
-// =============================================================================
-// Prompt safety — data/instruction separation for untrusted text
-// =============================================================================
-// Contact fields, uploaded .eml files, imported CSV values, and web-grounded
-// research text all flow into LLM prompts. Any of them can carry adversarial
-// "ignore your instructions"-style content (a hostile vCard, a web page that
-// ranks for a contact's name). This module provides the two halves of the
-// mitigation:
+// Data and instruction separation for untrusted text. Contact fields, uploaded
+// .eml files, imported CSV values and web research text all reach prompts, and
+// any of them can carry "ignore your instructions" content (a hostile vCard, a
+// web page that ranks for a contact's name). The two halves of the defense:
 //
-//   1. wrapUntrusted() — fence untrusted text inside <untrusted_data> tags,
-//      neutralizing any embedded closing tag so content cannot escape the
-//      fence, stripping control characters, and capping length.
-//   2. UNTRUSTED_DATA_RULE — a standing system-prompt rule that tells the
-//      model the fenced content is data, never instructions.
+//   1. wrapUntrusted() fences untrusted text in <untrusted_data> tags,
+//      neutralizing any embedded closing tag, stripping control characters
+//      and capping length.
+//   2. UNTRUSTED_DATA_RULE is a standing system-prompt rule that the fenced
+//      content is data, never instructions.
 //
-// Every aiService/aiSearch prompt that interpolates untrusted text uses both.
-// =============================================================================
+// Every prompt that interpolates untrusted text uses both.
 
 /**
  * Standing system-prompt rule. Append to the systemPrompt of any call whose
@@ -32,11 +27,10 @@ those tags.`.trim();
 const DEFAULT_MAX_LENGTH = 8_000;
 
 /**
- * Sanitize untrusted text for prompt interpolation:
- * - strip ASCII control characters (except \n and \t)
- * - neutralize any embedded `</untrusted_data` closing-tag attempt and
- *   nested `<untrusted_data` opening tags so the fence cannot be escaped
- * - cap length (a hostile input shouldn't be able to flood the context)
+ * Sanitize untrusted text for a prompt: strip ASCII control characters (except
+ * \n and \t), neutralize embedded `</untrusted_data` and nested
+ * `<untrusted_data` tags so the fence cannot be escaped, and cap the length so
+ * hostile input cannot flood the context.
  */
 export function sanitizeForPrompt(
   text: string,
@@ -53,7 +47,7 @@ export function sanitizeForPrompt(
 }
 
 /**
- * Fence a piece of untrusted text for safe prompt interpolation.
+ * Fence untrusted text for a prompt.
  *
  * @param label - Short description of what the data is (shown to the model).
  * @param text  - The untrusted content.
@@ -68,9 +62,7 @@ export function wrapUntrusted(
   return `<untrusted_data label="${safeLabel}">\n${sanitizeForPrompt(text, maxLength)}\n</untrusted_data>`;
 }
 
-// =============================================================================
 // Write-side validation — AI output that gets persisted
-// =============================================================================
 
 /** Patterns that indicate an AI output field echoed injected instructions. */
 export const INJECTION_ECHO_PATTERNS = [
@@ -82,13 +74,11 @@ export const INJECTION_ECHO_PATTERNS = [
 ];
 
 /**
- * Sanitize a string value produced by an LLM before persisting it to the
- * database (AI Search enrichment writes contact fields). Returns null when
- * the value looks like an injection echo — callers treat null as "discard".
- *
- * This is a backstop, not the primary defense (that's the fencing above):
- * caps length, strips control chars, and rejects values that contain our
- * fence tokens or classic injection phrases.
+ * Sanitize a model's string before it is saved (research writes contact
+ * fields). Null when the value looks like an injection echo, which callers
+ * discard. A backstop behind the fencing above: it caps length, strips control
+ * characters, and refuses values with our fence tokens or classic injection
+ * phrases.
  */
 export function sanitizeAiOutputValue(
   value: string,

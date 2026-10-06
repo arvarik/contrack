@@ -1,9 +1,5 @@
 import { idsSchema } from "../../shared/contracts/common.ts";
-// =============================================================================
-// Routes — Data Lifecycle: trash (undoable deletes), backups, full export
-// =============================================================================
-// Mounted in server/app.ts at /api.
-// =============================================================================
+// Data lifecycle routes: trash (undoable deletes), backups and full export.
 
 import { Router } from "express";
 import type { Request } from "express";
@@ -26,7 +22,7 @@ import {
 
 const router = Router();
 
-// ─── Trash ───────────────────────────────────────────────────────────────────
+// Trash
 
 // The trash routes are scoped through `contactService` and enforced by isolation tests.
 router.get(
@@ -58,11 +54,8 @@ router.post(
 );
 
 /**
- * Restore many at once — the undo path for a bulk delete.
- *
- * Without this, undoing a 200-contact delete meant 200 round trips, which is
- * slow enough that the user watches their contacts trickle back one by one
- * and cannot tell whether it worked.
+ * Restore many at once, the undo of a bulk delete, so undoing 200 deletes is
+ * one round trip instead of 200.
  */
 router.post(
   "/trash/bulk-restore",
@@ -110,11 +103,10 @@ router.delete(
   }),
 );
 
-// ─── Backups ─────────────────────────────────────────────────────────────────
+// Backups
 
-// A backup is a copy of the whole database, so it holds every account's rows.
-// Both routes are administration, which is what the manifest has said since
-// Phase 2 and what `requireAdmin` enforces from Phase 3.
+// A backup is a copy of the whole database, so it holds every account's rows,
+// and both routes are admin only.
 router.get(
   "/backups",
   requireAdmin,
@@ -134,9 +126,9 @@ router.post(
       action: "backup.created",
       targetType: "backup",
       targetId: backup.filename,
-      // `verified` is in the audit row because a snapshot that failed its
-      // check is an event somebody should be able to find later, and the
-      // sidecar next to a rotated-out file will not be there to find.
+      // `verified` goes in the audit row, because a snapshot that failed its
+      // check is worth finding later, and the sidecar of a rotated-out file is
+      // gone.
       details: {
         filename: backup.filename,
         verified: backup.verification?.ok ?? false,
@@ -154,18 +146,14 @@ router.post(
   }),
 );
 
-// ─── Export ──────────────────────────────────────────────────────────────────
+// Export
 
 /**
- * The account name that goes in the download filename.
- *
- * Two accounts on one instance produce two files a day, and a filename with
- * only a date in it makes the second one overwrite the first in the browser's
- * downloads folder. The username answers which account the file came from.
- *
- * `validateUsername` already restricts what an account name may contain, and
- * this strips anything else anyway: the value lands inside a quoted
- * `Content-Disposition` header, where a stray quote would end the filename.
+ * The account name in the download filename. Two accounts make two files a day,
+ * and a date alone would let the second overwrite the first in the downloads
+ * folder. `validateUsername` already limits account names, and this strips
+ * anything else anyway: the value lands in a quoted `Content-Disposition`
+ * header, where a stray quote would end the filename.
  */
 function exportOwnerSlug(req: Request): string {
   const raw = req.principal?.user.username ?? "";

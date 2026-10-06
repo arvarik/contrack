@@ -1,26 +1,20 @@
 /**
- * Smart Avatar — which look the default avatar draws for a contact.
- *
- * The avatar service keeps three pools of hair and clothing: female, male and
- * neutral. This module picks the pool. It never calls a network service, and
- * the same input always gives the same answer.
- *
- * The order of evidence:
+ * Which look the default avatar draws for a contact: the avatar service keeps
+ * female, male and neutral pools of hair and clothing (services/avatarService),
+ * and this picks the pool, with no network call and the same answer for the
+ * same input. The order of evidence:
  *
  *   1. Pronouns, when the contact has them. "she/her" is female, "he/him" is
  *      male, and any other pronoun ("they/them", "xe", "any") is neutral.
  *   2. A title the name starts with: Mr, Sir, Herr are male; Mrs, Ms, Dame,
  *      Frau are female; Mx is neutral. Dr, Prof and the like are dropped.
- *   3. The first name, looked up in a table built from the World Gender Name
- *      Dictionary (see nlp/givenNames.ts). The table has a line only for
- *      names that nine in ten people who carry them share a gender.
+ *   3. The first name, in a table built from the World Gender Name Dictionary
+ *      (nlp/givenNames.ts), which lists only names nine in ten of whose
+ *      bearers share a gender.
  *
  * Anything else is neutral. A neutral face has no beard and hair that reads
- * either way, so a name the data cannot call costs a guess, never a wrong one.
- * The old lookup forced every name into male or female, so Jordan, Taylor and
- * Kim each got a gender by coin toss.
- *
- * The asset pools live in services/avatarService.
+ * either way, so a name the data cannot call costs a guess, never a wrong one:
+ * Jordan, Taylor and Kim are not given a gender by coin toss.
  */
 
 import { foldName, lookupGivenName } from "./nlp/givenNames.ts";
@@ -28,9 +22,7 @@ import { foldName, lookupGivenName } from "./nlp/givenNames.ts";
 /** The three pools avatarService keys off. */
 export type AvatarLook = "female" | "male" | "neutral";
 
-// =============================================================================
 // Pronouns
-// =============================================================================
 
 const PRONOUN_LOOK = new Map<string, AvatarLook>([
   ["she", "female"],
@@ -55,12 +47,11 @@ const NO_PRONOUNS = new Set([
 ]);
 
 /**
- * The look a pronoun field asks for, or null when the field is empty.
- *
- * The first pronoun decides, because that is the one a person lists first:
- * "she/they" is female, "they/she" is neutral. A pronoun this does not know is
- * neutral rather than ignored. Someone who wrote "ze/hir" told us something,
- * and guessing from their name would throw that away.
+ * The look a pronoun field asks for, or null when the field is empty. The first
+ * pronoun decides, because a person lists it first: "she/they" is female,
+ * "they/she" neutral. An unknown pronoun is neutral rather than ignored:
+ * someone who wrote "ze/hir" said something, and guessing from the name would
+ * throw it away.
  */
 export function lookFromPronouns(
   pronouns: string | null | undefined,
@@ -71,9 +62,7 @@ export function lookFromPronouns(
   return PRONOUN_LOOK.get(first) ?? "neutral";
 }
 
-// =============================================================================
 // Names
-// =============================================================================
 
 /**
  * Words a name can start with that are not a first name. The value is the
@@ -156,13 +145,11 @@ const SUFFIX =
   /^(jr|sr|ii|iii|iv|phd|md|mba|cpa|esq|dds|rn|pe|jd|obe|mbe|cbe)\.?$/i;
 
 /**
- * Common Chinese, Korean and Vietnamese family names.
- *
- * Those names are often written family name first ("Li Na", "Kim Min-jun").
- * Several of the family names are also given names elsewhere: Li is a
- * Swedish girl's name, Lee an American one for boys. So when one of these
- * words starts a name of two or more words, the first word is probably not
- * the given name, and the answer is neutral.
+ * Common Chinese, Korean and Vietnamese family names. They are often written
+ * first ("Li Na", "Kim Min-jun"), and several are given names elsewhere (Li is
+ * a Swedish girl's name, Lee an American boy's). So when one starts a name of
+ * two or more words, the first word is probably not the given name, and the
+ * answer is neutral.
  */
 const FAMILY_NAME_FIRST = new Set(
   (

@@ -1,34 +1,26 @@
-// =============================================================================
-// The reactions to a contact write
-// =============================================================================
-// Every write path that changes a contact records an event
-// (contactService, interactionService for a ghost, dedupe/merging). These
-// subscribers turn the events into follow-up work, and each one decides from
-// the event alone: its type, the field names in `changed`, and the facts the
-// payload carries, such as where a contact came from. Not from which function
-// wrote it. So a rename by PATCH gets the dedupe vector and the duplicate
-// check that PUT always got.
+// The reactions to a contact write.
 //
-// The differences that stay are on purpose, and the payload carries them:
+// Every write that changes a contact records an event (contactService,
+// interactionService for a ghost, dedupe/merging). These subscribers turn the
+// events into follow-up work, deciding from the event alone (its type, the
+// field names in `changed` and the payload's facts), never from which function
+// wrote it. So a rename by PATCH gets the same reactions as a PUT.
+//
+// The differences are on purpose, and the payload carries them:
 // - An import (`origin: "import"`) and a bulk edit (`bulk: true`) get no
-//   per-row dedupe vector and no per-row duplicate check. The import runs one
-//   duplicate pass for the whole file, and thousands of embedding calls at
-//   once would swamp the embedding worker. An import is not indexed for
-//   search per row either, as before.
+//   per-row dedupe vector, duplicate check or search indexing: the import runs
+//   one duplicate pass for the whole file, and thousands of embedding calls at
+//   once would swamp the worker.
 // - A ghost made from a note (`origin: "mention"`) gets only the cache
 //   invalidation: the mention resolver already decided what it is.
 // - Auto-enrichment runs only where `autoEnrich` says a person added the
 //   contact and allowed it.
 // - A bulk edit that turns tracking on is scored by its route, as a batch.
 //
-// Each handler is synchronous and short. It schedules work and returns:
-// the search index queue, a job, a fire-and-forget promise.
-//
-// The subscribers register when this module loads. contactService imports
-// it, so every process that can write a contact runs them: the server, a
-// test app, a test that calls a service, a script. Registration is
-// idempotent by id.
-// =============================================================================
+// Each handler is synchronous and short: it schedules work (the search index
+// queue, a job, a fire-and-forget promise) and returns. The subscribers
+// register when this module loads, and contactService imports it, so every
+// process that writes a contact runs them. Registration is idempotent by id.
 
 import crypto from "node:crypto";
 import { sqlite } from "../db.ts";
@@ -172,10 +164,10 @@ const dedupeVector: Subscriber = {
 };
 
 /**
- * The duplicate check for one contact, when the owner has "check for
- * duplicates when a contact is added" on. A job keyed by the contact, five
- * seconds out: a second edit in that time moves the same job, so a burst of
- * edits is one check. With background jobs off the job stays queued.
+ * The duplicate check for one contact, when the owner has "check for duplicates
+ * when a contact is added" on: a job keyed by the contact, five seconds out, so
+ * a burst of edits moves one job and makes one check. With background jobs off
+ * the job stays queued.
  */
 const dedupeCheck: Subscriber = {
   id: "contacts.dedupeCheck",
@@ -205,11 +197,9 @@ const dedupeCheck: Subscriber = {
 };
 
 /**
- * The geocoder, for a contact whose address the write set.
- *
- * A pin a person placed is not the geocoder's to move. The write that changed
- * the address under such a pin cleared `geoSource` in its own transaction
- * (contactService), so the pin reaching this handler as 'manual' is one whose
+ * The geocoder, for a contact whose address the write set. A write that moved
+ * the address under a hand-placed pin cleared `geoSource` in its own
+ * transaction (contactService), so a pin still 'manual' here is one whose
  * address did not move, and it is left alone.
  */
 const geocode: Subscriber = {
@@ -229,10 +219,9 @@ const geocode: Subscriber = {
 };
 
 /**
- * The relationship score of a contact that tracking was just turned on for,
- * so the ring is right on the read that follows and not after the hourly
- * sweep. `computeScore` scores tracked contacts only. A bulk edit is scored by
- * its route, as one batch.
+ * The score of a contact just tracked, so the ring is right on the next read
+ * and not after the hourly sweep. `computeScore` scores tracked contacts only.
+ * A bulk edit is scored by its route, as one batch.
  */
 const score: Subscriber = {
   id: "contacts.score",
@@ -247,12 +236,11 @@ const score: Subscriber = {
 };
 
 /**
- * The owner's AI cache tiers that hold a view of contact data.
- *
- * Not every tier: the content-addressed ones (query parsing, mentions) hash
- * their own input and stay valid. Each tier is owner-keyed, so one account's
- * edit drops only that account's entries. A batch write runs its dispatch in
- * the cache's batch mode, so a thousand events cost one invalidation.
+ * The owner's AI cache tiers that hold a view of contact data. The
+ * content-addressed ones (query parsing, mentions) hash their own input and
+ * stay valid. Each tier is owner-keyed, so one account's edit drops only its
+ * own entries, and a batch write dispatches in the cache's batch mode, so a
+ * thousand events cost one invalidation.
  */
 const ownerCaches: Subscriber = {
   id: "contacts.ownerCaches",

@@ -1,27 +1,20 @@
-// =============================================================================
-// Why a person matches: the profile fields that answer the question
-// =============================================================================
-// The reranker used to write one sentence per match, and the model's time
-// went with it. `reasons.ts` builds one sentence from the field a filter or
-// the reranker proved. This module says more, with no model call:
+// Why a person matches: the profile fields that answer the question, with no
+// model call. `reasons.ts` builds one sentence from the field a filter or the
+// reranker proved. This says more:
 //
 //   1. The fields a filter or the reranker proved, first.
-//   2. Every other field that holds the question's words: its role, its
-//      company, its interests, its tags, its about text. "Who is interested
-//      in machine learning?" finds one person through their interests and
-//      another through their role, and each result names its own field.
+//   2. Every other field that holds the question's words: role, company,
+//      interests, tags, about. "Who is interested in machine learning?" finds
+//      one person through their interests and another through their role, and
+//      each result names its own field.
 //   3. For a result with neither, the passage the search found close in
-//      meaning, when the search read passages for this question.
+//      meaning, when it read passages for this question.
 //
-// The question's words are the ones left when the words that only ask for
-// people are gone ("who", "is", "interested", "in"). Each also matches its
-// other forms ("designers" finds Design) and a few common initialisms (ML,
-// machine learning). Matching ignores case and accents, and the marks are
-// offsets into the contact's own text.
-//
-// About 0.1 ms a result. Every Ask answer carries it, the local list and
-// the answer AI checked alike.
-// =============================================================================
+// The question's words are those left without the words that only ask for
+// people ("who", "is", "interested", "in"). Each also matches its other forms
+// ("designers" finds Design) and a few common initialisms (ML, machine
+// learning). Matching ignores case and accents, and the marks are offsets into
+// the contact's own text. About 0.1 ms a result, on every Ask answer.
 
 import type {
   MatchedField,
@@ -278,14 +271,12 @@ const oneLine = (value: unknown): string =>
   typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
 
 /**
- * A text cut to one line's worth round its first mark.
- *
- * The card shows at most two lines of a field, and a phone fits about forty
- * characters in them. So a mark that starts more than {@link LEAD} plus ten
- * characters in keeps only {@link LEAD} characters before it, from the start
- * of a word, and the text runs on for at most {@link WINDOW} characters in
- * all, cut at a word. Each cut end gets an ellipsis. Marks outside the cut
- * are dropped and the rest move with it. A text with no marks is only cut
+ * A text cut to one line's worth around its first mark. The card shows at most
+ * two lines of a field, about forty characters on a phone. A mark more than
+ * {@link LEAD} plus ten characters in keeps {@link LEAD} characters before it,
+ * from the start of a word, and the text runs on for at most {@link WINDOW}
+ * characters, cut at a word. Each cut end gets an ellipsis. Marks outside the
+ * cut are dropped and the rest move with it. A text with no marks is only cut
  * at its end.
  */
 export function windowed(

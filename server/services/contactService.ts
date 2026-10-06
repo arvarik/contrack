@@ -49,15 +49,10 @@ import { dispatchEvents, recordEvent } from "../events/index.ts";
 // that writes a contact through this service runs them.
 import "../events/contactSubscribers.ts";
 
-// ---------------------------------------------------------------------------
-// Events
-// ---------------------------------------------------------------------------
 // Every write below records an event inside its transaction and calls
 // dispatchEvents() after the transaction returns, before it reads its answer.
-// The follow-up work is the subscribers' (server/events/
-// contactSubscribers.ts), and they decide from the event, so every path that
-// sets a field gets the same reactions.
-// ---------------------------------------------------------------------------
+// The subscribers (server/events/contactSubscribers.ts) decide the follow-up
+// work from the event, so every path that sets a field gets the same reactions.
 
 /**
  * The request names of the fields an update writes: the columns it sets,
@@ -132,18 +127,17 @@ function followUpStatements() {
 /**
  * A follow-up date in a contact write, as the follow-up task it stands for.
  *
- * `contacts.nextFollowUpAt` is a cache. The `action_items_sync_*` triggers
- * hold it at the earliest due date of the contact's open follow-ups. A write
- * to the column alone showed a follow-up that no list of tasks had, and the
- * next task change put the column back. So a write never sets the column:
+ * `contacts.nextFollowUpAt` is a cache that the `action_items_sync_*` triggers
+ * hold at the earliest due date of the contact's open follow-ups. A write to
+ * the column alone would show a follow-up no task list has, so a write never
+ * sets the column:
  *
- * - A date moves the contact's earliest open follow-up to that date, or
- *   adds a "Follow up" task when it has none. The same date again changes
- *   nothing, so a contact read and written back keeps its tasks.
- * - Null completes the contact's open follow-ups, so it has none left.
+ * - A date moves the contact's earliest open follow-up to that date, or adds a
+ *   "Follow up" task when it has none. The same date again changes nothing, so
+ *   a contact read and written back keeps its tasks.
+ * - Null completes the contact's open follow-ups.
  *
- * The trigger then sets the column from the tasks. Runs inside the
- * caller's transaction.
+ * Runs inside the caller's transaction.
  */
 function followUpTo(
   scope: Scope,
@@ -184,14 +178,11 @@ function followUpTo(
   }
 }
 
-// ---------------------------------------------------------------------------
 // Private helpers
-// ---------------------------------------------------------------------------
 
 /**
- * Map a contact body to the contacts-table insert values.
- * Centralized here so createContact + bulkCreateContacts stay DRY.
- * Any field not listed here will never reach the database.
+ * Map a contact body to the contacts-table insert values, for createContact and
+ * bulkCreateContacts. A field not listed here never reaches the database.
  */
 function buildInsertValues(
   scope: Scope,
@@ -249,10 +240,9 @@ function buildInsertValues(
 
 /**
  * Keep the default face in step with the name and pronouns it was drawn from.
- *
- * When an edit changes either, and the contact still wears the default avatar
- * for its old name, the update carries the new default. A face from the
- * picker, a photo, and an edit that sets `avatarUrl` itself are left alone.
+ * When an edit changes either and the contact still wears the default avatar
+ * for its old name, the update carries the new default. A face from the picker,
+ * a photo, and an edit that sets `avatarUrl` itself are left alone.
  */
 function redrawDefaultAvatar(
   scope: Scope,
@@ -284,16 +274,12 @@ function redrawDefaultAvatar(
 }
 
 /**
- * What turning tracking on means, beyond the flag.
- *
- * Cadence is the second half of Track: it is set at the moment a contact is
- * tracked, from the body when it names one, else from the owner's default.
- * Only rows that are untracked now take the default, so tracking somebody
- * twice, or with a cadence of their own, changes nothing. Runs inside the
- * caller's transaction, before the flag itself is written.
- *
- * `trackedAt` needs no code here: the `contacts_track_stamp_*` triggers in
- * server/db.ts write it.
+ * What turning tracking on means, beyond the flag. The cadence is set when a
+ * contact is tracked, from the body when it names one, else from the owner's
+ * default. Only rows that are untracked now take the default, so tracking
+ * somebody twice, or with a cadence of their own, changes nothing. Runs inside
+ * the caller's transaction, before the flag is written. The
+ * `contacts_track_stamp_*` triggers write `trackedAt`.
  */
 function applyTrackingRules(
   scope: Scope,
@@ -313,9 +299,9 @@ function applyTrackingRules(
 }
 
 /**
- * Remove a contact's search artifacts (vec0 embeddings + dedupe metadata).
- * FTS rows are handled by the trash-aware triggers. vec0 tables don't support
- * FK cascading, so this must run on every soft delete and hard delete.
+ * Remove a contact's vectors and dedupe metadata. vec0 tables have no foreign
+ * key cascade, so this runs on every soft and hard delete. The trash-aware
+ * triggers keep the FTS rows.
  */
 function purgeContactSearchArtifacts(id: string): void {
   removeFromIndexQueue(id);
@@ -340,23 +326,17 @@ function purgeContactSearchArtifacts(id: string): void {
     .run(id);
 }
 
-// ---------------------------------------------------------------------------
-// Geocoding triggers
-// ---------------------------------------------------------------------------
+// Geocoding
 
 /**
  * Hand a pin back to the geocoder when the write moved its address.
  *
- * A pin placed by hand is not the geocoder's to move. The write may change
- * anything else about the contact and the pin stays where the person put it.
- * Only a change to the address the contact shows hands the pin back: the
- * address moved from under it, so `geoSource` is cleared, and the
- * `contacts.geocode` subscriber queues the new text after the commit. Until
- * the geocoder answers, the old coordinates stand.
- *
- * Runs inside the write's transaction, after the change. The release is part
- * of the write: the subscriber runs after the commit, when the address before
- * the write can no longer be read.
+ * A pin placed by hand stays where the person put it, whatever else the write
+ * changes. Only a change to the address the contact shows hands it back:
+ * `geoSource` is cleared, and the `contacts.geocode` subscriber queues the new
+ * text after the commit. Until the geocoder answers, the old coordinates stand.
+ * This runs inside the write's transaction, because after the commit the
+ * address before the write can no longer be read.
  *
  * @returns true when the pin was handed back.
  */
@@ -400,9 +380,7 @@ function removePurgedUploads(byOwner: Map<string, string[]>): void {
   for (const [ownerId, urls] of byOwner) removeUploads(ownerId, urls);
 }
 
-// ---------------------------------------------------------------------------
 // Service
-// ---------------------------------------------------------------------------
 
 /** Columns selected by the getSlimContacts Pass-1 query, typed off the schema. */
 type SlimContactRow = Pick<
@@ -448,10 +426,9 @@ export const contactService = {
    *
    * @param source - The provenance stamp for the child rows: "manual", or a
    *   connector's kind.
-   * @param options.autoEnrich - True only when a person added this contact,
-   *   in the app or through the REST API. Then "Enrich new contacts
-   *   automatically" may research it. A Google sync and an MCP client add
-   *   contacts that nobody chose one by one, so they leave it unset.
+   * @param options.autoEnrich - True only when a person added this contact, in
+   *   the app or through the REST API, so "Enrich new contacts automatically"
+   *   may research it. A Google sync and an MCP client leave it unset.
    */
   createContact(
     scope: Scope,
@@ -471,9 +448,9 @@ export const contactService = {
     }
 
     const txn = sqlite.transaction(() => {
-      // The owner is spelled out at the write, not only inside the value
-      // builder. It is the one column a reviewer and the tenant lint both have
-      // to be able to see without following a helper.
+      // The owner is spelled out at the write, not only in the value builder,
+      // so a reviewer and the tenant lint can see it without following a
+      // helper.
       db.insert(schema.contacts)
         .values({ ...values, ownerId: scope.ownerId })
         .run();
@@ -495,23 +472,21 @@ export const contactService = {
   /**
    * Write many contacts.
    *
-   * With an `importId`, the rows are written in batches of
-   * `IMPORT_BATCH_ROWS`, one transaction each, and the event loop runs
-   * between two batches. One transaction for a whole file held the database
-   * for seconds, and every other request on the instance waited: 3,000 rows
-   * kept `/healthz` waiting 2.9 s. A fresh run first records every row as
-   * `pending` with its payload. In a batch, every row is written under a
-   * savepoint of its own, and a row that throws is recorded as failed, with
-   * its payload, while the rest of the batch commits. The import's status
-   * moves to `imported` inside the last batch's transaction, so the record
-   * never says the contacts are there when they are not. A run that stops
-   * part way is settled by `importService` from its rows. `rowIndexes` gives
-   * each row its line in the import, which a retry uses to land a row back
-   * where it was.
+   * With an `importId`, the rows are written in batches of `IMPORT_BATCH_ROWS`,
+   * one transaction each, and the event loop runs between batches: one
+   * transaction for a whole file held the database for seconds (3,000 rows kept
+   * `/healthz` waiting 2.9 s). A fresh run first records every row as `pending`
+   * with its payload. Each row is written under its own savepoint, and a row
+   * that throws is recorded as failed, with its payload, while the rest of the
+   * batch commits. The import's status moves to `imported` inside the last
+   * batch's transaction, so the record never claims contacts that are not
+   * there. `importService` settles a run that stops part way from its rows.
+   * `rowIndexes` gives each row its line in the import, so a retry lands it
+   * back where it was.
    *
-   * Without an `importId` the write is one transaction, all or nothing, as
-   * it always was. The eval harness and the tests seed corpora through this
-   * path, and a partial corpus would be worse than a thrown one.
+   * Without an `importId` the write is one transaction, all or nothing. The
+   * eval harness and the tests seed corpora this way, and a partial corpus
+   * would be worse than a thrown one.
    */
   async bulkCreateContacts(
     scope: Scope,
@@ -533,10 +508,10 @@ export const contactService = {
       onProgress?.(i + 1, total, "Processing images");
     }
 
-    // Phase 2: write the contacts. The events of every transaction that
-    // commits are dispatched once at the end, in the cache's batch mode, so
-    // the invalidations are one per tier and not one per contact. Batch mode
-    // is not held across the batches' yields, where other requests run.
+    // Write the contacts. The events of every committed transaction are
+    // dispatched once at the end, in the cache's batch mode, so there is one
+    // invalidation per tier. Batch mode is not held across the yields, where
+    // other requests run.
     let count = 0;
     let failed = 0;
     const createdIds: string[] = [];
@@ -625,11 +600,9 @@ export const contactService = {
   },
 
   /**
-   * Soft-delete a batch of contacts (same trash semantics as deleteContact).
-   *
-   * Foreign ids are dropped by `findManyOwned` before anything runs, so the
-   * count the caller gets back is the number of their own rows that moved. A
-   * request that mixes another owner's ids in reports only its own.
+   * Soft-delete a batch of contacts, like deleteContact. `findManyOwned` drops
+   * foreign ids first, so the count is the number of the caller's own rows that
+   * moved.
    */
   bulkDeleteContacts(scope: Scope, ids: string[]) {
     let count = 0;
@@ -672,9 +645,8 @@ export const contactService = {
       const changed = changedFields(update);
       if (typeof data.name === "string")
         update.phoneticHash = doubleMetaphone(data.name).primary;
-      // Safety: buildContactUpdate returns only keys from a hardcoded whitelist
-      // (see utils/helpers.ts). Interpolating those key names into SQL is safe
-      // because no user-supplied string reaches the SET clause — only column names.
+      // buildContactUpdate returns only keys from a fixed allow list
+      // (utils/helpers.ts), so only column names reach the SET clause.
       const updateFn = sqlite.transaction(() => {
         applyTrackingRules(scope, owned, data);
         const setClauses = Object.keys(update)
@@ -763,8 +735,8 @@ export const contactService = {
   patchContact(scope: Scope, id: string, body: Record<string, unknown>) {
     assertOwnedContact(scope, id);
     const update = buildContactUpdate(body);
-    // The same as updateContact: dedupe's phonetic blocking reads this hash,
-    // and a rename by PATCH used to leave the old one behind.
+    // Dedupe's phonetic blocking reads this hash, so a rename by PATCH must
+    // update it, as updateContact does.
     if (typeof body.name === "string" && body.name) {
       update.phoneticHash = doubleMetaphone(body.name).primary;
     }
@@ -803,10 +775,10 @@ export const contactService = {
   },
 
   /**
-   * Soft-delete: move the contact to trash. The row keeps its children and
-   * can be restored until purgeExpiredTrash() hard-deletes it. isArchived is
-   * set so every "active" surface excludes it; the trash-aware FTS triggers
-   * drop it from search; embeddings are purged (regenerated on restore).
+   * Soft-delete: move the contact to trash. The row keeps its children and can
+   * be restored until purgeExpiredTrash() hard-deletes it. isArchived hides it
+   * from every active surface, the trash-aware FTS triggers drop it from
+   * search, and its embeddings are purged (rebuilt on restore).
    */
   deleteContact(scope: Scope, id: string) {
     const existing = contactRepo.findOwned(scope, id);
@@ -1010,9 +982,9 @@ export const contactService = {
 
     const existing = contactRepo.requireOwned(scope, id);
     const previousUrl = existing.avatarUrl as string | null;
-    // The old photo goes only when it is in this owner's own avatars folder.
-    // avatarUrl is user-writable through the update endpoints, so it may name
-    // another account's file, a shared logo, or a `..` path to either.
+    // The old photo goes only when it is in this owner's avatars folder:
+    // avatarUrl is user-writable, so it may name another account's file, a
+    // shared logo, or a `..` path to either.
     const oldPath = previousUrl
       ? resolveOwnUploadPath(scope.ownerId, previousUrl, "avatars")
       : null;
@@ -1041,12 +1013,10 @@ export const contactService = {
   },
 
   /**
-   * Put the pin where a person dropped it.
-   *
-   * `geoSource = 'manual'` is what keeps the geocoder off it from now on: the
-   * startup sweep leaves the row alone, and a later edit to the contact
-   * queues nothing unless it changes the address the pin was read from.
-   * The edit trigger skips pin columns, so a person's move stamps updatedAt here.
+   * Put the pin where a person dropped it. `geoSource = 'manual'` keeps the
+   * geocoder off it: the startup sweep skips the row, and a later edit queues
+   * nothing unless it changes the address the pin was read from. The edit
+   * trigger skips pin columns, so this stamps updatedAt itself.
    */
   setLocation(scope: Scope, id: string, lat: number, lng: number) {
     assertOwnedContact(scope, id);
@@ -1077,15 +1047,12 @@ export const contactService = {
   /**
    * Hand the pin back to the geocoder.
    *
-   * The coordinates go first, so the contact leaves the map until the
-   * geocoder answers rather than sitting on a pin that is nobody's decision
-   * any more. The geocoder then reads the same text it read the first time.
-   * A cached answer lands before this returns. A new one lands when the
-   * queue drains.
-   *
-   * The geocoder call here is the request itself, not a reaction to it, so
-   * it stays in this function. The event's subscribers drop the caches.
-   * A contact with no address text keeps its pin, and the request is refused.
+   * The coordinates go first, so the contact leaves the map until the geocoder
+   * answers. The geocoder then reads the same text it read the first time. A
+   * cached answer lands before this returns, a new one when the queue drains.
+   * The geocoder call is the request itself, not a reaction to it, so it stays
+   * here; the event's subscribers drop the caches. A contact with no address
+   * text keeps its pin, and the request is refused.
    */
   regeocode(scope: Scope, id: string) {
     assertOwnedContact(scope, id);
@@ -1185,9 +1152,8 @@ export const contactService = {
       sortOrder: number;
     }[];
 
-    // One subselect, six statements. The owner predicate lives inside it, so
-    // every child-table read below is bounded by the caller's contacts rather
-    // than by the whole instance. Each statement now takes one parameter.
+    // One subselect, six statements. The owner predicate inside it bounds every
+    // child-table read below to the caller's contacts.
     const unarchivedQuery = `WHERE contactId IN (SELECT id FROM contacts WHERE ownerId = ? AND (isArchived = 0 OR isArchived IS NULL))`;
     const tagRows = sqlite
       .prepare(`SELECT contactId, tag FROM contact_tags ${unarchivedQuery}`)
@@ -1198,9 +1164,8 @@ export const contactService = {
     const phoneRows = sqlite
       .prepare(`SELECT contactId, phone FROM contact_phones ${unarchivedQuery}`)
       .all(scope.ownerId) as { contactId: string; phone: string }[];
-    // `interactions` is owned, so it names the owner itself rather than
-    // borrowing the subselect's. Phase 1's mismatch trigger guarantees an
-    // interaction's owner equals its contact's, so the two agree by construction.
+    // `interactions` is owned, so it names the owner itself. The owner-check
+    // trigger keeps an interaction's owner equal to its contact's.
     const interactionCounts = sqlite
       .prepare(
         `SELECT contactId, COUNT(*) as cnt FROM interactions

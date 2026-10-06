@@ -1,14 +1,8 @@
-// =============================================================================
-// Research — the text of a result page
-// =============================================================================
-// A web search sends results, and a technique that reads them needs each
-// page's text. A service that sends the text with the result needs no fetch.
-// For any other, the page is fetched here.
-//
-// Web pages are hostile input by construction: every fetch goes through the
-// shared SSRF guards (safeFetch), the response is size-capped, and the text
-// goes into a prompt only inside wrapUntrusted() (buildReadingPrompt).
-// =============================================================================
+// The text of a result page. A technique that reads results needs each page's
+// text: a service that sends the text with the result needs no fetch, and any
+// other page is fetched here. Web pages are hostile input: every fetch goes
+// through the shared SSRF guards (safeFetch), the response is size-capped, and
+// the text reaches a prompt only inside wrapUntrusted() (buildReadingPrompt).
 
 import * as cheerio from "cheerio/slim";
 import { safeFetch, readBodyCapped } from "../../utils/urlSafety.ts";
@@ -39,13 +33,10 @@ async function fetchPageText(
 }
 
 /**
- * The readable text of a fetched page, without scripts, styles and page
- * chrome, cut to MAX_PAGE_CHARS.
- *
- * cheerio/slim parses with htmlparser2, which adds no <body> to a fragment
- * or a text/plain answer the way a browser's parser does. So the whole
- * document is read when it has no body element, with the head and title
- * removed first.
+ * The readable text of a fetched page, without scripts, styles and page chrome,
+ * cut to MAX_PAGE_CHARS. htmlparser2 (cheerio/slim) adds no <body> to a
+ * fragment or a text/plain answer the way a browser does, so a document with no
+ * body element is read whole, after its head and title are removed.
  */
 export function pageText(html: string): string | null {
   const $ = cheerio.load(html);

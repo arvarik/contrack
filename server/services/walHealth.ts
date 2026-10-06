@@ -1,24 +1,14 @@
-// =============================================================================
-// Write health — the WAL file, its checkpoints, and refused writes
-// =============================================================================
-// The database runs in WAL mode. Every write goes to `curator.db-wal` first
-// and is folded back into the database by a checkpoint, and SQLite runs one
-// by itself once the WAL passes a thousand pages.
+// Write health: the WAL file, its checkpoints, and refused writes. In WAL mode
+// every write goes to `curator.db-wal` first and a checkpoint folds it back;
+// SQLite runs one by itself past a thousand pages. But an automatic checkpoint
+// completes only when no reader still sees an older version, so one long reader
+// (a dedupe scan, a full export) holds every checkpoint off and the WAL grows
+// meanwhile, which a shared instance makes likely.
 //
-// "Once it passes a thousand pages" is doing a lot of work in that sentence.
-// An automatic checkpoint only completes when no reader is still looking at
-// an older version of the database, so one long reader — a dedupe scan, a
-// full export — holds every checkpoint off for as long as it runs, and the
-// WAL grows for the whole time. Nothing in this codebase has ever called a
-// checkpoint, so the only defense was that single-user instances rarely have
-// a long reader and a busy writer at the same time. A shared instance does.
-//
-// Two numbers come out of here, and both are for the admin health panel:
-// how big the WAL is, and how many requests have been refused because the
-// database was busy. The second is the symptom a person actually reports
-// ("it said try again"), and without a count nobody can tell one unlucky
-// moment from a pattern.
-// =============================================================================
+// Two numbers come out of here, for the admin health panel: the WAL's size, and
+// how many requests were refused because the database was busy. The second is
+// what people report ("it said try again"), and without a count one unlucky
+// moment looks like a pattern.
 
 import fs from "fs";
 import { sqlite } from "../db.ts";
@@ -28,11 +18,10 @@ import { jobQueue as aiSearchQueue } from "./aiSearch/jobQueue.ts";
 import { dedupeQueue } from "./dedupe/jobQueue.ts";
 
 /**
- * The size at which a passive checkpoint has clearly not been enough.
- *
- * 64 MB is roughly sixteen thousand pages, sixteen times SQLite's own
- * threshold. Reaching it means checkpoints have been blocked for a long time
- * rather than that the instance is busy.
+ * The size at which a passive checkpoint has clearly not been enough: 64 MB,
+ * about sixteen thousand pages, sixteen times SQLite's own threshold, which
+ * means checkpoints were blocked for a long time, not that the instance is
+ * busy.
  */
 export const WAL_TRUNCATE_BYTES = 64 * 1024 * 1024;
 
@@ -71,12 +60,9 @@ let lastBusyErrorAt: string | null = null;
 let lastCheckpoint: CheckpointResult | null = null;
 
 /**
- * One more request refused because the database was busy.
- *
- * Called from the error middleware, which is the only place that knows a
- * request was actually turned away rather than retried internally. A count
- * that also included every `SQLITE_BUSY` better-sqlite3 recovered from would
- * measure something nobody experienced.
+ * One more request refused because the database was busy. Called from the error
+ * middleware, the only place that knows a request was turned away rather than
+ * retried inside better-sqlite3, whose recoveries nobody experienced.
  */
 export function recordBusyError(): void {
   busyErrors += 1;
@@ -95,21 +81,17 @@ export function walBytes(): number {
 
 /** Whether a long reader is running that a checkpoint would have to wait for. */
 function longReaderRunning(): boolean {
-  // A dedupe scan reads the whole corpus and an AI search batch reads and
-  // writes across minutes. Both are exactly the reader that keeps a
-  // checkpoint from completing, and a TRUNCATE that has to wait for one takes
-  // the write lock with it.
+  // A dedupe scan reads the whole corpus and a research batch reads and writes
+  // for minutes: exactly the readers that keep a checkpoint from completing,
+  // and a TRUNCATE waiting on one holds the write lock.
   return dedupeQueue.isProcessing() || aiSearchQueue.isProcessing();
 }
 
 /**
- * Fold the write-ahead log back into the database.
- *
- * PASSIVE never waits: it moves what it can and reports what it could not,
- * which is why it is safe to run on a schedule. TRUNCATE takes the write lock
- * and empties the file, which is what actually reclaims the disk, and is only
- * worth its cost when the log has grown past the point where PASSIVE is
- * evidently not keeping up.
+ * Fold the WAL back into the database. PASSIVE never waits: it moves what it
+ * can and reports the rest, so it is safe on a schedule. TRUNCATE takes the
+ * write lock and empties the file, which is what reclaims the disk, and is
+ * worth it only when PASSIVE is clearly not keeping up.
  */
 export function checkpoint(mode: "passive" | "truncate"): CheckpointResult {
   const bytesBefore = walBytes();
@@ -132,19 +114,15 @@ export function checkpoint(mode: "passive" | "truncate"): CheckpointResult {
 }
 
 /**
- * The checkpoint half of the daily sweep.
- *
- * Always PASSIVE first, because it costs nothing and usually finishes. Then
- * TRUNCATE only when the log is still over the threshold and nothing long is
- * reading, because a TRUNCATE behind a dedupe scan would sit on the write
- * lock waiting for it and every writer would queue behind that.
- *
- * Never throws. This runs inside the daily sweep, which is a best-effort job.
+ * The checkpoint half of the daily sweep. PASSIVE first, because it costs
+ * nothing and usually finishes. TRUNCATE only when the log is still over the
+ * threshold and nothing long is reading, because a TRUNCATE behind a dedupe
+ * scan would hold the write lock waiting for it, with every writer queued
+ * behind. Never throws: the daily sweep is best effort.
  */
 export function runWalMaintenance(
-  // An argument with a default rather than a constant read inside, so a test
-  // can exercise the truncating branch without first writing 64 MB of rows.
-  // The daily sweep passes nothing and gets the real threshold.
+  // A parameter with a default, so a test can reach the truncating branch
+  // without writing 64 MB; the daily sweep passes nothing.
   truncateAtBytes: number = WAL_TRUNCATE_BYTES,
 ): CheckpointResult | null {
   try {

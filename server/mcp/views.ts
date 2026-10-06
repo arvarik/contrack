@@ -1,11 +1,8 @@
 /**
- * server/mcp/views.ts — What a tool sends back of a row.
- *
- * Every field a tool returns costs the client tokens, and a client may cut a
- * long answer short. A row from the services holds columns that only the
- * server reads, such as the owner, the search fields and the merge links, so
- * no tool sends those. A search hit or a list row is a summary, and
- * get_contact sends the whole profile.
+ * What a tool sends back of a row. Every field costs the client tokens, and a
+ * client may cut a long answer short, so no tool sends the columns only the
+ * server reads (the owner, the search fields, the merge links). A search hit or
+ * a list row is a summary; get_contact sends the whole profile.
  *
  * @module server/mcp/views
  */

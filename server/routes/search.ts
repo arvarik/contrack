@@ -72,13 +72,12 @@ router.get(
 );
 
 /**
- * GET /api/search/interactions — notes, with the date and an excerpt.
- *
- * "Who discussed hiring last month?" → the notes that mention hiring, dated
- * last month in the caller's zone, each with the person it is about and the
- * passage that matched. Local FTS5 only; no model is called. Query
- * parameters: `q`, `from`, `to`, `type`, `contactId`, `sort`, `mode`,
- * `limit`, `offset` and `tz`. See docs/api-reference.md.
+ * GET /api/search/interactions: notes, with the date and an excerpt. "Who
+ * discussed hiring last month?" gives the notes that mention hiring, dated last
+ * month in the caller's zone, each with its person and the passage that
+ * matched. Local FTS5 only, no model. Query parameters: `q`, `from`, `to`,
+ * `type`, `contactId`, `sort`, `mode`, `limit`, `offset` and `tz` (see
+ * docs/api-reference.md).
  */
 router.get(
   "/interactions",
@@ -205,12 +204,9 @@ router.post(
 );
 
 /**
- * POST /api/search/synthesize — Executive Brief (Feature 6)
- *
- * Accepts a query and the already-returned search results, streams an
- * NDJSON executive summary via the AI service.
- *
- * Body: { query: string, contactIds: string[] }. Facts come from the database.
+ * POST /api/search/synthesize: the executive brief over results already
+ * returned, streamed as NDJSON. Body: { query: string, contactIds: string[] };
+ * the facts come from the database.
  *
  * Streams:
  *   { phase: "start" }
@@ -325,10 +321,9 @@ router.get(
 );
 
 /**
- * GET /api/search/starters — the caller's pool of starter questions.
- *
- * Built from the caller's own contacts, and never longer than the number of
- * contacts. The Ask page shows six of them at random under "Try asking".
+ * GET /api/search/starters: the caller's pool of starter questions, built from
+ * their own contacts and never longer than their number of contacts. The Ask
+ * page shows six at random under "Try asking".
  */
 router.get(
   "/starters",
@@ -342,11 +337,10 @@ router.get(
 );
 
 /**
- * POST /api/search/refresh-index — Explicitly trigger indexing for missing or all contacts.
- *
- * For paid providers, requires explicit confirmation ({ allowProvider: true }) to prevent
- * unapproved API charges, and answers 403 AI_OFF_FOR_ACCOUNT while the caller
- * has AI off.
+ * POST /api/search/refresh-index: index the missing contacts, or all of them. A
+ * paid provider needs `{ allowProvider: true }`, so nobody is charged without
+ * saying so, and the route answers 403 AI_OFF_FOR_ACCOUNT while the caller has
+ * AI off.
  */
 router.post(
   "/refresh-index",
@@ -396,9 +390,7 @@ router.post(
   }),
 );
 
-// =============================================================================
 // Search History
-// =============================================================================
 
 router.get(
   "/history",

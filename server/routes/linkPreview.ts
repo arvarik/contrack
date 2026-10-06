@@ -15,8 +15,8 @@ router.get(
 
     if (!targetUrl) throw new AppError("url query parameter is required", 400);
 
-    // The preview image is saved in the caller's own uploads folder, so the
-    // service needs to know whose request this is.
+    // The preview image is saved in the caller's own uploads, so the service
+    // needs the scope.
     const result = await linkPreviewService.unfurlUrl(scopeOf(req), targetUrl);
     log.debug("API", `[${rid}] GET /api/link-preview/unfurl → unfurled`);
     res.json(result);

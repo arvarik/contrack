@@ -1,21 +1,13 @@
-// =============================================================================
-// Dedupe Suggestions Service — Persistent Suggestion + Merge Log Management
-// =============================================================================
-// Manages the lifecycle of dedupe suggestions: creation from scan results,
-// user review (merge/dismiss), auto-merge with soft-delete, and undo.
+// Dedupe suggestions: storing scan results, review (merge or dismiss),
+// auto-merge with soft delete, and undo.
 //
-// Tables used:
-//   dedupe_suggestions — detected pairs with status lifecycle
-//   dedupe_exclusions  — never-merge pairs (populated on dismiss)
-//   dedupe_merge_log   — audit trail for all merges
+//   dedupe_suggestions  detected pairs, pending → merged, dismissed or
+//                       auto_merged
+//   dedupe_exclusions   never-merge pairs, written on dismiss
+//   dedupe_merge_log    every merge, with the snapshots undo needs
 //
-// Design principles:
-// - All writes are transactional (single-statement or explicit transaction)
-// - Pre-compiled prepared statements for query performance
-// - Canonical pair ordering (contactIdA < contactIdB) enforced on store
-// - Idempotent inserts (INSERT OR IGNORE for re-scans)
-// - Suggestion status lifecycle: pending → merged | dismissed | auto_merged
-// =============================================================================
+// Pairs are stored in canonical order (contactIdA < contactIdB), and INSERT OR
+// IGNORE makes a re-scan idempotent.
 
 import crypto from "crypto";
 import { sqlite, db } from "../../db.ts";
@@ -36,9 +28,7 @@ import type {
 import { UnionFind } from "../../utils/unionFind.ts";
 import { recomputeLastContacted } from "../lastContacted.ts";
 
-// =============================================================================
 // Types
-// =============================================================================
 
 export interface DedupeSuggestion {
   id: string;
@@ -70,7 +60,7 @@ export interface MergeLogEntry {
   primaryId: string;
   duplicateId: string;
   mergedBy: string; // 'user' | 'auto' | 'user:suggestion'
-  mergeType: string; // 'soft'. Rows from before 2.0 may hold 'hard'.
+  mergeType: string; // 'soft'. Older rows may hold 'hard'.
   confidence: number;
   reasoning: string;
   mergedAt: string;
@@ -97,9 +87,7 @@ export interface MergedInto {
   mergedAt: string;
 }
 
-// =============================================================================
-// Prepared Statements
-// =============================================================================
+// Prepared statements
 
 /**
  * The contacts that can still be one half of a pending pair: not merged away,
@@ -115,19 +103,18 @@ const LIVE_CONTACTS = `SELECT id FROM contacts
 const LIVE_PAIR = `contactIdA IN (${LIVE_CONTACTS}) AND contactIdB IN (${LIVE_CONTACTS})`;
 
 const _stmts = {
-  // --- Suggestions ---
-  // A suggestion, an exclusion and a merge log row all name their owner on
-  // insert. The fill trigger would derive it from `contactIdA`, but the pair
-  // check that makes it right lives in the service, so the service writes it explicitly.
+  // A suggestion, an exclusion and a merge log row name their owner on insert.
+  // The fill trigger could derive it from `contactIdA`, but the pair check that
+  // makes it right lives in this service.
   insertSuggestion: sqlite.prepare(`
     INSERT OR IGNORE INTO dedupe_suggestions
       (id, contactIdA, contactIdB, matchType, confidence, reasoning, matchedField, status, ownerId, caveat)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `),
 
-  // Every read of the pending list asks for live pairs. A pair can outlive
-  // one of its contacts between two cleanups, when the contact goes to the
-  // Trash or the archive, and it must not reach the review or its badge.
+  // A pair can outlive one of its contacts between two cleanups, when the
+  // contact goes to the Trash or the archive, so every pending read asks for
+  // live pairs.
   getPending: sqlite.prepare(`
     SELECT * FROM dedupe_suggestions
     WHERE ownerId = ? AND status = 'pending' AND ${LIVE_PAIR}
@@ -169,8 +156,8 @@ const _stmts = {
   `),
 
   // A scan writes every pair it finds again, so it clears the old ones first.
-  // Not a note's pairs: a scan never finds them, and clearing them lost a
-  // ghost's "Mentioned in a note" review at every scan.
+  // Not a note's pairs: a scan never finds them, so clearing them would lose a
+  // ghost's "Mentioned in a note" review.
   clearAllPending: sqlite.prepare(`
     DELETE FROM dedupe_suggestions
     WHERE ownerId = ? AND status = 'pending' AND matchType != 'mention'
@@ -222,13 +209,13 @@ const _stmts = {
     LIMIT 1
   `),
 
-  // --- Exclusions ---
+  // Exclusions
   insertExclusion: sqlite.prepare(`
     INSERT OR IGNORE INTO dedupe_exclusions (contactIdA, contactIdB, ownerId)
     VALUES (?, ?, ?)
   `),
 
-  // --- Merge Log ---
+  // Merge Log
   insertMergeLog: sqlite.prepare(`
     INSERT INTO dedupe_merge_log
       (id, primaryId, duplicateId, mergedBy, mergeType, confidence, reasoning, duplicateSnapshot, ownerId)
@@ -269,13 +256,11 @@ const _stmts = {
   `),
 };
 
-// =============================================================================
-// Suggestion CRUD
-// =============================================================================
+// Suggestions
 
 /**
- * Store a single suggestion. Uses canonical pair ordering (A < B).
- * INSERT OR IGNORE makes this idempotent — safe for re-scans.
+ * Store one suggestion in canonical pair order (A < B). INSERT OR IGNORE makes
+ * a re-scan safe.
  */
 export function storeSuggestion(
   scope: Scope,
@@ -306,10 +291,7 @@ export function storeSuggestion(
   );
 }
 
-/**
- * Store multiple suggestions in a single transaction.
- * Used at the end of a scan to persist all detected pairs.
- */
+/** Store many suggestions in one transaction, at the end of a scan. */
 export function storeSuggestions(
   scope: Scope,
   pairs: {
@@ -347,8 +329,7 @@ export function storeSuggestions(
 }
 
 /**
- * Get all pending suggestions, ordered by confidence descending.
- * Hydrates both contacts for display purposes.
+ * Pending suggestions with both contacts, highest confidence first.
  *
  * @param limit - Max suggestions to return (default 100)
  */
@@ -364,8 +345,8 @@ export function getPendingSuggestions(
   ) as DedupeSuggestion[];
   if (!rows.length) return rows;
 
-  // Bulk-hydrate every referenced contact in one IN(...) query — per-row
-  // hydrate() here previously cost ~26 queries per suggestion.
+  // Hydrate every contact the rows name in one IN(...) query, not about 26
+  // queries per suggestion.
   try {
     const ids = [...new Set(rows.flatMap((r) => [r.contactIdA, r.contactIdB]))];
     const hydrated = suggestedContacts(scope, ids);
@@ -426,16 +407,11 @@ export function getPendingCount(scope: Scope): number {
 }
 
 /**
- * The number of review cards the Duplicates page will show.
+ * The number of review cards the Duplicates page shows.
  *
- * `getPendingCount` counts pending PAIRS. The review queue groups those pairs
- * into clusters with union-find, because pairs (A,B) and (B,C) describe one
- * problem with three contacts, not two problems. The sidebar badge read the
- * pair count, so it promised 7 items and the page then showed 3.
- *
- * This counts clusters, so the badge and the page agree. The work is a scan of
- * the pending table plus one union per row, which is near constant time each;
- * the pending set is tens of rows, not thousands.
+ * The review groups pending pairs into clusters with union-find, because (A,B)
+ * and (B,C) are one problem with three contacts. The badge counts clusters too,
+ * so it agrees with the page. The pending set is tens of rows.
  *
  * @returns the count of connected groups among pending suggestions
  */
@@ -468,11 +444,9 @@ export function getSuggestionById(
 }
 
 /**
- * Attach both contacts to a suggestion row.
- *
- * The two ids come off a row this account owns, and the pair check that wrote
- * the row proved both contacts share that owner, so a scoped read here always
- * finds them unless one has since been merged away.
+ * Attach both contacts to a suggestion row. The pair check that wrote the row
+ * proved both contacts share its owner, so a scoped read finds them unless one
+ * has been merged away since.
  */
 function hydratePair(scope: Scope, row: DedupeSuggestion): void {
   try {
@@ -484,10 +458,7 @@ function hydratePair(scope: Scope, row: DedupeSuggestion): void {
   }
 }
 
-/**
- * Find a pending suggestion involving a specific contact.
- * Used for point-of-action banners on the contact detail page.
- */
+/** A pending suggestion that names a contact, for the banner on its page. */
 export function getSuggestionForContact(
   scope: Scope,
   contactId: string,
@@ -504,13 +475,11 @@ export function getSuggestionForContact(
   return row;
 }
 
-// =============================================================================
-// Suggestion Actions
-// =============================================================================
+// Suggestion actions
 
 /**
- * Dismiss a suggestion — marks it as 'dismissed' and adds the pair to
- * the exclusions table so it's never re-suggested on future scans.
+ * Dismiss a suggestion and add the pair to the exclusions, so no scan suggests
+ * it again.
  */
 export function dismissSuggestion(scope: Scope, id: string, rid: string): void {
   const suggestion = _stmts.getById.get(id, scope.ownerId) as
@@ -551,9 +520,9 @@ export function dismissSuggestion(scope: Scope, id: string, rid: string): void {
 }
 
 /**
- * Mark a suggestion as merged (after the merge was performed externally).
+ * Mark a suggestion merged, after the merge itself ran.
  *
- * @param mergedBy - Who performed the merge: 'user', 'auto', or 'user:suggestion'
+ * @param mergedBy - Who merged: 'user', 'auto', or 'user:suggestion'
  */
 export function markSuggestionMerged(
   scope: Scope,
@@ -564,20 +533,12 @@ export function markSuggestionMerged(
   _stmts.updateStatus.run(status, mergedBy, id, scope.ownerId);
 }
 
-// =============================================================================
-// Merge Log — Audit Trail
-// =============================================================================
+// Merge log
 
 /**
- * INTERNAL — caller MUST already hold a transaction. Used by
- * `mergeContacts` and `softMergeContacts` so the audit log entry is
- * folded into the SAME transaction as the merge mutations.
- *
- * Why this matters: prior to this split the audit log was written AFTER
- * the merge txn committed. A crash (or any thrown exception in the audit
- * insert) between commit and the log write would orphan the merge — the
- * contacts were merged, but `dedupe_merge_log` had no row, so `undoSoftMerge`
- * was permanently impossible.
+ * INTERNAL: the caller must hold a transaction. `mergeContacts` and
+ * `softMergeContacts` write the log row in the same transaction as the merge,
+ * so a merge can never commit without the row that `undoSoftMerge` needs.
  */
 export function recordMergeUnsafe(
   scope: Scope,
@@ -590,9 +551,8 @@ export function recordMergeUnsafe(
   snapshot?: string | null,
 ): string {
   const id = crypto.randomUUID();
-  // The owner is the caller's, not a lookup on the surviving contact. Both
-  // merged contacts belong to this account: `mergeContacts` proved that in one
-  // statement before it touched a single child row.
+  // The owner is the caller's: `mergeContacts` proved both contacts belong to
+  // this account before it touched a child row.
   _stmts.insertMergeLog.run(
     id,
     primaryId,
@@ -612,7 +572,7 @@ export function recordMergeUnsafe(
 }
 
 /**
- * Get the merge audit log, most recent first.
+ * The merge log, most recent first.
  *
  * @param limit - Max entries to return (default 50)
  */
@@ -681,11 +641,10 @@ function columnsOf(table: string): Set<string> {
 }
 
 /**
- * Write a child row from a merge snapshot back onto a contact.
- *
- * The snapshot holds the row as `SELECT *` returned it, so this copies the
- * row's own columns and skips any column the table no longer has. It sets the
- * contact, and the owner when the table has one.
+ * Write a child row from a merge snapshot back onto a contact. The snapshot
+ * holds the row as `SELECT *` returned it, so this copies the row's columns and
+ * skips any the table no longer has. It sets the contact, and the owner when
+ * the table has one.
  *
  * @param table - One of the child tables in `CHILD_TABLES`.
  * @param row - The row from the snapshot.
@@ -761,16 +720,15 @@ function isChildRowModified(
 }
 
 /**
- * Undo a merge — restores the duplicate contact's visibility, reverses
- * unchanged record transfers, preserves post-merge edits on survivor,
- * recomputes task follow-ups, and reports any conflicts encountered.
+ * Undo a merge: show the duplicate again, move back the records the survivor
+ * has not changed since, keep its later edits, recompute follow-ups, and report
+ * any conflicts.
  *
- * `keepSeparate`, true unless the caller says otherwise, records the two as
- * different people as well, the way "Keep separate" does. An undo is a
- * person saying the merge was wrong, and an undo that only reopened the pair
- * was merged again by the next scan at the same confidence. The browser sends
- * false for the Undo right after a person's own merge, a slip of the key,
- * which puts the pair back in the review.
+ * `keepSeparate`, true unless the caller says otherwise, also records the two
+ * as different people, like "Keep separate": an undo that only reopened the
+ * pair would be merged again by the next scan. The browser sends false for the
+ * Undo right after a person's own merge, a slip of the key, which puts the pair
+ * back in the review.
  *
  * @throws Error if the merge log entry is not found or already undone
  */
@@ -824,9 +782,8 @@ export function undoSoftMerge(
 
   const conflicts: MergeConflict[] = [];
 
-  // The saved copy is read before anything changes. An undo that cannot read
-  // it says so: undoing without it would show the contact again with
-  // nothing on it.
+  // The saved copy is read before anything changes. Without it an undo would
+  // show the contact again with nothing on it, so it refuses.
   let snapshot: MergeSnapshotData | null = null;
   if (entry.duplicateSnapshot) {
     try {
@@ -840,9 +797,8 @@ export function undoSoftMerge(
     }
   }
 
-  // All or nothing. A step that throws rolls every step back, and the merge
-  // stays as it was, not undone. A catch here once kept the steps done
-  // before the error and marked the merge undone all the same.
+  // All or nothing: a step that throws rolls every step back, and the merge
+  // stays as it was.
   const txn = sqlite.transaction(() => {
     if (snapshot) {
       // 1. Reverse child tables
@@ -968,9 +924,9 @@ export function undoSoftMerge(
                   )
                   .run(entry.duplicateId, recId, scope.ownerId);
               } else if (columnsOf(mapping.table).has("isPrimary")) {
-                // The merge took the primary mark off an email or phone
-                // that joined a contact with one. Back home, it is the
-                // duplicate's primary again, as it was.
+                // The merge took the primary mark off an email or phone that
+                // joined a contact with one. Back home, it is the duplicate's
+                // primary again.
                 sqlite
                   .prepare(
                     `UPDATE ${mapping.table} SET contactId = ?, isPrimary = ? WHERE id = ?`,
@@ -1238,19 +1194,13 @@ export function undoSoftMerge(
   };
 }
 
-// =============================================================================
 // After a merge, and the contact a merged one became
-// =============================================================================
 
 /**
  * Settle the suggestions a merge changed. INTERNAL: the caller holds the
- * merge's transaction.
- *
- * The joined pair is marked merged, and every other pending pair that names
- * a contact which is no longer live goes. Every merge path runs this, so no
- * pair waits in the review for a contact that was merged away. Only the
- * cluster routes cleaned up before, and a pair merged from its own row, from
- * a contact's page or by an automatic check left its siblings behind.
+ * merge's transaction. The joined pair is marked merged, and every other
+ * pending pair that names a contact no longer live goes. Every merge path runs
+ * this, so no pair waits in the review for a contact merged away.
  */
 export function settleSuggestionsAfterMergeUnsafe(
   scope: Scope,
@@ -1369,13 +1319,10 @@ export function restoreSuggestion(scope: Scope, id: string, rid: string): void {
   );
 }
 
-// =============================================================================
 // Maintenance
-// =============================================================================
 
 /**
- * Remove stale pending suggestions where one or both contacts
- * no longer exist or have been merged/archived.
+ * Remove pending suggestions where a contact is gone, merged or archived.
  *
  * @returns Number of suggestions removed
  */
@@ -1395,8 +1342,8 @@ export function clearStaleSuggestions(scope: Scope): number {
 }
 
 /**
- * Clear all pending suggestions (used before persisting new scan results
- * to avoid double-counting from previous scans).
+ * Clear the pending pairs a scan finds again (not a note's) before it stores
+ * its results.
  *
  * @returns Number of suggestions cleared
  */

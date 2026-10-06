@@ -9,15 +9,13 @@ import { nicknameVariants } from "../../utils/nlp/nicknames.ts";
 import { isPhoneQuery } from "../../utils/nlp/phone.ts";
 import type { CompiledFacets } from "./facetSql.ts";
 
-// The first FTS column is the unindexed contactId. It still consumes a weight.
-// bm25() reads weights by column position, so one weight per column in COLUMNS:
-// contactId, name, company, role, headline, location, about, industry, tags,
-// extras, addresses, searchExpansion, ownerTok. Tags and interests weigh 3, as
-// much as a role, and emails and phones keep 1. Addresses weigh 0.5, the
-// least of any text: a street or a postcode finds a contact, but a name, a
-// company, a role, a location or an about text that holds the same word
-// ranks first. The last is ownerTok, which is a scoping filter and must not
-// affect ranking.
+// bm25() reads weights by column position, one per column in COLUMNS: contactId
+// (unindexed, still takes a weight), name, company, role, headline, location,
+// about, industry, tags, extras, addresses, searchExpansion, ownerTok. Tags and
+// interests weigh 3, as much as a role, and emails and phones 1. Addresses
+// weigh 0.5, the least: a street or a postcode finds a contact, but the same
+// word in any other field ranks first. ownerTok is a scoping filter and must
+// not affect ranking.
 export const WEIGHTS = "0, 10, 5, 3, 2, 2, 1, 1, 3, 1, 0.5, 0.5, 0";
 
 export interface LexicalMatch {
@@ -36,21 +34,16 @@ export function searchTokens(query: string): string[] {
 }
 
 /**
- * Wrap one retry strategy in the caller's owner token.
- *
- * FTS5 intersects the posting list for `ownerTok:<token>` with the posting
- * lists of the query tokens inside the index, so only the owner's matches are
- * ever produced. An UNINDEXED ownerId column could not do this: FTS5 pushes
- * down MATCH, rowid and rank alone, and everything else is a post-filter over
- * rows the caller may not read. The architecture document, section 6.2, has
- * the measurements.
+ * Wrap one retry strategy in the caller's owner token. FTS5 intersects the
+ * posting list for `ownerTok:<token>` with the query's inside the index, so
+ * only the owner's matches are produced; an UNINDEXED ownerId could only filter
+ * afterwards, because FTS5 pushes down MATCH, rowid and rank alone.
  *
  * The strategy never reads the owner token column. The token is "o" and the
- * owner's id in hex, and the query's words are prefix clauses, so for an
- * owner whose id starts with f the word "of" matched `ofd…` in every row
- * the owner has: one account in sixteen. Every contact then matched "of",
- * and every BM25 score moved. `- {ownerTok} :` keeps the words to the
- * searched columns. The notes index has the same column and shares this.
+ * owner's id in hex, and the query's words are prefix clauses, so for an owner
+ * whose id starts with f the word "of" would match `ofd…` in every row (one
+ * account in sixteen) and move every BM25 score. `- {ownerTok} :` keeps the
+ * words to the searched columns. The notes index shares this.
  */
 export function scopedMatch(scope: Scope, strategy: string): string {
   return `ownerTok:${ownerToken(scope)} AND (- {ownerTok} : (${strategy}))`;
@@ -58,11 +51,9 @@ export function scopedMatch(scope: Scope, strategy: string): string {
 
 /**
  * One token as an FTS clause: a prefix match, or an exact match for a
- * one-letter token in the OR strategy.
- *
- * With `nicknames`, the other names of the token's nickname group also
- * match, on the name column only: "bob" becomes
- * `("bob"* OR name:("robert" OR "rob" OR ...))`.
+ * one-letter token in the OR strategy. With `nicknames`, the token's nickname
+ * group also matches, on the name column only: "bob" becomes `("bob"* OR
+ * name:("robert" OR "rob" OR ...))`.
  */
 function tokenClause(token: string, nicknames = false, exact = false): string {
   const clause = exact ? `"${token}"` : `"${token}"*`;
@@ -73,13 +64,12 @@ function tokenClause(token: string, nicknames = false, exact = false): string {
 }
 
 /**
- * A phone number as a digit clause, or null for any other query.
- *
- * The index holds each stored number's digits, its last 10 and its last 7
- * (`PHONES` in ftsIndex.ts). The query's digits find all three. Its last 10 find
- * a number stored without the country code the query has, and its last 7
- * find one typed with a trunk zero ("01614960321" for "+44 161 496 0321").
- * A contact that matches more of the forms ranks first.
+ * A phone number as a digit clause, or null for any other query. The index
+ * holds each number's digits, its last 10 and its last 7 (`PHONE_DIGITS` in
+ * ftsIndex.ts), and the query's digits find all three. Its last 10 find a
+ * number stored without the query's country code, and its last 7 one typed with
+ * a trunk zero ("01614960321" for "+44 161 496 0321"). A contact that matches
+ * more forms ranks first.
  */
 function phoneClause(query: string): string | null {
   if (!isPhoneQuery(query)) return null;
@@ -96,24 +86,20 @@ function phoneClause(query: string): string | null {
 }
 
 /**
- * Retrieve active keyword matches. Apply allowed IDs and facets before
- * ranking and limiting.
+ * Active keyword matches, with the allowed ids and facets applied before
+ * ranking and limiting. A phone number is looked up by its digits first.
  *
- * Strict mode (the sidebar, and the check that decides a query's kind):
- * the contacts that match every token, then approximate names by score.
+ * Strict mode (the sidebar, and the check that decides a query's kind): the
+ * contacts that match every token, then approximate names by score.
  *
- * Broad mode (the keyword channel of hybrid retrieval) ranks four tiers,
- * each in its own order:
+ * Broad mode (hybrid retrieval's keyword channel) ranks four tiers, each in its
+ * own order, so a misspelled name is not buried under people who share one word
+ * of it:
  *
  * 1. every token matched, by BM25;
  * 2. approximate names scoring 0.85 or more, by score;
  * 3. partial matches, some tokens but not all, by BM25;
  * 4. approximate names from 0.75 to 0.85, by score.
- *
- * Before, every partial match outranked every approximate name, so at 5,000
- * contacts a misspelled name fell behind people who shared one word of it.
- *
- * A phone number is looked up by its digits first, in both modes.
  */
 export function lexicalSearch(
   scope: Scope,
@@ -129,10 +115,9 @@ export function lexicalSearch(
     ? "AND c.id IN (SELECT value FROM json_each(?))"
     : "";
   const facetClause = facets ? `AND (${facets.sql})` : "";
-  // `c.ownerId = ?` is a second guard, not the filter that does the work. The
-  // owner token has already restricted the FTS side, and the contact row is
-  // fetched by rowid, so this costs nothing and makes the statement true on
-  // its own.
+  // `c.ownerId = ?` is a second guard: the owner token already restricted the
+  // FTS side, and the contact row is fetched by rowid, so it costs nothing and
+  // makes the statement true on its own.
   const stmt = sqlite.prepare(`
     SELECT c.id AS contactId FROM contacts_fts f
     JOIN contacts c ON c.rowid = f.rowid
@@ -161,13 +146,11 @@ export function lexicalSearch(
     if (rows.length) return rows;
   }
 
-  // Exact matches always stay strictly first: the query as typed, then the
-  // query with the other names of its first token's nickname group. The
-  // first token is where a first name goes, so "Peggy Ellington" finds
-  // Margaret Ellington, and "people I will meet" does not reach for
-  // William. A rare nickname outscores a common name in BM25, so the
-  // nickname matches follow the literal ones rather than mix with them:
-  // "Margaret" lists every Margaret before a Maggie.
+  // Exact matches stay strictly first: the query as typed, then the query with
+  // the nickname group of its first token, where a first name goes. So "Peggy
+  // Ellington" finds Margaret Ellington, and "people I will meet" does not
+  // reach for William. A rare nickname outscores a common name in BM25, so
+  // nickname matches follow the literal ones: every Margaret before a Maggie.
   let exactRows = run(tokens.map((token) => tokenClause(token)).join(" AND "));
   if (exactRows.length < limit && nicknameVariants(tokens[0]).length) {
     const literal = new Set(exactRows.map((r) => r.contactId));

@@ -16,11 +16,9 @@ interface ListRow {
 }
 
 /**
- * Assert the scope owns this list, or 404.
- *
- * `list_members` carries no owner of its own, so every membership change has
- * to prove the list first. The 404 names no id and gives no reason, so a
- * foreign list id and an invented one look the same from outside.
+ * Assert the scope owns this list, or 404. `list_members` has no owner of its
+ * own, so every membership change proves the list first. The 404 names no id
+ * and gives no reason, so a foreign list id and an invented one look alike.
  */
 function requireOwnedList(scope: Scope, id: string): void {
   if (
@@ -112,12 +110,9 @@ export const listService = {
   },
 
   /**
-   * Renumber the caller's lists.
-   *
-   * Two different refusals, and the order matters. An id the caller does not
-   * own is a 404, the same answer an invented id gets. A set that is complete
-   * for nobody, but built only from the caller's own ids, is still the 400
-   * this endpoint has always returned.
+   * Renumber the caller's lists. An id the caller does not own is a 404, like
+   * an invented id. A set built only from the caller's own ids but not complete
+   * is a 400.
    */
   reorderLists(scope: Scope, orderedIds: string[]) {
     const unique = [...new Set(orderedIds)];
@@ -156,9 +151,8 @@ export const listService = {
   },
 
   /**
-   * Who is in a list, newest first, with only what the Lists page shows. It
-   * read every member as a whole contact, with their emails, phones, tags
-   * and lists, to draw a name and a photo.
+   * Who is in a list, newest first, with only what the Lists page shows (a name
+   * and a photo), not every member as a whole contact.
    */
   getListContacts(scope: Scope, id: string): ListMember[] {
     requireOwnedList(scope, id);
@@ -230,10 +224,8 @@ export const listService = {
   },
 
   /**
-   * Remove one contact from one list.
-   *
-   * Both sides are checked: validates that both contact and list belong to
-   * the active owner before running the DELETE.
+   * Remove one contact from one list, after checking that both belong to the
+   * caller.
    */
   removeMember(scope: Scope, listId: string, contactId: string) {
     requireOwnedList(scope, listId);
@@ -256,11 +248,9 @@ export const listService = {
   },
 
   /**
-   * Add many contacts to one list.
-   *
-   * The list is checked once and the contacts in a single scoped statement.
-   * A foreign id in the array aborts the whole call rather than being skipped,
-   * which matches `addMember` and keeps the reported count honest.
+   * Add many contacts to one list. The list is checked once and the contacts in
+   * one scoped statement. A foreign id aborts the whole call, as in
+   * `addMember`, so the count is true.
    */
   bulkAddMembers(scope: Scope, listId: string, contactIds: string[]) {
     requireOwnedList(scope, listId);
@@ -293,11 +283,9 @@ export const listService = {
   },
 
   /**
-   * Remove many contacts from one list.
-   *
-   * The checks of `removeMember`, made once: the list, then every contact in
-   * one scoped statement. A foreign id aborts the whole call, as it does in
-   * `bulkAddMembers`. The count is how many of them were members.
+   * Remove many contacts from one list, with `removeMember`'s checks made once:
+   * the list, then every contact in one scoped statement. A foreign id aborts
+   * the whole call, as in `bulkAddMembers`. The count is how many were members.
    */
   bulkRemoveMembers(scope: Scope, listId: string, contactIds: string[]) {
     requireOwnedList(scope, listId);

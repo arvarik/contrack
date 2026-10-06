@@ -1,32 +1,22 @@
-// =============================================================================
-// Mention resolution — which contact is "Jon"?
-// =============================================================================
-// A timeline note says "lunch with Jon and Priya". A model pulls the two names
-// out, and then something has to decide who they are. Until 2.0 that
-// something was `eq(contacts.name, m.name)`: an exact string match against
-// `contacts.name`, and a new ghost contact for every miss.
+// Mention resolution: which contact is "Jon"?
 //
-// An exact match misses almost everything a person writes. "Jon" does not
-// find "Jonathan Smith". "Maria Garcia" does not find "María García". "Dr.
-// Chen" does not find "Sarah Chen". Each miss made a ghost, the ghost joined
-// the mention graph the dashboard and the warm paths read, and the next note
-// about the same person made another one.
+// A note says "lunch with Jon and Priya". A model pulls the names out, and this
+// decides who they are. An exact match on `contacts.name` misses most of what a
+// person writes ("Jon" for "Jonathan Smith", "Maria Garcia" for "María García",
+// "Dr. Chen" for "Sarah Chen"), and every miss would make a ghost that joins
+// the mention graph. So this points the dedupe engine's name machinery (a
+// tokenizer that strips titles, a nickname table, Double Metaphone and
+// Jaro-Winkler) at one name.
 //
-// The dedupe engine has already solved the hard half of this: a name
-// tokenizer that strips titles, a nickname table, Double Metaphone, and
-// Jaro-Winkler. This is that machinery pointed at one name instead of a pair.
-//
-// Three outcomes, not two:
+// Three outcomes:
 //
 //   link    confident enough to attach the mention to an existing contact
 //   review  plausible, so make the ghost AND a suggestion pairing it with
 //           the candidate, reviewed in the same queue as a duplicate
-//   ghost   nothing close, so a new person, which is the old behavior
+//   ghost   nothing close, so a new person
 //
-// The middle one is the point. An exact match either found somebody or made a
-// ghost, with nothing in between, so every near miss became a second record
-// of a person the account already had and nobody was ever told.
-// =============================================================================
+// The middle one is the point: without it every near miss would become a second
+// record of a person the account already has, and nobody would be told.
 
 import { sqlite } from "../db.ts";
 import {
@@ -39,42 +29,33 @@ import {
 } from "../utils/nlp/index.ts";
 import type { Scope } from "../tenancy/scope.ts";
 
-// ---------------------------------------------------------------------------
 // Thresholds
-// ---------------------------------------------------------------------------
 
 /**
- * Attach the mention to this contact without asking.
- *
- * High, because the cost of the two mistakes is not symmetric. A wrong link
- * puts one person's lunch in another person's timeline and there is nothing
- * on screen to suggest it is wrong. A missed link makes a ghost, which is
- * visible, reviewable and merges away in one click.
+ * Attach the mention to this contact without asking. High, because the two
+ * mistakes cost differently: a wrong link puts one person's lunch in another's
+ * timeline with nothing on screen to show it, while a missed link makes a
+ * ghost, which is visible and merges away in one click.
  */
 export const MENTION_LINK_THRESHOLD = 0.9;
 
 /**
- * Make the ghost, and a suggestion that it might be this contact.
- *
- * Below this the candidate is not worth somebody's attention: a queue full of
- * "could this Ana be that Ana" is a queue nobody reads, and the dedupe engine
- * will find a real duplicate later anyway.
+ * Make the ghost, and a suggestion that it might be this contact. Below this
+ * the candidate is not worth anybody's attention: a queue full of "could this
+ * Ana be that Ana" goes unread, and the dedupe engine finds a real duplicate
+ * later anyway.
  */
 export const MENTION_REVIEW_THRESHOLD = 0.7;
 
 /**
- * How far ahead the best candidate has to be to be linked at all.
- *
- * Two contacts that score the same are the father-and-son case: "James
- * Whitfield" at one firm, twice, one of them the son. Linking picks one at
- * random and is wrong half the time, so a close second demotes the answer to
- * review however high the top score is.
+ * How far ahead the best candidate must be to be linked at all. Two contacts
+ * that score the same are the father-and-son case ("James Whitfield" at one
+ * firm, twice), where linking is a coin flip, so a close second demotes the
+ * answer to review however high the top score is.
  */
 const AMBIGUITY_MARGIN = 0.05;
 
-// ---------------------------------------------------------------------------
 // Shapes
-// ---------------------------------------------------------------------------
 
 /** One of the account's contacts, in the shape matching needs. */
 export interface MentionCandidateContact {
@@ -106,25 +87,18 @@ interface ScoredEntry {
   lastName: string;
   phonetic: string;
   /**
-   * Normalized company, or null when the mention named no company.
-   *
-   * `normalizeCompany` runs a loop of thirty-three suffix regexes and is by
-   * some way the most expensive thing here: 217 ms per 50,000 calls, against
-   * 41 ms for Double Metaphone and 25 ms for the tokenizer. Most mentions
-   * carry no company, and for those there is nothing to compare against, so
-   * computing it was more than half the cost of resolving a name for a
-   * booster that could not fire.
+   * Normalized company, or null when the mention named none. `normalizeCompany`
+   * runs thirty-three suffix regexes and is the most expensive step here (217
+   * ms per 50,000 calls, against 41 ms for Double Metaphone), and most mentions
+   * carry no company to compare, so it is skipped for them.
    */
   companyNorm: string | null;
 }
 
 /**
- * What one note needs that does not depend on which name is being resolved.
- *
- * Only the co-mention set, because the candidates are fetched per name. The
- * first version loaded and tokenized the account's whole address book here,
- * which is fine at a thousand contacts and is not at fifty thousand: 326 ms
- * of event loop, once per saved note, to compare against a handful of names.
+ * What one note needs whichever name is being resolved: only the co-mention
+ * set. Candidates are fetched per name, because loading and tokenizing a whole
+ * address book of fifty thousand costs 326 ms of event loop per saved note.
  */
 export interface MentionCorpus {
   scope: Scope;
@@ -133,15 +107,10 @@ export interface MentionCorpus {
 }
 
 /**
- * The account-level half of resolution: who already turns up beside this
- * contact.
- *
- * Two people who appear in a note together are more likely to be the two
- * people in front of you than two strangers with the same first name.
- *
- * `interaction_mentions` has no owner of its own, so the join to
- * `interactions` supplies one. A name in my note can only be somebody in my
- * address book, and a candidate from anywhere else is not a near miss.
+ * Who already turns up beside this contact: two people in one note are more
+ * likely the two in front of you than strangers with the same first name.
+ * `interaction_mentions` has no owner of its own, so the join to `interactions`
+ * supplies one: a name in my note can only be somebody in my address book.
  */
 export function buildMentionCorpus(
   scope: Scope,
@@ -176,36 +145,27 @@ const PREFIX_LENGTH = 3;
 const MAX_PATTERNS = 10;
 
 /**
- * The contacts worth tokenizing for this one name.
+ * The contacts worth tokenizing for this one name, in two queries.
  *
- * Two queries, not one and not five.
+ * The first reads `phoneticHash`, indexed on (ownerId, phoneticHash), for
+ * sound-alikes and most accents: Double Metaphone folds most of them, so "Søren
+ * Kjærgaard" and "Soren Kjaergaard" share a code.
  *
- * The first is `phoneticHash`, which has an index on (ownerId, phoneticHash)
- * and answers the sound-alike and most of the accent cases. Double Metaphone
- * already folds most accents, so "Søren Kjærgaard" and "Soren Kjaergaard"
- * carry the same code.
- *
- * The second is every name prefix, OR'd into one statement. A `LIKE` on a
- * name cannot use an index, so each pattern in its own query meant another
- * full scan of the account: five patterns cost 34 ms on 50,000 contacts, and
- * one statement costs 6 ms because the scan happens once.
- *
- * The prefixes are three characters, which keeps a misspelling in either half
- * of the name findable: "Vanse" still starts "van". Every short form of the
- * first name gets a prefix too, because "Bob" and "Robert" share none and a
- * LIKE cannot reach across the nickname table.
- *
- * No `LOWER()` around the column. SQLite's LIKE already folds ASCII case, so
- * it bought nothing and cost a function call per row scanned.
+ * The second ORs every name prefix into one statement. A `LIKE` on a name
+ * cannot use an index, so one query per pattern scans the account each time:
+ * five patterns take 34 ms on 50,000 contacts, one statement 6 ms. Prefixes are
+ * three characters, so a misspelling in either half of the name still matches
+ * ("Vanse" starts "van"), and every short form of the first name gets one too,
+ * because "Bob" and "Robert" share none. No `LOWER()`: SQLite's LIKE already
+ * folds ASCII case.
  */
 function fetchCandidates(
   scope: Scope,
   tokens: string[],
   phonetic: string,
 ): MentionCandidateContact[] {
-  // The status half only. `ownerId = ?` is written into each statement below
-  // rather than interpolated, so `tenant-lint` reads the owner check in the
-  // literal it scans instead of a fragment it cannot follow.
+  // The status half only. `ownerId = ?` is written into each statement below,
+  // so `tenant-lint` sees the owner check in the literal it scans.
   const ACTIVE = `deletedAt IS NULL AND canonicalId IS NULL
       AND (isArchived = 0 OR isArchived IS NULL)`;
   const first = tokens[0] ?? "";
@@ -273,15 +233,11 @@ function prepareEntry(
   };
 }
 
-// ---------------------------------------------------------------------------
 // Matching
-// ---------------------------------------------------------------------------
 
 /**
- * Score one candidate against one mentioned name.
- *
- * Returns null when no tier fires at all, which is most of the corpus for
- * most names. The tiers are tried in order and the first that fires wins:
+ * Score one candidate against one mentioned name, or null when no tier fires,
+ * which is most of the corpus for most names. The first tier that fires wins:
  * they are levels of evidence, not signals to add up.
  */
 function scoreCandidate(
@@ -372,11 +328,9 @@ function scoreCandidate(
 }
 
 /**
- * Decide what to do with one mentioned name.
- *
- * The margin check is as important as the threshold. A name that scores 0.95
- * against two contacts is not a confident answer, it is two answers, and
- * linking one of them is a coin flip nothing on screen would reveal.
+ * Decide what to do with one mentioned name. The margin matters as much as the
+ * threshold: a name that scores 0.95 against two contacts is two answers, and
+ * linking one is a coin flip nothing on screen would reveal.
  */
 export function resolveMention(
   corpus: MentionCorpus,
@@ -402,9 +356,8 @@ export function resolveMention(
   }
   if (scored.length === 0) return { kind: "ghost" };
 
-  // Sort by confidence, then by contact id, so two candidates that score
-  // identically resolve the same way on every run rather than in whatever
-  // order the corpus query returned.
+  // Sort by confidence, then by contact id, so ties resolve the same way on
+  // every run.
   scored.sort(
     (a, b) =>
       b.confidence - a.confidence || (a.contactId < b.contactId ? -1 : 1),

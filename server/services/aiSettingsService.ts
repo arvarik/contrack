@@ -1,17 +1,14 @@
 import { aiCache } from "../utils/aiCache.ts";
-// =============================================================================
-// AI Settings Service — provider credentials, capability assignments, models
-// =============================================================================
-// Backing logic for Settings → Administration → AI. Owns:
-//   - provider API keys entered through the UI (env keys stay read-only),
-//     stored sealed with the instance secret
-//   - custom OpenAI-compatible endpoints (OpenAI-compatible servers)
-//   - capability assignments: the Fast model (quick), the Strong model
-//     (deep), the web search model (research) and the embedding model
-//   - the web search policy: whether research may search the web, and the
-//     instance's engine (server/ai/webSearchPolicy.ts)
-//   - the cached model catalog per provider
-// =============================================================================
+// Provider credentials, capability assignments and models, behind Settings →
+// Administration → AI:
+// - provider API keys entered in the UI (env keys stay read-only), sealed with
+//   the instance secret
+// - custom OpenAI-compatible endpoints
+// - capability assignments: the Fast model (quick), the Strong model (deep),
+//   the web search model (research) and the embedding model
+// - the web search policy: whether research may search the web, and the
+//   instance's engine (server/ai/webSearchPolicy.ts)
+// - the cached model catalog per provider
 
 import { getSetting, setSetting, SETTING_KEYS } from "./settingsService.ts";
 import {
@@ -75,9 +72,7 @@ export interface CachedModelList {
 /** How long a cached model list is considered fresh. */
 const MODEL_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
-// ---------------------------------------------------------------------------
 // Provider credentials
-// ---------------------------------------------------------------------------
 
 /** Mask a secret for display: last 4 characters only. */
 function redact(key: string | undefined): string | undefined {
@@ -112,13 +107,10 @@ export function deleteProviderKey(providerId: string): void {
 }
 
 /**
- * Return any capability pinned to a departing provider to Auto.
- *
- * A pin outliving its provider fails differently per capability, and one of
- * those ways is silent: quick/deep/research fall back to auto with a warning,
- * but embeddings resolves straight to the dead provider and every embed call
- * throws — semantic search and duplicate detection stop working with nothing
- * in the UI to explain it, because the pin still *looks* valid.
+ * Return any capability pinned to a departing provider to Auto. Quick, deep and
+ * research fall back to auto with a warning, but an embeddings pin would
+ * resolve to the dead provider and fail every call, stopping semantic search
+ * and duplicate detection with nothing in the UI to explain it.
  */
 function releasePinsFor(providerId: string): void {
   const assignments = getCapabilityAssignments();
@@ -136,9 +128,7 @@ function releasePinsFor(providerId: string): void {
   if (changed) setSetting(SETTING_KEYS.aiCapabilities, assignments);
 }
 
-// ---------------------------------------------------------------------------
 // Custom OpenAI-compatible endpoints
-// ---------------------------------------------------------------------------
 
 /** Custom endpoints as stored: each key is sealed (see readStoredKey). */
 export function listCustomEndpoints(): CustomEndpointConfig[] {
@@ -174,16 +164,12 @@ export function deleteCustomEndpoint(id: string): void {
   aiCache.invalidateAll();
 }
 
-// ---------------------------------------------------------------------------
 // The instance switch
-// ---------------------------------------------------------------------------
 
 /**
  * Refuse work that has to reach a provider while AI is off for the instance.
- *
- * getProvider answers null while it is off, so without this a model refresh
- * or a model test would report "not configured" about a provider that is
- * configured, and send the admin looking for a key problem.
+ * getProvider answers null then, so a model refresh or test would otherwise
+ * report "not configured" and send the admin looking for a key problem.
  */
 export function assertAiOnForInstance(): void {
   if (!isAiOffForInstance()) return;
@@ -194,9 +180,7 @@ export function assertAiOnForInstance(): void {
   );
 }
 
-// ---------------------------------------------------------------------------
 // Capability assignments
-// ---------------------------------------------------------------------------
 
 const VALID_CAPABILITIES: AICapability[] = [
   "quick",
@@ -240,17 +224,14 @@ export function setWebSearch(patch: {
  * Send a pinned model one tiny request, the way its capability will call it,
  * before the pin is saved.
  *
- * The catalog shows what a provider lists, and a provider lists models that
- * cannot answer: on 2026-09-26 OpenAI listed nine deprecated models that
- * answer 404 and seven that Chat Completions refuses. The catalog now leaves
- * those out, and this catches the next one. A research pin is sent with the
- * web-search tool on, because a model can chat and still refuse the tool
- * (Haiku 4.5 refuses the newer search tool). The prompt needs no search, so
- * no search is billed.
- *
- * Only the three built-in providers are tested. A custom endpoint is the
- * operator's own server, which may be down for a reason, and a provider with
- * no key yet has nothing to test.
+ * Providers list models that cannot answer: OpenAI listed nine deprecated
+ * models that answer 404 and seven that Chat Completions refuses. The catalog
+ * leaves those out, and this catches the next one. A research pin is sent with
+ * the web-search tool on, because a model can chat and still refuse the tool
+ * (Haiku 4.5 refuses the newer search tool). The prompt needs no search, so no
+ * search is billed. Only the three built-in providers are tested: a custom
+ * endpoint is the operator's own server, which may be down for a reason, and a
+ * provider with no key has nothing to test.
  */
 export async function probeGeneration(
   capability: Exclude<AICapability, "embeddings">,
@@ -281,9 +262,7 @@ export async function probeGeneration(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Model discovery + cache
-// ---------------------------------------------------------------------------
+// Model discovery and cache
 
 function readModelCache(): Record<string, CachedModelList> {
   return (
@@ -296,9 +275,9 @@ function writeModelCache(cache: Record<string, CachedModelList>): void {
 }
 
 /**
- * Fetch and cache a provider's model list. Throws when discovery fails so the
- * caller (key validation) can surface an actionable error; the previous list
- * is retained with an `error` marker.
+ * Fetch and cache a provider's model list. Throws when discovery fails, so key
+ * validation can show an actionable error; the previous list is kept with an
+ * `error` marker.
  */
 export async function refreshModels(
   providerId: string,
@@ -349,10 +328,9 @@ export async function refreshModels(
 }
 
 /**
- * Refresh any provider whose cache is missing or older than the TTL.
- *
- * The server runs this at boot and once a day. While AI is off for the
- * instance it does nothing: a model list request is a provider call too.
+ * Refresh any provider whose cache is missing or older than the TTL, at boot
+ * and once a day. Nothing while AI is off for the instance: a model list
+ * request is a provider call too.
  */
 export async function refreshStaleModelCaches(): Promise<void> {
   if (isAiOffForInstance()) return;
@@ -376,9 +354,7 @@ export async function refreshStaleModelCaches(): Promise<void> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Aggregate view for the settings UI
-// ---------------------------------------------------------------------------
+// The settings UI's view
 
 export interface AISettingsView {
   providers: {
@@ -415,10 +391,9 @@ export interface AISettingsView {
         /** Display name of the provider that will serve this capability. */
         providerLabel: string;
         /**
-         * The concrete model that will run. Populated even in Auto mode —
-         * "chosen automatically" told the user nothing about what would
-         * execute or what it would cost. Undefined only when the provider
-         * genuinely cannot say in advance (a custom endpoint).
+         * The model that will run, even in Auto mode, so the user knows what
+         * runs and what it costs. Undefined only when the provider cannot say
+         * in advance (a custom endpoint).
          */
         model?: string;
         /** Human-readable target — the built-in model has no provider entry. */
@@ -479,13 +454,9 @@ const BUILT_IN_LABELS: Record<string, string> = {
 };
 
 /**
- * Resolve one capability into what the settings UI should display.
- *
- * Embeddings needs its own path: it resolves through resolveEmbeddings()
- * rather than resolveCapability(), and its Auto target is the built-in local
- * model — which has no provider entry, so it needs an explicit label. Leaving
- * it out made the UI report "nothing available" for a capability that was
- * working perfectly offline.
+ * Resolve one capability for the settings view. Embeddings resolves through
+ * resolveEmbeddings(), not resolveCapability(), and its Auto target is the
+ * built-in local model, which has no provider entry and so needs its own label.
  */
 function resolveForView(
   capability: AICapability,
@@ -535,9 +506,9 @@ function resolveForView(
         providerId: r.providerId,
         providerLabel: labelFor(r.providerId, configs),
         // In Auto mode `resolveCapability` leaves the model to the adapter's
-        // own router, so ask the adapter what it would pick. Adapters that
-        // cannot answer (custom endpoints) leave this undefined and the UI
-        // falls back to naming the provider alone.
+        // router, so ask the adapter what it would pick. One that cannot answer
+        // (a custom endpoint) leaves this undefined, and the UI names the
+        // provider alone.
         model:
           r.model ??
           r.provider.defaultModelFor?.(r.modelClass, {
@@ -575,18 +546,15 @@ function reasonFor(
     return "No provider is connected. Add a key or an OpenAI-compatible server under Providers.";
   }
   if (capability === "research") {
-    // Research is the one capability a self-hosted stack cannot serve through
-    // a model alone — but SearXNG covers it, and when configured the feature
-    // genuinely works despite resolving to no provider.
+    // No model can serve research here, but SearXNG can, and research works
+    // with it.
     if (getSearxngStatus().url) {
       return "No connected provider searches the web. Research searches with SearXNG.";
     }
     return "No connected provider searches the web. Connect Gemini, OpenAI or Anthropic, or add a SearXNG address.";
   }
   // The common self-hosted case: the only provider is a custom endpoint whose
-  // model list was never discovered, so there is no model to call. "No provider
-  // can serve this" would send the user looking for a second provider when the
-  // one they have needs a refresh.
+  // model list was never discovered. It needs a refresh, not a second provider.
   const compatWithoutModels = configs.filter(
     (config) =>
       config.kind === "openai-compatible" &&
@@ -600,11 +568,10 @@ function reasonFor(
 }
 
 /**
- * What each adapter kind can do, for the view while AI is off for the
- * instance. getProvider answers null then, so there is no adapter to ask,
- * and a provider row that lost its "web search" mark or its refresh button
- * would look like a different provider. Every adapter lists its models, and
- * only an OpenAI-compatible endpoint cannot search the web.
+ * What each adapter kind can do, for the view while AI is off for the instance,
+ * when getProvider answers null and there is no adapter to ask. Every adapter
+ * lists its models, and only an OpenAI-compatible endpoint cannot search the
+ * web.
  */
 const KIND_FEATURES: Record<
   ProviderKind,
@@ -694,15 +661,10 @@ function webSearchView(): AISettingsView["webSearch"] {
 }
 
 /**
- * Models eligible for a capability, grouped for the UI dropdowns.
- *
- * Research is filtered on "grounding", not "chat". Every chat model used to
- * be offered here, so the web-research picker listed dozens of models that
- * cannot search the web at all — and picking one saved without complaint,
- * then failed on the first enrichment run. Adapters now mark which of their
- * models actually support search grounding (see ModelCapability), and
- * providers that cannot ground at all — every custom OpenAI-compatible
- * endpoint — contribute nothing to this list.
+ * Models eligible for a capability, grouped for the dropdowns. Research is
+ * filtered on "grounding", not "chat", so the picker offers only models that
+ * can search the web (see ModelCapability), and a custom OpenAI-compatible
+ * endpoint, which cannot ground, adds nothing.
  */
 export function getModelsForCapability(
   capability: AICapability,

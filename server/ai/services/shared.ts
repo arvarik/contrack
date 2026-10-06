@@ -1,6 +1,4 @@
-// =============================================================================
-// AI Services — helpers shared by every domain module
-// =============================================================================
+// Helpers shared by the AI service modules.
 
 import { log } from "../../utils/logger.ts";
 import { isAnyProviderConfigured } from "../gateway.ts";
@@ -11,9 +9,9 @@ export function isMockMode(): boolean {
 }
 
 /**
- * Safely parses a JSON string from an LLM response.
- * LLMs occasionally return empty strings or malformed JSON despite schema enforcement.
- * This prevents an unhandled SyntaxError from crashing the caller.
+ * Parse JSON from a model's answer, or null. Models sometimes return an empty
+ * string or malformed JSON despite the schema, and a SyntaxError must not crash
+ * the caller.
  */
 export function safeParseJson<T>(text: string, context: string): T | null {
   if (!text?.trim()) return null;

@@ -1,21 +1,9 @@
-// =============================================================================
-// Avatar Service — deterministic avatar SVGs, generated in-process
-// =============================================================================
-// Contrack used to point every contact's avatar at `api.dicebear.com`, with the
-// contact's name in the query string. Rendering the contact list therefore sent
-// the name of every person the user knows to a third party, on every page load,
-// from an app whose entire pitch is local-first and privacy-focused. Those
-// people never agreed to that. It was also a hard runtime dependency: offline,
-// every contact without an uploaded photo was a broken image.
-//
-// The DiceBear npm packages are not API clients — they carry the artwork and
-// compose the SVG by computation. So this is not a cache in front of a network
-// call; the network call no longer exists. Generation is deterministic, so the
-// same name always produces the same face, and it costs roughly a millisecond.
-//
-// Nothing is written to disk. The output is a pure function of (style, seed),
-// so HTTP caching on the route is the whole cache — see routes/avatar.ts.
-// =============================================================================
+// Deterministic avatar SVGs, generated in-process. The DiceBear packages carry
+// the artwork and compose the SVG by computation, so no contact name goes to a
+// third party and avatars work offline. The same name always gives the same
+// face, in about a millisecond. Nothing is written to disk: the output is a
+// pure function of (style, seed), so HTTP caching on the route is the whole
+// cache (routes/avatar.ts).
 
 // DiceBear v9 style packages export `{ create, meta, schema }` rather than a
 // named style object, so the namespace *is* the style.
@@ -52,23 +40,18 @@ export function isAvatarStyle(value: string): value is AvatarStyle {
   return (AVATAR_STYLES as readonly string[]).includes(value);
 }
 
-// ---------------------------------------------------------------------------
 // Expression presets
-// ---------------------------------------------------------------------------
 
 /**
- * Friendly-face constraints for avataaars.
- *
- * The old URLs constrained only `mouth`, which left `eyebrows` and `eyes` free
- * — so a contact could land on `angry` brows over a `serious` mouth, or `cry`
- * eyes, and scowl out of the address book at you. A CRM's avatars should be
- * neutral-to-warm; nobody wants a directory of people who look annoyed.
+ * Friendly-face constraints for avataaars. Eyebrows and eyes are constrained as
+ * well as the mouth, so no contact scowls out of the address book with `angry`
+ * brows over a `serious` mouth. Avatars should be neutral to warm.
  *
  * Excluded on purpose:
- *   eyebrows — angry, angryNatural, frownNatural, sadConcerned,
- *              sadConcernedNatural, unibrowNatural
- *   eyes     — cry, xDizzy, eyeRoll, squint, closed (asleep), hearts (odd
- *              in a professional context), vomit-adjacent expressions
+ *   eyebrows: angry, angryNatural, frownNatural, sadConcerned,
+ *             sadConcernedNatural, unibrowNatural
+ *   eyes:     cry, xDizzy, eyeRoll, squint, closed (asleep), hearts (odd in a
+ *             professional context), vomit-adjacent expressions
  */
 export const FRIENDLY_EYEBROWS = [
   "default",
@@ -88,16 +71,14 @@ export const FRIENDLY_EYES = [
   "wink",
 ] as const;
 
-/** Unchanged from the previous URLs — already a friendly set. */
+/** Mouths, all friendly already. */
 export const FRIENDLY_MOUTH = ["default", "smile", "serious"] as const;
 
 /**
- * Expressions that must never reach a contact's face.
- *
- * Asserted in the tests rather than merely commented, because the failure mode
- * is silent: DiceBear ignores an option value it does not recognize, so a
- * single typo in the allow-lists above would quietly restore the *entire*
- * pool — angry brows included — with nothing to notice at runtime.
+ * Expressions that must never reach a contact's face. The tests assert this,
+ * because the failure is silent: DiceBear ignores an option value it does not
+ * recognize, so one typo in the allow lists above would quietly restore the
+ * whole pool, angry brows included.
  */
 export const BANNED_EXPRESSIONS = {
   eyebrows: [
@@ -116,17 +97,12 @@ export const BANNED_EXPRESSIONS = {
 const SKIN_COLOR = ["f8d25c"] as const;
 
 /**
- * Asset pools for the three looks smartAvatar can pick.
- *
- * The seed still picks within a pool, so two people with the same look get
- * different faces. The neutral pool is for names the data cannot call and for
- * pronouns other than he or she: no facial hair, the short and textured hair
- * that reads either way, no scoop neck, and no pastel pink hair, which reads
- * female. It used to be the unconstrained pool, which gave one ambiguous name
- * in ten a beard.
- *
- * `shavedSides` left the male pool: it is long hair swept to one side, and it
- * read female on one man in ten.
+ * Asset pools for the three looks smartAvatar can pick. The seed still picks
+ * within a pool, so two people with one look get different faces. The neutral
+ * pool is for names the data cannot call and pronouns other than he or she: no
+ * facial hair, short and textured hair that reads either way, no scoop neck,
+ * and no pastel pink hair, which reads female. `shavedSides` is not in the male
+ * pool: it is long hair swept to one side, which read female on one man in ten.
  */
 const LOOK_PRESETS = {
   male: {
@@ -232,11 +208,9 @@ const BACKGROUND_COLORS = [
 ] as const;
 
 /**
- * The same five hues, deep enough to sit in a dark card.
- *
- * The pastels above are backgrounds rather than text, so they carry no
- * contrast duty — but five bright squares in a grid on a near-black page are
- * the brightest thing on screen, which is not what a picker should be.
+ * The same five hues, deep enough for a dark card. The pastels are backgrounds,
+ * with no contrast duty, but five bright squares on a near-black page would be
+ * the brightest thing on screen.
  */
 const BACKGROUND_COLORS_DARK = [
   "14405a",
@@ -253,9 +227,7 @@ export function isAvatarTheme(value: unknown): value is AvatarTheme {
   return value === "light" || value === "dark";
 }
 
-// ---------------------------------------------------------------------------
 // Generation
-// ---------------------------------------------------------------------------
 
 export interface RenderAvatarOptions {
   style: AvatarStyle;
@@ -264,27 +236,23 @@ export interface RenderAvatarOptions {
   /** Apply the pastel background wash (the picker does; list avatars do not). */
   background?: boolean;
   /**
-   * Which palette to draw for.
-   *
-   * Undefined means "decide in the browser": the monogram then carries its own
-   * `prefers-color-scheme` rule, which is the right answer for the default
-   * `system` theme and needs no request parameter at all. A value pins it,
-   * which is what a person who chose light or dark explicitly needs.
+   * Which palette to draw for. Undefined means "decide in the browser": the
+   * monogram carries its own `prefers-color-scheme` rule, right for the default
+   * `system` theme. A value pins it, for a person who chose light or dark.
    */
   theme?: AvatarTheme;
   /**
-   * Which pool the illustrated style draws from. Undefined means "read it
-   * from the seed", which is right for a name. A contact's pronouns arrive
-   * here, because the seed alone cannot carry them.
+   * Which pool the illustrated style draws from. Undefined reads it from the
+   * seed, which is right for a name. A contact's pronouns arrive here, because
+   * the seed cannot carry them.
    */
   look?: AvatarLook;
 }
 
 /**
- * Each style declares its own option union, and they do not overlap — there is
- * no shared type that describes "seed plus whatever this style accepts". The
- * values below are validated against the real schemas by the unit tests, which
- * is a stronger guarantee than the structural type would have been.
+ * Each style declares its own option union, and no shared type describes "seed
+ * plus whatever this style accepts". The unit tests check the values below
+ * against the real schemas instead.
  */
 type AvatarOptions = Record<string, unknown>;
 
@@ -317,9 +285,9 @@ function renderStyle({
 
   switch (style) {
     case "avataaars": {
-      // Spread each pool into a fresh array: `as const` above keeps the literal
-      // element types (which the style's option unions require) but makes the
-      // arrays readonly, and DiceBear's options are mutable arrays.
+      // Spread each pool into a fresh array: `as const` keeps the literal types
+      // the style's options need but makes the arrays readonly, and DiceBear's
+      // options are mutable arrays.
       const preset = LOOK_PRESETS[look ?? classifyName(seed)];
       return createAvatar(avataaars, {
         ...base,
@@ -340,21 +308,18 @@ function renderStyle({
     case "initials":
       return monogramSvg(seed, theme);
     default:
-      // TypeScript proves this is unreachable for well-typed callers, but the
-      // style can arrive from a persisted URL or a hand-edited database row.
-      // Throwing routes it into the fallback chain below; falling off the end
-      // of the switch would return `undefined` and render a broken image.
+      // Unreachable for well-typed callers, but the style can come from a
+      // persisted URL or a hand-edited row. Throwing reaches the fallback chain
+      // below; falling off the switch would return `undefined` and a broken
+      // image.
       throw new Error(`Unknown avatar style "${style}"`);
   }
 }
 
 /**
- * Render an avatar to an SVG string.
- *
- * Never throws: a style that fails to compose falls back to `initials`, and if
- * even that fails the caller gets a plain lettered circle. A broken avatar
- * should degrade to a duller avatar, not to a broken image icon in a list of
- * two hundred people.
+ * Render an avatar to an SVG string. Never throws: a style that fails falls
+ * back to `initials`, and if that fails too the caller gets a plain lettered
+ * circle, a duller avatar rather than a broken image in a list of two hundred.
  */
 export function renderAvatar(options: RenderAvatarOptions): string {
   try {

@@ -1,12 +1,7 @@
-// =============================================================================
-// Module: ai
-// =============================================================================
 // AI providers and models, their usage statistics, and the AI routes.
-// /api/ai/stats mounts before /api/ai, as it always has. Its job refreshes
-// the providers' model lists every day. At start, research turned off the
-// old way, with the research model set to Off, moves to the "Allow web
-// search" switch, which keeps a pinned model.
-// =============================================================================
+// /api/ai/stats mounts before /api/ai. Its job refreshes the providers' model
+// lists daily. At start, research turned off by setting the research model to
+// Off moves to the "Allow web search" switch, which keeps a pinned model.
 
 import { defineModule } from "../module.ts";
 import { aiSettingsRouter } from "../../routes/aiSettings.ts";

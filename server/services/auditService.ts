@@ -1,41 +1,28 @@
-// =============================================================================
-// Audit Service — who did what to the instance, and when
-// =============================================================================
-// Every administrative action writes one row here: creating an account,
-// changing a role, disabling, resetting a password, deleting, inviting,
-// exporting somebody else's data, changing an instance setting, taking a
-// backup, and the sign-in events that make those attributable.
+// Who did what to the instance, and when. Every administrative action writes
+// one row: creating an account, changing a role, disabling, resetting a
+// password, deleting, inviting, exporting somebody else's data, changing an
+// instance setting, taking a backup, and the sign-in events that make those
+// attributable. Two rules:
 //
-// Two rules shape the design.
+//   1. A failed write never fails the action. The insert logs and returns on
+//      error: losing an audit row is bad, refusing to disable a compromised
+//      account because the table is locked is worse.
+//   2. `details` never carries a secret. Callers change, so the guard is here:
+//      a key that reads like a credential, or a value that looks like a
+//      personal token, becomes "[redacted]" before the row is written, and the
+//      redaction is logged so the call site is visible.
 //
-//   1. A failed write must never fail the action. The insert sits inside a
-//      try/catch that logs and returns. Losing an audit row is bad; refusing
-//      to disable a compromised account because the audit table is locked is
-//      worse.
-//
-//   2. `details` never carries a secret. The caller decides what to record,
-//      and callers change, so the guard is here rather than at each call
-//      site: a key whose name reads like a credential, or a value that looks
-//      like a personal token, is replaced with "[redacted]" before the row is
-//      written. The redaction is logged so a call site that trips it is
-//      visible rather than silent.
-//
-// Retention is 90 days, swept by the daily maintenance interval in server.ts.
-// =============================================================================
+// Rows are kept 90 days, swept by the daily maintenance job.
 
 import crypto from "crypto";
 import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 
-/** Every action name this app writes. Kept as a union so a typo fails to build. */
 /**
- * Every action that writes a row, as a value.
- *
- * A value and not only a type because the audit endpoint filters on it and a
- * filter has to reject an action nobody writes. A `LIKE` on a user-supplied
- * string would answer a typo with an empty page, which reads as "nothing
- * happened" — the one answer an audit log must never give by accident.
+ * Every action that writes a row, as a value, so the audit endpoint's filter
+ * can refuse an action nobody writes. A `LIKE` on a user-supplied string
+ * would answer a typo with an empty page, which reads as "nothing happened".
  */
 export const AUDIT_ACTIONS = [
   "auth.login.success",
@@ -111,11 +98,9 @@ interface RecordInput {
 }
 
 /**
- * Key names that must never reach the audit table.
- *
- * `link` is here because an invitation link carries the invitation secret in
- * its query string, and the link is exactly the field a well-meaning call site
- * would want to record.
+ * Key names that must never reach the audit table. `link` is here because an
+ * invitation link carries its secret in the query string, and it is exactly
+ * what a well-meaning call site would record.
  */
 const SECRET_KEY = /pass|token|secret|api_?key|credential|hash|link|cookie/i;
 
@@ -125,11 +110,9 @@ const TOKEN_VALUE = /\bctk_[A-Za-z0-9_-]{8,}/;
 const REDACTED = "[redacted]";
 
 /**
- * Copy `details` with anything credential-shaped removed.
- *
- * One level deep only. Audit details are flat by convention, and a recursive
- * walk over an arbitrary object is a place for a cycle to hang the request
- * that is trying to record it.
+ * Copy `details` without anything credential-shaped. One level deep: audit
+ * details are flat by convention, and a recursive walk over an arbitrary object
+ * could hang on a cycle.
  */
 function redact(
   details: Record<string, unknown>,
@@ -163,9 +146,8 @@ function redact(
 
 export const auditService = {
   /**
-   * Write one audit row.
-   *
-   * Never throws. A caller that cannot record an action still completes it.
+   * Write one audit row. Never throws: a caller that cannot record an action
+   * still completes it.
    */
   record(input: RecordInput): void {
     try {
@@ -195,18 +177,12 @@ export const auditService = {
   },
 
   /**
-   * The newest entries first, with an opaque cursor for the next page.
-   *
-   * The cursor is `<createdAt>|<id>` rather than a bare timestamp because
-   * `createdAt` defaults to `CURRENT_TIMESTAMP`, which has one-second
-   * resolution. A purge writes several rows inside one second, and a cursor
-   * of `createdAt < before` would skip every row that shares a second with
-   * the last row of the previous page.
-   *
-   * `actions` filters in SQL rather than in the caller. Phase 4 wanted a
-   * filter on this page and filtering a fetched page would have been a lie:
-   * fifty rows narrowed to the two sign-ins among them, with no way to reach
-   * the rest without paging through everything.
+   * The newest entries first, with an opaque cursor for the next page. The
+   * cursor is `<createdAt>|<id>`, because `createdAt` defaults to
+   * `CURRENT_TIMESTAMP` with one-second resolution: a purge writes several rows
+   * in one second, and `createdAt < before` would skip the rows that share a
+   * second with the last row of the previous page. `actions` filters in SQL,
+   * because filtering a fetched page would hide the matches on later pages.
    */
   list(params: { limit: number; before?: string; actions?: string[] }): {
     entries: AuditEntry[];

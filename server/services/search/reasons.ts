@@ -1,12 +1,8 @@
-// =============================================================================
-// Server-built reasons for Ask Contrack matches
-// =============================================================================
-// The model used to write one sentence per match, and those output tokens
-// were most of the reranker's 3 to 6 s. The reason is now built here, from
-// the fields that proved the match: the ones a database filter checked, and
-// the one field the reranker cited. The text comes from the contact's own
-// fields, so it is exact, short and the same on every run.
-// =============================================================================
+// Server-built reasons for Ask Contrack matches, from the fields that proved
+// the match: those a database filter checked, and the one the reranker cited.
+// The model writes no sentence (that cost most of the reranker's 3 to 6 s), and
+// the text comes from the contact's own fields, so it is exact, short and the
+// same on every run.
 
 import { formatDistanceStrict } from "date-fns";
 
@@ -110,14 +106,12 @@ function lastContactPart(at: unknown, now: Date): Part {
 }
 
 /**
- * One short sentence that says why a contact matches.
- *
- * `evidence` names the fields a filter or the reranker proved, most
- * important first. A role and a company merge into "Product Manager at
- * Northwind Logistics". At most two parts are joined, for example "Product
- * Manager at Northwind Logistics, based in Lisbon, Portugal." A proven field
- * that is empty on the contact adds nothing. Returns null when nothing is
- * left to say, and the card then shows no reason line.
+ * One short sentence that says why a contact matches. `evidence` names the
+ * fields a filter or the reranker proved, most important first. A role and a
+ * company merge into "Product Manager at Northwind Logistics". At most two
+ * parts are joined, such as "Product Manager at Northwind Logistics, based in
+ * Lisbon, Portugal." A proven field empty on the contact adds nothing. Null
+ * when nothing is left to say, and the card shows no reason line.
  */
 export function buildReason(
   contact: ReasonContact,

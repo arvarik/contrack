@@ -1,7 +1,5 @@
 /**
- * server/connectors/registry.ts — Registry of connector adapters and available kinds.
- *
- * Maps connector kinds to adapters and computes available kinds based on configuration.
+ * The connector adapters by kind, and which kinds the configuration offers.
  *
  * @module server/connectors/registry
  */
@@ -33,10 +31,8 @@ export function getAdapter(
 }
 
 /**
- * Whether the server runs in a container, for `GET /api/connectors/kinds`.
- * Docker writes /.dockerenv and Podman writes /run/.containerenv. Three
- * environment variables (DOCKER, IS_DOCKER, DOCKER_CONTAINER) could also say
- * so. Nothing set them, and nothing documented them, so they are gone.
+ * Whether the server runs in a container, for `GET /api/connectors/kinds`:
+ * Docker writes /.dockerenv and Podman writes /run/.containerenv.
  */
 export function isDocker(): boolean {
   try {

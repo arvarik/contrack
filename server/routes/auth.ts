@@ -1,15 +1,9 @@
-// =============================================================================
-// /api/auth — setup, sign-in, sign-out, profile, sessions
-// =============================================================================
-// Mounted BEFORE the requireAuth gate in app.ts, so these stay reachable to
-// someone who is not signed in. Each handler that needs a credential asks for
-// one itself via `requireUser`.
+// /api/auth: setup, sign-in, sign-out, profile, sessions.
 //
-// The first-run problem: on a gated instance with no accounts, nobody can sign
-// in, so /setup must be open. It closes itself the moment an account exists —
-// `countUsers() > 0` makes it a 409 — which is how a self-hosted app avoids
-// leaving an open registration endpoint on the internet.
-// =============================================================================
+// Mounted before the requireAuth gate in app.ts, so these stay reachable to
+// someone who is not signed in. A handler that needs a credential asks for one
+// itself (`requireSession`). On a gated instance with no accounts nobody can
+// sign in, so /setup is open until an account exists, then answers 409.
 
 import { Router, type Request, type Response } from "express";
 import { AppError, ValidationError } from "../utils/AppError.ts";
@@ -127,15 +121,11 @@ const uploadAccountAvatar = multer({
 });
 
 /**
- * Brute-force protection on the credential endpoints.
- *
- * Ten attempts a minute per IP. Generous enough that a person fumbling their
- * own password never sees it, tight enough that online guessing is hopeless
- * against any password worth the name — and it sits on top of scrypt, which
- * already caps a single core at roughly ten guesses a second.
- *
- * Keyed by IP alone rather than IP+username, deliberately: keying by username
- * lets an attacker lock a known account out by failing on purpose.
+ * Brute-force protection on the credential endpoints: ten attempts a minute per
+ * IP. A person fumbling a password never sees it, online guessing is hopeless,
+ * and scrypt already caps a core at about ten guesses a second. Keyed by IP
+ * alone, because keying by username lets an attacker lock a known account out
+ * by failing on purpose.
  */
 const credentialLimiter = createRateLimiter({
   windowMs: 60_000,
@@ -151,12 +141,10 @@ const setupLimiter = createRateLimiter({
 });
 
 /**
- * Ten personal tokens an hour, per account rather than per address.
- *
- * Keyed by the account because a token is a credential that account owns, and
- * because several people behind one office address should not share a budget
- * for minting their own. Ten an hour is far more than anybody needs and low
- * enough that a runaway script cannot fill the table.
+ * Ten personal tokens an hour, per account rather than per address: a token is
+ * the account's credential, and people behind one office address should not
+ * share a budget. Far more than anybody needs, and too few for a runaway script
+ * to fill the table.
  */
 const tokenLimiter = createRateLimiter({
   windowMs: 3_600_000,
@@ -166,9 +154,8 @@ const tokenLimiter = createRateLimiter({
 });
 
 /**
- * Three link requests per 15 minutes per IP.
- *
- * Sits in front of /api/auth/password-reset/request and /api/auth/magic-link/request.
+ * Three link requests per 15 minutes per IP, in front of
+ * /api/auth/password-reset/request and /api/auth/magic-link/request.
  */
 const linkLimiter = createRateLimiter({
   windowMs: 15 * 60_000,
@@ -194,30 +181,22 @@ function ipOf(req: Request): string | null {
   return req.ip ?? null;
 }
 
-// =============================================================================
 // Status
-// =============================================================================
 
 /**
- * What the client needs to decide which screen to show, in one round trip.
- *
- * `setupRequired` is only true on a gated instance nobody can sign in to — an
- * un-gated instance has no reason to demand an account, so it must not push
- * anyone through a setup wizard they did not ask for.
- *
- * It counts accounts with a password, not accounts. Every instance now has the
- * local owner account from boot, so `countUsers() === 0` is never true and
- * would have hidden the setup screen from everyone.
+ * What the client needs to choose a screen, in one round trip. `setupRequired`
+ * is true only on a gated instance nobody can sign in to: an open instance must
+ * not push anyone through setup. It counts accounts with a password, because
+ * the local owner always exists.
  */
 router.get("/status", (req, res) => {
   const authRequired = isAuthRequired();
   const user = currentUser(req);
   const passwordAccounts = countPasswordAccounts();
   const setupRequired = authRequired && passwordAccounts === 0;
-  // How much data is sitting here. Only computed for the setup screen, which
-  // is the one place it changes what someone should believe: "secure this
-  // instance" reads very differently when you know 431 contacts are already
-  // here and are about to belong to the account you are making.
+  // How many contacts are here, for the setup screen only: "secure this
+  // instance" reads differently when 431 contacts are about to belong to the
+  // account being made.
   const deviceContacts = setupRequired ? countDeviceContacts() : 0;
 
   res.json({
@@ -243,13 +222,10 @@ router.get("/status", (req, res) => {
     // Whether an MCP client can sign in with OAuth here (oauthService.ts):
     // sign-in is on, and PUBLIC_URL is https or a loopback http address.
     mcpOAuth: authRequired && oauthIssuer() !== null,
-    // What this instance calls itself, or "" when nobody has named it.
-    //
-    // Read-only here and unauthenticated on purpose: it has to reach the
-    // sign-in and join screens, which are the two places somebody looks
-    // before they have a credential and the two places the answer matters
-    // most. An operator who names their instance is choosing to put that name
-    // in front of anybody who can reach the port.
+    // What this instance calls itself, or "". Unauthenticated on purpose: the
+    // sign-in and join screens need it before anybody has a credential. An
+    // operator who names an instance chooses to show the name to anybody who
+    // can reach the port.
     instanceName: getInstanceName(),
     // The basemap style for each palette. Unauthenticated like the rest of
     // this payload: the URLs are public and the CSP header already names
@@ -258,9 +234,7 @@ router.get("/status", (req, res) => {
   });
 });
 
-// =============================================================================
 // First-run setup
-// =============================================================================
 
 router.post(
   "/setup",
@@ -281,9 +255,8 @@ router.post(
       displayName: bodyString(req, "displayName"),
     };
 
-    // Securing an instance that has been used converts the local owner rather
-    // than creating a second account. The id does not change, so every row it
-    // already owns stays owned, and nothing has to be claimed.
+    // Securing a used instance converts the local owner instead of adding an
+    // account. The id stays, so every row it owns stays owned.
     const user = hasLocalOwner()
       ? await convertLocalOwner(input)
       : await createUser(input);
@@ -299,20 +272,13 @@ router.post(
   }),
 );
 
-// =============================================================================
 // Open registration
-// =============================================================================
 
 /**
- * Create an account without an invitation.
- *
- * Off by default and only an admin can turn it on. The endpoint exists at all
- * times so that the answer to a closed instance is a clear
- * `403 REGISTRATION_CLOSED` rather than a 404 that reads like a broken build.
- *
- * The account is always a member. `createUser` makes the first account on an
- * instance an admin, and that cannot happen here: turning registration on
- * needs an admin, so one already exists.
+ * Create an account without an invitation. Off by default, and only an admin
+ * turns it on. The endpoint always exists, so a closed instance answers a clear
+ * `403 REGISTRATION_CLOSED` rather than a 404. The account is always a member:
+ * opening registration needs an admin, so this is never the first account.
  */
 router.post(
   "/register",
@@ -344,9 +310,7 @@ router.post(
   }),
 );
 
-// =============================================================================
-// Sign in / out
-// =============================================================================
+// Sign in and out
 
 router.post(
   "/login",
@@ -367,9 +331,8 @@ router.post(
     const user = await verifyCredentials(identifier, password);
     if (!user) {
       // The audit row says whether the typed name matched an account, and
-      // which one, never the text: a password typed into the name field
-      // would stay in the log. The actor is null, since nobody proved who
-      // they are.
+      // which, never the text: a password typed into the name field would stay
+      // in the log. The actor is null, since nobody proved who they are.
       const matched = accountIdForIdentifier(identifier);
       auditService.record({
         actorUserId: null,
@@ -386,11 +349,9 @@ router.post(
       });
     }
 
-    // Checked after the password, not before. Saying "this account is
-    // disabled" to someone who has not proved they own it would tell an
-    // attacker which usernames are real, which is the thing the shared message
-    // above exists to prevent. Someone holding the right password has already
-    // earned a straight answer.
+    // Checked after the password: telling somebody who has not proved ownership
+    // that an account is disabled would reveal which usernames are real. The
+    // right password earns a straight answer.
     if (user.status === "disabled") {
       auditService.record({
         actorUserId: user.id,
@@ -444,17 +405,12 @@ router.post("/logout", (req, res) => {
   res.json({ success: true });
 });
 
-// =============================================================================
 // Joining by invitation
-// =============================================================================
 
 /**
- * Turn an invitation link into an account, and sign it in.
- *
- * Lives in this file rather than in routes/admin.ts because the person using
- * it has no account yet: it must sit in front of the credential gate, and it
- * needs the same per-IP window the sign-in endpoints use, which is private to
- * this module.
+ * Turn an invitation link into an account, and sign it in. Here rather than in
+ * routes/admin.ts because the person has no account yet: it sits in front of
+ * the credential gate and shares the sign-in rate limiter.
  */
 router.post(
   "/accept-invitation",
@@ -472,8 +428,8 @@ router.post(
 
 /**
  * Whether an invitation link can still make an account, asked when the link
- * opens, so a dead link says so before anybody fills in the form. The same
- * answers and the same per-address window as accepting it.
+ * opens, so a dead link says so before anybody fills in the form. Same answers
+ * and rate limit as accepting it.
  */
 router.post(
   "/invitations/check",
@@ -485,9 +441,7 @@ router.post(
   }),
 );
 
-// =============================================================================
 // Password reset and magic links
-// =============================================================================
 
 /**
  * The mail that carries a reset or sign-in link to an address, or null when
@@ -544,13 +498,11 @@ function answerThenSend(
 }
 
 /**
- * Request a password reset link by email.
- *
- * Always returns 202 whether the email is known or not, preventing enumeration.
- * When mail can carry links (mail configured and PUBLIC_URL set) and the
- * account exists, creates a 1-hour reset token (subject to the hourly cap of 3
- * per account) and sends an email. The link's origin is PUBLIC_URL and never
- * the request's host, which the requester controls.
+ * Request a password reset link by email. Always 202, known address or not.
+ * When mail can carry links (mail configured, PUBLIC_URL set) and the account
+ * exists, it creates a 1-hour reset token (at most 3 an hour per account) and
+ * sends it. The link's origin is PUBLIC_URL, never the request's host, which
+ * the requester controls.
  */
 router.post(
   "/password-reset/request",
@@ -574,11 +526,9 @@ router.post(
 );
 
 /**
- * Complete a password reset using a one-time token.
- *
- * Redeems the token (single use, within TTL), sets the new password, clears
- * mustChangePassword, revokes all other sessions, creates a new session
- * with method "email-link", sets the session cookie, and writes an audit row.
+ * Complete a password reset with a one-time token: redeem it, set the password,
+ * clear mustChangePassword, revoke other sessions, sign in with method
+ * "email-link", and audit it.
  */
 router.post(
   "/password-reset/complete",
@@ -617,11 +567,9 @@ router.post(
 );
 
 /**
- * Request a magic link sign-in email.
- *
- * 404 MAGIC_LINK_OFF when the instance switch is off, or when mail cannot
- * carry links (mail not configured, or PUBLIC_URL not set). Always returns 202
- * when enabled, preventing email enumeration.
+ * Request a magic link sign-in email. 404 MAGIC_LINK_OFF when the instance
+ * switch is off or mail cannot carry links (no mail, or no PUBLIC_URL).
+ * Otherwise always 202, so it cannot enumerate emails.
  */
 router.post(
   "/magic-link/request",
@@ -642,10 +590,8 @@ router.post(
 );
 
 /**
- * Complete magic link sign-in using a one-time token.
- *
- * Redeems the token (single use, within 15m TTL), signs in the user with
- * session method "email-link", sets the session cookie, and writes audit rows.
+ * Complete a magic link sign-in with a one-time token (single use, 15 minute
+ * TTL): sign in with method "email-link", set the cookie, and audit it.
  */
 router.post(
   "/magic-link/complete",
@@ -693,14 +639,11 @@ router.post(
   }),
 );
 
-// =============================================================================
 // The signed-in account
-// =============================================================================
 
 router.get("/me", requireSession, (req, res) => {
-  // `via` says how this request proved who it is. Only a session reaches this
-  // route, so the value is always "session" today, and it is sent because the
-  // field is part of the documented shape and a later gate may widen it.
+  // `via` is always "session" here, since only a session reaches this route. It
+  // is part of the documented shape, so it is sent anyway.
   res.json({
     user: publicUser(currentUser(req)!),
     via: req.principal?.via ?? "session",
@@ -781,24 +724,18 @@ router.delete(
   }),
 );
 
-// =============================================================================
-// Preferences
-// =============================================================================
-// List density, the recent-contacts limit, dedupe sensitivity, the temperature
-// unit, the theme and the search history. One GET and one PATCH, because they
-// are read together on every page load and written one at a time.
+// Preferences: list density, the recent-contacts limit, dedupe sensitivity, the
+// temperature unit, the theme and the search history. One GET and one PATCH,
+// because they are read together and written one at a time.
 //
-// NOT `requireSession`, and that is the whole reason these two are here rather
-// than beside /me. An instance with sign-in switched off runs as the local
-// owner, whose principal is `implicit` — there is no session to require, and a
-// gate that asks for one would leave the default single-user setup unable to
-// choose a theme. Any principal that is a person acts on that person's own
-// account and nobody else's, which is what the route class means.
+// Not `requireSession`, which is why they are here and not beside /me. With
+// sign-in off the caller is the local owner, whose principal is `implicit`, and
+// a session gate would leave the default setup unable to choose a theme. A
+// person's principal acts on that person's own account only.
 //
-// `stored` names the keys this account has actually chosen. The browser needs
-// it to tell "the default, because nobody said" apart from "the default,
-// because somebody chose it", which is what makes the one-time migration out
-// of localStorage safe to run.
+// `stored` names the keys this account has chosen, so the browser can tell "the
+// default, because nobody said" from "the default, because somebody chose it",
+// which keeps the one-time move out of localStorage safe.
 
 router.get("/preferences", (req, res) => {
   const user = currentUser(req);
@@ -873,9 +810,7 @@ router.post(
   }),
 );
 
-// =============================================================================
 // Sessions
-// =============================================================================
 
 router.get("/sessions", requireSession, (req, res) => {
   res.json({
@@ -892,12 +827,8 @@ router.delete("/sessions", requireSession, (req, res) => {
   res.json({ revoked });
 });
 
-// =============================================================================
-// Personal API tokens
-// =============================================================================
-// A token acts as its account for every scoped endpoint and can reach none of
-// these routes, so a script cannot mint a second token or revoke the one it
-// is holding. `requireSession` is what says so.
+// Personal API tokens. A token can reach none of these routes
+// (`requireSession`), so a script cannot mint another token or revoke its own.
 
 router.get("/tokens", requireSession, (req, res) => {
   res.json({ tokens: listTokens(currentUser(req)!.id) });
@@ -905,11 +836,9 @@ router.get("/tokens", requireSession, (req, res) => {
 
 /**
  * Mint a token. The plaintext is in this response and nowhere else.
- *
- * `requirePasswordCurrent` sits here and not on the two routes beside it. A
- * new long-lived credential minted from an account whose password two people
- * know is the risk; reading the list and revoking one are what somebody who
- * is worried needs, so those stay open.
+ * `requirePasswordCurrent` is here and not on the routes beside it: a new
+ * long-lived credential from an account whose password two people know is the
+ * risk, while listing and revoking are what a worried person needs.
  */
 router.post(
   "/tokens",
@@ -930,9 +859,7 @@ router.delete(
   }),
 );
 
-// =============================================================================
 // Passkeys
-// =============================================================================
 
 router.post(
   "/passkeys/register/options",

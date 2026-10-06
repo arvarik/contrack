@@ -1,20 +1,9 @@
 /**
- * AI Resilience Primitives
- * ========================
- * Shared building blocks for every AI adapter: timeouts, retries with
- * jittered exponential backoff, abort propagation, retryable-error
- * classification, and tolerant JSON parsing.
- *
- * Why this module exists:
- * - Without a shared module each adapter reinvents (or skips) these
- *   concerns. The OpenAI and Anthropic adapters previously had NO retry,
- *   NO timeout, NO error classification. The Gemini adapter has retry
- *   logic but no timeout. This module unifies all of that.
- * - JSON parsing for `responseFormat: "json"` was happening at every
- *   call-site downstream. A malformed model response (which happens
- *   under load even on flagship models) would surface as a 500 from
- *   the caller's `JSON.parse`, with no clue that the upstream LLM was
- *   at fault. `parseAIJson()` produces a single, typed error class.
+ * Shared building blocks for every AI adapter: timeouts, retries with jittered
+ * exponential backoff, abort propagation, retryable-error classification, and
+ * tolerant JSON parsing. `parseAIJson()` gives a malformed model answer (which
+ * happens under load even on flagship models) one typed error, instead of a 500
+ * from a caller's `JSON.parse` with no hint that the model was at fault.
  */
 
 import {
@@ -24,10 +13,8 @@ import {
   AppError,
 } from "../utils/AppError.ts";
 
-// ---------------------------------------------------------------------------
-// Defaults — tuned for a desktop local-first app where latency matters less
-// than reliability. Override per-call via `AIGenerateOptions.timeoutMs`.
-// ---------------------------------------------------------------------------
+// Defaults, favoring reliability over latency. A call can override the timeout
+// with `AIGenerateOptions.timeoutMs`.
 
 export const AI_DEFAULTS = {
   /** Hard cap per single network attempt. Streaming / grounded calls may need to raise this. */
@@ -40,19 +27,13 @@ export const AI_DEFAULTS = {
   jitterMs: 250,
 };
 
-// ---------------------------------------------------------------------------
-// Retryable-error classifier — shared between providers
-// ---------------------------------------------------------------------------
+// Retryable errors
 
 /**
- * Coarse classifier for transient upstream failures.
- *
- * Recognizes:
- *  - HTTP 408 / 429 / 5xx
- *  - SDK error message keywords: "timeout", "ECONNRESET", "ECONNREFUSED",
- *    "rate limit", "quota", "overloaded", "temporarily unavailable"
- *  - Native AbortError when triggered by our own timeout (NOT when the
- *    caller's signal aborts — caller-aborts are surfaced unchanged).
+ * Coarse classifier for transient upstream failures: HTTP 408, 429 and 5xx; SDK
+ * messages with "timeout", "ECONNRESET", "ECONNREFUSED", "rate limit", "quota",
+ * "overloaded" or "temporarily unavailable"; and an AbortError from our own
+ * timeout (never the caller's abort, which surfaces unchanged).
  */
 export function isRetryableError(
   error: unknown,
@@ -107,21 +88,14 @@ export function isRetryableError(
   );
 }
 
-// ---------------------------------------------------------------------------
-// withTimeout — bound a single network attempt
-// ---------------------------------------------------------------------------
+// withTimeout: bound one network attempt
 
 /**
- * Run `op(signal)` with a hard timeout. Two outcomes:
- *
- *  - Promise resolves with the op's value within `timeoutMs`.
- *  - Promise rejects with an `UpstreamTimeoutError` once `timeoutMs` elapses.
- *
- * The signal passed into `op` is aborted when the timer fires AND when the
- * outer `parentSignal` aborts (if provided). Adapters MUST forward this
- * signal to their SDK call (`{ signal }` on OpenAI / Anthropic) so the
- * underlying socket is actually closed — without that, the timer just
- * lets the request leak in the background.
+ * Run `op(signal)` with a hard timeout: it resolves with the op's value, or
+ * rejects with an `UpstreamTimeoutError` once `timeoutMs` passes. The signal
+ * given to `op` aborts when the timer fires and when `parentSignal` aborts.
+ * Adapters must pass it to their SDK call (`{ signal }`), or the socket stays
+ * open and the request leaks in the background.
  */
 export async function withTimeout<T>(
   op: (signal: AbortSignal) => Promise<T>,
@@ -162,9 +136,7 @@ export async function withTimeout<T>(
   }
 }
 
-// ---------------------------------------------------------------------------
-// withRetry — exponential-backoff retry with jitter and abort propagation
-// ---------------------------------------------------------------------------
+// withRetry: exponential backoff with jitter and abort propagation
 
 export interface RetryOptions {
   baseBackoffMs?: number;
@@ -172,8 +144,8 @@ export interface RetryOptions {
   /** Optional caller-cancellation signal — if it aborts we bail out without further retries. */
   signal?: AbortSignal;
   /**
-   * Hook for adapter-specific side-effects between attempts (e.g. tripping a
-   * circuit breaker). Called only on retryable errors, BEFORE the backoff.
+   * Adapter side effects between attempts, such as tripping a circuit breaker.
+   * Called only on retryable errors, before the backoff.
    */
   onRetry?(attempt: number, err: unknown): void;
 }
@@ -235,8 +207,8 @@ export async function withRetry<T>(
       503,
       { code: "AI_AUTH_FAILED" },
     );
-  // Gemini answers 402 when a prepaid project has used its credit
-  // (2026-09-26). Time does not fix it, and "failed after retries" hid why.
+  // Gemini answers 402 when a prepaid project has used its credit. Time does
+  // not fix it, and "failed after retries" would hide why.
   if (status === 402)
     throw new AppError(
       `The AI provider refused the request for billing. ${providerMessage(e?.message)}`.trim(),
@@ -297,21 +269,14 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-// ---------------------------------------------------------------------------
-// parseAIJson — tolerant JSON parser for model output
-// ---------------------------------------------------------------------------
+// parseAIJson: a tolerant parser for model output
 
 /**
- * Models occasionally wrap their JSON in markdown code fences, prose, or
- * leading whitespace despite a strict schema. This parser:
- *
- *   1. Strips ```json / ``` fences.
- *   2. Trims surrounding whitespace.
- *   3. Falls back to extracting the first balanced `{...}` or `[...]` block.
- *
- * On any failure, throws an `AppError` with code `"AI_INVALID_JSON"` so the
- * caller can decide whether to retry, surface to the user, or substitute a
- * default. Returns the parsed value with the caller-supplied generic type.
+ * Models sometimes wrap their JSON in code fences, prose or whitespace despite
+ * a strict schema. This strips ```json / ``` fences, trims, and falls back to
+ * the first balanced `{...}` or `[...]` block. Any failure throws an `AppError`
+ * with code `"AI_INVALID_JSON"`, so the caller can retry, report it or use a
+ * default.
  */
 export function parseAIJson<T = unknown>(raw: string, context?: string): T {
   if (typeof raw !== "string" || raw.trim().length === 0) {

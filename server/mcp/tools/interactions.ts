@@ -1,9 +1,5 @@
 /**
- * server/mcp/tools/interactions.ts — Interaction and timeline MCP tools.
- *
- * Implements:
- * - get_timeline
- * - log_interaction
+ * Interaction MCP tools: get_timeline and log_interaction.
  *
  * @module server/mcp/tools/interactions
  */
@@ -89,8 +85,8 @@ export function registerInteractionTools({
     },
     (body) => {
       // Every ID must be a contact in the account, or nothing is logged. The
-      // service drops an unknown ID quietly, as the note editor wants, and a
-      // client should hear about a wrong ID instead.
+      // service drops an unknown ID quietly, as the note editor wants, but a
+      // client should hear about a wrong one.
       const mentionIds = [...new Set(body.mentionContactIds ?? [])].filter(
         (id) => id !== body.contactId,
       );

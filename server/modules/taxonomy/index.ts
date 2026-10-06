@@ -1,11 +1,6 @@
-// =============================================================================
-// Module: taxonomy
-// =============================================================================
-// Tags, and the MCP tools that read and sort contacts into tags and lists.
-//
-// Not named "tags": a global gitignore often ignores that word, and a folder
-// it ignores would never reach the repository.
-// =============================================================================
+// Tags, and the MCP tools that read and sort contacts into tags and lists. Not
+// named "tags": a global gitignore often ignores that word, and an ignored
+// folder would never reach the repository.
 
 import { defineModule } from "../module.ts";
 import { tagsRouter } from "../../routes/tags.ts";

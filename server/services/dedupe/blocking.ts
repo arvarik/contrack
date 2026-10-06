@@ -1,23 +1,16 @@
-// =============================================================================
-// Dedupe Blocking Engine — Candidate Generation + Negative Constraints
-// =============================================================================
-// Implements the multi-key blocking strategy (Tier 3) and negative constraint
-// filter (Tier 3.5) from DEDUPE_STRATEGIES.md. This replaces the O(n²)
-// brute-force comparison with an inverted-index approach that reduces
-// 584,721 candidate pairs to ~2,000–5,000.
+// Dedupe blocking: candidate generation and negative constraints. An inverted
+// index on blocking keys replaces comparing every pair (584,721 pairs become
+// about 2,000 to 5,000).
 //
-// Architecture:
-// 1. buildBlockIndex()            — inverted index: blockKey → contactIds[]
-// 2. generateCandidatePairs()     — iterate blocks → unique candidate pairs
-// 3. addEmbeddingCandidates()     — KNN nearest-neighbor pairs from sqlite-vec
-// 4. loadNegativeConstraints()    — co-occurrence + user exclusions
-// 5. isKnownDistinct()           — fast membership test
+// 1. buildBlockIndex()          inverted index: blockKey → contactIds[]
+// 2. generateCandidatePairs()   blocks → unique candidate pairs
+// 3. addEmbeddingCandidates()   KNN nearest-neighbor pairs from sqlite-vec
+// 4. loadNegativeConstraints()  co-occurrence and user exclusions
+// 5. isKnownDistinct()          fast membership test
 //
-// Design principles:
-// - Mega-block filter: skip blocks with >100 contacts (O(k²) explosion guard)
-// - De-duplication: canonical pair keys prevent duplicate candidates
-// - Separation of concerns: blocking is independent of scoring
-// =============================================================================
+// Blocks with more than 100 contacts are skipped (an O(k²) guard), canonical
+// pair keys prevent duplicate candidates, and blocking knows nothing of
+// scoring.
 
 import { sqlite } from "../../db.ts";
 import type { Scope } from "../../tenancy/scope.ts";
@@ -26,9 +19,7 @@ import type { NormalizedContact } from "./types.ts";
 import { getEmbeddingCount } from "./embeddings.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 
-// =============================================================================
 // Constants
-// =============================================================================
 
 /** Block size limit — blocks larger than this are skipped to avoid O(k²) pair explosion on common last names. */
 const MEGA_BLOCK_THRESHOLD = 100;
@@ -36,26 +27,20 @@ const MEGA_BLOCK_THRESHOLD = 100;
 /** How many KNN neighbors to query per contact for embedding-based blocking. */
 const KNN_NEIGHBORS = 5;
 
-// =============================================================================
-// Canonical Pair Key
-// =============================================================================
+// Canonical pair key
 
 /** Create a canonical, order-independent key for a pair of IDs. */
 export function pairKey(a: string, b: string): string {
   return a < b ? `${a}::${b}` : `${b}::${a}`;
 }
 
-// =============================================================================
-// Block Index
-// =============================================================================
+// Block index
 
 /**
- * Build an inverted index from blocking keys to contact IDs.
+ * An inverted index from blocking keys to contact ids, from the `blockKeys`
+ * normalization already computed.
  *
- * Each NormalizedContact already has pre-computed `blockKeys` from the
- * normalization pipeline. This function groups contacts by shared keys.
- *
- * @returns Map<blockKey, contactId[]> — the inverted index
+ * @returns Map<blockKey, contactId[]>, the inverted index
  */
 export function buildBlockIndex(
   contacts: NormalizedContact[],
@@ -73,10 +58,9 @@ export function buildBlockIndex(
 }
 
 /**
- * Generate unique candidate pairs from the block index.
- *
- * For each block with 2+ contacts (and ≤ MEGA_BLOCK_THRESHOLD), generates
- * all unique pairs. Skips pairs already found by deterministic passes.
+ * Unique candidate pairs from the block index: every pair in each block of 2 to
+ * MEGA_BLOCK_THRESHOLD contacts, except pairs the deterministic passes already
+ * found.
  *
  * @param blockIndex   - Inverted index from buildBlockIndex()
  * @param alreadyPaired - Set of canonical pair keys already found
@@ -137,17 +121,12 @@ export interface BlockingStats {
   totalCandidates: number;
 }
 
-// =============================================================================
-// Embedding-Based Candidate Generation (Tier 3b)
-// =============================================================================
+// Embedding candidates
 
 /**
- * Add embedding KNN candidates to the candidate pool.
- *
- * For each contact that has an embedding, queries sqlite-vec for the
- * K nearest neighbors and adds those pairs to the candidate set.
- * This catches semantic/contextual matches that blocking keys miss
- * (e.g., career-context similarity, cross-language names).
+ * Add embedding KNN candidates: for each contact with an embedding, its K
+ * nearest neighbors from sqlite-vec. This catches matches blocking keys miss,
+ * such as career context or names across languages.
  *
  * @param scope          - The owner whose vectors are searched
  * @param contactIds     - All contact IDs to query KNN for
@@ -168,18 +147,12 @@ export function addEmbeddingCandidates(
     return [];
   }
 
-  // The owner comes from the anchor contact in the same statement rather than
-  // from a parameter. `ownerId` is the vec0 partition key, so sqlite-vec reads
-  // only that owner's chunks and a neighbor from another account cannot be
-  // produced at all. Reading it from the anchor makes "a neighbor shares the
-  // anchor's owner" true by construction, with no caller left to get it wrong.
-  //
-  // The three status predicates are metadata columns, applied while the k
-  // nearest are being chosen. Before them the KNN could hand back an archived
-  // or trashed contact, which the scorer then dropped because the corpus has
-  // no normalized record for it — so the neighbor slot was spent on a
-  // candidate that could never become a pair. `.agent/STATUS.md` carried the
-  // archived half of that as a known issue.
+  // The owner comes from the anchor contact in the same statement. `ownerId` is
+  // the vec0 partition key, so sqlite-vec reads only that owner's chunks, and a
+  // neighbor from another account cannot be produced. The three status
+  // predicates are metadata columns applied while the k nearest are chosen, so
+  // no neighbor slot goes to an archived or trashed contact, which has no
+  // normalized record and could never become a pair.
   const knnStmt = sqlite.prepare(`
     SELECT ce.contactId, distance
     FROM contact_embeddings ce
@@ -223,17 +196,13 @@ export function addEmbeddingCandidates(
   return candidates;
 }
 
-// =============================================================================
-// Negative Constraints (Tier 3.5)
-// =============================================================================
+// Negative constraints
 
 /**
- * Load all negative constraints (provably-distinct pairs).
- *
- * Sources:
- * 1. Co-occurrence: contacts mentioned in the same interaction
- *    (Newtonian physics: they can't be the same person)
- * 2. User exclusions: pairs the user explicitly dismissed
+ * Every negative constraint, the pairs known to be two people:
+ * 1. Co-occurrence: contacts mentioned in the same interaction cannot be one
+ *    person.
+ * 2. User exclusions: pairs a person dismissed.
  *
  * @returns Set of canonical pair keys for known-distinct pairs
  */
@@ -243,9 +212,8 @@ export function loadNegativeConstraints(scope: Scope): Set<string> {
   // 1. Co-occurrence in interactions
   try {
     // `interaction_mentions` has no owner of its own, so the join to
-    // `interactions` supplies one. Two people mentioned in the same note are
-    // known to be different people, and that is only meaningful within an
-    // owner's own notes.
+    // `interactions` supplies one: two people in one note are two people only
+    // within one owner's notes.
     const coOccurrences = sqlite
       .prepare(
         `

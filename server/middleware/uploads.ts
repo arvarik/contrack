@@ -1,22 +1,15 @@
-// =============================================================================
-// Uploads guard — one owner's files are not another owner's to fetch
-// =============================================================================
-// Uploads are served by express.static from a single directory tree, so the
-// URL is the only thing standing between a file and anyone who can guess it.
-// Since Phase 1 the tree is laid out by owner:
+// Uploads guard: one owner's files are not another owner's to fetch.
+// express.static serves one directory tree, so the URL is all that stands
+// between a file and anybody who can guess it. The tree is laid out by owner:
 //
 //   uploads/logos/<domain>.png         shared, a company logo is not personal
 //   uploads/u/<ownerId>/avatars/...    one owner's contact avatars
 //   uploads/u/<ownerId>/files/...      one owner's interaction attachments
 //
-// which turns the check into a string comparison. The owner is already in the
-// path, and the caller is already on the request, so this middleware reads no
-// database and adds no measurable latency to a static file.
-//
-// Mounted between requireAuth and express.static in server/app.ts, so it only
-// ever sees callers that hold a credential. A token principal passes the same
-// way a session does, because a token belongs to exactly one account.
-// =============================================================================
+// so the check is a string comparison: no database read and no measurable
+// latency. Mounted between requireAuth and express.static in server/app.ts, so
+// it only sees callers with a credential. A token passes like a session,
+// because a token belongs to one account.
 
 import type { Request, Response, NextFunction } from "express";
 import { NotFoundError } from "../utils/AppError.ts";
@@ -31,11 +24,8 @@ const PROFILE_PREFIX = /^\/u\/[0-9a-f-]{36}\/profile\//;
 const TRAVERSAL = /(?:^|[\\/])\.\.(?:[\\/]|$)/;
 
 /**
- * Refuse any `/uploads` request that is not the caller's own file.
- *
- * The answer for someone else's file is 404, not 403. A 403 would confirm the
- * file exists, which is the one thing the owner of that file did not agree to
- * share.
+ * Refuse any `/uploads` request that is not for the caller's own file, with a
+ * 404 rather than a 403: a 403 would confirm the file exists.
  */
 export function guardUploads(
   req: Request,
@@ -59,12 +49,11 @@ export function guardUploads(
   const owner = OWNER_PREFIX.exec(path);
   if (owner && owner[1] === req.principal?.user.id) return next();
 
-  // Profile photos are visible to any authenticated user on the instance so
-  // that team members can see each other's avatars (e.g. in the admin accounts
-  // list or shared collaborative views). Contact avatars and private files
-  // remain owner-only.
+  // Profile photos are visible to any signed-in user of the instance, so people
+  // see each other's avatars (the admin accounts list, for one). Contact
+  // avatars and private files stay owner-only.
   if (req.principal && PROFILE_PREFIX.test(path)) return next();
 
-  // Everything else, including the flat pre-Phase-1 layout, is gone.
+  // Everything else, a path outside `u/<ownerId>/` included, is refused.
   next(new NotFoundError("File"));
 }

@@ -8,17 +8,14 @@ import { distanceToSimilarity } from "./scoring.ts";
 import type { ContactRow, NormalizedContact, PassContext } from "./types.ts";
 
 /**
- * Build the shared context used by all detection passes.
- * Performs all expensive loading upfront in batch queries.
+ * Build the context every detection pass shares, with the expensive loading
+ * done up front in batch queries.
  */
 export function buildPassContext(scope: Scope, rid: string): PassContext {
   const t0 = Date.now();
 
-  // 1. Load the owner's contacts.
-  //
-  // Scoped in 2a rather than 2e because normalizeContacts below is already
-  // scoped, and a context whose contact list and normalized map covered
-  // different sets of rows would be worse than either alone.
+  // 1. The owner's contacts, scoped like normalizeContacts below, so the
+  //    contact list and the normalized map cover the same rows.
   const allContacts = sqlite
     .prepare(
       `SELECT * FROM contacts
@@ -65,8 +62,8 @@ export function buildPassContext(scope: Scope, rid: string): PassContext {
 }
 
 /**
- * Get the embedding cosine similarity between two contacts.
- * Uses a cache to avoid redundant sqlite-vec queries.
+ * The cosine similarity of two contacts' embeddings, cached so a pair costs one
+ * sqlite-vec query.
  */
 export function getEmbeddingSimilarity(
   idA: string,
@@ -80,10 +77,9 @@ export function getEmbeddingSimilarity(
   try {
     const row = sqlite
       .prepare(
-        // Same shape as the KNN in blocking.ts: the owner is read from the
-        // anchor contact inside the statement, so the partition sqlite-vec
-        // searches is always the anchor's own. A pair that spans two accounts
-        // scores zero rather than a similarity.
+        // As in blocking.ts's KNN, the owner is read from the anchor contact
+        // inside the statement, so sqlite-vec searches the anchor's own
+        // partition, and a pair that spans two accounts scores zero.
         `
       SELECT distance FROM contact_embeddings
       WHERE embedding MATCH (

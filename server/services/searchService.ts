@@ -74,37 +74,25 @@ import { RequestCoalescer } from "../utils/requestCoalescer.ts";
 
 export const searchCoalescer = new RequestCoalescer();
 
-// =============================================================================
 // Constants
-// =============================================================================
 
 /**
- * Maximum candidates to hydrate and send in Phase 1.
- * Keeps the instant payload small (~30 full contact objects ≈ 40KB)
- * while still providing comprehensive results. Exported for the MCP
- * search_people tool, which cannot return more matches than this.
+ * Most candidates hydrated and sent in Phase 1, which keeps the instant payload
+ * near 40 KB. The MCP search_people tool returns no more than this.
  */
 export const PHASE1_LIMIT = 30;
 
-/**
- * Maximum candidates sent to the LLM reranker.
- * Matches PHASE1_LIMIT — the reranker evaluates the same top set.
- */
+/** Most candidates sent to the LLM reranker: the same top set as Phase 1. */
 const RERANKER_LIMIT = 30;
 
 /** The model stages together: the planner, then the reranker when it runs. */
 const MODEL_BUDGET_MS = 12_000;
 
-// =============================================================================
 // Types
-// =============================================================================
 
 /**
- * A fully hydrated contact row with an optional server-built reason.
- *
- * Uses `Record<string, unknown>` rather than `[key: string]: any` to
- * prevent silent `any`-propagation through the type system. The dynamic
- * shape comes from `contactRepo.hydrate()` which returns a plain object.
+ * A hydrated contact row with an optional server-built reason. `Record<string,
+ * unknown>`, not an index signature of `any`, so nothing leaks `any`.
  */
 export type HydratedMatch = Record<string, unknown> & {
   id: string;
@@ -143,17 +131,13 @@ export interface SemanticSearchOptions {
   crossEncoder?: boolean | RerankOptions;
 }
 
-// =============================================================================
-// Shared Helpers (DRY — used by both streaming and non-streaming paths)
-// =============================================================================
+// Helpers shared by the streaming and JSON paths
 
 /**
  * The JavaScript form of ACTIVE_CONTACT_SQL, for rows a scoped finder returned.
- *
- * `findManyOwned` answers "does this owner own these ids" and nothing else, so
- * the visibility gate is applied here instead. Each test matches its SQL twin
- * exactly: `isGhost = 0` is false for a NULL, and `COALESCE(isArchived, 0) = 0`
- * is true for one.
+ * `findManyOwned` checks ownership only, so the visibility gate is here. Each
+ * test matches its SQL twin: `isGhost = 0` is false for a NULL, and
+ * `COALESCE(isArchived, 0) = 0` is true for one.
  */
 function isActiveContact(row: RawContactRow): boolean {
   return (
@@ -165,8 +149,7 @@ function isActiveContact(row: RawContactRow): boolean {
 }
 
 /**
- * Hydrate a list of contact IDs into full contact objects with `aiReason: null`.
- * Returns a Map keyed by contactId for O(1) lookup.
+ * Hydrate contact ids into full contacts with `aiReason: null`, keyed by id.
  */
 function hydrateCandidates(
   scope: Scope,
@@ -177,10 +160,9 @@ function hydrateCandidates(
   const topIds = candidateIds.slice(0, limit);
   if (!topIds.length) return hydratedMap;
 
-  // One chunked IN(...) query + bulk hydration — this is the search hot path,
-  // and per-id hydrate() here previously cost ~13 queries per candidate. The
-  // finder puts the owner and the ids in the same statement, so a candidate id
-  // that belongs to somebody else is dropped at the index.
+  // One chunked IN(...) query and bulk hydration on the search hot path. The
+  // finder puts the owner and the ids in one statement, so another owner's id
+  // is dropped at the index.
   const rows = contactRepo.findManyOwned(scope, topIds).filter(isActiveContact);
   const hydratedRows = contactRepo.hydrateMany(rows);
   const byId = new Map(hydratedRows.map((r) => [r.id, r]));
@@ -371,8 +353,8 @@ const addressesOf = (contact: HydratedMatch): string[] =>
     .filter((address): address is string => typeof address === "string");
 
 /**
- * Build compressed contact profiles for the LLM reranker.
- * Strips heavy fields (avatar, timestamps, child arrays) to minimize token usage.
+ * Compressed profiles for the LLM reranker, without avatars, timestamps or
+ * child arrays, to save tokens.
  */
 function buildCompressedCandidates(
   matches: HydratedMatch[],
@@ -553,13 +535,10 @@ export function databaseProof(plan: QueryPlan): "filters" | "temporal" | null {
 }
 
 /**
- * The owner's notes revision, which every note insert, edit and delete
- * bumps (`installSearchIndex` in ftsIndex.ts).
- *
- * A note moves its contact's last contact and the passages a search reads,
- * and neither moves the search revision. So an answer to "founders I have
- * not talked to in 3 months" kept a person for five minutes after a call
- * with them was logged.
+ * The owner's notes revision, which every note insert, edit and delete bumps
+ * (`installSearchIndex` in ftsIndex.ts). A note moves its contact's last
+ * contact and the passages a search reads, and the search revision misses both,
+ * so the cache key needs this too.
  */
 function notesRevision(scope: Scope): number {
   const row = sqlite
@@ -817,10 +796,9 @@ async function runSearch(
   // Set once the question's vector exists, on the model path only.
   let semanticKey: SemanticKey | null = null;
   const final = (result: SearchResult, kind: string, path: string) => {
-    // A facet answer is one database read, and it reads columns the revision
-    // does not follow: tracking, the last contact, the date of an edit. Kept,
-    // "Who haven't I contacted in over 3 months?" listed a person for five
-    // minutes after a call with them was logged.
+    // A facet answer is one database read of columns the revision does not
+    // follow (tracking, the last contact, the date of an edit), so it is not
+    // cached.
     if (path !== "facets") setCachedSearch(scope, cacheKey, result);
     // L2 keeps only answers someone verified, with the question's vector.
     if (semanticKey && !result.fallback)
@@ -1094,15 +1072,10 @@ async function runSearch(
   return answer;
 }
 
-// =============================================================================
-// FTS5 Keyword Search (sidebar quick-search, unchanged from v1)
-// =============================================================================
+// FTS5 keyword search for the sidebar
 
 export const searchService = {
-  /**
-   * FTS5 keyword search — used by the sidebar quick-search.
-   * Simple, fast, exact-match search.
-   */
+  /** Keyword search for the sidebar: simple, fast, exact. */
   searchFts(scope: Scope, q: string, filters: FacetFilter[] = []) {
     // The facets run inside the keyword search, before its limit.
     const facets = filters.length ? compileFacets(scope, filters) : null;
@@ -1114,12 +1087,9 @@ export const searchService = {
   },
 
   /**
-   * Stream local candidates, then one terminal result. Never write after
-   * disconnect.
-   *
-   * The route reads the scope before it calls this and passes it in, because
-   * `res` is the only request object that reaches here and an NDJSON writer
-   * must not depend on the async context surviving the stream.
+   * Stream local candidates, then one terminal result. Never write after a
+   * disconnect. The route passes the scope in, because an NDJSON writer must
+   * not depend on the async context surviving the stream.
    */
   async semanticSearchStream(
     scope: Scope,

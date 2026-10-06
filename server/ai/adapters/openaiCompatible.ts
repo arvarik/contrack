@@ -1,21 +1,12 @@
-// =============================================================================
-// AI Layer — Generic OpenAI-Compatible Adapter
-// =============================================================================
-// One adapter for every backend that speaks the OpenAI wire format:
-// Ollama, vLLM, LM Studio, llama.cpp, xAI, DeepSeek, Mistral, OpenRouter…
-// Providers differ only by base URL + key, so they are *configuration*,
-// not code.
+// One adapter for every backend that speaks the OpenAI wire format: Ollama,
+// vLLM, LM Studio, llama.cpp, xAI, DeepSeek, Mistral, OpenRouter. They differ
+// only by base URL and key, so they are configuration, not code. No search
+// grounding (the compatible surface has no standard; SearXNG covers self-hosted
+// research), and no quota tracking or SmartRouter, which are Gemini's.
 //
-// What this adapter deliberately does NOT do:
-//   - Search grounding. No standard exists in the compat surface; the
-//     SearXNG research strategy covers self-hosted grounding instead.
-//   - Quota tracking / SmartRouter. Those are Gemini-specific.
-//
-// Structured output is adaptive: strict `json_schema` is attempted first and
-// the adapter downgrades (per model, remembered) to `json_object` and then to
-// prompt-only instructions when a backend rejects the richer forms. Many
-// local servers support only the simpler modes.
-// =============================================================================
+// Structured output adapts: strict `json_schema` first, then, per model and
+// remembered, `json_object`, then prompt-only instructions, as a backend
+// refuses the richer forms. Many local servers support only the simpler ones.
 
 import OpenAI from "openai";
 import type { AIProvider, ModelInfo } from "../provider.ts";
@@ -97,8 +88,9 @@ export class OpenAICompatibleAdapter implements AIProvider {
   }
 
   /**
-   * Models exposed by the endpoint. Compat servers return bare ids, so
-   * capability is guessed from the name and refined by the user in settings.
+   * The models the endpoint lists. Compatible servers return bare ids, so
+   * capability is guessed from the name, and the user can correct it in
+   * Settings.
    */
   async listModels(): Promise<ModelInfo[]> {
     const response = await this.client.models.list();
@@ -143,8 +135,8 @@ export class OpenAICompatibleAdapter implements AIProvider {
     const model = options.model;
     if (!model) {
       // Auto mode names a model from the discovered catalog, so reaching here
-      // means the catalog is empty — the endpoint was saved while it was
-      // unreachable, or it serves no chat models.
+      // means the catalog is empty: the endpoint was saved while unreachable,
+      // or serves no chat models.
       throw new AppError(
         `${this.name}: no model to call. Open Settings → Administration → AI, refresh this server's model list, then choose a model for this task.`,
         503,
@@ -200,13 +192,11 @@ export class OpenAICompatibleAdapter implements AIProvider {
 
   /**
    * The same call, streamed: `onDelta` gets each piece of the answer as the
-   * server sends it. A JSON call is not streamed, and neither is a grounded
-   * call or one with no model. `generate` runs and its text arrives as one
-   * piece.
-   *
-   * A stream that fails before its first piece falls back to `generate`,
-   * which has the retries. After the first piece a failure is thrown,
-   * because a piece already sent cannot be taken back.
+   * server sends it. A JSON call, a grounded call and one with no model are not
+   * streamed: `generate` runs and its text arrives as one piece. A stream that
+   * fails before its first piece falls back to `generate`, which has the
+   * retries. After the first piece a failure is thrown, because a sent piece
+   * cannot be taken back.
    */
   async generateStream(
     options: AIGenerateOptions,
@@ -269,10 +259,9 @@ export class OpenAICompatibleAdapter implements AIProvider {
       ? (this.jsonModes.get(model) ?? "json_schema")
       : "prompt";
 
-    // Walk down the ladder until one mode yields parseable JSON. A backend can
+    // Walk down the ladder until a mode yields parseable JSON. A backend can
     // fail loudly (a 400 naming response_format) or quietly (a 200 whose body
-    // is not JSON at all), so both a rejection and an unparseable body trigger
-    // the downgrade.
+    // is not JSON), so both trigger the downgrade.
     for (;;) {
       signal.throwIfAborted();
       let result: AIGenerateResult;
@@ -390,10 +379,10 @@ export class OpenAICompatibleAdapter implements AIProvider {
 
     const choice = response.choices?.[0];
     const text = choice?.message?.content ?? "";
-    // A reasoning model that hits the token ceiling mid-thought returns an
-    // empty `content` with the budget spent in `reasoning_content`. Silently
-    // returning "" would surface downstream as "malformed JSON", which sends
-    // the user looking in the wrong place.
+    // A reasoning model that hits the token ceiling mid-thought returns empty
+    // `content` with the budget spent in `reasoning_content`. Returning ""
+    // would surface as "malformed JSON" and send the user looking in the wrong
+    // place.
     if (!text.trim() && choice?.message?.reasoning_content?.trim()) {
       throw this.noAnswer(model, choice.finish_reason);
     }
@@ -502,10 +491,9 @@ export class OpenAICompatibleAdapter implements AIProvider {
   }
 
   /**
-   * The error for a reasoning model that spent its whole token budget on
-   * reasoning and produced no answer. 422, not 502: retrying replays the
-   * same prompt into the same ceiling, which on a local model costs seconds
-   * per attempt for a certain failure.
+   * The error for a reasoning model that spent its whole budget reasoning and
+   * gave no answer. 422, not 502: a retry replays the same prompt into the same
+   * ceiling, which on a local model costs seconds for a certain failure.
    */
   private noAnswer(model: string, finishReason?: string | null): AppError {
     return new AppError(

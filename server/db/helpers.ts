@@ -1,18 +1,12 @@
-// =============================================================================
-// The contacts columns that are not edits
-// =============================================================================
-// server/db.ts re-exports these, and `npm run db:new` uses contactEditColumns
-// to write a migration that rebuilds the edit-time triggers after a new
-// contacts column.
-// =============================================================================
+// The contacts columns that are not edits. server/db.ts re-exports these, and
+// `npm run db:new` uses contactEditColumns to write a migration that rebuilds
+// the edit-time triggers after a new contacts column.
 
 import type Database from "better-sqlite3";
 
 /**
- * Columns that hold what Contrack computed about a contact, not the contact.
- *
- * Writing one of these is not an edit, so it neither stamps `updatedAt` nor
- * schedules another recompute.
+ * Columns that hold what Contrack computed about a contact. Writing one is not
+ * an edit, so it neither stamps `updatedAt` nor schedules another recompute.
  */
 export const SCORE_COLUMNS = ["relationshipScore", "scoreDirty"] as const;
 

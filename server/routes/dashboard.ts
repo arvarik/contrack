@@ -71,10 +71,8 @@ router.get(
 );
 
 /**
- * GET /api/command-palette/zero-state
- *
- * Returns deterministic CRM intelligence signals for the Cmd+K zero-state:
- * action items due, catch-ups, ghost alerts. Pure SQLite — sub-10ms.
+ * GET /api/command-palette/zero-state: the palette's empty state (follow-ups
+ * due, catch-ups, ghost alerts), from SQLite alone, under 10 ms.
  */
 router.get(
   "/command-palette/zero-state",

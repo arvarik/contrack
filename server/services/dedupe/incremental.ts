@@ -1,27 +1,16 @@
-// =============================================================================
-// Incremental matching — one corpus, any number of new contacts
-// =============================================================================
-// Checking a newly written contact for duplicates means comparing it with
-// every other contact the same account owns. Most of that work does not
-// depend on which contact is being checked: normalizing the corpus, loading
-// the phone numbers, loading the pairs already marked as different people,
-// loading the social links. Doing it per contact is what made an import of
-// `n` contacts into a corpus of `m` cost about `n × m`.
+// Incremental matching: one corpus, any number of new contacts.
 //
-// So it is split in two. `buildIncrementalCorpus` does the part that depends
-// on the account, once. `findIncrementalPairs` does the part that depends on
-// the contact, per contact. One contact created by hand builds the corpus and
-// uses it once; an import of four hundred builds it once and uses it four
-// hundred times.
+// Checking a new contact for duplicates compares it with every contact the
+// account owns, and most of that work does not depend on the contact:
+// normalizing the corpus, loading phone numbers, the pairs marked as different
+// people, the social links. Done per contact, an import of `n` contacts into a
+// corpus of `m` costs about `n × m`. So `buildIncrementalCorpus` does the
+// account's part once, and `findIncrementalPairs` the contact's part per
+// contact.
 //
-// The matchers below are the ones that were inside the per-contact check.
-// Their confidences come from policy.ts, the same table the scan reads, so
-// the two paths agree on what a shared number or an exact name is worth.
-// They did not: this path scored a shared phone 0.99 where the scan scored
-// it 0.95, and an exact name across two sources 0.95 where the scan scored
-// it 0.92, so an import merged pairs a scan would have asked about.
-// `tests/integration/dedupe.import.test.ts` holds the numbers.
-// =============================================================================
+// The confidences come from policy.ts, the table the scan reads, so an import
+// and a scan agree on what a shared number or an exact name is worth
+// (`tests/integration/dedupe.import.test.ts` holds the numbers).
 
 import { log } from "../../utils/logger.ts";
 import {
@@ -93,22 +82,17 @@ export interface IncrementalCorpus {
   /** True while the vector store can answer, checked once. */
   embeddingsAvailable: boolean;
   /**
-   * Contacts that stopped being candidates part way through the run.
-   *
-   * A batch merges as it goes, so a contact merged away by an earlier pair
-   * must not be offered to a later one. The snapshot above cannot know that,
-   * because it was taken before any of it happened.
+   * Contacts that stopped being candidates during the run. A batch merges as it
+   * goes, so a contact merged away by an earlier pair must not be offered to a
+   * later one, which the snapshot above cannot know.
    */
   retired: Set<string>;
 }
 
 /**
- * Load and normalize one account, once.
- *
- * Five queries and one normalization pass. `normalizeContacts` is the
- * expensive half and is the reason this function exists: it was called once
- * per contact checked, and on a corpus of ten thousand that is a second of
- * work repeated for every row of the import.
+ * Load and normalize one account, once: five queries and one normalization
+ * pass. `normalizeContacts` is the expensive half, about a second at ten
+ * thousand contacts, which per contact would repeat for every row of an import.
  */
 export function buildIncrementalCorpus(
   scope: Scope,
@@ -119,10 +103,10 @@ export function buildIncrementalCorpus(
   const normalized = normalizeContacts(scope);
   const normalizedById = new Map(normalized.map((n) => [n.id, n]));
 
-  // Both maps are built from the normalized rows rather than from their own
-  // queries, so a contact that is a candidate by phone is a contact the name
-  // matcher can also see. Two sets that disagreed would produce pairs whose
-  // other half has no normalized record, which the scorer cannot use.
+  // Both maps come from the normalized rows, not their own queries, so a
+  // contact that is a candidate by phone is one the name matcher sees too.
+  // Otherwise a pair's other half could have no normalized record for the
+  // scorer.
   const contactsByPhone = new Map<string, string[]>();
   const contactsByEmail = new Map<string, string[]>();
   for (const contact of normalized) {
@@ -170,17 +154,12 @@ export function buildIncrementalCorpus(
 }
 
 /**
- * The contact to compare against the corpus.
- *
- * Read through `normalizeContactById` even when the corpus already holds a
- * record for it. The two builders agree on every field the matchers read, but
- * they can order `sources` differently, and that string appears in the
- * reasoning a cross-source match writes. Five small indexed queries per new
- * contact is not the cost this story is about.
- *
- * `normalizeContactById` does not filter out ghosts or archived contacts: the
- * caller asked about this specific contact. The corpus on the other side is
- * active contacts only.
+ * The contact to compare against the corpus, read through
+ * `normalizeContactById` even when the corpus has it: the two builders can
+ * order `sources` differently, and that string appears in a cross-source
+ * match's reasoning. It does not filter out ghosts or archived contacts,
+ * because the caller asked about this one. The corpus side is active contacts
+ * only.
  */
 export function normalizeTarget(
   corpus: IncrementalCorpus,
@@ -203,17 +182,12 @@ function isCandidate(
 }
 
 /**
- * Every duplicate of one contact, inside its own account.
- *
- * Four matchers in order of certainty: a shared email address, a shared phone
- * number, a name that matches exactly or through a nickname, and a vector
- * neighbor that scores high enough on the full signal set. Each one takes
- * the first claim on a pair, so a contact that shares an email is reported as
- * an email match and never scored a second time as a fuzzy one.
- *
- * `seen` is passed in rather than created here. Across a batch it is shared,
- * so a pair between two newly imported contacts is produced once by whichever
- * of them is reached first, instead of twice in opposite orders.
+ * Every duplicate of one contact, inside its own account. Four matchers in
+ * order of certainty: a shared email, a shared phone, a name that matches
+ * exactly or through a nickname, and a vector neighbor that scores high enough
+ * on the full signal set. The first claim on a pair wins, so an email match is
+ * never scored again as a fuzzy one. `seen` is shared across a batch, so a pair
+ * between two new contacts is produced once, not twice.
  */
 export function findIncrementalPairs(
   corpus: IncrementalCorpus,
@@ -228,17 +202,11 @@ export function findIncrementalPairs(
     pairs.push({ idA: contactId, idB: otherId, ...pair });
   };
 
-  // 1. A shared email address that names a person.
-  //
-  // A shared mailbox is skipped here for the same reason the scan's
-  // exact-email rule skips it: two contacts on `team.northwind@` are
-  // colleagues and two on `haddad.family@` are a household, and claiming the
-  // pair as an identity merges one of them away during an import. The fuzzy
-  // matcher below still sees the pair.
-  //
-  // Weighed, not claimed outright. An address three contacts carry is worth
-  // a little less, and an address between two different first names is
-  // capped below every preset. Same rule as the scan's D1.
+  // 1. A shared email address that names a person. A shared mailbox is skipped,
+  //    as in the scan's exact-email rule: two contacts on `team.northwind@` are
+  //    colleagues and two on `haddad.family@` a household, and an import must
+  //    not merge one away. The fuzzy matcher still sees the pair. The match is
+  //    weighed, not claimed outright, like the scan's D1.
   for (const email of target.emailsNorm) {
     if (isSharedMailbox(email)) continue;
     for (const otherId of corpus.contactsByEmail.get(email) ?? []) {
@@ -261,9 +229,9 @@ export function findIncrementalPairs(
     }
   }
 
-  // 2. A shared phone number. Same weighing, same rule as the scan's D2. A
-  //    household on one landline is the case this exists for: "Ada Twin" and
-  //    "Ben Twin" on one number reach a person rather than becoming one.
+  // 2. A shared phone number, weighed like the scan's D2. A household on one
+  //    landline is the case: "Ada Twin" and "Ben Twin" on one number reach a
+  //    person instead of becoming one.
   for (const phone of target.phonesNorm) {
     for (const otherId of corpus.contactsByPhone.get(phone) ?? []) {
       if (!isCandidate(corpus, otherId, contactId, seen)) continue;
@@ -285,9 +253,9 @@ export function findIncrementalPairs(
     }
   }
 
-  // 2b. The same personal profile link. Same rule as the scan's D2b: one
-  //     LinkedIn page on a new contact and an old one is one person, whatever
-  //     form the name took, and a link three contacts carry asks.
+  // 2b. The same personal profile link, like the scan's D2b: one LinkedIn page
+  // on a new contact and an old one is one person, whatever the name, and a
+  // link three contacts carry asks.
   for (const url of corpus.socialUrlsByContact.get(contactId) ?? []) {
     const carriers = corpus.contactsBySocial.get(url) ?? [];
     for (const otherId of carriers) {
@@ -322,20 +290,12 @@ export function findIncrementalPairs(
         target.nameNorm === other.nameNorm &&
         !generationsContradict(target, other)
       ) {
-        // Not "Hale Sr." beside "Hale Jr.", which normalize alike and are two
-        // people. The scan's D3 keys on the raw name and never sees that
-        // pair as exact, and this path used to claim it at 0.92.
-        //
         // The scan's D3, rule for rule: the same name at the same company
-        // outranks the same name from two sources, which outranks the same
-        // name alone. The import path used to know only the last two, at
-        // numbers of its own, so "Jonathan Smith at Northwind" twice was
-        // 0.92 here and 0.95 in a scan.
-        //
-        // A suffix on one side only, "Arthur Pemberton" beside "Arthur
-        // Pemberton III", is not two people by definition and not one
-        // either. The scan's D3 keys on the raw name and never claims it as
-        // exact. Here it keeps the plain name confidence, which asks.
+        // outranks the same name from two sources, which outranks the same name
+        // alone. "Hale Sr." beside "Hale Jr." normalize alike and are two
+        // people, so they never match exactly. A suffix on one side only
+        // ("Arthur Pemberton" beside "Arthur Pemberton III") is neither, and
+        // keeps the plain name confidence, which asks.
         const sameGeneration = target.generation === other.generation;
         const sameCompany =
           sameGeneration &&
@@ -347,10 +307,9 @@ export function findIncrementalPairs(
           target.sources.length > 0 &&
           other.sources.length > 0 &&
           !target.sources.some((s) => other.sources.includes(s));
-        //
         // Without the company the name is the whole claim, so a different
-        // employer or city on the two records caps it for review, the same
-        // rule as the scan's D3.
+        // employer or city on the two records caps it for review, as in the
+        // scan's D3.
         const carriers = corpus.frequency.names.get(target.nameNorm) ?? 2;
         const weighed = sameCompany
           ? weighName(NAME_CONFIDENCE.nameCompany, carriers)
@@ -404,9 +363,9 @@ export function findIncrementalPairs(
         continue;
       }
 
-      // The same rule the scan runs as D6. An import is where a middle name
-      // arrives: one export writes "Anton Kovacs" and the next writes "Anton
-      // Peter Kovacs", and without this the second one lands as a new person.
+      // The scan's D6. An import is where a middle name arrives ("Anton
+      // Kovacs", then "Anton Peter Kovacs"), and without this the second lands
+      // as a new person.
       if (isMiddleNameExtension(target.nameTokens, other.nameTokens)) {
         const weighed = weighNameOnly(
           NAME_CONFIDENCE.middleName,
@@ -434,12 +393,10 @@ export function findIncrementalPairs(
 
       for (const neighbor of neighbors) {
         if (!isCandidate(corpus, neighbor.contactId, contactId, seen)) continue;
-        // A vector can outlive its contact's place in the corpus: nothing
-        // removes the row when a contact is archived, so the KNN still
-        // answers with it while every other matcher here has stopped. The
-        // fallback keeps that pair reachable, which is what the per-contact
-        // check did. It is arguably wrong to suggest merging with a contact
-        // somebody archived, and it is not this change's to fix.
+        // A vector can outlive its contact's place in the corpus: archiving
+        // does not remove the row, so the KNN can still return it, and this
+        // fallback keeps the pair reachable. Whether an archived contact should
+        // be suggested at all is an open question.
         const other =
           corpus.normalizedById.get(neighbor.contactId) ??
           normalizeContactById(corpus.scope, neighbor.contactId);
@@ -449,17 +406,16 @@ export function findIncrementalPairs(
           target,
           other,
           distanceToSimilarity(neighbor.distance),
-          // Never distinct. A pair the account marked as two different people
-          // was dropped by `isCandidate` above, so the flag could only ever
-          // be false by the time the scorer saw it.
+          // Never distinct: `isCandidate` already dropped pairs the account
+          // marked as different people.
           false,
           corpus.socialUrlsByContact.get(target.id) ?? [],
           corpus.socialUrlsByContact.get(other.id) ?? [],
           corpus.frequency,
         );
-        // No model checks a pair here, so the floor and the weight of a scan
+        // No model checks a pair here, so the floor and weight of a scan
         // without a provider apply: an unclear pair is kept from 0.75, at 0.7
-        // of its score, and a pair below that is dropped.
+        // of its score.
         const confidence = unverifiedConfidence(computeCompositeScore(signals));
         if (confidence === null) continue;
 

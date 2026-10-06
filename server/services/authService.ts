@@ -1,18 +1,9 @@
-// =============================================================================
-// authService — accounts, sessions, and data ownership
-// =============================================================================
-// The whole credential layer lives here so the middleware and the route
-// handlers stay thin. Three concerns:
+// Accounts, sessions and data ownership. The credential layer lives here so the
+// middleware and the route handlers stay thin.
 //
-//   1. Accounts    — create, look up, update profile, change password.
-//   2. Sessions    — issue, resolve, revoke. Server-side, so sign-out is real.
-//   3. Ownership   — claim rows written before an account existed.
-//
-// Single-account today. Everything is written so that becoming multi-account
-// is a matter of adding scope to callers rather than reshaping this file:
-// there is no "the user" singleton, every function takes or returns an id,
-// and `role` is populated even though only 'admin' is ever assigned.
-// =============================================================================
+//   1. Accounts    create, look up, update profile, change password.
+//   2. Sessions    issue, resolve, revoke. Server-side, so sign-out is real.
+//   3. Ownership   the local owner, converted by setup.
 
 import crypto from "crypto";
 import { sqlite } from "../db.ts";
@@ -28,17 +19,12 @@ import {
 } from "./passwords.ts";
 
 /**
- * How long a browser session stays valid without re-authenticating.
+ * How long a browser session stays valid without signing in again.
  *
- * Configurable rather than fixed, because the right answer depends entirely on
- * where the instance lives: a laptop-only install wants months of not being
- * asked, and one exposed through a tunnel wants a day. Stored in app_settings
- * so it survives restarts and can be changed from the UI without a redeploy.
- *
- * Applies to sessions created after the change — shortening it does not
- * retroactively expire the session you are currently using, which is
- * deliberate: locking yourself out by adjusting a setting is a bad surprise.
- * "Sign out other devices" is the button for that.
+ * A setting, because the right answer depends on where the instance lives: a
+ * laptop-only install wants months, one exposed through a tunnel wants a day.
+ * It applies to sessions created after the change, so shortening it does not
+ * expire the session in use. "Sign out other devices" is the button for that.
  */
 export const SESSION_TTL_SETTING = "auth.sessionTtlDays";
 export const DEFAULT_SESSION_TTL_DAYS = 30;
@@ -50,9 +36,8 @@ export function getSessionTtlDays(): number {
   if (typeof stored !== "number" || !Number.isFinite(stored)) {
     return DEFAULT_SESSION_TTL_DAYS;
   }
-  // Clamp rather than trust: the value round-trips through a JSON blob that a
-  // determined person can edit by hand, and a session lasting zero days or a
-  // century is worse than the default either way.
+  // Clamp rather than trust: the value round-trips through a JSON blob a person
+  // can edit by hand.
   return Math.min(
     MAX_SESSION_TTL_DAYS,
     Math.max(MIN_SESSION_TTL_DAYS, Math.round(stored)),
@@ -81,12 +66,10 @@ export function setSessionTtlDays(value: unknown): number {
 }
 
 /**
- * Whether anybody may create an account without an invitation.
- *
- * Closed by default, and the default is the important part. A self-hosted app
- * reachable from the internet with open registration is an open door, and the
- * person who exposed it did not necessarily decide to. An admin turns it on
- * through `PUT /api/admin/settings` when they want it.
+ * Whether anybody may create an account without an invitation. Closed by
+ * default: an internet-facing instance with open registration is an open door
+ * its operator may not have chosen. An admin opens it through `PUT
+ * /api/admin/settings`.
  */
 export const REGISTRATION_SETTING = "auth.registrationOpen";
 
@@ -118,21 +101,13 @@ export function setMagicLinkSignIn(value: unknown): boolean {
   return value;
 }
 
-// =============================================================================
 // The instance's own name
-// =============================================================================
 
 /**
- * What this Contrack calls itself.
- *
- * A single-user install never needed one: there was one instance, and it was
- * yours. An invitation link changes that. Somebody clicking one arrives at a
- * sign-in screen from an instance they have never seen, sent by a person who
- * said "join my Contrack", and the screen should say whose it is rather than
- * leaving them to trust a hostname.
- *
- * Empty is a real answer and the default. An operator who has not set one
- * sees the product name everywhere, exactly as before.
+ * What this Contrack calls itself. Somebody who follows an invitation link
+ * lands on a sign-in screen they have never seen, and the screen should say
+ * whose instance it is rather than leave them to trust a hostname. Empty is the
+ * default, and then the product name shows everywhere.
  */
 export const INSTANCE_NAME_SETTING = "instance.name";
 export const INSTANCE_NAME_MAX = 60;
@@ -143,14 +118,10 @@ export function getInstanceName(): string {
 }
 
 /**
- * Set or clear it.
- *
- * The value reaches an unauthenticated sign-in screen, so it is trimmed,
- * length-capped, and stripped of the control characters that would let a name
- * span lines or hide text after itself. It is rendered as text by React and
- * never as markup, so this is belt and braces rather than the only defense.
- *
- * An empty string clears it, which is why this cannot simply reject empties.
+ * Set or clear it. The value reaches an unauthenticated sign-in screen, so it
+ * is trimmed, length-capped and stripped of control characters that would let a
+ * name span lines or hide text after itself. React renders it as text, so this
+ * is a second defense, not the only one. An empty string clears it.
  */
 export function setInstanceName(value: unknown): string {
   if (typeof value !== "string") {
@@ -171,9 +142,7 @@ export function setInstanceName(value: unknown): string {
 /** Cap on the stored User-Agent — enough to name a device, not a fingerprint. */
 const USER_AGENT_MAX = 200;
 
-// =============================================================================
 // Types
-// =============================================================================
 
 export interface User {
   id: string;
@@ -229,22 +198,18 @@ export function publicUser(user: User) {
   };
 }
 
-// =============================================================================
 // Identifier validation
-// =============================================================================
 
 /**
- * Usernames are lowercased and restricted to a conservative set, because they
- * appear in URLs and logs and are compared for uniqueness — and case-folding
- * plus Unicode confusables make "unique" a slippery claim otherwise.
+ * Usernames are lowercased and limited to a conservative set, because they
+ * appear in URLs and logs and must be unique, and case folding and Unicode
+ * confusables make "unique" slippery otherwise.
  */
 const USERNAME_PATTERN = /^[a-z0-9](?:[a-z0-9._-]{1,30}[a-z0-9])?$/;
 
 /**
- * Email checking is deliberately loose. This is a self-hosted app with no
- * outbound mail; the address is an identifier and a recovery hint, not
- * something we deliver to. Rejecting valid-but-unusual addresses would be a
- * worse failure than accepting a typo the owner can fix in settings.
+ * Email checking is loose on purpose: refusing a valid but unusual address is
+ * worse than accepting a typo the owner can fix in settings.
  */
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -264,9 +229,8 @@ export function validateUsername(username: string): string | null {
   if (!USERNAME_PATTERN.test(username)) {
     return "Use lowercase letters, numbers, dots, dashes and underscores; start and end with a letter or number.";
   }
-  // `local` is the local owner account that exists on every instance. Letting
-  // someone register it would collide on the UNIQUE index, and reading it back
-  // would be ambiguous with the implicit principal.
+  // `local` is the local owner, which every instance has. Registering it would
+  // collide on the UNIQUE index and be ambiguous with the implicit principal.
   if (RESERVED_USERNAMES.has(username)) return "That username is reserved.";
   return null;
 }
@@ -282,25 +246,18 @@ export function validateEmail(email: string): string | null {
   return null;
 }
 
-// =============================================================================
 // Accounts
-// =============================================================================
 
 const USER_COLUMNS = `id, email, username, displayName, passwordHash, role,
                       createdAt, updatedAt, lastLoginAt,
                       status, credentialState, mustChangePassword,
                       passwordChangedAt, disabledAt, createdBy, avatarUrl`;
 
-// =============================================================================
-// Hot-path prepared statements
-// =============================================================================
-// attachPrincipal runs on EVERY request, and with a session cookie present it
-// reaches resolveSession → getUserById. `sqlite.prepare()` compiles the SQL
-// each call — better-sqlite3 keeps no internal cache — so these four were
-// being recompiled one to three times per request. Compiled once here instead,
-// matching the `stmts` convention in contactRepository. Statements that run
-// on sign-in, setup, or settings stay inline: those paths fire a few times a
-// day, not a few times per request.
+// Prepared once: attachPrincipal runs on every request, and with a session
+// cookie it reaches resolveSession → getUserById. better-sqlite3 keeps no
+// statement cache, so an inline `sqlite.prepare()` compiles the SQL on every
+// call. Statements for sign-in, setup and settings stay inline, because those
+// paths run a few times a day.
 
 const stmts = {
   sessionById: sqlite.prepare(
@@ -314,13 +271,9 @@ const stmts = {
 };
 
 /**
- * Contacts this device accumulated before anyone made an account — what
- * securing the instance will carry over.
- *
- * Before Phase 1 these rows had `ownerId IS NULL`. They now belong to the
- * local owner account from boot, and setup converts that account rather than
- * claiming from NULL, so the number is the same but the query is not.
- * Excludes trashed and ghost rows, so it matches what the app will show.
+ * Contacts this device holds for the local owner: what securing the instance
+ * carries over. Setup converts that account, so they keep their owner. Trashed
+ * and ghost rows are left out, to match what the app shows.
  */
 export function countDeviceContacts(): number {
   const row = sqlite
@@ -358,21 +311,19 @@ function findUserRowByIdentifier(identifier: string): UserRow | undefined {
 }
 
 /**
- * The id of the account a sign-in name or email names, or null. For the
- * audit row of a failed sign-in, which records whether the typed name matched
- * an account and never the name itself: a password typed into the wrong
- * field would otherwise sit in the log for 90 days.
+ * The id of the account a sign-in name or email names, or null. For the audit
+ * row of a failed sign-in, which records whether the typed name matched an
+ * account and never the name itself: a password typed into the wrong field
+ * would otherwise sit in the log for 90 days.
  */
 export function accountIdForIdentifier(identifier: string): string | null {
   return findUserRowByIdentifier(identifier)?.id ?? null;
 }
 
 /**
- * Drop the hash on the way out.
- *
- * Written as an explicit field list rather than a rest-destructure so that a
- * column added to `users` later is not silently carried into every API
- * response — a new secret would have to be added here on purpose.
+ * Drop the hash on the way out. An explicit field list, not a rest destructure,
+ * so a column added to `users` later never leaks into API responses by
+ * accident.
  */
 function stripHash(row: UserRow): User {
   return {
@@ -397,14 +348,9 @@ function stripHash(row: UserRow): User {
 /**
  * Create an account.
  *
- * The first account created on an instance is always an admin, and claims
- * every unowned row — which is how an existing single-user database keeps its
- * contacts when its owner finally makes an account.
- *
- * Phase 3 added the last three fields, which only the administrative paths
- * supply: an admin creating an account, and somebody accepting an invitation.
- * Both need a role the caller chose and a record of who is responsible for
- * the account. Self-service paths omit them and get a member.
+ * The first account on an instance is always an admin. `role`, `createdBy` and
+ * `mustChangePassword` come only from an admin creating an account or somebody
+ * accepting an invitation. Self-service paths omit them and get a member.
  */
 export async function createUser(input: {
   email: unknown;
@@ -433,9 +379,8 @@ export async function createUser(input: {
       ? input.displayName.trim().slice(0, 100)
       : null;
 
-  // Checked before hashing so a duplicate fails fast, and re-checked by the
-  // UNIQUE constraint below — this read is a nicer error message, not the
-  // guarantee. The insert is what actually enforces it.
+  // A friendlier error before the slow hash. The UNIQUE constraint on the
+  // insert is the guarantee.
   assertIdentifiersFree(email, username, null);
 
   const passwordHash = await hashPassword(input.password as string);
@@ -487,9 +432,9 @@ export async function createUser(input: {
 /**
  * Verify credentials.
  *
- * @returns the user on success, null on any failure — a wrong password and an
- *   unknown username are indistinguishable to the caller on purpose, so the
- *   login response cannot be used to enumerate accounts.
+ * @returns the user on success, null on any failure. A wrong password and an
+ *   unknown username look the same to the caller, so the response cannot
+ *   enumerate accounts.
  */
 export async function verifyCredentials(
   identifier: string,
@@ -499,9 +444,8 @@ export async function verifyCredentials(
   if (typeof password !== "string" || !password) return null;
 
   if (!row) {
-    // Hash anyway. Without this, "unknown user" returns in microseconds while
-    // "wrong password" takes ~100ms, and that difference is enough to
-    // enumerate which accounts exist.
+    // Hash anyway: otherwise "unknown user" returns in microseconds and "wrong
+    // password" in about 100 ms, which enumerates accounts.
     await verifyPassword(password, DUMMY_HASH);
     return null;
   }
@@ -535,9 +479,8 @@ export async function verifyCredentials(
 }
 
 /**
- * A syntactically valid hash of a password nobody has, used to spend the same
- * ~100ms on an unknown username as on a real one. Generated once at module
- * load with the current cost parameters.
+ * A valid hash of a password nobody has, so an unknown username spends the same
+ * time as a real one. Built once at load with the current cost.
  */
 const DUMMY_HASH =
   "scrypt$65536$8$1$" +
@@ -622,11 +565,9 @@ export function setUserAvatar(userId: string, url: string | null): User {
 }
 
 /**
- * Change a password, verifying the current one first.
- *
- * Every other session is revoked on success. That is the behavior people
- * expect from a password change — if you are changing it because you think
- * someone else has it, leaving their session alive defeats the point.
+ * Change a password, verifying the current one first. Every other session is
+ * revoked on success: a person who changes a password because someone else has
+ * it wants that session gone.
  *
  * @param keepSessionId session to preserve (the one making the request)
  */
@@ -654,10 +595,9 @@ export async function changePassword(
   if (error) throw new ValidationError(error);
 
   const hash = await hashPassword(newPassword as string);
-  // Clearing `mustChangePassword` here is what ends a forced change: the
-  // temporary password an admin handed over verified above, and the password
-  // that replaces it is one only this person knows. `passwordChangedAt` is
-  // what the admin user list shows.
+  // Clearing `mustChangePassword` ends a forced change: the admin's temporary
+  // password verified above, and its replacement is one only this person knows.
+  // The admin user list shows `passwordChangedAt`.
   sqlite.transaction(() => {
     sqlite
       .prepare(
@@ -679,9 +619,7 @@ export async function changePassword(
   log.info("Auth", `Password changed for account ${row.id}`);
 }
 
-/**
- * Look up a password-enabled account by email address (case-insensitive).
- */
+/** A password-enabled account by email address, ignoring case. */
 export function findUserByEmail(email: string): User | null {
   const value = email.trim().toLowerCase();
   if (!value) return null;
@@ -694,10 +632,9 @@ export function findUserByEmail(email: string): User | null {
 }
 
 /**
- * Reset a user's password using a verified token.
- *
- * Sets the new password hash, clears mustChangePassword, updates passwordChangedAt,
- * revokes every existing session, and revokes active API tokens.
+ * Reset a password with a verified token: set the new hash, clear
+ * mustChangePassword, stamp passwordChangedAt, and revoke every session and
+ * active API token.
  */
 export async function resetUserPasswordWithToken(
   userId: string,
@@ -777,18 +714,12 @@ function isUniqueViolation(err: unknown): boolean {
   );
 }
 
-// =============================================================================
 // Sessions
-// =============================================================================
 //
-// The cookie holds a 32-byte random secret. The database holds only its
-// SHA-256, so the table is useless to anyone who reads it — including anyone
-// who finds one of the seven rotating backups this app keeps on disk.
-//
-// SHA-256 with no salt or stretching is the right call here, unlike for
-// passwords: the input is already 256 bits of uniform randomness, so there is
-// no dictionary to attack and nothing for a slow KDF to buy.
-// =============================================================================
+// The cookie holds a 32-byte random secret and the database only its SHA-256,
+// so a leaked database or backup holds no usable session. SHA-256 without salt
+// or stretching is right here, unlike for passwords: the input is already 256
+// random bits, so there is no dictionary for a slow KDF to defend against.
 
 /** Hash a session secret into its database key. */
 function sessionKey(secret: string): string {
@@ -798,8 +729,8 @@ function sessionKey(secret: string): string {
 /**
  * Create a session for `userId`.
  *
- * @returns the secret to put in the cookie — the only time it exists in
- *   plaintext anywhere.
+ * @returns the secret to put in the cookie, the only time it exists in
+ *   plaintext.
  */
 export interface CreateSessionOptions {
   method?: SessionMethod | null;
@@ -838,11 +769,8 @@ export function createSession(
 
 /**
  * Resolve a cookie secret to its user, or null when the session is unknown,
- * expired, or belongs to a deleted account.
- *
- * Refreshes `lastSeenAt` at most once an hour — the sessions list wants to
- * know roughly when a device was last used, and writing on every request
- * would mean a database write per API call for no benefit.
+ * expired, or belongs to a deleted account. `lastSeenAt` is refreshed at most
+ * once an hour, so a request does not cost a write.
  */
 export function resolveSession(
   secret: string,
@@ -913,12 +841,9 @@ export function revokeOtherSessions(
 }
 
 /**
- * Convert the local owner into a real account, keeping its id.
- *
- * This is what `POST /api/auth/setup` calls on an instance that has been used
- * without auth. Ownership does not move, because the id does not change, so
- * every contact written before the password existed is still owned by the
- * account that now has one.
+ * Convert the local owner into a real account, keeping its id, for `POST
+ * /api/auth/setup` on an instance used without auth. The id stays, so every
+ * contact written before the password existed keeps its owner.
  */
 export async function convertLocalOwner(input: {
   email: unknown;

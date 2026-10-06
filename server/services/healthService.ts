@@ -1,22 +1,12 @@
-// =============================================================================
-// Health Service — what an operator needs to know about one instance
-// =============================================================================
-// `/healthz` answers `SELECT 1`, and that is the right answer for the thing
-// it is: an unauthenticated probe that must say whether the process serves
-// requests and nothing else about the instance.
-//
-// An admin needs more when several people depend on one instance, and the
-// questions they have are not "is it up". They are: did the migration run,
-// is the write-ahead log growing, when was the last backup and was it any
-// good, whose scan is everybody else waiting behind, is the vector index
-// built for the account that just complained about search, and is the AI
-// provider refusing us. Every one of those was answerable only by reading the
-// server log or opening the database.
-//
-// Nothing here is a secret. No key, no token, no invitation link, no contact
-// of anybody's. The most identifying thing in the payload is a username
-// beside a queue position, and an admin can already list every account.
-// =============================================================================
+// What an operator needs to know about one instance. `/healthz` answers `SELECT
+// 1`, right for an unauthenticated probe that must say only whether the process
+// serves requests. An admin asks more: did the migration run, is the WAL
+// growing, when was the last backup and was it good, whose scan is everybody
+// waiting behind, is the vector index built for the account that just
+// complained about search, is the AI provider refusing us. This answers those
+// without the server log or the database. Nothing here is secret: no key,
+// token, invitation link or contact. The most identifying thing is a username
+// beside a queue position, and an admin can list every account.
 
 import fs from "fs";
 import { OWNED_TABLES, VEC_VERSION, sqlite } from "../db.ts";
@@ -208,12 +198,10 @@ function schemaVersions(): SchemaVersions {
 }
 
 /**
- * How far the search index has got, per account.
- *
- * Two numbers rather than a percentage, because the useful question is "which
- * account has contacts that search cannot reach yet" and a percentage of zero
- * contacts is not a number. Counted with the same predicate the backfill uses
- * so the two agree.
+ * How far the search index has got, per account. Two numbers, not a percentage:
+ * the question is which account has contacts search cannot reach yet, and a
+ * percentage of zero contacts is not a number. Counted with the backfill's own
+ * predicate, so the two agree.
  */
 function embeddingProgress(
   accounts: Map<string, Account>,
@@ -287,11 +275,9 @@ function cacheHealth(): Record<string, CacheTierHealth> {
 }
 
 /**
- * Everything the admin health panel reports.
- *
- * Every part is wrapped, because a panel that answers "something threw" is
- * worse than useless: the operator opening it is already looking for a
- * problem, and a blank page is the least informative way to have one.
+ * Everything the admin health panel reports. Every part is wrapped: the
+ * operator opening it is already looking for a problem, and "something threw"
+ * is the least useful answer.
  */
 export function instanceHealth(): InstanceHealth {
   const accounts = accountsById();
@@ -376,11 +362,9 @@ export function instanceHealth(): InstanceHealth {
 }
 
 /**
- * Whether anything has ever been embedded.
- *
- * The built-in model needs no key, so "no provider configured" does not mean
- * "no vectors". One row anywhere is enough to answer, and this is an
- * instance-wide question on an instance-wide route.
+ * Whether anything was ever embedded. The built-in model needs no key, so "no
+ * provider configured" does not mean "no vectors". One row anywhere answers
+ * this instance-wide question.
  */
 function hasSearchVectors(): boolean {
   try {

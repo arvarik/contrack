@@ -1,36 +1,28 @@
-// =============================================================================
-// int8 search vectors
-// =============================================================================
-// `search_embeddings` stores each vector component as one signed byte, a
-// quarter of the space of a float. One scale for the whole table turns a
-// component into a byte: round(component × scale), clamped to ±90. The query
-// goes through the same scale, so every L2 distance is the float distance
-// times the scale, up to rounding, and the order of the neighbors is kept.
+// int8 search vectors. `search_embeddings` stores each component as one signed
+// byte, a quarter of a float's space: round(component × scale), clamped to ±90,
+// with one scale for the whole table. The query uses the same scale, so every
+// L2 distance is the float distance times the scale, up to rounding, and the
+// order of the neighbors is kept. One scale per table, not per vector, because
+// an L2 distance subtracts components of two vectors, which must share a unit.
+// The scale is 90 over the largest component the table held when it was set,
+// stored in `app_settings` as `search.vectorScale`.
 //
-// One scale for the table, not one per vector, because an L2 distance
-// subtracts one vector's components from another's, so both must share a
-// unit. The scale is 90 over the largest component the table held when it
-// was set, and it lives in `app_settings` as `search.vectorScale`.
+// Why 90 and not 127: sqlite-vec 0.1.9 squares each byte difference in 16 bits
+// on its NEON path, 16 components at a time, and a difference of 182 or more
+// overflows, giving NULL or a wrong distance. At ±127 two large components of
+// opposite sign reach it (on the search gate's vectors recall@10 against float
+// fell from 0.984 to 0.967). At ±90 no difference passes 180, and recall@10 is
+// 0.984.
 //
-// Why 90 and not 127: sqlite-vec 0.1.9 squares each byte difference in 16
-// bits on its NEON path, 16 components at a time. A difference of 182 or
-// more overflows, and the distance comes back NULL or wrong. At ±127 two
-// large components of opposite sign reach it: on the search gate's vectors
-// recall@10 against float fell from 0.984 to 0.967. At ±90 no difference
-// passes 180, and recall@10 is 0.984.
+// The scale is set once: by the boot migration from the float vectors, or by
+// the first write to an empty table from that write's vectors. A later vector
+// with a larger component is clamped; on the search gate's 370 MiniLM vectors,
+// a scale from the first 64 clips 9 of 142,080 components. A new embedding
+// model rebuilds the table, and its first write sets a new scale.
 //
-// It is set once: by the boot migration from the float vectors, or by the
-// first write to an empty table from the vectors that write carries. A later
-// vector with a larger component is clamped. On the search gate's 370 MiniLM
-// vectors, a scale taken from the first 64 clips 9 of 142,080 components. A
-// change of embedding model rebuilds the table, and the first write after it
-// sets a new scale.
-//
-// `contact_embeddings`, the dedupe store, stays float. Its similarity scores
-// are thresholds, not only an order.
-//
-// No imports: `server/db.ts` runs the migration with these at boot.
-// =============================================================================
+// `contact_embeddings`, the dedupe store, stays float: its similarity scores
+// are thresholds, not only an order. No imports: `server/db.ts` runs the
+// migration with these at boot.
 
 /** The `app_settings` key that holds the scale, a JSON number. */
 export const VECTOR_SCALE_KEY = "search.vectorScale";
@@ -42,10 +34,8 @@ export const VECTOR_SCALE_KEY = "search.vectorScale";
 export const MAX_BYTE = 90;
 
 /**
- * The scale for components in [-1, 1].
- *
- * Used when there is nothing to learn a scale from: a table whose only
- * vectors are zero, which are zero at any scale.
+ * The scale for components in [-1, 1], used when there is nothing to learn a
+ * scale from: a table whose only vectors are zero, which are zero at any scale.
  */
 export const UNIT_SCALE = MAX_BYTE;
 

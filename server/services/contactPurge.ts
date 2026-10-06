@@ -1,22 +1,15 @@
-// =============================================================================
-// Contact purge: what "delete forever" has to reach
-// =============================================================================
-// A merge keeps the merged-away contact as a hidden row (`canonicalId` points
-// at the contact it went into) and writes a merge log entry with a snapshot
-// of both contacts, so the merge can be undone. Neither goes with a plain
-// delete of the surviving contact: the hidden row keeps its name, its notes
-// and its photo, and the snapshot keeps the whole profile.
+// What "delete forever" has to reach. A merge keeps the merged-away contact as
+// a hidden row (`canonicalId` points at the contact it went into) and a merge
+// log entry with a snapshot of both, so the merge can be undone. A plain delete
+// of the survivor would leave both: the hidden row keeps its name, notes and
+// photo, and the snapshot the whole profile.
 //
-// So a purge takes the contact and every contact merged into it, following
-// the chain, and deletes every merge log entry that names one of them. Every
-// function here runs inside the caller's transaction, and none of them
-// touches a file: the caller unlinks the URLs it collected after the commit
-// (`removeUploads` in uploadCleanup.ts).
-//
-// A merge can be undone for MERGE_UNDO_DAYS. After that the daily job
-// `contacts.mergePurge` deletes the hidden row and the entry
-// (contactService.purgeExpiredMerges).
-// =============================================================================
+// So a purge takes the contact and every contact merged into it, along the
+// chain, and deletes every merge log entry that names one of them. Everything
+// here runs inside the caller's transaction and touches no file: the caller
+// unlinks the URLs it collected after the commit (`removeUploads` in
+// uploadCleanup.ts). After MERGE_UNDO_DAYS the daily job `contacts.mergePurge`
+// deletes the hidden row and the entry (contactService.purgeExpiredMerges).
 
 import { sqlite } from "../db.ts";
 import type { Scope } from "../tenancy/scope.ts";

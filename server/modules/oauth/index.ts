@@ -1,10 +1,6 @@
-// =============================================================================
-// Module: oauth
-// =============================================================================
-// OAuth sign-in for MCP clients: the metadata and protocol routes outside
-// /api, the consent page's calls under /api/auth/oauth, and the hourly sweep
-// of what has expired (server/services/oauthService.ts).
-// =============================================================================
+// OAuth sign-in for MCP clients: the metadata and protocol routes outside /api,
+// the consent page's calls under /api/auth/oauth, and the hourly sweep of what
+// expired (server/services/oauthService.ts).
 
 import { defineModule } from "../module.ts";
 import { oauthConsentRouter, oauthRouter } from "../../routes/oauth.ts";

@@ -1,24 +1,20 @@
-// =============================================================================
-// Local model files: which ones, where they live, and whether to download
-// =============================================================================
-// Search runs two small models on the CPU worker: the embedding model and the
-// cross-encoder. Transformers.js finds a model file in three places, in this
-// order:
+// Local model files: which ones, where they live, and whether to download.
+// Search runs two small models on the CPU worker, the embedding model and the
+// cross-encoder. Transformers.js looks for a model file in this order:
 //
 //   1. its cache, `TRANSFORMERS_CACHE` or `DATA_DIR/.cache`
 //   2. the model folder, `MODEL_DIR` (default `DATA_DIR/models`)
 //   3. huggingface.co, which it then writes into the cache
 //
-// Step 3 is a network call at first boot that the operator never asked for,
-// and an air-gapped install fails there. `npm run models:fetch` fills the
-// model folder ahead of time, the Docker image ships it at `/app/models`, and
-// `MODEL_DOWNLOADS=false` turns step 3 off, so a model that is not on disk
-// fails with a message that names the fix instead of reaching the network.
+// Step 3 is a network call at first boot the operator never asked for, and an
+// air-gapped install fails there. `npm run models:fetch` fills the model folder
+// ahead of time, the Docker image ships it at `/app/models`, and
+// `MODEL_DOWNLOADS=false` turns step 3 off, so a missing model fails with a
+// message that names the fix.
 //
-// This module is read by the CPU worker, which must never import anything
-// that reaches `server/db.ts` (see `cpuWorker.ts`). It imports Node's `fs`
-// and `path` and nothing else, and that is the rule for anything added here.
-// =============================================================================
+// The CPU worker reads this module, and it must never import anything that
+// reaches `server/db.ts` (see `cpuWorker.ts`), so this imports only Node's `fs`
+// and `path`.
 
 import fs from "fs";
 import path from "path";
@@ -40,12 +36,11 @@ export interface PinnedModel {
 }
 
 /**
- * The models the server loads when nothing overrides them.
- *
- * The file list is exactly what Transformers.js reads for a q8 model: the
- * config, the tokenizer and its config, and the quantized ONNX weights. The
- * hashes were checked against the files at these commits on 2026-09-28, and
- * the two ONNX hashes match the LFS object ids Hugging Face publishes.
+ * The models the server loads when nothing overrides them. The file list is
+ * what Transformers.js reads for a q8 model: the config, the tokenizer and its
+ * config, and the quantized ONNX weights. The hashes match the files at these
+ * commits, and the two ONNX hashes match the LFS object ids Hugging Face
+ * publishes.
  */
 export const PINNED_MODELS: readonly PinnedModel[] = [
   {
@@ -180,15 +175,13 @@ export function modelOnDisk(modelId: string, env: Env = process.env): boolean {
 }
 
 /**
- * The load error, with the fix appended when downloads are off and the model
- * is not on disk.
- *
- * Transformers.js reports a missing file in more than one way: "`env.
- * allowRemoteModels=false` and file was not found locally", or for a
- * tokenizer "Cannot read properties of undefined (reading
- * 'tokenizer_class')". Neither names the fix, so this checks the disk itself.
- * A pinned model comes from `npm run models:fetch`, and any other model needs
- * a download or a copy by hand.
+ * The load error, with the fix appended when downloads are off and the model is
+ * not on disk. Transformers.js reports a missing file more than one way
+ * ("`env.allowRemoteModels=false` and file was not found locally", or for a
+ * tokenizer "Cannot read properties of undefined (reading 'tokenizer_class')"),
+ * and neither names the fix, so this checks the disk itself. A pinned model
+ * comes from `npm run models:fetch`; any other needs a download or a copy by
+ * hand.
  */
 export function describeModelLoadError(
   message: string,

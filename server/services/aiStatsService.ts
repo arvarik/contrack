@@ -1,22 +1,13 @@
-// =============================================================================
-// AI Stats Service — Invocation Recording, Aggregation & Feed Queries
-// =============================================================================
-// This service is the backend engine for the AI Stats Page (/settings/ai-stats).
-// It provides three capabilities:
+// Recording, aggregation and the feed for the AI usage page.
 //
-// 1. recordInvocation() — fire-and-forget write of each AI call to SQLite
-// 2. getSummary()       — aggregate KPIs + quota + cache tier stats
-// 3. getFeed()          — paginated, filterable invocation history
-// 4. cleanupOldInvocations() — 30-day retention sweep (runs on startup)
+// 1. recordInvocation()      writes each AI call to SQLite, and never throws,
+//    so a failed record never breaks the AI call
+// 2. getSummary()            totals, quota and cache tier stats
+// 3. getFeed()               the paginated, filterable call history
+// 4. cleanupOldInvocations() the 30-day retention sweep, at startup
 //
-// DESIGN DECISIONS:
-// - Uses raw better-sqlite3 prepared statements (not Drizzle query builder)
-//   for performance on the hot path (recordInvocation is called for every
-//   AI operation) and for the aggregate queries which use SQL features
-//   (GROUP BY, dynamic WHERE) that are more natural in raw SQL.
-// - recordInvocation() is synchronous and wrapped in try/catch. It NEVER
-//   throws — a failed recording must never break the actual AI operation.
-// =============================================================================
+// Raw prepared statements, not the Drizzle builder: recordInvocation runs for
+// every AI call, and the aggregates read more naturally as SQL.
 
 import { sqlite } from "../db.ts";
 import { currentOwnerId } from "../tenancy/requestContext.ts";
@@ -28,9 +19,7 @@ import { getProvider } from "../ai/providerRegistry.ts";
 import { blendedCostPerM } from "../ai/pricing.ts";
 import crypto from "crypto";
 
-// =============================================================================
 // Types
-// =============================================================================
 
 /** Valid operation values for the ai_invocations table (single source of truth). */
 export const AI_OPERATIONS = [
@@ -86,9 +75,7 @@ export interface FeedParams {
   sort: "newest" | "oldest";
 }
 
-// =============================================================================
-// Prepared Statements
-// =============================================================================
+// Prepared statements
 
 const insertStmt = sqlite.prepare(`
   INSERT INTO ai_invocations (id, operation, model, tokenCount, latencyMs, cached, description, ownerId, createdAt)
@@ -135,23 +122,11 @@ const cleanupStmt = sqlite.prepare(
   `DELETE FROM ai_invocations WHERE createdAt < datetime('now', '-30 days')`,
 );
 
-// =============================================================================
-// Cost Lookup — list prices in ai/pricing.ts, one blended rate per model
-// =============================================================================
-// This used to be a map of its own, and it had drifted: the Anthropic rows
-// were keyed "claude-haiku-4.5", which no request ever names (the id is
-// claude-haiku-4-5-20251001), and OpenAI stopped at GPT-5.4. So the page
-// priced every Anthropic and GPT-6 call at nothing.
-// =============================================================================
+// Costs come from the list prices in ai/pricing.ts, one blended rate per model.
 
-// =============================================================================
 // Public API
-// =============================================================================
 
-/**
- * Record a single AI invocation. Fire-and-forget — never throws.
- * Called after every AI function completes (both fresh calls and cache hits).
- */
+/** Record one AI invocation, fresh or cached. Never throws. */
 export function recordInvocation(entry: InvocationEntry): void {
   try {
     const id = crypto.randomUUID();
@@ -163,8 +138,7 @@ export function recordInvocation(entry: InvocationEntry): void {
       entry.latencyMs,
       entry.cached ? 1 : 0,
       entry.description ?? null,
-      // A boot-time or background job has no context, so this is null. The
-      // AI stats view groups null as "system" until Phase 2 wraps those jobs.
+      // Outside a request this is the primary admin (currentOwnerId).
       currentOwnerId(),
     );
     log.debug(
@@ -181,16 +155,11 @@ export function recordInvocation(entry: InvocationEntry): void {
 }
 
 /**
- * Get one account's aggregate KPIs, the instance quota state, and, for an
- * admin, the cache tier statistics.
- *
- * The counts, tokens and cost describe the caller's own AI use. They read
- * `idx_ai_inv_owner_created`, which leads with `ownerId`.
- *
- * `cacheTiers` is different in kind: the tiers are one in-process LRU shared
- * by the whole instance, and their hit and miss counters describe everybody's
- * traffic. A member sees their own spending; only an admin sees the
- * instance's cache behavior, so the field is omitted rather than faked.
+ * One account's totals, the instance quota state and, for an admin, the cache
+ * tier statistics. The counts, tokens and cost are the caller's own, read
+ * through `idx_ai_inv_owner_created`. The cache tiers are one in-process LRU
+ * shared by the instance, so their counters describe everybody's traffic and
+ * only an admin gets them; for a member the field is left out, not faked.
  */
 export function getSummary(scope: Scope, options: { admin: boolean }) {
   // 1. Session aggregates from ai_invocations
@@ -216,11 +185,11 @@ export function getSummary(scope: Scope, options: { admin: boolean }) {
   const cacheHitRate =
     agg.totalInvocations > 0 ? agg.cachedCalls / agg.totalInvocations : 0;
 
-  // 4. Live or mock. There is no free or paid tier to report: Google sets a
-  // key's tier from its Cloud project's billing and never says which, and
-  // OpenAI and Anthropic have none. What can be known is whether Google has
-  // answered with a free-tier quota error, which the page flags because
-  // Google uses free-tier prompts to improve its products.
+  // 4. Live or mock. There is no tier to report: Google sets a key's tier from
+  //    its Cloud project's billing and never says which, and OpenAI and
+  //    Anthropic have none. What is known is whether Google answered with a
+  //    free-tier quota error, which the page flags because Google uses
+  //    free-tier prompts to improve its products.
   const tier: "LIVE" | "MOCK" = isAnyProviderConfigured() ? "LIVE" : "MOCK";
   const geminiSnapshot = getProvider("gemini")?.getQuotaSnapshot?.();
   const freeTier = geminiSnapshot?.freeTier ?? false;
@@ -287,16 +256,16 @@ export function getSummary(scope: Scope, options: { admin: boolean }) {
 }
 
 /**
- * Get a paginated, filterable feed of one account's AI invocations.
- * Supports filtering by operation type(s), cache status, and sort direction.
+ * A paginated feed of one account's AI invocations, filtered by operation,
+ * cache status and sort direction.
  */
 export function getFeed(scope: Scope, params: FeedParams) {
   const { offset, limit, operations, cached, sort } = params;
 
-  // The owner is written into the statement text rather than assembled with
-  // the optional filters, so every shape of this query starts `WHERE ownerId
-  // = ?` and leads with `idx_ai_inv_owner_created`. A reader, and the tenant
-  // linter, can see the predicate without evaluating a variable.
+  // The owner is written into the statement text, not assembled with the
+  // optional filters, so every shape of this query starts `WHERE ownerId = ?`,
+  // uses `idx_ai_inv_owner_created`, and shows the predicate to the tenant
+  // lint.
   const filters: string[] = [];
   const filterValues: unknown[] = [];
 
@@ -362,8 +331,9 @@ export function getFeed(scope: Scope, params: FeedParams) {
 }
 
 /**
- * Delete invocations older than 30 days. Called once on server startup.
- * Returns the number of rows deleted for logging.
+ * Delete invocations older than 30 days, once at startup.
+ *
+ * @returns the number of rows deleted, for the log.
  */
 export function cleanupOldInvocations(): number {
   try {
@@ -381,20 +351,13 @@ export function cleanupOldInvocations(): number {
   }
 }
 
-// =============================================================================
-// Instance-wide views (admin only)
-// =============================================================================
-// Two reads that deliberately cross accounts. They exist because the provider
-// key is one key and the bill is one bill, so the operator paying it has to be
-// able to see where it went. `GET /api/ai/stats/summary?scope=all` and
-// `?scope=all` on the feed are the only routes that call them, and both refuse
-// a member with 403 ADMIN_REQUIRED before they get here.
-//
-// Neither returns the text of anything. `description` is the one field on an
-// invocation that can carry a fragment of a contact's data, so the instance
-// feed leaves it out: an admin needs to see that an account made 900 calls,
-// not what it asked about. Decision D10 says an admin does not read another
-// account's data, and this is where that rule meets the billing screen.
+// Instance-wide views, admin only. Two reads that cross accounts on purpose:
+// the provider key is one key and the bill one bill, so the operator who pays
+// it can see where it went. Only `GET /api/ai/stats/summary?scope=all` and the
+// feed with `?scope=all` call them, and both refuse a member with 403
+// ADMIN_REQUIRED first. Neither returns any text: `description` can carry a
+// fragment of a contact's data, so the instance feed leaves it out. An admin
+// needs to see that an account made 900 calls, not what it asked about.
 
 /** One account's share of the instance's AI use. */
 export interface UserUsage {
@@ -506,10 +469,8 @@ export function getInstanceSummary(): {
 
 /**
  * The instance's invocations, newest first, with the account that made each.
- *
- * `description` is not selected. It is the one column that can hold a
- * fragment of what somebody asked about, and an operator reading the billing
- * screen has no business seeing it.
+ * `description` is not selected: it can hold a fragment of what somebody asked
+ * about.
  */
 export function getInstanceFeed(params: {
   offset: number;

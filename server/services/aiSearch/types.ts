@@ -1,10 +1,6 @@
-// =============================================================================
-// AI Search — Type Definitions
-// =============================================================================
-// Shared types for the AI Search subsystem: the job lifecycle, batch
-// tracking, and the result a research run hands to the merge. The run itself
-// is the research layer's (`server/services/research/`).
-// =============================================================================
+// Types for the research batch queue: the job lifecycle, batch tracking, and
+// the result a research run hands to the merge. The run itself is the research
+// layer's (`server/services/research/`).
 
 import type {
   ResearchFinding,
@@ -12,9 +8,7 @@ import type {
 } from "../../../shared/researchRecord.ts";
 import type { ResearchDepth } from "../../../shared/researchDepth.ts";
 
-// =============================================================================
 // Job Lifecycle
-// =============================================================================
 
 export type {
   AISearchBatch,
@@ -23,9 +17,7 @@ export type {
   AISearchErrorType,
 } from "../../../shared/aiSearchContract.ts";
 
-// =============================================================================
 // Result
-// =============================================================================
 
 /** What one research run found, as the merge and the research record read it */
 export interface AISearchResult {

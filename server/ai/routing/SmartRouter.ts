@@ -1,19 +1,14 @@
-// =============================================================================
-// AI Layer — Gemini Router
-// =============================================================================
-// Given a request's routing preferences, pick the Gemini model to call.
+// The Gemini router: pick the model to call for a request's routing
+// preferences.
 //
-//   1. FILTER — drop models a circuit breaker has paused, models the policy
-//               excludes, and, for a grounded request, models with no search.
-//   2. SORT   — the preferred class first, then the newest generation,
-//               stable before preview, cheapest last.
+//   1. FILTER  drop models a circuit breaker paused, models the policy
+//              excludes, and, for a grounded request, models with no search.
+//   2. SORT    the preferred class first, then the newest generation, stable
+//              before preview, cheapest last.
 //
-// There is no capacity check. The router used to hold a table of free-tier and
-// paid-tier limits and refuse a model it believed was full, but those limits
-// were guesses: Google sets them per Cloud project and no longer publishes
-// them. A model that is really full answers 429, the adapter pauses it for the
-// delay Google asks for, and the next request goes to the next model here.
-// =============================================================================
+// There is no capacity check: Google sets limits per Cloud project and does not
+// publish them. A model that is full answers 429, the adapter pauses it for the
+// delay Google asks for, and the next request goes to the next model.
 
 import {
   compareForClass,

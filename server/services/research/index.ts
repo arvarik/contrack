@@ -1,22 +1,19 @@
-// =============================================================================
-// Research — the layer that runs contact research
-// =============================================================================
-// Contact research (Enrich) searches the web for one contact and fills empty
-// fields with sourced facts. Every research request comes here: the batch
-// queue (`aiSearch/jobQueue.ts`), the one-contact route
+// The layer that runs contact research. Research (Enrich) searches the web for
+// one contact and fills empty fields with sourced facts. Every request comes
+// here: the batch queue (`aiSearch/jobQueue.ts`), the one-contact route
 // (`POST /api/contacts/:id/enrich`), and auto-enrichment through the queue.
 //
-//   research()         one run: a technique's evidence, then one extraction
-//   chooseResearch()   the technique and web search a start runs with
+//   research()            one run: a technique's evidence, then one extraction
+//   chooseResearch()      the technique and web search a start runs with
 //   researchChoiceSchema  the two choices, as a route body holds them
-//   toAISearchResult() the result as the merge and the research record read it
+//   toAISearchResult()    the result as the merge and the research record
+//                         read it
 //
-// Two ports, each a registry with a set* seam for tests, as the embedder and
-// the reranker have (`server/ai/embedder.ts`, `server/ai/reranker.ts`):
+// Two ports, each a registry with a set* seam for tests, like the embedder and
+// the reranker (`server/ai/embedder.ts`, `server/ai/reranker.ts`):
 //
 //   Technique  how a run finds facts (`techniques.ts`, `setTechnique`)
 //   WebSearch  a search service (`webSearch.ts`, `setWebSearch`)
-// =============================================================================
 
 import type { AISearchResult } from "../aiSearch/types.ts";
 import type { ResearchResult } from "./types.ts";

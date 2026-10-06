@@ -1,21 +1,12 @@
-// =============================================================================
-// Export Service — JSON, CSV and vCard
-// =============================================================================
-// No-lock-in escape hatch: everything the user owns, in one download.
-//
-// Three formats, because they answer three different questions.
-//
-// JSON is the complete one: every row, every relation, the interactions and
-// the merge log. Nothing else can reconstruct this instance.
-//
-// CSV is the one a spreadsheet opens. It is flat by definition, so a contact
-// with three emails becomes one cell with three emails in it.
-//
-// vCard is the one another address book opens. It is the only export that
-// goes back in anywhere else, and the only one this app can read again — the
-// same `shared/vcard.ts` writes it here and parses it in the import modal, so
-// a file exported and re-imported is the same contact rather than nearly.
-// =============================================================================
+// Export: everything the user owns, in one download, in three formats for three
+// questions.
+// - JSON is complete: every row, relation, interaction and the merge log.
+//   Nothing else can rebuild this instance.
+// - CSV is what a spreadsheet opens. It is flat, so three emails share one
+//   cell.
+// - vCard is what another address book opens, and the only export this app
+//   reads back: `shared/vcard.ts` writes it here and parses it in the import
+//   modal, so an exported and re-imported contact is the same contact.
 
 import { sqlite } from "../db.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
@@ -35,14 +26,11 @@ export interface FullExport {
 }
 
 /**
- * One account's data, hydrated, including its archived and trashed rows.
- *
- * Every table filters by the caller. `list_members` is the one that cannot:
- * it carries no `ownerId`, so it reaches the owner through its list. Filtering
- * it by `contactId` instead would drop a membership whose list belongs to the
- * caller but whose contact row is already gone.
- *
- * Phase 3's admin offboarding export calls this with `scopeForOwnerId(id)`.
+ * One account's data, hydrated, archived and trashed rows included. Every table
+ * filters by the caller. `list_members` has no `ownerId`, so it reaches the
+ * owner through its list; filtering by `contactId` instead would drop a
+ * membership whose contact row is gone. The admin offboarding export calls this
+ * with `scopeForOwnerId(id)`.
  */
 export function buildFullExport(scope: Scope): FullExport {
   const owner = scope.ownerId;
@@ -130,16 +118,12 @@ export function buildFullExport(scope: Scope): FullExport {
 const FORMULA_START = /^[=+\-@\t\r]/;
 
 /**
- * One CSV cell: RFC-4180 escaping, quoted when needed, embedded quotes
- * doubled.
- *
- * Text that would start a formula gets a leading `'`, which Excel, Numbers
- * and Google Sheets read as "this cell is text". Contact fields are not only
- * what the owner typed: a Google sync, an imported vCard or AI research can
- * put `=HYPERLINK(...)` in a company name, and the owner's own export would
- * run it the moment they opened the file. A phone number such as `+1 555`
- * gets the mark too, which also stops a spreadsheet from reading it as a sum.
- * Numbers are left as they are.
+ * One CSV cell: RFC 4180 escaping, quoted when needed, quotes doubled. Text
+ * that would start a formula gets a leading `'`, which Excel, Numbers and
+ * Google Sheets read as "this cell is text": a Google sync, an imported vCard
+ * or AI research can put `=HYPERLINK(...)` in a company name, and the owner's
+ * own export would run it on open. A phone number such as `+1 555` gets the
+ * mark too, so it is not read as a sum. Numbers are left as they are.
  */
 export function csvCell(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -149,10 +133,8 @@ export function csvCell(value: unknown): string {
 }
 
 /**
- * One account's flat contacts CSV.
- *
- * The same rows as the vCard file: active and archived contacts, and not the
- * Trash, ghosts or merged-away contacts (`buildContactsVcf` says why).
+ * One account's flat contacts CSV: the same rows as the vCard file (see
+ * `buildContactsVcf`).
  */
 export function buildContactsCsv(scope: Scope): string {
   const contacts = contactRepo.hydrateMany(
@@ -222,19 +204,14 @@ export function buildContactsCsv(scope: Scope): string {
 }
 
 /**
- * One account's contacts as a vCard file.
- *
- * Same rows as the CSV: active and archived, trash excluded. A trashed contact
- * is one the person deleted, and handing it back in the file they are taking
- * to another address book undoes their decision.
- *
- * Ghosts are excluded. A ghost is a name Contrack extracted from a note and
- * has no card of its own to write — no email, no phone, often no surname.
- * Exporting a thousand of them into somebody's phone is not migration.
- *
- * Merged-away contacts are excluded too. After a merge the kept contact holds
- * the emails, phones and notes of both, and the other row stays only so the
- * merge can be undone. Exporting it writes the same person twice.
+ * One account's contacts as a vCard file: active and archived contacts, and
+ * not:
+ * - the Trash: the person deleted those, and handing them back undoes the
+ *   decision;
+ * - ghosts: names extracted from notes, with no card to write (no email, no
+ *   phone, often no surname);
+ * - merged-away contacts: the kept contact holds both sides, and the other row
+ *   exists only for undo, so it would write the same person twice.
  */
 export function buildContactsVcf(scope: Scope): string {
   const contacts = contactRepo.hydrateMany(

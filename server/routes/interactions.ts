@@ -14,12 +14,12 @@ import { asyncHandler } from "../utils/asyncHandler.ts";
 import { ensureDir, ownerUploadDir } from "../utils/paths.ts";
 import { scopeOf } from "../tenancy/scope.ts";
 
-// Attachments go to uploads/u/<ownerId>/files/ now. The destination callback
-// creates the caller's directory; there is no shared one to make here.
+// Attachments go to uploads/u/<ownerId>/files/, which the destination callback
+// creates for the caller.
 
-// Attachment extensions we accept. Script-capable types (.html, .svg, .xhtml,
-// .js, …) are excluded — uploads are served from the app origin, so a stored
-// HTML file would execute as same-origin script.
+// Accepted attachment extensions. Script-capable types (.html, .svg, .xhtml,
+// .js, …) are left out: uploads are served from the app origin, so a stored
+// HTML file would run as same-origin script.
 const ALLOWED_ATTACHMENT_EXTENSIONS = new Set([
   ".eml",
   ".txt",

@@ -79,12 +79,11 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
   const owner = scope.ownerId;
   const pairs: RawPair[] = [];
 
-  // A pair this pass must leave alone: one an earlier rule already claimed,
-  // or one known to be two people. Known means the person chose "Not the same
-  // person" or "Keep separate", or a note names both. A shared email or phone
-  // is not a reason to merge a pair the person has already kept apart, and a
-  // scan must not auto-merge it. The funnel and the automatic checks read the
-  // same set (`isKnownDistinct`, `isCandidate` in incremental.ts).
+  // A pair this pass leaves alone: one an earlier rule claimed, or one known to
+  // be two people (the person chose "Not the same person" or "Keep separate",
+  // or a note names both). A shared email or phone does not override a pair the
+  // person kept apart. The funnel and the automatic checks read the same set
+  // (`isKnownDistinct`, `isCandidate` in incremental.ts).
   const skip = (pk: string): boolean =>
     seenPairs.has(pk) || distinctPairs.has(pk);
 
@@ -93,21 +92,13 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
     return [];
   }
 
-  // D1: Exact email
-  //
-  // One scoped read and a Map, not a self-join.
-  //
-  // The join was `ON LOWER(TRIM(e1.email)) = LOWER(TRIM(e2.email))`, and a
-  // join predicate wrapped in a function cannot use an index, so SQLite ran a
-  // nested loop: every email row against every other. `EXPLAIN QUERY PLAN`
-  // said `SCAN e1` / `SEARCH e2 (contactId>?)`, and on 10,000 contacts with no
-  // duplicates at all it took 7.4 seconds to return nothing. Grouping the same
-  // rows by the same key in JavaScript is linear and gives the same pairs.
-  //
-  // Still one account's rows: two people who share an email address are a
-  // duplicate only inside one account, because the same address in two
-  // accounts is two people who each wrote it down. The `contactMap.has()`
-  // test below still runs, so a row outside this scan is dropped twice over.
+  // D1: Exact email. One scoped read grouped in a Map, not a self-join: a join
+  // on `LOWER(TRIM(e1.email)) = LOWER(TRIM(e2.email))` cannot use an index, and
+  // on 10,000 contacts with no duplicates it took 7.4 seconds to return
+  // nothing. Grouping by the same key in JavaScript is linear and gives the
+  // same pairs. Only one account's rows: the same address in two accounts is
+  // two people who each wrote it down. The `contactMap.has()` test below drops
+  // anything else again.
   const emailRows = sqlite
     .prepare(
       `SELECT ce.contactId, ce.email FROM contact_emails ce
@@ -121,12 +112,10 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
   for (const row of emailRows) {
     const key = row.email.toLowerCase().trim();
     if (key.length === 0) continue;
-    // A shared mailbox is not an identity. Two contacts recorded against
-    // `team.northwind@` work together and two on `haddad.family@` live
-    // together, and this rule would merge one of each pair away at 0.98 with
-    // nobody asked. The pair still reaches the funnel through the `EM:`
-    // blocking key, which scores it on the name and the company like any
-    // other candidate.
+    // A shared mailbox is not an identity: two contacts on `team.northwind@`
+    // work together and two on `haddad.family@` live together, and this rule
+    // would merge one of each away at 0.98. The pair still reaches the funnel
+    // through the `EM:` blocking key, which scores it on name and company.
     if (isSharedMailbox(key)) continue;
     let entry = byEmail.get(key);
     if (!entry) {
@@ -151,10 +140,10 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
     }
   }
 
-  // Weighed by the policy rather than claimed at a fixed number. An address
-  // three contacts carry is worth a little less, and an address between two
-  // different first names is capped below every preset, so a couple on one
-  // inbox reach a person. The import path runs the same call.
+  // Weighed by the policy, not claimed at a fixed number: an address three
+  // contacts carry is worth a little less, and one between two different first
+  // names is capped below every preset, so a couple on one inbox reach a
+  // person. The import path makes the same call.
   for (const m of emailDupes) {
     if (!contactMap.has(m.id1) || !contactMap.has(m.id2)) continue;
     const pk = pairKey(m.id1, m.id2);
@@ -196,10 +185,9 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
     if (!phoneMap.has(norm)) phoneMap.set(norm, []);
     phoneMap.get(norm)!.push(p.contactId);
   }
-  // Same weighing as D1. A household on one landline is the case: "Ada
-  // Twin" and "Ben Twin" share a number and are two people, and this rule
-  // used to merge them at 0.95 with nobody asked. The eval corpus counted 16
-  // such pairs at auto, all now capped at 0.85 and reviewed.
+  // Weighed like D1. A household on one landline is the case: "Ada Twin" and
+  // "Ben Twin" share a number and are two people. The eval corpus has 16 such
+  // pairs, all capped at 0.85 for review.
   for (const [normPhone, contactIds] of phoneMap) {
     const unique = [...new Set(contactIds)];
     if (unique.length < 2) continue;
@@ -232,15 +220,13 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
     }
   }
 
-  // D2b: The same personal profile link.
-  //
-  // One LinkedIn page on two records is one person written down twice,
-  // whatever the two names say, and no name rule sees "Priya R." beside
-  // "Priya Raman". The context loaded the links normalized and kept only
-  // personal profiles (`profileUrlsByContact`), so a trailing slash or a
-  // country subdomain is the same link, and a company page is no identity.
-  // Weighed like the other anchors: a link on three records is worth a
-  // little less, and two different first names cap the pair for review.
+  // D2b: The same personal profile link. One LinkedIn page on two records is
+  // one person written down twice, whatever the names say, and no name rule
+  // sees "Priya R." beside "Priya Raman". The links are normalized personal
+  // profiles (`profileUrlsByContact`), so a trailing slash or a country
+  // subdomain is the same link, and a company page is no identity. Weighed like
+  // the other anchors: a link on three records is worth a little less, and two
+  // different first names cap the pair for review.
   const bySocial = new Map<string, string[]>();
   for (const [contactId, urls] of ctx.socialUrlsByContact) {
     if (!contactMap.has(contactId)) continue;
@@ -274,24 +260,15 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
     }
   }
 
-  // D3: Exact name match
+  // D3: Exact name match, with no query: `ctx.allContacts` already holds this
+  // owner's live contacts, so grouping by name is linear. A self-join on
+  // `LOWER(TRIM(c1.name)) = LOWER(TRIM(c2.name))` cannot use an index and took
+  // 10.2 seconds on 10,000 contacts with no duplicates.
   //
-  // No query at all. `ctx.allContacts` was loaded with exactly the filters
-  // this self-join carried — one owner, not a ghost, not archived, not merged
-  // away — so the rows are already here and grouping them by the same key is
-  // linear.
-  //
-  // It was the worst of the two joins: `LOWER(TRIM(c1.name)) =
-  // LOWER(TRIM(c2.name))` cannot use an index, so `EXPLAIN QUERY PLAN` showed
-  // `SCAN c1` against `SEARCH c2 (id>?)` and 10,000 contacts with no
-  // duplicates took 10.2 seconds to return nothing. The cost was quadratic in
-  // the account's size and independent of how many duplicates there were.
-  //
-  // The key is the raw name lowercased and trimmed, which is what the SQL
-  // compared. Deliberately NOT the normalized name the funnel uses: that
-  // strips titles and generation suffixes, so "James Whitfield Sr." and
-  // "James Whitfield Jr." would become an exact match at 0.95 and merge a
-  // father into his son without anybody being asked.
+  // The key is the raw name lowercased and trimmed, NOT the normalized name the
+  // funnel uses: that strips titles and generation suffixes, so "James
+  // Whitfield Sr." and "James Whitfield Jr." would match exactly at 0.95 and
+  // merge a father into his son with nobody asked.
   const byName = new Map<string, ContactRow[]>();
   for (const contact of ctx.allContacts) {
     const key = (contact.name ?? "").toLowerCase().trim();
@@ -437,19 +414,14 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
           continue;
         }
 
-        // D6: one name is the other with middle names added.
-        //
-        // "Anton Kovacs" and "Anton Peter Kovacs" scored 0.643 to 0.750 on the
-        // composite, which is the band a provider verifies. With no provider
-        // configured the funnel keeps a pair only at 0.75 and above, so the
-        // engine found 1 of 15 of these. The shape is exact, so it is tested
-        // for here rather than approximated by a distance.
-        //
-        // 0.88 and not higher on purpose. It is the same number the nickname
-        // rule uses and it sits below the auto-merge threshold, so the pair
-        // reaches a person. A middle name added is strong evidence of one
-        // person and it is not proof: a father and a son can differ by exactly
-        // this much.
+        // D6: one name is the other with middle names added. "Anton Kovacs" and
+        // "Anton Peter Kovacs" score 0.643 to 0.750 on the composite, the band
+        // a provider verifies, and with no provider the funnel keeps a pair
+        // only from 0.75, so the engine would find 1 of 15. The shape is exact,
+        // so it is tested here rather than approximated by a distance. 0.88,
+        // the nickname rule's number, is below the auto-merge threshold on
+        // purpose: a middle name added is strong evidence, not proof, since a
+        // father and a son can differ by exactly this.
         if (isMiddleNameExtension(a.nameTokens, b.nameTokens)) {
           seenPairs.add(pk);
           const weighed = weighNameOnly(NAME_CONFIDENCE.middleName, 2, a, b);
@@ -574,12 +546,9 @@ export async function runFunnelPass(
       candidate.idB,
       distinctPairs,
     );
-    // Only when there is a vector store to ask. `getEmbeddingSimilarity` runs
-    // a KNN per pair, and with no embeddings every one of those threw inside
-    // its own try/catch and returned zero: 30,000 candidates meant 30,000
-    // failing queries, which was 1.1 seconds of the funnel's 1.2 on a corpus
-    // of 2,000. `useEmbeddings` already governed whether the KNN contributed
-    // candidates; it now governs whether it is consulted at all.
+    // Only when there is a vector store to ask: `getEmbeddingSimilarity` runs a
+    // KNN per pair, and with no embeddings 30,000 candidates meant 30,000
+    // failing queries, 1.1 seconds of the funnel's 1.2 on 2,000 contacts.
     const embSim = useEmbeddings
       ? getEmbeddingSimilarity(candidate.idA, candidate.idB, ctx)
       : 0;

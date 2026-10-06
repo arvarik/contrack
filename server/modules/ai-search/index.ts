@@ -1,8 +1,4 @@
-// =============================================================================
-// Module: ai-search
-// =============================================================================
 // Contact research: batches that read the web about contacts.
-// =============================================================================
 
 import { defineModule } from "../module.ts";
 import { aiSearchRouter } from "../../routes/aiSearch.ts";

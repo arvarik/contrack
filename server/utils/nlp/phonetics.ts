@@ -1,6 +1,4 @@
-// =============================================================================
-// Double Metaphone
-// =============================================================================
+// Double Metaphone.
 
 export function doubleMetaphone(input: string): {
   primary: string;

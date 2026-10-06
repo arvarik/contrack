@@ -1,15 +1,9 @@
-// =============================================================================
-// /api/admin — accounts, invitations, and the audit log
-// =============================================================================
-// Mounted at /api/admin in server/app.ts, after the credential gate. Every
-// route carries `requireAdmin` on the route itself rather than through
-// `router.use`, for two reasons: a reader sees the guard next to the handler
-// it protects, and the route manifest test can find it in `route.stack` and
-// fail if a new admin route ever arrives without it.
-//
-// Every handler is thin. The decisions, the guards and the audit rows live in
-// adminService and invitationService.
-// =============================================================================
+// /api/admin: accounts, invitations and the audit log, mounted after the
+// credential gate in server/app.ts. Every route carries `requireAdmin` itself,
+// not through `router.use`, so a reader sees the guard beside the handler and
+// the route manifest test fails on an admin route without it. Handlers are
+// thin: the decisions, guards and audit rows live in adminService and
+// invitationService.
 
 import { Router, type Request } from "express";
 import { AppError } from "../utils/AppError.ts";
@@ -98,20 +92,13 @@ function adminContext(req: Request): AdminContext {
   return { actor: req.principal!.user, ip: req.ip ?? null };
 }
 
-// ─── Health ──────────────────────────────────────────────────────────────────
+// Health
 
 /**
- * What an operator needs to know about this instance.
- *
- * Admin rather than public, and deliberately not part of `/healthz`. That
- * probe is reachable without a credential and must stay two states and no
- * detail: an unauthenticated endpoint that describes the instance tells
- * anybody who can reach the port what version it runs, how big it is, and how
- * many accounts it has.
- *
- * Nothing here is written, so it is safe to poll, and nothing here is a
- * secret. The most identifying value in the payload is a username beside a
- * queue position, and the caller can already list every account.
+ * What an operator needs to know about this instance. Admin only, and not part
+ * of `/healthz`, which anybody can reach and which must stay two states with no
+ * detail, or it would tell anybody the version, the size and the number of
+ * accounts. Read-only, so safe to poll, and nothing in it is secret.
  */
 router.get(
   "/health",
@@ -121,7 +108,7 @@ router.get(
   }),
 );
 
-// ─── Accounts ────────────────────────────────────────────────────────────────
+// Accounts
 
 router.get(
   "/users",
@@ -254,11 +241,9 @@ router.post(
 );
 
 /**
- * One account's data as a download, for handing to somebody who is leaving.
- *
- * The only endpoint on which an admin reads another account's contacts. It
- * writes a `user.exported` audit row naming the account, so the read is
- * visible to everybody who can read the log.
+ * One account's data as a download, for somebody who is leaving: the only
+ * endpoint where an admin reads another account's contacts. It writes a
+ * `user.exported` audit row naming the account.
  */
 router.get(
   "/users/:id/export",
@@ -310,10 +295,9 @@ router.get(
 );
 
 /**
- * The account name that goes in a download filename.
- *
- * Same rule as the self-service export: the value lands inside a quoted
- * `Content-Disposition` header, where a stray quote would end the filename.
+ * The account name in a download filename. As in the self-service export, it
+ * lands inside a quoted `Content-Disposition` header, where a stray quote would
+ * end the filename.
  */
 function exportSlug(username: string): string {
   const slug = username.replace(/[^A-Za-z0-9._-]/g, "").slice(0, 40);
@@ -335,7 +319,7 @@ router.delete(
   }),
 );
 
-// ─── Invitations ─────────────────────────────────────────────────────────────
+// Invitations
 
 router.get(
   "/invitations",
@@ -368,7 +352,7 @@ router.delete(
   }),
 );
 
-// ─── Instance settings ───────────────────────────────────────────────────────
+// Instance settings
 
 /** The one shape both routes answer with, so a write reads back as a read. */
 function settingsView() {
@@ -405,13 +389,9 @@ router.get(
 );
 
 /**
- * Change one or both instance settings.
- *
- * The session lifetime is one of them.
- *
- * The audit row names the keys that changed and not what they changed to for
- * the same reason the AI settings rows do: the key is what an operator needs
- * to see, and a value is the thing that occasionally turns out to be secret.
+ * Change one or both instance settings, the session lifetime among them. The
+ * audit row names the keys that changed, not their values, as the AI settings
+ * rows do: a value is what occasionally turns out to be secret.
  */
 router.put(
   "/settings",
@@ -495,7 +475,7 @@ router.put(
   }),
 );
 
-// ─── Integrations ──────────────────────────────────────────────────────────
+// Integrations
 
 router.get(
   "/integrations",
@@ -541,7 +521,7 @@ router.put(
   }),
 );
 
-// ─── Outgoing mail ──────────────────────────────────────────────────────────
+// Outgoing mail
 
 const mailTestLimiter = createRateLimiter({
   windowMs: 10 * 60_000,
@@ -643,7 +623,7 @@ router.post(
   }),
 );
 
-// ─── Audit log ───────────────────────────────────────────────────────────────
+// Audit log
 
 router.get(
   "/audit",
@@ -656,10 +636,9 @@ router.get(
         details: parsed.error.issues,
       });
     }
-    // The filter is a list of exact actions, checked against the vocabulary
-    // the app actually writes. A free string matched with LIKE would answer a
-    // typo with an empty page, and an empty page in an audit log reads as
-    // "nothing happened" — the one answer it must never give by accident.
+    // The filter is a list of exact actions from the vocabulary the app writes.
+    // A free string matched with LIKE would answer a typo with an empty page,
+    // which in an audit log reads as "nothing happened".
     let actions: string[] | undefined;
     if (parsed.data.action) {
       actions = parsed.data.action

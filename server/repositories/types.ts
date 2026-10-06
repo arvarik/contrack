@@ -1,43 +1,23 @@
-// =============================================================================
-// Repository Types — Server-Side Typed Interfaces
-// =============================================================================
-// These types are inferred from the Drizzle schema to guarantee compile-time
-// correctness. They describe the shapes returned by ContactRepository methods
-// and the expected shape of inbound child record payloads.
-//
-// IMPORTANT: The frontend mirrors these shapes in `src/types.ts`.
-// If you modify anything here, verify the frontend counterpart stays in sync.
-// =============================================================================
+// Server-side types, inferred from the Drizzle schema: the shapes
+// ContactRepository returns and the child record payloads it takes. The
+// frontend mirrors them in `src/types.ts`; keep the two in step.
 
 import type * as schema from "../db/schema.ts";
 
-// =============================================================================
-// Row types — inferred from Drizzle schema (read-side)
-// =============================================================================
-//
-// Each of these is `typeof schema.X.$inferSelect`, which produces the exact
-// shape returned by a Drizzle SELECT. Using these aliases (instead of
-// re-declaring fields) means schema changes propagate automatically: drop a
-// column from the Drizzle table and any downstream code referencing the
-// removed field stops type-checking. Do NOT replace these with hand-written
-// interfaces.
-// =============================================================================
+// Row types, each `typeof schema.X.$inferSelect`, the exact shape of a Drizzle
+// SELECT. Aliases, not hand-written interfaces, so a dropped column breaks the
+// code that still reads it.
 
 /** Raw `contacts` row — all columns, before child hydration. */
 export type ContactRow = typeof schema.contacts.$inferSelect;
-// =============================================================================
 // HydratedContact — the fully-joined API response shape
-// =============================================================================
 
 /**
- * A contact row with all child relations eagerly loaded.
- * This is the shape returned by `ContactRepository.hydrate()` and sent
- * over the wire as the JSON response for GET /api/contacts/:id.
- *
- * Integer booleans from SQLite (0/1) are converted to JS booleans for:
- * - `isPrimary` on emails, phones, addresses
- * - `isCurrent` on experience
- * - `isGhost`, `isArchived`, `isTracked` on the contact itself
+ * A contact with every child relation loaded: what
+ * `ContactRepository.hydrate()` returns and GET /api/contacts/:id sends.
+ * SQLite's 0/1 becomes a boolean for `isPrimary` on emails, phones and
+ * addresses, `isCurrent` on experience, and `isGhost`, `isArchived` and
+ * `isTracked` on the contact.
  */
 export interface HydratedContact extends Omit<
   ContactRow,
@@ -111,20 +91,11 @@ export interface HydratedContact extends Omit<
   interactionCount: number;
 }
 
-// =============================================================================
 // ChildRecordsPayload — inbound mutation shape
-// =============================================================================
 
 /**
- * Type definition for inbound payload containing potential relational data
- * to append to a given Contact profile during Creation or Hydration.
- *
- * Each array accepts either a plain string (shorthand) or a structured object.
- * The repository normalizes these unions internally.
- */
-/**
- * Scalar contact fields accepted from create/update payloads (post-Zod).
- * Everything is optional — Zod has validated shapes, this types the allow-list.
+ * Scalar contact fields accepted from create and update payloads, after Zod.
+ * Everything is optional: Zod checked the shapes, this types the allow list.
  */
 export interface ContactScalarPayload {
   name?: string;
@@ -158,9 +129,9 @@ export interface ContactScalarPayload {
 }
 
 /**
- * Full inbound contact payload: scalars + child arrays. The Record part
- * keeps passthrough keys readable as `unknown` (the Zod schemas allow
- * extra keys; buildContactUpdate re-filters through its allow-list).
+ * The full inbound contact payload: scalars and child arrays. The Record part
+ * keeps passthrough keys readable as `unknown` (the Zod schemas allow extra
+ * keys, and buildContactUpdate filters them through its allow list).
  */
 export type ContactPayload = ContactScalarPayload &
   ChildRecordsPayload & {

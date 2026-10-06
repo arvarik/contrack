@@ -1,23 +1,11 @@
-// =============================================================================
-// Maintenance Service — the daily sweep of rows nothing else removes
-// =============================================================================
-// Five tables accumulate rows that no request ever deletes: audit entries past
-// their retention, sessions whose expiry passed, tokens revoked long enough
-// ago that nobody is going to ask about them, invitations that were revoked
-// or expired a month back, and AI invocations outside the stats window.
-//
-// The sweep also checkpoints the write-ahead log, which is a different kind of
-// growth with the same shape: nothing removes it in the ordinary course of
-// things and it only becomes visible once it is a problem. `walHealth.ts` has
-// the reasoning.
-//
-// Two more tables grow with use: `events`, which every write adds to, and
-// `jobs`, where every finished run stays for the admin route (the connector
-// tick alone adds 1,440 rows a day).
-//
-// The sweep runs as the recurring job `maintenance.daily`, at start and every
-// day after (server/jobs/maintenance.ts).
-// =============================================================================
+// The daily sweep of rows nothing else removes: audit entries past their
+// retention, expired sessions, tokens revoked long ago, invitations revoked or
+// expired a month back, and AI invocations outside the stats window. `events`
+// grows with every write, and `jobs` keeps every finished run for the admin
+// route (the connector tick alone adds 1,440 rows a day). The sweep also
+// checkpoints the WAL, which grows unseen the same way (`walHealth.ts`). It
+// runs as the recurring job `maintenance.daily`, at start and every day after
+// (server/jobs/maintenance.ts).
 
 import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
@@ -32,10 +20,10 @@ export const AUDIT_RETENTION_DAYS = 90;
 export const REVOKED_TOKEN_RETENTION_DAYS = 30;
 export const DEAD_INVITATION_RETENTION_DAYS = 30;
 /**
- * How long a finished import is kept. Long enough to come back to a failed
- * row list after a holiday, short enough that a kept payload does not sit
- * around for ever. A running one is never swept: a process that dies leaves
- * it `running`, and the next read is what settles it.
+ * How long a finished import is kept: long enough to come back to a failed row
+ * list after a holiday, short enough that a kept payload does not sit forever.
+ * A running one is never swept: a dead process leaves it `running`, and the
+ * next read settles it.
  */
 export const IMPORT_RETENTION_DAYS = 30;
 export const AUTH_LINK_RETENTION_DAYS = 30;
@@ -44,9 +32,9 @@ export const CONNECTOR_RUN_RETENTION_DAYS = 90;
 /** Events are kept this long, and longer while a subscriber has not read them. */
 export const EVENT_RETENTION_DAYS = 30;
 /**
- * A finished job is kept a day, which is the window the admin route shows,
- * and the newest run of each kind stays whatever its age. A failed one is
- * kept a month, for whoever comes to ask why.
+ * A finished job is kept a day, the window the admin route shows, and the
+ * newest run of each kind stays whatever its age. A failed one is kept a month,
+ * for whoever asks why.
  */
 export const DONE_JOB_RETENTION_DAYS = 1;
 export const FAILED_JOB_RETENTION_DAYS = 30;
@@ -78,18 +66,15 @@ export interface MaintenanceCounts {
 /**
  * Remove what nobody needs any more, and say how much went.
  *
- * Every cut-off is computed by SQLite rather than by JavaScript, and every
- * column that might not be in SQLite's own format is read through
- * `datetime()`. Two of these columns are written by `new Date().toISOString()`
- * rather than by `CURRENT_TIMESTAMP`, and SQLite compares TEXT byte by byte:
- * `2026-09-10T15:41:07.774Z` against `2026-09-10 16:41:07` differs first at
- * the `T`, which sorts after a space, so a session that expired an hour ago
- * looked as though it had not. `datetime()` reads both formats, and a value it
- * cannot read becomes NULL, which keeps the row rather than removing one this
- * cannot reason about.
+ * Every cut-off is computed by SQLite, and every column that may not be in
+ * SQLite's own format is read through `datetime()`. Two of these columns are
+ * written by `new Date().toISOString()`, and SQLite compares TEXT byte by byte:
+ * `2026-09-10T15:41:07.774Z` against `2026-09-10 16:41:07` differs first at the
+ * `T`, which sorts after a space, so an expired session would look live.
+ * `datetime()` reads both formats, and a value it cannot read becomes NULL,
+ * which keeps the row.
  *
- * Never throws. A sweep that fails is a warning in the log and a retry
- * tomorrow, not a reason to take the process down.
+ * Never throws: a failed sweep is a warning and a retry tomorrow.
  */
 export function runDailyMaintenance(): MaintenanceCounts {
   const counts: MaintenanceCounts = {
@@ -275,10 +260,10 @@ export function runDailyMaintenance(): MaintenanceCounts {
 }
 
 /**
- * Delete the events older than EVENT_RETENTION_DAYS that every subscriber
- * has read. The cursors that count are those of the subscribers this process
- * registered, so the cursor of a subscriber that no longer exists cannot keep
- * events for ever. With none registered, every cursor counts.
+ * Delete the events older than EVENT_RETENTION_DAYS that every subscriber has
+ * read. Only the cursors of subscribers this process registered count, so a
+ * removed subscriber's cursor cannot keep events forever. With none registered,
+ * every cursor counts.
  */
 function sweepEvents(): number {
   const ids = registeredSubscriberIds();

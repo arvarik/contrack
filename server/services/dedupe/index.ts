@@ -1,6 +1,4 @@
-// =============================================================================
-// Dedupe Engine — Public API
-// =============================================================================
+// The dedupe engine's public API.
 
 export { dedupeService } from "./engine.ts";
 export { dedupeQueue } from "./jobQueue.ts";

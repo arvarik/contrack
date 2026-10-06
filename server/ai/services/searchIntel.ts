@@ -3,15 +3,9 @@ import { compileQueryPlan, roleVariants } from "../queryConstraints.ts";
 import { matchesQueryLocations } from "../searchLocations.ts";
 const QUERY_PLAN_VERSION = 3;
 import { AppError } from "../../utils/AppError.ts";
-// =============================================================================
-// AI Services — Search Intelligence (Ask Contrack pipeline)
-// =============================================================================
-// The LLM stages of the search pipeline: query planning, candidate reranking
-// with server-side evidence verification, and result synthesis.
-//
-// Extracted verbatim from aiService.ts in the domain split; the barrel there
-// re-exports this module, so import sites are unchanged.
-// =============================================================================
+// Search intelligence: the model stages of Ask Contrack (query planning,
+// candidate reranking with server-side evidence checks, and result synthesis).
+// aiService.ts re-exports it.
 
 import type {
   CompressedContact,
@@ -49,19 +43,14 @@ const EVIDENCE_FIELDS: [EvidenceField, ...EvidenceField[]] = [
 ];
 
 /**
- * LLM-based reranker for Ask Contrack hybrid retrieval pipeline.
- *
- * Takes ~30 pre-filtered candidate contacts (from the hybrid retrieval
- * engine) and uses the LLM to determine which ones *definitively* match
- * the user's query. For each match the model names one field and quotes a
- * literal substring of it. It writes no reason: the server builds one from
- * that evidence (`buildReason`), because the model's sentences were most of
- * this call's output tokens and most of its 3 to 6 s.
- *
- * This is the Stage 2 of the pipeline. Stage 1 (hybrid retrieval) narrows
- * the network to ~30 candidates using FTS5 + vector KNN + SQL filters.
- * The service calls this only when the SQL filter cannot prove every
- * constraint. The verified matches come back in candidate order.
+ * The model reranker of Ask Contrack's hybrid retrieval. It takes about 30
+ * candidates from hybrid retrieval (FTS5, vector KNN and SQL filters) and asks
+ * the model which ones definitively match. For each match the model names one
+ * field and quotes a literal substring of it, and writes no reason: the server
+ * builds one from that evidence (`buildReason`), because the model's sentences
+ * were most of this call's output tokens and most of its 3 to 6 s. The service
+ * calls this only when the SQL filter cannot prove every constraint. Verified
+ * matches come back in candidate order.
  */
 export async function rerankCandidates(
   query: string,
@@ -78,10 +67,9 @@ export async function rerankCandidates(
 
   if (candidates.length === 0) return [];
 
-  // Build a human-readable description of the QueryPlan that the reranker
-  // must verify against. Each must.* dimension becomes an explicit
-  // verification checklist item, and the reranker is told to refuse any
-  // candidate it cannot ground in a literal field value.
+  // The plan as a checklist for the reranker: each must.* dimension becomes an
+  // item to verify, and the reranker is told to refuse any candidate it cannot
+  // ground in a literal field value.
   const planDirectives: string[] = [];
   // A place can be in the location or in one of the addresses: a street or a
   // postcode is only ever in an address.
@@ -151,10 +139,10 @@ A contact that fails any hard constraint MUST be excluded, regardless of how wel
       : ""
   }${recency}`;
 
-  // Candidates travel with short ids, "c1" to "c30". A contact id is a UUID
-  // of about 25 tokens, and 30 matches of them overran the 1,200-token
-  // budget (measured 2026-09-27): the array was cut off, and the answer
-  // with it. The server maps the short ids back.
+  // Candidates travel with short ids, "c1" to "c30": a contact id is a UUID of
+  // about 25 tokens, and 30 matches of them overran the 1,200-token budget,
+  // cutting off the array and the answer with it. The server maps the short ids
+  // back.
   const listed = candidates.map((candidate, index) => ({
     ...candidate,
     id: `c${index + 1}`,
@@ -227,10 +215,9 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
     throw new AppError("AI returned invalid search evidence", 502);
   const parsed = parsedResult.data;
 
-  // ── Server-side evidence verification ───────────────────────────────────
-  // We re-check the LLM's claimed evidence against the actual candidate
-  // data to catch hallucinations and ungrounded matches. Four checks:
-  //  1. contact_id must exist in our candidate set
+  // Server-side evidence checks. The model's claimed evidence is checked
+  // against the candidate data to catch hallucinated or ungrounded matches:
+  //  1. contact_id must be in the candidate set
   //  2. verified_value must be a literal substring of the named field
   //  3. if a hard constraint applies to that field, the value must satisfy it
   //  4. the quoted value must pass the output sanitizer, because the reason
@@ -260,9 +247,8 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
       continue;
     }
 
-    // Verify the claimed evidence: the verified_value must actually appear
-    // in the candidate's named field. This catches the LLM saying "lives
-    // in California" for a contact whose location is "Sydney".
+    // The verified_value must appear in the candidate's named field, which
+    // catches "lives in California" for a contact in Sydney.
     const field = (m.verified_field ?? "").toLowerCase();
     const value = (m.verified_value ?? "").trim();
     const candAsRecord = cand as unknown as Record<string, unknown>;
@@ -292,10 +278,10 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
       continue;
     }
 
-    // If the query plan has a hard constraint on this field, verify the
-    // candidate's actual field satisfies AT LEAST ONE matcher. This is the
-    // last-mile safety net beyond the pre-filter. A place may be the
-    // location or any one of the addresses, as the pre-filter reads it.
+    // With a hard constraint on this field, the candidate's field must satisfy
+    // at least one matcher: the last safety net after the pre-filter. A place
+    // may be the location or any one of the addresses, as the pre-filter reads
+    // it.
     const places = [
       cand.location ?? "",
       ...(cand.addresses?.split(" | ") ?? []),
@@ -429,13 +415,11 @@ function safeDeltas(onDelta?: (text: string) => void) {
 }
 
 /**
- * Generates a concise 2-3 sentence executive summary of a set of AI search
- * results. This is an opt-in feature — the user clicks "Synthesize these
- * results" after seeing their matches.
- *
- * The text streams: `onDelta` receives each piece as the model writes it.
- * The returned text is the whole brief after `sanitizeAiOutputValue`, and
- * it is what the client keeps. A cache hit sends no pieces.
+ * A two or three sentence brief over Ask results, which the user asks for after
+ * seeing the matches. The text streams: `onDelta` gets each piece as the model
+ * writes it. The returned text is the whole brief after
+ * `sanitizeAiOutputValue`, and it is what the client keeps. A cache hit sends
+ * no pieces.
  *
  * @param scope    - The owner the brief is cached for
  * @param query    - The original user query
@@ -472,10 +456,10 @@ export async function synthesizeSearchResults(
     );
     plan = aiCache.get<QueryPlan>("queryParse", planCacheKey) ?? null;
   }
-  // The brief is a paragraph about the named contacts, so the key leads with
-  // the owner. The hash of the contact list would already differ between two
-  // owners, but only by accident: the owner prefix is what lets `rerank` and
-  // `synthesis` be dropped for one account and kept for the rest.
+  // The brief describes the named contacts, so the key leads with the owner.
+  // The contact list's hash would differ between owners anyway, but the owner
+  // prefix is what lets `rerank` and `synthesis` be dropped for one account
+  // alone.
   const cacheKey = ownerKey(
     scope,
     contentHash(
@@ -619,11 +603,11 @@ Write a 2-3 sentence executive brief. Every claim must be true for the contacts 
 }
 
 /**
- * Parse the query, then validate hard filters against phrases in the query.
- * Structured places preserve city and region qualifiers. Reviewed role aliases
- * expand supported occupations without accepting invented constraints.
- * Cache keys include the compiler version, provider, model, and query.
- * Return null on provider failure so callers can expose their keyword fallback.
+ * Parse the query, then check hard filters against phrases in the query.
+ * Structured places keep city and region qualifiers, and reviewed role aliases
+ * widen supported occupations without accepting invented constraints. The cache
+ * key has the compiler version, provider, model and query. Null on a provider
+ * failure, so callers can fall back to keywords.
  */
 export async function parseSearchQuery(
   query: string,
@@ -798,9 +782,8 @@ Return the structured QueryPlan JSON.`;
           : "",
     };
 
-    // Low-confidence queries skip hard filters entirely — they're treated
-    // as exploratory, only the soft boosts remain. This protects against
-    // the planner over-extracting on ambiguous queries.
+    // A low-confidence query skips hard filters and keeps only the soft boosts,
+    // so the planner cannot over-filter an ambiguous question.
     if (cleaned.confidence !== "low" && raw.must) {
       const loc = cleanList(raw.must.locationMatchers);
       if (loc) cleaned.must.locationMatchers = loc;

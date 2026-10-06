@@ -1,18 +1,14 @@
-// =============================================================================
-// AI Layer — Model prices, for the usage page's cost estimate
-// =============================================================================
-// Standard list prices in USD per 1M tokens, September 2026:
+// Model prices, for the usage page's cost estimate. Standard list prices in USD
+// per 1M tokens, September 2026:
 //   Gemini    https://ai.google.dev/gemini-api/docs/pricing
 //   OpenAI    https://developers.openai.com/api/docs/pricing
 //   Anthropic https://platform.claude.com/docs/en/about-claude/pricing
 //
-// The usage log stores one token count per call, input and output together,
-// so a call is priced at one blended rate: three parts input to one part
-// output, which is close to Contrack's calls (a prompt with context, a short
-// answer). The number is an estimate, and the page says so.
-//
-// A model not listed here is priced at nothing rather than guessed.
-// =============================================================================
+// The usage log stores one token count per call, input and output together, so
+// a call is priced at one blended rate: three parts input to one part output,
+// close to Contrack's calls (a prompt with context, a short answer). The page
+// says it is an estimate. A model not listed is priced at nothing rather than
+// guessed.
 
 interface Price {
   input: number;

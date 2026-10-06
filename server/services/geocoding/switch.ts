@@ -1,20 +1,14 @@
-// =============================================================================
-// Geocoding: the instance switch and the server it asks
-// =============================================================================
-// Every address the map places is sent to a Nominatim server. Two things stop
-// that for the whole instance:
-//   - GEOCODING_DISABLED=true (or 1) in the server's environment. It wins:
-//     while it is set, Settings cannot turn lookups back on.
-//   - the `geocoding.off` app setting, which an admin sets in Settings →
-//     Administration → General.
-// While lookups are off, no address leaves the server. A contact still gets a
-// pin from the shared cache, from an earlier answer, or by hand.
+// Geocoding: the instance switch and the server it asks. Every address the map
+// places goes to a Nominatim server, unless lookups are off for the instance:
+// - GEOCODING_DISABLED=true (or 1) in the environment, which wins: Settings
+//   cannot turn lookups back on while it is set;
+// - the `geocoding.off` app setting, from Settings → Administration → General.
 //
-// NOMINATIM_URL points the lookups at a self-hosted Nominatim instead of the
-// public one. A value that is not an http or https URL turns lookups off, so
-// a typo never sends addresses to the public server the operator meant to
-// avoid.
-// =============================================================================
+// While lookups are off no address leaves the server; a contact still gets a
+// pin from the shared cache, an earlier answer, or by hand. NOMINATIM_URL
+// points lookups at a self-hosted Nominatim. A value that is not an http or
+// https URL turns lookups off, so a typo never sends addresses to the public
+// server the operator meant to avoid.
 
 import { getSetting, setSetting } from "../settingsService.ts";
 import { log } from "../../utils/logger.ts";

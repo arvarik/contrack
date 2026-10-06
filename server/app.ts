@@ -1,10 +1,7 @@
 /**
- * app.ts — Express application factory.
- *
- * Builds the fully-wired API app (middleware, routers, error handling)
- * WITHOUT listening on a port, attaching Vite, or starting background
- * tasks — those live in server.ts. This split exists so integration
- * tests can mount the exact production request pipeline with supertest.
+ * The Express application factory: the wired API (middleware, routers, error
+ * handling) without a port, Vite or background tasks, which live in server.ts.
+ * Integration tests mount this exact pipeline with supertest.
  */
 import express from "express";
 import cors from "cors";
@@ -74,17 +71,10 @@ export interface CreateAppOptions {
 }
 
 /**
- * Build the API application: all middleware and routers, ending with the
- * 404 catch-all for /api/* and the centralized error handler. The caller
- * (server.ts) may append SPA/Vite handling between notFoundHandler and
- * errorHandler via the returned app.
- */
-/**
- * The one route that legitimately carries multi-megabyte JSON: bulk import
- * posts the parsed contents of a whole CSV/vCard export. Everything else on
- * the API speaks in kilobytes, and a limit sized for the import was letting
- * any caller hold 50 MB of server memory per request on any route —
- * including the unauthenticated ones under /api/auth.
+ * The one route that carries multi-megabyte JSON: bulk import posts a whole
+ * parsed CSV or vCard export. Everything else speaks in kilobytes, and an
+ * import-sized limit everywhere would let any caller, unauthenticated ones
+ * included, hold 50 MB of server memory per request.
  */
 const LARGE_JSON_PATHS = new Set(["/api/contacts/bulk"]);
 
@@ -95,25 +85,27 @@ export function buildProductionCsp(
   return buildContentSecurityPolicy({ origins });
 }
 
-// Morgan's `:url` token is `req.originalUrl`, query string included, and both
-// formats this app uses carry it. The query string holds invitation secrets,
-// palette searches and pasted URLs, so the access log writes the path alone.
-// Overriding the built-in token covers every format rather than one of them.
+// Morgan's `:url` is `req.originalUrl`, query string included, and the query
+// string holds invitation secrets, palette searches and pasted URLs. Overriding
+// the token makes every format log the path alone.
 morgan.token("url", (req) =>
   redactUrlForLog((req as express.Request).originalUrl),
 );
 
+/**
+ * Build the API application: every middleware and router. The caller adds
+ * SPA handling, then `finalizeApp` adds the error handler.
+ */
 export function createApp(options: CreateAppOptions = {}): express.Express {
   validatePublicUrl(process.env.PUBLIC_URL);
   const app = express();
   app.disable("x-powered-by");
 
-  // Express believes X-Forwarded-For, -Proto and -Host only from the hops it
-  // is told to trust, and TRUST_PROXY_HOPS says how many proxies sit in front
-  // (0 by default, see trustProxy.ts). Behind a proxy it is what makes rate
-  // limits and the audit log see the real client, and what marks the session
-  // cookie Secure when the original request was HTTPS. Set first, because
-  // everything below may read req.ip or req.secure.
+  // Express trusts X-Forwarded-For, -Proto and -Host only from the hops it is
+  // told to trust: TRUST_PROXY_HOPS proxies (0 by default, see trustProxy.ts).
+  // Behind a proxy it makes rate limits and the audit log see the real client,
+  // and marks the session cookie Secure when the original request was HTTPS.
+  // Set first, because everything below may read req.ip or req.secure.
   const hops = trustProxyHops();
   app.set("trust proxy", hops > 0 ? hops : false);
 
@@ -127,8 +119,8 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   });
 
   app.use((req, res, next) => {
-    // nosniff was previously set on /uploads alone; every response deserves
-    // it. DENY matches the CSP's frame-ancestors for older browsers.
+    // nosniff on every response. DENY matches the CSP's frame-ancestors for
+    // older browsers.
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Frame-Options", "DENY");
     res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
@@ -140,24 +132,23 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     next();
   });
 
-  // Brotli or gzip, before every middleware that can answer: the rate limits
-  // (429), the health check, the auth gate (401), the uploads, the routers,
-  // the error handler, and the Vite or dist handlers that server.ts adds
-  // after this function returns. A response that starts before this line
-  // goes out uncompressed. The two middlewares above only set headers, and
-  // the filter reads the headers when the response starts, so their place
-  // relative to this one does not matter. The rules are in compression.ts.
+  // Brotli or gzip, before every middleware that can answer (rate limits,
+  // health check, auth gate, uploads, routers, error handler, and the Vite or
+  // dist handlers server.ts adds later); a response that starts before this
+  // line goes out uncompressed. The two middlewares above only set headers,
+  // which the filter reads when the response starts. The rules are in
+  // compression.ts.
   app.use(compressResponses);
 
   // The account that owns the data while nobody signs in. The baseline
-  // migration makes it, and this keeps it after a test empties the users.
-  // Here rather than in server.ts, so tests that build the app get it too.
+  // migration makes it, and this keeps it after a test empties the users, here
+  // so tests that build the app get it too.
   ensureLocalOwner();
 
-  // Auth-off mode is valid only while the local owner is the only account.
-  // With a real account present there is no answer to "who is the caller with
-  // no credential", so the server enforces auth and says so, rather than
-  // quietly attributing that caller's writes to somebody.
+  // Auth-off mode is valid only while the local owner is the only account. With
+  // a real account there is no answer to "who is the caller with no
+  // credential", so the server enforces auth and says so, rather than quietly
+  // giving that caller's writes to somebody.
   if (!isAuthRequired() && countPasswordAccounts() > 0) {
     setForcedAuth(true);
     log.error(
@@ -166,15 +157,14 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     );
   }
 
-  // CORS is off by default: the SPA is same-origin (Vite runs as middleware
-  // in this process). Set CORS_ORIGIN to opt in for a browser-based external
-  // tool.
+  // CORS is off by default: the SPA is same-origin. Set CORS_ORIGIN to allow a
+  // browser-based external tool.
   if (process.env.CORS_ORIGIN) {
     app.use(cors({ origin: process.env.CORS_ORIGIN }));
   }
-  // The parser must be chosen BEFORE parsing starts — a global 50 MB parser
-  // with a stricter one nested in the route never runs the strict one,
-  // because the body is already consumed by the time routing happens.
+  // The parser is chosen before parsing starts: a global 50 MB parser with a
+  // stricter one in the route would consume the body before the strict one
+  // runs.
   const defaultJson = express.json({ limit: "1mb" });
   const importJson = express.json({ limit: "50mb" });
   app.use((req, res, next) =>
@@ -211,32 +201,29 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   // Docker's HEALTHCHECK holds no credential.
   app.use(healthRouter);
 
-  // While sign-in is off, answer only the names a web page cannot own, so a
-  // DNS rebinding page cannot act as the owner (hostGuard.ts). After the
-  // health check, which a probe reaches by any name.
+  // While sign-in is off, answer only the names a web page cannot own, so a DNS
+  // rebinding page cannot act as the owner (hostGuard.ts). After the health
+  // check, which a probe reaches by any name.
   app.use(hostGuard);
 
-  // Identify the caller before anything else looks at the request. Never
-  // rejects — it only decides *who* is asking, which the auth routes need to
-  // know even for callers that are nobody.
+  // Identify the caller before anything else reads the request. Never rejects:
+  // the auth routes need to know who is asking even when it is nobody.
   app.use(attachPrincipal);
 
-  // A write that the session cookie signs must come from this server's own
-  // pages. SameSite=Strict lets a sibling subdomain's page send the cookie,
-  // so this checks Origin and Sec-Fetch-Site (auth.ts). Before every router
-  // that writes, the auth router included.
+  // A write the session cookie signs must come from this server's own pages.
+  // SameSite=Strict lets a sibling subdomain's page send the cookie, so this
+  // checks Origin and Sec-Fetch-Site (auth.ts), before every router that
+  // writes, the auth router included.
   app.use(["/api", "/uploads"], refuseCrossSiteWrites);
 
   // Carry who is asking through the async call tree, so an insert can stamp
-  // ownerId without threading a parameter through every signature. Mounted
-  // after attachPrincipal because it reads req.principal. Attribution only:
+  // ownerId. After attachPrincipal, which sets req.principal. Attribution only:
   // reads and writes of owned data take an explicit Scope.
   app.use(attachRequestContext);
 
-  // The second AI limiter, per account rather than per address. It has to be
-  // here rather than beside the first one: it reads req.principal, which the
-  // two middlewares above are what set. One person on a shared office address
-  // can no longer spend everybody's provider budget.
+  // The second AI limiter, per account rather than per address, so one person
+  // on a shared office address cannot spend everybody's provider budget. Here
+  // because it reads req.principal, which the two middlewares above set.
   if (!options.disableRateLimit) {
     app.use(aiUserRateLimit);
   }
@@ -244,10 +231,9 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   // Refuse AI requests when the caller has switched AI off for their account.
   app.use(requireAiAllowed);
 
-  // Nothing under these four prefixes may be stored by a browser or by a
-  // proxy. Mounted before the routers so it applies to every response they
-  // produce, including the errors. `cacheControl.ts` says why each prefix is
-  // on the list.
+  // Nothing under these prefixes may be stored by a browser or proxy. Before
+  // the routers, so it covers every response, errors included.
+  // `cacheControl.ts` says why each prefix is listed.
   app.use([...NO_STORE_PREFIXES], noStore);
 
   // A read-only token reads, and talks to the MCP server. Mounted before the
@@ -255,16 +241,16 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   // are covered too.
   app.use(["/api", "/uploads"], guardReadOnlyToken);
 
-  // Auth endpoints must stay reachable pre-auth (status, setup, login);
-  // everything mounted after requireAuth — uploads and all other /api routes —
-  // is gated when sign-in is required.
+  // The auth endpoints stay reachable before sign-in (status, setup, login).
+  // Everything mounted after requireAuth, uploads and all other /api routes, is
+  // gated when sign-in is required.
   app.use("/api/auth", authRouter);
   app.use(["/api", "/uploads"], requireAuth);
 
   // An account whose password an admin chose reaches its own settings and
-  // nothing else. Mounted after the credential gate, because the flag lives on
-  // the principal that gate insists on. /api/auth/* is exempt, which is what
-  // makes the password change itself reachable.
+  // nothing else. After the credential gate, because the flag lives on the
+  // principal it requires. /api/auth/* is exempt, so the password change itself
+  // is reachable.
   app.use(["/api", "/uploads"], requirePasswordCurrent);
 
   const uploadDir = UPLOADS_DIR;
@@ -276,15 +262,13 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     "/uploads",
     express.static(uploadDir, {
       setHeaders: (res, filePath) => {
-        // Uploads are user-supplied content served from the app origin.
-        // Never let the browser sniff a different content type, and force
-        // non-image files (.eml, .txt, .pdf, legacy uploads) to download
-        // instead of rendering — a stored .html/.svg would otherwise run
-        // as same-origin script.
+        // Uploads are user content served from the app origin: no content
+        // sniffing, and non-image files (.eml, .txt, .pdf, older uploads)
+        // download instead of rendering, or a stored .html or .svg would run as
+        // same-origin script.
         res.setHeader("X-Content-Type-Options", "nosniff");
-        // `private`, because express.static's default `public` invites a
-        // shared cache to keep one account's attachment and serve it to
-        // whoever asks for that URL next.
+        // `private`: express.static's default `public` lets a shared cache
+        // serve one account's attachment to whoever asks for that URL next.
         res.setHeader("Cache-Control", UPLOAD_CACHE_CONTROL);
         const ext = path.extname(filePath).toLowerCase();
         if (!INLINE_UPLOAD_EXTENSIONS.has(ext)) {
@@ -297,20 +281,16 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   // account's file, rather than falling through to the app's index.html.
   app.use("/uploads", (_req, _res, next) => next(new NotFoundError("File")));
 
-  // Every feature's routers, in the order of server/modules/index.ts.
-  // Express matches in mount order, so that list's order is part of the
-  // behavior: the mcp module mounts before the contacts module. The admin
-  // module comes first, and every route in it carries requireAdmin itself, so
-  // that the manifest test can see the guard in each route's stack.
+  // Every feature's routers, in the order of server/modules/index.ts. Express
+  // matches in mount order, so that order is behavior: the mcp module mounts
+  // before the contacts module. The admin module comes first, and each of its
+  // routes carries requireAdmin itself, so the manifest test sees the guard.
   mountModules(app);
 
-  // ── Cache diagnostics (dev only) ─────────────────────────────────────────
-  // Exposes hit/miss counters and entry counts for all aiCache tiers.
-  // Useful for debugging: curl http://localhost:3210/api/debug/cache-stats
-  //
-  // Registered here rather than in server.ts so the route manifest test can
-  // see it. A supertest app calls createApp() and never runs server.ts, so a
-  // route registered there is invisible to the manifest. Same NODE_ENV guard.
+  // Cache counters for every aiCache tier, in development only (curl
+  // http://localhost:3210/api/debug/cache-stats). Registered here, not in
+  // server.ts, so the route manifest test, which builds createApp() without
+  // server.ts, can see it.
   if (process.env.NODE_ENV !== "production") {
     // The counters describe one in-process cache shared by everybody on the
     // instance, so this is an operator's view even in development.
@@ -323,9 +303,8 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
 }
 
 /**
- * Finalize the API pipeline: 404 catch-all for unknown /api/* paths and the
- * centralized error handler. server.ts inserts Vite/static SPA handling
- * before calling this; tests call it immediately after createApp().
+ * Finalize the API pipeline with the error handler. server.ts adds the Vite or
+ * static SPA handling first; tests call this right after createApp().
  */
 export function finalizeApp(app: express.Express): express.Express {
   app.use(errorHandler);

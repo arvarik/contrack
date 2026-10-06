@@ -1,23 +1,15 @@
-// =============================================================================
-// AI Search — Merge Engine
-// =============================================================================
-// Applies AI Search results to the database using a strictly additive strategy.
-// Never overwrites existing user data. All mutations are wrapped in a single
-// SQLite transaction for atomicity.
+// Applies research results to the database, additively: existing user data is
+// never overwritten, and every write is in one SQLite transaction.
 //
-// Design decisions:
-// - Direct SQL UPDATE for scalars (avoids 12 unnecessary hydration queries)
-// - Field name allowlist guard (defense-in-depth against SQL injection)
-// - Deduplication logic per child table (see table below)
-// - Always stamps aiHydratedAt, even if no new data was found
+// - Scalars are a direct SQL UPDATE, with no hydration queries.
+// - An allow list guards the field names that reach SQL.
+// - Each child table has its own dedupe rules (below).
+// - `aiHydratedAt` is stamped even when nothing new was found.
 // - Every run is recorded in `aiResearch`: what it added, field by field, the
-//   facts it reported and the pages it cited (shared/researchRecord.ts)
-// - Invalidates semantic search cache after merge
+//   facts it reported and the pages it cited (shared/researchRecord.ts).
+// - The owner's search caches are invalidated after a merge.
 //
-// PERF: FTS triggers fire per-row within the transaction. This is acceptable
-// for V1 (~0.1ms per trigger fire with prepared statements). The transaction
-// reduces WAL sync overhead but does not collapse trigger count.
-// =============================================================================
+// FTS triggers fire per row inside the transaction, about 0.1 ms each.
 
 import crypto from "node:crypto";
 import { sqlite } from "../../db.ts";
@@ -68,13 +60,8 @@ import {
 } from "../../../shared/researchRecord.ts";
 import type { ResearchDepth } from "../../../shared/researchDepth.ts";
 
-// =============================================================================
-// Allowed Scalar Fields
-// =============================================================================
-// SECURITY: Only these field names may be interpolated into SQL SET clauses.
-// This is a defense-in-depth guard — even though the Zod schema already
-// constrains the input, this prevents regressions if the schema is loosened.
-// =============================================================================
+// SECURITY: only these field names may be interpolated into SQL SET clauses.
+// The Zod schema already limits the input; this holds if it is ever loosened.
 
 const ALLOWED_SCALAR_FIELDS = new Set([
   "role",
@@ -126,9 +113,7 @@ function yearsClose(a?: string | null, b?: string | null): boolean {
   return Math.abs(Number(a.slice(0, 4)) - Number(b.slice(0, 4))) <= 1;
 }
 
-// =============================================================================
 // Research history
-// =============================================================================
 
 /** What a strategy says about the research behind its data. */
 export interface ResearchProvenance {
@@ -149,12 +134,9 @@ export interface ResearchProvenance {
 }
 
 /**
- * This contact's research so far, or null before any.
- *
- * A contact enriched before the record existed has `aiHydratedAt` and no
- * record. It counts as one earlier run whose details were not kept, so the
- * next enrichment is told it is a second round, and the dossier's history
- * says the earlier one happened.
+ * This contact's research so far, or null before any. A contact with
+ * `aiHydratedAt` and no record counts as one earlier run whose details were not
+ * kept, so the next enrichment is told it is a second round.
  */
 export function researchHistory(
   contact: Pick<HydratedContact, "aiResearch" | "aiHydratedAt">,
@@ -180,12 +162,10 @@ export function researchHistory(
 }
 
 /**
- * The record with this run added.
- *
- * Sources merge by address and keep the time a run first cited them. Only
- * the latest runs keep their fact lines, because the record travels with
- * the contact on every read. The entries the run added join the earlier
- * runs' entries, and the oldest drop off past `MAX_ADDED_ENTRIES`.
+ * The record with this run added. Sources merge by address and keep the time a
+ * run first cited them. Only the latest runs keep their fact lines, because the
+ * record travels with the contact on every read. The run's added entries join
+ * the earlier ones, and the oldest drop off past `MAX_ADDED_ENTRIES`.
  */
 function recordRun(
   history: ResearchRecord | null,
@@ -258,9 +238,7 @@ function addedEntry(
   };
 }
 
-// =============================================================================
-// Merge Function
-// =============================================================================
+// Merge
 
 /**
  * Merge one research result into a contact, and record the run.
@@ -328,10 +306,9 @@ export function mergeSearchResult(
       }),
     });
   }
-  // What earlier runs added. An entry among them that the contact still has
-  // is filtered below as a saved one. The rest the person removed, and
-  // research does not add them back: a school deleted as someone else's
-  // came back at the next Enrich again.
+  // What earlier runs added. An entry the contact still has is filtered below
+  // as a saved one. The rest the person removed, and research does not add them
+  // back, so a school deleted as someone else's stays gone.
   const history = researchHistory(existing);
   const before = (field: string) =>
     (history?.addedEntries ?? []).filter((entry) => entry.field === field);
@@ -382,7 +359,7 @@ export function mergeSearchResult(
   // 2. Array fields — build child payload, filtering out duplicates
   const childData: ChildRecordsPayload = {};
 
-  // ── Emails: deduplicate by email (case-insensitive) ──────────────
+  // Emails: deduplicate by email (case-insensitive)
   if (Array.isArray(searchResult.emails) && searchResult.emails.length > 0) {
     // Saved, or added before and removed.
     const skip = new Set(
@@ -396,7 +373,7 @@ export function mergeSearchResult(
     );
   }
 
-  // ── Phones: deduplicate by phone (normalized — digits only) ──────
+  // Phones: deduplicate by phone (normalized — digits only)
   if (Array.isArray(searchResult.phones) && searchResult.phones.length > 0) {
     const normalize = (p: string) => p.replace(/\D/g, "");
     const skip = new Set(
@@ -410,13 +387,11 @@ export function mergeSearchResult(
     );
   }
 
-  // ── Social Links: deduplicate by URL (normalized) ────────────────
-  // A person has one LinkedIn profile. When the contact has one, from an
-  // import or by hand, a researched profile under another handle is someone
-  // else with the same name: a second round added one to a contact imported
-  // from LinkedIn (2026-09-26). The same handle at another address, such as
+  // Social links, deduplicated by normalized URL. A person has one LinkedIn
+  // profile: when the contact has one, a researched profile under another
+  // handle is a namesake. The same handle at another address, such as
   // "uk.linkedin.com", is the profile the contact has. With none saved, the
-  // first researched profile is kept and any other one dropped.
+  // first researched profile is kept and any other dropped.
   if (
     Array.isArray(searchResult.socialLinks) &&
     searchResult.socialLinks.length > 0
@@ -444,15 +419,13 @@ export function mergeSearchResult(
     });
   }
 
-  // ── Education: one school and one degree, however a page writes them ──
-  // A second round found "The University of Example", "AB", 2017, for the
-  // "University of Example" "BA" of 2013 to 2017, and a school's short name
-  // for its long one (2026-09-26). It also wrote "Harbor School of
-  // Engineering at Example University" for a saved "Example University"
-  // (2026-10-05): a school is one however a page names its
-  // parts (`sameSchool`). A degree missing on either side matches any: a
-  // roster names the school, a profile the degree. End years more than a
-  // year apart are two entries.
+  // Education: one school and one degree, however a page writes them. "The
+  // University of Example" "AB" of 2017 is the saved "University of Example"
+  // "BA" of 2013 to 2017, a short name is its long one, and "Harbor School of
+  // Engineering at Example University" is a saved "Example University"
+  // (`sameSchool`). A degree missing on either side matches any: a roster names
+  // the school, a profile the degree. End years more than a year apart are two
+  // entries.
   if (
     Array.isArray(searchResult.education) &&
     searchResult.education.length > 0
@@ -479,27 +452,22 @@ export function mergeSearchResult(
     childData.education = kept;
   }
 
-  // ── Experience: deduplicate by company + role (+ startDate year when available)
-  // When the AI returns an entry without a startDate, we match by company+role
-  // only. This prevents duplicates like "COO at Robotics Inc" being inserted
-  // twice when the AI doesn't know the start date but the DB does.
+  // Experience, deduplicated by company and role, and the start year when both
+  // have one, so an entry without a start date does not duplicate one with.
   if (
     Array.isArray(searchResult.experience) &&
     searchResult.experience.length > 0
   ) {
     const getYear = (d?: string | null) => (d ? d.slice(0, 4) : "");
     // One employer however it is written ("Kestrel" and "Kestrel Securities
-    // International, Inc."), and either the same start month, however the
-    // title is worded, or one title worded two ways ("Editor, Writer" and
-    // "Editor and Writer": every word of one in the other, and no rank
-    // between them, `sameTitle`) with the same start year when both sides
-    // have one. A second round
-    // wrote "Associate" for a saved "Associate, Restructuring Group" that
-    // started the same month (2026-09-26), and of 2,646 simulated second
-    // rounds, 0.66 a round added a reworded title again (2026-10-05).
-    // "Research Assistant" and "Teaching Assistant" stay two, and so do
-    // "Analyst" and "Senior Analyst", and two titles with different start
-    // years.
+    // International, Inc."), and either the same start month, however the title
+    // is worded ("Associate" for a saved "Associate, Restructuring Group"), or
+    // one title worded two ways ("Editor, Writer" and "Editor and Writer":
+    // every word of one in the other and no rank between them, `sameTitle`)
+    // with the same start year when both have one. In 2,646 simulated second
+    // rounds, 0.66 a round added a reworded title. "Research Assistant" and
+    // "Teaching Assistant" stay two, as do "Analyst" and "Senior Analyst", and
+    // two titles with different start years.
     const month = (d?: string | null) =>
       d && d.length >= 7 ? d.slice(0, 7) : "";
     const sameJob = (a: JobEntry, b: JobEntry) =>
@@ -551,15 +519,14 @@ export function mergeSearchResult(
     childData.tags = kept.map((tag) => ({ tag }));
   }
 
-  // ── Interests: upsert via ON CONFLICT (handled by insertChildRecords) ──
-  // Force isAiGenerated: true — all interests from AI Search are AI-generated
-  // by definition. Don't rely on the LLM to set this flag correctly.
+  // Interests, upserted by insertChildRecords. Always `isAiGenerated`: every
+  // interest from research is, whatever the model says.
   if (
     Array.isArray(searchResult.interests) &&
     searchResult.interests.length > 0
   ) {
-    // One interest however it is worded: a second round wrote "Distance
-    // running coach" for "Distance running" (2026-09-26).
+    // One interest however it is worded: "Distance running coach" is "Distance
+    // running".
     const removed = before("interests").map((e) => e.value);
     const kept: string[] = [];
     for (const { interest } of searchResult.interests) {
@@ -578,14 +545,11 @@ export function mergeSearchResult(
     }));
   }
 
-  // ── Attributes: one entry per kind, and research's own kind gains items ──
-  // An attribute holds a list of one kind ("Publications": "A; B"). A
-  // second round used to skip a kind the contact had, list and all: 2.1 new
-  // items a round were lost (2026-10-05). Now a kind an earlier run added
-  // gains the items it lacks, each once (`sameItem`), through the upsert in
-  // insertChildRecords. A kind the person wrote is theirs, and stays as it
-  // is. A kind or an item research added and the person removed is not
-  // added back.
+  // Attributes: one entry per kind ("Publications": "A; B"). A kind an earlier
+  // run added gains the items it lacks, each once (`sameItem`), through the
+  // upsert in insertChildRecords; skipping the kind lost 2.1 new items a round.
+  // A kind the person wrote is theirs and stays as it is. A kind or an item
+  // research added and the person removed is not added back.
   const appendedItems = new Map<string, string[]>();
   if (
     Array.isArray(searchResult.attributes) &&
@@ -644,7 +608,7 @@ export function mergeSearchResult(
     childData.attributes = kept;
   }
 
-  // ── Addresses: deduplicate by address string (case-insensitive) ──
+  // Addresses: deduplicate by address string (case-insensitive)
   if (
     Array.isArray(searchResult.addresses) &&
     searchResult.addresses.length > 0
@@ -788,9 +752,8 @@ export function mergeSearchResult(
   });
   txn();
 
-  // Invalidate this owner's cached search work so the new data is searchable.
-  // It used to flush the whole rerank tier, so one account's research made
-  // every other account on the instance pay for a fresh search.
+  // Drop this owner's cached search work so the new data is searchable, without
+  // costing other accounts a fresh search.
   aiCache.invalidateForOwner("rerank", scope.ownerId);
   aiCache.invalidateForOwner("synthesis", scope.ownerId);
   aiCache.invalidate("briefing", ownerKey(scope, contactId));
@@ -804,9 +767,7 @@ export function mergeSearchResult(
   return fieldsUpdated;
 }
 
-// =============================================================================
 // Not this person
-// =============================================================================
 
 /** The child tables a run's entries can live in, by field. */
 const ENTRY_TABLES: Record<string, string> = {
@@ -887,19 +848,18 @@ function rowsFor(
  * Take back what one research run added, because it found someone else.
  *
  * Every entry the run added that the contact still has as research wrote it
- * goes: a row or a field the person edited since reads differently and
- * stays, and so does anything they added themselves. The run is marked
- * `rejected`, its fact lines go, and its pages move to `rejectedSources`,
- * which later runs leave out with the passages they back. The run's entries
- * stay in the record, so research never adds them back.
+ * goes. A row or field the person edited since stays, as does anything they
+ * added. The run is marked `rejected`, its fact lines go, and its pages move to
+ * `rejectedSources`, which later runs leave out with the passages they back.
+ * The run's entries stay in the record, so research never adds them back.
  *
  * @param scope - The account that owns the contact.
  * @param contactId - The contact researched.
  * @param runAt - The run, by its `at`.
  * @returns How many fields, entries and list items were taken back.
  * @throws AppError 404 when the contact has no such run, or it was marked
- *   already. 409 while research runs for the contact, or for a run from
- *   before entries named their run (`RESEARCH_RUN_UNTRACKED`).
+ *   already. 409 while research runs for the contact, or for a run from before
+ *   entries named their run (`RESEARCH_RUN_UNTRACKED`).
  */
 export function rejectResearchRun(
   scope: Scope,
@@ -962,10 +922,10 @@ export function rejectResearchRun(
           );
         continue;
       }
-      // A field is cleared only while it holds exactly what the run wrote.
-      // An About the person added to still starts the same, and cutting it
-      // cleared their words too. An entry from before the hash was kept
-      // matches only a value short enough to be whole in `value`.
+      // A field is cleared only while it holds exactly what the run wrote: an
+      // About the person added to still starts the same, and cutting it would
+      // clear their words too. An entry without the hash matches only a value
+      // short enough to be whole in `value`.
       const value = contact[entry.field as keyof HydratedContact];
       if (
         (RESEARCH_SCALARS as readonly string[]).includes(entry.field) &&

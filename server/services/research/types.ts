@@ -1,6 +1,3 @@
-// =============================================================================
-// Research — the request, the result, and the two ports
-// =============================================================================
 // A research run takes one ResearchRequest and gives one ResearchResult. Two
 // ports keep the run apart from what it searches with:
 //
@@ -8,9 +5,8 @@
 //              search whose pages a model reads, or both. It returns evidence,
 //              never contact fields.
 //   WebSearch  a search service that answers a query with results, such as
-//              SearXNG. A technique that searches the web itself uses the one
-//              the request chose.
-// =============================================================================
+//              SearXNG. A technique that searches the web uses the one the
+//              request chose.
 
 import type { HydratedContact } from "../../repositories/types.ts";
 import type { Scope } from "../../tenancy/scope.ts";

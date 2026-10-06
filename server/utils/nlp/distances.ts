@@ -1,16 +1,11 @@
-// =============================================================================
 // Levenshtein & Jaro-Winkler Distances
-// =============================================================================
 
 /**
- * Optimal String Alignment (restricted Damerau-Levenshtein) distance.
- * Computes the minimum number of insertions, deletions, substitutions,
- * and adjacent character transpositions.
- *
- * The recurrence reads only the two rows before the current one, so three
- * rows are kept instead of the whole table. Name search scores a few
- * hundred candidates per keystroke, and allocating a table per pair was
- * most of that time.
+ * Optimal String Alignment (restricted Damerau-Levenshtein) distance: the
+ * fewest insertions, deletions, substitutions and adjacent transpositions. The
+ * recurrence reads only the two rows before the current one, so three rows are
+ * kept instead of a table per pair, which was most of the time name search
+ * spends scoring a few hundred candidates per keystroke.
  */
 export function damerauLevenshtein(a: string, b: string): number {
   if (a === b) return 0;
@@ -47,8 +42,8 @@ export function damerauLevenshtein(a: string, b: string): number {
 }
 
 /**
- * Jaro-Winkler similarity (0→1). Designed specifically for short strings like
- * personal names. Rewards matching prefixes, handles transpositions well.
+ * Jaro-Winkler similarity (0 to 1), made for short strings like names. It
+ * rewards a matching prefix and handles transpositions well.
  */
 export function jaroWinkler(a: string, b: string): number {
   if (a === b) return 1;

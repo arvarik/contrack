@@ -4,12 +4,10 @@ import { scopeOf, type Scope } from "../tenancy/scope.ts";
 import type { Request, Response, NextFunction } from "express";
 
 /**
- * Require a saved contact the scope owns, which is neither trashed nor merged.
- * Archived contacts remain editable.
- *
- * The owner and the id are in one statement, so a foreign id is a miss rather
- * than a row that is read and then rejected. The 404 carries no id and no
- * reason: "not yours" and "does not exist" must look the same from outside.
+ * Require a saved contact the scope owns that is neither trashed nor merged;
+ * archived contacts stay editable. The owner and the id are in one statement,
+ * so a foreign id is a miss, never a row read and then rejected. The 404
+ * carries no id and no reason: "not yours" and "does not exist" look alike.
  */
 export function assertOwnedContact(scope: Scope, id: string): void {
   if (

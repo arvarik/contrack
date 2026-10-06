@@ -1,11 +1,7 @@
 import { z } from "zod";
 import { AppError } from "../../utils/AppError.ts";
-// =============================================================================
-// AI Services — Relationship Intelligence (briefings, email digests, insights)
-// =============================================================================
-// Extracted verbatim from aiService.ts in the domain split; the barrel there
-// re-exports this module, so import sites are unchanged.
-// =============================================================================
+// Relationship intelligence: briefings, email digests and insights.
+// aiService.ts re-exports it.
 
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
@@ -15,8 +11,8 @@ import { generateFor } from "../gateway.ts";
 import { isMockMode, safeParseJson } from "./shared.ts";
 
 /**
- * Feeds a contact profile and their last N interactions into the AI to
- * generate an executive 3-bullet briefing. Enforces JSON array response.
+ * A three-bullet briefing from a contact's profile and last interactions, as a
+ * JSON array.
  */
 export async function generateCatchMeUpBriefing(
   contact: Record<string, unknown>,
@@ -93,8 +89,8 @@ You are an elite executive assistant preparing a meeting brief.
 }
 
 /**
- * Parses raw .eml strings into highly actionable, formatted HTML thread summaries.
- * Designed to strip Apple Mail export jargon organically.
+ * Summarize a raw .eml into a formatted HTML thread summary, without Apple Mail
+ * export noise.
  */
 export async function summarizeEmlEmail(rawEml: string): Promise<string> {
   if (isMockMode())
@@ -152,8 +148,7 @@ export interface DailyInsight {
 }
 
 /**
- * Generates a single actionable insight about the user's CRM network.
- * Falls back gracefully to null if no API key is provided.
+ * One actionable insight about the user's network, or null without an API key.
  */
 export async function generateDailyInsight(
   stats: {

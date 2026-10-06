@@ -1,13 +1,8 @@
-// =============================================================================
-// Routes — Tags: manage tag vocabulary across an account's contacts
-// =============================================================================
-// Mounted in server/app.ts at /api.
-//   GET    /api/tags/summary   tag vocabulary with contact counts
-//   PATCH  /api/tags/:tag      rename or merge tag
-//   DELETE /api/tags/:tag      delete tag from all contacts
-//
-// GET /api/tags remains on mcpRouter answering a plain string[] array for MCP.
-// =============================================================================
+// The tag vocabulary across an account's contacts, at /api:
+//   GET    /api/tags/summary   tags with contact counts
+//   PATCH  /api/tags/:tag      rename or merge a tag
+//   DELETE /api/tags/:tag      delete a tag from all contacts
+// GET /api/tags, on mcpRouter, answers a plain string[] for MCP.
 
 import { Router } from "express";
 import { asyncHandler } from "../utils/asyncHandler.ts";

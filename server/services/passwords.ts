@@ -1,24 +1,17 @@
-// =============================================================================
-// Password hashing — scrypt, with the cost parameters carried in the hash
-// =============================================================================
-// scrypt rather than argon2id, which is the stronger recommendation, because
-// argon2 means a native module. This app already pays for one (better-sqlite3)
-// and every extra native dependency is another thing that can fail to build on
+// Password hashing: scrypt, with the cost carried in the hash. Not argon2id,
+// the stronger choice, because argon2 is a native module, and every native
+// dependency beyond better-sqlite3 is one more thing that can fail to build on
 // somebody's NAS. scrypt is memory-hard, ships in node:crypto, and is on
-// OWASP's list of acceptable choices — the right trade for self-hosted.
-//
-// The stored string is self-describing:
+// OWASP's list of acceptable choices. The stored string describes itself:
 //
 //     scrypt$16384$8$1$<salt-b64>$<hash-b64>
 //            └─N─┘ │ │
 //                  r p
 //
-// Parameters travel WITH the hash rather than living in a constant, which is
-// the whole point: raising the cost later does not invalidate anyone's
-// password. Verification uses whatever the stored string says, and
-// `needsRehash` reports when a hash was made with weaker settings than the
-// current ones so the caller can quietly upgrade it on next sign-in.
-// =============================================================================
+// The parameters travel with the hash, so raising the cost later invalidates no
+// password: verification uses what the stored string says, and `needsRehash`
+// reports a hash made with weaker settings, so the caller can upgrade it at the
+// next sign-in.
 
 import crypto from "crypto";
 import { promisify } from "util";
@@ -31,22 +24,19 @@ const scrypt = promisify(crypto.scrypt) as (
 ) => Promise<Buffer>;
 
 /**
- * Current cost parameters.
- *
- * N=2^16 with r=8 costs ~64 MB and ~100 ms per hash on a modern laptop. That
- * is deliberately slow — it is the entire defense against someone who has
- * stolen the database file and is grinding the hash offline. It also bounds
- * online guessing to roughly ten attempts a second per core, on top of the
- * rate limiter in front of the login route.
+ * Current cost parameters. N=2^16 with r=8 costs about 64 MB and 100 ms per
+ * hash on a modern laptop, slow on purpose: it is the whole defense against
+ * somebody grinding a stolen database offline. It also bounds online guessing
+ * to about ten attempts a second per core, beside the login rate limiter.
  */
 const PARAMS = { N: 65536, r: 8, p: 1 } as const;
 const KEY_LENGTH = 64;
 const SALT_LENGTH = 16;
 
 /**
- * scrypt needs `maxmem` above 128 * N * r or it refuses to run; the Node
- * default is 32 MB, well under what these parameters ask for. The factor of
- * two is headroom for the p>1 case if the parameters are ever raised.
+ * scrypt refuses to run unless `maxmem` exceeds 128 * N * r, and Node's default
+ * of 32 MB is well under these parameters. The factor of two is headroom for
+ * p>1 should the parameters rise.
  */
 function maxmemFor(N: number, r: number): number {
   return 256 * N * r;
@@ -64,9 +54,8 @@ export const MIN_PASSWORD_LENGTH = 8;
  * @returns a self-describing `scrypt$N$r$p$salt$hash` string
  */
 export async function hashPassword(password: string): Promise<string> {
-  // Unbounded input is a denial-of-service vector on a deliberately expensive
-  // function: scrypt's cost is dominated by N and r, but hashing a 100 MB
-  // "password" still means moving 100 MB through it.
+  // Unbounded input is a denial of service on a deliberately slow function: a
+  // 100 MB "password" still moves 100 MB through scrypt.
   if (password.length > MAX_PASSWORD_LENGTH) {
     throw new Error(
       `Password exceeds the maximum of ${MAX_PASSWORD_LENGTH} characters`,
@@ -84,11 +73,9 @@ export async function hashPassword(password: string): Promise<string> {
 }
 
 /**
- * Check a password against a stored hash.
- *
- * Returns false rather than throwing for a malformed or unknown-algorithm
- * hash: a corrupted row should read as "wrong password", not crash the login
- * route and tell an attacker they found something interesting.
+ * Check a password against a stored hash. False, not a throw, for a malformed
+ * or unknown-algorithm hash: a corrupted row reads as "wrong password" rather
+ * than crashing the login route and telling an attacker they found something.
  */
 export async function verifyPassword(
   password: string,
@@ -119,8 +106,8 @@ export async function verifyPassword(
 }
 
 /**
- * True when `stored` was produced with weaker parameters than the current
- * ones, so the caller should re-hash after a successful verify.
+ * True when `stored` used weaker parameters than the current ones, so the
+ * caller should re-hash after a successful verify.
  */
 export function needsRehash(stored: string): boolean {
   const parsed = parseHash(stored);
@@ -129,12 +116,9 @@ export function needsRehash(stored: string): boolean {
 }
 
 /**
- * Unicode-normalize before hashing.
- *
- * The same password typed on two keyboards can arrive as different byte
- * sequences — an accented character composed as one code point on macOS and
- * two on Linux. NFKC folds those together so a password set on one machine
- * still verifies on another.
+ * Unicode-normalize before hashing: one password typed on two keyboards can
+ * arrive as different bytes (an accented letter as one code point on macOS and
+ * two on Linux), and NFKC folds them together.
  */
 function normalize(password: string): string {
   return password.normalize("NFKC");
@@ -158,9 +142,8 @@ function parseHash(stored: string): ParsedHash | null {
   const N = Number(rawN);
   const r = Number(rawR);
   const p = Number(rawP);
-  // N must be a power of two greater than one, which is scrypt's own
-  // constraint; the rest is basic sanity so a corrupted row cannot ask for
-  // gigabytes of memory.
+  // N must be a power of two above one (scrypt's own rule); the rest is sanity,
+  // so a corrupted row cannot ask for gigabytes of memory.
   if (!Number.isInteger(N) || N < 2 || (N & (N - 1)) !== 0) return null;
   if (!Number.isInteger(r) || r < 1 || r > 64) return null;
   if (!Number.isInteger(p) || p < 1 || p > 16) return null;
@@ -180,12 +163,9 @@ function parseHash(stored: string): ParsedHash | null {
 }
 
 /**
- * Reject passwords that are too short or made entirely of whitespace.
- *
- * Deliberately not a composition rule ("one uppercase, one digit, one symbol").
- * Those push people toward `Password1!` and are no longer recommended by NIST;
- * length is what actually helps, and this is a self-hosted app whose owner is
- * the only person affected by their own choice.
+ * Refuse a password that is too short or only whitespace. No composition rule
+ * ("one uppercase, one digit, one symbol"): those push people toward
+ * `Password1!`, NIST no longer recommends them, and length is what helps.
  *
  * @returns an error message, or null when the password is acceptable
  */

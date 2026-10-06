@@ -1,18 +1,10 @@
-// =============================================================================
-// Note text — the plain text of an interaction body
-// =============================================================================
-// The composer stores TipTap HTML. Indexing that HTML directly would put tag
-// names, attribute names and mention ids into the search index, so a query
-// for "span" or "li" would match every formatted note and a snippet would
-// carry markup into the page. This module turns the stored HTML into the text
-// a person reads, once, on the way into the index.
-//
-// The same function is registered on the database connection as the SQL
-// function `contrack_note_text`, which the interactions_fts triggers call.
-// That is what lets one set of triggers cover every write path — the
-// composer, an email import, a merge, a seed script — without each path
-// having to remember to maintain a derived column.
-// =============================================================================
+// The plain text of an interaction body. The composer stores TipTap HTML, and
+// indexing it would put tag names, attributes and mention ids in the index (a
+// search for "span" would match every formatted note) and markup in snippets.
+// So the HTML becomes the text a person reads, once, on the way into the index.
+// The same function is the SQL function `contrack_note_text`, which the
+// interactions_fts triggers call, so one set of triggers covers every write
+// path (the composer, an email import, a merge, a seed script).
 
 /** The longest body the index keeps. Longer notes are indexed up to here. */
 export const NOTE_TEXT_LIMIT = 200_000;
@@ -57,14 +49,11 @@ function decodeEntities(text: string): string {
 }
 
 /**
- * The readable text of a note body.
- *
- * Tags become spaces so that `<p>one</p><p>two</p>` reads "one two" and not
- * "onetwo". Entities are decoded after the tags are gone, so a literal
- * `&lt;b&gt;` in a note stays the text "<b>" a person typed. Control
- * characters are dropped: the search service uses two of them as highlight
- * markers and a note must not be able to forge one. Whitespace collapses to
- * single spaces.
+ * The readable text of a note body. Tags become spaces, so
+ * `<p>one</p><p>two</p>` reads "one two". Entities are decoded after the tags
+ * go, so a typed `&lt;b&gt;` stays the text "<b>". Control characters are
+ * dropped: the search uses two as highlight markers, and a note must not forge
+ * one. Whitespace collapses to single spaces.
  *
  * @param html - The stored body, HTML or plain text. May be null.
  * @returns The plain text, or null when nothing readable is left.

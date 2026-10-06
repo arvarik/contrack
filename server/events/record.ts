@@ -1,16 +1,9 @@
-// =============================================================================
-// recordEvent: one row in `events`, inside the write's own transaction
-// =============================================================================
-// A write path calls this inside the transaction that makes its change, so
-// the change and the record of it commit together or not at all. A crash
-// after the commit loses nothing: the dispatcher reads the row at the next
-// dispatch, or at boot. A rolled-back write leaves no row, so no subscriber
-// ever reacts to a change that did not happen.
-//
-// It refuses to run outside a transaction. A write path that forgot its
-// transaction fails in its tests, rather than recording an event that could
-// outlive a write that failed after it.
-// =============================================================================
+// recordEvent: one row in `events`, inside the write's own transaction, so the
+// change and its record commit together or not at all. A crash after the commit
+// loses nothing: the dispatcher reads the row at the next dispatch, or at boot.
+// A rolled-back write leaves no row, so no subscriber reacts to a change that
+// did not happen. It refuses to run outside a transaction, so a write path that
+// forgot its transaction fails in its tests.
 
 import type Database from "better-sqlite3";
 import { sqlite } from "../db.ts";

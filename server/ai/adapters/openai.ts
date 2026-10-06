@@ -1,20 +1,13 @@
-// =============================================================================
-// AI Layer — Concrete OpenAI Adapter
-// =============================================================================
-// This is the ONLY file in the codebase that imports from `openai`.
-// All OpenAI SDK coupling is contained here. The rest of the AI layer
-// programs against the abstract AIProvider interface.
-//
-// Resiliency (Phase 2 backend refactor):
-// - Per-attempt timeout via AbortSignal, propagated to the SDK call so the
-//   socket is actually torn down (not just abandoned).
-// - Exponential backoff + jitter on transient failures (5xx/429/timeout/
+// The OpenAI adapter, the only file that imports `openai`. The rest of the AI
+// layer programs against AIProvider.
+// - A per-attempt timeout through AbortSignal, passed to the SDK so the socket
+//   is torn down, not abandoned.
+// - Exponential backoff with jitter on transient failures (5xx, 429, timeout,
 //   socket reset).
-// - Tolerant JSON validation when responseFormat === "json", normalized so
-//   the text callers get back always parses.
-// - Caller-cancellation: if the request's AbortSignal aborts, no further
-//   retries are attempted and an AppError(code: CANCELLED) is thrown.
-// =============================================================================
+// - Tolerant JSON validation for `responseFormat === "json"`, normalized so the
+//   text callers get always parses.
+// - When the caller's AbortSignal aborts, nothing more is retried and an
+//   AppError(code: CANCELLED) is thrown.
 
 import OpenAI from "openai";
 import type { AIProvider, ModelInfo, ModelCapability } from "../provider.ts";
@@ -41,9 +34,7 @@ import {
   AI_DEFAULTS,
 } from "../resilience.ts";
 
-// ---------------------------------------------------------------------------
-// Model Class Mapping
-// ---------------------------------------------------------------------------
+// Model classes
 
 // The fallback when discovery has not run. GPT-6 names its tiers Astra (the
 // flagship, $10/$50 per 1M tokens), Sol (the middle, $2/$10) and Luna (the
@@ -59,33 +50,25 @@ const DEFAULT_MODEL_CLASS: ModelClass = "lite";
 
 /**
  * Whether a model can use the Responses API `web_search` tool, which is how
- * this adapter grounds research.
- *
- * OpenAI's list endpoint returns bare ids with no capability metadata at all,
- * so like the chat/embeddings split above this is a name rule — and like that
- * split it is reported with "guessed" confidence. Web search is available on
- * the GPT-4o and later flagship families and the o-series reasoning models;
- * the legacy 3.5 and instruct families cannot use tools this way.
+ * this adapter grounds research. The list endpoint returns bare ids, so this is
+ * a name rule reported with "guessed" confidence: GPT-4o and later flagships
+ * and the o-series take the tool, the 3.5 and instruct families do not.
  */
 function supportsWebSearch(modelId: string): boolean {
   return /^(gpt-4o|gpt-4\.1|gpt-[5-9]|o[3-9])/i.test(modelId);
 }
 
 /**
- * Ids /v1/models lists that a chat call cannot use, or should not.
- *
- * Tested against the live API on 2026-09-26: the codex and `*-chat-latest`
- * aliases answer 404 "deprecated" (shut down in July and August 2026), the
- * `-pro` models and `gpt-live-1` answer "not a chat model", and search,
- * realtime, audio, image and moderation models are other products. Offering
- * any of them in a dropdown produced a pin that failed on its first call.
+ * Ids /v1/models lists that a chat call cannot or should not use: the codex and
+ * `*-chat-latest` aliases answer 404 "deprecated", the `-pro` models and
+ * `gpt-live-1` answer "not a chat model", and search, realtime, audio, image
+ * and moderation models are other products. Offered in a dropdown, any of them
+ * makes a pin that fails on its first call.
  */
 const NOT_FOR_CHAT =
   /whisper|tts|dall-e|sora|moderation|transcribe|realtime|audio|image|codex|chat-latest|^chat-|-pro\b|-pro-|\blive\b|-live|search|instruct|davinci|babbage/i;
 
-// ---------------------------------------------------------------------------
 // Reasoning effort
-// ---------------------------------------------------------------------------
 
 /** The values the API takes, lowest first. */
 const EFFORT_LADDER = [
@@ -155,9 +138,8 @@ function effortCorrection(
   );
 }
 
-// ---------------------------------------------------------------------------
-// Schema Translation — shared translator, OpenAI dialect (nullable→anyOf)
-// ---------------------------------------------------------------------------
+// Schema translation: the shared translator in OpenAI's dialect (nullable as
+// anyOf)
 
 const SCHEMA_DIALECT: TranslateOptions = {
   nullableStyle: "anyOf",
@@ -171,9 +153,7 @@ function translateSchemaNode(node: JsonSchemaNode): Record<string, unknown> {
 /** A Responses API source: the URL is all OpenAI returns for one. */
 type ResponsesSource = RawSource;
 
-// ---------------------------------------------------------------------------
-// OpenAI Adapter
-// ---------------------------------------------------------------------------
+// The adapter
 
 export class OpenAIAdapter implements AIProvider {
   readonly name = "OpenAI";
@@ -191,10 +171,9 @@ export class OpenAIAdapter implements AIProvider {
   }
 
   /**
-   * Enumerate models. OpenAI's list endpoint returns bare ids with no
-   * capability metadata, so capability is pattern-matched and the settings UI
-   * exposes an override. `created` becomes `releasedAt`, so the catalog can
-   * drop chat models more than a year old.
+   * List models. The endpoint returns bare ids, so capability is
+   * pattern-matched and the settings UI offers an override. `created` becomes
+   * `releasedAt`, so the catalog can drop chat models more than a year old.
    */
   async listModels(): Promise<ModelInfo[]> {
     const models: ModelInfo[] = [];
@@ -255,19 +234,18 @@ export class OpenAIAdapter implements AIProvider {
   }
 
   /**
-   * OpenAI wraps the schema in `json_schema: { name, schema }` — note this is
-   * NOT the shape Anthropic uses, which takes the schema directly.
+   * OpenAI wraps the schema in `json_schema: { name, schema }`; Anthropic takes
+   * the schema directly.
    *
-   * `strict: true` is deliberately omitted. Strict mode requires `required` to
-   * list every key in `properties`, and Contrack's schemas have genuinely
-   * optional fields (a contact has a name; it may not have a company). Sending
-   * strict with those schemas is rejected outright:
+   * No `strict: true`: strict mode needs `required` to list every key in
+   * `properties`, and Contrack's schemas have optional fields (a contact may
+   * have no company). Strict with those schemas is refused:
    *
    *   400 Invalid schema for response_format 'response': 'required' is required
    *   to be supplied and to be an array including every key in properties.
    *
    * Non-strict json_schema still constrains generation and accepts optional
-   * fields, which is what we need.
+   * fields.
    */
   translateSchema(schema: JsonSchemaNode): {
     type: "json_schema";
@@ -287,11 +265,9 @@ export class OpenAIAdapter implements AIProvider {
 
   /**
    * The Responses API's `text.format`, which is flat: `{ type, name, schema }`.
-   *
-   * The adapter used to send the Chat Completions shape here, nested under
-   * `json_schema`, and every grounded research call answered 400 "Missing
-   * required parameter: 'text.format.name'". The Responses API also defaults
-   * to strict, unlike Chat Completions, hence the explicit `strict: false`.
+   * The Chat Completions shape, nested under `json_schema`, answers 400
+   * "Missing required parameter: 'text.format.name'". The Responses API
+   * defaults to strict, unlike Chat Completions, hence `strict: false`.
    */
   translateResponsesFormat(schema: JsonSchemaNode): {
     type: "json_schema";
@@ -327,9 +303,9 @@ export class OpenAIAdapter implements AIProvider {
           options.signal,
         );
 
-        // JSON validation lives at the adapter boundary so every business
-        // caller can rely on `result.text` being parseable when requested:
-        // fences and prose go, and a wrapped array root comes back an array.
+        // JSON is validated here, so `result.text` always parses when JSON was
+        // asked for: fences and prose go, and a wrapped array root comes back
+        // an array.
         if (options.responseFormat === "json") {
           const parsed = parseAIJson(
             result.text,
@@ -360,13 +336,11 @@ export class OpenAIAdapter implements AIProvider {
   }
 
   /**
-   * The same call, streamed: `onDelta` gets each piece of text as OpenAI
-   * sends it. A JSON or grounded call is not streamed. It runs `generate`
-   * and sends the text as one piece.
-   *
-   * A stream that fails before its first piece falls back to `generate`,
-   * which has the retries. After the first piece a failure is thrown,
-   * because a piece already sent cannot be taken back.
+   * The same call, streamed: `onDelta` gets each piece of text as OpenAI sends
+   * it. A JSON or grounded call is not streamed: it runs `generate` and sends
+   * the text as one piece. A stream that fails before its first piece falls
+   * back to `generate`, which has the retries. After the first piece a failure
+   * is thrown, because a sent piece cannot be taken back.
    */
   async generateStream(
     options: AIGenerateOptions,
@@ -463,7 +437,7 @@ export class OpenAIAdapter implements AIProvider {
     return reasons ? Math.max(max, REASONING_TOKEN_FLOOR) : max;
   }
 
-  // ── Standard chat completion ──────────────────────────────────────────
+  // Standard chat completion
   private async runChatCompletion(
     options: AIGenerateOptions,
     model: string,
@@ -475,9 +449,8 @@ export class OpenAIAdapter implements AIProvider {
       messages.push({ role: "system", content: options.systemPrompt });
     messages.push({ role: "user", content: options.prompt });
 
-    // Minimal local response shape — the OpenAI SDK types are unions over a dozen
-    // overloads (streaming vs. non-streaming, function-calling, etc.) and TypeScript
-    // can't narrow them at our call site. We assert the non-streaming branch here.
+    // A local response shape: the SDK types are unions over many overloads that
+    // TypeScript cannot narrow here, so this asserts the non-streaming branch.
     interface ChatCompletionResponse {
       choices?: Array<{ message?: { content?: string | null } }>;
       usage?: {
@@ -533,7 +506,7 @@ export class OpenAIAdapter implements AIProvider {
     };
   }
 
-  // ── Streamed chat completion ──────────────────────────────────────────
+  // Streamed chat completion
   private async streamChatCompletion(
     options: AIGenerateOptions,
     model: string,
@@ -609,7 +582,7 @@ export class OpenAIAdapter implements AIProvider {
     };
   }
 
-  // ── Responses API with web_search tool ────────────────────────────────
+  // Responses API with web_search tool
   private async runResponsesAPI(
     options: AIGenerateOptions,
     model: string,
@@ -621,9 +594,8 @@ export class OpenAIAdapter implements AIProvider {
       input.push({ role: "system", content: options.systemPrompt });
     input.push({ role: "user", content: options.prompt });
 
-    // Local response shape for the Responses API — the SDK types are too
-    // permissive (output can be any of a dozen tool/message types). We model
-    // only the branches we extract from.
+    // A local shape for the Responses API, covering only the branches read
+    // here.
     interface ResponsesAPIResponse {
       output?: Array<{
         type?: string;

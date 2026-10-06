@@ -21,12 +21,10 @@ const PREVIEW_MAX_BYTES = 5 * 1024 * 1024;
 const PREVIEW_TIMEOUT_MS = 6000;
 
 /**
- * Copy a page's og:image into the caller's previews folder and return the
- * local URL, or null when there is no usable copy.
- *
- * The browser never loads the linked site's image: a note that shows it
- * would tell that site each time the note is opened. The file name is the
- * digest of the image URL, so a link unfurled twice reuses the first copy.
+ * Copy a page's og:image into the caller's previews folder and return the local
+ * URL, or null. The browser never loads the linked site's image, which would
+ * tell that site each time the note opens. The file name is the digest of the
+ * image URL, so a link unfurled twice reuses the first copy.
  */
 async function localPreviewImage(
   scope: Scope,
@@ -98,11 +96,10 @@ export const linkPreviewService = {
     let rawImage: string;
     let finalUrl: string;
     try {
-      // safeFetch checks the URL before the first request (the same
-      // ValidationError the separate check used to throw), re-checks every
+      // safeFetch checks the URL before the first request, again on every
       // redirect hop, and its socket lookup refuses a private address at
-      // connect time. That last part closes the DNS rebinding gap a
-      // check-then-fetch leaves open.
+      // connect time, which closes the DNS rebinding gap a check-then-fetch
+      // leaves.
       let htmlRes: globalThis.Response;
       try {
         ({ response: htmlRes, finalUrl } = await safeFetch(targetUrl, {

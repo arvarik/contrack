@@ -1,43 +1,29 @@
-// =============================================================================
-// The worker job protocol
-// =============================================================================
-// Shared by the host on the main thread and the worker on the other side of
-// it. Nothing here imports the database, the AI gateway, or anything else
-// heavy: the worker loads this file first, and a module graph that reached
+// The worker job protocol, shared by the host on the main thread and the
+// worker. Nothing here imports the database, the AI gateway or anything heavy:
+// the worker loads this file first, and a module graph that reached
 // `server/db.ts` would re-run every migration in a second thread.
 //
-// Four message kinds, which is the whole protocol: start, progress, result,
-// cancel. A job is identified by a number the host hands out, and every
-// message the worker sends carries the id of the job it belongs to, so two
-// jobs in flight cannot be confused for one.
+// Four message kinds: start, progress, result, cancel. The host numbers each
+// job, and every worker message carries its job's id, so two jobs in flight
+// cannot be confused. Canceling happens on the host, which drops a job not yet
+// sent; the worker ignores a cancel for a running job, because nothing in the
+// product cancels one.
 //
-// Canceling is handled entirely on the host, which drops a job that has not
-// been sent yet. The message kind is still here because the host is where the
-// decision belongs and a running job may want it later; the worker ignores
-// it, because nothing in the product cancels a running job and an untested
-// path is worse than an absent one.
-//
-// Two job kinds: `embed` turns text into vectors, and `rerank` scores
-// (query, profile) pairs with a cross-encoder. Both hold an onnxruntime
-// session, so both run here and not on the main thread. A third kind for the
-// dedupe passes was measured and then removed: after the quadratic self-joins
-// came out of the deterministic pass and the futile KNN came out of the
-// funnel, a scan of 50,000 contacts spends about 500 ms in those passes, and
-// shipping the corpus across the thread boundary and back costs about 180 ms
-// in structured clone on the main thread. The work was better removed than
-// moved.
-// =============================================================================
+// Two job kinds: `embed` turns text into vectors, and `rerank` scores (query,
+// profile) pairs with a cross-encoder. Both hold an onnxruntime session, so
+// both run here, off the main thread. The dedupe passes stay on the main
+// thread: a scan of 50,000 contacts spends about 500 ms in them, and shipping
+// the corpus across the thread boundary and back would cost about 180 ms of
+// structured clone on the main thread.
 
 /** What a job asks the worker to do. */
 export type WorkerJob = EmbedJob | RerankJob;
 
 /**
- * Turn text into vectors.
- *
- * The worker holds the model; the main thread does every read and every
- * write. A backfill of 2,000 contacts blocked the event loop for 3.1 of its
- * 3.3 seconds before this, in bursts of up to 129 ms, which on a shared
- * instance is every other account's requests waiting.
+ * Turn text into vectors. The worker holds the model; the main thread does
+ * every read and write. On the main thread a backfill of 2,000 contacts blocked
+ * the event loop for 3.1 of its 3.3 seconds, in bursts of up to 129 ms, and
+ * every other account's requests waited.
  */
 export interface EmbedJob {
   kind: "embed";
@@ -57,12 +43,10 @@ export interface EmbedJob {
 }
 
 /**
- * Score each document against one query with a cross-encoder.
- *
- * The query and one document go through the model together, so the score
- * reads both at once. That is what makes a cross-encoder more exact than two
- * vectors compared afterwards, and also why it is too slow for more than the
- * top of a list. `server/ai/reranker.ts` sends these.
+ * Score each document against one query with a cross-encoder. The query and one
+ * document go through the model together, so the score reads both, which makes
+ * a cross-encoder more exact than comparing two vectors and too slow for more
+ * than the top of a list. `server/ai/reranker.ts` sends these.
  */
 export interface RerankJob {
   kind: "rerank";
@@ -75,16 +59,12 @@ export interface RerankJob {
   maxLength: number;
 }
 
-// ---------------------------------------------------------------------------
 // Host to worker
-// ---------------------------------------------------------------------------
 
 export type HostMessage =
   { type: "run"; id: number; job: WorkerJob } | { type: "cancel"; id: number };
 
-// ---------------------------------------------------------------------------
 // Worker to host
-// ---------------------------------------------------------------------------
 
 export type WorkerMessage =
   | { type: "progress"; id: number; done: number; total: number }
@@ -96,11 +76,9 @@ export type WorkerMessage =
 export type JobResult = EmbedResult | RerankResult;
 
 /**
- * Vectors as one flat array, not an array of arrays.
- *
- * A flat `Float32Array` has one ArrayBuffer, which `postMessage` can transfer
- * instead of copying. Two thousand 384-wide vectors is three megabytes, and
- * copying it twice per backfill round is the cost this avoids.
+ * Vectors as one flat array, not an array of arrays: a flat `Float32Array` has
+ * one ArrayBuffer, which `postMessage` can transfer instead of copying (two
+ * thousand 384-wide vectors are three megabytes).
  */
 export interface EmbedResult {
   kind: "embed";
@@ -108,11 +86,9 @@ export interface EmbedResult {
   count: number;
   dimension: number;
   /**
-   * Whether this job needed the model.
-   *
-   * Reported because loading it is a one-way door for the whole process, so
-   * "did that job load it" is the difference between a worker that can be
-   * replaced and one that cannot. See the note in `cpuWorker.ts`.
+   * Whether this job needed the model. Loading it is a one-way door for the
+   * whole process, so this tells a worker that can be replaced from one that
+   * cannot (see `cpuWorker.ts`).
    */
   modelLoaded: boolean;
 }

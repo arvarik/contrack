@@ -1,11 +1,7 @@
-// =============================================================================
-// Runtime data paths — single source of truth
-// =============================================================================
-// All runtime data (SQLite DB, uploads, model cache) lives under DATA_DIR.
-// Outside Docker DATA_DIR is unset and everything resolves relative to the
-// project root, preserving the historical layout (./uploads, ./curator.db).
-// In Docker, DATA_DIR=/app/data puts everything on the persistent volume.
-// =============================================================================
+// Runtime data paths. All runtime data (the SQLite database, uploads, the model
+// cache) lives under DATA_DIR. Outside Docker DATA_DIR is unset and everything
+// resolves from the project root (./uploads, ./curator.db). In Docker,
+// DATA_DIR=/app/data puts everything on the persistent volume.
 
 import path from "path";
 import fs from "fs";
@@ -17,28 +13,24 @@ export const UPLOADS_DIR = path.join(DATA_DIR, "uploads");
 export const LOGOS_DIR = path.join(UPLOADS_DIR, "logos");
 
 /**
- * The folders inside one owner's uploads directory.
- *
+ * The folders inside one owner's uploads directory:
  * - `avatars`: contact photos, uploaded or copied from a connector.
  * - `files`: interaction attachments.
  * - `profile`: the account's own photo.
  * - `previews`: link-preview images, downloaded once by the server so the
  *   browser never loads them from the linked site.
  *
- * Account deletion removes the whole `u/<ownerId>/` folder, so a new kind
- * needs no extra cleanup there.
+ * Account deletion removes the whole `u/<ownerId>/` folder, so a new kind needs
+ * no cleanup of its own.
  */
 export type OwnerUploadKind = "avatars" | "files" | "profile" | "previews";
 
 /**
- * Where one owner's uploads live: `UPLOADS_DIR/u/<ownerId>/<kind>/`.
- *
- * `logos/` stays shared, because a company logo is not personal data and the
- * same employer turns up in several people's contact lists.
- *
- * The id is checked against a UUID shape rather than merely escaped, because
- * it becomes a path segment. An id of `..` would otherwise walk out of the
- * uploads root before resolveUploadPath ever sees the result.
+ * Where one owner's uploads live: `UPLOADS_DIR/u/<ownerId>/<kind>/`. `logos/`
+ * stays shared, because a company logo is not personal data and one employer
+ * appears in many people's contacts. The id must have a UUID shape, not just be
+ * escaped, because it becomes a path segment: `..` would walk out of the
+ * uploads root before resolveUploadPath sees the result.
  */
 export function ownerUploadDir(ownerId: string, kind: OwnerUploadKind): string {
   return path.join(UPLOADS_DIR, "u", assertOwnerId(ownerId), kind);
@@ -68,15 +60,12 @@ export function ensureDir(dir: string): void {
 }
 
 /**
- * Resolve a public `/uploads/...` URL path (as stored in `avatarUrl` /
- * `fileUrl` columns) to an absolute filesystem path, guaranteed to stay
- * inside UPLOADS_DIR. Returns null for anything else — including traversal
- * attempts like `/uploads/avatars/../../etc/passwd`, which normalize to a
- * path outside the uploads root.
- *
- * Every read of a stored upload URL MUST go through this function, and every
- * delete through `resolveOwnUploadPath`: these columns are user-writable via
- * the contact update endpoints, and uploads/ holds every account's files.
+ * Resolve a public `/uploads/...` URL path (as stored in `avatarUrl` or
+ * `fileUrl`) to an absolute path inside UPLOADS_DIR, or null for anything else,
+ * traversal like `/uploads/avatars/../../etc/passwd` included. Every read of a
+ * stored upload URL goes through this, and every delete through
+ * `resolveOwnUploadPath`: the columns are user-writable through the contact
+ * update endpoints, and uploads/ holds every account's files.
  */
 export function resolveUploadPath(urlPath: string): string | null {
   if (!urlPath.startsWith("/uploads/")) return null;
@@ -89,14 +78,11 @@ export function resolveUploadPath(urlPath: string): string | null {
 }
 
 /**
- * Resolve a stored `/uploads/...` URL only when it is inside this owner's own
- * folder, `uploads/u/<ownerId>/`, or inside its `kind` folder when one is
- * named. Null for anything else.
- *
- * `resolveUploadPath` keeps a path inside `uploads/`, and that folder holds
- * every account's files. A contact's `avatarUrl` of
- * `/uploads/u/<another owner>/avatars/../files/<file>` passed it, and a photo
- * upload then deleted the other account's attachment.
+ * Resolve a stored `/uploads/...` URL only when it is inside this owner's
+ * folder, `uploads/u/<ownerId>/`, or its `kind` folder when one is named; null
+ * otherwise. `resolveUploadPath` alone allows any account's files, so an
+ * `avatarUrl` of `/uploads/u/<another owner>/avatars/../files/<file>` would let
+ * a photo upload delete another account's attachment.
  */
 export function resolveOwnUploadPath(
   ownerId: string,

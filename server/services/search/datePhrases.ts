@@ -1,18 +1,11 @@
-// =============================================================================
-// Date phrases — "last month" in a question, as a range in the caller's zone
-// =============================================================================
-// "Who discussed hiring last month?" carries two things: a topic and a
-// period. This module lifts the period out of the text so the topic can go
-// to the index on its own, and turns it into an instant range the search can
-// apply as a plain filter.
-//
-// Everything here is deterministic and local. There is no model in the loop
-// and the phrases it understands are the ones listed below; anything else is
-// left in the text as words to search for. A period is a calendar period in
-// the caller's time zone, because "last month" to somebody in California is
-// not the UTC month, and the difference is a whole evening of notes at each
-// end.
-// =============================================================================
+// Date phrases: "last month" in a question, as a range in the caller's zone.
+// "Who discussed hiring last month?" carries a topic and a period. This lifts
+// the period out, so the topic goes to the index alone, and turns it into an
+// instant range the search applies as a filter. Deterministic and local: only
+// the phrases below are understood, and anything else stays in the text as
+// words to search for. A period is a calendar period in the caller's time zone,
+// because "last month" in California is not the UTC month, and the difference
+// is a whole evening of notes at each end.
 
 /** An instant range. `from` is inclusive, `to` is exclusive, both ISO. */
 export interface DateRange {
@@ -165,12 +158,10 @@ function zoneOffset(instant: Date, timeZone: string): number {
 }
 
 /**
- * Local midnight of a calendar day, as an instant.
- *
- * Two passes, because the offset can change between the guess and the
- * answer on a transition day. Month and day may run past their range and
- * roll over, which is what lets "the day after the last of the month" be
- * written as day + 1 rather than a calendar of its own.
+ * Local midnight of a calendar day, as an instant. Two passes, because the
+ * offset can change between the guess and the answer on a transition day. Month
+ * and day may run past their range and roll over, so "the day after the last of
+ * the month" is just day + 1.
  */
 function startOfDay(
   year: number,
@@ -505,11 +496,9 @@ export function extractDatePhrase(
 }
 
 /**
- * The instant bounds of a filter value.
- *
- * A calendar date names a whole day in the caller's zone, so `from` is that
- * day's midnight and `to` is the midnight after. An instant is taken as it
- * is: `from` inclusive, `to` exclusive.
+ * The instant bounds of a filter value. A calendar date names a whole day in
+ * the caller's zone, so `from` is that day's midnight and `to` the midnight
+ * after. An instant is taken as it is: `from` inclusive, `to` exclusive.
  */
 export function boundFromFilter(
   value: string,

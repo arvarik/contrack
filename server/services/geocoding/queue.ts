@@ -32,10 +32,9 @@ let noAnswers = 0;
 
 /**
  * Place a contact's pin from the cache, or queue its address for Nominatim.
- *
- * With address lookups off (switch.ts) a cached answer still places the pin,
- * since nothing leaves the server for it, and nothing is queued. The log
- * lines name the contact, never the address.
+ * With lookups off (switch.ts) a cached answer still places the pin, since
+ * nothing leaves the server, and nothing is queued. Log lines name the contact,
+ * never the address.
  */
 export function queueGeocode(contactId: string, location: string): void {
   // Integration tests set this to keep background fetches off the network.
@@ -157,13 +156,11 @@ async function drainQueue(): Promise<void> {
 }
 
 /**
- * Write what the geocoder found, unless a person placed the pin.
- *
- * A row with `geoSource = 'manual'` is one somebody dragged into place, and
- * the geocoder's answer for the same text does not outrank that. The guard
- * is in the statement itself, so every path through this module honors it,
- * and a task queued before the pin was moved lands on nothing when it drains.
- * A row the geocoder does place is marked `'geocoder'` in the same write.
+ * Write what the geocoder found, unless a person placed the pin. A row with
+ * `geoSource = 'manual'` was dragged into place, and the geocoder's answer for
+ * the same text does not outrank it. The guard is in the statement, so every
+ * path honors it, and a task queued before the pin moved lands on nothing. A
+ * row the geocoder places is marked `'geocoder'` in the same write.
  */
 function writeGeocoded(contactId: string, lat: number, lng: number): void {
   // tenant-lint: allow instance sweep

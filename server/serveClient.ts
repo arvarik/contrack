@@ -1,6 +1,4 @@
-// =============================================================================
-// The web app: Vite's middleware in development, the built files in production
-// =============================================================================
+// The web app: Vite's middleware in development, the built files in production.
 
 import type http from "node:http";
 import path from "node:path";
@@ -14,11 +12,10 @@ const LOOPBACK_HOSTS = new Set(["127.0.0.1", "::1", "localhost"]);
 
 /**
  * Refuse to run the development server on an address other machines reach.
- *
  * Vite's middleware serves the files under the project folder, and without
- * `DATA_DIR` the database is one of them: `GET /curator.db` answered with the
- * whole database and no sign-in. `server.fs.deny` in `vite.config.ts` refuses
- * the data files too. The production build serves `dist/` only.
+ * `DATA_DIR` the database is one of them: `GET /curator.db` would answer with
+ * the whole database and no sign-in. `server.fs.deny` in `vite.config.ts`
+ * refuses the data files too. The production build serves `dist/` only.
  */
 export function assertDevHost(host: string, production: boolean): void {
   if (production || LOOPBACK_HOSTS.has(host.toLowerCase())) return;
@@ -28,16 +25,12 @@ export function assertDevHost(host: string, production: boolean): void {
 }
 
 /**
- * Serve the web app on `app`, which `server` listens for.
- *
- * In development, Vite's middleware, with its reload socket on `server`.
- * Vite's default in middleware mode is a socket of its own on port 24678.
- * Two dev servers cannot share that port, and the page of the second one
- * dialed the first one's socket even with hot reload off. On the app's own
- * server, each page dials the port it came from.
- *
- * In production, the files in `distPath`, and `index.html` for any other
- * page a person opens.
+ * Serve the web app on `app`, which `server` listens for. In development,
+ * Vite's middleware, with its reload socket on `server`: Vite's own default
+ * socket on port 24678 cannot be shared by two dev servers, and the second
+ * one's page would dial the first one's socket even with hot reload off. On the
+ * app's own server, each page dials the port it came from. In production, the
+ * files in `distPath`, and `index.html` for any other page.
  */
 export async function serveClient(
   app: Express,
@@ -57,11 +50,10 @@ export async function serveClient(
   }
 
   const distPath = options.distPath ?? path.join(process.cwd(), "dist");
-  // Vite names every file under /assets by the hash of its content, so a
-  // file there never changes. A browser keeps it for a year and asks no
-  // more: a phone used to send some 85 revalidations on every load. The
-  // rest, index.html first, is checked every time, so a deploy shows at
-  // once.
+  // Vite names every file under /assets by its content hash, so it never
+  // changes: a browser keeps it a year and does not revalidate (a phone would
+  // otherwise send about 85 revalidations per load). The rest, index.html
+  // first, is checked every time, so a deploy shows at once.
   app.use(
     "/assets",
     express.static(path.join(distPath, "assets"), {
@@ -69,21 +61,21 @@ export async function serveClient(
       maxAge: "1y",
     }),
   );
-  // A file the build no longer has, such as an old chunk an open tab asks
-  // for after a deploy, is a plain 404. Never the app's HTML, which the
-  // browser would try to run as script.
+  // A file the build no longer has, such as an old chunk an open tab asks for
+  // after a deploy, is a plain 404, never the app's HTML, which the browser
+  // would try to run as script.
   app.use("/assets", (_req, res) => {
     res.status(404).type("text/plain").send("Not found");
   });
   app.use(express.static(distPath));
-  // SPA fallback for navigation only. This used to answer EVERY method —
-  // a POST to any unknown path returned index.html with a 200, which reads
-  // as success to a script that mistyped an endpoint.
+  // The SPA fallback answers navigation only (GET and HEAD). A POST to an
+  // unknown path answered with index.html and a 200 would read as success to a
+  // script that mistyped an endpoint.
   app.use((req, res, next) => {
     if (req.method !== "GET" && req.method !== "HEAD") return next();
-    // A path under `root`, not an absolute one: `send` refuses an absolute
-    // path with a dot folder in it, such as ~/.local/contrack/dist, and
-    // every page a person opened answered 500.
+    // A path under `root`, not an absolute one: `send` refuses an absolute path
+    // with a dot folder in it, such as ~/.local/contrack/dist, which would make
+    // every page answer 500.
     res.sendFile("index.html", { root: distPath });
   });
   return async () => {};

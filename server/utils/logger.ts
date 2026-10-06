@@ -1,22 +1,16 @@
-// =============================================================================
-// The server log
-// =============================================================================
-// One line per event on standard output: `[time] [LEVEL] [area] message`,
-// then the details as JSON when there are any.
-//
+// The server log: one line per event on standard output, `[time] [LEVEL] [area]
+// message`, then the details as JSON when there are any.
 //   - LOG_LEVEL sets the lowest level written: error, warn, info or debug.
 //     Unset means info. Another value logs one warning and runs at info.
 //   - Colors only on a terminal. `docker logs` and a file get plain text.
-//   - An Error in the details is written as its name, message and stack.
-//     JSON.stringify writes an Error as {}, so a connector failure lost its
-//     cause.
+//   - An Error in the details is written as its name, message and stack
+//     (JSON.stringify would write {}).
 //
-// A line names records by id and says counts and times. It never carries a
+// A line names records by id and gives counts and times. It never carries a
 // person's name, an email address, a phone number, an address, note or title
 // text, a file name somebody chose, a search or an Ask question, a pasted URL
-// or model output. The operator keeps this log for as long as they like, and
-// the people in it never agreed to that.
-// =============================================================================
+// or model output: the operator keeps this log as long as they like, and the
+// people in it never agreed to that.
 
 type LogLevel = "DEBUG" | "INFO" | "WARN" | "ERROR";
 
@@ -40,10 +34,10 @@ const LEVEL_NAMES = new Map<string, LogLevel>([
 let current: { raw: string | undefined; min: number } | undefined;
 
 /**
- * The lowest rank written. LOG_LEVEL is read on each call and parsed again
- * only when it changes, so a bad value warns once. It is read at the first
- * line, not at import, so a script that loads `.env` after it imports this
- * module still gets its level.
+ * The lowest rank written. LOG_LEVEL is read on each call and parsed again only
+ * when it changes, so a bad value warns once. It is read at the first line, not
+ * at import, so a script that loads `.env` after importing this module still
+ * gets its level.
  */
 function minRank(): number {
   const raw = process.env.LOG_LEVEL;

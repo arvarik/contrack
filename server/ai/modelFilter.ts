@@ -1,22 +1,18 @@
-// =============================================================================
-// AI Layer — Model Catalog Guardrails and Family Heuristics
-// =============================================================================
-// Pure functions that filter raw provider model listings down to the set of
-// models suitable for interactive CRM tasks and determine the latest generation
-// per model family/class.
+// Model catalog guardrails: pure functions that cut a provider's model list
+// to the models fit for interactive CRM work, and find the latest generation
+// per family.
 //
-// Heuristics:
-//   1. Modality filter  — drop embeddings, audio/tts, image/video generation,
-//                         moderation, and specialized robotics/research agents.
-//   2. Recency filter   — drop chat models released over 1 year ago (when the
-//                         provider dates them: OpenAI and Anthropic do).
-//                         Embedding models are exempt: OpenAI's newest are
-//                         from January 2024.
-//   3. Alias dedupe     — collapse pinned snapshots (gpt-4o-2024-08-06) into
-//                         their floating alias (gpt-4o).
-//   4. Generation       — extract generation numbers (gemini-3.8-flash → 3.8)
-//                         to prefer the latest generation within each family.
-// =============================================================================
+//   1. Modality filter  drop embeddings, audio and TTS, image and video
+//                       generation, moderation, and robotics or research
+//                       agents.
+//   2. Recency filter   drop chat models released over a year ago, when the
+//                       provider dates them (OpenAI and Anthropic do).
+//                       Embedding models are exempt: OpenAI's newest are
+//                       from January 2024.
+//   3. Alias dedupe     collapse pinned snapshots (gpt-4o-2024-08-06) into
+//                       their floating alias (gpt-4o).
+//   4. Generation       read generation numbers (gemini-3.8-flash → 3.8) to
+//                       prefer the latest generation within each family.
 
 import type { ModelClass } from "./routing/registry.ts";
 import type { ModelInfo } from "./provider.ts";
@@ -117,9 +113,9 @@ export function dedupeAliases<T extends { id: string }>(models: T[]): T[] {
 }
 
 /**
- * Run catalog guardrails over a raw model list.
- * Preserves models that declare "embeddings" capability if present on the object,
- * otherwise requires isChatModel and a release inside the recency window.
+ * Run the catalog guardrails over a raw model list. A model that declares
+ * "embeddings" stays; any other must be a chat model released inside the
+ * recency window.
  */
 export function applyCatalogGuardrails<
   T extends { id: string; capabilities?: string[]; releasedAt?: number | null },
@@ -158,10 +154,10 @@ export function inferModelFamily(
   }
   if (provider === "openai") {
     // OpenAI renamed its tiers between generations. In GPT-5.6, Sol is the
-    // flagship, Terra the old "mini" and Luna the old "nano". In GPT-6,
-    // Astra is the flagship ($10/$50 per 1M tokens), Sol the middle ($2/$10)
-    // and Luna the cheap tier ($0.10/$0.50). Read as one rule, Sol would be
-    // the flagship twice and GPT-6's middle tier would never be picked.
+    // flagship, Terra the "mini" and Luna the "nano". In GPT-6, Astra is the
+    // flagship ($10/$50 per 1M tokens), Sol the middle ($2/$10) and Luna the
+    // cheap tier ($0.10/$0.50). Read as one rule, Sol would be the flagship
+    // twice and GPT-6's middle tier never picked.
     const generation = extractGeneration(id) ?? 0;
     if (id.includes("-astra")) return "Flagship";
     if (id.includes("-sol")) return generation >= 6 ? "Balanced" : "Flagship";

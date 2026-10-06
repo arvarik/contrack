@@ -1,30 +1,25 @@
-// =============================================================================
-// Research — the combined technique (the research model's search and a web
-// search's, at once)
-// =============================================================================
-// Both searches at once, and the facts of both kept:
+// The combined technique: the research model's search and a web search's, both
+// at once, with the facts of both kept.
 //
 //   1. The research model's own search (`providerSearch`) and the request's
-//      web search with its pages read (`searchAndRead`) run side by side.
-//      Neither waits for the other, so the run takes as long as the slower.
+//      web search with its pages read (`searchAndRead`) run side by side, so
+//      the run takes as long as the slower.
 //   2. The fact lines of every source that found some are merged, with their
 //      pages, findings and searches (`mergeEvidence`), and one extraction
 //      reads them.
 //
 // One source is enough. The research model decides for itself whether to
-// search, and for a person with a small web footprint it often does not:
-// the web search then stands alone. When the web search is down or finds
-// nothing, the model's search stands alone. A run records no public
-// information only when a source searched and matched nobody, and it fails
-// only when neither source has facts or a no-match.
+// search, and for a person with a small web footprint it often does not; then
+// the web search stands alone, and when the web search is down or finds
+// nothing, the model's search does. A run records no public information only
+// when a source searched and matched nobody, and fails only when neither has
+// facts or a no-match.
 //
-// Each search has a deadline of its own, the run's allowance less the time
-// the extraction needs. A model that cites no page is asked twice more, and
-// its two rounds can take 240 s, the whole of a Standard run. Without its own
-// deadline, the run would stop with it, and the web search's facts, ready
-// long before, would be lost. A small local model that reads the web
-// search's pages in parts can be the slow one too.
-// =============================================================================
+// Each search has its own deadline: the run's allowance less the extraction's
+// time. A model that cites no page is asked twice more, and its two rounds can
+// take 240 s, a whole Standard run; without its own deadline the run would stop
+// with it and lose the web search's facts, ready long before. A small local
+// model reading pages in parts can be the slow one too.
 
 import {
   NEEDS_FAST_MODEL,
@@ -60,8 +55,8 @@ function reason(outcome: SourceOutcome): string {
 
 /**
  * One source's search, stopped at its own deadline when the run has one. A
- * source stopped there failed, and the other one's facts still count. A
- * canceled run still throws.
+ * source stopped there failed, and the other's facts still count. A canceled
+ * run still throws.
  *
  * @param name - The source, for the reason: "The web search model's search".
  */
@@ -138,9 +133,9 @@ async function searchBoth(
 
 export const combined: Technique = {
   name: "combined",
-  // Both searches, so both have to be there: the web search, the web search
-  // model, the Strong model that reads the web search's pages and the Fast
-  // one that extracts.
+  // Both searches, so it needs everything both need: the web search, the web
+  // search model, the Strong model that reads pages and the Fast one that
+  // extracts.
   needs: () => [
     { what: "web-search" },
     { what: "research", message: NEEDS_WEB_SEARCH_MODEL },

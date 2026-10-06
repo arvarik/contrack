@@ -1,12 +1,8 @@
-// =============================================================================
-// Module: admin
-// =============================================================================
 // Instance administration: accounts, invitations, settings, mail, the audit
 // log, the health payload and the background jobs. Every route carries
-// requireAdmin itself, so the manifest test can see the guard in each
-// route's stack. Its jobs keep the instance in shape: the daily sweep of rows
-// nothing else removes, and the planner statistics.
-// =============================================================================
+// requireAdmin itself, so the manifest test sees the guard in each route's
+// stack. Its jobs are the daily sweep of rows nothing else removes and the
+// planner statistics.
 
 import { defineModule } from "../module.ts";
 import { adminRouter } from "../../routes/admin.ts";

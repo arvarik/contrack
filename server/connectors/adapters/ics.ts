@@ -1,9 +1,8 @@
 /**
- * server/connectors/adapters/ics.ts — Calendar (ICS) connector adapter.
- *
- * Connects to any calendar feed that publishes a private ICS URL (Google, iCloud,
- * Outlook, Fastmail, Nextcloud). Turns past meetings into `meeting` interactions on
- * matching contacts, and writes future events to `upcoming_events` for display on Pulse.
+ * The calendar (ICS) connector, for any calendar with a private ICS URL
+ * (Google, iCloud, Outlook, Fastmail, Nextcloud). Past meetings become
+ * `meeting` interactions on matching contacts, and future events go to
+ * `upcoming_events` for Pulse.
  *
  * @module server/connectors/adapters/ics
  */
@@ -76,9 +75,9 @@ async function readCappedBody(
 }
 
 /**
- * The whole feed, from the request to the last byte. The 15 s timers below
- * end at the headers, and a server that then sent the body slowly, or not at
- * all, held the sync until shutdown.
+ * The whole feed, from request to last byte. The 15 s timers below end at the
+ * headers, so without this a server that sends the body slowly, or not at all,
+ * would hold the sync until shutdown.
  */
 const ICS_FETCH_DEADLINE_MS = 60_000;
 
@@ -134,9 +133,9 @@ export async function fetchIcsContent(
 }
 
 /**
- * When an event starts or ends, as stored. An all-day event (`VALUE=DATE`)
- * is a day, written `2026-10-09`: node-ical builds it at the server's local
- * midnight, so its local parts are the day. As an instant it was the
+ * When an event starts or ends, as stored. An all-day event (`VALUE=DATE`) is a
+ * day, written `2026-10-09`: node-ical builds it at the server's local
+ * midnight, so its local parts are the day. As an instant it would be the
  * evening before for every reader west of the server.
  */
 function stamp(date: Date, allDay: boolean): string {

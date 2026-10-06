@@ -1,16 +1,13 @@
-// =============================================================================
-// Tag Service — tag management across an account's contacts
-// =============================================================================
-// Tags belong to contacts, but a person thinks about tags as a vocabulary.
-// This service gives the vocabulary its counts and its mutating actions:
+// Tags as a vocabulary: a person thinks of tags across contacts, so this gives
+// them counts and actions.
 //
 //   getSummary   distinct tags, the contacts in the list that hold each, and
 //                every contact a rename or a delete changes
-//   renameTag    atomic rename and merge across the owner's contacts
-//   deleteTag    remove a tag from all contacts owned by this account
+//   renameTag    rename, merging into an existing tag, across the owner's
+//                contacts
+//   deleteTag    remove a tag from all of this account's contacts
 //
-// Every operation is scoped through contacts.ownerId in a single transaction.
-// =============================================================================
+// Each runs in one transaction, scoped through contacts.ownerId.
 
 import { sqlite } from "../db.ts";
 import type { Scope } from "../tenancy/scope.ts";

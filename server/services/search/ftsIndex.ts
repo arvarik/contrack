@@ -7,20 +7,16 @@ import { installInteractionSearchIndex } from "./interactionFtsIndex.ts";
 export const ACTIVE_CONTACT_SQL = `c.isGhost = 0 AND COALESCE(c.isArchived, 0) = 0
   AND c.canonicalId IS NULL AND c.deletedAt IS NULL`;
 
-// Version 3 adds `ownerTok`. Version 4 adds interactions_fts, the note index
-// in interactionFtsIndex.ts, which lives under the same gate. Version 5 gives
-// tags and interests their own column, `tags`, and adds the digit forms of
-// each phone number to `extras`. Version 6 adds `addresses`, every address a
-// contact has, at the lowest rank (`WEIGHTS` in lexical.ts). The gate below
-// drops and rebuilds both tables when the recorded version differs, so the
-// first boot after upgrade re-indexes every active contact and every note.
-// Measured at 233 ms for 50,000 contacts.
+// Version 3 adds `ownerTok`, version 4 the note index (interactions_fts, in
+// interactionFtsIndex.ts, under the same gate), version 5 a `tags` column and
+// the digit forms of phone numbers in `extras`, and version 6 `addresses` at
+// the lowest rank (`WEIGHTS` in lexical.ts). When the recorded version
+// differs, the gate drops and rebuilds both tables, re-indexing every active
+// contact and note: 233 ms for 50,000 contacts.
 /**
  * The FTS schema version, recorded as the `contacts_fts` row of
- * schema_migrations (server/db/indexes.ts).
- *
- * Exported so the admin health panel can report what this database is on
- * without opening it, which is the whole point of the panel.
+ * schema_migrations (server/db/indexes.ts). Exported for the admin health
+ * panel.
  */
 export const FTS_SCHEMA_VERSION = 6;
 const VERSION = FTS_SCHEMA_VERSION;
@@ -38,12 +34,10 @@ function builtVersion(sqlite: Database.Database): number {
 
 /**
  * Every contacts_fts column, in order. Position 0 is the UNINDEXED contactId.
- *
- * `ownerTok` is last and indexed. Phase 2 scopes search by prefixing every
- * query with `ownerTok:<token> AND (...)`, which makes FTS5 intersect posting
- * lists inside the index instead of post-filtering rows the caller may not
- * read. An UNINDEXED ownerId column could not do that: FTS5's xBestIndex
- * pushes down only MATCH, rowid and rank.
+ * `ownerTok` is last and indexed: every query is prefixed with
+ * `ownerTok:<token> AND (...)`, so FTS5 intersects posting lists inside the
+ * index instead of filtering rows afterwards. An UNINDEXED ownerId could not do
+ * that, because FTS5's xBestIndex pushes down only MATCH, rowid and rank.
  */
 export const COLUMNS =
   "contactId, name, company, role, headline, location, about, industry, tags, extras, addresses, searchExpansion, ownerTok";
@@ -81,15 +75,12 @@ const sqlChar = (ch: string) =>
 
 /**
  * Each phone number followed by its digit forms: all digits, the last 10 and
- * the last 7, each once.
- *
- * "+1 (415) 555-1234" is indexed as the tokens 1, 415, 555 and 1234, so the
- * number typed as "4155551234" found nobody. With "14155551234",
- * "4155551234" and "5551234" beside it, the number typed with or without its
- * country code, or as a local number, finds the contact. Plain SQL, not a
- * function registered on the server's connection: every connection that
- * writes a contact runs these triggers, a backup check or `sqlite3` in a
- * shell among them.
+ * the last 7, each once. "+1 (415) 555-1234" is indexed as the tokens 1, 415,
+ * 555 and 1234, which "4155551234" would not find; with the digit forms beside
+ * it, the number typed with or without its country code, or as a local number,
+ * finds the contact. Plain SQL, not a function registered on the server's
+ * connection, because every connection that writes a contact runs these
+ * triggers, a backup check or a `sqlite3` shell among them.
  */
 const PHONE_DIGITS = PHONE_SEPARATORS.reduce(
   (expression, ch) => `replace(${expression}, ${sqlChar(ch)}, '')`,
@@ -102,13 +93,11 @@ const PHONES = `COALESCE((SELECT GROUP_CONCAT(phone || CASE WHEN d = '' OR d GLO
     FROM (SELECT phone, ${PHONE_DIGITS} AS d FROM contact_phones WHERE contactId = c.id)), '')`;
 
 /**
- * The owner token expression.
- *
- * The default unicode61 tokenizer splits on `-`, so a raw UUID would become
- * five tokens and `ownerTok:3f2c...` would match the wrong owners. Stripping
- * the hyphens and prefixing a letter produces one 33-character term. This must
- * stay identical to ownerToken() in server/tenancy/scope.ts, which a unit test
- * pins against SQLite's own replace().
+ * The owner token expression. The unicode61 tokenizer splits on `-`, so a raw
+ * UUID would be five tokens and `ownerTok:3f2c...` would match the wrong
+ * owners. Without hyphens and with a letter prefix it is one 33-character term.
+ * It must stay identical to ownerToken() in server/tenancy/scope.ts, which a
+ * unit test pins against SQLite's own replace().
  */
 const OWNER_TOKEN_SQL = (alias: string) =>
   `'o' || replace(${alias}.ownerId, '-', '')`;
@@ -126,43 +115,36 @@ const VALUES = `c.id, c.name, c.company, c.role, c.headline, c.location, c.about
   COALESCE(c.searchExpansion, ''), ${OWNER_TOKEN_SQL("c")}`;
 
 /**
- * Columns which change search text, contact visibility, or the owner token.
- *
- * `ownerId` is here so that reassigning a contact re-indexes its FTS row and
- * drops its now-mispartitioned search vector. The one owner change 2.0 makes
- * is the boot claim, which runs with these triggers dropped.
+ * Columns that change search text, contact visibility or the owner token.
+ * `ownerId` is here so a reassigned contact re-indexes its FTS row and drops
+ * its search vector from the wrong partition.
  */
 export const SEARCH_COLUMNS =
   "id, name, company, role, headline, location, about, industry, preferences, searchExpansion, isGhost, isArchived, canonicalId, deletedAt, ownerId";
 
 /** Insert the FTS row for one contact, or for every active contact. */
 function ftsInsert(where: string): string {
-  // contacts_fts mirrors contacts. Every row this writes takes its owner from
-  // the contact it copies: ${COLUMNS} ends in ownerTok and ${VALUES} ends in
-  // OWNER_TOKEN_SQL("c"). The scanner reads the literal, not the constants it
-  // interpolates, so it cannot see either.
+  // contacts_fts mirrors contacts, and every row takes its owner from the
+  // contact it copies: ${COLUMNS} ends in ownerTok and ${VALUES} in
+  // OWNER_TOKEN_SQL("c"). The scanner reads the literal, not the constants.
   // tenant-lint: allow derived table
   return `INSERT INTO contacts_fts(rowid, ${COLUMNS}) SELECT c.rowid, ${VALUES}
         FROM contacts c WHERE ${where}`;
 }
 
 /**
- * The three triggers that keep contacts_fts in step with contacts.
- *
- * Deletes are by `rowid`, which FTS5 pushes down. An earlier version deleted
- * by `contactId`, an UNINDEXED column, which the core evaluated after scanning
- * the whole virtual table: 0.50 ms per update at 5,000 rows against 0.04 ms
- * now. Never reintroduce a WHERE on contactId here.
- *
- * Exported so a unit test can snapshot the generated SQL.
+ * The three triggers that keep contacts_fts in step with contacts. Deletes are
+ * by `rowid`, which FTS5 pushes down. A delete by the UNINDEXED `contactId` is
+ * evaluated after scanning the whole virtual table (0.50 ms per update at 5,000
+ * rows against 0.04 ms), so never put a WHERE on contactId here. Exported so a
+ * unit test can snapshot the generated SQL.
  */
 export function contactTriggerSql(): string {
-  // Each body acts on the single contact row the trigger fired for, and the
-  // insert carries that row's owner token through ftsInsert. The deletes are
-  // by rowid, which is the FTS mirror of that same row.
-  // A nested backtick would split this template into fragments that the lint
-  // scanner reads as separate statements, so the row expression is built
-  // first and the trigger body stays one literal.
+  // Each body acts on the one contact row the trigger fired for: the insert
+  // carries its owner token through ftsInsert, and the deletes are by its
+  // rowid. The row expression is built first, because a nested backtick would
+  // split the template into fragments the lint scanner reads as separate
+  // statements.
   const insertChangedContact = ftsInsert(
     `c.id = new.id AND ${ACTIVE_CONTACT_SQL}`,
   );
@@ -184,12 +166,10 @@ export function contactTriggerSql(): string {
 }
 
 /**
- * Install or migrate both FTS tables atomically.
- *
- * FTS rowids match the rowids of the rows they mirror, for indexed deletes.
- * The note index is installed here as well, inside the same transaction and
- * under the same version gate, so the two can never disagree about which
- * schema version this database is on.
+ * Install or migrate both FTS tables atomically. FTS rowids match the rows they
+ * mirror, for indexed deletes. The note index is installed in the same
+ * transaction under the same version gate, so the two never disagree about the
+ * schema version.
  */
 export function installSearchIndex(sqlite: Database.Database): void {
   const started = performance.now();
@@ -247,10 +227,10 @@ export function installSearchIndex(sqlite: Database.Database): void {
           ON CONFLICT(ownerId) DO UPDATE SET revision = search_revision.revision + 1;
       END;
     `);
-    // A note moves no searched column, so notes keep a revision of their own.
-    // The Ask cache keys on both (searchService.ts). A trigger bumps it on
-    // every insert, edit and delete, where the newest note time would miss a
-    // delete, and an edit in the same second as the change before it.
+    // A note moves no searched column, so notes keep a revision of their own,
+    // and the Ask cache keys on both (searchService.ts). A trigger bumps it on
+    // every insert, edit and delete; the newest note time would miss a delete,
+    // and an edit in the same second as the change before it.
     sqlite.exec(`
       CREATE TABLE IF NOT EXISTS notes_revision (
         ownerId TEXT PRIMARY KEY,
@@ -298,9 +278,8 @@ export function installSearchIndex(sqlite: Database.Database): void {
         ["ad", "DELETE", "old.contactId"],
         ["au", "UPDATE", "old.contactId, new.contactId"],
       ]) {
-        // searchExpansion is a derived cache column, and the trigger clears
-        // it for the contact that owns the child row that just changed. There
-        // is no second contact it could reach.
+        // searchExpansion is a derived cache, and the trigger clears it only
+        // for the contact that owns the changed child row.
         // tenant-lint: allow derived table
         sqlite.exec(`
           DROP TRIGGER IF EXISTS fts_${table}_${suffix};
@@ -312,14 +291,14 @@ export function installSearchIndex(sqlite: Database.Database): void {
     }
     if (rebuilt) {
       sqlite.exec(
-        // Only when the index version changed, and only over a derived cache
-        // column, so every account's rows are meant to be cleared together.
+        // Only when the index version changed, and only a derived cache
+        // column, so every account's rows are cleared together on purpose.
         // tenant-lint: allow boot migration
         "UPDATE contacts SET searchExpansion = NULL WHERE searchExpansion IS NOT NULL",
       );
     }
-    // Same reason as contactTriggerSql: one literal, so the scanner sees the
-    // whole statement rather than the fragments around a nested backtick.
+    // One literal, as in contactTriggerSql, so the scanner sees the whole
+    // statement.
     // tenant-lint: allow derived table
     const insertMissingRows = ftsInsert(`${ACTIVE_CONTACT_SQL}
       AND NOT EXISTS (SELECT 1 FROM contacts_fts f WHERE f.rowid = c.rowid)`);
@@ -350,32 +329,24 @@ export function installSearchIndex(sqlite: Database.Database): void {
 }
 
 /**
- * The columns that make a stored search vector wrong.
- *
- * A shorter list than `SEARCH_COLUMNS`, and the difference is the point. The
- * FTS row mirrors a contact's status as well as its text, so every column
- * above re-indexes it. A vector encodes the TEXT — `contactToSearchText` reads
+ * The columns that make a stored search vector wrong: fewer than
+ * `SEARCH_COLUMNS`, on purpose. The FTS row mirrors a contact's status as well
+ * as its text, but a vector encodes only the text (`contactToSearchText` reads
  * name, company, role, location, industry, headline, about, preferences, tags
- * and the expansion, and none of the four status columns — so archiving a
- * contact does not make its vector wrong.
- *
- * Until the vec0 status columns landed, the two lists were the same one, and
- * archiving a contact deleted its embedding and made the next backfill compute
- * it again from text that had not changed. Now the status lives in the index
- * and a trigger keeps it there, so a status change updates three integers
- * instead of discarding a vector.
- *
+ * and the expansion), so archiving a contact leaves its vector right. The
+ * status lives in vec0 metadata columns, which a trigger keeps current, so a
+ * status change updates three integers instead of discarding a vector.
  * `ownerId` stays, because a reassigned contact's vector sits in the wrong
- * vec0 partition and a partition key is not something to update in place.
+ * partition, and a partition key cannot be updated in place.
  */
 export const SEARCH_VECTOR_COLUMNS =
   "name, company, role, headline, location, about, industry, preferences, searchExpansion, ownerId";
 
 /** Remove outdated vectors in the same transaction as the contact change. */
 export function installSearchVectorTriggers(sqlite: Database.Database): void {
-  // search_index_queue records pending indexing work durably across edits and restarts.
-  // Both bodies delete the vector of the contact row that changed, and enqueue
-  // active contacts to be re-indexed.
+  // search_index_queue holds pending indexing work across edits and restarts.
+  // Both bodies delete the changed contact's vector and queue an active one to
+  // be indexed again.
   // tenant-lint: allow derived table
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS search_index_queue (

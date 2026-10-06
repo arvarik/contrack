@@ -1,36 +1,24 @@
 /**
- * Relationship Scoring Service — Computes health scores for contacts.
- *
- * Score formula (0–100):
+ * Relationship scores for tracked contacts, 0 to 100:
  *   Score = 0.40·Recency + 0.25·Frequency + 0.15·Depth + 0.10·Reciprocity + 0.10·Momentum
+ * stored on `contacts.relationshipScore` for fast reads.
  *
- * Each signal is computed from existing database tables — no new tables needed.
- * Scores are stored on `contacts.relationshipScore` for fast reads.
+ * Recomputed:
+ * - when an interaction is created (one contact, at once)
+ * - at startup and every 60 minutes (only what changed, per owner)
+ * - every 24 hours (every contact, because recency decays with the clock)
  *
- * Recomputation triggers:
- *   - On interaction creation (single contact, immediate)
- *   - On server startup (only what changed while the server was down)
- *   - Every 60 minutes (only what changed, per owner)
- *   - Every 24 hours (every contact, because recency decays with the clock)
+ * Two sweeps, because four of the five signals move only on a write, while
+ * recency moves every day for every contact: a dirty-only sweep would freeze
+ * the score of the person nobody has touched, the one the score exists to
+ * surface. The hourly pass reads `contacts.scoreDirty`, which triggers on
+ * `contacts`, `interactions` and `action_items` set (server/db.ts), and the
+ * daily pass reads everything. On a quiet instance the hourly pass scans an
+ * empty partial index.
  *
- * ── Why there are two sweeps ────────────────────────────────────────────────
- * Four of the five signals only move when something is written: a new
- * interaction, an edited cadence, a contact that was archived. Recency moves
- * on its own, every day, for every contact — so a dirty-only sweep alone would
- * freeze the score of anyone nobody has touched, which is exactly the person
- * the score exists to surface.
- *
- * So the hourly pass reads `contacts.scoreDirty`, a flag the database sets
- * through triggers on `contacts`, `interactions` and `action_items` (see §4 and
- * §6 of server/db.ts), and the daily pass reads everything. On a quiet instance
- * the hourly pass scans a partial index that holds no rows.
- *
- * ── Why per owner ──────────────────────────────────────────────────────────
- * Both sweeps walk one owner at a time and take turns: a batch for each owner
- * in round-robin, then a yield to the event loop. An account with fifty
- * thousand contacts therefore cannot put an account with fifty behind it, and
- * neither can hold a request waiting. It also keeps each transaction inside one
- * account, which is what the rest of the server assumes.
+ * Both sweeps take owners in turn, a batch each, then yield to the event loop,
+ * so an account with fifty thousand contacts cannot hold up one with fifty or a
+ * waiting request, and each transaction stays inside one account.
  *
  * @module server/services/relationshipService
  */
@@ -40,9 +28,7 @@ import { getErrorMessage } from "../utils/helpers.ts";
 import { isoWeekStart } from "../../shared/dates.ts";
 import { getPreferences } from "./userPreferencesService.ts";
 
-// =============================================================================
 // Types
-// =============================================================================
 
 interface ContactScoreRow {
   id: string;
@@ -65,14 +51,11 @@ interface InteractionStatsRow {
   avgContentLength: number;
 }
 
-// =============================================================================
-// Scoring Algorithm
-// =============================================================================
+// Scoring
 
 /**
- * Sigmoid decay function for recency scoring.
- * Stays near 100 within cadence, drops steeply after.
- * k=0.08 gives a gentler curve that doesn't punish 1-2 day delays too hard.
+ * Sigmoid decay for recency: near 100 within the cadence, steep after it.
+ * k=0.08 does not punish a delay of a day or two too hard.
  */
 function recencyScore(daysSinceContact: number, cadenceDays: number): number {
   if (daysSinceContact <= 0) return 100;
@@ -81,12 +64,9 @@ function recencyScore(daysSinceContact: number, cadenceDays: number): number {
 }
 
 /**
- * The five signals behind a score, each 0–100, with the weight applied to it.
- *
- * Returned rather than discarded because a bare number out of 100 attached to
- * a person is a judgment nobody can check. "42" means nothing; "you last
- * spoke 8 months ago, against a 90-day cadence" is something you can act on or
- * disagree with.
+ * The five signals behind a score, each 0 to 100, with its weight. A bare "42"
+ * attached to a person is a judgment nobody can check; "you last spoke 8 months
+ * ago, against a 90-day cadence" is something to act on or dispute.
  */
 export interface ScoreBreakdown {
   score: number;
@@ -111,11 +91,8 @@ const WEIGHTS = {
 } as const;
 
 /**
- * The per-contact interaction rollup, prepared once.
- *
- * It used to be prepared inside the loop, so a sweep of 10,000 contacts
- * compiled the same statement 10,000 times. Lazy rather than at module load
- * because the unit project replaces `server/db.ts` with a stub.
+ * The per-contact interaction rollup, prepared once per process rather than per
+ * contact. Lazy, because the unit project replaces `server/db.ts` with a stub.
  */
 let statsStmt: ReturnType<typeof sqlite.prepare> | null = null;
 
@@ -136,10 +113,7 @@ function statsStatement() {
   return statsStmt;
 }
 
-/**
- * Compute a single contact's relationship score.
- * Returns a clamped integer 0-100.
- */
+/** One contact's relationship score, a clamped integer 0 to 100. */
 function computeScoreForContact(
   contact: ContactScoreRow,
   defaultCadence: number = 90,
@@ -154,7 +128,7 @@ function computeBreakdown(
 ): ScoreBreakdown {
   const cadence = contact.cadenceDays || defaultCadence;
 
-  // ── Recency (40%) ──────────────────────────────────────────────────────
+  // Recency (40%)
   let recency = 0;
   if (contact.lastContactedAt) {
     const lastDate = new Date(contact.lastContactedAt);
@@ -166,7 +140,7 @@ function computeBreakdown(
   }
   // No lastContactedAt → 0 recency (never interacted)
 
-  // ── Frequency, Depth, Reciprocity, Momentum (from interactions) ────────
+  // Frequency, Depth, Reciprocity, Momentum (from interactions)
   const stats = statsStatement().get(contact.id) as InteractionStatsRow;
 
   // Frequency (25%): 10+ interactions in 90 days = max score
@@ -197,7 +171,7 @@ function computeBreakdown(
     momentum = 0; // No activity at all
   }
 
-  // ── Weighted composite ─────────────────────────────────────────────────
+  // Weighted composite
   const raw =
     WEIGHTS.recency * recency +
     WEIGHTS.frequency * frequency +
@@ -266,13 +240,7 @@ function computeBreakdown(
   };
 }
 
-// =============================================================================
-// Public API
-// =============================================================================
-
-// =============================================================================
 // The sweeps
-// =============================================================================
 
 /** What one sweep did. */
 export interface SweepResult {
@@ -281,10 +249,9 @@ export interface SweepResult {
   /** Contacts whose score was recomputed and written. */
   scored: number;
   /**
-   * Contacts that were marked for scoring but are not eligible for a score:
-   * a ghost, or archived. Their flag is cleared so the next sweep does not
-   * find them again, which is what stops one archived contact making its
-   * owner part of every hourly pass for ever.
+   * Contacts marked for scoring that cannot have a score: a ghost, or archived.
+   * Their flag is cleared, so one archived contact does not pull its owner into
+   * every hourly pass.
    */
   cleared: number;
   /** Contacts whose scoring threw. Logged one by one, never retried. */
@@ -293,11 +260,9 @@ export interface SweepResult {
 }
 
 /**
- * Contacts per transaction.
- *
- * better-sqlite3 is synchronous, so one transaction over a whole account would
- * hold every pending HTTP request for its duration. Each batch commits on its
- * own — about 2 ms per 100 contacts — and the loop yields between rounds.
+ * Contacts per transaction. better-sqlite3 is synchronous, so one transaction
+ * over a whole account would hold every pending request. Each batch commits on
+ * its own, about 2 ms per 100 contacts, and the loop yields between rounds.
  */
 const BATCH_SIZE = 200;
 
@@ -351,11 +316,9 @@ function candidatesFor(ownerId: string, full: boolean): ContactScoreRow[] {
 }
 
 /**
- * Clear the flag on rows that are marked but cannot be scored.
- *
- * Archiving a contact is an edit, so the trigger marks it, and the sweep then
- * refuses to score it. Without this the row stays marked and its owner joins
- * every hourly sweep from then on to do nothing at all.
+ * Clear the flag on rows that are marked but cannot be scored. Archiving is an
+ * edit, so the trigger marks the row, and the sweep refuses to score it;
+ * without this its owner would join every hourly sweep to do nothing.
  */
 function clearIneligible(ownerId: string): number {
   return sqlite
@@ -459,9 +422,8 @@ async function runSweep(options: { full: boolean }): Promise<SweepResult> {
 
 export const relationshipService = {
   /**
-   * The score for a contact, together with the five signals that produced it.
-   * Computed fresh rather than read from the stored scalar, so the explanation
-   * always matches the number it is explaining.
+   * The score for a contact with the five signals behind it, computed fresh so
+   * the explanation always matches its number.
    */
   explainScore(contactId: string): ScoreBreakdown | null {
     const contact = sqlite
@@ -480,12 +442,10 @@ export const relationshipService = {
       : 90;
     const breakdown = computeBreakdown(contact, defaultCadence);
 
-    // Write the fresh score back. `contacts.relationshipScore` is a cache
-    // refreshed hourly, so by the time someone asks *why* a score is what it
-    // is, the stored number can be an hour stale — and an explanation that
-    // adds up to 42 sitting next to a badge reading 45 undermines the very
-    // trust the explanation exists to build. Recomputing already happened
-    // above; persisting it costs one indexed write and makes the two agree.
+    // Write the fresh score back. The stored score is refreshed hourly and can
+    // be an hour stale, and an explanation adding up to 42 beside a badge
+    // reading 45 would undo the trust it exists to build. One indexed write
+    // makes them agree.
     sqlite
       .prepare(
         // tenant-lint: allow owner-checked by caller
@@ -497,8 +457,8 @@ export const relationshipService = {
   },
 
   /**
-   * Compute and persist the relationship score for a single contact.
-   * Called after each interaction creation for immediate feedback.
+   * Compute and save one contact's score, right after an interaction is
+   * created.
    */
   computeScore(contactId: string): number | null {
     const contact = sqlite
@@ -527,34 +487,29 @@ export const relationshipService = {
   },
 
   /**
-   * Score every eligible contact on the instance, one owner at a time.
-   *
-   * The daily pass. Recency decays with the clock rather than with a write, so
-   * a contact nobody has touched still changes score overnight, and the dirty
-   * flag can never see that.
+   * Score every eligible contact on the instance, one owner at a time: the
+   * daily pass. Recency decays with the clock, not with a write, so the dirty
+   * flag cannot see it.
    */
   async recomputeAll(): Promise<SweepResult> {
     return runSweep({ full: true });
   },
 
   /**
-   * Score only the contacts something changed, one owner at a time.
-   *
-   * The hourly pass, and the one that runs at startup. On a quiet instance it
-   * reads an empty partial index and returns in under a millisecond.
+   * Score only the contacts something changed, one owner at a time: the hourly
+   * pass, and the one at startup. On a quiet instance it reads an empty partial
+   * index and returns in under a millisecond.
    */
   async recomputeStale(): Promise<SweepResult> {
     return runSweep({ full: false });
   },
 
   /**
-   * Score the named contacts of one owner now, in the sweep's own batches.
-   *
-   * For the routes that turn tracking on. A person who tracks somebody sees
-   * the ring on the next read, not after the hourly sweep. Ids that are not
-   * the owner's, not tracked, ghosts or archived are left alone. Above
-   * `INLINE_SCORE_LIMIT` ids the rows stay marked for the sweep instead, so
-   * one request cannot hold the process for a whole address book.
+   * Score one owner's named contacts now, in the sweep's batches, for the
+   * routes that turn tracking on, so the ring shows on the next read. Ids that
+   * are not the owner's, not tracked, ghosts or archived are left alone. Above
+   * `INLINE_SCORE_LIMIT` ids the rows stay marked for the sweep, so one request
+   * cannot hold the process for a whole address book.
    */
   async scoreContacts(ownerId: string, ids: string[]): Promise<number> {
     if (ids.length === 0 || ids.length > INLINE_SCORE_LIMIT) return 0;
@@ -595,8 +550,8 @@ export const relationshipService = {
 };
 
 /**
- * Record a weekly score snapshot for an owner's contacts.
- * Uses INSERT OR IGNORE so each contact is captured at most once per ISO week.
+ * Record a weekly score snapshot of an owner's contacts. INSERT OR IGNORE keeps
+ * one per contact per ISO week.
  */
 export function snapshotScores(ownerId: string, weekStart: string): number {
   return sqlite
@@ -610,8 +565,8 @@ export function snapshotScores(ownerId: string, weekStart: string): number {
 }
 
 /**
- * Capture weekly score snapshots for all active owners.
- * Called on boot after the startup stale sweep.
+ * Weekly score snapshots for every active owner, on boot after the startup
+ * sweep.
  */
 export function ensureWeeklySnapshot(now: Date = new Date()): void {
   const weekStart = isoWeekStart(now);

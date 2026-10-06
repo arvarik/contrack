@@ -1,36 +1,29 @@
-// =============================================================================
-// The semantic cache (L2)
-// =============================================================================
-// L1 (`getCachedSearch`) answers a question typed the same way twice. L2
-// answers a question asked in other words, "Berlin founders" after "founders
-// in Berlin", without a model call. It keeps the verified answers of the last
-// five minutes, up to 100 per account, each with the query vector the local
-// stage already computed. A new question reuses an answer when all of these
-// hold:
+// The semantic cache (L2). L1 (`getCachedSearch`) answers a question typed the
+// same way twice. L2 answers one asked in other words, "Berlin founders" after
+// "founders in Berlin", with no model call. It keeps the verified answers of
+// the last five minutes, up to 100 per account, each with the query vector the
+// local stage computed. A new question reuses an answer when all of these hold:
 //
-// - the same account, the same search revision and the same notes revision,
-//   so no contact or note has changed since, and no merge has happened;
-// - the same facets and the same answer source (provider and model);
-// - the same entity key: the set of capitalized words, numbers, quoted
-//   phrases and email addresses in the question;
-// - the same ordered constraint text and comparison operators after proven
+// - the same account, search revision and notes revision, so no contact, note
+//   or merge changed since;
+// - the same facets and answer source (provider and model);
+// - the same entity key: the capitalized words, numbers, quoted phrases and
+//   email addresses in the question;
+// - the same ordered constraint text and comparison operators, once proven
 //   facets and leading request words are removed;
 // - a cosine similarity of 0.97 or more between the two query vectors.
 //
-// Measured on the built-in MiniLM model: word-order paraphrases score 0.96 to
-// 0.99, and city swaps ("founders in Berlin", "founders in Munich") 0.79 to
-// 0.85. The entity key blocks a swap of a name, a number or a place even when
-// the vectors are close. The threshold was measured on the built-in model
-// only, so a provider's embedding model leaves this tier off.
+// On the built-in MiniLM model, word-order paraphrases score 0.96 to 0.99 and
+// city swaps ("founders in Berlin", "founders in Munich") 0.79 to 0.85. The
+// entity key blocks a swapped name, number or place even when the vectors are
+// close. The threshold holds for the built-in model only, so a provider's
+// embedding model turns this tier off.
 //
-// The revision is the only invalidation a contact edit needs. The
-// search_revision triggers bump it on every change to a searched column, a
-// tag, an interest, an email or a phone, and on every merge, so an answer
-// from before an edit never matches a question after it. A note moves no
-// searched column, so the notes revision (`notesRevision` in
-// searchService.ts) follows notes. A flush of every AI cache tier (a change of AI settings)
-// empties this tier too.
-// =============================================================================
+// The revisions are the only invalidation an edit needs: the search_revision
+// triggers bump on every change to a searched column, tag, interest, email or
+// phone, and on every merge, and the notes revision (`notesRevision` in
+// searchService.ts) follows notes. A flush of every AI cache tier (a change of
+// AI settings) empties this tier too.
 
 import type { Scope } from "../../tenancy/scope.ts";
 import { aiCache } from "../../utils/aiCache.ts";
@@ -136,13 +129,11 @@ const fold = (value: string) =>
     .toLowerCase();
 
 /**
- * The names in a question, as one string: capitalized words, numbers,
- * quoted phrases and email addresses, folded and sorted.
- *
- * A capitalized word that only starts a question ("Who", "Find", "I") is
- * not a name, so the words that ask are left out. Case and accents are
- * folded, so "Zürich" and "ZURICH" are one entity. A question typed all in
- * lower case has no capitalized words, and matches only another question
+ * The names in a question as one string: capitalized words, numbers, quoted
+ * phrases and email addresses, folded and sorted. A capitalized word that only
+ * starts a question ("Who", "Find", "I") is not a name, so asking words are
+ * left out. Case and accents are folded, so "Zürich" and "ZURICH" are one. A
+ * question all in lower case has no capitalized words, and matches only another
  * with none.
  */
 export function entityKey(question: string): string {
@@ -169,13 +160,11 @@ export function entityKey(question: string): string {
 }
 
 /**
- * Keep the order and operators of the remaining question.
- *
- * MiniLM scores "AI and machine learning" against "AI or machine learning"
- * above 0.97. It also confuses opposite career transitions. Similar vectors
- * therefore cannot authorize a different constraint. Only leading request
- * wording is ignored. The caller removes proven facets first, so a place
- * can move within a question without changing this key.
+ * Keep the order and operators of the remaining question. MiniLM scores "AI and
+ * machine learning" against "AI or machine learning" above 0.97, and confuses
+ * opposite career moves, so similar vectors cannot allow a different
+ * constraint. Only leading request words are ignored. The caller removes proven
+ * facets first, so a place can move in a question without changing this key.
  */
 export function constraintKey(question: string, remainder = question): string {
   let text = fold(remainder).replace(/\s+/g, " ").trim();
@@ -216,10 +205,9 @@ function liveEntries(ownerId: string, now: number): Entry[] {
 }
 
 /**
- * The closest answer to `key` at 0.97 or more, or null.
- *
- * Only this owner's entries are read, and an entry must match the revision,
- * the facets, the answer source and the entity key before its vector counts.
+ * The closest answer to `key` at 0.97 or more, or null. Only this owner's
+ * entries are read, and an entry must match the revision, facets, answer source
+ * and entity key before its vector counts.
  */
 export function getSemanticAnswer<T>(scope: Scope, key: SemanticKey): T | null {
   const entries = liveEntries(scope.ownerId, Date.now());

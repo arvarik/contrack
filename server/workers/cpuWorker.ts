@@ -1,41 +1,29 @@
-// =============================================================================
-// The CPU worker
-// =============================================================================
-// Runs on a `worker_threads` thread and holds the embedding model, which is
-// the one piece of work that used to hold the event loop for seconds at a
-// time. It also holds the search cross-encoder, which scores the top of a
-// result list in a few milliseconds per job. A backfill of 2,000 contacts blocked it for 2.19 of its 2.4 seconds,
-// in bursts of up to 83 ms; through this worker the same backfill takes the
-// same 2.4 seconds and blocks for 0.03.
+// The CPU worker, on a `worker_threads` thread. It holds the embedding model,
+// which would otherwise hold the event loop for seconds at a time (a backfill
+// of 2,000 contacts blocked it for 2.19 of its 2.4 seconds, in bursts of up to
+// 83 ms; through the worker it takes the same 2.4 seconds and blocks for 0.03),
+// and the search cross-encoder, a few milliseconds per job.
 //
-// It has no database connection and no way to get one. Everything it needs
-// arrives in the job, and everything it produces goes back to the main
-// thread, which is the only thread that writes. That is how the single-writer
-// rule survives a second thread: not by agreeing not to write, but by having
-// nothing to write with.
+// It has no database connection and no way to get one: everything it needs
+// arrives in the job, and everything it makes goes back to the main thread, the
+// only writer. The module graph must stay that way: anything that reaches
+// `server/db.ts` would open the database again and re-run every migration on
+// this thread, so the imports are the protocol and the models only.
 //
-// The module graph is the other constraint, and it is easy to break by
-// accident. Importing anything that reaches `server/db.ts` would open the
-// database a second time and re-run every migration on this thread. The
-// imports below are the protocol and the models, and nothing else.
-//
-// ONE LOAD PER PROCESS. onnxruntime-node's native addon registers itself with
-// the Node environment that loads it first, and every later load anywhere in
-// the same process fails with "Module did not self-register" — including in
-// the main thread, and including after the thread that loaded it has been
-// terminated. Measured on linux/x64, which is what the image runs:
+// ONE LOAD PER PROCESS. onnxruntime-node's native addon registers with the
+// first Node environment that loads it, and every later load in the process
+// fails with "Module did not self-register", in the main thread too, even after
+// the first thread ended. On linux/x64, the image's platform:
 //
 //   worker #1, first load in the process   ok
 //   worker #2, after #1 was terminated     Module did not self-register
 //   main thread, after #1 was terminated   Module did not self-register
 //   a worker that never imports it         ok, as many times as you like
 //
-// Two rules come out of that, and both are in `cpuHost.ts`: this worker is
-// never replaced once it has been spawned, and the in-process fallback is
-// only reachable when the worker never started at all. The third is here: a
-// job with nothing to embed must not touch the model, or every empty job
-// spends the process's one load.
-// =============================================================================
+// So this worker is never replaced once spawned, and the in-process fallback
+// runs only when the worker never started (both in `cpuHost.ts`). And here, a
+// job with nothing to embed must not touch the model, or an empty job would
+// spend the process's one load.
 
 import { parentPort } from "worker_threads";
 import {
@@ -63,9 +51,7 @@ function send(message: WorkerMessage, transfer?: Transferable[]): void {
   port.postMessage(message, transfer as never);
 }
 
-// ---------------------------------------------------------------------------
-// The model
-// ---------------------------------------------------------------------------
+// The models
 
 /**
  * The library, reading the model folder and the cache the way the server
@@ -81,12 +67,10 @@ async function transformers() {
 const SESSION_OPTIONS = { intraOpNumThreads: 2, interOpNumThreads: 1 };
 
 /**
- * Embedding models by model id, each loaded once, on this thread.
- *
- * The main thread does not load them at all, so there is one copy of each in
- * memory rather than two. The server uses one. The benchmark compares
- * several in one process, which is why this is a map. A load that failed is
- * removed, so the next job tries again.
+ * Embedding models by id, each loaded once, on this thread only, so there is
+ * one copy in memory. The server uses one; the benchmark compares several in
+ * one process, hence a map. A failed load is removed, so the next job tries
+ * again.
  */
 const extractors = new Map<string, Promise<FeatureExtractionPipeline>>();
 
@@ -112,11 +96,9 @@ interface CrossEncoder {
 }
 
 /**
- * Cross-encoders by model id, each loaded once.
- *
- * The server uses one. The benchmark compares two in one process, which is
- * why this is a map. A load that failed is removed, so the next job tries
- * again rather than failing forever on one bad download.
+ * Cross-encoders by id, each loaded once. The server uses one; the benchmark
+ * compares two in one process, hence a map. A failed load is removed, so one
+ * bad download does not fail forever.
  */
 const crossEncoders = new Map<string, Promise<CrossEncoder>>();
 
@@ -142,11 +124,10 @@ function ensureCrossEncoder(id: string): Promise<CrossEncoder> {
 }
 
 /**
- * Score every document against the query in one forward pass.
- *
- * Each pair is the query and one document, cut to `maxLength` tokens. An
- * MS MARCO cross-encoder returns one logit per pair, and that logit is the
- * score. No documents means no model, for the reason `runEmbed` gives.
+ * Score every document against the query in one forward pass. Each pair is the
+ * query and one document, cut to `maxLength` tokens; an MS MARCO cross-encoder
+ * returns one logit per pair, which is the score. No documents means no model,
+ * for the reason `runEmbed` gives.
  */
 async function runRerank(id: number, job: RerankJob): Promise<void> {
   if (job.docs.length === 0) {
@@ -179,19 +160,16 @@ async function runRerank(id: number, job: RerankJob): Promise<void> {
 }
 
 /**
- * Embed every text, a batch at a time.
- *
- * The batching is what makes progress meaningful and keeps memory bounded: one
- * forward pass over two thousand texts would be one long call with nothing to
- * report and every vector alive at once.
+ * Embed every text, a batch at a time, so progress means something and memory
+ * stays bounded: one pass over two thousand texts would report nothing and keep
+ * every vector alive at once.
  */
 async function runEmbed(id: number, job: EmbedJob): Promise<void> {
   const { texts, batchSize } = job;
 
-  // Nothing to embed, so nothing to load. Not an optimization: loading the
-  // model is the one irreversible thing this process can do, and spending it
-  // on a job with no texts would leave a worker that can never be replaced in
-  // exchange for no vectors at all.
+  // Nothing to embed, so nothing to load. Loading the model is the one
+  // irreversible thing this process can do, and spending it on an empty job
+  // would leave a worker that can never be replaced, for no vectors.
   if (texts.length === 0) {
     send({
       type: "result",
@@ -241,16 +219,12 @@ async function runEmbed(id: number, job: EmbedJob): Promise<void> {
   );
 }
 
-// ---------------------------------------------------------------------------
 // The loop
-// ---------------------------------------------------------------------------
 
 port.on("message", (message: HostMessage) => {
-  // Canceling happens on the host, which drops a job that has not been sent
-  // yet. Stopping one that is already running would mean checking a flag
-  // between batches here, and that is deliberately not built: nothing in the
-  // product cancels a running job, and a path with no caller and no test is
-  // worse than a path that is not there.
+  // The host drops a canceled job that has not been sent. A running job is not
+  // stopped here: nothing in the product cancels one, and a path with no caller
+  // and no test is worse than none.
   if (message.type === "cancel") return;
 
   const { id, job } = message;

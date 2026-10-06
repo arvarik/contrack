@@ -1,18 +1,15 @@
 /**
- * Database Initialization — the SQLite connection, the migrations and the
- * derived indexes.
+ * The SQLite connection, the migrations and the derived indexes. Every service
+ * imports this file, and on import it:
+ * 1. Opens the connection in WAL mode with foreign keys enforced.
+ * 2. Applies the migrations in server/db/migrations/ this database has not run,
+ *    each recorded in schema_migrations (server/db/runner.ts).
+ * 3. Installs the FTS tables, the vec0 stores, the passage index and their
+ *    triggers (server/db/indexes.ts).
+ * 4. Runs the steps every boot needs (section 3 below).
  *
- * Every service imports this file. On import it:
- * 1. Opens the SQLite connection in WAL mode with foreign keys enforced
- * 2. Applies the migrations in server/db/migrations/ that this database has
- *    not run, and records each in schema_migrations (server/db/runner.ts)
- * 3. Installs the FTS tables, the vec0 stores, the passage index and the
- *    triggers that feed them (server/db/indexes.ts)
- * 4. Runs the four steps that run on every boot (§3 below)
- *
- * The exports keep the names and signatures they had before the migrations
- * moved to server/db/. A helper that lives there takes the connection, and
- * the wrapper here binds it to this one.
+ * A helper in server/db/ takes the connection, and the wrapper here binds it to
+ * this one.
  *
  * @module server/db
  */
@@ -30,14 +27,12 @@ import {
 } from "./db/owners.ts";
 import { tableExists as tableExistsOn } from "./db/vec.ts";
 
-// =============================================================================
-// 1. Open SQLite Connection
-// =============================================================================
+// 1. The connection
 
 import path from "path";
 // Under Vitest the database must live in a DATA_DIR the test setup made. The
-// fallback, ./curator.db, is the developer's own data when the suite runs
-// from a checkout, and three unit tests once wrote test accounts into it.
+// fallback, ./curator.db, is the developer's own data when the suite runs from
+// a checkout.
 if (process.env.VITEST && !process.env.DATA_DIR) {
   throw new Error(
     "DATA_DIR is not set under Vitest. The fallback ./curator.db is real data, so a test setup must give each file a temp DATA_DIR.",
@@ -50,46 +45,31 @@ export const sqlite = new Database(DB_PATH);
 sqlite.pragma("journal_mode = WAL");
 sqlite.pragma("foreign_keys = ON");
 
-// =============================================================================
-// 1a. Performance PRAGMAs (Caching Strategy)
-// =============================================================================
-// These PRAGMAs are CRITICAL for a local-first app with an embedded 9–15MB
-// database. They reduce cold-start query latency by ~3–5× and eliminate
-// unnecessary fsync calls on writes. Each is explained inline.
-//
-// DIAGNOSTIC: All applied PRAGMAs are logged at startup so cache config is
-// always visible when debugging performance issues.
-// =============================================================================
+// PRAGMAs. They cut cold-start query latency by about 3 to 5 times and skip
+// needless fsyncs. Each one is logged at startup.
 
-// cache_size: Hold ~8MB of database pages in SQLite's internal page cache.
-// Negative value = kilobytes. Default is -2000 (2MB). For a ~9MB database,
-// -8000 (8MB) pins ~90% of pages, drastically reducing cold-start reads.
+// About 8 MB of pages in SQLite's page cache (negative = kilobytes; the default
+// is 2 MB), which holds most of a typical database.
 sqlite.pragma("cache_size = -8000");
 
-// mmap_size: Memory-map the entire database file into virtual memory.
-// This bypasses read() syscalls — the OS maps the file directly into the
-// process address space. 256MB ceiling covers generous future growth.
+// Memory-map up to 256 MB of the file, so reads skip the read() syscall.
 sqlite.pragma("mmap_size = 268435456");
 
-// synchronous: In WAL mode, NORMAL provides sufficient crash safety for a
-// local-first app. It allows group commits (fewer fsync calls per transaction)
-// while still guaranteeing durability against application crashes.
-// Only an OS-level crash during a WAL checkpoint could theoretically lose the
-// most recent transaction — an acceptable trade-off for a personal CRM.
+// NORMAL is crash-safe in WAL mode against an application crash and allows
+// group commits. Only an OS crash during a checkpoint could lose the latest
+// transaction, which is acceptable for a personal CRM.
 sqlite.pragma("synchronous = NORMAL");
 
-// temp_store: Keep temporary tables and indices in memory instead of disk.
-// Relevant for complex JOINs in dashboard aggregations, dedupe scans, and
-// any query that uses ORDER BY on non-indexed columns (which creates temp B-trees).
+// Temporary tables and indexes in memory, for joins and sorts on non-indexed
+// columns in the dashboard and dedupe scans.
 sqlite.pragma("temp_store = MEMORY");
 
-// busy_timeout: With WAL mode + several background writers (geocode queue,
-// embedding backfills, incremental dedupe, hourly score recompute), a
-// concurrent write would otherwise surface immediately as SQLITE_BUSY (503).
-// Wait up to 5s for the lock instead.
+// Several background writers (geocoder, embedding backfills, dedupe, scoring)
+// share the lock, so a write waits up to 5 s for it instead of failing at once
+// with SQLITE_BUSY.
 sqlite.pragma("busy_timeout = 5000");
 
-// ── Diagnostic: Log all applied PRAGMA values for observability ──────────
+// Diagnostic: Log all applied PRAGMA values for observability
 import fs from "fs";
 
 const dbSizeBytes = (() => {
@@ -142,12 +122,7 @@ log.info("Database", `Opened ${DB_PATH} (WAL mode, foreign keys ON)`, {
   tempStore: tempStoreNames[appliedTempStore as number] ?? appliedTempStore,
 });
 
-// =============================================================================
-// 1b. Load sqlite-vec Extension
-// =============================================================================
-// Must be loaded BEFORE any DDL that creates vec0 virtual tables.
-// sqlite-vec adds native vector similarity search directly to SQLite.
-// =============================================================================
+// sqlite-vec, loaded before any DDL that creates vec0 tables.
 
 import * as sqliteVec from "sqlite-vec";
 sqliteVec.load(sqlite);
@@ -157,32 +132,24 @@ const { vec_version } = sqlite
 log.info("Database", `sqlite-vec loaded (version ${vec_version})`);
 
 /**
- * The sqlite-vec build this process loaded.
- *
- * Read once at boot and exported for the admin health panel. An operator
- * confirming that an upgrade actually took effect should not have to open the
- * database to do it, and this is the one version number that comes from a
- * native extension rather than from a row we wrote ourselves.
+ * The sqlite-vec build this process loaded, for the admin health panel, so an
+ * operator can confirm an upgrade without opening the database.
  */
 export const VEC_VERSION = vec_version;
 
-// Before any migration runs. Partition keys arrived in 0.1.6 and vector
-// queries depend on them, so an instance that cannot have them
-// must refuse to start rather than migrate and then fail. `assertVecVersion`
-// is declared below; a function declaration hoists, so it is callable here.
+// Before any migration: vector queries depend on partition keys (0.1.6), so an
+// instance without them refuses to start rather than migrate and then fail.
+// `assertVecVersion` is a hoisted function declaration, so it is callable here.
 assertVecVersion(vec_version);
 
 export const db = drizzle(sqlite, { schema });
 
-// =============================================================================
-// 2. Migrations, then the derived indexes
-// =============================================================================
-// The runner applies every migration this database has not run, in order,
-// each in one transaction with its row in schema_migrations. A migration that
-// throws stops the boot here, with its id in the error. Then every derived
-// structure is installed, and its version recorded. A database holding a
-// migration this build does not have refuses to start.
-// =============================================================================
+// 2. Migrations, then the derived indexes. The runner applies every migration
+//    this database has not run, in order, each in one transaction with its row
+//    in schema_migrations. A migration that throws stops the boot with its id
+//    in the error. Then every derived structure is installed and its version
+//    recorded. A database holding a migration this build does not have refuses
+//    to start.
 
 runMigrations(sqlite, MIGRATIONS);
 installIndexes(sqlite);
@@ -203,10 +170,9 @@ export {
 } from "./db/vec.ts";
 
 /**
- * Tables that carry `ownerId`. Every row in each has an owner after boot.
- *
- * The live list. A migration that adds an owned table adds it here too, and
- * the ownership guard in §3 checks every table in it on every boot.
+ * Tables that carry `ownerId`; after boot every row in them has an owner. A
+ * migration that adds an owned table adds it here too, and the ownership guard
+ * below checks every table in it on every boot.
  */
 export const OWNED_TABLES = [
   "contacts",
@@ -230,10 +196,8 @@ export const OWNED_TABLES = [
 ] as const;
 
 /**
- * The admin that instance-wide work acts as.
- *
- * Throws only if called before ensureLocalOwner has ever run, which the boot
- * order makes impossible.
+ * The admin that instance-wide work acts as. Throws only if called before
+ * ensureLocalOwner has run, which the boot order prevents.
  */
 export function primaryAdminId(): string {
   return primaryAdminIdOn(sqlite);
@@ -253,12 +217,9 @@ export function tableExists(name: string): boolean {
 }
 
 /**
- * Refuse to start below the release that introduced partition keys.
- *
- * The returned string carries a leading `v` and may carry a pre-release
- * suffix (`v0.1.10-alpha.4`), so this parses three integers rather than
- * comparing strings — `"v0.1.10" < "v0.1.6"` is true as a string and false as
- * a version.
+ * Refuse to start below the release that introduced partition keys. The version
+ * has a leading `v` and may have a pre-release suffix (`v0.1.10-alpha.4`), so
+ * this compares three integers: as strings, `"v0.1.10" < "v0.1.6"`.
  */
 export function assertVecVersion(version: string, minimum = [0, 1, 6]): void {
   const parts = version
@@ -277,28 +238,16 @@ export function assertVecVersion(version: string, minimum = [0, 1, 6]): void {
   }
 }
 
-// =============================================================================
-// 3. Every boot
-// =============================================================================
-// Four steps run on every start, after the migrations and the indexes,
-// because live code needs them and not only old rows:
-//
-// - §8, because earlier builds wrote `nextFollowUpAt` from POST and PATCH
-//   with no task, and this turns such a date into one. A write now makes the
-//   task itself (`followUpTo` in contactService).
-// - §9i, the ownership guard over the live OWNED_TABLES.
-// - ANALYZE and PRAGMA optimize, for the planner.
-// - §10, because ghost contacts from mentions and connectors are written with
-//   no `phoneticHash`, and only this fills it.
-//
-// =============================================================================
+// 3. Every boot. After the migrations and the indexes:
+// - the follow-up backfill, for a database written before every write made its
+//   own follow-up task (`followUpTo` in contactService);
+// - the ownership guard over the live OWNED_TABLES;
+// - ANALYZE and PRAGMA optimize, for the planner;
+// - the phonetic hash backfill, because ghost contacts from mentions and
+//   connectors are written with no `phoneticHash`.
 
-// =============================================================================
-// 8. Backfill: Migrate existing nextFollowUpAt → action_items
-// =============================================================================
-// One-time migration: for contacts with nextFollowUpAt set but no action_items
-// rows, create a default "Follow up" action item so the trigger system takes over.
-// =============================================================================
+// Follow-up backfill: a contact with `nextFollowUpAt` and no open action item
+// gets a "Follow up" item, so the triggers take over.
 
 const orphanedFollowUps = sqlite
   .prepare(
@@ -312,10 +261,8 @@ const orphanedFollowUps = sqlite
   .all() as { id: string; nextFollowUpAt: string }[];
 
 if (orphanedFollowUps.length > 0) {
-  // No ownerId column here on purpose: §2z-4 runs before this section, so
-  // `action_items_owner_fill` is installed and copies the owner from the
-  // parent contact. Naming it here would duplicate the trigger, not replace
-  // it, and every row this writes belongs to whoever owns the contact.
+  // No ownerId here on purpose: the migrations installed
+  // `action_items_owner_fill`, which copies the owner from the parent contact.
   // tenant-lint: allow boot migration
   const insertStmt = sqlite.prepare(`
     INSERT INTO action_items (id, contactId, title, dueAt)
@@ -333,15 +280,8 @@ if (orphanedFollowUps.length > 0) {
   );
 }
 
-// =============================================================================
-// 9i. Ownership guard
-// =============================================================================
-// The columns themselves are added in §2z-4, which has to run before §3
-// because the FTS backfill selects `c.ownerId`. What stays here is the check
-// that used to be implied by doing the work: if any owned table reached the
-// end of boot without the column, scoped queries would return
-// the wrong rows rather than fail, so this fails now instead.
-// =============================================================================
+// Ownership guard. Without the column on an owned table, scoped queries would
+// return the wrong rows rather than fail, so boot fails here instead.
 
 for (const table of OWNED_TABLES) {
   const columns = sqlite.pragma(`table_info(${table})`) as { name: string }[];
@@ -352,32 +292,22 @@ for (const table of OWNED_TABLES) {
   }
 }
 
-// =============================================================================
-// 9h. Planner statistics
-// =============================================================================
-// Give the query planner statistics for the indexes the migrations built.
-//
-// `PRAGMA optimize` only re-analyzes tables that
-// already have sqlite_stat1 rows, and nothing had ever run ANALYZE, so the
-// owner-first composite indexes would have been invisible to the
-// planner. This runs once per boot and is cheap on a database this size.
+// Planner statistics for the indexes the migrations built. `PRAGMA optimize`
+// alone only re-analyzes tables that already have sqlite_stat1 rows, so this
+// runs ANALYZE once per boot, which is cheap at this size.
 sqlite.exec("ANALYZE");
 sqlite.pragma("optimize");
 
 /**
  * Bring the planner's row counts up to date after a batch of writes.
  *
- * SQLite plans from the counts of the last ANALYZE, which the boot above
- * gathers and a daily timer refreshes. After a server indexed 5,000
- * contacts, the counts said "2 rows" for a table of 22,000, and a keyword
- * search took 145 seconds.
- *
- * `optimize=0x10002` looks at every table and runs ANALYZE only on a table
- * whose row count has moved tenfold, under SQLite's own time limit. On a
- * database of 5,800 contacts it takes 0.02 ms when nothing moved and 3 ms
- * for one stale table, where a full ANALYZE takes 20 ms. So every drain of
- * the index queue and every backfill calls it, and SQLite decides what is
- * stale. A failure is logged and no more: the counts stay as they were.
+ * SQLite plans from the counts of the last ANALYZE, which boot gathers and a
+ * daily timer refreshes. After 5,000 contacts were indexed, the counts said "2
+ * rows" for a table of 22,000, and a keyword search took 145 seconds.
+ * `optimize=0x10002` runs ANALYZE only on a table whose row count moved
+ * tenfold, under SQLite's own time limit: on 5,800 contacts, 0.02 ms when
+ * nothing moved and 3 ms for one stale table, against 20 ms for a full ANALYZE.
+ * So every index-queue drain and backfill calls it. A failure is only logged.
  */
 export function refreshPlannerStats(): void {
   try {
@@ -390,12 +320,8 @@ export function refreshPlannerStats(): void {
   }
 }
 
-// =============================================================================
-// 10. Phonetic Hash Backfill
-// =============================================================================
-// One-time idempotent backfill: compute Double Metaphone for all contacts
-// that don't yet have a phoneticHash. On subsequent runs this is a no-op.
-// =============================================================================
+// Phonetic hash backfill: Double Metaphone for every contact without a
+// phoneticHash. A no-op when there are none.
 
 import { doubleMetaphone } from "./utils/nlp/index.ts";
 
