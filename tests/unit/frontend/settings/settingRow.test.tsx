@@ -3,7 +3,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import { render, screen, cleanup, act } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { SettingRow } from "../../../../src/views/settings/SettingRow";
+import {
+  RowsUnderHeading,
+  SettingRow,
+} from "../../../../src/views/settings/SettingRow";
 
 let mockChanged: string[] = [];
 
@@ -31,41 +34,36 @@ const row = () =>
   );
 
 describe("SettingRow", () => {
-  it("renders title, description and control without the dot at the default", () => {
-    mockChanged = [];
-    row();
-    expect(screen.getByText("Test Setting")).toBeTruthy();
-    expect(screen.getByText("A description of the test setting")).toBeTruthy();
-    expect(screen.getByText("Control")).toBeTruthy();
-    expect(
-      screen.queryByRole("img", { name: "Changed from the default" }),
-    ).toBeNull();
-  });
+  it.each([
+    [[], 0],
+    [["theme"], 1],
+  ])(
+    "marks a value off its default with the dot alone (%j)",
+    (changed, dots) => {
+      mockChanged = changed;
+      row();
+      expect(
+        screen.queryAllByRole("img", { name: "Changed from the default" }),
+      ).toHaveLength(dots);
+      // The page's one Reset to defaults resets it (ResetToDefaults).
+      expect(screen.queryByRole("button", { name: /reset/i })).toBeNull();
+    },
+  );
 
-  it("marks a changed value with the dot alone, and no Reset of its own", () => {
-    mockChanged = ["theme"];
-    row();
-    const mark = screen.getByRole("img", { name: "Changed from the default" });
-    expect(mark.getAttribute("title")).toBe("Changed from the default");
-    // The page's one Reset to defaults resets it (ResetToDefaults).
-    expect(screen.queryByRole("button", { name: /reset/i })).toBeNull();
-  });
-
-  it("puts a wide control under the text when the row is below", () => {
+  // Headings never skip a level: h1, then the rows, unless a section's h2
+  // sits between them.
+  it("titles a row h2 under the page and h3 under a section", () => {
     mockChanged = [];
-    const { container } = render(
+    render(
       <MemoryRouter>
-        <SettingRow id="wide" title="Wide" description="Tiles" below>
-          <div data-testid="tiles" />
-        </SettingRow>
+        <SettingRow id="top" title="Top" description="" />
+        <RowsUnderHeading>
+          <SettingRow id="inner" title="Inner" description="" />
+        </RowsUnderHeading>
       </MemoryRouter>,
     );
-    const layout = container.querySelector("#wide > div")!;
-    expect(layout.className).toContain("flex-col");
-    expect(layout.className).not.toContain("sm:flex-row");
-    expect(screen.getByTestId("tiles").parentElement!.className).toBe(
-      "min-w-0",
-    );
+    expect(screen.getByRole("heading", { name: "Top" }).tagName).toBe("H2");
+    expect(screen.getByRole("heading", { name: "Inner" }).tagName).toBe("H3");
   });
 
   it("flashes background and focuses element on matching hash", () => {

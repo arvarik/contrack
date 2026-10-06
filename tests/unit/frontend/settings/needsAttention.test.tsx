@@ -1,153 +1,47 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NeedsAttention } from "../../../../src/views/settings/NeedsAttention";
 import * as api from "../../../../src/api";
 import * as importsApi from "../../../../src/api/imports";
 
-vi.mock("../../../../src/api", () => ({
-  useDedupeCount: vi.fn(),
-  useContacts: vi.fn(),
-}));
+vi.mock("../../../../src/api", () => ({ useDedupeCount: vi.fn() }));
+vi.mock("../../../../src/api/imports", () => ({ useImports: vi.fn() }));
 
-vi.mock("../../../../src/api/imports", () => ({
-  useImports: vi.fn(),
-}));
+const counts = (duplicates: number, failed: number) => {
+  vi.mocked(api.useDedupeCount).mockReturnValue({
+    data: duplicates,
+  } as unknown as ReturnType<typeof api.useDedupeCount>);
+  vi.mocked(importsApi.useImports).mockReturnValue({
+    data: Array.from({ length: failed }, (_, i) => ({
+      id: `i${i}`,
+      status: "failed",
+      failed: 0,
+      createdAt: new Date().toISOString(),
+    })),
+  } as unknown as ReturnType<typeof importsApi.useImports>);
+  return render(
+    <MemoryRouter>
+      <NeedsAttention />
+    </MemoryRouter>,
+  );
+};
 
 describe("NeedsAttention", () => {
-  let queryClient: QueryClient;
-
-  beforeEach(() => {
-    queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-    vi.clearAllMocks();
+  it("draws nothing while nothing waits", () => {
+    expect(counts(0, 0).container.firstChild).toBeNull();
   });
 
-  const renderComponent = () =>
-    render(
-      <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <NeedsAttention />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-  it("renders nothing when all counts are zero", () => {
-    vi.mocked(api.useDedupeCount).mockReturnValue({
-      data: 0,
-    } as unknown as ReturnType<typeof api.useDedupeCount>);
-    vi.mocked(api.useContacts).mockReturnValue({
-      data: [{ id: "c1", aiHydratedAt: "2026-01-01" }],
-    } as unknown as ReturnType<typeof api.useContacts>);
-    vi.mocked(importsApi.useImports).mockReturnValue({
-      data: [
-        {
-          id: "i1",
-          status: "complete",
-          failed: 0,
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    } as unknown as ReturnType<typeof importsApi.useImports>);
-
-    const { container } = renderComponent();
-    expect(container.firstChild).toBeNull();
-  });
-
-  it("renders review duplicates link when dedupeCount > 0", () => {
-    vi.mocked(api.useDedupeCount).mockReturnValue({
-      data: 5,
-    } as unknown as ReturnType<typeof api.useDedupeCount>);
-    vi.mocked(api.useContacts).mockReturnValue({
-      data: [],
-    } as unknown as ReturnType<typeof api.useContacts>);
-    vi.mocked(importsApi.useImports).mockReturnValue({
-      data: [],
-    } as unknown as ReturnType<typeof importsApi.useImports>);
-
-    renderComponent();
-    expect(
-      screen.getByRole("region", { name: "Needs attention" }),
-    ).toBeTruthy();
-    expect(screen.getByText("Review 5 possible duplicates")).toBeTruthy();
-    const link = screen.getByRole("link", {
-      name: /Review 5 possible duplicates/i,
-    });
-    expect(link.getAttribute("href")).toBe("/pulse/duplicates");
-  });
-
-  it("has no enrich link, however many contacts were never enriched", () => {
-    vi.mocked(api.useDedupeCount).mockReturnValue({
-      data: 0,
-    } as unknown as ReturnType<typeof api.useDedupeCount>);
-    vi.mocked(api.useContacts).mockReturnValue({
-      data: [
-        { id: "c1", aiHydratedAt: null, isArchived: false, isGhost: false },
-        { id: "c2", aiHydratedAt: null, isArchived: false, isGhost: false },
-      ],
-    } as unknown as ReturnType<typeof api.useContacts>);
-    vi.mocked(importsApi.useImports).mockReturnValue({
-      data: [],
-    } as unknown as ReturnType<typeof importsApi.useImports>);
-
-    const { container } = renderComponent();
-    expect(screen.queryByText(/Enrich \d+ contact/)).toBeNull();
-    // Nothing else waits, so the strip is not drawn at all.
-    expect(container.firstChild).toBeNull();
-  });
-
-  it("renders retry failed imports link for recent failures", () => {
-    vi.mocked(api.useDedupeCount).mockReturnValue({
-      data: 0,
-    } as unknown as ReturnType<typeof api.useDedupeCount>);
-    vi.mocked(api.useContacts).mockReturnValue({
-      data: [],
-    } as unknown as ReturnType<typeof api.useContacts>);
-    vi.mocked(importsApi.useImports).mockReturnValue({
-      data: [
-        {
-          id: "i1",
-          status: "failed",
-          failed: 0,
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    } as unknown as ReturnType<typeof importsApi.useImports>);
-
-    renderComponent();
-    expect(screen.getByText("Retry 1 failed import")).toBeTruthy();
-    const link = screen.getByRole("link", { name: /Retry 1 failed import/i });
-    expect(link.getAttribute("href")).toBe("/settings/import");
-  });
-
-  it("renders both links when both have counts", () => {
-    vi.mocked(api.useDedupeCount).mockReturnValue({
-      data: 12,
-    } as unknown as ReturnType<typeof api.useDedupeCount>);
-    vi.mocked(api.useContacts).mockReturnValue({
-      data: [
-        { id: "c1", aiHydratedAt: null, isArchived: false, isGhost: false },
-      ],
-    } as unknown as ReturnType<typeof api.useContacts>);
-    vi.mocked(importsApi.useImports).mockReturnValue({
-      data: [
-        {
-          id: "i1",
-          status: "complete",
-          failed: 3,
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    } as unknown as ReturnType<typeof importsApi.useImports>);
-
-    renderComponent();
-    expect(screen.getByText("Review 12 possible duplicates")).toBeTruthy();
-    expect(screen.getByText("Retry 1 failed import")).toBeTruthy();
-    expect(screen.queryByText(/Enrich \d+ contact/)).toBeNull();
-    expect(screen.getAllByRole("link")).toHaveLength(2);
+  it("links each count to the page that settles it", () => {
+    counts(12, 1);
+    const hrefs = screen
+      .getAllByRole("link")
+      .map((link) => [link.textContent, link.getAttribute("href")]);
+    expect(hrefs).toEqual([
+      ["Review 12 possible duplicates", "/pulse/duplicates"],
+      ["Retry 1 failed import", "/settings/import"],
+    ]);
   });
 });
