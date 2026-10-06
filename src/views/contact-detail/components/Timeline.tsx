@@ -303,6 +303,8 @@ interface TimelineEntryProps {
   onOpen: (item: Interaction, editing: boolean) => void;
   onAskDelete: (item: Interaction) => void;
   promoteGhost: PromoteGhost;
+  /** A follow-up marked done in its undo window reads as done here too. */
+  pending: ReadonlySet<string>;
 }
 
 const TimelineEntry = React.memo(
@@ -313,13 +315,12 @@ const TimelineEntry = React.memo(
     onOpen,
     onAskDelete,
     promoteGhost,
+    pending,
   }: TimelineEntryProps) => {
     const navigate = useNavigate();
     // Each entry animates in with a transform, which makes it a stacking
     // context. An open menu lifts its entry above the next one.
     const [menuOpen, setMenuOpen] = useState(false);
-    /** A follow-up marked done in its undo window reads as done here too. */
-    const pending = useHiddenPendingIds();
     const { item, date } = entry;
     const { Icon, tone } = getInteractionStyle(item.type);
     const mentions = useMemo(
@@ -660,6 +661,7 @@ export const Timeline = ({
                       onOpen={open}
                       onAskDelete={askDelete}
                       promoteGhost={promoteGhost}
+                      pending={hidden}
                     />
                   ))}
                 </ul>
