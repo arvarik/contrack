@@ -9,45 +9,25 @@
  *   favicon-16.png            a tab at 1x: the tiny master, fitted to the pixels
  *   favicon-32.png            a tab at 2x: the small master, fitted to the pixels
  *   favicon-48.png            a tab at 3x, and search results: small
- *   favicon.ico               the three frames above, for everything that asks
- *                             for /favicon.ico
+ *   favicon.ico               the three frames above, for /favicon.ico
  *   apple-touch-icon.png      180, square and opaque, for iOS to round: medium
  *   icon-192.png, -512.png    the rounded tile, for launchers: medium
  *   icon-maskable-192.png, icon-maskable-512.png
  *                             full bleed, the bird inside the safe circle
  *   og-image.png              1200 by 630, the link preview
  *
- * The brand kit, in `docs/brand/` (its README says what each file is for):
+ * The brand kit goes in `docs/brand/`, and its README lists each file.
  *
- *   corvid-mark.svg, .png             the logo on a light ground
- *   corvid-mark-dark.svg, .png        the logo on a dark ground
- *   corvid-mark-black.svg             one colour, for print
- *   corvid-mark-white.svg             one colour, reversed
- *   corvid-app-icon.svg, -1024.png    the app icon's master
- *   contrack-lockup.svg, .png         the mark and the name, light ground
- *   contrack-lockup-dark.svg, .png    the same, dark ground
- *   contrack-lockup-animated.svg, contrack-lockup-animated-dark.svg
- *                                     the lockups with the bird alive, for
- *                                     the README (see `animatedLockup.ts`)
- *   social-preview.png                1280 by 640, the repository's card
- *   corvid-optical-sizes.png          the four masters at the sizes they serve
- *   corvid-mark-variants.png          the four colour versions on their grounds
- *   corvid-poses.svg, .png            the model sheet (see `poseSheet.ts`)
+ * Every color is a literal from `BRAND` and `TILE`, because a favicon cannot
+ * read CSS tokens and librsvg (under sharp) does not resolve `var()`.
+ * `corvidPaths.test.ts` checks each literal against its token. Every word is
+ * an outline in the app's own faces (see `type.ts`), so no render depends on
+ * the machine's fonts.
  *
- * Every colour here is a literal from `BRAND` and `TILE`. A favicon cannot
- * read CSS tokens, and librsvg, which sharp rasterises through, does not
- * resolve `var()` either. `tests/unit/frontend/brand/corvidPaths.test.ts`
- * checks each literal against the token it copies. Every word is an outline
- * in the app's own faces (see `type.ts`), so no render depends on the fonts
- * the machine has.
- *
- * The outputs are committed. `tests/unit/frontend/brand/icons.test.ts`
- * renders every SVG again and compares it with the committed file, byte for
- * byte, so a change to the paths, the masters or the fonts without a rebuild
- * fails CI.
- * It checks each raster's size and the icon file's frames. A raster's bytes
- * depend on the libvips and librsvg of the machine that drew it, so they
- * are not compared.
+ * The outputs are committed. `icons.test.ts` renders every SVG again and
+ * compares it byte for byte, so a change without a rebuild fails CI. It
+ * checks only each raster's size and the icon file's frames, because raster
+ * bytes depend on the machine's libvips and librsvg.
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -93,9 +73,7 @@ const NAME_TRACKING = -0.025;
 const round = (n: number) => Math.round(n * 1000) / 1000;
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-// ---------------------------------------------------------------------------
 // SVG builders
-// ---------------------------------------------------------------------------
 
 /** Some of the mark's parts, as SVG lines. */
 const partLines = (parts: readonly CorvidPart[], indent: string): string[] =>
@@ -209,7 +187,7 @@ function tileSvg(options: TileOptions): string {
   ].join("\n");
 }
 
-/** The four colour versions of the logo, for the brand kit. */
+/** The four color versions of the logo, for the brand kit. */
 export const MARK_VARIANTS = {
   "corvid-mark": {
     ink: BRAND.mark,
@@ -274,7 +252,7 @@ interface LockupOptions {
 /**
  * The lockup: the mark and the name, in the proportions of `<Wordmark>`.
  * The name is set at 0.7 of the mark's height, tracked as the app's
- * headings are, and its ink is centred on the mark's. The gap is the
+ * headings are, and its ink is centered on the mark's. The gap is the
  * component's 8 px at 28 px, scaled. The box keeps the mark's own side
  * margin after the name too. Units are pixels at the PNG's size.
  */
@@ -345,7 +323,7 @@ async function lockupSvg(
 
 /**
  * A link card: the app icon at left, the name and one line of the
- * description at right, the group centred on the light surface. The link
+ * description at right, the group centered on the light surface. The link
  * preview is 1200 by 630 and the repository card 1280 by 640. Everything
  * scales with the height, so the two are one composition.
  */
@@ -395,9 +373,7 @@ export async function renderCardSvg(
   ].join("\n");
 }
 
-// ---------------------------------------------------------------------------
 // Raster
-// ---------------------------------------------------------------------------
 
 function png(svg: string, density = 72): Promise<Buffer> {
   return sharp(Buffer.from(svg), { density })
@@ -477,7 +453,7 @@ export function icoFile(
     directory.writeUInt8(size >= 256 ? 0 : size, at + 1);
     directory.writeUInt8(0, at + 2); // no palette
     directory.writeUInt8(0, at + 3);
-    directory.writeUInt16LE(1, at + 4); // colour planes
+    directory.writeUInt16LE(1, at + 4); // color planes
     directory.writeUInt16LE(32, at + 6); // bits a pixel
     directory.writeUInt32LE(data.length, at + 8);
     directory.writeUInt32LE(offset, at + 12);
@@ -630,7 +606,7 @@ async function opticalSheet(): Promise<Buffer> {
     .toBuffer();
 }
 
-/** The four colour versions of the logo on the grounds they are for. */
+/** The four color versions of the logo on the grounds they are for. */
 async function variantSheet(): Promise<Buffer> {
   const cell = 200;
   const pad = 24;
@@ -666,9 +642,7 @@ async function variantSheet(): Promise<Buffer> {
     .toBuffer();
 }
 
-// ---------------------------------------------------------------------------
 // Build
-// ---------------------------------------------------------------------------
 
 export async function build(): Promise<string[]> {
   await mkdir(BRAND_DIR, { recursive: true });

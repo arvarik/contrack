@@ -1,20 +1,13 @@
 /**
- * The corvid's flights, measured.
+ * The corvid's flights, measured. Every flight is flown frame by frame at 60
+ * fps, over many seeds and three windows, and checked on every frame:
  *
- * `planFlight` is pure so that "the bird left the window", "the bird flew
- * upside down" and "the bird landed somewhere other than its ring" are
- * failures a test can see. Every flight here is flown frame by frame at 60
- * frames a second, over many seeds and three windows, and every promise is
- * checked on every frame rather than on the waypoints the route was drawn
- * through:
- *
- * - It leaves as the logo and lands as the logo, at the perch's place and
- *   size, so the swap between the perch's bird and the flying one is
- *   invisible at both ends.
- * - It stays inside the window, and away from the perch inside the part of
- *   the window a flight may cross.
+ * - It leaves and lands as the logo, at the perch's place and size, so the
+ *   swap to and from the perch's bird is invisible.
+ * - It stays inside the window, and away from the perch inside the part a
+ *   flight may cross.
  * - It faces the way it goes, turning round rather than flying backwards.
- * - It is random: seeds give different routes, and one seed gives one route.
+ * - Seeds give different routes, and one seed gives one route.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -62,7 +55,7 @@ function fly(plan: FlightPlan, step = 1000 / 60): FlightFrame[] {
   return frames;
 }
 
-const perchCentre = (perch: FlightPerch) => {
+const perchCenter = (perch: FlightPerch) => {
   const [x, y] = bodyCentre(HOME_POSE);
   return [
     perch.left + (x / 100) * perch.size,
@@ -71,7 +64,7 @@ const perchCentre = (perch: FlightPerch) => {
 };
 
 const expectHome = (frame: FlightFrame, perch: FlightPerch) => {
-  const [x, y] = perchCentre(perch);
+  const [x, y] = perchCenter(perch);
   expect(frame.x).toBeCloseTo(x, 6);
   expect(frame.y).toBeCloseTo(y, 6);
   expect(frame.size).toBeCloseTo(perch.size, 6);
@@ -134,7 +127,7 @@ for (const kind of ["loop", "sortie", "swoop", "search"] as FlightKind[]) {
 
       it(`stays in the window, and in the flight box away from the perch, on ${name}`, () => {
         const box = flightBox(viewport);
-        const [px, py] = perchCentre(perch);
+        const [px, py] = perchCenter(perch);
         for (const seed of SEEDS) {
           const plan = planFlight({
             kind,
@@ -795,7 +788,7 @@ describe("a search round the column", () => {
 
   /** The frames away from the perch: not leaving it, not landing on it. */
   const away = (frames: FlightFrame[], perch: FlightPerch) => {
-    const [px, py] = perchCentre(perch);
+    const [px, py] = perchCenter(perch);
     return frames.filter((f) => Math.hypot(f.x - px, f.y - py) >= 110);
   };
 

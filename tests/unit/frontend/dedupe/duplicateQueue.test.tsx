@@ -1,16 +1,11 @@
 // @vitest-environment jsdom
-// =============================================================================
-// Possible duplicates: the keys, the choice of the contact to keep, and Undo
-// =============================================================================
-// A merge changes a person's data, so every case here guards a way the list
-// used to merge the wrong thing or hide how to take it back:
+// Possible duplicates: the keys, the choice of the contact to keep, and Undo.
+// A merge changes a person's data, so:
 //
-// - An arrow pressed to choose the contact to keep also merged the group,
-//   into the contact the engine had suggested, in the same key press.
-// - A key merge ignored the contact a person had chosen.
-// - The caveat that says "look twice" was behind a click.
-// - Only a key merge offered Undo, and Keep separate offered none.
-// =============================================================================
+// - An arrow chooses the contact to keep and never merges in the same press.
+// - A key merge keeps the contact the person chose.
+// - The caveat that says "look twice" shows without a click.
+// - Every merge and Keep separate offer Undo.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   act,

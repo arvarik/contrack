@@ -1,13 +1,10 @@
 // @vitest-environment jsdom
 /**
- * Add from text, on the Network list.
- *
- * One callback served two paths: closing the dialog and a successful
- * extraction. So the X, Escape or the overlay went on to the New contact
- * form. Now a close only closes, and focus goes back to the control that
- * opened the dialog. A successful extraction opens the form with the
- * fields filled in, and a result that arrives after the person closed the
- * dialog opens nothing. The V key reaches the same dialog.
+ * Add from text, on the Network list. Closing the dialog (X, Escape or the
+ * overlay) only closes, and focus goes back to the control that opened it. A
+ * successful extraction opens the New contact form with the fields filled
+ * in, and a result that arrives after a close opens nothing. The V key opens
+ * the same dialog.
  *
  * The real ContactList renders here, so the test holds its wiring and not a
  * copy of it. The API is stubbed and nothing is saved.

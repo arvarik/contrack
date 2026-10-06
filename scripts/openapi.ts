@@ -1,6 +1,4 @@
-// =============================================================================
 // npm run api:openapi — write docs/openapi.json from the route contracts
-// =============================================================================
 // Every route with a contract in shared/contracts/ becomes one operation of
 // an OpenAPI 3.1 document: its path and query parameters, its JSON body, and
 // the JSON body of a success. Zod writes each schema (`z.toJSONSchema`),
@@ -15,7 +13,6 @@
 //
 // tests/integration/contracts.test.ts fails when the committed file differs
 // from what this builds, so run it after changing a contract.
-// =============================================================================
 
 import { writeFile } from "node:fs/promises";
 import path from "node:path";

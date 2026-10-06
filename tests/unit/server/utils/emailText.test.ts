@@ -1,6 +1,4 @@
-// =============================================================================
 // Unit: emailText — the readable part of an uploaded .eml file
-// =============================================================================
 
 import { describe, it, expect } from "vitest";
 import { emailText } from "../../../../server/utils/emailText.ts";

@@ -1,13 +1,10 @@
-// =============================================================================
-// Unit Tests — facets as SQL agree with the palette's matchesFacet
-// =============================================================================
+// Unit: facets as SQL agree with the palette's matchesFacet.
 // The palette filters its cached contacts with `matchesFacet`, and the server
 // now compiles the same facets into SQL. A person must see the same people
 // either way, so every facet runs both ways on the same rows: lower and
 // upper case, accents, quotes, blank and whitespace values, NULLs, the three
 // date forms the columns hold, a date nothing can read, and coordinates on
 // both sides of the 180th meridian.
-// =============================================================================
 
 import { describe, it, expect, beforeAll, vi } from "vitest";
 import crypto from "crypto";

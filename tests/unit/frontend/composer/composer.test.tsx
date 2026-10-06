@@ -1,22 +1,15 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The interaction composer keeps a note until the save that keeps it
-// =============================================================================
-// The composer cleared its editor the moment a save started. A request that
-// failed took the note with it, and a request that succeeded took anything
-// typed while it was out. Every case here is one a person on a slow
-// connection meets: a 500, a session that expires mid-save, a second click on
-// Save, and a sentence finished while the first half was still uploading.
+// The interaction composer keeps a note until the save that keeps it. A
+// failed save keeps the note, and a successful one keeps text typed while it
+// was out. The cases are a 500, a session that expires mid-save, a second
+// click on Save, and a sentence finished during the upload.
 //
-// It is also the only composer now. The contact page and the quick
-// interaction dialog both draw it, so the controls it shows (a type
-// radiogroup, a Save that is never disabled, the message an empty Save gets)
-// and its compact form for the dialog are checked here too.
+// The contact page and the quick interaction dialog both draw this composer,
+// so its controls (a type radiogroup, a Save that is never disabled, the
+// message an empty Save gets) and its compact form are checked here too.
 //
-// The editor is a real tiptap instance. Typing is done by mutating the
-// contenteditable, which is what a browser does, and ProseMirror's DOM
-// observer reads it back into the document.
-// =============================================================================
+// The editor is a real tiptap instance. Tests type by mutating the
+// contenteditable, as a browser does, and ProseMirror's DOM observer reads it.
 import {
   afterEach,
   beforeAll,
@@ -52,11 +45,9 @@ vi.mock("../../../../src/components/auth/AuthGate", () => ({
   useAuth: () => ({ user: account.current }),
 }));
 
-// The composer reads two hooks off the `api` barrel, and the barrel pulls in
-// every API module in the app. Coverage instruments what is imported, so
-// loading twenty modules this file never exercises lowered the project's
-// function coverage under its floor. The two hooks stay real, from their own
-// files.
+// The composer reads two hooks off the `api` barrel, which pulls in every API
+// module, and coverage instruments what is imported. So the barrel is stubbed
+// and the two hooks stay real, from their own files.
 vi.mock("../../../../src/api", async () => {
   const [interactions, contacts] = await Promise.all([
     import("../../../../src/api/interactions"),
@@ -159,9 +150,8 @@ const followUpInput = () =>
 
 /**
  * jsdom lays nothing out, so a Range has no rectangles. ProseMirror asks for
- * them when it scrolls the caret into view, which it does for an editor with
- * focus, and the composer now puts focus in the editor after an empty Save
- * and when "Log interaction" asks for it.
+ * them to scroll the caret into view in a focused editor, and the composer
+ * focuses the editor after an empty Save and on "Log interaction".
  */
 beforeAll(() => {
   const noRect = () => new DOMRect(0, 0, 0, 0);
@@ -416,7 +406,7 @@ describe("the compact composer", () => {
   });
 
   it("keeps a note it did not save for the next opening", async () => {
-    // Escape or a tap outside closed the dialog, and the note was gone.
+    // Escape or a tap outside closes the dialog, and the note must survive.
     stubServer();
     const first = mountCompact();
     await type(await editorElement(), "Lunch at the usual place");
@@ -717,7 +707,7 @@ describe("a save that succeeds", () => {
 
     await waitFor(() => expect(pm.textContent).toBe(""));
     expect(followUpInput().value).toBe("");
-    // Save stays enabled on an empty composer. Pressing it now explains.
+    // Save stays enabled on an empty composer, and pressing it explains.
     expect((saveButton() as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -791,8 +781,7 @@ describe("a save that succeeds", () => {
 
   it("sends the type and the follow-up that are on screen from the keyboard", async () => {
     // The shortcut extension is created once, with the first render's
-    // closures, so before this Mod-Enter always sent a "note" with no
-    // follow-up whatever the screen showed.
+    // closures, so it must read the type and follow-up on screen at send time.
     const saves = stubServer();
     mount();
     const pm = await editorElement();

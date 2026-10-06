@@ -101,8 +101,8 @@ describe("useHeatUnderLabels", () => {
 
   it.each<[string, Layer[], [string, string][]]>([
     [
-      // The dark basemap names the water under its roads. The heat under
-      // that label had the roads drawn across it.
+      // The dark basemap names the water under its roads, so heat placed
+      // under that label would have the roads drawn across it.
       "where the labels start, over the last road",
       [
         { id: "background", type: "background" },

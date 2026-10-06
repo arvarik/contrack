@@ -31,8 +31,8 @@ const NOW = new Date("2026-09-30T12:00:00.000Z");
 const SEED = "test-seed";
 const FACE = defaultAvatarUrl("Christy Russel");
 
-/** Metres between two points, near enough for a few kilometres. */
-function metres(aLat: number, aLng: number, bLat: number, bLng: number) {
+/** Meters between two points, near enough for a few kilometers. */
+function meters(aLat: number, aLng: number, bLat: number, bLng: number) {
   const dLat = (bLat - aLat) * 111_320;
   const dLng = (bLng - aLng) * 111_320 * Math.cos((aLat * Math.PI) / 180);
   return Math.hypot(dLat, dLng);
@@ -126,17 +126,17 @@ describe("planEnrichment", () => {
   });
 
   describe("addresses", () => {
-    it("puts a Berlin contact on a Berlin street, pinned in that neighbourhood", () => {
+    it("puts a Berlin contact on a Berlin street, pinned in that neighborhood", () => {
       const p = plan({ location: "Berlin, Germany" });
       const home = p.add.contact_addresses[0];
       expect(home.label).toBe("home");
       expect(home.isPrimary).toBe(1);
       expect(home.address).toMatch(/\d{5} Berlin$/);
-      const hoods = CITIES.berlin.neighbourhoods!;
+      const hoods = CITIES.berlin.neighborhoods!;
       expect(hoods.some((h) => home.address.startsWith(h.street))).toBe(true);
       const near = Math.min(
         ...hoods.map((h) =>
-          metres(
+          meters(
             h.lat,
             h.lng,
             p.contact.lat as number,
@@ -155,8 +155,8 @@ describe("planEnrichment", () => {
       );
     });
 
-    it("places a town's pin beside the town's centre, whatever pin the contact has", () => {
-      const [lat, lng] = CITIES.aarhus.centre!;
+    it("places a town's pin beside the town's center, whatever pin the contact has", () => {
+      const [lat, lng] = CITIES.aarhus.center!;
       for (const pin of [
         { lat: 56.1496, lng: 10.2045 },
         { lat: 0, lng: 0 },
@@ -164,7 +164,7 @@ describe("planEnrichment", () => {
         const p = plan({ location: "Aarhus", ...pin });
         expect(p.add.contact_addresses[0].address).toMatch(/\d{4} Aarhus$/);
         expect(
-          metres(lat, lng, p.contact.lat as number, p.contact.lng as number),
+          meters(lat, lng, p.contact.lat as number, p.contact.lng as number),
         ).toBeLessThan(1300);
       }
     });
@@ -260,7 +260,7 @@ describe("planEnrichment", () => {
       }
     });
 
-    it("knows every city the benchmark contacts live in, and the centre and prefix of every town", () => {
+    it("knows every city the benchmark contacts live in, and the center and prefix of every town", () => {
       const cities = [
         "Amsterdam, Netherlands",
         "Austin, TX, USA",
@@ -294,8 +294,8 @@ describe("planEnrichment", () => {
         expect(CITIES[cityKey(location)!], location).toBeDefined();
       }
       for (const [key, city] of Object.entries(CITIES)) {
-        if (city.neighbourhoods) continue;
-        expect(city.centre, key).toBeDefined();
+        if (city.neighborhoods) continue;
+        expect(city.center, key).toBeDefined();
         expect(city.zip, key).toBeTruthy();
       }
     });

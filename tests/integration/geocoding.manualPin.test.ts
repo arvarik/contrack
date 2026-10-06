@@ -1,6 +1,4 @@
-// =============================================================================
 // Integration: a pin placed by hand, and what the geocoder does about it
-// =============================================================================
 // The rule under test has two halves. The geocoder never overwrites a row a
 // person placed, however it comes to have an answer for that row. And an edit
 // to that contact does not ask the geocoder again unless it changed the text
@@ -10,7 +8,6 @@
 // the call it makes or does not make, with no provider and no network. The
 // one test that needs the real write runs it against the geocode cache, which
 // answers before any provider is asked.
-// =============================================================================
 
 import { describe, it, expect, vi } from "vitest";
 import request from "supertest";

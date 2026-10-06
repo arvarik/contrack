@@ -1,5 +1,5 @@
 /**
- * tests/unit/server/connectors/summaries.test.ts — Unit tests for connector email summaries.
+ * Unit: connector email summaries.
  *
  * A summary sends an email body to an AI provider, so it runs only when a
  * provider is configured and both AI switches allow it for the connector's

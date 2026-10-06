@@ -1,15 +1,8 @@
-// =============================================================================
-// Integration Tests — the route manifest matches the app
-// =============================================================================
-// A route that reaches production unclassified is a route nobody decided the
-// tenancy rules for. This test makes that impossible: adding, removing, or
-// renaming a route fails here until server/tenancy/routeManifest.ts is
-// updated to say what the route is.
-//
-// The route list comes from the recorder in ./tenancy/listRoutes.ts, not from
-// a naive stack walk. Express 5 keeps no mount path strings, so a stack walk
-// alone yields "/reorder" rather than "/api/lists/reorder".
-// =============================================================================
+// Integration: the route manifest matches the app.
+// Adding, removing or renaming a route fails here until
+// server/tenancy/routeManifest.ts says what the route is, so no route ships
+// without tenancy rules. The route list comes from ./tenancy/listRoutes.ts,
+// because Express 5 keeps no mount paths for a plain stack walk.
 
 import { describe, it, expect } from "vitest";
 import { createApp } from "../../server/app.ts";
@@ -122,14 +115,7 @@ describe("route manifest", () => {
   });
 
   it("counts the admin surface", () => {
-    // A cheap tripwire: the admin surface grew from fourteen classified rows
-    // to twenty-nine guarded ones in Phase 3, and to thirty with the health
-    // route in quality story S9, to thirty-eight with the instance AI
-    // switch, to thirty-nine with the web search switch, to forty with the
-    // background jobs, back to thirty-nine when the old session policy
-    // route went, to forty-one with the address lookup switch, and to
-    // forty-two with the snapshot download. A route added without a
-    // decision moves this number.
+    // A cheap tripwire: a route added without a decision moves this number.
     const admin = ROUTE_MANIFEST.filter((r) => r.class === "admin");
     expect(admin).toHaveLength(42);
     expect(

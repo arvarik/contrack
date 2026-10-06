@@ -235,10 +235,10 @@ function countedContacts(count: number) {
   return { contacts, reads };
 }
 
-// The three projections share the full contact list. An inline `select` is
-// a new function on each render, so TanStack Query ran it again on every
-// render of the map, the palette and the note dialog, and each run walked
-// all 5,800 people.
+// The three projections share the full contact list. An inline `select` would
+// be a new function on each render, so TanStack Query would run it again on
+// every render of the map, the palette and the note dialog, each time walking
+// every contact.
 describe("contact list projections", () => {
   it.each([
     ["useContactNames", useContactNames],

@@ -1,15 +1,12 @@
 /**
  * The weather, without the weather service.
  *
- * A contact with coordinates shows the local time and the temperature where
- * they are, and the temperature comes from Open-Meteo, a public service.
- * A spec that reached it would depend on that service being up, and would
- * scan a page whose pill fades in whenever the answer happens to arrive.
- * An accessibility scan that starts mid-fade reads the text at a tenth of
- * its opacity and calls the contrast a failure.
- *
- * So every test answers the host here, at once and with one fixed reading.
- * The request still leaves the page, which keeps the production CSP honest.
+ * A contact with coordinates shows the temperature where they are, from
+ * Open-Meteo. A spec that reached it would depend on the service, and an
+ * accessibility scan that starts while the pill fades in reads its text at a
+ * tenth of its opacity and fails the contrast. So every test answers the host
+ * here, at once, with one fixed reading. The request still leaves the page,
+ * which keeps the production CSP honest.
  */
 import type { Page } from "@playwright/test";
 

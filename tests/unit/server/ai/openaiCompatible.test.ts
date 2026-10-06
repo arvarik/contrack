@@ -1,15 +1,11 @@
-// =============================================================================
-// OpenAI-compatible adapter — structured-output negotiation
-// =============================================================================
-// Self-hosted backends vary wildly in how much of the OpenAI surface they
-// really implement, and they can fail *quietly* — a 200 whose body is not the
-// JSON that was asked for. The negotiation therefore downgrades on an
-// unparseable body as well as on an outright rejection.
+// Unit: the OpenAI-compatible adapter's structured-output negotiation.
+// Self-hosted backends implement different parts of the OpenAI surface and
+// can fail quietly, with a 200 whose body is not the JSON asked for, so the
+// negotiation downgrades on an unparseable body as well as on a rejection.
 //
 // The reasoning-model cases come from a real llama.cpp server (gemma-4-12B on
 // CUDA): it splits output into `reasoning_content` and `content`, so a tight
 // token ceiling yields a 200 with an empty answer.
-// =============================================================================
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 

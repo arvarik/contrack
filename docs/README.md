@@ -36,7 +36,7 @@ is optional.
 - [REST API reference](api-reference.md): every endpoint, with examples
 - [Architecture](architecture.md): how the system fits together
 - [Contributing](../CONTRIBUTING.md): set up, test, and ship a change
-- [Brand kit](brand/README.md): the corvid, the lockup, and the colours
+- [Brand kit](brand/README.md): the corvid, the lockup, and the colors
 
 ## About these pages
 

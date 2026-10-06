@@ -1,12 +1,9 @@
-// =============================================================================
 // Integration: the search lane of the AI queue
-// =============================================================================
 // Ask generations (the planner, the reranker and the brief) run in a lane
-// with two slots of its own. On 2026-09-26 a question waited 12 s behind two
-// research calls in the shared slots, then answered with nothing. These tests
-// hold the shared slots and prove an Ask generation does not wait for them,
-// and that the lane keeps its own limit and order.
-// =============================================================================
+// with two slots of its own, so a question does not wait behind research
+// calls in the shared slots. These tests hold the shared slots and prove an
+// Ask generation does not wait for them, and that the lane keeps its own
+// limit and order.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

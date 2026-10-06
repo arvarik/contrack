@@ -1,6 +1,4 @@
-// =============================================================================
-// Remote images — the server's one download of a third-party image
-// =============================================================================
+// Unit: remote images, the server's one download of a third-party image.
 // server/utils/remoteImage.ts is the path every logo, Google contact photo
 // and link-preview image takes before it reaches disk. These tests pin what
 // it accepts (raster images only), what it refuses (SVG, HTML, too large),
@@ -9,7 +7,6 @@
 //
 // The network is stubbed at safeFetch. Everything after it is real: the
 // capped binary reader, sharp's format check, and the atomic writer.
-// =============================================================================
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

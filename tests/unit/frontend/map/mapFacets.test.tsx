@@ -1,11 +1,9 @@
 // @vitest-environment jsdom
-// =============================================================================
 // The map's filter, on rows built the way the map builds them
-// =============================================================================
+//
 // The rows come from `toMapContacts`, a projection of the slim contact cache,
 // and the query arrives through the address the way a link or a saved view
 // gives it: with no space after its last facet.
-// =============================================================================
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";

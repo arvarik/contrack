@@ -1,12 +1,9 @@
-// =============================================================================
-// Integration Tests — only a tracked contact is scored
-// =============================================================================
+// Integration: only a tracked contact is scored
 // The score is an opt-in. `contacts.isTracked` gates the two sweeps, the
 // single-contact readers, the inline scorer behind the tracking routes and
 // the weekly snapshot (its case is with the other snapshot rules, in
 // scoring.snapshots.test.ts). An untracked contact's stored score is a
 // placeholder that nothing writes and nothing shows.
-// =============================================================================
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { sqlite } from "../../server/db.ts";
 import {

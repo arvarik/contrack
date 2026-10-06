@@ -104,7 +104,7 @@ describe("heatStops", () => {
   });
 
   it("darkens toward the most over a light map, from a pale yellow to the accent", () => {
-    // The first stop is the second's colour with no alpha.
+    // The first stop is the second's color with no alpha.
     const stops = heatStops("#006a91", "light")!.map((stop) =>
       read(stop.color),
     );
@@ -132,7 +132,7 @@ describe("heatStops", () => {
 
   it("follows a picked accent the short way round, never through violet", () => {
     // Rose to yellow goes through orange. Blue to yellow goes through teal
-    // and green. Neither passes the AI colour's hue, 293.
+    // and green. Neither passes the AI color's hue, 293.
     for (const [accent, mode] of [
       ["#e11d48", "light"],
       ["#006a91", "light"],
@@ -147,7 +147,7 @@ describe("heatStops", () => {
     expect(rose.at(-1)!.h).toBeLessThan(40);
   });
 
-  it("draws no heat rather than a colour of its own for an unreadable token", () => {
+  it("draws no heat rather than a color of its own for an unreadable token", () => {
     expect(heatStops("", "light")).toBeNull();
     expect(heatStops("oklch(0.7 0.1 230)", "dark")).toBeNull();
   });
@@ -210,7 +210,7 @@ describe("heatPaint", () => {
     expect(HEAT_PINS_ZOOM).toBeLessThan(HEAT_END_ZOOM);
   });
 
-  it("colours the density with the ramp", () => {
+  it("colors the density with the ramp", () => {
     expect(paint["heatmap-color"]).toEqual([
       "interpolate",
       ["linear"],

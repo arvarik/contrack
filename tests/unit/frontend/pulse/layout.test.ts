@@ -252,9 +252,9 @@ describe("pulse.layout", () => {
     expect(next).toBe(state);
   });
 
-  // A layout stored before the Momentum card became Keeping up. The old id
-  // is unknown now and drops out. The new id is not named, so the card comes
-  // back in its default column: last in the Network column.
+  // A stored layout can hold the retired `momentum` id (Momentum became
+  // Keeping up). It drops out, and the new id is not named, so the card comes
+  // back in its default place: last in the Network column.
   it("drops a stored momentum id and shows Keeping up in its default place", () => {
     const stored: PulseLayout = {
       hidden: ["momentum"],
@@ -274,9 +274,9 @@ describe("pulse.layout", () => {
     expect(Object.values(resolved.visible).flat()).not.toContain("momentum");
   });
 
-  // A layout stored before New people folded into Inbox. The id is unknown
-  // now and drops out of the order and the hidden list alike. Composition
-  // keeps the place the person gave it.
+  // A stored layout can hold the retired `new-people` id (New people folded
+  // into Inbox). It drops out of the order and the hidden list alike, and
+  // Composition keeps the place the person gave it.
   it("drops a stored new-people id from the order and from the hidden list", () => {
     const stored: PulseLayout = {
       hidden: ["new-people"],
@@ -298,12 +298,10 @@ describe("pulse.layout", () => {
   });
 });
 
-// =============================================================================
 // The drag's draft
-// =============================================================================
+//
 // A drag moves a card through a local copy of the visible columns and saves
 // once, on the drop, through the reducer. These are the pure steps.
-// =============================================================================
 describe("pulse.layout: the drag's draft", () => {
   const start = (): VisibleColumns =>
     resolveLayout(DEFAULT_PULSE_LAYOUT).visible;

@@ -1,12 +1,9 @@
-// =============================================================================
 // The embedder port
-// =============================================================================
 // Search and dedupe reach a model only through `currentEmbedder()`. These
 // tests pin what each adapter says about itself and sends where, and the two
 // rules built on `local`: who may be embedded, and that the built-in model
 // loads at boot whatever the capability names. The capability, the account
 // switch and the worker host are mocked, so no model runs.
-// =============================================================================
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

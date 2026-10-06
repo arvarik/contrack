@@ -1,16 +1,13 @@
 /**
- * Compression, in the browser the app runs in.
+ * Compression, in the browser the app runs in. The integration tests read
+ * the bytes off the wire, and this reads the page. Chromium asks for
+ * `gzip, deflate, br, zstd`, also on this plain-HTTP loopback origin. The
+ * production build must work end to end: HTML, JS, CSS and API JSON
+ * compressed, the fonts as they are, and Ask's stream as it is, so its first
+ * line shows before the last is written.
  *
- * The integration tests read the bytes off the wire. This reads the page.
- * Chromium asks for `gzip, deflate, br, zstd`, also on this plain-HTTP
- * loopback origin, and decodes what comes back. The production build must
- * still work end to end: the HTML, JS, CSS and the API's JSON compressed,
- * the fonts as they are, and Ask's stream as it is, so that its first line
- * can show before the last one is written.
- *
- * The browser's own measure of each body comes from Resource Timing: its
- * size on the wire (`encodedBodySize`) and once decoded (`decodedBodySize`).
- * A compressed body is smaller on the wire.
+ * Resource Timing gives each body's size on the wire (`encodedBodySize`) and
+ * decoded (`decodedBodySize`). A compressed body is smaller on the wire.
  */
 import type { Page } from "@playwright/test";
 import { test, expect } from "./fixtures/test";

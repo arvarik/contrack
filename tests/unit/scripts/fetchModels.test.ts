@@ -1,11 +1,8 @@
-// =============================================================================
 // Unit: scripts/fetch-models.ts downloads pinned files and checks each hash
-// =============================================================================
 // The Docker build runs this script, so the image ships the search models and
 // never reaches huggingface.co. A file that does not match its pinned SHA-256
 // must stop the build rather than ship, and a file already on disk must not
 // be downloaded again.
-// =============================================================================
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";

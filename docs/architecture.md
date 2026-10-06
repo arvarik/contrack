@@ -378,7 +378,7 @@ Each area of the server is a module: a folder in `server/modules/` whose
 
 - `createApp()` mounts every module's routers in list order, after the auth
   middleware. Express matches in mount order, so the order is part of the
-  behaviour: the `mcp` module mounts before the `contacts` module, or
+  behavior: the `mcp` module mounts before the `contacts` module, or
   `GET /contacts/:id` would capture `GET /contacts/action-items`.
 - `registerAllTools` registers every module's MCP tools.
 - `server.ts` registers every module's jobs and subscribers, starts the job
@@ -540,7 +540,7 @@ from its committed baseline, up or down.
 | `tests/eval/search.eval.test.ts`   | Recall at 10 and mean reciprocal rank for 79 questions over 300 contacts, for five rankings: the sidebar search, keyword, fused, the local answer, and the local answer with the cross-encoder. Record with `npm run eval:record`. |
 | `tests/eval/answer.eval.test.ts`   | The whole Ask pipeline with recorded model answers: filters, results, empty answers, prompt-injection cases and grounded briefs. Record with `npm run eval:record:answer`, or run live with `npm run eval:answer:live`.            |
 | `tests/eval/passages.eval.test.ts` | Questions whose answer sits late in a long field, through the passage index.                                                                                                                                                       |
-| `tests/eval/dedupe.eval.test.ts`   | Precision and recall of the duplicate passes with AI off, on a labelled corpus with hard negatives. Record with `npm run eval:record:dedupe`.                                                                                      |
+| `tests/eval/dedupe.eval.test.ts`   | Precision and recall of the duplicate passes with AI off, on a labeled corpus with hard negatives. Record with `npm run eval:record:dedupe`.                                                                                       |
 
 ## AI
 
@@ -614,7 +614,7 @@ search), `server/services/research/` (contact research) and
   prompt when a server refuses the format.
 - **Resilience.** `server/ai/resilience.ts` gives every adapter `withTimeout`,
   `withRetry` (at most one retry, with jittered backoff) and `parseAIJson`. The
-  SDKs' own retries are off. A cancelled request stops its queued work.
+  SDKs' own retries are off. A canceled request stops its queued work.
 - **Prompt safety.** `wrapUntrusted` (`server/ai/promptSafety.ts`) fences
   contact fields, files and web text inside `<untrusted_data>` tags, and each
   such prompt carries `UNTRUSTED_DATA_RULE`. `sanitizeAiOutputValue` checks

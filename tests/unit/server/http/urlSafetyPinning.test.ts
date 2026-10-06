@@ -1,12 +1,9 @@
-// =============================================================================
 // SSRF guard — the connect-time lookup that closes the rebinding hole
-// =============================================================================
 // assertPublicHttpUrl resolves a hostname, checks it, and then fetch resolves
 // the SAME name again to dial the socket. Two queries, two answers: a hostile
 // DNS server passes the check with a public address and serves the connect a
 // private one. guardedLookup runs INSIDE the dialing resolver, so the address
 // it validates is the address the socket uses.
-// =============================================================================
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -37,9 +34,8 @@ describe("guardedLookup", () => {
     "192.168.1.20",
     "169.254.169.254",
     "::1",
-    // IPv6 forms that EMBED a private IPv4 — the guard must see through the
-    // wrapping. The metadata address in ::ffff: form walked past the old
-    // three-prefix check; found by the independent v1.5.4 review.
+    // IPv6 forms that EMBED a private IPv4: the guard must see through the
+    // wrapping, such as the metadata address in ::ffff: form.
     "::ffff:169.254.169.254",
     "::ffff:172.16.0.9",
     "::ffff:100.64.0.1",
@@ -88,9 +84,8 @@ describe("guardedLookup", () => {
   });
 
   it("passes a clean all:true answer through in array form", async () => {
-    // net reads addresses[0].address — collapsing the array to a string
-    // breaks the socket layer (ERR_INVALID_IP_ADDRESS), which is how the
-    // first version of this guard failed against a real host.
+    // net reads addresses[0].address, so collapsing the array to a string
+    // breaks the socket layer (ERR_INVALID_IP_ADDRESS) against a real host.
     const answer = [
       { address: "93.184.216.34", family: 4 },
       { address: "2606:2800:220:1:248:1893:25c8:1946", family: 6 },

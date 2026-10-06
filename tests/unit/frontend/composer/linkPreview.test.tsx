@@ -1,14 +1,9 @@
 // @vitest-environment jsdom
-// =============================================================================
-// Link preview cards draw only the server's own copy of an image
-// =============================================================================
-// The server now stores each preview image under /uploads/ and answers with
-// that path. A note saved before that change can still carry the linked
-// site's image URL, and drawing it would load a third-party image each time
-// the note is opened. So the card draws an <img> only for a same-origin
-// /uploads/ path, in both places it is drawn: the editor's React node view
-// and the HTML the editor saves.
-// =============================================================================
+// Link preview cards draw only the server's own copy of an image. The server
+// stores each preview image under /uploads/, but an older note can still carry
+// the linked site's image URL, which would load a third-party image each time
+// the note opens. So the card draws an <img> only for a same-origin /uploads/
+// path, in the editor's React node view and in the HTML the editor saves.
 
 import { afterEach, describe, expect, it } from "vitest";
 import React from "react";

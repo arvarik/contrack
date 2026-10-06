@@ -1,20 +1,14 @@
-// =============================================================================
-// vCard — the round trip, and the four things that break parsers
-// =============================================================================
-// The claim this feature makes is not "we can write a .vcf". It is that a file
-// this app writes is a file this app reads back with nothing lost, and that a
-// file another address book writes is one this app can read. Those are two
-// different tests and both are here.
+// Unit: vCard, the round trip and the four things that break parsers.
+// A file this app writes reads back with nothing lost, and a file another
+// address book writes reads in. Both are tested here.
 //
-// The round trip is the first block and it is the one that matters: contacts
-// with the awkward values — a semicolon in a surname, a comma in a company, a
-// newline in a note, an emoji, a name long enough to fold — go out through the
-// serializer and back in through the importer, and every field is compared.
+// The round trip comes first and matters most: contacts with awkward values
+// (a semicolon in a surname, a comma in a company, a newline in a note, an
+// emoji, a name long enough to fold) go out through the serializer and back
+// through the importer, and every field is compared.
 //
-// The rest are the four things that make vCard harder than it looks, each with
-// a sample from the exporter that produces it: folding, escaping, the three
-// spellings of a parameter, and quoted-printable.
-// =============================================================================
+// The rest cover folding, escaping, the three spellings of a parameter, and
+// quoted-printable, each with a sample from an exporter that produces it.
 
 import { describe, it, expect } from "vitest";
 import {
@@ -32,9 +26,7 @@ import {
 } from "../../../shared/vcard";
 import { parseVCard } from "../../../src/lib/importers";
 
-// ---------------------------------------------------------------------------
 // The round trip
-// ---------------------------------------------------------------------------
 
 /** Contacts chosen for the values that break a naive implementation. */
 const ROUND_TRIP: VCardInput[] = [
@@ -184,9 +176,7 @@ describe("a contact written out and read back", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Guessing a structured name
-// ---------------------------------------------------------------------------
 
 describe("splitDisplayName", () => {
   // A contact added by hand has one name field, so without this every export
@@ -243,9 +233,7 @@ describe("splitDisplayName", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Escaping
-// ---------------------------------------------------------------------------
 
 describe("escaping", () => {
   const AWKWARD = [
@@ -283,9 +271,7 @@ describe("escaping", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Folding
-// ---------------------------------------------------------------------------
 
 describe("folding", () => {
   it("leaves a short line alone", () => {
@@ -326,9 +312,7 @@ describe("folding", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Files from other address books
-// ---------------------------------------------------------------------------
 
 describe("files other address books produce", () => {
   it("reads Apple's grouped properties and custom labels", () => {
@@ -446,9 +430,7 @@ describe("files other address books produce", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Files that are not really files
-// ---------------------------------------------------------------------------
 
 describe("a file that is damaged, or not a vCard at all", () => {
   it("reads nothing rather than throwing", () => {
@@ -495,9 +477,7 @@ describe("a file that is damaged, or not a vCard at all", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Writing
-// ---------------------------------------------------------------------------
 
 describe("serializeVCard", () => {
   it("writes N even when there is nothing to put in it", () => {

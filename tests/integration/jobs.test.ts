@@ -1,21 +1,15 @@
-// =============================================================================
-// Integration Tests — the job runner
-// =============================================================================
-// Background work is a row in `jobs`, and the runner (server/jobs/runner.ts)
-// runs it. Four guarantees, with background jobs off as in every
-// integration file, so nothing runs unless the test asks:
+// Integration: the job runner (server/jobs/runner.ts).
+// Background jobs are off, so nothing runs unless the test asks:
 //
-//   1. runJobNow runs a job in the calling process and records it, with
-//      background jobs disabled, and an owner's job runs in that owner's
-//      scope.
+//   1. runJobNow runs a job in the calling process and records it, and an
+//      owner's job runs in that owner's scope.
 //   2. A job the last process left `running` is queued again at boot.
 //   3. A job that throws is tried again later, and after its last try it
 //      ends `failed` with its error.
 //   4. Two owners' jobs take turns, whoever queued first.
 //
 // The poll takes the time as an argument, so a retry an hour out is a call
-// with a later clock, not an hour of waiting.
-// =============================================================================
+// with a later clock.
 
 import crypto from "node:crypto";
 import { describe, it, expect, beforeEach, afterAll } from "vitest";

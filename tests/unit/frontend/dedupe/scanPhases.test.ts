@@ -1,7 +1,5 @@
-// =============================================================================
 // The dedupe scan's progress card: which modes run the AI pass, and its
 // pipeline rows
-// =============================================================================
 import { describe, expect, it } from "vitest";
 import {
   runsAiPass,

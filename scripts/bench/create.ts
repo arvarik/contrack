@@ -31,9 +31,9 @@ export function uuidFrom(text: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-${variant}${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
 }
 
-/** A city with neighbourhoods draws ten times the people of a town. */
+/** A city with neighborhoods draws ten times the people of a town. */
 const PLACES = Object.entries(CITIES).map(
-  ([key, city]) => [key, city.neighbourhoods ? 10 : 1] as const,
+  ([key, city]) => [key, city.neighborhoods ? 10 : 1] as const,
 );
 const COUNTRY_NAME = new Intl.DisplayNames(["en"], {
   type: "region",

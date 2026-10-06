@@ -31,7 +31,7 @@ describe("detectPlatformFromUrl", () => {
   });
 
   it.each([
-    // The bug: a domain that ends in "x.com" is not x.com.
+    // A domain that ends in "x.com" is not x.com.
     "https://www.dropbox.com/s/abc",
     "https://www.netflix.com/title/1",
     "https://fedex.com/track",
@@ -50,7 +50,7 @@ describe("detectPlatformFromUrl", () => {
   });
 
   it("reads a link with no scheme the way a person typed it", () => {
-    // A vCard or a CSV often has these, and the old text match caught them.
+    // A vCard or a CSV often has these.
     expect(detectPlatformFromUrl("www.linkedin.com/in/ada")).toBe("linkedin");
     expect(detectPlatformFromUrl("x.com/ada")).toBe("twitter");
     expect(detectPlatformFromUrl("  github.com/ada  ")).toBe("github");

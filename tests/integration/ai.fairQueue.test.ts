@@ -1,16 +1,12 @@
-// =============================================================================
-// Integration Tests — Multitenant Fair AI Queue
-// =============================================================================
-// Verifies that real gateway calls reach the queue with the account and the
-// priority the queue's fairness depends on:
+// Integration: the fair AI queue across accounts.
+// Real gateway calls reach the queue with the account and priority its
+// fairness depends on:
 // 1. Waiting work rotates between accounts read from the request context.
-// 2. Interactive user requests run ahead of background jobs, whether the
-//    caller names the priority or the request id marks a job.
-// 3. Admin health panel (/api/admin/health) reports AI queue status and the
-//    production limits (concurrency 2, waiting capacity 16).
-// The scheduling rules themselves (anti-starvation, tail drop) are pinned in
-// tests/unit/server/ai/workQueue.test.ts.
-// =============================================================================
+// 2. Interactive requests run ahead of background jobs, whether the caller
+//    names the priority or the request id marks a job.
+// 3. /api/admin/health reports the queue and its limits (concurrency 2,
+//    waiting capacity 16).
+// workQueue.test.ts pins the scheduling rules (anti-starvation, tail drop).
 
 import {
   describe,

@@ -1,20 +1,12 @@
-// =============================================================================
-// Route recorder
-// =============================================================================
-// Express 5 does not keep mount path strings. `app.router` is a lazy getter,
-// layers carry no `regexp`, and `layer.path` is only set after a successful
-// `layer.match(url)`. Walking the stack alone therefore yields leaf paths with
-// no prefix: `/reorder` instead of `/api/lists/reorder`.
+// Route recorder.
+// Express 5 does not keep mount path strings: `app.router` is a lazy getter,
+// layers carry no `regexp`, and `layer.path` is set only after a match. So
+// `Router.prototype.use` and `application.use` are wrapped while `createApp()`
+// runs, each string mount path is stored against its handle, and the stack
+// walk joins prefix to route path.
 //
-// So the mount paths are recorded as they happen. `Router.prototype.use` and
-// `application.use` are wrapped while `createApp()` runs, each string mount
-// path is stored against the handle it mounted, and the stack walk then joins
-// prefix to route path.
-//
-// Shape pinned against express@5.2.1 and router@2.2.0. The fields read here
-// are `layer.route`, `route.path`, `route.methods`, `layer.name` and
-// `layer.handle`, which are the stable ones.
-// =============================================================================
+// Pinned against express@5.2.1 and router@2.2.0. It reads only `layer.route`,
+// `route.path`, `route.methods`, `layer.name` and `layer.handle`.
 
 import express from "express";
 

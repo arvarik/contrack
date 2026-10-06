@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * The Network list's proximity lift: the row under a mouse rises, and the
- * neighbour on the pointer's side rises as the pointer nears it. The lift is
+ * neighbor on the pointer's side rises as the pointer nears it. The lift is
  * written to `--p` on at most two rows, a frame after the move, and nothing
  * renders.
  */
@@ -70,7 +70,7 @@ afterEach(() => {
 });
 
 describe("useProximityLift", () => {
-  it("lifts the row under the mouse and none beside it at its centre", async () => {
+  it("lifts the row under the mouse and none beside it at its center", async () => {
     screen.getByTestId("list").dispatchEvent(pointer("pointermove", 28));
     // Nothing happens until the frame.
     expect(lifts()).toEqual(["", "", ""]);
@@ -97,7 +97,7 @@ describe("useProximityLift", () => {
 
   it("shares the lift evenly across the gap between two rows", async () => {
     // The gap between row 0 and row 1 is y 56 to 64, and its middle is the
-    // midpoint between their centres.
+    // midpoint between their centers.
     screen.getByTestId("list").dispatchEvent(pointer("pointermove", 28));
     await nextFrame();
     screen.getByTestId("list").dispatchEvent(pointer("pointermove", 60));
@@ -108,7 +108,7 @@ describe("useProximityLift", () => {
   });
 
   it("hands the lift from one row to the next without losing any", async () => {
-    // Between row 0's centre (y 28) and row 1's (y 92) the lifts always add
+    // Between row 0's center (y 28) and row 1's (y 92) the lifts always add
     // up to one whole lift, so the rise moves between rows rather than
     // dipping or doubling on the way.
     const list = screen.getByTestId("list");

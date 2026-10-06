@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
-// =============================================================================
 // The sidebar marks the page a person pressed before that page can draw
-// =============================================================================
+//
 // A navigation is a transition, so while the next page's code is on its way
 // the last page stays up and the location keeps its old path. The sidebar and
 // the tab bar read the pressed path from `lib/pendingNav`, in the same frame
 // as the press.
-// =============================================================================
 import {
   act,
   fireEvent,

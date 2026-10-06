@@ -1,18 +1,9 @@
-// =============================================================================
-// Search evaluation harness — shared by the gate and by the recorder
-// =============================================================================
-// `tests/eval/search.eval.test.ts` asserts against a committed baseline and
-// `scripts/record-search-eval.ts` writes that baseline. Both call `measure()`
-// here, so the numbers in the baseline file and the numbers the gate computes
-// come from one piece of code. A harness the recorder did not share would
-// drift, and the first sign of the drift would be a failing gate nobody could
-// explain.
-//
-// What the two callers do differently is where the query vector comes from.
-// The recorder loads the real model. The test replaces `embedText` with a
-// lookup into the recorded fixture. Everything else — the corpus, the FTS
-// index, the vector store, the fusion — is the real thing in both.
-// =============================================================================
+// Search evaluation harness, shared by the gate and the recorder.
+// `search.eval.test.ts` and `scripts/record-search-eval.ts` both call
+// `measure()`, so the baseline and the gate's numbers come from one piece of
+// code. Only the query vector differs: the recorder loads the real model, and
+// the test looks `embedText` up in the recorded fixture. The corpus, the FTS
+// index, the vector store and the fusion are real in both.
 
 import crypto from "crypto";
 import fs from "fs";
@@ -52,9 +43,7 @@ export const FIXTURE_DIR = path.resolve(HERE, "../fixtures/search-eval");
 export const BASELINE_PATH = path.resolve(HERE, "search.baseline.json");
 export const RERANK_SCORES_PATH = path.join(FIXTURE_DIR, "rerank-scores.json");
 
-// ---------------------------------------------------------------------------
 // The fixture on disk
-// ---------------------------------------------------------------------------
 
 export interface VectorManifest {
   model: string;
@@ -130,9 +119,7 @@ export function loadFixture(): Fixture {
   return { contacts, queries, manifest, contactVectors, queryVectors };
 }
 
-// ---------------------------------------------------------------------------
 // Seeding
-// ---------------------------------------------------------------------------
 
 /**
  * Write the corpus into a real database under one owner, with the ids the
@@ -180,9 +167,7 @@ export function seedVectors(
   );
 }
 
-// ---------------------------------------------------------------------------
 // Recorded cross-encoder scores
-// ---------------------------------------------------------------------------
 
 /** The scores the recorder saw, by question and by profile text hash. */
 export interface RerankScores {
@@ -250,9 +235,7 @@ export function recordingReranker(
   };
 }
 
-// ---------------------------------------------------------------------------
 // Metrics
-// ---------------------------------------------------------------------------
 
 export interface ChannelScore {
   recallAt10: number;
@@ -309,9 +292,7 @@ export function scoreRankings(
 
 function aggregate(results: QueryResult[]): ChannelScore {
   if (results.length === 0) {
-    // An empty result set averages to zero, not to one. This is the trap an
-    // earlier audit script in this repository fell into: it measured a page
-    // with nothing on it and reported a clean pass.
+    // An empty result set must fail, not report a clean pass.
     throw new Error("Nothing was measured. The eval scored zero queries.");
   }
   const recall = results.reduce((s, r) => s + r.recallAt10, 0) / results.length;
@@ -336,32 +317,26 @@ export interface MeasureOptions {
  * Run every query through all five rankings and score them.
  *
  * `sidebar` is `searchService.searchFts`, the quick search box. It joins its
- * tokens with AND and has no fallback, which is why it scores nothing at all
- * on a sentence: one word the corpus does not carry empties the result. That
- * is the widget working as designed, and recording it means a change to it
- * cannot pass unnoticed.
+ * tokens with AND and has no fallback, so one word the corpus lacks empties
+ * the result and it scores nothing on a sentence. That is by design, and
+ * recording it catches a change to it.
  *
- * `lexical` is the same FTS5 statement the hybrid retrieval uses, with the OR
- * fallback switched on. This is the number the BM25 column weights move, and
- * it is the reason this eval exists: `WEIGHTS` in `search/lexical.ts` is one
- * string of eleven numbers that anybody can edit, and nothing else in the
- * suite would notice a change.
+ * `lexical` is the hybrid retrieval's FTS5 statement with the OR fallback on.
+ * The BM25 column weights (`WEIGHTS` in `search/lexical.ts`, one string of
+ * eleven numbers) move it, and nothing else in the suite would notice.
  *
- * `fused` is `hybridRetrieval`. With no AI provider configured
- * `parseSearchQuery` returns null, so there is no query plan, no hard
- * pre-filter and no trait boost: what is measured is the keyword and vector
- * channels fused by weighted reciprocal rank, and nothing that needs a
- * network. This is the number the fusion weights and `k` move.
+ * `fused` is `hybridRetrieval`. With no provider, `parseSearchQuery` returns
+ * null, so there is no plan, pre-filter or trait boost: the keyword and
+ * vector channels fused by weighted reciprocal rank. The fusion weights and
+ * `k` move it.
  *
- * `hybrid` is what Ask Contrack answers without a model: a name, an email or
- * a phone number from strict keyword search, a question that names a known
- * place, company or industry inside those facets, and everything else as
- * the fused list. It is what a person sees before the model answers, and
- * what they keep when it fails. It leaves the cross-encoder out.
+ * `hybrid` is what Ask Contrack answers without a model: names, emails and
+ * phone numbers from strict keyword search, a known place, company or
+ * industry inside those facets, and the fused list for the rest. It is what a
+ * person sees before the model answers and keeps when it fails.
  *
- * `reranked` is `hybrid` with the cross-encoder on, which reorders the top of
- * the fused list. The gate replays recorded scores for it, so it needs no
- * model. When no cross-encoder is ready, it equals `hybrid`.
+ * `reranked` is `hybrid` with the cross-encoder reordering the top, from
+ * replayed scores. With no cross-encoder ready, it equals `hybrid`.
  */
 export async function measure(
   scope: Scope,
@@ -455,9 +430,7 @@ export async function measure(
   };
 }
 
-// ---------------------------------------------------------------------------
 // The baseline file
-// ---------------------------------------------------------------------------
 
 export interface Baseline {
   recordedAt: string;

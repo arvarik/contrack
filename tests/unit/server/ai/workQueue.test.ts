@@ -28,7 +28,7 @@ describe("AI work limits", () => {
     expect(await one).toBe("first");
     expect(await two).toBe("second");
   });
-  it("does not start work cancelled before its first microtask", async () => {
+  it("does not start work canceled before its first microtask", async () => {
     const controller = new AbortController();
     const operation = vi.fn(async () => 1);
     const result = new GenerationQueue().run(operation, {
@@ -515,7 +515,7 @@ describe("Multitenant fair AI queueing", () => {
     expect(executionOrder).toEqual(["A-int", "B-int"]);
   });
 
-  it("preserves anti-starvation counter when a background job is cancelled before starting", async () => {
+  it("preserves anti-starvation counter when a background job is canceled before starting", async () => {
     // maxConsecutiveInteractive = 2
     const queue = new GenerationQueue(1, 10, 2);
     const activeJob = deferred<void>();

@@ -1,28 +1,13 @@
-// =============================================================================
-// Integration Tests — the bulk-import tail keeps the importer's scope
-// =============================================================================
-// The non-stream import answers the client and then keeps working: it embeds
-// the new contacts, waits for the writes to settle, and runs one dedupe scan
-// over all of them. That second half starts from a timer, long after the
-// response has been sent, so nothing about the request is still in scope by
-// then.
+// Integration: the bulk-import tail keeps the importer's scope.
+// The non-stream import answers, then embeds the new contacts and runs one
+// dedupe scan from a timer, after the request has left scope. Both halves run
+// in runWithContext with the scope captured at the top of the handler. This
+// reads the owner off the AI invocation rows they write, and pins the outcome,
+// not the mechanism (AsyncLocalStorage also survives the timer).
 //
-// Both halves are wrapped in runWithContext with the scope captured at the top
-// of the handler. This file reads the owner off the AI invocation rows they
-// write, because an invocation row is exactly what the attribution is for.
-//
-// Measured while writing this: AsyncLocalStorage already survives the timer,
-// so the rows carry the importer with or without the wrapper. The wrapper
-// makes the scope an explicit argument rather than something inherited by
-// luck, and this test pins the outcome rather than the mechanism.
-//
-// The two imports run at the same time on purpose. One shared module-level
-// queue drains both tails, and the assertion that each owner's row carries
-// that owner is what a shared queue would break.
-//
-// The stubs stand in for a provider: with none configured the real functions
-// return immediately and record nothing at all.
-// =============================================================================
+// The two imports run at once on purpose: one module-level queue drains both
+// tails, and a shared queue is what would mix up the owners. The stubs stand
+// in for a provider, because with none the real functions record nothing.
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import request from "supertest";

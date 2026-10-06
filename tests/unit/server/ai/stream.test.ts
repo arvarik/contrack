@@ -1,10 +1,7 @@
-// =============================================================================
 // Unit tests: the streamed brief (gateway `streamFor`, synthesizeSearchResults)
-// =============================================================================
 // The brief grows word by word. The pieces are provisional: the text the
 // caller keeps is the whole brief after `sanitizeAiOutputValue`, a brief that
 // fails the check fails as a whole, and a cached brief sends no pieces.
-// =============================================================================
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

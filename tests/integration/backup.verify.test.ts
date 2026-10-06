@@ -1,15 +1,8 @@
-// =============================================================================
-// Integration Tests — a snapshot is opened again before anybody trusts it
-// =============================================================================
-// `runBackup` wrote a file and rotated the old ones. Nothing ever opened it.
-// A backup that restores nothing looks exactly like a backup that restores
-// everything until the day somebody needs it, which is the worst possible day
-// to find out.
-//
-// Every test here writes real snapshots of a real database into a real
-// directory, and the damaged cases damage the actual file on disk. Verifying
-// a file nobody has broken proves only that the check runs.
-// =============================================================================
+// Integration: a snapshot is opened again before anybody trusts it.
+// A backup that restores nothing looks like one that restores everything
+// until somebody needs it. Every test writes real snapshots of a real
+// database into a real directory, and the damaged cases damage the file on
+// disk, because verifying an unbroken file proves only that the check runs.
 
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import fs from "fs";

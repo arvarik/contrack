@@ -1,25 +1,19 @@
 // @vitest-environment jsdom
 /**
- * The flight overlay.
+ * What the flight overlay does with a route (`flightPlan.test.ts` measures
+ * the routes):
  *
- * `flightPlan.test.ts` measures the routes. This measures what the
- * overlay does with one:
- *
- * 1. Who is allowed to fly. "off" flies nothing, "subtle" flutters on the
- *    perch and stays, and the Motion row's Reduced is "off".
+ * 1. "off" flies nothing, "subtle" flutters on the perch, and the Motion
+ *    row's Reduced is "off".
  * 2. The layer never takes a click and never speaks.
- * 3. The perch's bird is hidden while it is out, and only the bird: the ring
- *    stays on screen, empty. However the flight ends, the bird comes back.
- * 4. It lands on its own: the flight ends, the overlay goes and the perch
- *    is the logo again.
+ * 3. While the bird is out only the perch's bird hides, the ring stays, and
+ *    the bird always comes back.
+ * 4. A flight ends on its own and the perch is the logo again.
  * 5. Escape, a route change and an unmount end it at once.
- * 6. A search flight hunts over the ground it is given until `recallCorvid`
- *    calls it home by the short way. Given a column to keep out of, it
- *    hunts round the column and comes home round it too. A recall ends
- *    nothing else.
+ * 6. A search flight hunts over its ground, round any column it must keep out
+ *    of, until `recallCorvid` calls it home. A recall ends nothing else.
  *
- * Fake timers drive `requestAnimationFrame` and `performance.now` together,
- * so a whole flight can be flown in a test.
+ * Fake timers drive `requestAnimationFrame` and `performance.now` together.
  */
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

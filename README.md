@@ -145,7 +145,7 @@ A multi-pass engine with exact matches, phonetic and near-spelling names, normal
 - **Quick Note** (`Cmd+Shift+I`) — Log interactions from anywhere
 - **Link Unfurling** — Zero-Chromium OpenGraph extraction via Cheerio
 - **Logo Proxy** — Heuristic company logo discovery with local caching
-- **Themes** — Light, dark, or follow the machine, plus an accent colour that derives a readable palette of its own
+- **Themes** — Light, dark, or follow the machine, plus an accent color that derives a readable palette of its own
 - **Trash & Undo** — Deletes are soft: restore from Settings → Trash until the retention an admin sets runs out, 30 days by default
 - **Export** — vCard, CSV and JSON, each covering only your own contacts. vCard reads back in, so moving out and back in is honest
 - **Automatic Backups** — Scheduled SQLite snapshots with rotation. Every snapshot is reopened, checked and counted against the live database, and the answer shows per file

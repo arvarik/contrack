@@ -1,21 +1,13 @@
-// =============================================================================
-// Integration Tests — which contact is "Jon"?
-// =============================================================================
-// Mention resolution used to be `eq(contacts.name, m.name)`: an exact string
-// match, and a new ghost contact for every miss. "Jon" did not find "Jonathan
-// Smith", "Maria Garcia" did not find "María García", and "Dr. Chen" did not
-// find "Sarah Chen". Each miss made a ghost, the ghost joined the mention
-// graph the dashboard reads, and the next note about the same person made
-// another one.
+// Integration: which contact is "Jon"?
+// An exact name match would miss "Jon" for "Jonathan Smith", "Maria Garcia"
+// for "María García" and "Dr. Chen" for "Sarah Chen", and each miss would make
+// a ghost contact. Every test in the first two blocks fails against an exact
+// match.
 //
-// Every test in the first two blocks fails against that exact match.
-//
-// The interesting half is the middle outcome. There are three now — link,
-// review, ghost — where there were two, and the tests that matter most are
-// the ones about when NOT to link: a bare first name that two contacts
-// answer to, two people with the same name at the same company, a ghost that
-// should not outrank a real contact.
-// =============================================================================
+// There are three outcomes: link, review, ghost. The tests that matter most
+// are about when NOT to link: a bare first name that two contacts answer to,
+// two people with one name at one company, a ghost that should not outrank a
+// real contact.
 
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 
@@ -41,12 +33,10 @@ let scope: ReturnType<typeof scopeForOwnerId>;
 /**
  * A contact in the account under test. Returns its id.
  *
- * `phoneticHash` is set here because the product sets it: `buildInsertValues`
- * writes it on every create and update, section 10 of `db.ts` backfills any
- * row that predates the column, and candidate retrieval reads it. A raw
- * INSERT that left it NULL would give this file a corpus the resolver cannot
- * see by sound, and the accent tests would fail for a reason that has nothing
- * to do with the resolver.
+ * `phoneticHash` is set because the product sets it on every create and
+ * update (`buildInsertValues`), and candidate retrieval reads it. Left NULL,
+ * the resolver could not match by sound and the accent tests would fail for
+ * the wrong reason.
  */
 function addContact(
   name: string,
@@ -98,9 +88,7 @@ beforeEach(() => {
   anchorId = addContact("Anchor Person");
 });
 
-// ---------------------------------------------------------------------------
 // The names an exact match missed
-// ---------------------------------------------------------------------------
 
 describe("names the old exact match could not find", () => {
   it("finds a formal name from its short form", () => {
@@ -179,9 +167,7 @@ describe("names the old exact match could not find", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // When not to link
-// ---------------------------------------------------------------------------
 
 describe("when the answer is not certain enough to act on", () => {
   it("does not pick between two contacts a bare first name fits", () => {
@@ -227,7 +213,7 @@ describe("when the answer is not certain enough to act on", () => {
 
     const result = resolve("Priya Raghunathan");
 
-    // Both match exactly. The ghost is penalised, so the person the account
+    // Both match exactly. The ghost is penalized, so the person the account
     // actually knows wins, and the margin is wide enough to link.
     expect(result.kind).toBe("link");
     expect(result.kind === "link" && result.match.contactId).toBe(real);
@@ -238,16 +224,14 @@ describe("when the answer is not certain enough to act on", () => {
 
     const result = resolve("Yusuf Demirci");
 
-    // This is the behaviour that stops an account collecting one ghost per
+    // This is the behavior that stops an account collecting one ghost per
     // mention of the same unknown person.
     expect(result.kind).toBe("link");
     expect(result.kind === "link" && result.match.contactId).toBe(ghost);
   });
 });
 
-// ---------------------------------------------------------------------------
 // Context
-// ---------------------------------------------------------------------------
 
 describe("the tiebreakers", () => {
   it("lets a matching company carry a name that would not make it alone", () => {
@@ -299,9 +283,7 @@ describe("the tiebreakers", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // The thresholds
-// ---------------------------------------------------------------------------
 
 describe("the thresholds", () => {
   it("links only at or above the link threshold", () => {

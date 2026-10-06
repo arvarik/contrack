@@ -1,22 +1,13 @@
-// =============================================================================
-// Integration Tests — lastContactedAt never holds the future
-// =============================================================================
-// `recencyScore` is discontinuous at zero. It returns 100 when `daysSince <= 0`
-// and 91.68 at any positive value with the default cadence, so a contact
-// stamped at or ahead of now scores full marks on a signal that carries 40
-// percent of the composite, and a contact stamped a millisecond ago scores
-// 91.68. A-05 in `.agent/STATUS.md` records the discontinuity.
+// Integration: lastContactedAt never holds the future.
+// `recencyScore` returns 100 when `daysSince <= 0` and 91.68 at any positive
+// value with the default cadence, so a contact stamped at or ahead of now
+// scores full marks on 40 percent of the composite. `.agent/STATUS.md` keeps
+// the discontinuity as an open issue. The formula stays, and the only way to
+// reach the cliff is closed: a `lastContactedAt` ahead of now.
 //
-// The formula is not changed here. Smoothing it moves every score in the
-// instance, and no eval exists that would show the new numbers are better than
-// the old ones. What is changed is the only way the cliff is reachable: a
-// `lastContactedAt` ahead of now.
-//
-// Two guards, and both are tested because each covers what the other cannot.
-// The schema refuses the write and says why. The `MIN` in the derived UPDATE
-// closes the five minutes of clock slack the schema allows, and the rows an
-// older version already wrote.
-// =============================================================================
+// Each guard covers what the other cannot. The schema refuses the write and
+// says why. The `MIN` in the derived UPDATE closes the five minutes of clock
+// slack the schema allows, and rows already written ahead of now.
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { sqlite, ensureLocalOwner } from "../../server/db.ts";
@@ -158,13 +149,12 @@ describe("the score consequence", () => {
   // The cliff, measured rather than fixed. `computeBreakdown` floors
   // `daysSince` at zero, so a future stamp lands on `recencyScore`'s
   // `daysSince <= 0` branch and takes full marks. At the 30-day cadence the
-  // sigmoid underneath gives 91.68 for any positive gap, so the step is more
-  // than eight points on a signal weighted at 40 percent.
+  // sigmoid gives 91.68 for any positive gap, a step of more than eight points
+  // on a signal weighted at 40 percent.
   //
-  // Nothing below is stamped "now". That is deliberate: two reads of a contact
-  // stamped at the current instant disagree depending on whether they land in
-  // the same millisecond, which is how this was found and what made one test
-  // in twenty fail. Every stamp here is a day or more from the boundary.
+  // Nothing below is stamped "now": two reads of a contact stamped at the
+  // current instant disagree depending on whether they land in the same
+  // millisecond. Every stamp is a day or more from the boundary.
   it("takes a contact off the cliff on the next interaction", async () => {
     const contactId = await makeContact("Cliff Walker");
     sqlite

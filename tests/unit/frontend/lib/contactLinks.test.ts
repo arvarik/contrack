@@ -19,7 +19,7 @@ describe("contact links", () => {
     ["020 7946 0018 ext. 42", "tel:02079460018,42", "sms:02079460018"],
     ["555.010.2030 x7", "tel:5550102030,7", "sms:5550102030"],
     ["+1 555 0100, 12", "tel:+15550100,12", "sms:+15550100"],
-    // The trunk zero after a country code is not dialled.
+    // The trunk zero after a country code is not dialed.
     ["+44 (0) 20 7946 0018", "tel:+442079460018", "sms:+442079460018"],
     // Each of these would dial a wrong number, or none on an iPhone.
     ["no number", null, null],

@@ -1,12 +1,9 @@
-// =============================================================================
 // Integration: the note search — GET /api/search/interactions
-// =============================================================================
 // Real database, real triggers, real route. What is pinned here is the
 // promise the feature makes: a note written today is found today, an edited
 // note is found by its new words and not its old ones, a deleted note is
 // gone, a note on a contact the app hides is hidden with it, and "last month"
 // means the caller's month.
-// =============================================================================
 
 import { beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";

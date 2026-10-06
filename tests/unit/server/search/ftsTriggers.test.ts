@@ -1,29 +1,19 @@
-// =============================================================================
-// Unit Tests — the generated FTS trigger SQL
-// =============================================================================
-// Three properties of this SQL are load-bearing and none of them is obvious
-// from reading a trigger body in isolation:
+// Unit: the generated FTS trigger SQL. Three properties are load-bearing and
+// not obvious from a trigger body:
 //
 //   • Deletes go through `rowid`. FTS5 pushes down only MATCH, rowid and rank,
-//     so a delete on the UNINDEXED `contactId` column is a full scan of the
-//     virtual table. It was one once, and it cost 0.50 ms per contact update
-//     against 0.04 ms now.
-//   • Every row carries `ownerTok`, and it is the same string
-//     `ownerToken()` builds. Phase 2 scopes search by matching on it, and a
-//     mismatch between the SQL and the helper means every scoped search
-//     silently returns nothing. The scoped searches in
-//     tests/integration/search.index.test.ts check it.
-//     tests/unit/server/tenancy/scope.test.ts pins the helper to the same SQL
-//     form, and the snapshot holds the trigger's copy of it.
+//     so a delete on the UNINDEXED `contactId` scans the virtual table
+//     (0.50 ms per contact update against 0.04 ms).
+//   • Every row carries `ownerTok`, the same string `ownerToken()` builds.
+//     Scoped search matches on it, so a mismatch returns nothing. The scoped
+//     searches in search.index.test.ts check it, scope.test.ts pins the
+//     helper, and the snapshot holds the trigger's copy.
 //   • `contacts_au` fires on `ownerId`, so reassigning a contact reindexes it.
 //
-// The snapshot is here to make a change to any of them deliberate.
+// The snapshot makes a change to any of them deliberate.
 //
 // The BM25 weights are positional. bm25() counts the UNINDEXED contactId
-// column, so a list one entry short shifts every weight one column to the
-// left, and "name" gets the weight meant for contactId. That was the state in
-// v1.5.5.
-// =============================================================================
+// column, so a list one entry short shifts every weight one column left.
 
 import { describe, it, expect } from "vitest";
 import Database from "better-sqlite3";
@@ -42,8 +32,8 @@ describe("FTS trigger SQL", () => {
   });
 
   it("never deletes on the UNINDEXED contactId column", () => {
-    // The regression this guards is invisible: the trigger still works, it
-    // just scans the whole index every time it fires.
+    // The failure is invisible: the trigger still works, but scans the whole
+    // index every time it fires.
     expect(sql).not.toMatch(/DELETE FROM contacts_fts\s+WHERE\s+contactId/i);
     const deletes = sql.match(/DELETE FROM contacts_fts[^;]*/gi) ?? [];
     expect(deletes.length).toBeGreaterThan(0);

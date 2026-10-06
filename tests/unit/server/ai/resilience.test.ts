@@ -1,17 +1,12 @@
-// =============================================================================
-// Unit Tests — AI Resilience Primitives (Phase 2)
-// =============================================================================
-// Covers the shared utilities every AI adapter is built on:
+// Unit: the AI resilience primitives every adapter is built on:
 //   - withTimeout          → bounds a single attempt, surfaces UpstreamTimeoutError
 //   - withRetry            → jittered exponential-backoff with abort propagation
 //   - isRetryableError     → coarse classifier for transient upstream failures
 //   - parseAIJson          → tolerant JSON parsing for model output
 //
-// These tests use vitest fake timers heavily because the production code
-// schedules a real backoff (500ms plus jitter before the one retry). We never
-// sleep in real time.
-// All async paths must therefore co-operate with `vi.advanceTimersByTimeAsync`.
-// =============================================================================
+// The production code schedules a real backoff (500ms plus jitter before the
+// one retry), so these tests use fake timers and never sleep. Every async
+// path must work with `vi.advanceTimersByTimeAsync`.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
@@ -28,9 +23,7 @@ import {
   UpstreamTimeoutError,
 } from "../../../../server/utils/AppError.ts";
 
-// =============================================================================
 // isRetryableError
-// =============================================================================
 
 describe("isRetryableError", () => {
   it("returns true for HTTP 429 (rate limit)", () => {
@@ -103,9 +96,7 @@ describe("isRetryableError", () => {
   });
 });
 
-// =============================================================================
 // withTimeout
-// =============================================================================
 
 describe("withTimeout", () => {
   beforeEach(() => vi.useFakeTimers());
@@ -167,9 +158,7 @@ describe("withTimeout", () => {
   });
 });
 
-// =============================================================================
 // withRetry
-// =============================================================================
 
 describe("withRetry", () => {
   beforeEach(() => vi.useFakeTimers());
@@ -302,9 +291,7 @@ describe("withRetry", () => {
   });
 });
 
-// =============================================================================
 // parseAIJson
-// =============================================================================
 
 describe("parseAIJson", () => {
   it("parses a plain JSON object", () => {

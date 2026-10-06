@@ -4,7 +4,7 @@
  * Each test starts with focus on the body, presses real keys, and asserts
  * where focus went and that a sighted keyboard user could see it there
  * (WCAG 2.1.1, 2.4.3, 2.4.7). The focus ring is checked in both palettes,
- * because it is drawn from a colour token and the dark palette has its own.
+ * because it is drawn from a color token and the dark palette has its own.
  */
 import { test, expect } from "./fixtures/test";
 import { expectVisibleFocus } from "./fixtures/a11y";
@@ -224,41 +224,12 @@ test("on a contact page the skip link lands on the contact's name", async ({
 });
 
 /**
- * The Tab budget.
- *
- * Before the list became one Tab stop, the first control in a contact was
- * stop 42: the skip link, six sidebar links, six list controls, fifteen rows
- * and thirteen letter buttons. The budget is what the page costs now, and a
- * change that adds stops in front of the content fails here rather than in a
- * keyboard user's afternoon.
- *
- * Both budgets went up by exactly one when the corvid mark became a button.
- * It is the seventh sidebar stop, and it stands in front of the content on
- * every page, so a keyboard user pays for it once per page.
- *
- * The contact budget went up by one again when a scored avatar ring became
- * the button that explains the score. Ada is tracked and scored, so her page
- * carries it. It is the one way to the breakdown from the page the score is
- * about, and it costs the stop that used to buy nothing.
- *
- * The Network budget went up by two when the filter row started showing
- * with no lists: the All chip and the Tracked chip stand in front of the
- * list. The Tracked chip is the way into tracking, and a row that shows
- * only once a list exists would hide it from the people it is for.
- *
- * The contact budget went up by one when the list's edge became a
- * separator that resizes the list. It sits between the list and the
- * contact, and the arrow keys that move it need it in the Tab order. It is
- * there only from `lg`, where the two panes share the screen.
- *
- * The contact budget went up by one again when Change avatar left the
- * actions menu for a pencil on the avatar itself. It sits on the picture,
- * left of the name, so it comes before the name in the Tab order as it does
- * on the screen.
- *
- * Both budgets went up by one when the sidebar got a Command palette
- * button for a mouse, beside Keyboard shortcuts. Before it, ⌘K was the
- * only way in from a desktop.
+ * The Tab budget: what each page costs now, so a change that adds stops in
+ * front of the content fails here. The stops before the content include the
+ * corvid mark and the Command palette button in the sidebar, and on Network
+ * the All and Tracked chips and the list as one stop. A contact page adds the
+ * list's resize separator (from `lg`), the avatar ring that explains the score
+ * (Ada is tracked and scored), and the Change avatar pencil, left of the name.
  */
 test.describe("Tab budget", () => {
   test("a contact's name is within 21 Tabs of the top of the page", async ({

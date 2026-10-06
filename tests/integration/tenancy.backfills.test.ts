@@ -1,26 +1,16 @@
-// =============================================================================
-// Integration Tests — the embedding backfills run one account at a time
-// =============================================================================
-// Both backfills are sweeps: they run at boot, with no request behind them and
-// no scope in the async context. Rather than one single pass over every contact
-// on the instance, they run partitioned by owner with two consequences addressed:
+// Integration: the embedding backfills run one account at a time.
+// Both backfills sweep at boot with no scope in the async context, so they
+// run partitioned by owner. This pins two things:
 //
-//   • The provider bill landed on the primary admin. `recordInvocation` reads
-//     `currentOwnerId()`, which falls back to that account when there is no
-//     context, so an instance of ten people showed one person paying for all
-//     of them.
-//   • A large account finished before a small account started. The sweep was
-//     one queue in table order, so a new account's search stayed empty until
-//     every older account was embedded.
+//   • The owner named at the provider call is the owner of the contact being
+//     embedded. `currentOwnerId()` falls back to the primary admin with no
+//     context, which would bill one person for everybody.
+//   • Accounts take turns, so a new account's search does not wait for every
+//     older account to be embedded.
 //
-// This file proves both are fixed: the owner named at the moment of the
-// provider call is the owner whose contact is being embedded, and accounts
-// take turns rather than draining one at a time.
-//
-// The seam is `server/ai/embeddings.ts`. Mocking it makes the resolved
-// capability a provider model, which is what both `isSearchEmbeddingReady`
-// and `isEmbeddingAvailable` check, and replaces the provider call itself.
-// =============================================================================
+// The seam is `server/ai/embeddings.ts`. Mocking it makes the capability a
+// provider model, which `isSearchEmbeddingReady` and `isEmbeddingAvailable`
+// both check, and replaces the provider call.
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import crypto from "crypto";

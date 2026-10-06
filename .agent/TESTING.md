@@ -142,7 +142,7 @@ when `DOCS_SCREENSHOTS=1` is set. Otherwise they go to `test-results/`.
 
 A unit test goes when one of these holds:
 
-1. Another test asserts the same behaviour through a public interface: an
+1. Another test asserts the same behavior through a public interface: an
    integration test, an e2e journey or a more public unit test. Open that
    owner before you delete, and name it in the pull request. Two audits once
    deleted both copies.

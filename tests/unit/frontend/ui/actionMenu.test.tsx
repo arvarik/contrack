@@ -1,13 +1,8 @@
 // @vitest-environment jsdom
-// =============================================================================
-// ActionMenu: a kebab that behaves as a menu
-// =============================================================================
-// `role="menu"` promises keys: focus inside on open, the arrows and Home and
-// End move, Escape goes back to the button. The contact page's menus carried
-// the role without the keys. The header kebab, each detail row's kebab and
-// each link's actions now share this one primitive, so its keys are checked
-// here once.
-// =============================================================================
+// ActionMenu: a kebab that behaves as a menu. `role="menu"` promises keys:
+// focus inside on open, the arrows and Home and End move, Escape goes back to
+// the button. The header kebab, each detail row's kebab and each link's
+// actions share this primitive, so its keys are checked here once.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import {
@@ -81,7 +76,7 @@ describe("the trigger", () => {
 describe("inside the menu", () => {
   it("moves with the arrows and wraps, jumps with Home and End, and skips disabled items", () => {
     const { trigger } = mount([
-      item("Change colour"),
+      item("Change color"),
       item("Copy details", { disabled: true }),
       item("Archive"),
       item("Delete", { danger: true }),
@@ -94,18 +89,18 @@ describe("inside the menu", () => {
     fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
     expect(focused()).toBe("Delete");
     fireEvent.keyDown(document.activeElement!, { key: "ArrowDown" });
-    expect(focused()).toBe("Change colour");
+    expect(focused()).toBe("Change color");
     fireEvent.keyDown(document.activeElement!, { key: "ArrowUp" });
     expect(focused()).toBe("Delete");
     fireEvent.keyDown(document.activeElement!, { key: "Home" });
-    expect(focused()).toBe("Change colour");
+    expect(focused()).toBe("Change color");
     fireEvent.keyDown(document.activeElement!, { key: "End" });
     expect(focused()).toBe("Delete");
   });
 
   it("jumps to the next item that starts with a typed letter", () => {
     const { trigger } = mount([
-      item("Change colour"),
+      item("Change color"),
       item("Change avatar"),
       item("Archive"),
     ]);

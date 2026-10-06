@@ -1,11 +1,8 @@
-// =============================================================================
 // Integration: the research record the enrichment merge keeps
-// =============================================================================
 // Every enrichment is recorded on the contact (`aiResearch`): when it ran,
 // which models, what it added field by field, the searches, the facts and the
 // pages. A second enrichment adds to the record, and "Not this person" takes
 // a run back.
-// =============================================================================
 
 import { beforeEach, describe, it, expect } from "vitest";
 import request from "supertest";

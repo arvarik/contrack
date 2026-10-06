@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
-// =============================================================================
 // Which keys this computer has, in src/lib/platform.ts
-// =============================================================================
+//
 // A Mac holds ⌘ ⇧ for the navigation keys. Windows and Linux hold Ctrl Alt,
 // because the browser keeps Ctrl ⇧ I, P and M. These checks hold the
 // detection to the navigator's platform fields, the chord test to both forms,
 // and the shortcuts table to the keys of the platform it runs on.
-// =============================================================================
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   chordLabel,

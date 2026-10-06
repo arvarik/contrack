@@ -178,7 +178,7 @@ describe("Map Views API (/api/map/views)", () => {
         .post("/api/map/views")
         .send({ name: "Valid Name", bounds: [0, 0, 1, 1] }),
     );
-    // A number used to reach `.trim()` and answer 500.
+    // A number must not reach `.trim()` and answer 500.
     for (const body of [
       { name: "" },
       { name: "a".repeat(61) },
@@ -239,9 +239,9 @@ describe("Map Views API (/api/map/views)", () => {
     expect(bobRes.status).toBe(201);
   });
 
-  // Health was a third layer until v2. A view saved with it, a save from a
-  // page loaded before v2, and the account's layer preference all read as
-  // Pins, so an old value never fails to load.
+  // Health is a retired layer. A view saved with it, a save from a stale
+  // page, and the account's layer preference all read as Pins, so a stored
+  // value never fails to load.
   describe("a layer saved as health", () => {
     it("opens a stored health view on pins", async () => {
       const created = await asUser(alice)(

@@ -1,15 +1,11 @@
 #!/usr/bin/env node
-// =============================================================================
-// tenant-lint — find SQL over owned tables that carries no owner predicate
-// =============================================================================
-// Multi-tenancy fails quietly. A SELECT that forgets `AND ownerId = ?` returns
-// another person's contacts and looks perfectly healthy in every test that
-// only ever creates one user. This scanner reads server/**/*.ts, finds every
-// statement that touches an owned table, and flags the ones with no owner in
-// them.
+// tenant-lint: find SQL over owned tables that carries no owner predicate.
+// A SELECT that forgets `AND ownerId = ?` returns another person's contacts
+// and passes every test that creates one user. This scanner reads
+// server/**/*.ts and flags each statement on an owned table with no owner.
 //
-// A statement that legitimately carries no owner predicate is annotated on the
-// line above:
+// A statement that rightly has no owner predicate is annotated on the line
+// above:
 //
 //   // tenant-lint: allow instance sweep
 //   sqlite.prepare("DELETE FROM ai_invocations WHERE createdAt < ?")
@@ -19,7 +15,6 @@
 //   --strict <glob...>  exit 1 on any flag in a matching file. Several globs
 //                     may follow. `npm run lint` runs
 //                     `--strict "server/**/*.ts"` over the whole tree.
-// =============================================================================
 
 import fs from "node:fs";
 import path from "node:path";
@@ -120,12 +115,9 @@ const REGEX_KEYWORDS = new Set([
  * it starts on. Comments are skipped so a SQL example in a comment is not
  * mistaken for a statement.
  *
- * Regular expressions are skipped too, and that is not cosmetic. A quote
- * inside a regex body — `/[",\n]/` in the CSV escaper, `data-id="..."` in the
- * mention matcher — used to open a string that ran to the next quote anywhere
- * in the file. Every quote after it was then off by one: real statements read
- * as code and were never scanned, so a file could pass `--strict` while
- * holding an unscoped statement further down.
+ * Regular expressions are skipped too. A quote inside a regex body, such as
+ * `/[",\n]/`, would open a string that runs to the next quote, and every
+ * statement after it would go unscanned.
  */
 function extractLiterals(source) {
   const out = [];
@@ -324,9 +316,9 @@ export function scanProject(root = "server") {
 export function globToRegExp(glob) {
   // `**/` crosses path separators and may match none of them, so
   // `server/**/*.ts` covers `server/db.ts` as well as `server/a/b.ts`: a file
-  // sitting directly in `server/` must not fall outside strict mode. A lone `*`
-  // never crosses a separator. One pass over the three forms, longest first, so the
-  // replacement text is never rewritten by a later rule.
+  // directly in `server/` stays in strict mode. A lone `*` never crosses a
+  // separator. One pass, longest form first, so no rule rewrites another's
+  // output.
   const escaped = glob
     .replace(/[.+^${}()|[\]\\]/g, "\\$&")
     .replace(/\*\*\/|\*\*|\*/g, (m) =>

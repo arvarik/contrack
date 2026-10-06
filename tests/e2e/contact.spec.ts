@@ -2,11 +2,8 @@
  * Opening a contact and coming back from one.
  *
  * Where focus goes on navigation is invisible to a pointer user and the whole
- * experience for a keyboard or screen reader user. Before these journeys were
- * written, clicking a row left focus on the row while the contact rendered
- * beside it, and on a phone, where the list leaves the screen, focus fell to
- * the document. Each journey below names the element that must have focus
- * after the step, not just the page that must be showing.
+ * experience for a keyboard or screen reader user. Each journey names the
+ * element that must have focus after the step, not just the page showing.
  */
 import { devices, type Page } from "@playwright/test";
 import { test, expect } from "./fixtures/test";
@@ -215,7 +212,7 @@ test.describe("the Network header and start panel", () => {
     await expect(rows.first()).toContainText("Ada Lovelace");
 
     // The selected row is `z-10` and comes after the `sticky z-10` header,
-    // so a menu drawn inside the header used to open under it.
+    // so a menu drawn inside the header would open under it.
     await rows.nth(1).click();
     await expect(
       page.getByRole("button", { name: "Contact actions" }),
@@ -338,7 +335,7 @@ test.describe("the Network header and start panel", () => {
       page.locator("header").getByRole("button", { name: "Command palette" }),
     ).toBeHidden();
 
-    // Named for a screen reader, labelled for a pointer, no visible text.
+    // Named for a screen reader, labeled for a pointer, no visible text.
     for (const name of ["Select", "Import", "New"]) {
       const button = page.getByRole("button", { name, exact: true });
       await expect(button).toBeVisible();
@@ -457,12 +454,10 @@ test.describe("the list's width", () => {
 /**
  * The header's menu.
  *
- * The header used to show a palette icon and an archive icon at the same rank
- * as the name, with delete in a menu and an unlabelled sparkle beside the
- * company. Every action is now in the "Contact actions" menu, which behaves
- * as a menu: focus inside on open, the arrows and Home and End move, Escape
- * returns to the button. There is no button to log: the composer is the first
- * thing in the Timeline column.
+ * Every action is in the "Contact actions" menu, which behaves as a menu:
+ * focus inside on open, the arrows and Home and End move, Escape returns to
+ * the button. There is no button to log: the composer is the first thing in
+ * the Timeline column.
  */
 /**
  * Twelve people of the test's own, so the list is longer than the window.
@@ -549,7 +544,7 @@ test.describe("the contact header", () => {
     await kebab.click();
     const menu = page.getByRole("menu", { name: "Contact actions" });
     // Change avatar left for the pencil on the avatar, and the two enrich
-    // depths follow the colour: AI actions about this contact. Each ends
+    // depths follow the color: AI actions about this contact. Each ends
     // with its time, because research runs on Gemini here.
     await expect(menu.getByRole("menuitem")).toHaveText([
       "Change color",
@@ -579,19 +574,19 @@ test.describe("the contact header", () => {
     await expect(menu).toBeHidden();
     await expect(kebab).toBeFocused();
 
-    // Change colour, from the keyboard: the picker opens on the colour in
+    // Change color, from the keyboard: the picker opens on the color in
     // use, and Escape hands focus back to the menu button.
     await page.keyboard.press("Enter");
     await expect(
       menu.getByRole("menuitem", { name: "Change color" }),
     ).toBeFocused();
     await page.keyboard.press("Enter");
-    const colours = page.getByRole("radiogroup", { name: "Contact color" });
-    await expect(colours).toBeVisible();
-    await expect(colours.getByRole("radio", { checked: true })).toBeFocused();
-    await expectPageAccessible(page, testInfo, "contact-colour-picker");
+    const colors = page.getByRole("radiogroup", { name: "Contact color" });
+    await expect(colors).toBeVisible();
+    await expect(colors.getByRole("radio", { checked: true })).toBeFocused();
+    await expectPageAccessible(page, testInfo, "contact-color-picker");
     await page.keyboard.press("Escape");
-    await expect(colours).toBeHidden();
+    await expect(colors).toBeHidden();
     await expect(kebab).toBeFocused();
 
     // Archive from the menu, and the item turns into its undo.
@@ -651,7 +646,7 @@ test.describe("the contact header", () => {
     await expect(pencil).toHaveCSS("outline-style", "solid");
   });
 
-  test("+ link adds a link after the others, labelled by its host", async ({
+  test("+ link adds a link after the others, labeled by its host", async ({
     page,
     instance,
   }) => {
@@ -921,7 +916,7 @@ test.describe("tracking", () => {
     instance,
   }) => {
     const id = await ownContact(instance, "Zane Cadence");
-    // Every 2 months was a choice before 2.0. The API still takes it.
+    // The menus do not offer every 2 months, and the API still takes it.
     await instance.api("PATCH", `/contacts/${id}`, {
       isTracked: true,
       cadenceDays: 60,
@@ -986,9 +981,9 @@ test.describe("tracking", () => {
     await page.keyboard.press("Escape");
   });
 
-  // The Tracked page's bar was fixed to the window and centred on it: at
-  // 800 px it started at x 24 over the rail's Settings gear, and at 1440 px
-  // it ran past the cards on both sides.
+  // The Tracked page's bar must sit over the cards, not be fixed to the
+  // window: at 800 px that would cover the rail's Settings gear, and at
+  // 1440 px run past the cards on both sides.
   test.describe("the Tracked page at 800 px", () => {
     test.use({ viewport: { width: 800, height: 900 } });
 

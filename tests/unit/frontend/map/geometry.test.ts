@@ -1,11 +1,8 @@
 /**
- * The map's arithmetic and its data shape.
- *
- * Three rules live here, and each was a bug before it was a rule. The world
- * must cover the container at every window size, which is what `minZoomFor`
- * answers. A row with coordinates the map cannot draw must never reach the
- * map, which is what `toFeatureCollection` guarantees. And a contact on a
- * tile boundary is one pin, not two, which is what `toVisibleFeatures` does.
+ * The map's arithmetic and its data shape. `minZoomFor` keeps the world
+ * covering the container at every window size. `toFeatureCollection` keeps a
+ * row with coordinates the map cannot draw off the map. `toVisibleFeatures`
+ * keeps a contact on a tile boundary as one pin, not two.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -155,7 +152,7 @@ describe("toFeatureCollection", () => {
 
   it("weighs a contact by its interactions, for the heat", () => {
     // The pins draw the same for everybody: a score, a band or a late
-    // follow-up is not a map property since the health layer went.
+    // follow-up is not a map property.
     const [feature] = toFeatureCollection([
       person({
         relationshipScore: 12,

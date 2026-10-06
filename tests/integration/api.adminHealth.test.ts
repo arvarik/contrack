@@ -1,17 +1,8 @@
-// =============================================================================
-// Integration Tests — GET /api/admin/health
-// =============================================================================
-// `/healthz` answers `SELECT 1`, which is the right answer for a probe that
-// anybody who can reach the port may ask. This route is the other half: the
-// questions an operator has when four people share an instance, and which
-// until now were answerable only by reading the server log or opening the
-// database.
-//
-// That a member cannot reach it is the admin guard, which api.admin.test.ts
-// checks on every admin route. This file checks that the numbers in it are
-// real, which is the reason it exists: a health panel full of zeros because
-// every query threw is worse than no panel, because somebody will believe it.
-// =============================================================================
+// Integration: GET /api/admin/health.
+// `/healthz` answers anybody who can reach the port. This route answers an
+// operator's questions about a shared instance. api.admin.test.ts checks the
+// admin guard. This file checks that the numbers are real, because a panel of
+// zeros from queries that threw is worse than no panel.
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";

@@ -1,6 +1,4 @@
-// =============================================================================
-// Unit Tests — the MATCH expression a question becomes
-// =============================================================================
+// Unit: the MATCH expression a question becomes.
 
 import { describe, it, expect } from "vitest";
 import {

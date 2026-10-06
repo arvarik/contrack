@@ -110,8 +110,7 @@ describe("the Research card", () => {
       heading.textContent?.trim(),
     );
     expect(headings.at(-4)).toBe("Research");
-    // The old card sat between About and Experience, closed, with its own
-    // scroll. It is gone.
+    // No separate research notes card.
     expect(screen.queryByText("Research notes and sources")).toBeNull();
   });
 
@@ -202,11 +201,10 @@ describe("the Research card", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // The briefing card
-// ---------------------------------------------------------------------------
-// The briefing moved from a modal behind the sparkle to a card at the top of
-// the Dossier tab, with a labelled button, a status line and an error line.
+//
+// The briefing is a card at the top of the Dossier tab, with a labeled button,
+// a status line and an error line.
 
 /** A contact with nothing in it, so the card offers to write a briefing. */
 const BLANK = { id: "test", name: "Test" } as Contact;
@@ -327,12 +325,10 @@ describe("the briefing card", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // "Catch me up" from the palette
-// ---------------------------------------------------------------------------
-// Palette B opens the contact with `?brief=1`. Nothing read the flag, so the
-// contact opened on its Timeline. The page now opens the Dossier and hands
-// the Briefing card a request, which the card answers once.
+//
+// Palette B opens the contact with `?brief=1`. The page opens the Dossier and
+// hands the Briefing card a request, which the card answers once.
 
 describe("Catch me up from the palette", () => {
   const ask = (contact: Contact, mutate = vi.fn()) => {

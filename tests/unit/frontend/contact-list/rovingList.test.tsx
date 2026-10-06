@@ -4,7 +4,7 @@
  *
  * The list is one stop in the Tab order, and the keys inside it do what a
  * list's keys do. Rendered with plain buttons so the test exercises the hook
- * and not the virtualiser: a list that only mounts some rows is simulated by
+ * and not the virtualizer: a list that only mounts some rows is simulated by
  * the `mounted` range below.
  */
 import React, { useState } from "react";
@@ -41,7 +41,7 @@ function List({
   selectedIndex?: number;
   /** Rows before this index are "scrolled out" and not rendered. */
   mountedFrom?: number;
-  /** A new value remounts every row, the way a virtualiser re-measure can. */
+  /** A new value remounts every row, the way a virtualizer re-measure can. */
   generation?: number;
 }) {
   const [firstMounted, setFirstMounted] = useState(mountedFrom);
@@ -165,7 +165,7 @@ describe("useRovingList", () => {
 
     act(() => scroller.focus());
     // The row mounts on the next render, and the hook focuses it on the
-    // frame after that, the way a virtualiser would bring it in.
+    // frame after that, the way a virtualizer would bring it in.
     await act(
       () =>
         new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
@@ -210,7 +210,7 @@ describe("useRovingList", () => {
     await nextFrame();
     expect(document.activeElement).toBe(row("Ada Lovelace"));
 
-    // The virtualiser re-measures and replaces the row element: focus falls
+    // The virtualizer re-measures and replaces the row element: focus falls
     // to the document, and the hook is still holding on, so it refocuses.
     rerender(<List mountedFrom={2} generation={1} />);
     expect(document.activeElement).toBe(document.body);

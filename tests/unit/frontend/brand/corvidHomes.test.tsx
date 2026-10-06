@@ -1,14 +1,10 @@
 // @vitest-environment jsdom
 /**
- * The bird's other homes.
- *
- * Two behaviours that only exist because a surface asked for them, and
- * that a person would only notice if they broke:
+ * The bird's other homes:
  *
  * 1. The sign-in card's bird shakes its head at a wrong password, once per
- *    message, and at nothing else. A card that twitches on every re-render
- *    while an error is up is worse than a card that never moves. The ring
- *    it sits in never moves at all.
+ *    message and at nothing else, not on every re-render while an error is
+ *    up. The ring it sits in never moves.
  * 2. The "All reviewed" mark hops when it arrives, and holds still for an
  *    account that asked for no motion.
  */
@@ -51,9 +47,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// ---------------------------------------------------------------------------
 // The sign-in card
-// ---------------------------------------------------------------------------
 
 /** The shell with an error that the test can change from outside. */
 const Card = ({ error }: { error: string | null }) => (
@@ -129,9 +123,7 @@ describe("the sign-in card", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // The mark that hops when it arrives
-// ---------------------------------------------------------------------------
 
 describe("a mark that hops on mount", () => {
   const chest = (container: HTMLElement) => partOf(container, "chest");

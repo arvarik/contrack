@@ -201,7 +201,7 @@ On Windows and Linux, `Cmd+K` is `Ctrl+K`, and `Cmd+Shift+I` is
 - **Cadence**: how often you want to talk to a tracked contact, such as
   **Monthly**.
 - **Score ring**: the ring around a tracked contact's picture. Its length is
-  the score, from 0 to 100. Its colour is the band: **Strong** from 70,
+  the score, from 0 to 100. Its color is the band: **Strong** from 70,
   **Fading** from 40 to 69, and **At risk** under 40. A tracked contact with
   nothing logged says "No interactions yet". See
   [How the score works](pulse.md#how-the-score-works).

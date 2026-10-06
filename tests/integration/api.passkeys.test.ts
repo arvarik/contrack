@@ -1,10 +1,7 @@
-// =============================================================================
 // Integration: Passkeys API
-// =============================================================================
 // Covers registration options/verify, login options/verify, passkey listing,
 // rename, remove, nudge dismissal, session requirement, ceremony expiry,
 // disabled account checks, and origin verification.
-// =============================================================================
 
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
 import request from "supertest";

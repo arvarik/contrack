@@ -1,13 +1,7 @@
 // @vitest-environment jsdom
-// =============================================================================
-// Settings pages start loading before their link is pressed
-// =============================================================================
-// Each settings page is its own module. The first click on a page waited for
-// its code, and the Account page then showed "Loading devices…" while its
-// lists arrived. `warm.ts` loads a page's code, and its first data, when a
-// person points at its link, and every page's code in idle moments. These
-// tests pin what is loaded, when, and for whom.
-// =============================================================================
+// Each settings page is its own module. `warm.ts` loads a page's code, and
+// its first data, when a person points at its link, and every page's code in
+// idle moments. These tests pin what is loaded, when, and for whom.
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";

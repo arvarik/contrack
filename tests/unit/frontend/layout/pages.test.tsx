@@ -1,13 +1,8 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The lazy pages start loading before their link is pressed
-// =============================================================================
-// Map, Pulse and Ask Contrack are each their own chunk. A first visit showed
-// a skeleton for 300 ms even when the chunk took 5 ms, and Pulse then showed
-// its own skeleton while its data arrived. `views/pages.ts` loads the code in
-// idle moments and when a link is pointed at, and Pulse's data with it.
-// These tests pin what is loaded, when, and in what order.
-// =============================================================================
+// Map, Pulse and Ask Contrack are each their own chunk. `views/pages.ts` loads
+// the code in idle moments and when a link is pointed at, and Pulse's data
+// with it, so a first visit does not wait on a skeleton. These tests pin what
+// is loaded, when, and in what order.
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";

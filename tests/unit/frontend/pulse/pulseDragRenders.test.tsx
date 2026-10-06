@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
-// =============================================================================
 // A drag renders the grid, not the cards
-// =============================================================================
+//
 // Each step of a customize drag changes the grid's draft. The page builds
 // each card's element once per change of the card's data (`PulseView`), and
-// the grid passes those elements to its memoised cards, so a step renders
+// the grid passes those elements to its memoized cards, so a step renders
 // the grid and React skips the queue, the heatmap and the charts. Here each
 // card is a stand-in that counts its renders and draws the real card frame,
 // grip and all, so the keyboard can carry a card while the counts are read.
-// =============================================================================
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   act,

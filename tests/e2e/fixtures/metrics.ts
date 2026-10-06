@@ -3,18 +3,16 @@
  *
  * `.agent/STYLE.md` sets two rules: every control a finger can reach has a
  * hit box of at least 44 by 44 CSS pixels, and no text a person reads is
- * smaller than 11 pixels. The UI review measured both by hand on a phone and
- * found 54 small targets and 29 small text nodes on one contact page. This
- * fixture turns that walk into an assertion, so a new screen cannot bring
- * either number back.
+ * smaller than 11 pixels. This fixture asserts both, so a new screen cannot
+ * break either.
  *
  * The hit box of a control is the largest of three boxes:
  *
  *   1. its own border box,
- *   2. its `::after` box, which is what the `.hit-area` utility draws to
- *      grow a small control without changing how it looks,
- *   3. the box of the `<label>` that wraps it, which is what a tap on a
- *      visually hidden checkbox or radio actually lands on.
+ *   2. its `::after` box, which the `.hit-area` utility draws to grow a
+ *      small control without changing how it looks,
+ *   3. the box of the `<label>` that wraps it, which is where a tap on a
+ *      visually hidden checkbox or radio lands.
  */
 import { expect, type Page, type TestInfo } from "@playwright/test";
 import { settleAnimations } from "./a11y";

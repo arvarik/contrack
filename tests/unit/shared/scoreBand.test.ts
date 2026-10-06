@@ -46,7 +46,7 @@ describe("bandFor", () => {
 });
 
 describe("the band names", () => {
-  it("gives each band a sentence-case label and a colour token", () => {
+  it("gives each band a sentence-case label and a color token", () => {
     expect(SCORE_BANDS.strong).toEqual({
       band: "strong",
       label: "Strong",
@@ -93,7 +93,7 @@ describe("contactScore", () => {
   });
 
   it("is null for a contact with no logged interaction, whatever the column holds", () => {
-    // The column defaults to 50, which is a placeholder and not a judgement.
+    // The column defaults to 50, which is a placeholder and not a judgment.
     expect(
       contactScore({
         isTracked: true,

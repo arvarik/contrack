@@ -1,5 +1,5 @@
 /**
- * tests/e2e/connectors.spec.ts — E2E browser tests for Connectors & Calendar.
+ * Connectors and the Calendar connector, in the browser.
  *
  * Covers:
  * - Booting dedicated instance with CONNECTORS_ALLOW_PRIVATE_HOSTS="true"

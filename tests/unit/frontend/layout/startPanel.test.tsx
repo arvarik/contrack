@@ -1,12 +1,8 @@
 // @vitest-environment jsdom
-// =============================================================================
-// StartPanel: the pane beside the list when no contact is open
-// =============================================================================
-// It shows the mark and the words "No contact selected", and nothing else.
-// The cards it once carried (Up next, Recently viewed, Add people) are gone,
-// and so is the line that told a reader to pick somebody. With nobody in the
-// network it shows nothing: the list's own empty state has the bird.
-// =============================================================================
+// StartPanel: the pane beside the list when no contact is open. It shows the
+// mark and the words "No contact selected", and nothing else. With nobody in
+// the network it shows nothing, because the list's own empty state has the
+// bird.
 import { afterEach, describe, expect, it } from "vitest";
 import React from "react";
 import { cleanup, render, screen } from "@testing-library/react";

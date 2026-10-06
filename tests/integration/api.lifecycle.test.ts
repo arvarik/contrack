@@ -1,6 +1,4 @@
-// =============================================================================
 // Integration: data lifecycle — trash/restore/purge, backups, full export
-// =============================================================================
 
 import { afterEach, describe, it, expect } from "vitest";
 import request from "supertest";

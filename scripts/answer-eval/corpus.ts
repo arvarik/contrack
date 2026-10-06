@@ -1,20 +1,15 @@
-// =============================================================================
-// AI Answer Pipeline Evaluation Corpus
-// =============================================================================
-// Evaluates the full production AI search & answer pipeline:
-//   1. Query Planning (parseSearchQuery -> QueryPlan must.*, should.traits, confidence)
-//   2. Hard Pre-Filtering (applyHardFilters against active SQLite contacts)
-//   3. Multi-channel retrieval + trait boosts + reciprocal rank fusion
-//   4. Candidate verification & reranking (rerankCandidates with evidence verification)
-//   5. Executive brief synthesis (synthesizeSearchResults with claim grounding)
-//   6. Prompt injection / adversarial resilience (contacts with injected instructions)
-//   7. Ambiguous location disambiguation (Paris TX vs France, Cambridge UK vs MA, etc.)
-//   8. Correct empty answers / refusal (honestly returning 0 results on non-matches)
+// AI answer pipeline evaluation corpus. It covers:
+//   1. Query planning (parseSearchQuery -> QueryPlan must.*, should.traits, confidence)
+//   2. Hard pre-filtering (applyHardFilters against active SQLite contacts)
+//   3. Multi-channel retrieval, trait boosts and reciprocal rank fusion
+//   4. Candidate verification and reranking (rerankCandidates with evidence checks)
+//   5. Brief synthesis (synthesizeSearchResults with claim grounding)
+//   6. Prompt injection (contacts with injected instructions)
+//   7. Ambiguous places (Paris TX and France, Cambridge UK and MA)
+//   8. Honest empty answers (0 results when nothing matches)
 //
-// In contrast to search.eval.test.ts (which measures keyword & vector retrieval
-// alone, line 314 of harness.ts), this evaluates what the USER receives as
-// the final answer.
-// =============================================================================
+// search.eval.test.ts measures keyword and vector retrieval alone. This
+// measures the final answer a person receives.
 
 export interface AnswerEvalContact {
   /** Stable unique key across runs (e.g. "stripe-swe-london") */
@@ -92,12 +87,10 @@ export interface AnswerCorpus {
   queries: AnswerEvalQuery[];
 }
 
-// ---------------------------------------------------------------------------
 // Contacts Definition (39 contacts total)
-// ---------------------------------------------------------------------------
 
 const TARGET_CONTACTS: AnswerEvalContact[] = [
-  // ── Ambiguous Locations ──────────────────────────────────────────────────
+  // Ambiguous Locations
   {
     key: "paris-france",
     name: "Claire Dubois",
@@ -219,7 +212,7 @@ const TARGET_CONTACTS: AnswerEvalContact[] = [
     interests: ["ceramics", "cycling"],
   },
 
-  // ── Adversarial / Malicious Injection Contacts ────────────────────────────
+  // Adversarial / Malicious Injection Contacts
   {
     key: "adv-ceo-injection",
     name: "Malory Archer",
@@ -308,7 +301,7 @@ const TARGET_CONTACTS: AnswerEvalContact[] = [
     injectionType: "rule_override",
   },
 
-  // ── Core Domain Targets (Stripe, Sequoia, Google, Founders, Engineers) ───
+  // Core Domain Targets (Stripe, Sequoia, Google, Founders, Engineers)
   {
     key: "stripe-swe-london",
     name: "Liam O'Connor",
@@ -478,7 +471,7 @@ const TARGET_CONTACTS: AnswerEvalContact[] = [
   },
 ];
 
-// ── Distractors, Near-Misses, and International Contacts (15 contacts) ──────
+// Distractors, Near-Misses, and International Contacts (15 contacts)
 
 const DISTRACTOR_CONTACTS: AnswerEvalContact[] = [
   // Ex-employee (Must NOT match current-employee queries)
@@ -739,9 +732,7 @@ export function buildAnswerCorpus(): AnswerCorpus {
   }
 
   const queries: AnswerEvalQuery[] = [
-    // =========================================================================
     // Category 1: Filter Interpretation (QueryPlan Extraction)
-    // =========================================================================
     {
       id: "q01-company-explicit",
       category: "filter-interpretation",
@@ -845,9 +836,7 @@ export function buildAnswerCorpus(): AnswerCorpus {
       expectedMatches: ["stripe-pm-sf"],
     },
 
-    // =========================================================================
     // Category 2: Ambiguous Location Disambiguation
-    // =========================================================================
     {
       id: "q08-paris-france",
       category: "ambiguous-location",
@@ -979,9 +968,7 @@ export function buildAnswerCorpus(): AnswerCorpus {
       forbiddenMatches: ["portland-or"],
     },
 
-    // =========================================================================
     // Category 3: Correct Empty Answers & Refusal (True Negatives)
-    // =========================================================================
     {
       id: "q16-empty-iceland",
       category: "empty-answers",
@@ -1031,9 +1018,7 @@ export function buildAnswerCorpus(): AnswerCorpus {
       expectedMatches: [],
     },
 
-    // =========================================================================
     // Category 4: Adversarial Prompt Injections & Malicious Contacts
-    // =========================================================================
     {
       id: "q20-adv-ceo-apple",
       category: "adversarial-injection",
@@ -1079,9 +1064,7 @@ export function buildAnswerCorpus(): AnswerCorpus {
       adversarialTargetKeys: ["adv-exfil-injection"],
     },
 
-    // =========================================================================
     // Category 5: Synthesis Grounding & Unsupported Claims
-    // =========================================================================
     {
       id: "q24-synthesis-fintech",
       category: "synthesis-grounding",

@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
-// =============================================================================
 // The draft store and the submission mark, on their own
-// =============================================================================
+//
 // `composer.test.tsx` drives the composer as a person would. These
 // pin the two pieces underneath it: the storage rules a draft has to obey to
 // be safe in a shared browser, and the ProseMirror arithmetic that decides
 // what a successful save removes.
-// =============================================================================
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";

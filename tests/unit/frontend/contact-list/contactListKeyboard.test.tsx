@@ -2,10 +2,8 @@
 /**
  * useContactListKeyboard: the arrows and j/k walk the list from the open
  * contact. The listener is attached once and reads the latest values from a
- * ref written in the commit, so a key pressed as soon as the page shows a
- * new current row steps from that row. It used to be attached again in an
- * effect after every change, and a fast second ArrowDown ran the listener
- * from before and reopened the row that was already open.
+ * ref written in the commit, so a fast second ArrowDown steps from the new
+ * current row and does not reopen the row that is already open.
  */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";

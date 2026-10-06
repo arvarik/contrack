@@ -1,16 +1,8 @@
-// =============================================================================
-// The eval corpus checks itself
-// =============================================================================
-// `scripts/dedupe-eval/corpus.ts` is the ground truth the dedupe gate measures
-// against, so a defect in it does not fail a test, it changes what every
-// number means. That happened: the generator gave both people in a hard
-// negative the same first name for 26 of 111 pairs, and the gate counted every
-// one of them as an engine error no engine change could remove. A-01 read 58
-// when the honest figure was 32.
-//
-// `validateCorpus` is the guard, and this file is the guard's test. Each case
-// below is a shape that got past an earlier version of it.
-// =============================================================================
+// Unit: the eval corpus checks itself.
+// `scripts/dedupe-eval/corpus.ts` is the ground truth the dedupe gate
+// measures against, so a defect in it does not fail a test, it changes what
+// every number means. `validateCorpus` is the guard, and each case below is a
+// shape it must refuse, such as both people in a hard negative with one name.
 
 import { describe, it, expect } from "vitest";
 import {
@@ -70,7 +62,7 @@ describe("validateCorpus", () => {
     expect(() => validateCorpus(corpus)).not.toThrow();
   });
 
-  it("still refuses an unlabelled name collision between two groups", () => {
+  it("still refuses an unlabeled name collision between two groups", () => {
     // The older check, which the one above does not replace.
     const distractor = corpus.contacts.find((c) =>
       c.key.startsWith("distractor-"),

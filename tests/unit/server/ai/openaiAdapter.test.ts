@@ -1,20 +1,16 @@
-// =============================================================================
-// OpenAI adapter — the request shapes the live API taught us
-// =============================================================================
-// Most cases below are failures seen against the real API on 2026-09-26:
+// Unit: the OpenAI adapter's request shapes. Most cases are failures of the
+// real API:
 //   - GPT-6 and GPT-5.6 reason at "medium" when told nothing, so quick work
-//     paid for hidden reasoning and query planning ran past its 4 s budget.
+//     pays for hidden reasoning and query planning runs past its 4 s budget.
 //   - Some models refuse some efforts (Astra refuses "none", GPT-5 nano wants
 //     "minimal"), and a model from before reasoning refuses the parameter.
-//   - A small `max_completion_tokens` left a reasoning model no room to
+//   - A small `max_completion_tokens` leaves a reasoning model no room to
 //     answer: finish_reason "length" and an empty string.
 //   - An array at the schema's root is a 400.
-//   - Grounded research sent the Chat Completions format to the Responses
-//     API, and every run answered 400.
-// The others pin the model each class gets when discovery has not run, and
-// the schema dialect: no `strict`, which optional fields turn into a 400,
-// and nullable fields as `anyOf`.
-// =============================================================================
+//   - Grounded research must send the Responses API its own format.
+// The others pin the model each class gets before discovery runs, and the
+// schema dialect: no `strict`, which optional fields turn into a 400, and
+// nullable fields as `anyOf`.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 

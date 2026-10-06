@@ -358,7 +358,7 @@ lists the folders and the order in which the server reads them.
     their errors. `JOB_CONCURRENCY` sets how many jobs run at once.
 - The server writes its log to standard output: the terminal, or
   `docker logs contrack`. Each line has the time, the level and the area, such
-  as `[WARN] [Auth]`. Colours appear only in a terminal.
+  as `[WARN] [Auth]`. Colors appear only in a terminal.
 - `LOG_LEVEL` sets how much it writes: `error`, `warn`, `info` (the default)
   or `debug`. Each request is one `info` line, with the client's IP address,
   the path and no query string.

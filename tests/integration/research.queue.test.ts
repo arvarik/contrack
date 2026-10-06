@@ -1,13 +1,10 @@
-// =============================================================================
 // Integration: an AI switch turned off while a research call waits in the
 // AI work queue
-// =============================================================================
 // A model call can wait minutes for a slot in the shared queue. Research asks
 // the switches before the call joins the queue, and again when it gets its
 // slot, so a call that waited never reaches the provider once a switch says
 // no, and the run ends with the switch's refusal. The real gateway runs here,
 // with a scripted provider.
-// =============================================================================
 
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import request from "supertest";

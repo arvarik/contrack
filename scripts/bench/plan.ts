@@ -5,7 +5,7 @@
  * plan, so the script can run again and change nothing, and a test can read
  * the answer. The runner (`run.ts`) writes the plan.
  *
- * Nothing here is real. Streets and neighbourhoods are real places, with
+ * Nothing here is real. Streets and neighborhoods are real places, with
  * invented house numbers, and every person is made up. See `places.ts`.
  *
  * @module scripts/bench/plan
@@ -17,6 +17,7 @@ import {
   isDefaultAvatarFor,
 } from "../../server/utils/avatarUrl.ts";
 import { classifyName } from "../../server/utils/smartAvatar.ts";
+import { createRng } from "../../src/lib/corvidMotion.ts";
 import {
   CITIES,
   COUNTRIES,
@@ -134,22 +135,10 @@ export interface BenchPlan {
 export const sqliteStamp = (date: Date): string =>
   date.toISOString().slice(0, 19).replace("T", " ");
 
-// ─── Randomness ────────────────────────────────────────────────────────────
+// Randomness
 
 export function hash32(text: string): number {
   return createHash("sha1").update(text).digest().readUInt32BE(0);
-}
-
-/** A small seeded generator. The same seed gives the same sequence. */
-function mulberry32(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 export interface Dice {
@@ -161,7 +150,7 @@ export interface Dice {
 }
 
 export function dice(seed: string): Dice {
-  const next = mulberry32(hash32(seed));
+  const next = createRng(hash32(seed));
   const int = (min: number, max: number) =>
     min + Math.floor(next() * (max - min + 1));
   return {
@@ -204,7 +193,7 @@ function fillPattern(
     .join("");
 }
 
-// ─── Small helpers ─────────────────────────────────────────────────────────
+// Small helpers
 
 /** Letters that no accent folds away, written in the letters of English. */
 const PLAIN: Record<string, string> = {
@@ -229,7 +218,7 @@ const slug = (text: string): string =>
 
 const letters = (text: string): string => slug(text).replace(/-/g, "");
 
-const capitalise = (text: string): string =>
+const capitalize = (text: string): string =>
   text.charAt(0).toUpperCase() + text.slice(1);
 
 const PERSONAL_DOMAINS = new Set([
@@ -266,7 +255,7 @@ export function companyName(d: Dice, nouns: readonly string[]): string {
   return `${d.pick(COMPANY_FIRST)} ${d.pick(nouns)}`;
 }
 
-// ─── Places ────────────────────────────────────────────────────────────────
+// Places
 
 /** For a city the tables do not list: a plain address in a plain format. */
 const FALLBACK_COUNTRY: Country = {
@@ -312,7 +301,7 @@ function postcode(prefix: string, country: Country, d: Dice): string {
   }
 }
 
-/** A point within `radiusM` metres of a centre, most of them near it. */
+/** A point within `radiusM` meters of a center, most of them near it. */
 function jitter(
   lat: number,
   lng: number,
@@ -357,7 +346,7 @@ function formatAddress(
 interface Spot {
   address: string;
   pin: { lat: number; lng: number } | null;
-  /** The neighbourhood's name, or the city when there is none. */
+  /** The neighborhood's name, or the city when there is none. */
   area: string;
 }
 
@@ -369,7 +358,7 @@ function spotIn(
   avoid: Set<string>,
 ): Spot | null {
   const code = place.city?.country;
-  const hoods = place.city?.neighbourhoods;
+  const hoods = place.city?.neighborhoods;
   for (let attempt = 0; attempt < 6; attempt++) {
     let spot: Spot;
     if (hoods && hoods.length > 0) {
@@ -389,11 +378,11 @@ function spotIn(
       const faker = allFakers[place.country.locale ?? "en"];
       faker.seed(hash32(`${salt}:${attempt}`));
       const street = streets ? d.pick(streets) : faker.location.street();
-      // The table's centre, never the contact's own pin: a run moves the pin,
+      // The table's center, never the contact's own pin: a run moves the pin,
       // and a second run would drift from it. A city the table does not know
       // keeps the pin it has.
-      const centre = place.city?.centre;
-      const pin = centre ? jitter(centre[0], centre[1], 1800, d) : null;
+      const center = place.city?.center;
+      const pin = center ? jitter(center[0], center[1], 1800, d) : null;
       const number = houseNumber(code, d);
       const zip = postcode(place.city?.zip ?? "", place.country, d);
       spot = {
@@ -407,13 +396,13 @@ function spotIn(
   return null;
 }
 
-// ─── Text ──────────────────────────────────────────────────────────────────
+// Text
 
 function fillTemplate(text: string, values: Record<string, string>): string {
   return text.replace(/\{(\w+)\}/g, (_, key: string) => values[key]);
 }
 
-// ─── The plan ──────────────────────────────────────────────────────────────
+// The plan
 
 export function planEnrichment(
   input: BenchInput,
@@ -515,13 +504,13 @@ export function planEnrichment(
     `${role} at ${company}`,
     `${role} at ${company} · ${focus1}`,
     `${role}, ${company} | ${focus1} and ${focus2}`,
-    `${capitalise(focus1)} · ${role} @ ${company}`,
+    `${capitalize(focus1)} · ${role} @ ${company}`,
     `${company} · ${role} · ${focus1}`,
   ];
   const abouts = [
     `${first} is ${/^[AEIOU]/i.test(role) ? "an" : "a"} ${role.toLowerCase()} at ${company}, focused on ${focus1} and ${focus2}. Based in ${area}.`,
     `${years} years at ${company}, after ${previous}. Now works on ${focus1}. Outside work: ${interest1} and ${interest2}.`,
-    `${capitalise(focus1)} person. Previously ${dText.pick(industry.roles).toLowerCase()} at ${previous}. Lives in ${area} and likes ${interest1}.`,
+    `${capitalize(focus1)} person. Previously ${dText.pick(industry.roles).toLowerCase()} at ${previous}. Lives in ${area} and likes ${interest1}.`,
     `Runs the ${focus1} work at ${company} from ${area}. Used to be at ${previous}. Weekends are for ${interest1}.`,
     `${first} joined ${company} ${years} years ago to build out ${focus1}. Also into ${interest1}.`,
     `Knows ${focus1} and ${focus2} better than most. Came from ${previous}. Usually reachable in ${area}, unless out ${interest1}.`,

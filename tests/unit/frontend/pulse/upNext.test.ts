@@ -354,9 +354,9 @@ describe("pulse.upNext", () => {
 });
 
 describe("pulse.upNext reads a date with no time as a local day", () => {
-  // The follow-up dialog writes "2026-09-19". Read as UTC midnight it is
-  // 5 PM the day before in Los Angeles, so the chip said a day more than
-  // the contact page's banner, which reads the local day.
+  // The follow-up dialog writes "2026-09-19". Read as UTC midnight it is 5 PM
+  // the day before in Los Angeles, and the chip would say a day more than the
+  // contact page's banner, which reads the local day.
   const item = (id: string, dueAt: string): ActionItem => ({
     id,
     contactId: "c1",

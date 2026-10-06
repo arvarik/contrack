@@ -1,13 +1,10 @@
-// =============================================================================
 // Unit: the reference pages cover what the code holds
-// =============================================================================
 // Two lists in the code are the truth behind two reference pages. Every route
 // the server registers is a row in ROUTE_MANIFEST, so docs/api-reference.md
 // must name each one as `METHOD /path`, and must not name a route that no
 // longer exists. Every key binding is a row in SHORTCUTS, so
 // docs/keyboard-shortcuts.md must carry each description word for word. A
 // route or a shortcut added without its line in the docs fails here.
-// =============================================================================
 
 import { readFileSync } from "node:fs";
 import path from "node:path";

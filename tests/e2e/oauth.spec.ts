@@ -1,5 +1,5 @@
 /**
- * tests/e2e/oauth.spec.ts — An app's OAuth sign-in, in the built app.
+ * An app's OAuth sign-in, in the built app.
  *
  * One journey on a phone: an app opens the authorize link while nobody is
  * signed in, the person signs in on the same page, sees who is asking and

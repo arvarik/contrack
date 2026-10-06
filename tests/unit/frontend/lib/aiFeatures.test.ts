@@ -1,10 +1,8 @@
-// =============================================================================
 // Unit: what each AI feature uses, and whether it works now
-// =============================================================================
+//
 // One table maps the models, chosen by role, to the features people know.
 // The "What each feature uses" list, its read-only copy on Privacy and AI,
 // and each model's "Used by" line all read it, so they never disagree.
-// =============================================================================
 
 import { describe, expect, it } from "vitest";
 import type { AISettings } from "../../../../src/api/aiSettings";

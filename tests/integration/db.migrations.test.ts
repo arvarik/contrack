@@ -1,6 +1,4 @@
-// =============================================================================
-// Integration Tests — the migration ledger
-// =============================================================================
+// Integration: the migration ledger.
 // Four guarantees of server/db/runner.ts and the baseline migration, on real
 // SQLite files with sqlite-vec loaded:
 //
@@ -13,9 +11,7 @@
 //   4. server/db/schema.ts names every table and column of the migrated
 //      database, and nothing more.
 //
-// tests/fixtures/schema/v2.0-d67c8a9.sql was written from the code at
-// d67c8a9. Its header says how.
-// =============================================================================
+// The header of tests/fixtures/schema/v2.0-d67c8a9.sql says how it was made.
 
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
@@ -136,8 +132,7 @@ describe("a new database", () => {
     expect(added.map((row) => row.name).sort()).toEqual(
       [...ADDED_SINCE_FIXTURE].sort(),
     );
-    // Byte for byte: the baseline moved the old boot code, and a changed
-    // character in any statement shows here.
+    // Byte for byte, so a changed character in any statement shows here.
     const kept = (row: MasterRow) => !ADDED_SINCE_FIXTURE.includes(row.name);
     expect(actual.filter(kept)).toEqual(fixtureRows().filter(kept));
   });

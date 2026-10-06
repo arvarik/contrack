@@ -2,12 +2,9 @@
  * Settings with hundreds of contacts: the long lists, the Tracked filters,
  * and pages that open with no "Loading…".
  *
- * The Duplicates picker and the Enrichment list drew every contact. On 5,824
- * contacts, Manual merge took 44 s to show and Enrichment 44 s to open, and
- * going back to the scan kept the merge list on screen. The lists now draw only
- * the rows in view (`VirtualRows`), past 200 rows, so this spec runs its own
- * instance with 450 contacts: the shared one has a dozen, which never
- * reaches that path, and other specs count its people.
+ * Past 200 rows the Duplicates picker and the Enrichment list draw only the
+ * rows in view (`VirtualRows`), so this spec runs its own instance with 450
+ * contacts. The shared one has a dozen, and other specs count its people.
  *
  * 1. Manual merge draws a few dozen rows of 450, reaches the last by
  *    scrolling, picks two, and Check comes back at once.
@@ -16,9 +13,9 @@
  * 3. The Tracked page's two rows of pills narrow the list, the choices stay
  *    in the address, and Back from a contact returns to the same list.
  * 4. A settings page whose code has loaded opens from the settings list
- *    with no "Loading…" (React held it behind that for 300 ms).
+ *    with no "Loading…".
  * 5. On a phone, Back from a contact puts the same row at the same place in
- *    the Network list. It landed about 230 px away.
+ *    the Network list.
  */
 import { test, expect, type Page } from "@playwright/test";
 import { ContrackInstance } from "./fixtures/instance";

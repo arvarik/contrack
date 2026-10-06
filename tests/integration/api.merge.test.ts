@@ -1,6 +1,4 @@
-// =============================================================================
 // Integration: dedupe merge/undo (the data-destructive core)
-// =============================================================================
 
 import { describe, it, expect } from "vitest";
 import request from "supertest";
@@ -11,9 +9,9 @@ import { dedupeService } from "../../server/services/dedupe/index.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 
 /**
- * Every merge runs through the route. Since #56 the manual and the automatic
- * paths share one merge engine, so one set of merge and undo tests covers
- * both. Auth is off in this file, so every row belongs to the local owner.
+ * Every merge runs through the route. The manual and the automatic paths
+ * share one merge engine, so one set of merge and undo tests covers both.
+ * Auth is off in this file, so every row belongs to the local owner.
  */
 const app = makeTestApp();
 
@@ -228,7 +226,7 @@ describe("merge → audit log → undo", () => {
       .send({ primaryId: id });
     expect(missing.status).toBe(400);
 
-    // The batch route used to answer "merged 1" and hide the contact.
+    // The batch route must not answer "merged 1" and hide the contact.
     const batch = await request(app)
       .post("/api/contacts/merge-clusters")
       .send({ clusters: [{ primaryId: id, duplicateIds: [id] }] });
@@ -240,15 +238,11 @@ describe("merge → audit log → undo", () => {
   });
 });
 
-// =============================================================================
-// Cluster merges from overlapping suggestions — the select-all path
-// =============================================================================
-// The review queue groups pairwise suggestions into clusters. Merging a
-// cluster used to walk its SUGGESTIONS one by one under the cluster's chosen
-// primary — but a pair like (B,C) does not contain primary A, and the server
-// silently treated A as "not contactIdA, so contactIdA must be the
-// duplicate", re-merging a tombstoned contact. Select-all reliably failed.
-// These tests pin the correct path (merge-cluster) and the server guard.
+// Cluster merges from overlapping suggestions: the select-all path.
+// The review queue groups pairwise suggestions into clusters. A pair such as
+// (B,C) does not contain the cluster's primary A, so merging the cluster pair
+// by pair would re-merge a tombstoned contact. These tests pin the
+// merge-cluster path and the server guard.
 
 describe("cluster merge from overlapping suggestions", () => {
   /** Seed a pending suggestion directly — scans are not under test here. */
@@ -279,8 +273,8 @@ describe("cluster merge from overlapping suggestions", () => {
     const c = await createContact({ name: "Overlap C" });
     const suggestionBC = seedSuggestion(b, c);
 
-    // The old behaviour: primary A (not in the pair) silently picked B as
-    // the duplicate. It must refuse instead.
+    // Primary A is not in the pair, so the route must refuse rather than
+    // pick B as the duplicate.
     const res = await request(app)
       .post(`/api/dedupe/suggestions/${suggestionBC}/merge`)
       .send({ primaryId: a });
@@ -325,19 +319,14 @@ describe("cluster merge from overlapping suggestions", () => {
   });
 });
 
-// =============================================================================
-// Follow-up tasks survive a merge
-// =============================================================================
-// `action_items.contactId` references `contacts.id` with ON DELETE CASCADE.
-// A hard merge re-parented eleven kinds of child row and then deleted the
-// duplicate, and tasks were not one of the eleven, so the database removed
-// every follow-up the duplicate carried. One task became zero, silently. The
-// soft-merge path left the rows in place, on a contact nobody can open.
+// Follow-up tasks survive a merge.
+// `action_items.contactId` references `contacts.id` with ON DELETE CASCADE, so
+// a merge must re-parent tasks before the duplicate goes, or the database
+// silently drops them.
 //
 // The cache is checked beside the rows. `contacts.nextFollowUpAt` is
-// MIN(dueAt) of the pending tasks, kept by trigger, and a merge that moved the
-// rows without the survivor's cache following them would show the task on the
-// contact and never on the dashboard.
+// MIN(dueAt) of the pending tasks, kept by trigger, so the survivor's cache
+// must follow the moved rows or the task never shows on the dashboard.
 
 interface TaskRow {
   id: string;
@@ -399,9 +388,8 @@ describe("a merge keeps the duplicate's follow-up tasks", () => {
       .send({ primaryId, duplicateId });
     expect(merged.status).toBe(200);
 
-    // The row is still there, and it hangs off the survivor now. Before this
-    // the count here was zero: the FOREIGN KEY cascade took it with the
-    // duplicate.
+    // The row is still there, on the survivor, and not taken by the FOREIGN
+    // KEY cascade with the duplicate.
     const tasks = allTasks().filter((t) => t.id === taskId);
     expect(tasks).toHaveLength(1);
     expect(tasks[0].contactId).toBe(primaryId);
@@ -435,7 +423,7 @@ describe("a merge keeps the duplicate's follow-up tasks", () => {
       "Return the call",
       "2027-04-01T09:00:00.000Z",
     );
-    // A completed task moves too, and it does not count towards the cache.
+    // A completed task moves too, and it does not count toward the cache.
     const done = await createTask(
       duplicateId,
       "Already done",
@@ -495,13 +483,11 @@ describe("a merge keeps the duplicate's follow-up tasks", () => {
   });
 });
 
-// -----------------------------------------------------------------------------
 // Undo after the survivor changed a child row
 //
 // A merge moves the duplicate's child rows onto the survivor. If the survivor
 // then deletes or edits one, undo must put the original back on the duplicate.
 // That path writes the row again, so it must name columns the tables have.
-// -----------------------------------------------------------------------------
 
 interface ChildRow {
   table: string;

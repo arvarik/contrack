@@ -1,16 +1,8 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The Duplicates tool's two tabs, and the Manual merge picker's long list
-// =============================================================================
-// With 5,824 contacts, Manual merge drew every contact and took 44 s to show,
-// and going back to the scan kept the merge list on screen while the scan
-// waited for it to slide out (`AnimatePresence` in "wait" mode). The tabs
-// now swap at once, and the picker draws only the rows near the screen.
-// jsdom has no layout, so the virtualizer asks for the first ten rows.
-//
-// The Check tab is one button. It used to offer three scans, and the one
-// with AI off said why the other two could not run.
-// =============================================================================
+// The Duplicates tool's two tabs, and the Manual merge picker's long list. The
+// tabs swap at once, and the picker draws only the rows near the screen, so
+// thousands of contacts open fast. jsdom has no layout, so the virtualizer
+// asks for the first ten rows. The Check tab is one button.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

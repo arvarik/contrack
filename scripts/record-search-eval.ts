@@ -1,7 +1,5 @@
 #!/usr/bin/env node
-// =============================================================================
 // Record the search evaluation fixture and baseline
-// =============================================================================
 // Run this when a ranking change is intended:
 //
 //   npm run eval:record
@@ -14,19 +12,15 @@
 //   tests/fixtures/search-eval/rerank-scores.json   the cross-encoder's scores
 //   tests/eval/search.baseline.json                 recall@10 and MRR per channel
 //
-// The baseline diff is the evidence that goes in the pull request. A change
-// that improves ranking shows as numbers going up; a change that was supposed
-// to be neutral and is not shows as numbers moving at all. That is the whole
-// point of the gate: `tests/eval/search.eval.test.ts` fails in both
-// directions, so nobody can improve or damage ranking without saying so.
+// The baseline diff goes in the pull request. `tests/eval/search.eval.test.ts`
+// fails when the numbers move either way, so no change improves or damages
+// ranking without saying so.
 //
-// The vectors and scores are recorded, not computed at test time, so the gate
-// needs no model, no download and no network. The vectors are the model's
-// own floats for the text the backfill embeds. The gate and this script both
-// write them through the product's int8 write path, in one batch, so both
-// search the same bytes. The scores are every (question, profile) pair the
-// cross-encoder reads while the baseline is measured.
-// =============================================================================
+// The vectors and scores are recorded, so the gate needs no model and no
+// network. The gate and this script both write the vectors through the
+// product's int8 write path, in one batch, so both search the same bytes. The
+// scores are every (question, profile) pair the cross-encoder reads while the
+// baseline is measured.
 
 import fs from "fs";
 import os from "os";
@@ -47,9 +41,8 @@ process.env.OPENAI_API_KEY = "";
 process.env.ANTHROPIC_API_KEY = "";
 process.env.AUTH_REQUIRED = "";
 
-// The model cache would otherwise land inside the throwaway DATA_DIR, so
-// every run would download it again. Keep it beside the dependencies that
-// need it instead.
+// Keep the model cache beside the dependencies, not in the throwaway
+// DATA_DIR, so a run does not download it again.
 process.env.TRANSFORMERS_CACHE =
   process.env.TRANSFORMERS_CACHE ??
   path.join(
@@ -150,10 +143,8 @@ async function main(): Promise<void> {
   const scores: Record<string, Record<string, number>> = {};
   reranker.setReranker(recordingReranker(reranker.crossEncoder(model), scores));
 
-  // Measured with the models loaded, which is the same arithmetic the gate
-  // runs with the recordings: the gate's `embedText` returns the rows
-  // written above and its reranker the scores written below, so both sides
-  // see identical inputs.
+  // Measured with the models loaded. The gate's `embedText` and reranker
+  // return the recordings written here, so both sides see the same inputs.
   const measurement = await measure(scope, queries, idByKey);
   const pairs = Object.values(scores).reduce(
     (sum, byDoc) => sum + Object.keys(byDoc).length,

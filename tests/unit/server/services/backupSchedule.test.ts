@@ -1,14 +1,9 @@
-// =============================================================================
-// Backup schedule — env parsing, incl. the empty-string trap
-// =============================================================================
-// docker-compose renders an absent variable as `VAR: ""` — set, but empty.
-// The schedule guard used `!== undefined`, so Compose users got Number("")=0
-// and the disable branch: default 24h snapshots silently OFF. Found by the
-// independent v1.5.4 review; pinned here so it cannot come back.
+// Unit: the backup schedule's env parsing, with the empty-string trap.
+// docker-compose renders an absent variable as `VAR: ""`, set but empty, and
+// Number("") is 0, which would turn the default 24h snapshots off.
 //
-// The scheduled backup is a job now. `startBackupSchedule` answers with the
-// gap the job runs at, or null when the schedule is off.
-// =============================================================================
+// The scheduled backup is a job. `startBackupSchedule` answers with the gap
+// the job runs at, or null when the schedule is off.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { startBackupSchedule } from "../../../../server/services/backupService.ts";
@@ -61,7 +56,7 @@ describe("startBackupSchedule", () => {
     expect(startBackupSchedule()).toBeNull();
   });
 
-  it("honours an explicit interval", () => {
+  it("honors an explicit interval", () => {
     process.env.BACKUP_INTERVAL_HOURS = "6";
     handle = startBackupSchedule();
     expect(handle).not.toBeNull();

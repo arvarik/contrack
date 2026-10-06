@@ -1,20 +1,14 @@
-// =============================================================================
-// Integration Tests — incremental relationship scoring (story S10)
-// =============================================================================
-// Two claims are under test here and they pull in opposite directions.
+// Integration: incremental relationship scoring.
+// Two claims that pull in opposite directions.
 //
-// The first is that the hourly sweep does work in proportion to what changed.
-// That is easy to assert and easy to get wrong in a way no assertion catches:
-// a sweep that skips everything also does work in proportion to what changed.
-// So every "marks it" case below is paired with a "and the sweep then scores
-// it" case, and the quiet case asserts the count is zero rather than small.
+// The hourly sweep does work in proportion to what changed. A sweep that
+// skips everything passes that too, so every "marks it" case is paired with
+// "and the sweep then scores it", and the quiet case asserts zero, not small.
 //
-// The second is that scoring is not an edit. Before this story the sweep wrote
-// `relationshipScore` on every contact every hour, which fired the broad
-// `contacts_auto_updated_at` trigger and stamped `updatedAt` on the whole
-// corpus. That made `updatedAt` mean "the last sweep", told the dedupe engine
-// every contact needed re-embedding, and made the dirty flag impossible.
-// =============================================================================
+// Scoring is not an edit. A sweep that wrote `relationshipScore` on every
+// contact would fire the `contacts_auto_updated_at` trigger and stamp
+// `updatedAt` on the whole corpus, which would tell the dedupe engine that
+// every contact needs re-embedding and make the dirty flag impossible.
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
@@ -44,9 +38,8 @@ const UNSCORED = -1;
  * preference. `recencyScore` returns 100 when `daysSince <= 0` and falls
  * straight to 91.68 at any positive value, so a contact stamped with the
  * current instant scores one of two numbers eight points apart depending on
- * whether the reader lands in the same millisecond as the writer. Two scores
- * of the same contact taken microseconds apart then disagree, which made
- * `explainScore` look inconsistent with the sweep about one run in twenty.
+ * whether the reader lands in the same millisecond as the writer, and
+ * `explainScore` would disagree with the sweep about one run in twenty.
  */
 const LAST_CONTACTED = new Date(Date.now() - 5 * 86_400_000).toISOString();
 
@@ -145,9 +138,7 @@ afterAll(() => {
   app.close();
 });
 
-// ---------------------------------------------------------------------------
 // The trigger's column list
-// ---------------------------------------------------------------------------
 
 describe("the updatedAt trigger fires on edits and nothing else", () => {
   it("lists exactly the table's columns minus the score and pin columns", () => {
@@ -179,8 +170,8 @@ describe("the updatedAt trigger fires on edits and nothing else", () => {
     );
   });
 
-  // The geocoder writes pins in the background, so `updated:<1m` matched
-  // people it had just placed, and the dedupe embedder re-read them.
+  // The geocoder writes pins in the background, so a geocoder write must not
+  // count as an edit for `updated:<1m` or the dedupe embedder.
   it.each([
     ["the score", "relationshipScore = 77"],
     ["a pin", "lat = 51.5, lng = -0.12, geoSource = 'geocoder'"],
@@ -260,9 +251,7 @@ describe("the updatedAt trigger fires on edits and nothing else", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // What marks a contact
-// ---------------------------------------------------------------------------
 
 describe("what marks a contact for re-scoring", () => {
   it("marks a contact the moment it is created", () => {
@@ -342,9 +331,7 @@ describe("what marks a contact for re-scoring", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // The sweeps
-// ---------------------------------------------------------------------------
 
 describe("the incremental sweep", () => {
   it("does nothing at all on a quiet instance", async () => {

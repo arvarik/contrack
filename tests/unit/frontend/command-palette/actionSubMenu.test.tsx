@@ -117,7 +117,7 @@ describe("the actions for one contact", () => {
   });
 
   // → opens the menu while the palette's search box keeps the focus, so the
-  // menu takes the box's letters. B used to type a "b" and close the menu.
+  // menu takes the box's letters, and B must not type a "b" and close it.
   it("answers a letter from the search box, not with a modifier or elsewhere", () => {
     const { onCatchMeUp } = mount();
     const box = document.createElement("input");

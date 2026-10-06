@@ -1,16 +1,12 @@
-// =============================================================================
-// Integration Tests — what saving a note actually does with the names in it
-// =============================================================================
-// `mention.resolution.test.ts` covers the decision. This covers the wiring:
-// that a saved note reaches the resolver, that a confident answer attaches the
-// mention to the contact already there instead of making a ghost, and that a
-// plausible one reaches the review queue rather than nowhere.
+// Integration: what saving a note does with the names in it.
+// `mention.resolution.test.ts` covers the decision, and this covers the
+// wiring: a saved note reaches the resolver, a confident answer attaches the
+// mention to the existing contact, and a plausible one reaches the review
+// queue.
 //
-// Background jobs are on in this file and off everywhere else, because the
-// extraction runs on a timer after the response has gone. The model is
-// mocked: what it returns is not what is under test, and a real provider call
-// would make this a contract test.
-// =============================================================================
+// Background jobs are on in this file only, because extraction runs on a
+// timer after the response. The model is mocked, because a real provider
+// call would make this a contract test.
 
 import {
   describe,
@@ -136,8 +132,8 @@ describe("saving a note that names somebody", () => {
 
     const id = await saveNoteAndWait("Lunch with Jon Smith about the move.");
 
-    // No ghost. Before this, "Jon Smith" did not equal "Jonathan Smith" and
-    // the account got a second record of a person it already had.
+    // No ghost: "Jon Smith" resolves to "Jonathan Smith", not to a second
+    // record of a person the account already has.
     const mentions = mentionsOf(id);
     expect(mentions).toHaveLength(1);
     expect(mentions[0].contactId).toBe(jonathan);

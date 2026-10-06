@@ -1,13 +1,9 @@
-// =============================================================================
-// Integration: forwarded headers
-// =============================================================================
-// The server used to trust one proxy hop always. With no proxy in front, that
-// hop is the client, so a client's own X-Forwarded-For chose the address the
-// login and reset-link limits counted and the audit log wrote down.
-// TRUST_PROXY_HOPS now defaults to 0. These tests prove the difference through
-// the real pipeline: the failed sign-in's audit row, and HSTS, which follows
-// `req.secure` and so X-Forwarded-Proto.
-// =============================================================================
+// Integration: forwarded headers.
+// With no proxy in front, a trusted hop is the client, so its own
+// X-Forwarded-For would choose the address the login and reset-link limits
+// count and the audit log writes. TRUST_PROXY_HOPS defaults to 0. These tests
+// prove it through the real pipeline: the failed sign-in's audit row, and
+// HSTS, which follows `req.secure` and so X-Forwarded-Proto.
 
 import { describe, it, expect, afterEach } from "vitest";
 import request from "supertest";

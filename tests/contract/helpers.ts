@@ -1,18 +1,10 @@
-// =============================================================================
-// Provider contract tests — availability helpers
-// =============================================================================
-// These tests call real provider APIs. They exist because mocked adapter tests
-// cannot catch the failure mode that matters here: a mock encodes *our*
-// assumption about a provider's wire format, so when the assumption is wrong
-// the test passes forever while the feature is broken. Anthropic's
-// `output_config.format` shipped broken for exactly that reason — the unit
-// test asserted the wrong shape and stayed green.
+// Provider contract tests: availability helpers.
+// These tests call real provider APIs, because a mock encodes our own
+// assumption about a provider's wire format and stays green when it is wrong.
 //
-// Nothing here is required to develop Contrack. Every provider block skips
-// itself when its credential is absent, so `npm run test:contract` with no keys
-// configured reports all-skipped rather than failing, and a contributor with a
-// single key exercises only that provider.
-// =============================================================================
+// Nothing here is needed to develop Contrack. Each provider block skips
+// itself without its credential, so `npm run test:contract` with no keys
+// reports all-skipped, and one key runs only that provider.
 
 import "../../server/utils/loadEnv.ts";
 

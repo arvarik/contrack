@@ -127,9 +127,7 @@ describe("Frontend Mail & Google Connectors Components", () => {
     );
   };
 
-  // =========================================================================
   // 1. ImapFormModal
-  // =========================================================================
   describe("ImapFormModal", () => {
     it("validates missing host, username, and password", async () => {
       renderWithClient(<ImapFormModal isOpen={true} onClose={vi.fn()} />);
@@ -233,9 +231,7 @@ describe("Frontend Mail & Google Connectors Components", () => {
     });
   });
 
-  // =========================================================================
   // 2. GoogleFormModal
-  // =========================================================================
   describe("GoogleFormModal", () => {
     it("renders Google Workspace modal when configured", () => {
       renderWithClient(<GoogleFormModal isOpen={true} onClose={vi.fn()} />);
@@ -274,9 +270,7 @@ describe("Frontend Mail & Google Connectors Components", () => {
     });
   });
 
-  // =========================================================================
   // 3. CorrespondentsView
-  // =========================================================================
   describe("CorrespondentsView", () => {
     const mockCorrespondents: Correspondent[] = [
       {

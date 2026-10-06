@@ -1,10 +1,7 @@
-// =============================================================================
 // Capability-based AI routing — resolution rules
-// =============================================================================
 // The critical invariant: with a single provider configured and no explicit
 // settings, resolution must reproduce the pre-capability behavior exactly
 // (fast→lite, smart→flash, research→pro on the AI_PROVIDER provider).
-// =============================================================================
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
@@ -249,9 +246,8 @@ describe("capability resolution — research grounding constraint", () => {
 
 /**
  * An Ollama-only install leaves every capability on "Automatic", so auto mode
- * has to produce a *model*, not just a provider. It previously produced only
- * the provider, and the compat adapter refuses to be called without a model —
- * so a correctly connected endpoint failed every AI request.
+ * must produce a model, not just a provider: the compat adapter refuses a
+ * call without one.
  */
 describe("capability resolution — OpenAI-compatible endpoints in auto mode", () => {
   it("names a discovered chat model instead of leaving the model unset", () => {

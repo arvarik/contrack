@@ -1,15 +1,10 @@
 // @vitest-environment jsdom
-// =============================================================================
-// Unit: research citations become links only when they are web addresses
-// =============================================================================
-// The dossier's Research card links every page a run cited, and each fact to
-// the page behind it. Those addresses come from a provider, so a
-// `javascript:` or `data:` address must never reach an anchor. The record
-// keeps only absolute http and https addresses, and one bad address costs
-// only itself: a stored record still reads, with the bad source dropped and a
-// finding's bad address read as none. The card sends each address through
-// `safeHref` as well, like every other external link in the app.
-// =============================================================================
+// Research citations become links only when they are web addresses. The
+// addresses come from a provider, so a `javascript:` or `data:` address must
+// never reach an anchor. The record keeps only absolute http and https
+// addresses, and one bad address costs only itself: a stored record still
+// reads, with the bad source dropped and a finding's bad address read as none.
+// The card also sends each address through `safeHref`.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 // AI is set up: the Enrich buttons ask `useAiSetup`.

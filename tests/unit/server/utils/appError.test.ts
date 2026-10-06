@@ -1,18 +1,13 @@
-// =============================================================================
-// Unit Tests — AppError class hierarchy (Phase 2 foundation)
-// =============================================================================
-// These tests pin down the contract that every operational error in the system
-// is expected to honor:
+// Unit: the AppError class hierarchy, the contract every operational error
+// honors:
 //   - statusCode drives the HTTP response
 //   - code is a stable machine-readable identifier
 //   - details carries structured context (e.g. Zod issues)
 //   - cause preserves the original error for forensics
 //
-// Service-layer and middleware code branches on these properties. Breaking
-// any of them is a contract violation that this file catches at CI time.
-// The shapes a client sees for NotFoundError, ValidationError and
-// RateLimitedError are checked after translation, in errorHandler.test.ts.
-// =============================================================================
+// Service and middleware code branch on these. errorHandler.test.ts checks
+// the shapes a client sees for NotFoundError, ValidationError and
+// RateLimitedError after translation.
 
 import { describe, it, expect } from "vitest";
 import {

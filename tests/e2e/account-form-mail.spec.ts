@@ -1,14 +1,11 @@
 /**
- * The email hint on the account form tells the truth about mail.
- *
- * It said "Contrack never sends mail" on every instance. With outgoing mail
- * set up, Contrack mails the reset and sign-in links that somebody asks for.
- * The hint follows what `/api/auth/status` reports: `mailConfigured`, which
+ * The email hint on the account form tells the truth about mail. With
+ * outgoing mail set up, Contrack mails the reset and sign-in links somebody
+ * asks for. The hint follows `mailConfigured` from `/api/auth/status`, which
  * needs a mail server, a sender and `PUBLIC_URL`, because a link cannot be
  * built from the request.
  *
- * Each test has an instance of its own, because both settings are read at
- * boot.
+ * Each test has its own instance, because both settings are read at boot.
  */
 import { test, expect } from "./fixtures/test";
 import { ContrackInstance } from "./fixtures/instance";
@@ -17,7 +14,7 @@ import { SETUP_HEADING } from "./fixtures/accounts";
 test("says it emails links once outgoing mail is set up", async ({
   browser,
 }) => {
-  // The address is never dialled: this page sends nothing.
+  // The address is never dialed: this page sends nothing.
   const local = await ContrackInstance.start({
     authRequired: true,
     env: {

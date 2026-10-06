@@ -1,10 +1,8 @@
-// =============================================================================
 // The masthead's line of facts
-// =============================================================================
+//
 // `buildDayLine` turns the day's counts into the items of one line. The
 // masthead joins them with a middle dot. The function is pure, so the words
 // are checked here and the masthead test checks the dots and the buttons.
-// =============================================================================
 import { describe, expect, it } from "vitest";
 import {
   buildDayLine,

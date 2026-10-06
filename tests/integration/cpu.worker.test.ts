@@ -1,22 +1,13 @@
-// =============================================================================
-// Integration Tests — the CPU worker
-// =============================================================================
-// The embedding model used to run on the request thread. A backfill of 2,000
-// contacts took 2.4 seconds and blocked the event loop for 2.19 of them, in
-// bursts of up to 83 ms, so for the duration of one account's index being
-// built every other account's requests waited.
+// Integration: the CPU worker.
+// The embedding model runs on a `worker_threads` thread, because on the
+// request thread a backfill blocks every account's requests. These tests are
+// about the thread, not the vectors (`search.eval.test.ts` pins ranking): a
+// job goes to it, a job can be stopped, a queue of jobs comes back in order,
+// and a worker that will not start does not stop embedding.
 //
-// It runs on a `worker_threads` thread now. The tests that matter here are
-// not about vectors — `tests/eval/search.eval.test.ts` already pins ranking —
-// they are about the thread: that a job goes to it, that a job can be
-// stopped, that a queue of jobs comes back in order, and that a worker which
-// will not start does not stop the product embedding anything.
-//
-// No model. The worker is exercised through the protocol with a stub job, so
-// this file needs no download and no network, and it fails for one reason
-// rather than two. A stub job does no work, so the main thread's freedom
-// cannot be measured here.
-// =============================================================================
+// No model: the worker runs a stub job through the protocol, so this needs no
+// download or network. A stub does no work, so the main thread's freedom is
+// not measured here.
 
 import fs from "fs";
 import os from "os";
@@ -47,9 +38,7 @@ afterEach(async () => {
   await stopCpuWorker();
 });
 
-// ---------------------------------------------------------------------------
 // The thread
-// ---------------------------------------------------------------------------
 
 describe("the worker thread", () => {
   it("spawns and answers a job", async () => {
@@ -69,8 +58,8 @@ describe("the worker thread", () => {
       batchSize: 8,
     }).result;
 
-    // This is a correctness rule, not an optimization, and CI is where it was
-    // learned. onnxruntime-node registers itself with the first Node
+    // This is a correctness rule, not an optimization. onnxruntime-node
+    // registers itself with the first Node
     // environment that loads it and refuses every later load anywhere in the
     // process — another worker, the main thread, even after the first thread
     // has gone. A job with no texts that loaded the model would spend that one
@@ -149,11 +138,9 @@ describe("the worker thread", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// Cancelling
-// ---------------------------------------------------------------------------
+// Canceling
 
-describe("cancelling", () => {
+describe("canceling", () => {
   it("cancels an embedding queued through runOnWorker without starting a fallback", async () => {
     const controller = new AbortController();
     const fallback = vi.fn(async () => "fallback");
@@ -175,10 +162,8 @@ describe("cancelling", () => {
 
   it("drops a job that is still queued, without sending it", async () => {
     // Submitting chains through microtasks and `cancelJob` is synchronous, so
-    // the second job is certainly still in the queue here. That is what makes
-    // this deterministic: an earlier version cancelled a job that might have
-    // already finished and accepted either outcome, which is a test that
-    // cannot fail.
+    // the second job is certainly still in the queue here, which keeps this
+    // deterministic.
     startJob({ kind: "embed", texts: [], batchSize: 8 });
     const { id, result } = startJob({ kind: "embed", texts: [], batchSize: 8 });
 
@@ -194,16 +179,14 @@ describe("cancelling", () => {
 
     cancelJob(id);
 
-    // Cancelling one job is not cancelling the queue, and the job behind the
-    // cancelled one still runs rather than being stranded.
+    // Canceling one job is not canceling the queue, and the job behind the
+    // canceled one still runs rather than being stranded.
     await expect(first).resolves.toMatchObject({ kind: "embed" });
     await expect(third).resolves.toMatchObject({ kind: "embed" });
   });
 });
 
-// ---------------------------------------------------------------------------
 // The fallback
-// ---------------------------------------------------------------------------
 
 describe("when the worker cannot run", () => {
   it("uses the in-process path instead", async () => {
@@ -248,9 +231,7 @@ describe("when the worker cannot run", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // The wire format
-// ---------------------------------------------------------------------------
 
 describe("the result", () => {
   it("splits a flat buffer back into one vector per row", () => {
@@ -285,9 +266,7 @@ describe("the result", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // The worker's own module graph
-// ---------------------------------------------------------------------------
 
 describe("what the worker is allowed to import", () => {
   it("cannot reach the database through any import", () => {
@@ -380,9 +359,7 @@ function importGraph(entry: string): string[] {
   return [...seen];
 }
 
-// ---------------------------------------------------------------------------
 // Shutting down
-// ---------------------------------------------------------------------------
 
 describe("the process", () => {
   it("exits on its own once the worker is idle", async () => {
@@ -390,11 +367,11 @@ describe("the process", () => {
     // holds a reference to the event loop for its whole life keeps the process
     // alive for ever, and the first sign is a container that will not stop.
     //
-    // The opposite mistake is just as real and was made first: a worker
-    // unref'd from construction let Node exit while it was still resolving its
-    // own imports, and a backfill died with "Detected unsettled top-level
-    // await". So the reference is held while a job runs and released when the
-    // queue empties, and this runs a whole process to check both halves.
+    // The opposite mistake is as real: a worker unref'd from construction
+    // lets Node exit while it still resolves its own imports ("Detected
+    // unsettled top-level await"). So the reference is held while a job runs
+    // and released when the queue empties, and this runs a whole process to
+    // check both halves.
     const script = `
       const { startJob } = await import(${JSON.stringify(hostPath())});
       await startJob({ kind: "embed", texts: [], batchSize: 8 }).result;
@@ -431,9 +408,8 @@ function hostPath(): string {
 /**
  * Run a script with Node and report whether it ended on its own.
  *
- * The child is Node itself. It was `npx tsx`, three processes deep, and a
- * timeout's SIGKILL reached only npx: the tsx and node processes under it
- * were orphaned, and one was found still running fifteen days later.
+ * The child is Node itself, not `npx tsx`, because a timeout's SIGKILL would
+ * reach only npx and orphan the processes under it.
  */
 function runNode(
   file: string,

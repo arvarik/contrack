@@ -1,17 +1,12 @@
 // @vitest-environment jsdom
-// =============================================================================
-// Waiting behind another account's dedupe scan
-// =============================================================================
-// One scan runs at a time on an instance, so from 2.0 a scan can be refused
-// because somebody else is scanning. The server books a place in the queue and
-// says so in the 429; the client has to show a wait rather than an error, and
-// pick the scan up when its turn comes.
+// Waiting behind another account's dedupe scan. One scan runs at a time on an
+// instance, so the server can refuse a scan with a 429 that books a place in
+// the queue. The client shows a wait, not an error, and picks the scan up when
+// its turn comes.
 //
-// Every case here is one the server can produce and the UI used to get wrong:
-// a red toast for a refusal that was not a failure, a progress bar frozen at
-// zero for a scan that had not started, a scan that finished between two polls
-// and vanished, and a wait abandoned by one dropped packet.
-// =============================================================================
+// The cases: no red toast for a refusal, no progress bar frozen at zero for a
+// scan that has not started, a scan that finishes between two polls still
+// shows, and one dropped packet does not abandon the wait.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import {
@@ -61,11 +56,9 @@ function stubEventSource() {
 }
 
 /**
- * One client per test file, not one per render.
- *
- * `renderHook`'s wrapper is a component: building a QueryClient in its body
- * makes a new one on every render, which throws away in-flight mutations and
- * every cached answer at the worst possible moment.
+ * One client per test file: `renderHook`'s wrapper is a component, so a
+ * QueryClient built in its body is new on every render and drops in-flight
+ * mutations and cached answers.
  */
 const client = new QueryClient({
   defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -148,9 +141,8 @@ describe("a scan booked behind another account's", () => {
 
   it("recovers a scan that started and finished between two polls", async () => {
     // `getActiveScan` skips terminal scans, so a short scan leaves
-    // `{ active: false, queued: false }` behind it. Treating that as "the
-    // wait is over, nothing to adopt" made the waiting card vanish and the
-    // idle card return, with what the scan found never reported.
+    // `{ active: false, queued: false }` behind it. Read as "nothing to adopt",
+    // the waiting card would vanish and what the scan found would never show.
     stubEventSource();
     const fetchMock = vi.fn().mockImplementation((url: string) => {
       if (String(url).includes("/dedupe/status")) {
@@ -265,12 +257,9 @@ describe("a scan booked behind another account's", () => {
   });
 });
 
-// =============================================================================
 // The review list on Pulse: the keeper's card keeps its values
-// =============================================================================
-// =============================================================================
+//
 // The manual merge: a new stage opens at its top
-// =============================================================================
 describe("the manual merge", () => {
   const person = (id: string, name: string) => ({
     id,
@@ -415,13 +404,11 @@ describe("the manual merge", () => {
   });
 });
 
-// =============================================================================
 // Undo of a merge of several contacts
-// =============================================================================
+//
 // A group merges one contact at a time, and the merge answers with each
 // merge-log id in order. Undo takes them back last first: each merge
 // changed the contact the next one started from.
-// =============================================================================
 
 describe("Undo of a merge of several contacts", () => {
   it("undoes each merge, the last first, and keeps the pairs open", async () => {

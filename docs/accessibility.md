@@ -58,7 +58,7 @@ Every page works with no pointer. See
   sidebar. Reduced motion holds the bird still whatever you choose. The bird
   is never announced, never takes a click, and `Esc` lands it.
 - **Text size**: **Large** makes all text one step larger.
-- **Theme**: **Light**, **Dark** or **System**. Every **Accent colour** you
+- **Theme**: **Light**, **Dark** or **System**. Every **Accent color** you
   can pick is adjusted to meet WCAG 2.2 AA contrast in both themes.
 
 ### Phones

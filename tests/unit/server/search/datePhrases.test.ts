@@ -1,13 +1,10 @@
-// =============================================================================
-// Unit Tests — date phrases in a question
-// =============================================================================
+// Unit: date phrases in a question.
 // "Last month" is a calendar month in the caller's zone, ending at that
 // zone's midnight. Every expectation below is an exact instant, because an
 // off-by-one-zone here is a whole evening of notes at each end of the range.
 //
 // `now` is Monday 14 September 2026, 17:30 UTC, which is 10:30 in Los
 // Angeles and 23:00 in Kolkata.
-// =============================================================================
 
 import { describe, it, expect } from "vitest";
 import {

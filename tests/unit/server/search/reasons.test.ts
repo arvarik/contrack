@@ -1,6 +1,4 @@
-// =============================================================================
 // Unit tests: server-built reasons for Ask Contrack matches (buildReason)
-// =============================================================================
 
 import { describe, expect, it } from "vitest";
 import {

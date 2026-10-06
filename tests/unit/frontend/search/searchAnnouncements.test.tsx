@@ -1,11 +1,9 @@
 // @vitest-environment jsdom
-// =============================================================================
 // Search announcements — what a screen reader hears, and when
-// =============================================================================
+//
 // The wording is pure and tested as sentences. The region is tested for the
 // two rules that make a live region reliable: it is in the DOM before it has
 // anything to say, and the value it mounts with is not spoken.
-// =============================================================================
 import { afterEach, describe, expect, it } from "vitest";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import React from "react";

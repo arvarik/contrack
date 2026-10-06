@@ -1,10 +1,7 @@
-// =============================================================================
 // Integration: capability-based AI settings API
-// =============================================================================
 // Runs against the real app + real SQLite. No AI keys are configured in the
 // integration environment, so these exercise the configuration surface and its
 // failure modes rather than live provider calls.
-// =============================================================================
 
 import { describe, it, expect, afterEach } from "vitest";
 import request from "supertest";
@@ -54,8 +51,8 @@ describe("GET /api/settings/ai", () => {
   it("reports embeddings as the built-in model, not as unavailable", async () => {
     // Embeddings resolves through resolveEmbeddings(), not resolveCapability(),
     // and its Auto target is the local model — which needs no provider and
-    // works offline. Reporting null made the UI show an amber "nothing
-    // available" warning on a capability that was working fine.
+    // works offline. Reporting null would show an amber "nothing available"
+    // warning on a capability that works.
     const res = await request(app).get("/api/settings/ai");
     const embeddings = res.body.capabilities.embeddings;
 
@@ -139,9 +136,9 @@ describe("capability assignment", () => {
 
   it("keeps both vector stores at the same width", async () => {
     // Search and dedupe share one embeddings model, so a change must rebuild
-    // both. Reconciling only search stranded contact_embeddings at the old
-    // width and every later insert failed with "Expected 384 dimensions but
-    // received 1536" until the process restarted.
+    // both. Reconciling only search would strand contact_embeddings at the
+    // previous width, and every later insert would fail with "Expected 384
+    // dimensions but received 1536" until a restart.
     const widthOf = (table: string) => {
       const row = sqlite
         .prepare("SELECT sql FROM sqlite_master WHERE name = ?")
@@ -603,7 +600,8 @@ describe("web search", () => {
   });
 
   it("keeps a pinned web search model while it is off", async () => {
-    // The old Off was a mode of the research model, and lost the pin.
+    // Off is its own setting, not a mode of the research model, so the pin
+    // stays.
     sqlite
       .prepare(
         "INSERT INTO app_settings (key, value) VALUES ('ai.capabilities', ?)",

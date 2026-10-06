@@ -1,12 +1,9 @@
-// =============================================================================
 // Unit: the docs tooling reads Markdown the way GitHub does, and writes a wiki
-// =============================================================================
 // scripts/docs/markdown.ts answers three questions for the docs link test and
 // the wiki builder: which anchor a heading gets, which links a page holds, and
 // which pages the index lists. scripts/docs/wiki.ts then writes the pages as
 // a GitHub wiki. The last test builds the wiki from the real docs, so a page
 // that cannot become a wiki page fails here rather than on publish day.
-// =============================================================================
 
 import { existsSync, mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";

@@ -1,51 +1,36 @@
-// =============================================================================
-// The dedupe evaluation corpus
-// =============================================================================
-// `tests/unit/server/nlp/*.test.ts` check the matchers one at a time: does
-// Jaro-Winkler score this pair above that one, does the nickname table know
-// Bob is Robert. Nothing measured the engine. A pass can score every matcher
-// correctly and still produce the wrong pairs, because what reaches a matcher
-// is decided by blocking, by the corpus, and by the order the passes run in.
-//
-// So this file is a corpus with the answer written down. Every pair of
-// contacts in it is either a duplicate or it is not, and which one it is was
-// decided here rather than by the engine. Running the passes over it gives a
-// precision and a recall.
+// The dedupe evaluation corpus: contacts with the answer written down, so
+// running the passes gives a precision and a recall for the whole engine.
+// Unit tests check each matcher alone, but blocking and pass order decide what
+// reaches a matcher.
 //
 // Three kinds of contact:
 //
-// 1. DUPLICATE GROUPS. Two or three records of one person. Hand written,
-//    because the exact spelling is the whole point: a typo target has a
-//    plausible typo, a nickname target has the formal name on one record and
-//    the short name on the other.
+// 1. DUPLICATE GROUPS. Two or three records of one person, hand written,
+//    because the exact spelling is the point: a plausible typo, or the formal
+//    name on one record and the short name on the other.
 //
-// 2. HARD NEGATIVES. Two people who look like one. A father and a son at the
-//    same firm, a married couple sharing a landline, two women with the same
-//    common name. These are named one by one, so a regression reports which
-//    kind of near miss started matching rather than only that precision fell.
+// 2. HARD NEGATIVES. Two people who look like one: a father and a son at one
+//    firm, a married couple on one landline. Each is named, so a failure says
+//    which kind of near miss started matching.
 //
-// 3. DISTRACTORS. Generated with a fixed seed. Not filler: they give blocking
-//    something to do, and a corpus where every name is unique measures a
-//    matcher rather than an engine.
+// 3. DISTRACTORS. Generated with a fixed seed. They give blocking something to
+//    do, because a corpus of unique names measures a matcher, not an engine.
 //
-// The ground truth is closed. Every pair the engine produces that is not in
-// `duplicatePairs()` is a false positive, including a pair between two
-// distractors. `validateCorpus()` is what makes that safe to assume: it fails
-// when two contacts from different groups share a normalized name, an email
-// or a phone number without being named as a hard negative.
+// The ground truth is closed: every pair the engine produces that is not in
+// `duplicatePairs()` is a false positive. `validateCorpus()` makes that safe:
+// it fails when two contacts from different groups share a normalized name,
+// an email or a phone number without being named as a hard negative.
 //
 // Nothing here is a real person. The names are assembled from parts.
-// =============================================================================
 
 import {
   NICKNAME_GROUPS,
   normalizePhone,
   tokenizeName,
 } from "../../server/utils/nlp/index.ts";
+import { createRng } from "../../src/lib/corvidMotion.ts";
 
-// ---------------------------------------------------------------------------
 // Shapes
-// ---------------------------------------------------------------------------
 
 /** One contact record as the fixture stores it. */
 export interface EvalContact {
@@ -118,9 +103,7 @@ export interface Corpus {
   negatives: NegativePair[];
 }
 
-// ---------------------------------------------------------------------------
 // Duplicate groups
-// ---------------------------------------------------------------------------
 // Column order: personKey, kind, then two or three records. A record is
 // `name | company | role | location | emails | phones | sources`, with `-` for
 // an empty field and `;` between repeated values.
@@ -128,7 +111,7 @@ export interface Corpus {
 type GroupRow = [personKey: string, kind: DuplicateKind, ...records: string[]];
 
 const GROUPS: GroupRow[] = [
-  // ── Typos. One record carries a misspelling somebody really makes. ───────
+  // Typos. One record carries a misspelling somebody really makes.
   [
     "ellery-vance",
     "typo",
@@ -178,7 +161,7 @@ const GROUPS: GroupRow[] = [
     "Mohamed Al-Rashid|Cobalt Energy|Project Lead|Doha, QA|-|-|csv",
   ],
 
-  // ── Nicknames. Formal name on one record, short name on the other. ───────
+  // Nicknames. Formal name on one record, short name on the other.
   [
     "robert-lindqvist",
     "nickname",
@@ -266,7 +249,7 @@ const GROUPS: GroupRow[] = [
     "Yusuf Demirci|Rampart Security|Platform Engineer|Istanbul, TR|-|0532 555 0198|csv",
   ],
 
-  // ── Shared email. Different spellings of the name, one address. ──────────
+  // Shared email. Different spellings of the name, one address.
   [
     "rosalind-achebe",
     "shared-email",
@@ -300,7 +283,7 @@ const GROUPS: GroupRow[] = [
     "Oscar Ramirez|Windrow Farms|-|Fresno, CA|-|(559) 555-0172|csv",
   ],
 
-  // ── Cross-source. Identical name, two platforms, no other overlap. ───────
+  // Cross-source. Identical name, two platforms, no other overlap.
   [
     "tobias-lindholm",
     "cross-source",
@@ -320,7 +303,7 @@ const GROUPS: GroupRow[] = [
     "Nikolai Vasiliev|-|-|-|-|-|google",
   ],
 
-  // ── Initial for a first name. ───────────────────────────────────────────
+  // Initial for a first name.
   [
     "reginald-mbeki",
     "initial",
@@ -334,7 +317,7 @@ const GROUPS: GroupRow[] = [
     "C. Whitfield|Cinder Gallery|Curator|Melbourne, AU|c.whitfield@cinder.example|-|csv",
   ],
 
-  // ── Diacritics dropped by an export. ────────────────────────────────────
+  // Diacritics dropped by an export.
   [
     "maria-garcia-lopez",
     "diacritic",
@@ -354,7 +337,7 @@ const GROUPS: GroupRow[] = [
     "Soren Kjaergaard|Flint Robotics|Controls Engineer|Odense, DK|soren.k@flint.example|-|csv",
   ],
 
-  // ── Married name. Same person, the surname changed. ──────────────────────
+  // Married name. Same person, the surname changed.
   [
     "helena-vasquez-reid",
     "married-name",
@@ -368,7 +351,7 @@ const GROUPS: GroupRow[] = [
     "Nadia Hartley|Harbour Freight|Route Planner|Riga, LV|-|2555 0186|csv",
   ],
 
-  // ── A middle name on one record only. ───────────────────────────────────
+  // A middle name on one record only.
   [
     "anton-kovacs",
     "middle-name",
@@ -382,7 +365,7 @@ const GROUPS: GroupRow[] = [
     "Leilani Rose Kahananui|Jetty Marine|Skipper|Honolulu, HI|-|-|csv",
   ],
 
-  // ── A title or suffix on one record only. ───────────────────────────────
+  // A title or suffix on one record only.
   [
     "evelyn-sandoval",
     "title-suffix",
@@ -396,7 +379,7 @@ const GROUPS: GroupRow[] = [
     "Gregory Ntumba Jr.|Larkspur Media|Cinematographer|Kinshasa, CD|-|-|csv",
   ],
 
-  // ── Formatting only: casing and spacing. ────────────────────────────────
+  // Formatting only: casing and spacing.
   [
     "bridget-oshaughnessy",
     "formatting",
@@ -410,7 +393,7 @@ const GROUPS: GroupRow[] = [
     "Tomasz Bielecki|Nettle Organics|Buyer|Krakow, PL|-|-|csv",
   ],
 
-  // ── Three records of one person. Every pair inside counts. ──────────────
+  // Three records of one person. Every pair inside counts.
   [
     "susanna-adeyemi",
     "nickname",
@@ -434,9 +417,7 @@ const GROUPS: GroupRow[] = [
   ],
 ];
 
-// ---------------------------------------------------------------------------
 // Hard negatives
-// ---------------------------------------------------------------------------
 // Two people who look like one. Each row builds both records and asserts the
 // engine keeps them apart. Column order: kind, why, then the two records.
 
@@ -579,20 +560,12 @@ const NEGATIVE_ROWS: NegativeRow[] = [
   ],
 ];
 
-// ---------------------------------------------------------------------------
 // Recipes
-// ---------------------------------------------------------------------------
-// The hand-written groups above carry the shapes that only a person can pick:
-// a typo somebody really makes, a surname that survives a marriage. They do
-// not carry enough pairs to measure anything per kind, and writing two hundred
-// more by hand would produce two hundred rows nobody reads.
-//
-// So the rest is built by recipe. A recipe is one named transformation from a
-// base record to a second record of the same person, or to a second record of
-// a different person who looks like them. The transformation is the label: a
-// reader can see exactly what "typo" means here rather than inferring it from
-// examples, and a recipe that stops producing a findable pair fails
-// `validateCorpus` instead of quietly lowering recall.
+// The hand-written groups above carry the shapes only a person can pick, but
+// too few pairs to measure each kind. The rest is built by recipe: one named
+// transformation from a base record to a second record of the same person, or
+// of a different person who looks like them. The transformation is the label,
+// and a recipe that stops producing a findable pair fails `validateCorpus`.
 
 /** A base person the recipes build variants from. */
 interface BasePerson {
@@ -636,14 +609,12 @@ function transpose(word: string): string {
 /**
  * A sibling's first name: the same opening as `first`, a different ending.
  *
- * The shared opening is the point. Two siblings block together on the
- * first-three-letters key, which is the near miss the `siblings` negative
- * exists to measure.
+ * Two siblings block together on the first-three-letters key, which is the
+ * near miss the `siblings` negative measures.
  *
- * The guard is not theoretical. Taking the last three letters of the other
- * person's name spelled the base name straight back whenever the two happened
- * to end alike: "Edw" and Gaspard's "ard" rebuilt "Edward", so a pair labelled
- * `siblings` held two records of one name and measured nothing.
+ * The guard matters: when the two names end alike, the parts can spell the
+ * base name back ("Edw" and Gaspard's "ard" give "Edward"), and a `siblings`
+ * pair with one name measures nothing.
  */
 function siblingFirstName(first: string, other: string): string {
   const prefix = first.slice(0, 3);
@@ -970,11 +941,9 @@ const DUPLICATE_RECIPES: {
   {
     kind: "formatting",
     // Casing and whitespace at both ends, and one space in the middle of each.
-    // Both halves are deliberate. The exact-name pass keys on the trimmed,
-    // lowercased name, so a pair that differs only in those two ways is the
-    // pair that proves it still trims and still lowercases. A doubled space in
-    // the middle would have broken the match on its own and made the trim
-    // unobservable, which is what the first version of this did.
+    // The exact-name pass keys on the trimmed, lowercased name, so this pair
+    // proves it trims and lowercases. A doubled middle space would break the
+    // match on its own and hide the trim.
     build: (p) => [
       record(
         `${p.first} ${p.last}`,
@@ -1187,9 +1156,7 @@ const NEGATIVE_RECIPES: {
   },
 ];
 
-// ---------------------------------------------------------------------------
 // Recipe base people
-// ---------------------------------------------------------------------------
 // Separate pools from the distractors, so a recipe pair can never collide
 // with a singleton. The first names are taken from the engine's own nickname
 // table, because a nickname recipe that invented its own short forms would be
@@ -1211,14 +1178,9 @@ const BASE_LAST_POOL =
 /**
  * First names for the second person in a hard negative.
  *
- * Its own pool, for the same reason `OTHER_LAST_POOL` is: a name assembled
- * from one pool for the first half and another for the second half can land
- * on a name some other row already owns. This one is disjoint from
- * `FORMAL_FIRSTS` and from the distractor pool, so `other.first` beside a base
- * surname cannot reproduce a base person.
- *
- * Longer than `BASES_PER_RECIPE`, so the 13 consecutive indices one recipe
- * takes get 13 different people rather than one person repeated.
+ * Disjoint from `FORMAL_FIRSTS` and the distractor pool, so `other.first`
+ * beside a base surname cannot reproduce a base person. Longer than
+ * `BASES_PER_RECIPE`, so the 13 indices of one recipe get 13 different people.
  */
 const OTHER_FIRST_POOL =
   "Aurelio Bastienne Cressida Damaris Evander Fenella Gaspard Hesper Ilaria Jolyon Konstantin Leocadia Mirabel Nestor Orsolya Pelagia Rurik".split(
@@ -1229,12 +1191,9 @@ const OTHER_LAST_POOL =
     " ",
   );
 /**
- * Longer than `BASES_PER_RECIPE`, on purpose.
- *
- * The shared-inbox recipe builds its team alias from the company name, so two
- * rows of that recipe sharing a company share an alias, and the corpus grows
- * an email link between two people nobody labelled. One more company than
- * there are rows keeps the company unique within a recipe.
+ * Longer than `BASES_PER_RECIPE`, so the company is unique within a recipe.
+ * The shared-inbox recipe builds its alias from the company name, and two of
+ * its rows at one company would share an unlabeled email link.
  */
 const BASE_COMPANY_POOL =
   "Saltmarsh Freight|Tanglewood Press|Undercliff Marine|Verity Assurance|Wainwright Steel|Yarnold Mills|Zebedee Optics|Applecross Foods|Briarcliff Care|Crosthwaite Legal|Dunleavy Motors|Embleton Glass|Fettercairn Paper|Glenbuchat Tiles".split(
@@ -1258,11 +1217,7 @@ const BASES_PER_RECIPE = 13;
  * The surname cycles and the first name advances once per full cycle, so the
  * pair (first, last) is a base-`BASE_LAST_POOL.length` counter and every index
  * below `FORMAL_FIRSTS.length * BASE_LAST_POOL.length` gets its own name.
- *
- * Both pools cycling independently was the first attempt, and
- * `validateCorpus` refused it: two indices that agree modulo both pool lengths
- * produce one name, which put two unlabelled records of the same person in a
- * corpus whose whole purpose is that the labels are complete.
+ * Pools that cycle on their own would repeat a name, an unlabeled duplicate.
  */
 function baseFor(index: number): BasePerson {
   const first = firstNameFor(index);
@@ -1283,25 +1238,11 @@ function baseFor(index: number): BasePerson {
  * colleague. Its own surname pool, disjoint from every other pool here, so it
  * cannot collide with a primary base or with a distractor.
  *
- * ── Why the first name comes from its own pool ─────────────────────────────
- * This read `firstNameFor(index + 1)`, which looks like "the next person" and
- * is not. `firstNameFor` advances the first name once per full surname cycle
- * of 35, so adding 1 to the index changed the name at 1 index in 35. A recipe
- * takes 13 consecutive indices, so for 13 of every 16 pairs `other.first`
- * came back equal to `p.first`.
- *
- * Two recipes then measured nothing. The sibling recipe builds its second
- * name from a prefix of one first name and a suffix of the other, so "Edward"
- * and "Edward" rebuilt "Edward": 13 of 16 sibling pairs were two records of
- * one name at one company, which no engine can separate. The shared-landline
- * recipe put one household number on "Charles Hatherleigh" and "Charles
- * Hatherleigh" rather than on two members of one family. The gate counted all
- * 26 as engine errors, which is what inflated A-01 from 32 to 58.
- *
- * Advancing inside `FORMAL_FIRSTS` does not fix it. `validateCorpus` refused
- * that: "Edward" beside the base surname "Hatherleigh" is a name a later base
- * index owns, so the corpus grew an unlabelled duplicate. The second person
- * needs a first-name pool of its own, which is what `OTHER_FIRST_POOL` is.
+ * The first name comes from `OTHER_FIRST_POOL`, not `firstNameFor(index + 1)`.
+ * `firstNameFor` changes the name once per surname cycle of 35, so most pairs
+ * would get one first name twice, and a sibling or shared-landline pair of
+ * one name is something no engine can separate. A name from `FORMAL_FIRSTS`
+ * would collide with a later base index.
  */
 function otherFor(index: number): BasePerson {
   const first = OTHER_FIRST_POOL[index % OTHER_FIRST_POOL.length];
@@ -1334,9 +1275,7 @@ function nicknameFor(index: number): string | null {
   return short ? short[0].toUpperCase() + short.slice(1) : null;
 }
 
-// ---------------------------------------------------------------------------
 // Distractors
-// ---------------------------------------------------------------------------
 
 const FIRST_POOL =
   "Adaeze Bartholomew Celestine Dashiell Eulalia Ferdinand Genevieve Horatio Isolde Jarrah Kalinda Lysander Marisol Nikolas Ottoline Peregrine Quillon Rosalba Sylvester Thandiwe Ulrich Verity Wendell Xiomara Yannick Zenobia Ambrose Bronwyn Caspian Delphine Emeric Fionnuala Gideon Hyacinth Ignatius Jocasta Kendrick Lavinia Montgomery Natania".split(
@@ -1359,17 +1298,6 @@ const LOCATION_POOL =
     "|",
   );
 
-/** Deterministic 32-bit PRNG, so the corpus is the same on every machine. */
-function mulberry32(seed: number): () => number {
-  return function () {
-    seed |= 0;
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 const DISTRACTOR_COUNT = 90;
 
 /**
@@ -1380,7 +1308,7 @@ const DISTRACTOR_COUNT = 90;
  * one does.
  */
 function buildDistractors(): EvalContact[] {
-  const rand = mulberry32(0x9e3779b9);
+  const rand = createRng(0x9e3779b9);
   const out: EvalContact[] = [];
   const usedNames = new Set<string>();
 
@@ -1410,9 +1338,7 @@ function buildDistractors(): EvalContact[] {
   return out;
 }
 
-// ---------------------------------------------------------------------------
 // Assembly
-// ---------------------------------------------------------------------------
 
 /** `a;b` → `["a", "b"]`, and `-` → `[]`. */
 function list(field: string): string[] {
@@ -1454,9 +1380,8 @@ function parseRecord(
 /**
  * Build the corpus.
  *
- * Throws rather than returning something subtly wrong. A corpus that has
- * drifted is worse than no corpus: the numbers still come out and they are
- * measuring a different thing.
+ * Throws on a corpus that has drifted, because its numbers would still come
+ * out but measure a different thing.
  */
 export function buildCorpus(): Corpus {
   const contacts: EvalContact[] = [];
@@ -1544,11 +1469,10 @@ export function pairId(a: string, b: string): string {
 /**
  * Refuse a corpus whose ground truth is not the truth.
  *
- * The gate counts every produced pair that is not in `duplicates` as a false
- * positive. That is only fair if the corpus really contains no other
- * duplicates, and the easy way to break it is to add a contact whose name,
- * email or phone accidentally matches somebody in another group. Each check
- * below is a way that has happened.
+ * The gate counts every produced pair not in `duplicates` as a false
+ * positive, which is fair only if the corpus holds no other duplicates. Each
+ * check below catches a contact whose name, email or phone matches somebody
+ * in another group.
  */
 export function validateCorpus(corpus: Corpus): void {
   const { contacts, duplicates, negatives } = corpus;
@@ -1579,7 +1503,7 @@ export function validateCorpus(corpus: Corpus): void {
   for (const pair of negatives) named.add(pairId(pair.a, pair.b));
 
   // An accidental identity overlap between two groups. Either it is a
-  // duplicate nobody labelled, or it is a near miss nobody named.
+  // duplicate nobody labeled, or it is a near miss nobody named.
   const byName = new Map<string, EvalContact[]>();
   const byEmail = new Map<string, EvalContact[]>();
   const byPhone = new Map<string, EvalContact[]>();
@@ -1621,18 +1545,10 @@ export function validateCorpus(corpus: Corpus): void {
     }
   }
 
-  // A hard negative that carries one name twice.
-  //
-  // The check above cannot see this, because a labelled negative is allowed to
-  // share a name and two of these kinds are built to. The rest are not, and a
-  // pair of identical names under one of those labels measures nothing: no
-  // signal separates two records that agree on every field, so the gate counts
-  // it as an engine error that no engine change can remove.
-  //
-  // This is how A-01 came to be reported as 58 auto-merged pairs of different
-  // people when 26 of them were two records of one person. The generator
-  // advanced the second person's first name by one index where it needed a
-  // full cycle, and nothing failed.
+  // A hard negative that carries one name twice. The check above allows a
+  // labeled negative to share a name, and two kinds are built to. For the
+  // rest, two records that agree on every field measure nothing: the gate
+  // would count an engine error that no engine change can remove.
   for (const pair of negatives) {
     if (SAME_NAME_NEGATIVES.has(pair.kind)) continue;
     const a = byKey.get(pair.a)!;

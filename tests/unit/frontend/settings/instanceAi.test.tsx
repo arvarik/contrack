@@ -1,17 +1,14 @@
 // @vitest-environment jsdom
-// =============================================================================
-// Unit: the AI switches on the two settings pages that show them
-// =============================================================================
-// Administration → AI carries "Use AI on this instance". AI_DISABLED on the
-// server holds it off, so then it cannot be pressed and says why.
+// The AI switches on the two settings pages that show them.
 //
-// Privacy and AI carries the account's switch, "Use AI for my account",
-// while the instance has more than one account. It cannot turn AI on while
-// an admin has it off for the instance, so it shows off, cannot be pressed,
-// and says why. With one account, that account is the admin, and the page
-// shows one switch, "Use AI", which is the instance's: turning it on also
-// turns the account's own back on.
-// =============================================================================
+// Administration → AI carries "Use AI on this instance". AI_DISABLED on the
+// server holds it off, and then it cannot be pressed and says why.
+//
+// Privacy and AI carries "Use AI for my account" while the instance has more
+// than one account. While an admin has AI off for the instance, it shows off,
+// cannot be pressed, and says why. With one account, the page shows one
+// switch, "Use AI", which is the instance's: turning it on also turns the
+// account's own back on.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import React from "react";
