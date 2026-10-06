@@ -13,6 +13,7 @@
 
 import { actionItemRoutes } from "./actionItems.ts";
 import { contactRoutes } from "./contacts.ts";
+import { dedupeRoutes } from "./dedupe.ts";
 import { geoRoutes } from "./geo.ts";
 import { interactionRoutes } from "./interactions.ts";
 import { jobRoutes } from "./jobs.ts";
@@ -35,6 +36,7 @@ export {
 export const CONTRACTS: readonly RouteContract[] = [
   ...Object.values(actionItemRoutes),
   ...Object.values(contactRoutes),
+  ...Object.values(dedupeRoutes),
   ...Object.values(geoRoutes),
   ...Object.values(interactionRoutes),
   ...Object.values(jobRoutes),
@@ -147,7 +149,6 @@ export const UNCONTRACTED: readonly string[] = [
   "POST /api/dedupe/backfill-embeddings",
   "GET /api/dedupe/embedding-status",
   "GET /api/dedupe/merge-log",
-  "POST /api/dedupe/merge-log/:id/undo",
   "POST /api/dedupe/scan",
   "GET /api/dedupe/status",
   "GET /api/dedupe/stream",
@@ -211,4 +212,4 @@ export const UNCONTRACTED: readonly string[] = [
  * it here instead means raising this number, which is a decision for the
  * review.
  */
-export const UNCONTRACTED_CEILING = 141;
+export const UNCONTRACTED_CEILING = 140;

@@ -6,7 +6,11 @@ import { log } from "../../utils/logger.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
 import type { Scope } from "../../tenancy/scope.ts";
 import { normalizePhone } from "../../utils/nlp/index.ts";
-import { recordMergeUnsafe } from "./suggestions.ts";
+import {
+  recordMergeUnsafe,
+  settleSuggestionsAfterMergeUnsafe,
+} from "./suggestions.ts";
+import { normalizeProfileUrl } from "./normalization.ts";
 import {
   ConflictError,
   NotFoundError,
@@ -102,12 +106,19 @@ export interface ExecuteMergeOptions {
   rid: string;
 }
 
+/** What a merge answers: the primary as it is now, and its history row. */
+export interface MergeResult {
+  contact: ReturnType<typeof contactRepo.hydrate>;
+  /** The merge-history row, which `POST /api/dedupe/merge-log/:id/undo` takes. */
+  mergeLogId: string;
+}
+
 export function executeMerge(
   scope: Scope,
   primaryId: string,
   duplicateId: string,
   options: ExecuteMergeOptions,
-) {
+): MergeResult {
   const { mergedBy, confidence, reasoning, rid } = options;
 
   // A contact merged into itself points its canonicalId at itself and leaves
@@ -128,20 +139,16 @@ export function executeMerge(
     throw new ConflictError("The primary contact was already merged");
   }
 
+  // A duplicate that is gone, or already merged away, is a merge that cannot
+  // happen, and the caller hears so. It used to answer with the primary as if
+  // it had merged, so a stale pair in the review "merged successfully" and
+  // nothing changed.
   if (!duplicate) {
-    log.warn(
-      "DedupeService",
-      `[${rid}] Duplicate ${duplicateId} not found — skipping merge into ${primaryId}`,
-    );
-    return contactRepo.hydrate(primary);
+    throw new NotFoundError("Duplicate contact", duplicateId);
   }
 
   if (duplicate.canonicalId) {
-    log.warn(
-      "DedupeService",
-      `[${rid}] Duplicate ${duplicateId} already soft-merged — skipping`,
-    );
-    return contactRepo.hydrate(primary);
+    throw new ConflictError("This contact was already merged into another");
   }
 
   const mergeTxn = sqlite.transaction(() => {
@@ -156,18 +163,10 @@ export function executeMerge(
       .prepare("SELECT * FROM contacts WHERE id = ? AND ownerId = ?")
       .get(duplicateId, scope.ownerId) as ContactRow | undefined;
     if (!duplicateInTx) {
-      log.warn(
-        "DedupeService",
-        `[${rid}] Duplicate ${duplicateId} vanished mid-merge — aborting txn`,
-      );
-      return;
+      throw new NotFoundError("Duplicate contact", duplicateId);
     }
     if (duplicateInTx.canonicalId) {
-      log.warn(
-        "DedupeService",
-        `[${rid}] Duplicate ${duplicateId} concurrently merged — aborting txn`,
-      );
-      return;
+      throw new ConflictError("This contact was already merged into another");
     }
 
     // 1. Take raw pre-merge snapshots of child records
@@ -373,16 +372,14 @@ export function executeMerge(
         .run(primaryId, id);
     }
 
-    // Social Links
-    const primarySocialKeys = new Set(
-      primarySocialLinks.map(
-        (s) =>
-          `${((s.platform as string) || "").toLowerCase().trim()}::${((s.url as string) || "").toLowerCase().trim()}`,
-      ),
-    );
+    // Social Links. One page written two ways, with and without a trailing
+    // slash, is one link, so the primary does not end up with both.
+    const socialKey = (link: Record<string, unknown>) =>
+      `${((link.platform as string) || "").toLowerCase().trim()}::${normalizeProfileUrl((link.url as string) || "")}`;
+    const primarySocialKeys = new Set(primarySocialLinks.map(socialKey));
     const movedSocialLinkIds: string[] = [];
     for (const ds of dupeSocialLinks) {
-      const key = `${((ds.platform as string) || "").toLowerCase().trim()}::${((ds.url as string) || "").toLowerCase().trim()}`;
+      const key = socialKey(ds);
       if (!primarySocialKeys.has(key)) {
         movedSocialLinkIds.push(ds.id as string);
         primarySocialKeys.add(key);
@@ -660,7 +657,7 @@ export function executeMerge(
       },
     };
 
-    recordMergeUnsafe(
+    const logId = recordMergeUnsafe(
       scope,
       primaryId,
       duplicateId,
@@ -670,21 +667,26 @@ export function executeMerge(
       "soft",
       JSON.stringify(snapshotData),
     );
+    settleSuggestionsAfterMergeUnsafe(scope, primaryId, duplicateId, mergedBy);
 
     recordEvent(scope, "contact.merged", primaryId, {
       duplicateId,
       mergedBy,
     });
+    return logId;
   });
 
-  mergeTxn();
+  const mergeLogId = mergeTxn();
   dispatchEvents();
   scheduleSearchIndex(primaryId);
   log.info(
     "DedupeService",
     `[${rid}] Merged ${duplicateId} → ${primaryId} (by ${mergedBy}, confidence: ${(confidence * 100).toFixed(0)}%)`,
   );
-  return contactRepo.hydrate(contactRepo.findOwned(scope, primaryId));
+  return {
+    contact: contactRepo.hydrate(contactRepo.findOwned(scope, primaryId)),
+    mergeLogId,
+  };
 }
 
 export function mergeContacts(
@@ -692,7 +694,7 @@ export function mergeContacts(
   primaryId: string,
   duplicateId: string,
   rid: string,
-) {
+): MergeResult {
   return executeMerge(scope, primaryId, duplicateId, {
     mergedBy: "user",
     confidence: 1.0,
@@ -708,11 +710,11 @@ export function softMergeContacts(
   confidence: number,
   reasoning: string,
   rid: string,
-) {
-  executeMerge(scope, primaryId, duplicateId, {
+): string {
+  return executeMerge(scope, primaryId, duplicateId, {
     mergedBy: "auto",
     confidence,
     reasoning,
     rid,
-  });
+  }).mergeLogId;
 }

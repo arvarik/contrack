@@ -18,8 +18,10 @@ export {
   getSuggestionById,
   getSuggestionForContact,
   dismissSuggestion,
+  restoreSuggestion,
   markSuggestionMerged,
   getMergeLog,
+  getMergedInto,
   undoSoftMerge,
   clearStaleSuggestions,
 } from "./suggestions.ts";

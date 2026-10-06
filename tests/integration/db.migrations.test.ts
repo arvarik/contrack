@@ -60,6 +60,8 @@ const ADDED_SINCE_FIXTURE = [
   "api_tokens",
   // 0005_dedupe_pair_index
   "idx_dedupe_sugg_contact_b",
+  // 0006_dedupe_caveat: dedupe_suggestions gains a column
+  "dedupe_suggestions",
 ];
 
 interface MasterRow {

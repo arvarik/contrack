@@ -15,6 +15,8 @@ export type MatchType =
   | "nickname"
   /** One name is the other with middle names added. */
   | "middle_name"
+  /** The same personal profile link, such as one LinkedIn page. */
+  | "social"
   | "cross_source"
   | "fuzzy"
   | "ai"
@@ -32,8 +34,11 @@ export interface RawPair {
   idB: string;
   matchType: MatchType;
   confidence: number;
+  /** Why the two look like one person, in plain words with no numbers. */
   reasoning: string;
   matchedField?: string;
+  /** Why to look twice before merging, or null. See `WeighedMatch.caveat`. */
+  caveat?: string | null;
 }
 
 /**
@@ -163,6 +168,7 @@ export interface ClusterPair {
   confidence: number;
   reasoning: string;
   matchedField?: string;
+  caveat?: string | null;
 }
 
 export interface DedupeCluster {
@@ -249,4 +255,6 @@ export interface MergeSnapshotData {
 export interface UndoMergeResult {
   restoredContactId: string;
   conflicts: MergeConflict[];
+  /** Whether the undo also recorded the two as different people. */
+  keptSeparate: boolean;
 }

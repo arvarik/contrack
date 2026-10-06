@@ -168,6 +168,7 @@ const COVERED = [
   "GET /api/dedupe/active",
   "GET /api/dedupe/embedding-status",
   "GET /api/dedupe/merge-log",
+  "GET /api/dedupe/merged-into/:contactId",
   "GET /api/dedupe/status",
   "GET /api/dedupe/stream",
   "GET /api/dedupe/suggestion-for/:contactId",
@@ -232,6 +233,7 @@ const COVERED = [
   "POST /api/dedupe/scan",
   "POST /api/dedupe/suggestions/:id/dismiss",
   "POST /api/dedupe/suggestions/:id/merge",
+  "POST /api/dedupe/suggestions/:id/restore",
   "POST /api/imports/:id/retry",
   "POST /api/lists",
   "POST /api/lists/:id/members",
@@ -2762,6 +2764,39 @@ describe("dedupe scans and merges stop at the account that asked", () => {
     expect(pendingRows(B.user.id)).toHaveLength(1);
   });
 
+  it("refuses B's restore of A's kept-separate pair, and restores A's own", async () => {
+    const suggestionId = (
+      sqlite
+        .prepare(
+          `SELECT id FROM dedupe_suggestions
+            WHERE ownerId = ? AND status = 'dismissed'`,
+        )
+        .get(A.user.id) as { id: string }
+    ).id;
+
+    const foreign = await asUser(B)(
+      request(app).post(`/api/dedupe/suggestions/${suggestionId}/restore`),
+    );
+    const missing = await asUser(B)(
+      request(app).post(`/api/dedupe/suggestions/${randomId()}/restore`),
+    );
+    expect(foreign.status).toBe(404);
+    expect(missing.status).toBe(404);
+    expect(comparableError(foreign.body).code).toBe(
+      comparableError(missing.body).code,
+    );
+    expect(rowsOwnedBy("dedupe_exclusions", A.user.id)).toBe(1);
+    expect(pendingRows(A.user.id)).toHaveLength(0);
+
+    const own = await asUser(A)(
+      request(app).post(`/api/dedupe/suggestions/${suggestionId}/restore`),
+    );
+    expect(own.status).toBe(200);
+    expect(rowsOwnedBy("dedupe_exclusions", A.user.id)).toBe(0);
+    expect(pendingRows(A.user.id)).toHaveLength(1);
+    expect(pendingRows(B.user.id)).toHaveLength(1);
+  });
+
   it("refuses every merge endpoint a pair of A's ids, and changes nothing", async () => {
     const before = snapshotA();
     const janeBefore = janeA.map((id) => snapshotRow("contacts", id));
@@ -2869,6 +2904,31 @@ describe("dedupe scans and merges stop at the account that asked", () => {
         .prepare("SELECT undoneAt FROM dedupe_merge_log WHERE id = ?")
         .get(mergeLogIdA),
     ).toEqual({ undoneAt: null });
+  });
+
+  it("tells A where A's merged contact went, and B nothing at all", async () => {
+    const own = await asUser(A)(
+      request(app).get(`/api/dedupe/merged-into/${roeA[1]}`),
+    );
+    expect(own.status).toBe(200);
+    expect(own.body.merge).toMatchObject({
+      primaryId: roeA[0],
+      primaryName: "John Roe Primary",
+      mergeLogId: mergeLogIdA,
+    });
+
+    const foreign = await asUser(B)(
+      request(app).get(`/api/dedupe/merged-into/${roeA[1]}`),
+    );
+    const missing = await asUser(B)(
+      request(app).get(`/api/dedupe/merged-into/${randomId()}`),
+    );
+    expect(foreign.status).toBe(404);
+    expect(missing.status).toBe(404);
+    expect(comparableError(foreign.body).code).toBe(
+      comparableError(missing.body).code,
+    );
+    expect(JSON.stringify(foreign.body)).not.toContain("John Roe");
   });
 
   it("lets A undo A's own merge", async () => {

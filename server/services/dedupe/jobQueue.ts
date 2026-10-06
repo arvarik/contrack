@@ -98,7 +98,7 @@ class DedupeJobQueue extends EventEmitter {
       scanId,
       mode,
       phase: "starting",
-      phaseName: "Initializing scan…",
+      phaseName: "Starting",
       contactsScanned: 0,
       totalContacts: 0,
       deterministicFound: 0,
@@ -236,7 +236,7 @@ class DedupeJobQueue extends EventEmitter {
     if (!owned) return;
     const { scan } = owned;
     scan.phase = "complete";
-    scan.phaseName = "Scan complete";
+    scan.phaseName = "Done";
     scan.clusters = clusters;
     scan.clustersFound = clusters.length;
     scan.completedAt = new Date().toISOString();
@@ -255,7 +255,7 @@ class DedupeJobQueue extends EventEmitter {
     if (!owned) return;
     const { scan } = owned;
     scan.phase = "error";
-    scan.phaseName = "Scan failed";
+    scan.phaseName = "Failed";
     scan.error = error;
     scan.completedAt = new Date().toISOString();
     this.processing = false;

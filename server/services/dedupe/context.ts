@@ -1,7 +1,7 @@
 import { sqlite } from "../../db.ts";
 import type { Scope } from "../../tenancy/scope.ts";
 import { log } from "../../utils/logger.ts";
-import { normalizeContacts } from "./normalization.ts";
+import { loadProfileUrls, normalizeContacts } from "./normalization.ts";
 import { loadNegativeConstraints, pairKey } from "./blocking.ts";
 import { countValues } from "./policy.ts";
 import { distanceToSimilarity } from "./scoring.ts";
@@ -38,20 +38,8 @@ export function buildPassContext(scope: Scope, rid: string): PassContext {
   // 3. Load negative constraints
   const distinctPairs = loadNegativeConstraints(scope);
 
-  // 4. Batch-load the owner's social URLs
-  const allSocialLinks = sqlite
-    .prepare(
-      `SELECT sl.contactId, LOWER(TRIM(sl.url)) AS url FROM contact_social_links sl
-       JOIN contacts c ON c.id = sl.contactId WHERE c.ownerId = ?`,
-    )
-    .all(scope.ownerId) as { contactId: string; url: string }[];
-
-  const socialUrlsByContact = new Map<string, string[]>();
-  for (const sl of allSocialLinks) {
-    if (!socialUrlsByContact.has(sl.contactId))
-      socialUrlsByContact.set(sl.contactId, []);
-    socialUrlsByContact.get(sl.contactId)!.push(sl.url);
-  }
+  // 4. The owner's personal profile links, normalized
+  const socialUrlsByContact = loadProfileUrls(scope);
 
   log.info(
     "DedupeService",

@@ -796,6 +796,11 @@ export const dedupeSuggestions = sqliteTable(
     ownerId: text("ownerId").references(() => users.id, {
       onDelete: "restrict",
     }),
+    /**
+     * 0006: why a person should look twice before merging, such as "First
+     * names differ: Ada and Ben". Null when nothing argues against the match.
+     */
+    caveat: text("caveat"),
   },
   (t) => ({
     unq: unique().on(t.contactIdA, t.contactIdB),
