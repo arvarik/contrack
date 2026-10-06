@@ -15,3 +15,29 @@ export function startStream(res: Response, type: StreamType): void {
   res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders();
 }
+
+/**
+ * A signal that aborts when the client disconnects before the response ends,
+ * so the work behind a request stops with it. Call `release` once the work is
+ * done. `onDisconnect`, for a log line, runs on every close.
+ */
+export function abortOnDisconnect(
+  res: Response,
+  onDisconnect?: () => void,
+): { signal: AbortSignal; release: () => void } {
+  const controller = new AbortController();
+  const onClose = () => {
+    onDisconnect?.();
+    if (!res.writableEnded) controller.abort();
+  };
+  res.on("close", onClose);
+  return {
+    signal: controller.signal,
+    release: () => res.off("close", onClose),
+  };
+}
+
+/** True when `err` is the abort of work whose client went away. */
+export function isClientAbort(err: unknown, signal: AbortSignal): boolean {
+  return signal.aborted || (err instanceof Error && err.name === "AbortError");
+}

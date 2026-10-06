@@ -11,6 +11,7 @@ import { parseQuery, validateBody } from "../utils/validators.ts";
 import { interactionRoutes } from "../../shared/contracts/interactions.ts";
 import { AppError, NotFoundError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
+import { abortOnDisconnect } from "../utils/stream.ts";
 import { ensureDir, ownerUploadDir } from "../utils/paths.ts";
 import { scopeOf } from "../tenancy/scope.ts";
 
@@ -101,20 +102,16 @@ router.post(
   requireContact,
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const controller = new AbortController();
-    const onClose = () => {
-      if (!res.writableEnded) controller.abort();
-    };
-    res.on("close", onClose);
+    const client = abortOnDisconnect(res);
     let points;
     try {
       points = await interactionService.generateBriefing(
         scopeOf(req),
         String(req.params.id),
-        controller.signal,
+        client.signal,
       );
     } finally {
-      res.off("close", onClose);
+      client.release();
     }
     if (!points) throw new AppError("Contact not found", 404);
 

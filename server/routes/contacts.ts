@@ -27,7 +27,7 @@ import { contactRoutes } from "../../shared/contracts/contacts.ts";
 import { z } from "zod";
 import { AppError, NotFoundError, ValidationError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
-import { startStream } from "../utils/stream.ts";
+import { abortOnDisconnect, startStream } from "../utils/stream.ts";
 import { scopeOf } from "../tenancy/scope.ts";
 import { runWithContext } from "../tenancy/requestContext.ts";
 import { importService, type ImportRecord } from "../services/importService.ts";
@@ -651,11 +651,7 @@ router.post(
     );
     const contact = enrichmentContact(scope, id);
     const release = lockEnrichment(id);
-    const controller = new AbortController();
-    const onClose = () => {
-      if (!res.writableEnded) controller.abort();
-    };
-    res.on("close", onClose);
+    const client = abortOnDisconnect(res);
     try {
       const startMs = Date.now();
       // The research provider is named for the log only: the technique
@@ -671,14 +667,14 @@ router.post(
           contact,
           depth,
           history: researchHistory(contact),
-          signal: controller.signal,
+          signal: client.signal,
           ...choice,
           // The allowance a batch job has at this depth, under Node's own
           // request timeout of 300 s (server.ts sets no shorter one).
           timeoutMs: Math.min(RESEARCH_TIMEOUT_MS[depth], 290_000),
         }),
       );
-      controller.signal.throwIfAborted();
+      client.signal.throwIfAborted();
       const fieldsUpdated = mergeSearchResult(
         scope,
         id,
@@ -708,7 +704,7 @@ router.post(
       });
     } finally {
       release();
-      res.off("close", onClose);
+      client.release();
     }
   }),
 );
