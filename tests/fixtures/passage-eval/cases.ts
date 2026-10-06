@@ -1,4 +1,4 @@
-/** Separate from the 70-query ranking corpus. Keep these facts after the old text limits. */
+/** Separate from the 70-query ranking corpus. Each fact sits after a long preamble, past a short text limit. */
 export const passageCases = [
   {
     id: "clocks",

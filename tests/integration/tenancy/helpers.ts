@@ -187,10 +187,9 @@ export async function seedOwner(
 /**
  * The local owner account id.
  *
- * Every instance has one from boot (server/db.ts §2z-4), and the
- * `contacts_owner_required` trigger refuses an insert without an owner. A test
- * that writes a contact with raw SQL has to name an owner, and with auth off
- * this is the same account the API would have stamped.
+ * Every instance has one from boot, and the `contacts_owner_required` trigger
+ * refuses an insert without an owner. A test that writes a contact with raw
+ * SQL names this one, which is the account the API stamps with auth off.
  */
 export function localOwnerId(): string {
   const row = sqlite

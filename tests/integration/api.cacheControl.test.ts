@@ -97,13 +97,10 @@ describe("no-store", () => {
 
 describe("uploads", () => {
   /**
-   * A real file in the caller's own upload directory.
-   *
-   * It has to be real. `express.static` calls `setHeaders` only when it is
-   * actually sending a file, so a request for a path that does not exist
-   * produces a 404 with no headers from that layer at all — and a test
-   * asserting "the header is not `public`" against a response that has no
-   * header would pass whatever the code did.
+   * A real file in the caller's own upload directory. `express.static` calls
+   * `setHeaders` only when it sends a file, so a missing path gives a 404 with
+   * no header, and "the header is not `public`" would pass whatever the code
+   * did.
    */
   function writeUpload(name: string, body: string): string {
     const dir = ownerUploadDir(actor.user.id, "files");

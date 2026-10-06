@@ -183,11 +183,10 @@ function planOf(sql: string, params: unknown[]): string {
 /**
  * Core query statements with the query plan each must produce.
  *
- * `index` is the index that must appear. No step may be a `SCAN` at all, and
- * that is checked without naming tables: SQLite prints the alias when a
- * statement declares one, so an assertion written against table names would
- * pass for four of these cases whatever the query plan produced. `source` is where the
- * statement lives, so a reader can check this copy against the original.
+ * `index` is the index that must appear. No step may be a `SCAN`, checked
+ * without naming tables, because SQLite prints the alias when a statement
+ * declares one. `source` is where the statement lives, so a reader can check
+ * this copy against the original.
  */
 interface PlanCase {
   label: string;
