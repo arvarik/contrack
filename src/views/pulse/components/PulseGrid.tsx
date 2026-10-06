@@ -92,7 +92,7 @@ import {
 import { getEventCoordinates } from "@dnd-kit/utilities";
 import { cn } from "../../../lib/utils";
 import { LABEL } from "../../../lib/styles";
-import { DURATION } from "../../../lib/motion";
+import { DURATION, prefersReducedMotion } from "../../../lib/motion";
 import {
   CARD_TITLES,
   COLUMN_NAMES,
@@ -120,7 +120,7 @@ import {
   type DropPlace,
   type KeyStep,
 } from "../lib/dropTarget";
-import { EASE_CSS, createFlip, prefersReducedMotion } from "../lib/flip";
+import { EASE_CSS, createFlip } from "../lib/flip";
 import {
   COLUMN_CLASSES,
   DRAG_GRIP_OFFSET,

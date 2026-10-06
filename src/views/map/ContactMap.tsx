@@ -62,7 +62,7 @@ import {
   type CardAction,
 } from "./MapHoverCard";
 import { STACK_LIMIT, StackPopup, type ContactStack } from "./StackPopup";
-import { prefersReducedMotion } from "./flyTo";
+import { prefersReducedMotion } from "../../lib/motion";
 import { cardPadding } from "./insets";
 import { useHoverCard } from "./useHoverCard";
 import { readLastView, writeLastView } from "./lastView";

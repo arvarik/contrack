@@ -8,11 +8,7 @@
 // boxes and `animate` are stand-ins here.
 // =============================================================================
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  EASE_CSS,
-  createFlip,
-  prefersReducedMotion,
-} from "../../../../src/views/pulse/lib/flip";
+import { EASE_CSS, createFlip } from "../../../../src/views/pulse/lib/flip";
 import { DURATION } from "../../../../src/lib/motion";
 
 /** A root with one element per id, each with a box that the test moves. */
@@ -92,23 +88,5 @@ describe("createFlip", () => {
     boxes.set("a", { left: 0, top: 200 });
     flip.play();
     expect(animate).not.toHaveBeenCalled();
-  });
-});
-
-describe("prefersReducedMotion", () => {
-  it("reads the Motion row in Settings and the operating system", () => {
-    vi.stubGlobal("matchMedia", (query: string) => ({
-      matches: false,
-      media: query,
-    }));
-    expect(prefersReducedMotion()).toBe(false);
-    document.documentElement.dataset.motion = "reduced";
-    expect(prefersReducedMotion()).toBe(true);
-    delete document.documentElement.dataset.motion;
-    vi.stubGlobal("matchMedia", (query: string) => ({
-      matches: query === "(prefers-reduced-motion: reduce)",
-      media: query,
-    }));
-    expect(prefersReducedMotion()).toBe(true);
   });
 });

@@ -51,3 +51,23 @@ const MAX_STAGGER_MS = 200;
  */
 export const tileDelay = (index: number): string =>
   `${Math.min(index * STEP_MS, MAX_STAGGER_MS)}ms`;
+
+/**
+ * Whether motion is off: Reduced in the Motion setting (`data-motion` on the
+ * root, from PreferencesContext) or "reduce motion" in the system. CSS
+ * transitions already stop under both, but a script animation does not, so
+ * a script asks here at the moment it would start one.
+ *
+ * @returns False without a window, so a test of a move runs the move.
+ */
+export function prefersReducedMotion(): boolean {
+  if (typeof window === "undefined") return false;
+  const setting =
+    typeof document === "undefined"
+      ? null
+      : document.documentElement.getAttribute("data-motion");
+  return (
+    setting === "reduced" ||
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
+  );
+}
