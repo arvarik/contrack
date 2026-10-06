@@ -165,6 +165,16 @@ export async function serveAiModels(page: Page): Promise<void> {
         resolved,
       };
     }
+    // Research also needs its engine: the model's own web search.
+    json.webSearch = {
+      ...json.webSearch,
+      allowed: true,
+      engine: "provider",
+      engines: {
+        ...json.webSearch.engines,
+        provider: { available: true, missing: [] },
+      },
+    };
     await route.fulfill({ json });
   });
 }

@@ -17,6 +17,8 @@
 import { useRef } from "react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { RailTooltip } from "./RailTooltip";
 
 export interface SegmentedOption<T extends string | number> {
   value: T;
@@ -44,6 +46,7 @@ export const Segmented = <T extends string | number>({
   className?: string;
 }) => {
   const container = useRef<HTMLDivElement>(null);
+  const labelled = useMediaQuery("(min-width: 640px)");
 
   /**
    * Arrows move the selection, and take focus with it.
@@ -85,7 +88,7 @@ export const Segmented = <T extends string | number>({
     >
       {options.map((option) => {
         const Icon = option.icon;
-        return (
+        const button = (
           <button
             key={option.value}
             type="button"
@@ -118,6 +121,21 @@ export const Segmented = <T extends string | number>({
               option.label
             )}
           </button>
+        );
+        // Below `sm` a glyph stands alone, so a long press names it. From
+        // `sm` the label shows, and needs no tooltip.
+        return Icon ? (
+          <RailTooltip
+            key={option.value}
+            label={option.label}
+            side="bottom"
+            disabled={labelled}
+            className="flex-1 sm:flex-none"
+          >
+            {button}
+          </RailTooltip>
+        ) : (
+          button
         );
       })}
     </div>

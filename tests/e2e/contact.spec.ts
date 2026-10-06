@@ -13,6 +13,7 @@ import { test, expect } from "./fixtures/test";
 import { expectPageAccessible, expectVisibleFocus } from "./fixtures/a11y";
 import type { ContrackInstance } from "./fixtures/instance";
 import type { Seed } from "./fixtures/seed";
+import { serveAiModels } from "./fixtures/search";
 
 /** The Pixel 7 without its browser type. See mobile-forms.spec.ts. */
 const { defaultBrowserType: _chromium, ...PHONE } = devices["Pixel 7"];
@@ -538,6 +539,8 @@ test.describe("the contact header", () => {
     instance,
   }, testInfo) => {
     const id = await ownContact(instance, "Zora Kebab");
+    // The enrich rows are ready only with a model to run them.
+    await serveAiModels(page);
     await page.goto(`/contact/${id}`);
     await expect(contactHeading(page, "Zora Kebab")).toBeVisible();
 
@@ -713,6 +716,7 @@ test.describe("the contact header", () => {
     instance,
   }) => {
     const id = await ownContact(instance, "Zion Enrich");
+    await serveAiModels(page);
     // No real run: the start and its status are answered here.
     let started: { contactIds: string[]; depth?: string } | null = null;
     await page.route("**/api/ai-search", async (route) => {

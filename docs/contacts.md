@@ -170,26 +170,32 @@ under **This week** and then one heading per month. The week starts on the
 day set in **Week starts on**, in **Settings → Network and contacts**.
 
 1. Open the contact. The composer is at the top of the **Timeline** tab. On a
-   phone it is one line, "Write a quick note...", until you tap it.
-2. Write the note. Type `@` to mention someone.
-3. Optional: write the next step with a date in the next action line, such as
-   "Send the deck next Tuesday".
+   phone it is one line, "Write a quick note…", until you tap it.
+2. Write the note. Type `@` to mention someone by any part of their name.
+3. Optional: write the next step with a date in the **Follow-up** line, such
+   as "Send the deck next Tuesday". A weekday is always the next one: on a
+   Monday, "Friday" is this Friday. A follow-up needs a date. With only a
+   follow-up and no note, Save adds the follow-up alone, and "last
+   contacted" does not change.
 4. Choose **Note**, **Call**, **Meeting** or **Email**.
 5. Press **Save**, or `Cmd+Enter` (`Ctrl+Enter` on Windows and Linux).
 
-The entry takes a title from its type, such as "Quick Note" or "Logged call".
+The entry takes its type as its title: "Note", "Call", "Meeting" or "Email".
 Until you save, your draft stays on this device for up to 30 days. To log from
 any page, press **Log note** on Pulse, or `Cmd+Shift+I` (`Ctrl+Alt+I` on
 Windows and Linux), and choose the contact in the **Log an interaction**
-dialog.
+dialog. On a contact's page that dialog opens for that contact. It keeps an
+unsaved note when it closes, for the next time it opens.
 
 - **Open**: press an entry's title to see the full text, its follow-ups,
-  **Edit** and **Delete**. **Edit** changes the title and the text only.
+  **Edit** and **Delete**. **Edit** changes the title and the text, in the
+  same editor as the composer. Press a follow-up to mark it done, with
+  **Undo**.
 - **Delete**: asks "Delete this interaction?". Press **Delete interaction**.
   The toast offers **Undo** for 10 seconds. After that the delete is final,
   and an attached file goes with the entry.
-- **Files**: drop files on the **Timeline** tab to attach them, up to 50 MB
-  each. Contrack takes PDFs, PNG, JPEG, GIF and WebP images, `.txt`, `.md`
+- **Files**: drop files on the **Timeline** tab, or press **Attach a file**,
+  to attach them, up to 50 MB each. Contrack takes PDFs, PNG, JPEG, GIF and WebP images, `.txt`, `.md`
   and `.csv` files, and `.eml` email files. An `.eml` file becomes an email
   entry. With AI on, AI writes a summary of the thread into it. With AI off,
   the entry holds the file with no summary.

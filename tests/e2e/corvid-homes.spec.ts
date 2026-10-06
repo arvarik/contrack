@@ -40,6 +40,7 @@ test.describe("the bird while the AI works", () => {
     page,
     seed,
   }, testInfo) => {
+    await serveAiModels(page);
     await page.route("**/api/contacts/*/briefing", async (route) => {
       await new Promise((resolve) => setTimeout(resolve, 5_000));
       await route.fulfill({ json: { points: ["one", "two", "three"] } });
