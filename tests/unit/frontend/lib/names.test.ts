@@ -16,13 +16,12 @@ import { NAMES } from "../../../../src/lib/names";
 import { NAV_ITEMS } from "../../../../src/components/command-palette/ZeroStateView";
 import { Sidebar } from "../../../../src/components/layout/Sidebar";
 
-// The sidebar reads two counts off the `api` barrel, and the barrel pulls in
+// The sidebar reads a count off the `api` barrel, and the barrel pulls in
 // every API module in the app. Coverage instruments what is imported, so the
-// hooks are stubbed here. The counts are fixed, so the badge wording in the
+// hook is stubbed here. The count is fixed, so the badge wording in the
 // Pulse link's name is under test too.
 vi.mock("../../../../src/api", () => ({
   useUrgentActionItemCount: () => ({ data: { count: 2 } }),
-  useDedupeCount: () => ({ data: { count: 1 } }),
 }));
 vi.mock("../../../../src/contexts/SessionContext", () => ({
   useRecent: () => ({ lastContactId: null }),
@@ -88,11 +87,11 @@ describe("every surface uses the same name", () => {
   it("the sidebar links carry the same names", () => {
     render(createElement(MemoryRouter, null, createElement(Sidebar)));
 
-    // Exact names. The Pulse link adds its counts after a comma, because the
-    // badges are hidden from assistive tech and the name has to say them.
+    // Exact names. The Pulse link adds its count after a comma, because the
+    // dot is hidden from assistive tech and the name has to say it.
     for (const name of [
       NAMES.network.label,
-      `${NAMES.pulse.label}, 2 urgent follow-ups, 1 possible duplicate`,
+      `${NAMES.pulse.label}, 2 urgent follow-ups`,
       NAMES.map.label,
       NAMES.ask.label,
       NAMES.settings.label,
