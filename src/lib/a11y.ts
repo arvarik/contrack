@@ -19,7 +19,7 @@ import type { KeyboardEvent, PointerEvent } from "react";
 
 /**
  * Run `handler` when the element is activated by keyboard, matching native
- * button behaviour: Enter and Space both fire.
+ * button behavior: Enter and Space both fire.
  *
  * Space is prevented from scrolling the page, which is what the browser would
  * otherwise do — and Enter from submitting an enclosing form.

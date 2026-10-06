@@ -18,11 +18,11 @@
    * Depth Rule: only a button that does something has an edge under it.
    *
    * ── Contrast contract ──────────────────────────────────────────────
-   * Every colour below that is ever used as TEXT or as an ICON clears
+   * Every color below that is ever used as TEXT or as an ICON clears
    * WCAG AA (4.5:1) against every surface it actually lands on in this
    * app — measured, not assumed. The binding cases are not white cards;
    * they are the pale tints (`bg-primary/15`, `bg-success/10`, …)
-   * that badges and pills are built from, where a colour sits on a wash
+   * that badges and pills are built from, where a color sits on a wash
    * of itself.
    *
    * The previous primary, #009EDB, measured 2.39:1 at its worst and
@@ -65,12 +65,12 @@
 
   /* ── AI-derived data ────────────────────────────────────────────────
    * The second accent, and the only one that means something. A chip, a
-   * glyph or a label in this colour says "a model wrote this, not you":
+   * glyph or a label in this color says "a model wrote this, not you":
    * the interests and tags an enrichment run added, the note glyph on the
    * timeline. Nothing else wears it. A selected option is a selection, so
    * it takes the primary.
    *
-   * Not part of an accent or a contact colour: a violet contact must not
+   * Not part of an accent or a contact color: a violet contact must not
    * make every one of its own notes read as AI. Worst measured 4.92:1 as
    * text on a surface, 4.75:1 on its own 10 percent wash.
    * `--color-on-ai-wash` carries text on a 10, 15 or 20 percent wash, the
@@ -83,7 +83,7 @@
    * warm wash behind the text, never a second blue. Only `mark` wears it
    * (see the base layer). The text on it is always `on-surface`, which
    * reads at 10.4:1 here and 7.4:1 on the dark value, where the variant
-   * text colour would sit near the AA line. */
+   * text color would sit near the AA line. */
   --color-highlight: #fce7a6;
 
   /* ── Secondary / Neutral ────────────────────────────────────────── */
@@ -92,7 +92,7 @@
   /* ── Status ─────────────────────────────────────────────────────────
    * Text and icons only. The pale `bg-*-500/10` washes these sit on stay
    * on Tailwind's raw palette — a background carries no contrast duty,
-   * and the light tint is what makes the chip read as its colour.
+   * and the light tint is what makes the chip read as its color.
    *
    * Each value is the lightest one in its hue that still clears 4.5:1 on
    * all ten surfaces measured in the app. Amber is unavoidably brown at
@@ -109,10 +109,10 @@
   --color-on-error: #ffffff;
 
   /* ── Surface Hierarchy (paper-stack) ────────────────────────────────
-   * Warm paper. The greys used to lean blue (hue 250 in OKLCH), which read
+   * Warm paper. The grays used to lean blue (hue 250 in OKLCH), which read
    * as a screen rather than a stack of paper. They now lean warm (hue 85)
    * at a chroma of 0.005 to 0.010, with every lightness kept where it was
-   * measured, so each text colour clears AA on each surface by the same
+   * measured, so each text color clears AA on each surface by the same
    * margin as before: the worst pair is still the primary on `highest`,
    * 4.68:1. The ink (`on-surface`, `on-surface-variant`) stays a cool
    * slate, the way ink sits on paper. The dark palette is unchanged. */
@@ -132,7 +132,7 @@
     Material 3 name for exactly this — but it was never defined, so Tailwind
     dropped `divide-outline-variant/10` entirely and `divide-y` fell back to
     its v4 default of `currentColor`. That rendered the AI-usage feed's row
-    separators in near-black text colour, which is what made them look wrong.
+    separators in near-black text color, which is what made them look wrong.
     Defining the token makes the intent land.
   */
   --color-outline-variant: #d4d1cb;
@@ -177,7 +177,7 @@
 }
 
 /* =====================================================================
- * COLOUR SCHEME
+ * COLOR SCHEME
  * =====================================================================
  * Declared outside `@theme`, which only takes custom properties. Without
  * it the browser paints form controls, scrollbars and the canvas behind
@@ -189,7 +189,7 @@
   color-scheme: light;
 
   /* The three durations (see "Motion" in the theme). Fast is a press or a
-     menu opening, base is a hover or a colour change, slow is something
+     menu opening, base is a hover or a color change, slow is something
      arriving on the page. `src/lib/motion.ts` holds the same numbers for
      `motion/react`. */
   --dur-fast: 120ms;
@@ -228,7 +228,7 @@
  * DO NOT EDIT THESE VALUES ALONE. They are duplicated in `src/lib/theme.ts`,
  * which is where the accent derivation reads the surfaces it has to be
  * readable on, and `tests/unit/frontend/style/themeContrast.test.ts` asserts
- * that the two files agree token for token and that every text colour here
+ * that the two files agree token for token and that every text color here
  * clears WCAG AA on every surface it lands on.
  *
  * Not an inversion of the light palette. Inverting it puts a card below the
@@ -248,7 +248,7 @@
     --color-on-primary-wash: #6ec6ee;
     --color-corvid-eye: #7fd6ff;
     --color-ai: #bfa3f9;
-    /* The AI colour unchanged: it reads at 6.16:1 on its own wash. */
+    /* The AI color unchanged: it reads at 6.16:1 on its own wash. */
     --color-on-ai-wash: #bfa3f9;
     --color-highlight: #5a4116;
     --color-secondary: #b0c2ca;
@@ -281,7 +281,7 @@
   --color-on-primary-wash: #6ec6ee;
   --color-corvid-eye: #7fd6ff;
   --color-ai: #bfa3f9;
-  /* The AI colour unchanged: it reads at 6.16:1 on its own wash. */
+  /* The AI color unchanged: it reads at 6.16:1 on its own wash. */
   --color-on-ai-wash: #bfa3f9;
   --color-highlight: #5a4116;
   --color-secondary: #b0c2ca;
@@ -311,7 +311,7 @@
 /* =====================================================================
  * SURFACES THAT ARE NOT TOKENS
  * =====================================================================
- * One thing paints a colour no `--color-*` token describes: the frosted
+ * One thing paints a color no `--color-*` token describes: the frosted
  * panel, written as a literal. (The map is the second. Its basemap is a
  * style URL, so ContactMap swaps the style instead.) The swipe overlays
  * were two more. They are the success and error tokens now, which change
@@ -322,14 +322,14 @@
   :root:not([data-theme="light"]) {
     .glass-panel {
       /* 80% white over a light page; the same idea over a dark one. The
-         colour alone, not the shorthand: the shorthand would reset the
+         color alone, not the shorthand: the shorthand would reset the
          hover layer's background image on a glass control. */
       background-color: rgba(25, 30, 33, 0.82);
     }
 
     /*
      * MapLibre draws its zoom and attribution icons as dark SVG backgrounds,
-     * which no colour token reaches. On the dark surfaces below they vanish,
+     * which no color token reaches. On the dark surfaces below they vanish,
      * so they are inverted. See MAP CHROME for the rest of the map's chrome.
      */
     .contact-map .maplibregl-ctrl-icon,
@@ -342,14 +342,14 @@
 :root[data-theme="dark"] {
   .glass-panel {
     /* 80% white over a light page; the same idea over a dark one. The
-       colour alone, not the shorthand: the shorthand would reset the hover
+       color alone, not the shorthand: the shorthand would reset the hover
        layer's background image on a glass control. */
     background-color: rgba(25, 30, 33, 0.82);
   }
 
   /*
    * MapLibre draws its zoom and attribution icons as dark SVG backgrounds,
-   * which no colour token reaches. On the dark surfaces below they vanish,
+   * which no color token reaches. On the dark surfaces below they vanish,
    * so they are inverted. See MAP CHROME for the rest of the map's chrome.
    */
   .contact-map .maplibregl-ctrl-icon,
@@ -444,7 +444,7 @@
     border-radius: inherit;
   }
 
-  /* Pointer interaction keeps the old behaviour: no outline. */
+  /* Pointer interaction keeps the old behavior: no outline. */
   :where(button, [role="button"], a, input, select, textarea):focus:not(
       :focus-visible
     ) {
@@ -492,7 +492,7 @@
 
   /* ── The highlighter ──────────────────────────────────────────────────
    * Every `mark` in the app: the words a search matched. A warm wash, the
-   * ink colour on it whatever the text around it is, and a tight box that
+   * ink color on it whatever the text around it is, and a tight box that
    * follows a match across a line break. */
   mark {
     background-color: var(--color-highlight);
@@ -524,7 +524,7 @@
    * avatars and the letter rail showed through the items. A menu has to
    * be the one opaque thing on screen, so it paints the card surface with
    * a hairline ring and a soft shadow. The ring is a 1 px line, which the
-   * no-line rule otherwise forbids: a floating panel has no neighbouring
+   * no-line rule otherwise forbids: a floating panel has no neighboring
    * surface to shift against, so the line is what marks its edge in both
    * palettes.
    *
@@ -544,7 +544,7 @@
       0 2px 6px rgb(0 0 0 / 0.06);
   }
   /* A panel in the top layer (`usePanelPlacement`). The browser's own sheet
-     centres a popover with `inset: 0` and `margin: auto` and draws a border.
+     centers a popover with `inset: 0` and `margin: auto` and draws a border.
      The panel is placed from its trigger instead, and its ring is the
      shadow above. */
   .menu-panel[popover] {
@@ -609,7 +609,7 @@
    * person cannot press no longer looks pressable. That also ends the old
    * confusion where a disabled primary looked like a secondary.
    *
-   * The edge colour is mixed from the face, so it follows a picked accent,
+   * The edge color is mixed from the face, so it follows a picked accent,
    * a contact's vibe and the dark palette with no extra token. The border
    * is part of the edge, not a sectioning line (see `.agent/STYLE.md`).
    *
@@ -768,9 +768,9 @@
 
   /* ── Hover: one layer for every flat control ────────────────────────
    * A row in a list, a ghost button, a filter pill, a nav item. On hover a
-   * 6 percent layer of the ink colour covers the element's own background,
+   * 6 percent layer of the ink color covers the element's own background,
    * and on press a 10 percent one. A layer and not a second background
-   * colour, because the same row sits on a white card, on the page and on
+   * color, because the same row sits on a white card, on the page and on
    * a wash, in two palettes, and "one surface step up" meant a different
    * token in each of those. The layer is a background image, so a resting
    * wash or a selected tint stays underneath it. No shadow, no motion. */
@@ -818,7 +818,7 @@
    * wash inside a card (an Inbox row, a Coming up row), a settings tile. On
    * hover it rises 1 px and takes a soft shadow, and on press it sets back
    * down. "Elevation" in STYLE.md says when anything lifts at all: a row in
-   * a list of rows never does. It carries its own colour transition, so an
+   * a list of rows never does. It carries its own color transition, so an
    * element with `lift` takes no `transition-*` class. */
   .lift {
     transition:
@@ -850,7 +850,7 @@
 
   /* ── Proximity lift: rows that rise toward the pointer ──────────────
    * The Network list's rows (`useProximityLift`). The hook writes `--p`,
-   * from 0 to 1, on the row under the pointer and on the neighbour it is
+   * from 0 to 1, on the row under the pointer and on the neighbor it is
    * nearing, and this turns it into a rise of up to 2 px and a soft shadow.
    * The rise is `translate`, which adds to the virtual list's own
    * `transform` on the row's wrapper instead of replacing it. The shadow is
@@ -922,8 +922,8 @@
    * hit-area: a 44 by 44 px tap box around a control that looks smaller.
    *
    * `.agent/STYLE.md` requires a 44 px hit box on every control. A 24 px
-   * chip remove button or a 28 px colour swatch can keep its size on
-   * screen and still take a thumb: the `::after` box is centred on the
+   * chip remove button or a 28 px color swatch can keep its size on
+   * screen and still take a thumb: the `::after` box is centered on the
    * control, at least 44 px on each side, and a tap on it is a tap on the
    * control. It draws nothing.
    *
@@ -958,7 +958,7 @@
    * bar only while the pointer is over the pane or the keyboard is in it.
    * The bar sits against the sidebar, and a bar that never goes away reads
    * as part of the sidebar. The lane stays, so nothing moves when the thumb
-   * comes back. Only the thumb's colour changes. A mouse press that focuses
+   * comes back. Only the thumb's color changes. A mouse press that focuses
    * a row does not keep it, because `:focus-visible` is the keyboard's. A
    * screen with no hover keeps the bar the platform draws while scrolling. */
   @media (hover: hover) {
@@ -1202,7 +1202,7 @@ html[data-text-scale="large"] {
  * MAP CHROME
  * =====================================================================
  * MapLibre paints its own chrome from its stylesheet: the attribution, the
- * zoom buttons and the popup frame, in white with a thin grey ring and a
+ * zoom buttons and the popup frame, in white with a thin gray ring and a
  * blue focus glow. These rules put that chrome on the surface tokens, so it
  * follows the palette like the rest of the app.
  *
@@ -1252,7 +1252,7 @@ html[data-text-scale="large"] {
  * gets the app's ring: inset on a zoom button, because the group clips
  * anything outside, and on the credit's pill around the "i", 2 px outside
  * like every other control, because the dark palette draws the "i" through
- * a filter that would recolour a ring on the button itself.
+ * a filter that would recolor a ring on the button itself.
  */
 .contact-map .maplibregl-ctrl-group button:focus,
 .contact-map .maplibregl-ctrl-attrib-button:focus {
@@ -1283,8 +1283,8 @@ html[data-text-scale="large"] {
 }
 /*
  * MapLibre tells the attribution links apart from the text beside them by
- * colour alone, and only underlines them on hover. WCAG 1.4.1 asks for a
- * distinction that does not depend on colour, and an underline holds in both
+ * color alone, and only underlines them on hover. WCAG 1.4.1 asks for a
+ * distinction that does not depend on color, and an underline holds in both
  * palettes.
  */
 .contact-map .maplibregl-ctrl-attrib a {
@@ -1311,7 +1311,7 @@ html[data-text-scale="large"] {
 
 /*
  * A card opens above the pins. Every pin carries a z-index, so the open
- * contact's pin stands above its neighbours, and MapLibre gives its popup
+ * contact's pin stands above its neighbors, and MapLibre gives its popup
  * none, so without this line a card opened under the next pin over.
  */
 .contact-map .maplibregl-popup {
@@ -1324,7 +1324,7 @@ html[data-text-scale="large"] {
   color: var(--color-on-surface);
   box-shadow: 0 4px 16px rgb(0 0 0 / 0.14);
 }
-/* The tip is a border triangle, so its colour is the one border it draws. */
+/* The tip is a border triangle, so its color is the one border it draws. */
 .contact-map .maplibregl-popup-anchor-bottom .maplibregl-popup-tip,
 .contact-map .maplibregl-popup-anchor-bottom-left .maplibregl-popup-tip,
 .contact-map .maplibregl-popup-anchor-bottom-right .maplibregl-popup-tip {
@@ -1367,7 +1367,7 @@ html[data-text-scale="large"] {
  *
  * With a contact open, both keep to the map the contact leaves: MapView sets
  * `--map-open`, the open width, and the corner's right edge is where the
- * contact starts. The contact used to cover them, and the licence needs the
+ * contact starts. The contact used to cover them, and the license needs the
  * credit on screen. When the open map is under MIN_OPEN_PX, MapView sets
  * `data-cramped`: the zoom buttons step aside like the toolbar, and the
  * credit stays. The open credit keeps inside the open map too: its width

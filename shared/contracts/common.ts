@@ -3,7 +3,7 @@
 // =============================================================================
 // Dates, ID lists, the child records of a contact body, and the readers for
 // query strings that routes used to parse by hand. Request schemas here keep
-// the parse behaviour they had in `server/utils/validators.ts`, transforms
+// the parse behavior they had in `server/utils/validators.ts`, transforms
 // included. Response schemas never transform.
 // =============================================================================
 

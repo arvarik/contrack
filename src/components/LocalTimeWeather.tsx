@@ -2,7 +2,7 @@
  * LocalTimeWeather: the time where a contact is, and the weather there.
  *
  * Both are facts on the contact's meta line ("Sydney · 2:45 AM AEST ·
- * 13°C"), so they render as plain text. They used to wear grey pills, the
+ * 13°C"), so they render as plain text. They used to wear gray pills, the
  * same pills as the social links, and a fact looked like something to press.
  *
  * The time carries its zone, short: "2:13 PM EDT". A time alone does not say
@@ -19,7 +19,7 @@
  * The weather is a request to Open-Meteo with the contact's coordinates. It
  * is a third party, so the weather renders only when `showWeather` allows it,
  * and when it does not, the part that owns the request never mounts. The
- * coordinates it gets are rounded to about a kilometre (`weatherUrl`).
+ * coordinates it gets are rounded to about a kilometer (`weatherUrl`).
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -346,7 +346,7 @@ const Weather = ({
     <>
       <MetaDot />
       <motion.span
-        // The temperature arrives at its full colour and grows into
+        // The temperature arrives at its full color and grows into
         // place. Text faded in from nothing is text below its
         // contrast for as long as the fade lasts, which WCAG 1.4.3
         // does not excuse and an accessibility scan catches whenever

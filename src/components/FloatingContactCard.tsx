@@ -4,7 +4,7 @@
  * Opened from a search result, so the reader can see who was found without
  * leaving the results. It fills most of the viewport rather than using the
  * shared `Modal`, because a profile is a page's worth of content and the
- * centred card would scroll inside a scrolling page.
+ * centered card would scroll inside a scrolling page.
  *
  * It is a dialog all the same, and it carries what a dialog owes a keyboard
  * or screen-reader user: the role and name, focus moved into it when it

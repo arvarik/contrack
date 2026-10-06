@@ -172,7 +172,7 @@ const NOISE_TYPES = new Set(["internet", "pref", "voice", "other", "x-apple"]);
  *
  * Every exporter has its own word for a mobile number — Apple writes IPHONE
  * and CELL, Android writes CELL, Outlook writes MOBILE — and keeping all three
- * meant one person's phone was labelled three ways depending on which address
+ * meant one person's phone was labeled three ways depending on which address
  * book the file came out of. The app's own vocabulary is "mobile".
  */
 const TYPE_ALIASES: Record<string, string> = {

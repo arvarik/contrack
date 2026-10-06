@@ -3,25 +3,25 @@
  *
  * The Network list is the one list a person scans with the pointer all day.
  * With this, the row under the pointer rises a little, and the row beside it
- * rises too, more as the pointer nears it. Which neighbour depends on which
+ * rises too, more as the pointer nears it. Which neighbor depends on which
  * half of the row the pointer is in: in the lower half the row below starts
- * to rise, in the upper half the row above. Nothing jumps: at a row's centre
- * it has the whole lift and its neighbours none, and on the line between two
+ * to rise, in the upper half the row above. Nothing jumps: at a row's center
+ * it has the whole lift and its neighbors none, and on the line between two
  * rows each has half.
  *
  * The lift of a row is a number from 0 to 1, written to its `--p` custom
  * property. `.proximity-row` in `index.css` turns it into a rise of up to
  * 2 px and a soft shadow, so the look lives in one place. The curve is a
- * raised cosine over one row's pitch, the centre-to-centre distance:
+ * raised cosine over one row's pitch, the center-to-center distance:
  *
  *   p(d) = (1 + cos(π·d)) / 2 for d < 1, else 0
  *
- * which is flat at the centre and at the edge, so a pointer resting near
+ * which is flat at the center and at the edge, so a pointer resting near
  * either does not make the rows tremble.
  *
  * Nothing renders. A pointer move stores the pointer's position and asks for
  * one animation frame, and that frame finds the row under the pointer, reads
- * its box and its neighbour's, and writes `--p` on at most two rows, and
+ * its box and its neighbor's, and writes `--p` on at most two rows, and
  * clears the rows lifted before. React never hears about it, so a list of
  * four hundred contacts does not render again as the pointer moves.
  *
@@ -38,10 +38,10 @@ import { useEffect, type RefObject } from "react";
 /** The attribute that makes an element a row this hook lifts. */
 export const PROXIMITY_ROW_ATTR = "data-proximity-row";
 
-/** The space between two rows, for a row with no neighbour on that side. */
+/** The space between two rows, for a row with no neighbor on that side. */
 const ROW_GAP_PX = 8;
 
-/** The lift at `d` row pitches from a row's centre, from 1 to 0. */
+/** The lift at `d` row pitches from a row's center, from 1 to 0. */
 function liftAt(d: number): number {
   return d >= 1 ? 0 : 0.5 * (1 + Math.cos(Math.PI * Math.max(0, d)));
 }
@@ -85,16 +85,16 @@ export function useProximityLift(
       const rows = Array.from(root.querySelectorAll<HTMLElement>(selector));
       const index = rows.indexOf(current);
       const box = current.getBoundingClientRect();
-      const centre = box.top + box.height / 2;
-      const neighbour = rows[index + (pointer.y >= centre ? 1 : -1)] ?? null;
+      const center = box.top + box.height / 2;
+      const neighbor = rows[index + (pointer.y >= center ? 1 : -1)] ?? null;
       let pitch = box.height + ROW_GAP_PX;
-      if (neighbour) {
-        const other = neighbour.getBoundingClientRect();
-        pitch = Math.abs(other.top + other.height / 2 - centre) || pitch;
+      if (neighbor) {
+        const other = neighbor.getBoundingClientRect();
+        pitch = Math.abs(other.top + other.height / 2 - center) || pitch;
       }
-      const d = Math.min(1, Math.abs(pointer.y - centre) / pitch);
+      const d = Math.min(1, Math.abs(pointer.y - center) / pitch);
       const next = new Map([[current, liftAt(d)]]);
-      if (neighbour) next.set(neighbour, liftAt(1 - d));
+      if (neighbor) next.set(neighbor, liftAt(1 - d));
       write(next);
     };
 

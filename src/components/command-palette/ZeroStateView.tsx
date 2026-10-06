@@ -110,7 +110,7 @@ const modeIcon = (mode: string) => {
  * (`.agent/STYLE.md`, "Tones") and match Pulse's rows: follow-ups due are an
  * action to take, a catch-up is past due, a possible duplicate is the
  * warning, and a ghost or stale data is neutral. The server finds these by
- * rule, not with a model, so none of them wears the AI colour.
+ * rule, not with a model, so none of them wears the AI color.
  *
  * The tone sits on the glyph's tile and the row stays plain. The rows used to
  * rest on five raw washes, and a primary one would look like the current row.

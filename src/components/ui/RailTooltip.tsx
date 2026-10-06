@@ -117,9 +117,9 @@ export const RailTooltip = ({
   );
 
   const { box, caret, from } = SIDES[side];
-  // Centred under the control: Motion owns the transform, so the half-width
+  // Centered under the control: Motion owns the transform, so the half-width
   // shift is its `x`, not a class.
-  const centre = side === "bottom" ? { x: "-50%" } : {};
+  const center = side === "bottom" ? { x: "-50%" } : {};
 
   return (
     <div
@@ -137,9 +137,9 @@ export const RailTooltip = ({
       <AnimatePresence>
         {visible && !disabled && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, ...from, ...centre }}
-            animate={{ opacity: 1, x: 0, y: 0, scale: 1, ...centre }}
-            exit={{ opacity: 0, scale: 0.95, ...from, ...centre }}
+            initial={{ opacity: 0, scale: 0.95, ...from, ...center }}
+            animate={{ opacity: 1, x: 0, y: 0, scale: 1, ...center }}
+            exit={{ opacity: 0, scale: 0.95, ...from, ...center }}
             transition={{ duration: DURATION.fast, ease: EASE }}
             className={cn("absolute z-50 pointer-events-none", box)}
           >

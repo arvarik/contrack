@@ -64,7 +64,7 @@ export function isGeneratedAvatar(url: string | null | undefined): boolean {
  * username rather than the display name. Both are deliberate: the account is
  * not one of the contacts and should not look like one, and a username is the
  * stable identifier — a display name changes, and an avatar that changes with
- * it stops being recognisable.
+ * it stops being recognizable.
  */
 export function accountAvatarUrl(
   username: string | null | undefined,

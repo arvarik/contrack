@@ -1,7 +1,7 @@
 /**
  * ScoreBreakdown — makes the relationship score inspectable.
  *
- * A number out of 100 attached to a person is a judgement, and a judgement you
+ * A number out of 100 attached to a person is a judgment, and a judgment you
  * cannot interrogate is one you either over-trust or ignore. Neither is what
  * the score is for. This turns "42" into the five things that produced it,
  * each with the measurement behind it, so the answer to "why is this low" is
@@ -41,7 +41,7 @@ async function fetchScoreBreakdown(
   return res.json();
 }
 
-/** Colour the bar by how healthy that one signal is, not by the total. */
+/** Color the bar by how healthy that one signal is, not by the total. */
 function barTone(value: number): string {
   if (value >= 67) return "bg-success";
   if (value >= 34) return "bg-warning";

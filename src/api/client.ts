@@ -7,7 +7,7 @@
  * expired", "your account is disabled", or "change your password first", and
  * each of those needs the whole app to change screen rather than the calling
  * view to show a toast. A view cannot make that decision, and eleven views
- * making it separately would make it eleven ways. So the transport recognises
+ * making it separately would make it eleven ways. So the transport recognizes
  * the answer, announces it once on the window, and still throws, so the
  * calling query fails exactly the way it always has.
  *
@@ -119,7 +119,7 @@ export function retryApiQuery(failures: number, error: unknown): boolean {
  * These are completely different events for the user ("Contrack is down or
  * you are offline" vs "that contact does not exist") but `fetch` reports the
  * first as a bare `TypeError: Failed to fetch`, indistinguishable from a
- * programming error. Naming it lets one app-level sentinel recognise a
+ * programming error. Naming it lets one app-level sentinel recognize a
  * disconnection and speak for the whole app, instead of every view inventing
  * its own story about why it has no data.
  *
@@ -249,7 +249,7 @@ export async function apiFetch(
   try {
     res = await fetch(`${API_BASE}${path}`, init);
   } catch (cause) {
-    // AbortError is a caller cancelling on purpose, not a dead server.
+    // AbortError is a caller canceling on purpose, not a dead server.
     if (
       init?.signal?.aborted ||
       (cause instanceof Error && cause.name === "AbortError")

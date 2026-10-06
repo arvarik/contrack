@@ -9,7 +9,7 @@
  * A radiogroup rather than a set of buttons, so a screen reader announces one
  * control with a selected option instead of three unrelated buttons.
  *
- * The role promises keyboard behaviour, so the behaviour is here: the arrows
+ * The role promises keyboard behavior, so the behavior is here: the arrows
  * move between options and select as they go, and only the selected option is
  * in the tab order. A radiogroup without that is a role that lies about what
  * the control does.
@@ -46,7 +46,7 @@ export const Segmented = <T extends string | number>({
   className?: string;
 }) => {
   const container = useRef<HTMLDivElement>(null);
-  const labelled = useMediaQuery("(min-width: 640px)");
+  const labeled = useMediaQuery("(min-width: 640px)");
 
   /**
    * Arrows move the selection, and take focus with it.
@@ -129,7 +129,7 @@ export const Segmented = <T extends string | number>({
             key={option.value}
             label={option.label}
             side="bottom"
-            disabled={labelled}
+            disabled={labeled}
             className="flex-1 sm:flex-none"
           >
             {button}

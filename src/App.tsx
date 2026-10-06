@@ -424,7 +424,7 @@ const ResponsiveLayout = () => {
                     // stays the page's main content while a contact is open over it.
                     <motion.section
                       aria-label="Contact"
-                      // The map reads this to centre a pin beside the contact, not
+                      // The map reads this to center a pin beside the contact, not
                       // under it (`insets.ts`). The panel sits flush with the map's
                       // right edge, so its width is what it covers.
                       data-covers-map="right"
@@ -476,12 +476,12 @@ const AppToaster = () => {
   const { mode } = usePreferences();
   // A phone's dialog is a sheet from the bottom, with Save at its foot.
   const dialogOpen = useDialogOpen();
-  const centredDialogs = useMediaQuery("(min-width: 640px)");
-  const sheetOpen = dialogOpen && !centredDialogs;
+  const centeredDialogs = useMediaQuery("(min-width: 640px)");
+  const sheetOpen = dialogOpen && !centeredDialogs;
   return (
     <Toaster
       // The app's own palette, not the system's: a dark page drew dark
-      // grey descriptions on the dark glass of a light-theme toast.
+      // gray descriptions on the dark glass of a light-theme toast.
       theme={mode}
       position={sheetOpen ? "top-center" : "bottom-right"}
       // The mobile tab bar is fixed to the bottom of the viewport, so a

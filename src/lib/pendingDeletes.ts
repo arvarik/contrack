@@ -149,7 +149,7 @@ function undo(id: string, entry: PendingDelete): void {
 /**
  * Send every delete that is still in its undo window.
  *
- * Runs on `pagehide`. A request of a closing page is cancelled unless it uses
+ * Runs on `pagehide`. A request of a closing page is canceled unless it uses
  * `keepalive`, so this path calls the API directly and not the mutation.
  */
 function flushPendingDeletes(): void {

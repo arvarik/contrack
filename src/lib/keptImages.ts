@@ -5,7 +5,7 @@
  * holds it. A page that unmounts lets go of every picture on it, and the
  * next mount reads each one back from the disk cache, a frame after its row
  * has drawn. On each return to the Network page, every avatar in the list
- * showed its grey circle for that frame, and every company logo was missing.
+ * showed its gray circle for that frame, and every company logo was missing.
  *
  * A picture that has loaded calls `keepImage`, which holds it in an `Image`
  * here. A row built again then finds its picture in memory and paints it in

@@ -2,8 +2,8 @@
  * EmptyState — what a screen shows when it has nothing to show.
  *
  * The review counted seven empty-state styles: a tinted square with a Users
- * icon, a party icon in a 96 px circle, a green check, a grey card, a faint
- * icon, a grey square with "No matches found", a waveform, and a brain hero.
+ * icon, a party icon in a 96 px circle, a green check, a gray card, a faint
+ * icon, a gray square with "No matches found", a waveform, and a brain hero.
  * Each said the same thing a different way. This is the one way.
  *
  *   ┌────┐

@@ -157,7 +157,7 @@ export const SUGGESTION_CHIP =
 /**
  * Ask Contrack's column. The history panel opens over the page, so opening
  * it moves nothing, and the column sits where the open panel never covers
- * it. From `lg` it is `clamp(34rem, 100% - 40rem, 48rem)` wide, and centred
+ * it. From `lg` it is `clamp(34rem, 100% - 40rem, 48rem)` wide, and centered
  * when that leaves the panel's 20rem free on its right. On a narrower window
  * (below about 1360 px) it sits only as far left as it must to leave them,
  * so at 1024 px the search box ends 32 px short of the open panel instead of
@@ -196,8 +196,8 @@ export const SELECTED_TINT = "bg-primary/10 text-on-primary-wash";
 export const SELECTED_ROW = "row-selected";
 
 /**
- * The chosen swatch in a picker of colours, icons or avatars: a 2 px ring in
- * the ink colour, 2 px off the swatch. A swatch has no room for a bar or a
+ * The chosen swatch in a picker of colors, icons or avatars: a 2 px ring in
+ * the ink color, 2 px off the swatch. A swatch has no room for a bar or a
  * dot, and its fill is its content, so it cannot take the tint either. The
  * ring is the ink, not the primary, so it never reads as the focus ring,
  * which is the primary with no gap on a swatch like this.
@@ -207,11 +207,11 @@ export const SWATCH_SELECTED =
 
 // ─── Tones ───────────────────────────────────────────────────────────────────
 //
-// A colour that means something, in one place. Overdue is the error red,
+// A color that means something, in one place. Overdue is the error red,
 // today is the primary, a birthday is the warning amber, new people are the
 // success green, and everything else is neutral. A group's dot, its rows'
 // leading glyph and its chips read from the same tone, so the eye can follow
-// a colour down a card. The AI colour is not a tone: it marks what a model
+// a color down a card. The AI color is not a tone: it marks what a model
 // wrote, and a category is not that.
 
 export type Tone = "error" | "primary" | "warning" | "success" | "neutral";
@@ -267,7 +267,7 @@ export const navLink = (active: boolean, extra?: string) =>
  * action, which is the only kind of button with depth.
  *
  * About 32 px on screen with a 16 px icon, and a 44 px tap box from
- * `hit-area` (see index.css). Give neighbours 12 px of gap so the boxes do
+ * `hit-area` (see index.css). Give neighbors 12 px of gap so the boxes do
  * not overlap.
  */
 export const ICON_BTN =
@@ -275,7 +275,7 @@ export const ICON_BTN =
 
 /**
  * A quiet text button beside a control: "Reset", "Show more", "Clear".
- * Small, the variant text colour, the ink on hover, and a 44 px tap box.
+ * Small, the variant text color, the ink on hover, and a 44 px tap box.
  * It never competes with the control it sits beside.
  */
 export const BTN_QUIET =
@@ -284,7 +284,7 @@ export const BTN_QUIET =
 /**
  * A link inside a sentence: "Connect a provider in Settings → Administration
  * → AI". Underlined at rest, so it is told from the text by more than its
- * colour.
+ * color.
  */
 export const TEXT_LINK =
   "font-semibold text-primary underline underline-offset-2";
@@ -447,14 +447,14 @@ export const MENU_PANEL =
  * drawn inside the row, because the rows touch and an outside ring would be
  * cut off by the panel's edge. With a mouse the tint on `:focus` (not only
  * `:focus-visible`) shows where the arrow keys start after a click opened
- * the menu. After a tap it would grey the first row beside the checked one,
+ * the menu. After a tap it would gray the first row beside the checked one,
  * so a touch screen tints only for a keyboard. A row that waits is half
  * opacity, in every menu.
  */
 export const MENU_ITEM =
   "w-full min-h-[44px] pointer-fine:min-h-[36px] flex items-center gap-2.5 px-2.5 rounded-md text-sm font-medium text-left text-on-surface transition-colors hover:bg-surface-container-high pointer-fine:focus:bg-surface-container-high focus-visible:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed";
 
-/** A destructive row: the error colour, on its own tint. */
+/** A destructive row: the error color, on its own tint. */
 export const MENU_ITEM_DANGER =
   "text-error hover:bg-error/10 pointer-fine:focus:bg-error/10 focus-visible:bg-error/10";
 
@@ -512,7 +512,7 @@ export const DIALOG_ACTIONS =
 
 /**
  * A field a model filled in — returns additional classes when a field was
- * auto-populated. AI-derived data, so the AI colour: its wash and a 1 px
+ * auto-populated. AI-derived data, so the AI color: its wash and a 1 px
  * inset edge, still. It used to be a pulsing primary glow, which said
  * "focus" and "loading" at once and never stopped.
  */

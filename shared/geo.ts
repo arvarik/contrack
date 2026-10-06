@@ -61,7 +61,7 @@ export interface MapContact {
  * The properties of one contact point in the map source.
  *
  * Absent fields are left out rather than set to null: the source is
- * serialised into MapLibre's worker, and a missing key reads the same on
+ * serialized into MapLibre's worker, and a missing key reads the same on
  * both sides.
  */
 interface ContactPointProperties {

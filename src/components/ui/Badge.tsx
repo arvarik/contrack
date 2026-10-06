@@ -7,7 +7,7 @@
  * every such pill was written out where it was used, which is how a codebase
  * ends up with four shades of "warning".
  *
- * The tones map onto the semantic colours in `.agent/STYLE.md` and nothing
+ * The tones map onto the semantic colors in `.agent/STYLE.md` and nothing
  * else. `neutral` is deliberately the dullest: most rows are in their
  * ordinary state, and a badge that shouts on every row stops meaning
  * anything.

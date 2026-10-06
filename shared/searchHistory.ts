@@ -58,7 +58,7 @@ export const listHistoryQuerySchema = z.object({
 });
 
 /**
- * Normalise a query for indexing and history deduplication:
+ * Normalize a query for indexing and history deduplication:
  * - Lowercase
  * - Trim leading/trailing whitespace
  * - Collapse consecutive whitespace to a single space

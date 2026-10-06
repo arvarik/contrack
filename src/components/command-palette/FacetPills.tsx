@@ -21,7 +21,7 @@ import { cn } from "../../lib/utils";
  * describes a person (a role, a company, a place, a tag) means nothing good
  * or bad, so it is neutral. `tracked` takes the primary wash, the one the
  * Track button wears when it is on. A facet that failed, such as a place that
- * did not resolve, takes the error. It used to be a colour per field, eleven
+ * did not resolve, takes the error. It used to be a color per field, eleven
  * hues that meant nothing and fell to 2.3:1 on the dark panel.
  */
 const pillTone = (filter: FacetFilter): Tone =>

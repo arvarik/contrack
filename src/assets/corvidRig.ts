@@ -338,7 +338,7 @@ export const corvidPose = (changes: Partial<CorvidPose> = {}): CorvidPose => ({
   ...changes,
 });
 
-/** The fields a pose adds up from, so behaviours can be layered. */
+/** The fields a pose adds up from, so behaviors can be layered. */
 export const POSE_KEYS = Object.keys(HOME_POSE) as (keyof CorvidPose)[];
 
 // ---------------------------------------------------------------------------

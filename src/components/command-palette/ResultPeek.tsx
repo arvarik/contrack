@@ -50,7 +50,7 @@ export const ResultPeek = ({ contact, visible }: ResultPeekProps) => {
   // The same reader as the ring, so the peek and the ring always agree. A
   // contact nobody tracks has no bar, and neither has one with nothing
   // logged yet. The bar takes its band's tone (`SCORE_BANDS`), the token the
-  // ring strokes with, so the two agree on the colour too.
+  // ring strokes with, so the two agree on the color too.
   const view = contact ? scoreView(contact) : null;
   return createPortal(
     <AnimatePresence>
@@ -63,7 +63,7 @@ export const ResultPeek = ({ contact, visible }: ResultPeekProps) => {
           transition={{ duration: DURATION.fast, ease: EASE }}
           aria-hidden="true"
           className="fixed top-1/2 -translate-y-1/2 z-[200] pointer-events-none"
-          // Beside the palette (672 px wide, centred) with an 8 px gap, and
+          // Beside the palette (672 px wide, centered) with an 8 px gap, and
           // over its right edge in a window too narrow for both.
           style={{ left: "min(calc(50% + 344px), calc(100% - 17rem))" }}
         >

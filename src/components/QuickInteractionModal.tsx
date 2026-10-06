@@ -17,7 +17,7 @@
  * queue and the map's hover card open it that way.
  *
  * The picker keeps its own keyboard handling because it has product-specific
- * behaviour (ghosts left out, the top six only) that the generic Combobox
+ * behavior (ghosts left out, the top six only) that the generic Combobox
  * does not model.
  *
  * @module components/QuickInteractionModal

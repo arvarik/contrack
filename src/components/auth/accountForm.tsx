@@ -4,7 +4,7 @@
  * Three screens create an account: first-run setup, open registration, and
  * accepting an invitation. They differ in their title, their copy, and which
  * endpoint they call. They do not differ in what an account is, so the fields,
- * the validation, the blur behaviour and the error wording live here once.
+ * the validation, the blur behavior and the error wording live here once.
  *
  * The rules mirror the server's (`server/services/authService.ts`) and run on
  * blur rather than on every keystroke: telling someone their email is invalid

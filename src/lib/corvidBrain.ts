@@ -162,7 +162,7 @@ interface CorvidBrainOptions {
 export type CorvidBrainEvent =
   /** The perch is hovered or focused, or stops being. */
   | { type: "hover"; on: boolean }
-  /** Where the pointer is from the bird's centre, in px. */
+  /** Where the pointer is from the bird's center, in px. */
   | { type: "pointer"; dx: number; dy: number }
   /** The pointer left the window, or the bird should stop watching it. */
   | { type: "pointerGone" }

@@ -540,7 +540,7 @@ const Composer = ({
    * The placeholder is a function (see Placeholder.configure above), so all
    * this has to do is ask ProseMirror to recompute decorations. It used to
    * reach into `editor.extensionManager`, which is null until the editor has
-   * finished initialising, and that crashed the contact page.
+   * finished initializing, and that crashed the contact page.
    */
   useEffect(() => {
     typeRef.current = type;

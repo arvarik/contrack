@@ -34,7 +34,7 @@ interface AIResultCardProps {
   isFallback: boolean;
   /**
    * AI is set up. Without it the reason under the name comes from rules
-   * only, and it takes the plain ink, not the AI colour and its sparkle.
+   * only, and it takes the plain ink, not the AI color and its sparkle.
    */
   ai?: boolean;
 }
@@ -65,7 +65,7 @@ export const AIResultCard = ({
       }}
       className="contents"
     >
-      {/* The avatar wears no ring: a coloured ring around an avatar is the
+      {/* The avatar wears no ring: a colored ring around an avatar is the
           relationship's health everywhere else, and the dot after the name
           says it here. */}
       <img
@@ -75,7 +75,7 @@ export const AIResultCard = ({
       />
 
       <ContactRowBody contact={match}>
-        {/* The reason: the AI colour while AI answers, plain without it. */}
+        {/* The reason: the AI color while AI answers, plain without it. */}
         {match.aiReason && (
           <motion.span
             initial={{ opacity: 0, y: 2 }}

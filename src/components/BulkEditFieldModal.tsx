@@ -14,7 +14,7 @@ import { FORM_INPUT, FORM_LABEL } from "../lib/styles";
 //   2. Every interactive control meets the 44-px touch-target minimum
 //      (Apple HIG / WCAG 2.5.5 AAA), preventing tap-target misses on phones.
 //   3. The input uses `text-base` on mobile to suppress iOS Safari's
-//      auto-zoom-on-focus behaviour that would jolt the modal layout.
+//      auto-zoom-on-focus behavior that would jolt the modal layout.
 // ---------------------------------------------------------------------------
 
 interface Field {

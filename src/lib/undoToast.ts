@@ -25,7 +25,7 @@ import { MAIN_CONTENT_ID } from "../components/layout/SkipLink";
  * How long the undo stays on screen.
  *
  * Longer than sonner's 4s default: undo is only useful if it is still there
- * when the user realises what they did, and realising takes a beat. Short
+ * when the user realizes what they did, and realizing takes a beat. Short
  * enough that it does not linger over the next thing they do. The track and
  * untrack toasts keep the same beat.
  */

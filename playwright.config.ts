@@ -43,7 +43,7 @@ export default defineConfig({
   use: {
     trace: "on-first-retry",
     screenshot: "only-on-failure",
-    // The app honours `prefers-reduced-motion`, and so does this suite: an
+    // The app honors `prefers-reduced-motion`, and so does this suite: an
     // assertion made mid-transition is a flake waiting to happen, and the
     // motion itself is not what is under test.
     reducedMotion: "reduce",

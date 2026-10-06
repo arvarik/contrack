@@ -6,9 +6,9 @@
  * outside click, and none of them followed the menu pattern a screen reader
  * announces. `role="menu"` promises arrow keys, Home and End, Escape back to
  * the button, and focus inside the menu when it opens. A menu that carries
- * the role without that behaviour tells a keyboard user something false.
+ * the role without that behavior tells a keyboard user something false.
  *
- * So the behaviour lives here once:
+ * So the behavior lives here once:
  *
  * 1. The trigger is a button with `aria-haspopup="menu"` and
  *    `aria-expanded`. Click, Enter or Space opens the menu and focuses the
@@ -81,7 +81,7 @@ export interface ActionMenuItem {
   to?: string;
   /** The route's state, for a link that tells the next page what to show. */
   state?: unknown;
-  /** Destructive: drawn in the error colour on its own surface tone. */
+  /** Destructive: drawn in the error color on its own surface tone. */
   danger?: boolean;
   disabled?: boolean;
   /** A hint at the end of the row: a shortcut ("L"), a count. */

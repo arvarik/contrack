@@ -1,7 +1,7 @@
 /**
  * useMediaQuery — whether a CSS media query matches, kept in step with it.
  *
- * Most responsive behaviour belongs in CSS. This exists for the one thing CSS
+ * Most responsive behavior belongs in CSS. This exists for the one thing CSS
  * cannot change: what an element *is* to assistive technology. The contact
  * list is a sidebar beside the open contact on a wide screen and the page's
  * main content on a narrow one, and a landmark role is an attribute, not a

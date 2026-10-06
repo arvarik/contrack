@@ -91,7 +91,7 @@ function shouldIgnoreRecord(mode: HistoryMode, query: string): boolean {
  * Record a completed search question.
  *
  * Optimistically inserts at the top of the search history infinite query cache,
- * and ignores records whose normalised query and mode equal the last one within 2 seconds.
+ * and ignores records whose normalized query and mode equal the last one within 2 seconds.
  */
 export function useRecordSearch() {
   const queryClient = useQueryClient();

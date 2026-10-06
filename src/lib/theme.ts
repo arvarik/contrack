@@ -4,15 +4,15 @@
  * ── Why the palettes are here as well as in index.css ──────────────────────
  * `src/index.css` is what the browser paints from. This file holds the same
  * values because the accent derivation has to know what is behind the text it
- * is choosing a colour for, and because the contrast gate has to check them
+ * is choosing a color for, and because the contrast gate has to check them
  * without a browser. `tests/unit/frontend/style/themeContrast.test.ts`
  * asserts the two agree token for token, in both palettes, so they cannot
  * drift.
  *
  * ── The contrast contract ──────────────────────────────────────────────────
- * Every colour used as text or as an icon clears WCAG AA (4.5:1) against every
+ * Every color used as text or as an icon clears WCAG AA (4.5:1) against every
  * surface it actually lands on, in BOTH palettes — including the pale washes a
- * badge is built from, where a colour sits on fifteen percent of itself. That
+ * badge is built from, where a color sits on fifteen percent of itself. That
  * was already the rule for the light palette. The dark palette is held to it
  * by the same test, and so is every accent a person can pick: the derivation
  * below searches for a lightness that satisfies it rather than assuming one.
@@ -66,7 +66,7 @@ export const WASH_ALPHAS = [0.1, WASH_ALPHA, 0.2] as const;
  * Narrower than {@link SURFACE_TOKENS} on purpose. `surface-variant` is used
  * zero times as a background in this app, and including it made the contract
  * stricter than the product without making any screen more readable. These
- * four are the page, a card, and the two sectional greys a filter bar or a
+ * four are the page, a card, and the two sectional grays a filter bar or a
  * list row is drawn on.
  */
 export const PILL_SURFACES = [
@@ -103,7 +103,7 @@ export interface Palette {
   "on-primary-wash": string;
   /**
    * AI-derived data only: the chips an enrichment run added and the note
-   * glyph. Not replaced by an accent, so a contact's colour never makes its
+   * glyph. Not replaced by an accent, so a contact's color never makes its
    * own data read as a model's.
    */
   ai: string;
@@ -152,7 +152,7 @@ export const LIGHT: Palette = {
   error: "#bf1b1b",
   "on-error": "#ffffff",
   // Warm paper: hue 85 in OKLCH at a chroma of 0.005 to 0.010, with the
-  // lightness of each step kept where the cool greys were measured.
+  // lightness of each step kept where the cool grays were measured.
   surface: "#f8f6f2",
   "on-surface": "#2a3437",
   "surface-variant": "#e5e2db",
@@ -174,7 +174,7 @@ export const LIGHT: Palette = {
  * and a card is lighter than the page it sits on, which is what reads as
  * raised when there is no white to cast a shadow onto.
  *
- * Every text colour here was chosen by the contrast gate rather than by eye.
+ * Every text color here was chosen by the contrast gate rather than by eye.
  * The status hues in particular: an accessible dark amber is pale, the way an
  * accessible light amber is brown.
  */
@@ -244,7 +244,7 @@ export type AccentTokens = Record<(typeof ACCENT_TOKENS)[number], string>;
  * The worst background `text-primary` can land on for a given primary.
  *
  * Not a constant, because the worst case depends on the primary itself: the
- * wash is fifteen percent of the very colour being checked. Returns every
+ * wash is fifteen percent of the very color being checked. Returns every
  * candidate background so the search below can require all of them at once.
  */
 function primaryBackgrounds(primaryHex: string, palette: Palette) {
@@ -257,7 +257,7 @@ function primaryBackgrounds(primaryHex: string, palette: Palette) {
 }
 
 /**
- * A colour that reads on every wash made from `primaryHex`.
+ * A color that reads on every wash made from `primaryHex`.
  *
  * The wash is `primaryHex` at 10, 15 or 20 percent over one of the four
  * surfaces a pill sits on, so the twelve backgrounds are all built from the
@@ -267,12 +267,12 @@ function primaryBackgrounds(primaryHex: string, palette: Palette) {
  *
  * Step zero is tried first and returned unchanged when it passes, which is
  * what happens in the dark palette: the dark primary already reads on its own
- * heaviest wash, so dark pills keep exactly the colour they had.
+ * heaviest wash, so dark pills keep exactly the color they had.
  *
  * @param primaryHex - The primary the wash is made from.
  * @param palette - The palette whose surfaces sit behind the wash.
  * @param mode - Light walks darker, dark walks lighter.
- * @returns A hex colour that clears AA on every wash, or the darkest or
+ * @returns A hex color that clears AA on every wash, or the darkest or
  *   lightest the hue reaches if none does.
  */
 export function deriveWashText(
@@ -312,12 +312,12 @@ function worstPrimaryContrast(primaryHex: string, palette: Palette): number {
 }
 
 /**
- * Walk lightness until the colour is readable, and stop at the first one.
+ * Walk lightness until the color is readable, and stop at the first one.
  *
  * `step` is negative in light mode (darken until it reads on white) and
  * positive in dark mode (lighten until it reads on near-black). Stopping at
  * the first pass rather than at some fixed target keeps as much of the chosen
- * colour as the contract allows: somebody who picks a pale pink gets the
+ * color as the contract allows: somebody who picks a pale pink gets the
  * darkest pale pink that is still readable, not navy.
  */
 function searchLightness(
@@ -347,7 +347,7 @@ function bestOn(fillHex: string): string {
 }
 
 /**
- * Turn one chosen colour into the accent tokens the app paints with.
+ * Turn one chosen color into the accent tokens the app paints with.
  *
  * The input is a wish, not an instruction. Hue is kept exactly, chroma is kept
  * as far as the sRGB gamut allows, and lightness is whatever the contrast
@@ -388,7 +388,7 @@ export function deriveAccent(hex: string, mode: ResolvedMode): AccentTokens {
     "primary-container": container,
     "on-primary": bestOn(primary),
     // From the searched primary, not from `hex`. The wash on screen is made
-    // from the primary that ends up in the stylesheet, so that is the colour
+    // from the primary that ends up in the stylesheet, so that is the color
     // the text has to read against.
     "on-primary-wash": deriveWashText(primary, palette, mode),
   };
@@ -399,7 +399,7 @@ export function deriveAccent(hex: string, mode: ResolvedMode): AccentTokens {
 // ---------------------------------------------------------------------------
 
 /**
- * The six colours a contact can be given.
+ * The six colors a contact can be given.
  *
  * One base value each, and the tokens are derived from it exactly the way a
  * chosen accent is. They used to be eight hand-written triples, tuned for the
@@ -413,9 +413,9 @@ export function deriveAccent(hex: string, mode: ResolvedMode): AccentTokens {
  * arithmetic.
  *
  * Violet and indigo are gone. A vibe replaces the primary on its contact's
- * page, and violet sat on the AI colour's own hue (293 in OKLCH, the same
+ * page, and violet sat on the AI color's own hue (293 in OKLCH, the same
  * number), with indigo 16 degrees away. On a violet contact the Save button,
- * the Tracked button and every link wore the colour that means "a model wrote
+ * the Tracked button and every link wore the color that means "a model wrote
  * this", so the AI chips beside them said nothing. Every vibe now keeps
  * {@link AI_HUE_CLEARANCE} degrees from the AI hue, and the contrast test
  * holds that. A contact stored as "violet" or "indigo" reads as the first
@@ -432,8 +432,8 @@ export const VIBES: readonly { id: string; label: string; base: string }[] = [
 
 /**
  * How far, in degrees of OKLCH hue, a preset accent or a vibe keeps from the
- * AI colour. Thirty is where a violet and a magenta stop reading as one
- * colour at a glance on both palettes.
+ * AI color. Thirty is where a violet and a magenta stop reading as one
+ * color at a glance on both palettes.
  */
 export const AI_HUE_CLEARANCE = 30;
 
@@ -463,7 +463,7 @@ export const THEME_CACHE_KEY = "contrack.theme";
  *
  * This cache is per browser, not per account, because the boot script runs
  * before anyone has signed in. Nothing in it is private — a palette choice and
- * a handful of colours — and the account's real preference replaces it one request
+ * a handful of colors — and the account's real preference replaces it one request
  * later.
  */
 export interface ThemeCache {
@@ -517,7 +517,7 @@ export function resolveMode(theme: ThemeMode): ResolvedMode {
 }
 
 /**
- * The browser bar's colour for each palette: the page background, as the two
+ * The browser bar's color for each palette: the page background, as the two
  * `theme-color` metas in index.html give it.
  */
 const BAR_COLORS = { light: "#f8f6f2", dark: "#0f1315" } as const;
@@ -525,7 +525,7 @@ const BAR_COLORS = { light: "#f8f6f2", dark: "#0f1315" } as const;
 /**
  * Point both `theme-color` metas at the chosen palette. Each meta answers one
  * system scheme, so with a theme picked in the app the Android bar followed
- * the system and not the page. "system" gives each meta its own colour back.
+ * the system and not the page. "system" gives each meta its own color back.
  */
 function syncThemeColor(theme: ThemeMode): void {
   for (const meta of document.querySelectorAll<HTMLMetaElement>(

@@ -7,7 +7,7 @@
  *
  *   <motion.div transition={{ duration: DURATION.base, ease: EASE }} />
  *
- * Fast is a press or a menu opening, base is a hover or a colour change, slow
+ * Fast is a press or a menu opening, base is a hover or a color change, slow
  * is something arriving on the page. A spring or a deliberate long animation
  * (a toast that waits, the corvid's flight) keeps its own numbers.
  *

@@ -52,7 +52,7 @@ export const MobileNav = () => {
   return (
     <nav
       aria-label="Primary"
-      // The map reads this to keep its centre above the bar (`insets.ts`).
+      // The map reads this to keep its center above the bar (`insets.ts`).
       data-covers-map="bottom"
       // `mobile-tabbar`: index.css hides the bar while a person types.
       className="mobile-tabbar md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-stretch px-1 pt-1.5 glass-panel rounded-t-2xl shadow-[0_-4px_16px_rgba(0,0,0,0.05)]"
@@ -124,7 +124,7 @@ export const MobileNav = () => {
             active ? "text-primary" : "state-layer text-on-surface-variant",
           )}
         >
-          {/* Active pill sits behind the icon rather than recolouring the
+          {/* Active pill sits behind the icon rather than recoloring the
               whole tab, so the current tab is legible at a glance. It is the
               selected tint, the same as the sidebar's current link. */}
           <span

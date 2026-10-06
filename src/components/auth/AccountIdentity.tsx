@@ -37,7 +37,7 @@ import { usePreferences } from "../../contexts/PreferencesContext";
  * The account's role, as a pill.
  *
  * Only "admin" is drawn in the primary tint. A member badge in the same
- * colour would give equal weight to the ordinary case, and the whole point of
+ * color would give equal weight to the ordinary case, and the whole point of
  * the badge is that one of the two is worth noticing.
  */
 export const RoleBadge = ({
@@ -120,7 +120,7 @@ function accountLabel(user: AccountUser): string {
  *
  * Renders nothing on an un-gated instance and nothing before `/status` has
  * answered, rather than a placeholder: the sidebar is 64 px of icons and a
- * grey circle that turns into a face is worse than a gap that fills.
+ * gray circle that turns into a face is worse than a gap that fills.
  */
 export const SidebarIdentity = () => {
   const { user, authRequired, isAdmin, instanceName, signOut } = useAuth();
@@ -159,7 +159,7 @@ export const SidebarIdentity = () => {
           A disclosure, not a menu. `role="menu"` promises arrow-key movement,
           Home and End, and a roving tabindex, and it also forbids the
           non-menuitem content this panel exists to show — the name, the email
-          and the role. Two ordinary controls in a labelled panel are read
+          and the role. Two ordinary controls in a labeled panel are read
           correctly by everything and behave the way Tab already works.
         */}
       {open && (

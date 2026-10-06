@@ -4,7 +4,7 @@
  * The server stores a score from 0 to 100 on every contact
  * (`contacts.relationshipScore`, see server/services/relationshipService).
  * A number alone asks the reader to know where "good" starts. The bands give
- * the number a word and a colour, and every place that shows a score reads
+ * the number a word and a color, and every place that shows a score reads
  * them here: the ring around an avatar, the list row's accessible name, the
  * command palette, Pulse, and the map's hover card and insights.
  *
@@ -41,7 +41,7 @@ interface ScoreBandInfo {
   /** The word shown to a person, in sentence case: "Strong", "At risk". */
   label: string;
   /**
-   * The colour token, without its prefix: `success` is `--color-success` in
+   * The color token, without its prefix: `success` is `--color-success` in
    * CSS and `text-success` or `stroke-success` in a class.
    */
   token: "success" | "warning" | "error";
@@ -153,7 +153,7 @@ export function scoreWords(
  *    person chose to keep up with, so the column holds whatever it held
  *    before, or the default.
  * 2. Nothing is logged yet. The column defaults to 50, and 50 against no
- *    interaction is a placeholder, not a judgement.
+ *    interaction is a placeholder, not a judgment.
  *
  * Most callers want `scoreView`, which names the two cases apart. This
  * function answers the number alone.

@@ -79,7 +79,7 @@ const CorvidPerch = () => {
       /*
         The nav link's shape and the focus ring every control gets from
         `index.css`, but not its hover layer: while the bird is away this
-        button holds only the empty ring, and a grey box round it reads as
+        button holds only the empty ring, and a gray box round it reads as
         something still loading.
       */
       /*

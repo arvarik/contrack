@@ -36,7 +36,7 @@ const CONTACT_LIST_ID = "contact-list";
  * A single fixed target was wrong on the two busiest pages. On a wide screen
  * the Network page's main pane is "No contact selected" while the list beside
  * it is what a person came for, and on a contact page the main pane starts
- * with an avatar button and a colour picker before the name. So the link
+ * with an avatar button and a color picker before the name. So the link
  * follows the route: the contact's name on a contact page, the list's current
  * row on the Network page, the page beside the rail in Settings, and the main
  * landmark everywhere else.

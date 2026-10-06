@@ -3,8 +3,8 @@
  *
  * It sits on the seam between the pane and the content beside it: a
  * zero-width box on the pane's edge, inside the pane (and its landmark), with
- * its grip reaching over the neighbour's edge. The pane is the element the
- * handle is placed in, and it must paint over its neighbour for the grip to
+ * its grip reaching over the neighbor's edge. The pane is the element the
+ * handle is placed in, and it must paint over its neighbor for the grip to
  * take the pointer. It draws nothing at rest. A pointer over
  * it shows a hairline, and a drag shows the line in the primary. Keyboard
  * focus draws the one focus ring, inset, as a 4 px bar on the seam.
@@ -238,7 +238,7 @@ export const ResizeHandle = ({
       >
         {/* The line. A pointer that only crosses the seam shows nothing:
             the hairline waits one base duration before it fades in. Under
-            the focus ring it takes the ring's colour, so the bar stays one
+            the focus ring it takes the ring's color, so the bar stays one
             bar when the pointer rests on it too. */}
         <span
           aria-hidden="true"

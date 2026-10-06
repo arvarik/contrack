@@ -245,7 +245,7 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
 
         {/*
           ── Streaming and complete: Show synthesis text ──
-          A model wrote the summary, so it sits on the AI colour's wash with
+          A model wrote the summary, so it sits on the AI color's wash with
           the AI glyph. The button that asked for it is a control and stays
           primary. While the text streams, the box is busy and has no
           dismiss button.

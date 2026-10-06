@@ -163,7 +163,7 @@ export function Modal({
   // or springs it back.
   const startDrag = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.pointerType === "mouse" || !content.current) return;
-    // From `sm` it is a centred dialog, not a sheet, and does not drag.
+    // From `sm` it is a centered dialog, not a sheet, and does not drag.
     if (window.matchMedia?.("(min-width: 640px)").matches) return;
     if ((event.target as HTMLElement).closest("button, a, input")) return;
     drag.current = { y: event.clientY, at: event.timeStamp, dy: 0 };
@@ -209,7 +209,7 @@ export function Modal({
   };
 
   const position =
-    // Centred from `sm`, it rises by half the keyboard, so a tablet's dialog
+    // Centered from `sm`, it rises by half the keyboard, so a tablet's dialog
     // keeps its buttons above the keyboard too.
     "inset-x-0 bottom-[var(--keyboard-inset,0px)] rounded-t-3xl sm:rounded-3xl sm:inset-auto sm:left-1/2 sm:top-[calc(50%-var(--keyboard-inset,0px)/2)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[calc(100%-2rem)]";
   return (

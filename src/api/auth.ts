@@ -155,7 +155,7 @@ export async function authFetch<T>(
   if (!res.ok) {
     // An `ApiError`, not a plain `Error`, so a caller can act on the status
     // and the code. The accept-invitation screen has to tell a link the
-    // server does not recognise (404) or one it used to (410) apart from a
+    // server does not recognize (404) or one it used to (410) apart from a
     // typed field it can fix, and it cannot do that from a message string.
     // Nothing here announces on the window: these are the screens outside the
     // gate, and a 401 on one of them is the expected answer, not news.
@@ -231,7 +231,7 @@ export function registerAccount(input: {
 /**
  * Redeem an invitation and create the account it was issued for.
  *
- * The secret is single-use. A `404` means the server does not recognise it,
+ * The secret is single-use. A `404` means the server does not recognize it,
  * and a `410` means it did once — used, revoked, or expired. Both arrive here
  * as the server's own sentence.
  */
@@ -328,7 +328,7 @@ export function revokeApiToken(id: string): Promise<{ revoked: true }> {
 /**
  * Upload and set a new profile picture for the signed-in account.
  *
- * Normalised by the server to a 512 px square JPEG with EXIF orientation
+ * Normalized by the server to a 512 px square JPEG with EXIF orientation
  * applied and metadata stripped.
  */
 export async function uploadAccountAvatar(

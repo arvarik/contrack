@@ -1,7 +1,7 @@
 /**
  * RouteFallback — what a lazily-loaded route shows while its chunk downloads.
  *
- * This used to be one centred "Loading…" string for every route. Because the
+ * This used to be one centered "Loading…" string for every route. Because the
  * views themselves have real skeletons that only appear *after* their chunk
  * has arrived, a cold navigation to Pulse ran through four states —
  * blank → "Loading..." → skeleton → content — two of which were placeholders
@@ -292,7 +292,7 @@ export const RouteFallback = ({
   }
 
   // settings: the rail from lg, then the header and the page in the page's
-  // centred box. The list has no back link, and from lg no page has one.
+  // centered box. The list has no back link, and from lg no page has one.
   return (
     <div className="h-full flex overflow-hidden bg-surface">
       <div

@@ -10,13 +10,13 @@
  * committed favicon with what the script renders.
  *
  * Where the numbers come from. The reference is `docs/brand/corvid-source.jpg`,
- * a 1024 px mono-line raven facing right. Each part's centreline was measured
+ * a 1024 px mono-line raven facing right. Each part's centerline was measured
  * from that image (the midpoint of the dark run on every 16th column and row),
  * joined with a Catmull-Rom spline, checked against the source at 60 percent
  * opacity, then thinned while the curve stayed within one source pixel of the
  * dense trace. The box maps source pixels x 300.5 to 750 and y 305 to 694 at
  * 0.17887 units per pixel, so the ink, stroke included, keeps 8 units clear of
- * the left and right edges and sits centred top to bottom.
+ * the left and right edges and sits centered top to bottom.
  *
  * The mark is two things. The ring is the C the bird sits in, and it never
  * moves. Everything else is the bird, and only the bird is ever animated:
@@ -78,7 +78,7 @@ export const CORVID_PATHS: Readonly<Record<CorvidPart, string>> = {
     "M45.3 84.8 C46.2 84.7 49.2 84.5 50.5 84.3 C51.8 84.1 51.9 84.1 53.4 83.6 C54.8 83.1 57.6 81.9 59.1 81.2 C60.5 80.5 61.3 80 61.9 79.5 C62.6 79 62.8 78.4 63 78.2",
 };
 
-/** The filled eye. Its colour is the `--color-corvid-eye` token, never the stroke. */
+/** The filled eye. Its color is the `--color-corvid-eye` token, never the stroke. */
 export const CORVID_EYE = { cx: 34.2, cy: 27.7, r: 3 } as const;
 
 /** The logo's own stroke width: the weight it was traced at. */
@@ -110,7 +110,7 @@ export const MARK_STROKE = 3.6;
  *
  * `tiny` keeps the four strokes that make the silhouette: the C, the head
  * with its beak, the wing and the long outer tail. A 16 px tab has room for
- * no more. The chest and the inner feather merge with their neighbours, and
+ * no more. The chest and the inner feather merge with their neighbors, and
  * the eye is less than a pixel.
  *
  * The in-app `<CorvidMark>` keeps the logo's own stroke wherever it lives,
@@ -162,11 +162,11 @@ export function opticalSize(points: number, density = 2): OpticalSize {
 }
 
 // ---------------------------------------------------------------------------
-// Brand colours
+// Brand colors
 // ---------------------------------------------------------------------------
 
 /**
- * Brand colours for renders outside the app, where no token applies. Each is
+ * Brand colors for renders outside the app, where no token applies. Each is
  * a literal copy of the token its comment names, in `src/index.css`.
  * `tests/unit/frontend/brand/corvidPaths.test.ts` reads the stylesheet and
  * fails when a token changes without its copy.
@@ -197,7 +197,7 @@ export const BRAND = {
 
 /**
  * The tile: the rounded square behind the mark in the tab strip, on a home
- * screen and in the link preview. Literal colours, because a favicon cannot
+ * screen and in the link preview. Literal colors, because a favicon cannot
  * read CSS tokens and librsvg does not resolve them either.
  *
  * The branding gradient runs from `primary-dim` to `primary-container`. The
@@ -287,7 +287,7 @@ function cubic(p0: Point, c1: Point, c2: Point, p1: Point, t: number): Point {
 }
 
 /**
- * Points along one path's centreline: its start, and every cubic sampled
+ * Points along one path's centerline: its start, and every cubic sampled
  * twenty times. Exact enough to place the mark on a tile, to test its
  * padding and to test that a maskable icon keeps inside its safe circle.
  */
@@ -346,7 +346,7 @@ export interface Placement {
 
 /**
  * Where a master goes on a square of `box` units so that its ink, stroke
- * included, fills the square minus `inset` on every side and sits centred.
+ * included, fills the square minus `inset` on every side and sits centered.
  * The result is an SVG `translate(tx ty) scale(scale)` for a group holding
  * the paths in their own 100-unit coordinates.
  */

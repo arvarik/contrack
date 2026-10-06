@@ -75,7 +75,7 @@ export const InfoTip = ({
   /**
    * `warning` draws the question mark in the warning ink, a little larger:
    * a mark that says "look here", such as a result AI did not verify. The
-   * label says it in words, so the colour is never the only signal.
+   * label says it in words, so the color is never the only signal.
    */
   tone?: "muted" | "warning";
   /**

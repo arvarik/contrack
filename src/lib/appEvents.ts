@@ -1,5 +1,5 @@
 /**
- * appEvents.ts — Named window events used for cross-tree signalling.
+ * appEvents.ts — Named window events used for cross-tree signaling.
  *
  * A handful of things need to travel between components that share no useful
  * ancestor: a modal owned by App that a nav button in the sidebar wants to

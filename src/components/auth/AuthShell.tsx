@@ -2,7 +2,7 @@
  * AuthShell — the frame shared by the sign-in and first-run screens.
  *
  * Both are full-screen, single-purpose, and the only thing on the page, so
- * they get the same treatment: a centred card, a mark, a title, and one
+ * they get the same treatment: a centered card, a mark, a title, and one
  * obvious action. Keeping the frame here means the two screens differ only
  * where they should — in their fields.
  *
@@ -202,7 +202,7 @@ const InstanceName = () => {
 };
 
 /**
- * A labelled text input.
+ * A labeled text input.
  *
  * The label is a real `<label>` rather than a placeholder: placeholder-only
  * fields lose their name the moment you type, which is exactly when a form

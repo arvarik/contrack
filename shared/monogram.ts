@@ -37,7 +37,7 @@ export function monogramLetters(seed: string): string {
  *
  * With no `theme` the SVG decides for itself. An `<img>` cannot inherit the
  * page's palette, but it can carry its own media query, and that is the
- * correct answer for the default `system` theme. The colours are hard-coded
+ * correct answer for the default `system` theme. The colors are hard-coded
  * rather than read from a token, because the SVG shows as an image and no
  * page stylesheet reaches it.
  */

@@ -23,7 +23,7 @@ import {
 } from "./accountForm";
 
 /**
- * 404 is a secret the server does not recognise, 410 is one it used to. Both
+ * 404 is a secret the server does not recognize, 410 is one it used to. Both
  * are final: no amount of retrying makes a used link work again.
  */
 const isDeadLink = (err: unknown): err is ApiError =>

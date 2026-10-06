@@ -7,7 +7,7 @@
  *   `describeCadence` gives it ("3 contacts, quarterly")
  * - Archive (with undo toast)
  * - Add to list
- * - Colour / vibe update
+ * - Color / vibe update
  * - Field edit (with undo toast)
  * - CSV export to clipboard
  * - Add-to-list and bulk-edit modal open/close states
@@ -273,11 +273,11 @@ export function useBulkActions({
         { ids, data: { themeColor: vibeId } },
         {
           onSuccess: ({ count }) => {
-            toast.success(`Changed the colour of ${say(count)}`);
+            toast.success(`Changed the color of ${say(count)}`);
             onComplete?.();
           },
           onError: (err) =>
-            toast.error(`Could not change the colour: ${errorText(err)}`),
+            toast.error(`Could not change the color: ${errorText(err)}`),
         },
       );
     },

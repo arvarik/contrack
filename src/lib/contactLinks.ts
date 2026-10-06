@@ -21,11 +21,11 @@ const MAX_DIGITS = 15;
  *
  * 1. `number`: a leading "+" and the digits. Spaces, brackets, dots, dashes
  *    and slashes go. The trunk "(0)" after a country code goes too: "+44
- *    (0) 20" is dialled as "+4420".
+ *    (0) 20" is dialed as "+4420".
  * 2. `pauses`: what a phone dials after the call connects, each after a ","
  *    (a pause): the digits after a "," in the text, and an extension.
  *
- * Null when a wrong number would be dialled, so the caller shows plain text:
+ * Null when a wrong number would be dialed, so the caller shows plain text:
  * no digit; a letter ("1-800-FLOWERS" would dial "1800"); a second "+" or
  * more than 15 digits (two numbers in one field); a "*" or a "#", which the
  * iPhone's Phone app refuses to dial.

@@ -1,15 +1,15 @@
 /**
- * AccentPicker — choose the colour the app is built around.
+ * AccentPicker — choose the color the app is built around.
  *
- * Seven presets and a colour well. The swatches show the DERIVED primary
+ * Seven presets and a color well. The swatches show the DERIVED primary
  * rather than the raw value somebody picked, so the control shows what the app
  * will actually look like: pick a pale yellow and the swatch is the brown-gold
  * the contrast contract turns it into, rather than a pale yellow that then
  * appears nowhere.
  *
- * A radiogroup for the presets, with the colour well beside it as a separate
+ * A radiogroup for the presets, with the color well beside it as a separate
  * control. The well is a native `<input type="color">` on purpose: every
- * platform already has a colour picker people know, and a hand-built one would
+ * platform already has a color picker people know, and a hand-built one would
  * be a worse wheel with its own keyboard trap.
  */
 import { useId, useRef } from "react";
@@ -29,7 +29,7 @@ import {
  * The presets, named so a screen reader can say which one is selected.
  *
  * No violet: the accent replaces the primary on every button and link, and
- * violet is the AI colour's hue. Each preset keeps `AI_HUE_CLEARANCE`
+ * violet is the AI color's hue. Each preset keeps `AI_HUE_CLEARANCE`
  * degrees away from it, which
  * `tests/unit/frontend/style/themeContrast.test.ts` holds.
  */
@@ -40,7 +40,7 @@ export const ACCENT_PRESETS: readonly { value: string; label: string }[] = [
   { value: "#b45309", label: "Amber" },
   { value: "#be123c", label: "Rose" },
   // Hue 339: the derived dark primary sits 41 degrees from the dark AI
-  // colour. The old #a21caf (hue 324) came within 26 of it in dark.
+  // color. The old #a21caf (hue 324) came within 26 of it in dark.
   { value: "#b0158f", label: "Magenta" },
   { value: "#334155", label: "Slate" },
 ];
@@ -49,7 +49,7 @@ export const ACCENT_PRESETS: readonly { value: string; label: string }[] = [
  * What the app will actually paint for this accent.
  *
  * The default is not derived. `applyTheme` leaves the hand-tuned palette in
- * place for it, so deriving it here would show a swatch in a colour the app
+ * place for it, so deriving it here would show a swatch in a color the app
  * never uses — close, but visibly not the one on the buttons beside it.
  */
 function swatchTokens(hex: string, mode: ResolvedMode): AccentTokens {
@@ -93,7 +93,7 @@ export const AccentPicker = ({
     if (step === 0) return;
     event.preventDefault();
     const index = ACCENT_PRESETS.findIndex((p) => p.value === normalized);
-    // A custom colour is not in the row, so an arrow starts from the default.
+    // A custom color is not in the row, so an arrow starts from the default.
     const from = index === -1 ? 0 : index;
     const next =
       ACCENT_PRESETS[
@@ -106,14 +106,14 @@ export const AccentPicker = ({
 
   // Swatches are 36 px with a 44 px tap box (`hit-area`). Eight of them do not
   // fit one row of a phone card, so below `sm` the presets sit in two rows of
-  // four with the colour well beside them. The 8 px gap keeps the tap boxes
+  // four with the color well beside them. The 8 px gap keeps the tap boxes
   // from overlapping.
   return (
     <div className="flex items-end gap-2 sm:items-center">
       <div
         ref={group}
         role="radiogroup"
-        aria-label="Accent colour"
+        aria-label="Accent color"
         className="grid grid-cols-4 gap-2 sm:flex sm:items-center sm:gap-1.5"
       >
         {ACCENT_PRESETS.map((preset) => {
@@ -157,14 +157,14 @@ export const AccentPicker = ({
 
       {/*
         The label is the 44 px tap box and the input fills it, invisible. A
-        colour input draws no `::after`, so `hit-area` cannot grow it, and an
+        color input draws no `::after`, so `hit-area` cannot grow it, and an
         `overflow-hidden` label would clip its own box back to the circle. The
         circle is a child span instead.
       */}
       <label
         htmlFor={wellId}
         className="group/well relative w-11 h-11 -m-1 flex items-center justify-center cursor-pointer"
-        title="Any other colour"
+        title="Any other color"
       >
         <span
           aria-hidden="true"
@@ -176,7 +176,7 @@ export const AccentPicker = ({
             !isPreset && SWATCH_SELECTED,
           )}
         />
-        <span className="sr-only">Any other colour</span>
+        <span className="sr-only">Any other color</span>
         <input
           id={wellId}
           type="color"

@@ -1,21 +1,21 @@
 /**
- * color.ts — the colour maths the theme is built on.
+ * color.ts — the color maths the theme is built on.
  *
  * Pure functions, no DOM. Everything here is measured rather than asserted:
- * the accent picker has to guarantee that whatever colour somebody chooses,
+ * the accent picker has to guarantee that whatever color somebody chooses,
  * the text painted in it still clears WCAG AA on every surface it lands on.
  * That guarantee is only worth something if the same numbers the browser will
  * compute are computed here first.
  *
- * Two colour spaces are used and they do different jobs.
+ * Two color spaces are used and they do different jobs.
  *
  * sRGB, and the WCAG relative-luminance formula over it, is what "contrast"
  * means. It is not perceptually uniform, so it is a poor space to move a
- * colour around in.
+ * color around in.
  *
- * OKLCH is perceptually uniform, so lowering L darkens a colour without
+ * OKLCH is perceptually uniform, so lowering L darkens a color without
  * swinging its hue — which is exactly what deriving a readable primary from
- * somebody's favourite blue requires. Every derivation happens in OKLCH and
+ * somebody's favorite blue requires. Every derivation happens in OKLCH and
  * every check happens in sRGB.
  *
  * @module lib/color
@@ -31,7 +31,7 @@ interface Rgb {
 export interface Oklch {
   /** Perceptual lightness, 0–1. */
   l: number;
-  /** Chroma. 0 is grey; about 0.37 is the most sRGB can hold. */
+  /** Chroma. 0 is gray; about 0.37 is the most sRGB can hold. */
   c: number;
   /** Hue angle in degrees, 0–360. */
   h: number;
@@ -52,7 +52,7 @@ export function hexToRgb(hex: string): Rgb {
           .join("")
       : text;
   if (!/^[0-9a-fA-F]{6}$/.test(full)) {
-    throw new Error(`Not a hex colour: ${hex}`);
+    throw new Error(`Not a hex color: ${hex}`);
   }
   return {
     r: parseInt(full.slice(0, 2), 16),
@@ -106,7 +106,7 @@ export function contrast(a: Rgb, b: Rgb): number {
 }
 
 /**
- * Composite a translucent colour over an opaque one.
+ * Composite a translucent color over an opaque one.
  *
  * This is what makes the check honest. The binding contrast case in this app
  * is not text on a card; it is a pill where `text-primary` sits on a
@@ -167,9 +167,9 @@ const inGamut = ({ r, g, b }: Rgb) =>
   r >= -0.5 && r <= 255.5 && g >= -0.5 && g <= 255.5 && b >= -0.5 && b <= 255.5;
 
 /**
- * OKLCH to sRGB, reducing chroma until the colour fits.
+ * OKLCH to sRGB, reducing chroma until the color fits.
  *
- * A hue and lightness pair can name a colour no monitor can show. Clipping the
+ * A hue and lightness pair can name a color no monitor can show. Clipping the
  * channels instead would shift the hue, which is what makes a "red" accent at
  * high lightness come back orange. Binary search on chroma keeps the hue and
  * the lightness and gives up only saturation, which is the one of the three

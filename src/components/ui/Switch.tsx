@@ -3,15 +3,15 @@
  *
  * One switch for every on/off setting: "Local time and weather", "Anyone can
  * create an account", "Send it by email". It used to be a 56 by 32 px pill
- * whose knob was the card colour, so in the dark palette the off state was
- * a grey blob with a knob nobody could see, and it sat in a 44 px square of
+ * whose knob was the card color, so in the dark palette the off state was
+ * a gray blob with a knob nobody could see, and it sat in a 44 px square of
  * its own that pushed it off the row's right edge.
  *
  * The track is 44 by 24 px. Off, it is the highest container tone inside a
- * hairline, with a 16 px knob in the variant text colour, so it reads as a
+ * hairline, with a 16 px knob in the variant text color, so it reads as a
  * control on any surface in either palette. On, the track is the accent and
- * the knob grows to 20 px in the on-accent colour with a check inside it,
- * so the state is told three ways: the knob's side, its colour and the
+ * the knob grows to 20 px in the on-accent color with a check inside it,
+ * so the state is told three ways: the knob's side, its color and the
  * glyph. A press swells the knob a little under the thumb, and the move
  * takes 200 ms on the standard curve.
  *

@@ -446,7 +446,7 @@ interface SplitName {
  * name field. `N` is required by vCard 3.0 and many address books sort and
  * group by it, so exporting `N:;;;;` files every contact under nothing.
  *
- * Deliberately conservative. Two shapes are recognised — "Family, Given" and
+ * Deliberately conservative. Two shapes are recognized — "Family, Given" and
  * "Given … Family" — and anything with a semicolon in it is left alone,
  * because a name that already contains the format's own separator is one this
  * cannot be confident about. A wrong guess is worse than an empty N: an empty

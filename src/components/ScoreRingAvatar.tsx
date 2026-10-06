@@ -12,18 +12,18 @@
  * 2. `unscored`: tracked, with nothing logged yet. The faint track shows with
  *    no arc, and the words say "No interactions yet".
  * 3. `scored`: the arc length is the score. A score of 72 draws 72 percent of
- *    the circle, clockwise from the top, over the track. The arc colour is
- *    the band: Strong in the success colour, Fading in warning, At risk in
+ *    the circle, clockwise from the top, over the track. The arc color is
+ *    the band: Strong in the success color, Fading in warning, At risk in
  *    error.
  *
- * Colour is never the only sign. The ring is an image named by the score in
+ * Color is never the only sign. The ring is an image named by the score in
  * words ("Score 72, strong"), and the same words are its tooltip.
  *
  * The ring is 2 px in a list and 3.5 px in the contact header. A photo shows
- * on no tint: the grey disc behind the picture is only for the drawn
+ * on no tint: the gray disc behind the picture is only for the drawn
  * fallback, which has transparent corners.
  *
- * The contact's colour stays on the contact page as its accent, and nowhere
+ * The contact's color stays on the contact page as its accent, and nowhere
  * else.
  *
  * @module components/ScoreRingAvatar

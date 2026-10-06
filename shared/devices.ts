@@ -28,7 +28,7 @@ export function describeSessionMethod(method?: string | null): string {
     : SESSION_METHOD_LABELS.password;
 }
 
-/** Turn a User-Agent into something a person can recognise their laptop in. */
+/** Turn a User-Agent into something a person can recognize their laptop in. */
 export function describeDevice(userAgent: string | null): string {
   if (!userAgent) return "Unknown device";
   const browser = /Firefox\//.test(userAgent)

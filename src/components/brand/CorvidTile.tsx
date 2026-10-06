@@ -2,7 +2,7 @@
  * CorvidTile: the app icon, inline.
  *
  * The gradient rounded square with the white corvid on it, in fixed brand
- * colours, for the places in the app that show the app's icon rather than
+ * colors, for the places in the app that show the app's icon rather than
  * its mark: an "installed" card, an about row, a list of instances. It does
  * not follow the accent, on purpose. The tab strip and a home screen cannot
  * follow it either, and this is their picture.

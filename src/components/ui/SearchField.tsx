@@ -30,7 +30,7 @@ export const NO_AUTOCORRECT = {
 
 /**
  * The X at the end of a search box: 24 px on screen with a 44 px tap box,
- * centred in a `relative` frame.
+ * centered in a `relative` frame.
  */
 export const ClearButton = ({
   label,

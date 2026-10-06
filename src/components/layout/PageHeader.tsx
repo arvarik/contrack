@@ -2,7 +2,7 @@
  * PageHeader: the top of every page, in one layout.
  *
  * Six pages drew six headers: a title beside icon buttons, a 13 px label
- * over a 32 px date, an icon tile with a title on a grey band, the same on a
+ * over a 32 px date, an icon tile with a title on a gray band, the same on a
  * band with a bottom border, a title over an intro, and a back link over an
  * icon tile. The titles sat at different heights and sizes, so moving between
  * pages moved the eye.

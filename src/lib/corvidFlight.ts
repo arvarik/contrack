@@ -224,7 +224,7 @@ function waypoints(
   const { rng, kind, viewport } = req;
   const width = box.right - box.left;
   const height = box.bottom - box.top;
-  const centre: Point = [box.left + width / 2, box.top + height / 2];
+  const center: Point = [box.left + width / 2, box.top + height / 2];
   const at = (fx: number, fy: number): Point =>
     clampTo(box, [box.left + width * fx, box.top + height * fy]);
 
@@ -247,7 +247,7 @@ function waypoints(
   // Off the perch: up and away into the room, then the route, then an
   // approach from the ring's open side, so the bird comes in flying toward
   // its own ring and lands facing the way the logo's body does.
-  const side = start[0] < centre[0] ? 1 : -1;
+  const side = start[0] < center[0] ? 1 : -1;
   const launch = clampTo(box, [
     start[0] + side * between(rng, 80, 120),
     start[1] + between(rng, 26, 60),
@@ -295,7 +295,7 @@ function waypoints(
     // crosses itself into a figure of eight.
     const n = count(rng, 3, 5);
     const direction = sign(rng);
-    const startAngle = Math.atan2(start[1] - centre[1], start[0] - centre[0]);
+    const startAngle = Math.atan2(start[1] - center[1], start[0] - center[0]);
     middle = [];
     for (let i = 1; i <= n; i++) {
       const angle =
@@ -304,8 +304,8 @@ function waypoints(
       const reach = between(rng, 0.5, 0.85);
       middle.push(
         clampTo(box, [
-          centre[0] + Math.cos(angle) * (width / 2) * reach,
-          centre[1] + Math.sin(angle) * (height / 2) * reach,
+          center[0] + Math.cos(angle) * (width / 2) * reach,
+          center[1] + Math.sin(angle) * (height / 2) * reach,
         ]),
       );
     }
@@ -849,13 +849,13 @@ export function searchGround(
     )
     .map(([side, rect]) => ({ side, rect, hunts: false }));
   const band = zones.find((zone) => zone.side === "top");
-  const centre = perch ? perchPoint(perch) : null;
+  const center = perch ? perchPoint(perch) : null;
   const reachable = (zone: HuntZone) =>
     !!band ||
-    !centre ||
+    !center ||
     (zone.side === "left"
-      ? centre[0] - zone.rect.right <= SIDE_REACH
-      : zone.rect.left - centre[0] <= SIDE_REACH);
+      ? center[0] - zone.rect.right <= SIDE_REACH
+      : zone.rect.left - center[0] <= SIDE_REACH);
   for (const zone of zones) {
     const { rect } = zone;
     zone.hunts =
@@ -1147,7 +1147,7 @@ const MAX_TURN = 100;
 /**
  * Soften any waypoint the route would turn too sharply at. A bird at speed
  * cannot turn on a point, and a random route will now and then ask it to:
- * such a waypoint is drawn toward the middle of its two neighbours until the
+ * such a waypoint is drawn toward the middle of its two neighbors until the
  * turn is one a bird could make. The ends stay where they are.
  */
 function relax(points: Point[]): Point[] {
@@ -1543,23 +1543,23 @@ export function planFlight(req: FlightRequest): FlightPlan {
 
   // The perch's bird sits in the logo pose, so its body's middle is the
   // logo's, at the perch's scale.
-  const perchCentre: Point | null = perch ? perchPoint(perch) : null;
+  const perchCenter: Point | null = perch ? perchPoint(perch) : null;
   const perchSize = perch?.size ?? size;
   const nearPerch = (p: Point) =>
-    !!perchCentre &&
-    Math.hypot(p[0] - perchCentre[0], p[1] - perchCentre[1]) < PERCH_REACH;
+    !!perchCenter &&
+    Math.hypot(p[0] - perchCenter[0], p[1] - perchCenter[1]) < PERCH_REACH;
 
   const wp =
-    airborne && perchCentre
+    airborne && perchCenter
       ? ground
         ? searchHomeWaypoints(
             req,
             ground,
             [airborne.x, airborne.y],
-            perchCentre,
+            perchCenter,
           )
-        : homeWaypoints(req, [airborne.x, airborne.y], perchCentre, box)
-      : waypoints(req, perchCentre ?? [box.left, box.top], box, ground);
+        : homeWaypoints(req, [airborne.x, airborne.y], perchCenter, box)
+      : waypoints(req, perchCenter ?? [box.left, box.top], box, ground);
   const raw = spline(wp);
   // Keep the route in the room, except where it has to reach the perch, and
   // except a flypast's way in and out, which is off screen on purpose.
@@ -1570,7 +1570,7 @@ export function planFlight(req: FlightRequest): FlightPlan {
         Math.min(Math.max(p[1], 4), viewport.height - 4),
       ];
     }
-    if (!perchCentre)
+    if (!perchCenter)
       return [p[0], Math.min(Math.max(p[1], box.top), box.bottom)];
     return clampTo(box, p);
   });
@@ -1794,8 +1794,8 @@ export function planFlight(req: FlightRequest): FlightPlan {
         const headU = easeInOut((after - 200) / 110);
         pose.bodyFacing = arrival.body > 0 ? 1 : notFlat(-1 + 2 * bodyU);
         pose.headFacing = arrival.head > 0 ? 1 : notFlat(-1 + 2 * headU);
-        x = perchCentre![0];
-        y = perchCentre![1];
+        x = perchCenter![0];
+        y = perchCenter![1];
       }
       pose.nape = 1 - easeInOut((after - 170) / 260);
       lift *= 1 - flare;

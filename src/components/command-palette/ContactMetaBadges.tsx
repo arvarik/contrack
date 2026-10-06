@@ -5,7 +5,7 @@
  *   1. Relationship score dot — after the contact name, in its band's tone
  *   2. "Last contact" time distance — below role/company
  *
- * The avatar wears no freshness ring any more: a coloured ring around an
+ * The avatar wears no freshness ring any more: a colored ring around an
  * avatar is the relationship's health everywhere else in the app.
  *
  * Designed to be composable: each badge renders only if its data is non-null.
@@ -37,13 +37,13 @@ interface ScoreDotProps {
 }
 
 /**
- * A 6 px coloured circle after the contact's name, for the band.
+ * A 6 px colored circle after the contact's name, for the band.
  *
  * The dot shows for a tracked contact with a score. It is absent for a
  * contact nobody tracks and for one with nothing logged yet, so a fresh
  * import of hundreds of people shows no wall of red. It takes its band's
  * tone (`SCORE_BANDS` in shared/scoreBand), the token the avatar ring
- * strokes with, so the palette and the ring agree on the colour as well as
+ * strokes with, so the palette and the ring agree on the color as well as
  * the cut points.
  */
 const ScoreDot = ({ contact }: ScoreDotProps) => {

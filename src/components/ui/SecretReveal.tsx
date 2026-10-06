@@ -16,7 +16,7 @@
  * password.
  *
  * `inline-block`, not flex. Flex items are blockified, and a browser
- * serialising blockified elements to the clipboard inserts a line break
+ * serializing blockified elements to the clipboard inserts a line break
  * between each — so a hand selection would have produced five lines where the
  * copy button produces one string. Inline-block leaves them in the inline
  * formatting context, where no break is inserted.
