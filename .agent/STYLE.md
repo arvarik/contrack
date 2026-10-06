@@ -277,10 +277,16 @@ are `src/views/pulse/lib/pulseStyles.ts` in words.
   counts. **Log note** is the one primary button.
 - Up next is a pane of rows grouped Overdue, Today, This week, Birthdays and
   Catch up, each in its tone. Chips say facts in words ("12 days overdue").
-- Enter belongs to the control that has focus. Rows use a roving tab stop.
-  The first queue key only shows the highlight.
+  Below `lg` it shows its first eight rows and **Show all**.
+- Enter belongs to the control that has focus. Rows use a roving tab stop,
+  and only the current row's controls are Tab stops. The first queue key
+  only shows the highlight, and no page key acts while a dialog or a menu is
+  open.
+- A change to a follow-up or to the layout ends with a toast with Undo: done,
+  snooze, reset.
 - Customize mode drags a card by its grip and offers a Move menu, so no one
-  has to drag.
+  has to drag. Its bar sits under the masthead, where no toast covers it,
+  and each column shows the name its Move menu says.
 
 ## 9. Decisions the machine asks for
 
@@ -315,7 +321,13 @@ the Undo.
 - **One key per decision, then the next.** `J` and `K` move, `L` acts, `H`
   declines, `Z` undoes, and focus moves to the next item after a decision. A
   key another control used first (`event.defaultPrevented`, an arrow in a
-  radio group) is that control's. Letters obey **Single-key shortcuts**.
+  radio group) is that control's, and so is a key while a menu or a dialog
+  is open. Letters obey **Single-key shortcuts**, and Caps Lock does not
+  change them.
+- **A caution takes two steps.** The first `L` on a Check carefully item
+  opens its comparison and puts focus on the action, which the caution
+  describes. The second `L` or `Enter` acts. Its button is never the primary
+  one, and below `lg` its row offers Compare instead.
 - **List and detail.** From `lg` the list and the open item sit side by side,
   with the item's actions at the top of its pane. Below `lg` each row carries
   its actions, and the item opens in a sheet with its actions at the bottom.

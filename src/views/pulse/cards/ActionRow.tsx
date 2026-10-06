@@ -140,17 +140,18 @@ export const ActionRow = memo(
       };
     }, []);
 
-    // When the highlight arrives on this row, bring it into view. It takes
-    // focus too when focus was already inside the list, so the arrows and
-    // J or K pressed on a row keep walking rows. Focus that is already in
-    // the row stays where it is: Tab onto the row's check makes the row
-    // current, and the row must not take focus back from the check. The
-    // first render is not an arrival: the page must not scroll to the
-    // queue on load.
+    // When the keyboard moves the highlight onto this row, bring it into
+    // view. It takes focus too when focus was already inside the list, so
+    // the arrows and J or K pressed on a row keep walking rows. Focus that
+    // is already in the row stays where it is: Tab onto the row's check
+    // makes the row current, and the row must not take focus back from the
+    // check. The first row that the queue picks as it loads is no arrival:
+    // the scroll moved the browser's Tab starting point to it, and the
+    // first Tab on a fresh Pulse skipped the skip link and the sidebar.
     useEffect(() => {
       const arrived = isSelected && !wasSelectedRef.current;
       wasSelectedRef.current = isSelected;
-      if (!arrived) return;
+      if (!arrived || !(looksSelected || focusOnSelect)) return;
       const el = rowRef.current;
       if (!el) return;
       // jsdom has no scrollIntoView, so the call is optional.
@@ -158,7 +159,7 @@ export const ActionRow = memo(
       if (focusOnSelect && !el.contains(document.activeElement)) {
         el.focus({ preventScroll: true });
       }
-    }, [isSelected, focusOnSelect]);
+    }, [isSelected, looksSelected, focusOnSelect]);
 
     // The check shows done while it animates. The row then leaves the
     // queue, or stays when the write did not happen, and a row that stays

@@ -687,8 +687,11 @@ const PulseOffice = () => {
             <p className="text-xs sm:text-sm text-on-surface text-center sm:text-left">
               <span className="font-semibold">Editing layout</span>
               <span className="text-on-surface-variant">
-                {" · "}Move a card by its handle or its Move menu. Use the eye
-                to hide one
+                {" · "}
+                <span>
+                  Move a card by its handle or its Move menu. Use the eye to
+                  hide one
+                </span>
               </span>
             </p>
             <div className="flex items-center gap-3">

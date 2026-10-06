@@ -343,6 +343,9 @@ export function AISearchView({
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className={SEARCH_INPUT}
+                    spellCheck={false}
+                    autoCorrect="off"
+                    autoCapitalize="off"
                   />
                 </div>
 

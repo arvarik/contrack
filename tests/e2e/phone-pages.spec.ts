@@ -201,6 +201,8 @@ test.describe("phone pages (390 px)", () => {
     const input = page.getByRole("textbox", {
       name: "Ask about your network",
     });
+    // A touch screen opens no keyboard over the page on arrival.
+    await expect(input).not.toBeFocused();
     const inputBox = await input.boundingBox();
     const rowBox = await row.boundingBox();
     expect(inputBox).not.toBeNull();

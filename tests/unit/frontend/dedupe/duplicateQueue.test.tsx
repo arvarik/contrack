@@ -253,6 +253,26 @@ describe("a held key", () => {
   });
 });
 
+describe("a pair to check carefully", () => {
+  it("merges on the second L only: the first opens it and puts focus on Merge", async () => {
+    const calls = stubApi([
+      pair("ab", ada, quill, 0.8, { caveat: "First names differ: Ada and A." }),
+    ]);
+    renderQueue();
+    await screen.findByRole("radiogroup", { name: "Contact to keep" });
+
+    // An upper-case L, as Caps Lock types it.
+    fireEvent.keyDown(document.body, { key: "L" });
+    await waitFor(() =>
+      expect(document.activeElement?.textContent).toMatch(/^Merge/),
+    );
+    expect(merges(calls)).toEqual([]);
+
+    fireEvent.keyDown(document.activeElement!, { key: "l" });
+    await waitFor(() => expect(merges(calls)).toHaveLength(1));
+  });
+});
+
 describe("Different person", () => {
   it("keeps the open group and the contact chosen in it", async () => {
     const adaQ = person("e", "Ada Q.");
