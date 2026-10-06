@@ -238,6 +238,19 @@ function addedEntry(
   };
 }
 
+/**
+ * After research changed a contact: drop this owner's cached search work and
+ * the contact's briefing, so the new data is searchable without costing other
+ * accounts a fresh search, and queue the contact for indexing.
+ */
+function refreshAfterResearch(scope: Scope, contactId: string): void {
+  aiCache.invalidateForOwner("rerank", scope.ownerId);
+  aiCache.invalidateForOwner("synthesis", scope.ownerId);
+  aiCache.invalidate("briefing", ownerKey(scope, contactId));
+  aiCache.invalidateForOwner("dailyInsight", scope.ownerId);
+  scheduleSearchIndex(contactId);
+}
+
 // Merge
 
 /**
@@ -752,13 +765,7 @@ export function mergeSearchResult(
   });
   txn();
 
-  // Drop this owner's cached search work so the new data is searchable, without
-  // costing other accounts a fresh search.
-  aiCache.invalidateForOwner("rerank", scope.ownerId);
-  aiCache.invalidateForOwner("synthesis", scope.ownerId);
-  aiCache.invalidate("briefing", ownerKey(scope, contactId));
-  aiCache.invalidateForOwner("dailyInsight", scope.ownerId);
-  scheduleSearchIndex(contactId);
+  refreshAfterResearch(scope, contactId);
 
   log.info(
     "MergeEngine",
@@ -1020,11 +1027,7 @@ export function rejectResearchRun(
     write();
     dispatchEvents();
 
-    aiCache.invalidateForOwner("rerank", scope.ownerId);
-    aiCache.invalidateForOwner("synthesis", scope.ownerId);
-    aiCache.invalidate("briefing", ownerKey(scope, contactId));
-    aiCache.invalidateForOwner("dailyInsight", scope.ownerId);
-    scheduleSearchIndex(contactId);
+    refreshAfterResearch(scope, contactId);
     log.info(
       "MergeEngine",
       `Contact ${contactId}: run ${runAt} marked as someone else; ${removed} taken back, ${pages.length} pages left out from now on`,
