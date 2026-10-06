@@ -285,7 +285,9 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
                     aria-expanded={dropdownOpen}
                     aria-controls={dropdownOpen ? listId : undefined}
                     aria-activedescendant={
-                      dropdownOpen ? `${listId}-${highlightIndex}` : undefined
+                      dropdownOpen && filteredContacts[highlightIndex]
+                        ? `${listId}-${highlightIndex}`
+                        : undefined
                     }
                     ref={contactInputRef}
                     value={contactQuery}

@@ -7,7 +7,7 @@
  * "May 14" or "May 14, 1990" (`parseBirthday`), and saves on Enter or when
  * focus leaves. Escape puts it back. An empty field removes the birthday.
  */
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "../../../lib/utils";
 import { TONE_WASH } from "../../../lib/styles";
@@ -29,6 +29,7 @@ export const BirthdayField = ({
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [invalid, setInvalid] = useState(false);
+  const invalidId = useId();
   const button = useRef<HTMLButtonElement>(null);
   /** A key closed the field: focus goes back to the value, and the blur that follows saves nothing. */
   const closedByKey = useRef(false);
@@ -55,7 +56,7 @@ export const BirthdayField = ({
         <input
           aria-label="Birthday"
           aria-invalid={invalid || undefined}
-          aria-describedby={invalid ? "birthday-invalid" : undefined}
+          aria-describedby={invalid ? invalidId : undefined}
           // Inline editor, opened by pressing the value it replaces.
           // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
@@ -83,7 +84,7 @@ export const BirthdayField = ({
           className="min-h-[44px] sm:pointer-fine:min-h-0 text-base sm:text-sm font-medium bg-surface-container-high rounded-lg px-2 py-1 border-none w-full"
         />
         {invalid && (
-          <p id="birthday-invalid" className="text-xs font-semibold text-error">
+          <p id={invalidId} className="text-xs font-semibold text-error">
             Use a date like May 14, or May 14, 1990
           </p>
         )}

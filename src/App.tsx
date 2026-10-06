@@ -101,9 +101,20 @@ function useClickFocusesScroller() {
       ) {
         if (!el) return;
         if (isScroller(el)) {
-          el.tabIndex = -1;
-          el.style.outline = "none";
-          el.focus({ preventScroll: true });
+          // Taken back on blur: a scroller with a tabindex of -1 is one
+          // Chrome's Tab no longer reaches.
+          const scroller = el;
+          scroller.tabIndex = -1;
+          scroller.style.outline = "none";
+          scroller.addEventListener(
+            "blur",
+            () => {
+              scroller.removeAttribute("tabindex");
+              scroller.style.outline = "";
+            },
+            { once: true },
+          );
+          scroller.focus({ preventScroll: true });
           return;
         }
       }
