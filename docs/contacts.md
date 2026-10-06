@@ -296,8 +296,8 @@ list, or **New list** on **Settings → Lists**. Choose an icon, type the
 - **Change a list**: on **Settings → Lists**, drag a list to move it, or use
   **Move up** and **Move down** in its row's menu. Open it to change its icon
   and name. The name saves when you leave the field or press `Enter`, and
-  `Esc` puts the saved name back. To delete it, press **Delete** beside
-  **Delete this list**, then **Delete** again. The contacts stay.
+  `Esc` puts the saved name back. To delete it, press **Delete list**, then
+  **Delete list** in the dialog that asks first. The contacts stay.
 
 ## Tags
 

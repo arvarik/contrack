@@ -518,11 +518,9 @@ describe("the shared helpers", () => {
   });
 
   it("asks for a touch screen through TOUCH_QUERY or touchFirst", () => {
-    // MultiValueField.tsx is reserved in PR #196. It leaves this list when
-    // it moves to TOUCH_QUERY.
     expect(
       usersOutside("lib/platform.ts", /"\((?:pointer: coarse|hover: none)\)"/),
-    ).toEqual(["views/contact-detail/components/MultiValueField.tsx"]);
+    ).toEqual([]);
   });
 
   it("offers Undo through withUndo, so every Undo stays as long", () => {

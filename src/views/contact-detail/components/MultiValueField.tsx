@@ -63,6 +63,7 @@ import { cn } from "../../../lib/utils";
 import { INLINE_INPUT } from "../../../lib/styles";
 import { mailtoHref, smsHref, telHref } from "../../../lib/contactLinks";
 import { useMediaQuery } from "../../../hooks/useMediaQuery";
+import { TOUCH_QUERY } from "../../../lib/platform";
 import type { MapLink } from "../../map/mapLink";
 import { EditableField, INPUT_KIND } from "./EditableField";
 import { AddButton, FIELD_VALUE, showUndoToast } from "./Field";
@@ -174,7 +175,7 @@ const SortableRow = ({
   const [menuOpen, setMenuOpen] = useState(false);
   // "Message" hands the number to the phone's messages app. With a mouse
   // there is often no app for `sms:`, and the item would do nothing.
-  const touch = useMediaQuery("(pointer: coarse)");
+  const touch = useMediaQuery(TOUCH_QUERY);
   /**
    * True from a press on the handle until the press ends. The press that
    * grabs the handle is also a press outside the open kebab, so the kebab
