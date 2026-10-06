@@ -40,14 +40,23 @@ export function useConnectorKinds() {
   });
 }
 
-export function useConnectors() {
+/**
+ * The account's connectors. A page that shows their sync state reads them
+ * again every 30 s. `poll: false` reads them once in a while, for a card
+ * that only asks whether one is connected.
+ */
+export function useConnectors({
+  enabled = true,
+  poll = true,
+}: { enabled?: boolean; poll?: boolean } = {}) {
   return useQuery({
     queryKey: connectorKeys.lists(),
     queryFn: ({ signal }) =>
       apiJson<{ connectors: ConnectorSummary[] }>("/connectors", {
         signal,
       }).then((data) => data.connectors),
-    refetchInterval: 30 * 1000,
+    enabled,
+    ...(poll ? { refetchInterval: 30 * 1000 } : { staleTime: 5 * 60 * 1000 }),
   });
 }
 

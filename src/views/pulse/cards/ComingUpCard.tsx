@@ -13,7 +13,6 @@
  * thing that would fill it: a calendar, unless one is connected already.
  */
 import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Cake, Video } from "lucide-react";
 import { differenceInCalendarDays } from "date-fns";
@@ -31,9 +30,7 @@ import {
 import { describeDueChip } from "../lib/upNext";
 import { parseServerTime } from "../../../lib/datetime";
 import type { UpcomingBirthday } from "../lib/birthdays";
-import { apiJson } from "../../../api/client";
-import { connectorKeys } from "../../../api/connectors";
-import type { ConnectorSummary } from "../../../../shared/connectors";
+import { useConnectors } from "../../../api/connectors";
 
 interface MeetingItem {
   title: string;
@@ -49,23 +46,6 @@ interface ComingUpCardProps {
 
 /** Up next owns birthdays through day seven. This card starts at day eight. */
 const COMING_UP_FROM_DAY = 8;
-
-/**
- * Whether a calendar is connected, asked only while the card is empty. The
- * Connectors page polls the same list every 30 s. This page has no need to.
- */
-function useCalendarConnected(enabled: boolean): boolean | undefined {
-  const { data } = useQuery({
-    queryKey: connectorKeys.lists(),
-    queryFn: ({ signal }) =>
-      apiJson<{ connectors: ConnectorSummary[] }>("/connectors", {
-        signal,
-      }).then((res) => res.connectors),
-    enabled,
-    staleTime: 5 * 60_000,
-  });
-  return data?.some((c) => c.kind === "ics" || c.kind === "google");
-}
 
 type Entry =
   | { kind: "birthday"; key: string; when: Date; birthday: UpcomingBirthday }
@@ -119,7 +99,14 @@ export const ComingUpCard = ({
     });
     return list.sort((a, b) => a.when.getTime() - b.when.getTime());
   }, [birthdays, meetings]);
-  const calendarConnected = useCalendarConnected(entries.length === 0);
+  // Whether a calendar is connected, asked only while the card is empty.
+  const { data: connectors } = useConnectors({
+    enabled: entries.length === 0,
+    poll: false,
+  });
+  const calendarConnected = connectors?.some(
+    (c) => c.kind === "ics" || c.kind === "google",
+  );
 
   if (entries.length === 0) {
     return (
