@@ -194,33 +194,21 @@ These work on the **Ask Contrack** page, in **People** and in **Notes** mode.
 | `H`   | Toggle search history | Yes        |
 | `Esc` | Clear the search      | No         |
 
-## Duplicates
-
-These work on **Settings → Duplicates**, on the **Scan** tab, while the
-results of a scan show in the **Swipe** view. See
-[Review possible duplicates](duplicates.md#review-possible-duplicates).
-
-| Keys       | What it does           | Single key |
-| ---------- | ---------------------- | ---------- |
-| `→` or `L` | Merge into the primary | The letter |
-| `←` or `H` | Keep separate          | The letter |
-| `↓` or `J` | Next group             | The letter |
-| `↑` or `K` | Previous group         | The letter |
-| `⌘ Z`      | Undo the last skip     | No         |
-
 ## Possible duplicates
 
 These work on the **Possible duplicates** page. Open it with **Review them**
 on **Settings → Duplicates**, or with the number on the **Pulse** icon in the
-sidebar.
+sidebar. In **Contact to keep**, the arrows choose the contact, and the
+letters still decide. See
+[Review possible duplicates](duplicates.md#review-possible-duplicates).
 
-| Keys       | What it does       | Single key |
-| ---------- | ------------------ | ---------- |
-| `↓` or `J` | Next pair          | The letter |
-| `↑` or `K` | Previous pair      | The letter |
-| `→` or `L` | Merge the pair     | The letter |
-| `←` or `H` | Keep them separate | The letter |
-| `Space`    | Select the pair    | No         |
+| Keys       | What it does                   | Single key |
+| ---------- | ------------------------------ | ---------- |
+| `↓` or `J` | Next group                     | The letter |
+| `↑` or `K` | Previous group                 | The letter |
+| `→` or `L` | Merge into the contact to keep | The letter |
+| `←` or `H` | Keep them separate             | The letter |
+| `Z`        | Undo the last decision         | Yes        |
 
 ## Other keys
 

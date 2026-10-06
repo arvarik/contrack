@@ -281,3 +281,47 @@ are `src/views/pulse/lib/pulseStyles.ts` in words.
   The first queue key only shows the highlight.
 - Customize mode drags a card by its grip and offers a Move menu, so no one
   has to drag.
+
+## 9. Decisions the machine asks for
+
+Possible duplicates is the model for a screen where a person decides what the
+machine is unsure of. The rules are `src/views/dedupe/components/` in words,
+and `tests/unit/frontend/dedupe/duplicateQueue.test.tsx` holds the keys and
+the Undo.
+
+- **One place to decide.** A kind of decision has one review screen. Every
+  other place links to it and shows the same count: Settings, the Pulse inbox,
+  the command palette, a contact's banner.
+- **Words, not scores.** Never print a percentage from the engine or a model.
+  Show the reason in plain words, and say the level once, in a part's heading:
+  Very likely, Likely, Check carefully. A setting that holds a threshold says
+  what it merges, not the number.
+- **The caution sits where the doubt is**: on the row before anything opens,
+  under the field it is about, in the warning tone with its glyph, and named
+  by the button it guards (`aria-describedby`). A pair with a caution never
+  joins a batch action.
+- **Show the differences, then what is lost.** One column for each record,
+  only the rows that differ at first, the rest in one "Same:" line with **Show
+  all fields**. A value the action drops is struck through, with "not kept"
+  for a screen reader. The comparison ends with what moves, what is not kept,
+  and how to undo it. ❌ KEPT and DISCARDED labels.
+- **Undo over confirm.** A reversible decision ends with a toast with Undo
+  (`withUndo`), one at a time, and `Z` takes back the last one. A durable
+  history has Undo too. An undo of a machine's decision records the person's
+  answer, so the machine does not make it again.
+- **The machine says what it did.** Background work that changes data tells
+  the person once, with Undo. A page for a record that no longer exists goes
+  to the record that replaced it and says so.
+- **One key per decision, then the next.** `J` and `K` move, `L` acts, `H`
+  declines, `Z` undoes, and focus moves to the next item after a decision. A
+  key another control used first (`event.defaultPrevented`, an arrow in a
+  radio group) is that control's. Letters obey **Single-key shortcuts**.
+- **List and detail.** From `lg` the list and the open item sit side by side,
+  with the item's actions at the top of its pane. Below `lg` each row carries
+  its actions, and the item opens in a sheet with its actions at the bottom.
+- ❌ A swipe card for a decision that changes data. It hides the comparison
+  and rewards speed. A swipe may speed up a row action that a button also
+  does, never replace it.
+- The AI colour and glyph mark a reason a model wrote. A reason from a fixed
+  rule takes the neutral ink and the glyph of what matched: an envelope for an
+  email, a phone for a number.

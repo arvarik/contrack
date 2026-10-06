@@ -116,9 +116,9 @@ Driven by a Hybrid RAG pipeline combining FTS5 + local vector KNN via Reciprocal
 
 ### ⚡ Intelligent Deduplication
 
-Keep your database impeccably clean with an automated assistant that spots duplicate contacts for you. Review merged suggestions quickly with an intuitive swipe interface.
+Contrack merges the contacts that are surely one person by itself, and asks you about the rest in one review list. Each pair says why in plain words, warns when first names or places differ, and shows what a merge keeps. Every merge has Undo for 90 days.
 
-Multi-pass engine utilizing Double Metaphone phonetic matching, Levenshtein distance, E.164 phone normalization, and 768-dim AI embeddings with one-click undo.
+A multi-pass engine with exact matches, phonetic and near-spelling names, normalized phone numbers and profile links, local embeddings, and AI for the unclear pairs.
 
 </td>
 <td width="70%">

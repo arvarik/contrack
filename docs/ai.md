@@ -19,7 +19,7 @@ every feature that uses it follows (see [Models](#models)).
 | Email file summary                     | Summarizes an `.eml` file that you attach to a contact's timeline                                                                        | Strong model                | The email's text                                                                                                                               |
 | Mail summaries                         | Writes a short note for each matched email, when a **Mailbox (IMAP)** or **Google Workspace** connector has **Generate AI summaries** on | Fast model                  | Each email's subject and body                                                                                                                  |
 | [Contact research](#research-contacts) | Searches the web for a contact and fills empty fields                                                                                    | Web search, then Fast model | The contact's name, role, company, headline, city, addresses, industry, website, summary, emails, profiles, jobs, schools, interests and facts |
-| Duplicate checks                       | **AI scan** and **Full AI scan** ask about pairs that look alike but are not certain                                                     | Strong model                | Both contacts' names, companies, roles, locations, emails, phones and import sources                                                           |
+| Duplicate checks                       | **Check now** on **Settings → Duplicates** asks about pairs that look alike but are not certain                                          | Strong model                | Both contacts' names, companies, roles, locations, emails, phones and import sources                                                           |
 | Search by meaning                      | Turns each contact into numbers, so Ask Contrack and duplicate checks can compare people by meaning                                      | Embedding model             | Nothing with the built-in model. A hosted model gets each contact's profile text, but not for an account with AI off                           |
 
 Research never sends your notes or phone numbers.
@@ -30,7 +30,7 @@ With no provider connected, Contrack keeps working. Ask Contrack answers from
 the local index with the built-in model, and marks its answers **Not verified
 by AI**. The command palette, facets and
 [note search](search.md#search-your-notes) run on the server. Duplicate checks
-run, and **AI scan** and **Full AI scan** skip their AI step.
+run, and **Check now** finds exact matches only.
 
 The other features in the table need a provider. Without one, an `.eml` file
 that you attach is saved with no summary.
@@ -315,9 +315,8 @@ With AI off for you or for the instance:
   model keeps working.
 - The other features in the table do not run. Their controls are hidden, or
   they say that AI is off.
-- On the **Duplicates** page, **AI scan** and **Full AI scan** show as
-  unavailable, with the reason, and **Exact scan** runs. The automatic checks
-  of new contacts and imports still run.
+- On the **Duplicates** page, **Check now** finds exact matches only, and the
+  card says why. The automatic checks of new contacts and imports still run.
 - Link previews in notes do not load.
 - An `.eml` file that you attach is saved with no summary.
 - A search that an MCP client runs with your token answers from the local

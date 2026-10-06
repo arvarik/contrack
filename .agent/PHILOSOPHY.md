@@ -57,6 +57,11 @@ run it on their own machine or server, alone or with a few trusted accounts.
 
 - Background work fills in what it can: coordinates for the map, search
   vectors, duplicate checks, relationship scores. It never interrupts.
+- When the machine changes your data by itself, it says so once, with Undo.
+  An undo is an answer it keeps: two contacts you pulled apart stay apart.
+- When the machine is unsure, it asks, in one place, with the reason in plain
+  words and what a yes would change. It never shows a confidence number, and
+  it says when to look twice.
 - Names mentioned in notes become ghosts: people the network knows about
   before anyone adds them. A ghost can become a contact with one action.
 - A card with nothing to say is one line. Say the fact or say nothing.

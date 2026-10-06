@@ -141,8 +141,13 @@ with an empty `DATA_DIR`.
 ### Duplicates
 
 - One merge policy decides every merge, keeps follow-ups, and can be undone.
-- A pair marked as different people is never merged, and a quick scan runs
-  with AI off.
+- A pair marked as different people is never merged, and a check runs with AI
+  off, finding exact matches.
+- Possible duplicates is the one review list: each pair says why in plain
+  words, shows its caution and what a merge keeps, and every decision has
+  Undo. An undo of a merge keeps the two apart.
+- The same name at two different companies or cities waits for review, and
+  the import check no longer suggests weak pairs.
 
 ### Privacy
 
