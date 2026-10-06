@@ -185,8 +185,11 @@ router.get("/:domain", async (req: Request, res: Response) => {
     const outcome = await resolveLogo(sanitizedDomain, filePath, missPath);
     if (outcome === "found") return res.sendFile(filePath);
     // A permanent miss keeps the 30-day header: the disk marker gives the
-    // same answer for the same 30 days.
-    if (outcome === "missing") return res.status(404).send("Logo not found");
+    // same answer for the same 30 days. 204, not 404: a company with no logo
+    // is an answer, not an error, and a 404 put a red line in the browser's
+    // console for every such row of the Network list. The image fails to
+    // draw either way, and the row shows its initial.
+    if (outcome === "missing") return res.status(204).end();
     // A transient failure says nothing about the domain, so the browser must
     // not keep this answer.
     res.setHeader("Cache-Control", "no-store");

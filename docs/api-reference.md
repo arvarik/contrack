@@ -1168,7 +1168,7 @@ data of the account that created it.
 | Endpoint                       | What it does                                                                                                                                                                                         | Access               |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
 | `GET /api/avatar/:style`       | A generated avatar as SVG. Styles: `avataaars`, `lorelei`, `bottts` and `initials`. `seed` is required. Optional `bg=1`, `theme` (`light` or `dark`) and `look` (`f`, `m` or `n`). Cached for a day. | any signed-in caller |
-| `GET /api/logos/:domain`       | A company logo as PNG, at most 128 px. The server fetches it once and keeps it. `404` when the domain has no logo, and `503` for a failure that may pass.                                            | any signed-in caller |
+| `GET /api/logos/:domain`       | A company logo as PNG, at most 128 px. The server fetches it once and keeps it. `204` with no body when the domain has no logo, and `503` for a failure that may pass.                               | any signed-in caller |
 | `GET /api/link-preview/unfurl` | The title, description and image of a web page: `?url=`. The server fetches the page, keeps the image in your uploads, and answers a local `image` path.                                             | your data            |
 
 The server fetches pages and logos, so the browser never contacts those sites.
