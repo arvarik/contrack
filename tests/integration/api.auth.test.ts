@@ -11,6 +11,7 @@ import request from "supertest";
 import crypto from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { makeTestApp } from "./helpers.ts";
+import { cookieFrom } from "./tenancy/helpers.ts";
 import { ensureLocalOwner, sqlite } from "../../server/db.ts";
 import { __resetAuthRateLimits } from "../../server/routes/auth.ts";
 import {
@@ -99,10 +100,6 @@ async function signIn(
  * the failure surfaces as an unrelated status code. An empty array sends no
  * cookie, so an unauthenticated request reads as 401 — which is the truth.
  */
-function cookieFrom(res: request.Response): string[] {
-  return (res.headers["set-cookie"] as unknown as string[]) ?? [];
-}
-
 beforeAll(() => {
   process.env.AUTH_REQUIRED = "true";
 });

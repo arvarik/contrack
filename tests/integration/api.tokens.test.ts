@@ -13,7 +13,7 @@ import request from "supertest";
 import crypto from "node:crypto";
 import { makeTestApp } from "./helpers.ts";
 import { sqlite } from "../../server/db.ts";
-import { resetAccounts } from "./tenancy/helpers.ts";
+import { cookieFrom, resetAccounts } from "./tenancy/helpers.ts";
 import { __resetAuthRateLimits } from "../../server/routes/auth.ts";
 import { __resetAuthWarnings } from "../../server/middleware/auth.ts";
 import { clearSettingsCache } from "../../server/services/settingsService.ts";
@@ -25,10 +25,6 @@ interface Handle {
   id: string;
   username: string;
   cookie: string[];
-}
-
-function cookieFrom(res: request.Response): string[] {
-  return (res.headers["set-cookie"] as unknown as string[]) ?? [];
 }
 
 function as(who: Handle) {

@@ -26,6 +26,7 @@ import { makeTestApp } from "./helpers.ts";
 import { sqlite } from "../../server/db.ts";
 import {
   asUser,
+  cookieFrom,
   createActor,
   resetAccounts,
   rowsOwnedBy,
@@ -60,10 +61,6 @@ interface Handle {
 }
 
 // Harness
-
-function cookieFrom(res: request.Response): string[] {
-  return (res.headers["set-cookie"] as unknown as string[]) ?? [];
-}
 
 /** Attach an account's session to a request. */
 function as(who: Handle) {

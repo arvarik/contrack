@@ -12,7 +12,7 @@ import request from "supertest";
 import http from "http";
 import { createApp, finalizeApp, notFoundHandler } from "../../server/app.ts";
 import { sqlite } from "../../server/db.ts";
-import { resetAccounts } from "./tenancy/helpers.ts";
+import { cookieFrom, resetAccounts } from "./tenancy/helpers.ts";
 import { __resetAuthRateLimits } from "../../server/routes/auth.ts";
 import { __resetAuthWarnings } from "../../server/middleware/auth.ts";
 import { __resetAiRateLimits } from "../../server/middleware/rateLimit.ts";
@@ -37,10 +37,6 @@ interface Handle {
   id: string;
   username: string;
   cookie: string[];
-}
-
-function cookieFrom(res: request.Response): string[] {
-  return (res.headers["set-cookie"] as unknown as string[]) ?? [];
 }
 
 const as = (who: Handle) => (r: request.Test) => r.set("Cookie", who.cookie);

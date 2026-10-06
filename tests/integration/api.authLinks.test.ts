@@ -10,7 +10,7 @@ import {
 import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
 import { sqlite } from "../../server/db.ts";
-import { resetAccounts } from "./tenancy/helpers.ts";
+import { cookieFrom, resetAccounts } from "./tenancy/helpers.ts";
 import { mailService } from "../../server/services/mailService.ts";
 import { clearSettingsCache } from "../../server/services/settingsService.ts";
 import { __resetAdminRateLimits } from "../../server/routes/admin.ts";
@@ -35,10 +35,6 @@ interface Handle {
   username: string;
   email: string;
   cookie: string[];
-}
-
-function cookieFrom(res: request.Response): string[] {
-  return (res.headers["set-cookie"] as unknown as string[]) ?? [];
 }
 
 function as(who: Handle) {

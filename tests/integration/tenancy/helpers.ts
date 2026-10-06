@@ -35,7 +35,7 @@ interface ActorOverrides {
 const DEFAULT_PASSWORD = "correct horse battery staple";
 let actorCount = 0;
 
-function cookieFrom(res: request.Response): string[] {
+export function cookieFrom(res: request.Response): string[] {
   return (res.headers["set-cookie"] as unknown as string[]) ?? [];
 }
 
