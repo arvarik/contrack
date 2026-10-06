@@ -40,7 +40,7 @@ import {
   SECTION_HEADING,
   TONE_WASH,
 } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 
 /**
  * A name to start from, out of an address's local part: "rowan.vale" and
@@ -96,9 +96,7 @@ export const CorrespondentsView: React.FC = () => {
       toast.success(`Added ${displayName} as a contact`);
       void refetch();
     } catch (err) {
-      toast.error(
-        `Could not add ${displayName}${(err as Error).message ? `: ${(err as Error).message}` : ""}`,
-      );
+      toast.error(`Could not add ${displayName}: ${errorText(err)}`);
     } finally {
       setProcessingId(null);
     }
@@ -117,9 +115,7 @@ export const CorrespondentsView: React.FC = () => {
       toast.success(`Ignored ${displayName}`);
       void refetch();
     } catch (err) {
-      toast.error(
-        `Could not ignore ${displayName}${(err as Error).message ? `: ${(err as Error).message}` : ""}`,
-      );
+      toast.error(`Could not ignore ${displayName}: ${errorText(err)}`);
     } finally {
       setProcessingId(null);
     }
