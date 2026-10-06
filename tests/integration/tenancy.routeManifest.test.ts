@@ -127,13 +127,14 @@ describe("route manifest", () => {
     // route in quality story S9, to thirty-eight with the instance AI
     // switch, to thirty-nine with the web search switch, to forty with the
     // background jobs, back to thirty-nine when the old session policy
-    // route went, and to forty-one with the address lookup switch. A route
-    // added without a decision moves this number.
+    // route went, to forty-one with the address lookup switch, and to
+    // forty-two with the snapshot download. A route added without a
+    // decision moves this number.
     const admin = ROUTE_MANIFEST.filter((r) => r.class === "admin");
-    expect(admin).toHaveLength(41);
+    expect(admin).toHaveLength(42);
     expect(
       ROUTE_MANIFEST.filter((r) => r.path.startsWith("/api/admin/")),
-    ).toHaveLength(24);
+    ).toHaveLength(25);
 
     // The three token routes act on the caller's own account, so a token
     // cannot reach them and neither can the implicit local owner.

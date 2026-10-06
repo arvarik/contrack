@@ -210,7 +210,7 @@ async function searchWithProvider(
     return failed(
       !answers.some(searched) && answers.some((answer) => answer.text.trim())
         ? new AppError(
-            "The web search model did not run a web search for this contact. No contact fields changed. Try again, or choose another web search model in Settings → AI.",
+            "The web search model did not run a web search for this contact. No contact fields changed. Try again, or choose another web search model in Settings → Administration → AI.",
             502,
             { code: "AI_NO_SEARCH" },
           )

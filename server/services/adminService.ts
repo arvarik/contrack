@@ -285,7 +285,7 @@ function assertNotProtectedLocalOwner(target: UserListRow): void {
   if (target.credentialState !== "none") return;
   if (isAuthRequired()) return;
   throw new AppError(
-    "This is the local account that owns this device's data, and authentication is off. Secure the instance first.",
+    "This is the local account, which holds the data while sign-in is off. Secure the instance first.",
     409,
     { code: "LOCAL_OWNER_PROTECTED" },
   );
@@ -423,7 +423,7 @@ export async function resetPassword(
   assertNotSelf(ctx, id);
   if (target.credentialState === "none") {
     throw new ValidationError(
-      "This account has no password to reset. It is the local account that owns this device's data.",
+      "This account has no password to reset. It is the local account, which holds the data while sign-in is off.",
     );
   }
 

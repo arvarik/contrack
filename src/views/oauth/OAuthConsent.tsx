@@ -212,7 +212,7 @@ export default function OAuthConsent() {
         e.preventDefault();
         decide.mutate("allow");
       }}
-      footer="Disconnect it any time in Settings, Account, API tokens"
+      footer="Disconnect it any time in Settings → Account, under API tokens"
     >
       <div className="rounded-xl bg-surface-container-highest p-3 space-y-2 text-sm text-on-surface text-pretty">
         {warning && (

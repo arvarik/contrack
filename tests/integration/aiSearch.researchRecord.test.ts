@@ -628,6 +628,21 @@ describe("Not this person", () => {
     );
   });
 
+  it("keeps an About the person added to, and clears one left as the run wrote it", async () => {
+    const about = `A trader at Harbor Point. ${"Writes about markets. ".repeat(20)}`;
+    merge({ about, headline: "Trader" });
+    const runAt = record().runs[0].at;
+    // The person adds a line after the run's 400 characters.
+    await request(app)
+      .put(`/api/contacts/${id}`)
+      .send({ about: `${about} Met at the fair.` });
+
+    expect((await reject(runAt)).status).toBe(200);
+    const after = enrichmentContact(scope(), id);
+    expect(after.about).toBe(`${about} Met at the fair.`);
+    expect(after.headline).toBeNull();
+  });
+
   it("takes back a run's own list items, and keeps what a later run added to the list", async () => {
     merge({
       attributes: [

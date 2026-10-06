@@ -18,8 +18,8 @@ interface FeedFiltersProps {
 
 const CACHE_OPTIONS = [
   { value: "all", label: "All" },
-  { value: "fresh", label: "Fresh" },
-  { value: "cached", label: "Cached" },
+  { value: "fresh", label: "New" },
+  { value: "cached", label: "Reused" },
 ] as const;
 
 export const FeedFilters = ({
@@ -33,7 +33,7 @@ export const FeedFilters = ({
       {/* `w-auto` keeps the trough to its options on a phone, so the sort
           toggle still fits on the same row. */}
       <Segmented
-        label="Cache"
+        label="Answers"
         options={CACHE_OPTIONS}
         value={cacheFilter}
         onChange={onCacheFilterChange}

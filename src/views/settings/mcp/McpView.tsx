@@ -536,7 +536,7 @@ export const McpView: React.FC = () => {
                 </pre>
                 {!authRequired && (
                   <p className="text-xs text-on-surface-variant text-pretty">
-                    This Contrack asks nobody to sign in, so a client needs no
+                    This Contrack asks no one to sign in, so a client needs no
                     token. Anyone who can reach the address can use it
                   </p>
                 )}

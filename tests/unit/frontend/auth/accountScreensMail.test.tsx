@@ -9,6 +9,7 @@ vi.mock("../../../../src/components/auth/AuthGate", () => ({
 vi.mock("../../../../src/api/auth", () => ({
   registerAccount: vi.fn(),
   acceptInvitation: vi.fn(),
+  checkInvitation: vi.fn(() => Promise.resolve({ ok: true })),
   setupAccount: vi.fn(),
   uploadAccountAvatar: vi.fn(),
 }));
@@ -51,13 +52,14 @@ const screens: [string, (mailConfigured?: boolean) => React.ReactElement][] = [
 describe.each(screens)("%s email hint", (_name, screen_) => {
   afterEach(cleanup);
 
-  it("says links are emailed when the instance can email them", () => {
+  // The invitation screen checks its link first, so the form comes later.
+  it("says links are emailed when the instance can email them", async () => {
     render(screen_(true));
-    expect(screen.getByText(WITH_MAIL)).toBeTruthy();
+    expect(await screen.findByText(WITH_MAIL)).toBeTruthy();
   });
 
-  it("says the server cannot send email otherwise", () => {
+  it("says the server cannot send email otherwise", async () => {
     render(screen_(false));
-    expect(screen.getByText(WITHOUT_MAIL)).toBeTruthy();
+    expect(await screen.findByText(WITHOUT_MAIL)).toBeTruthy();
   });
 });

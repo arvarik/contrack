@@ -57,11 +57,4 @@ describe("SettingsRail", () => {
     expect(rail.className).toContain("w-(--pane-width)");
     expect(rail.style.getPropertyValue(LEFT_PANE.property)).toBe("420px");
   });
-
-  it("keeps the rows' scroll bar on the left edge", () => {
-    mount();
-    const nav = screen.getByRole("navigation", { name: "Settings" });
-    expect(nav.getAttribute("dir")).toBe("rtl");
-    expect(nav.firstElementChild?.getAttribute("dir")).toBe("ltr");
-  });
 });

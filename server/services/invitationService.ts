@@ -241,31 +241,7 @@ export async function acceptInvitation(
   },
   ip: string | null,
 ): Promise<User> {
-  // A malformed token and an unknown one get the same answer. Telling them
-  // apart would turn this endpoint into an oracle for whether a link is real.
-  if (typeof input.token !== "string" || !input.token)
-    throw unknownInvitation();
-
-  const row = sqlite
-    .prepare(
-      `SELECT id, role, invitedBy, acceptedAt, revokedAt, expiresAt
-         FROM invitations WHERE tokenHash = ?`,
-    )
-    .get(tokenHash(input.token)) as
-    | {
-        id: string;
-        role: string;
-        invitedBy: string | null;
-        acceptedAt: string | null;
-        revokedAt: string | null;
-        expiresAt: string;
-      }
-    | undefined;
-  if (!row) throw unknownInvitation();
-
-  const status = statusOf(row);
-  if (status !== "pending") throw deadInvitation(status);
-
+  const row = pendingInvitation(input.token);
   const user = await createUser({
     email: input.email,
     username: input.username,
@@ -304,6 +280,45 @@ export async function acceptInvitation(
 
   log.info("Auth", `Invitation ${row.id} accepted by account ${user.id}`);
   return user;
+}
+
+/**
+ * The invitation a link names, while it can still make an account. Throws
+ * the 404 or the 410 that says why it cannot.
+ */
+function pendingInvitation(token: unknown) {
+  // A malformed token and an unknown one get the same answer. Telling them
+  // apart would turn this endpoint into an oracle for whether a link is real.
+  if (typeof token !== "string" || !token) throw unknownInvitation();
+
+  const row = sqlite
+    .prepare(
+      `SELECT id, role, invitedBy, acceptedAt, revokedAt, expiresAt
+         FROM invitations WHERE tokenHash = ?`,
+    )
+    .get(tokenHash(token)) as
+    | {
+        id: string;
+        role: string;
+        invitedBy: string | null;
+        acceptedAt: string | null;
+        revokedAt: string | null;
+        expiresAt: string;
+      }
+    | undefined;
+  if (!row) throw unknownInvitation();
+
+  const status = statusOf(row);
+  if (status !== "pending") throw deadInvitation(status);
+  return row;
+}
+
+/**
+ * Whether a link can still make an account, for the join screen to ask
+ * before it shows the form. Throws what accepting the link would throw.
+ */
+export function checkInvitation(token: unknown): void {
+  pendingInvitation(token);
 }
 
 /** One body for a token that is malformed and for one that never existed. */

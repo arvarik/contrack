@@ -161,7 +161,7 @@ function checkResource(issuer: string, resource: string | undefined): void {
   if (named !== mcpResource(issuer) && named !== issuer) {
     throw new OAuthError(
       "invalid_target",
-      `This server issues tokens only for ${mcpResource(issuer)}.`,
+      `Contrack issues tokens only for ${mcpResource(issuer)}.`,
     );
   }
 }
@@ -344,11 +344,11 @@ async function fetchClientDocument(clientId: string): Promise<Client> {
     !parsed.token_endpoint_auth_methods_supported?.includes("none")
   ) {
     throw unavailable(
-      "it asks for a client secret, which this server does not issue",
+      "it asks for a client secret, which Contrack does not issue",
     );
   }
   if (!parsed.redirect_uris.every(isValidRedirectUri)) {
-    throw unavailable("it lists a redirect URI this server does not accept");
+    throw unavailable("it lists a redirect URI that Contrack does not accept");
   }
 
   const client: Client = {

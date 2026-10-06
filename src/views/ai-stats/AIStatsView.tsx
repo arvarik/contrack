@@ -140,10 +140,10 @@ export const AIStatsView = () => {
   const cacheHitRate = session?.cacheHitRate ?? 0;
   const tier = summary?.tier;
 
-  // Sub-value for the invocations card
+  // Sub-value for the calls card
   const invocationSub =
     invocations > 0
-      ? `${session!.freshCalls} fresh · ${session!.cachedCalls} cached`
+      ? `${session!.freshCalls} new · ${session!.cachedCalls} reused`
       : undefined;
 
   // Sub-value for the tokens card. The cost is an estimate at list prices,
@@ -164,7 +164,7 @@ export const AIStatsView = () => {
       {/* Zone 1b: KPI Row — stacked on phones, 3 up from sm */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <MetricCard
-          label="Invocations"
+          label="AI calls"
           value={formatCompact(invocations)}
           subValue={invocationSub}
           icon={Activity}
@@ -178,10 +178,12 @@ export const AIStatsView = () => {
           delay={tileDelay(1)}
         />
         <MetricCard
-          label="Cache hit rate"
+          label="Reused answers"
           value={invocations > 0 ? `${(cacheHitRate * 100).toFixed(0)}%` : "—"}
           subValue={
-            invocations > 0 ? `${session!.cachedCalls} hits` : undefined
+            invocations > 0
+              ? `${session!.cachedCalls} of ${invocations} calls`
+              : undefined
           }
           icon={Gauge}
           delay={tileDelay(2)}
@@ -236,7 +238,7 @@ export const AIStatsView = () => {
           {feedLoading ? (
             <div className="py-8 text-center text-sm text-on-surface-variant">
               <Loader2 className="w-5 h-5 animate-spin mx-auto mb-2 text-primary" />
-              Loading activity...
+              Loading activity…
             </div>
           ) : feedItems.length > 0 ? (
             <>
@@ -244,12 +246,7 @@ export const AIStatsView = () => {
                 <FeedItem key={item.id} item={item} index={i} />
               ))}
 
-              {/*
-                Appends. Pressing this used to raise an offset and replace
-                everything above it with the next twenty rows, so reading the
-                feed meant losing what you had just read and there was no way
-                back. Known issue B-02.
-              */}
+              {/* Appends, so the rows already read stay above. */}
               {hasNextPage && (
                 <div className="pt-3 flex justify-center">
                   <button
@@ -257,7 +254,7 @@ export const AIStatsView = () => {
                     disabled={isFetchingNextPage}
                     className="btn-secondary"
                   >
-                    {isFetchingNextPage ? "Loading..." : "Load older activity"}
+                    {isFetchingNextPage ? "Loading…" : "Load older activity"}
                   </button>
                 </div>
               )}

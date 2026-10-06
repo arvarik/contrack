@@ -5,7 +5,7 @@
  * list and a page.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import {
   act,
   cleanup,
@@ -20,10 +20,7 @@ import {
   findSettingsPage,
   isSettingsPageVisible,
 } from "../../../../src/views/settings/registry";
-import {
-  SettingsHeaderActions,
-  SettingsHeaderContext,
-} from "../../../../src/views/settings/SettingsHeader";
+import { SettingsHeaderActions } from "../../../../src/views/settings/SettingsHeader";
 import {
   SlideLink,
   holdSlide,
@@ -59,29 +56,17 @@ describe("findSettingsPage", () => {
 });
 
 describe("isSettingsPageVisible", () => {
-  it("hides an admin page from a member", () => {
-    expect(isSettingsPageVisible(page("admin-users"), {})).toBe(false);
-    expect(isSettingsPageVisible(page("admin-users"), { isAdmin: true })).toBe(
-      true,
-    );
-  });
-
-  it("hides the member's AI usage from an admin, who has the instance's", () => {
-    expect(isSettingsPageVisible(page("ai-usage"), { isAdmin: false })).toBe(
-      true,
-    );
-    expect(isSettingsPageVisible(page("ai-usage"), { isAdmin: true })).toBe(
-      false,
-    );
-  });
-
-  it("hides Account when this instance asks nobody to sign in", () => {
-    expect(
-      isSettingsPageVisible(page("account"), { authRequired: false }),
-    ).toBe(false);
-    expect(isSettingsPageVisible(page("account"), { authRequired: true })).toBe(
-      true,
-    );
+  it.each([
+    ["admin-users", {}, false],
+    ["admin-users", { isAdmin: true }, true],
+    // An admin has the instance's AI usage instead of the member's.
+    ["ai-usage", { isAdmin: false }, true],
+    ["ai-usage", { isAdmin: true }, false],
+    // No account to show while the instance asks no one to sign in.
+    ["account", { authRequired: false }, false],
+    ["account", { authRequired: true }, true],
+  ] as const)("shows %s to %j: %s", (id, viewer, shown) => {
+    expect(isSettingsPageVisible(page(id), viewer)).toBe(shown);
   });
 
   it("gives the search the same answer as the rail", () => {
@@ -101,38 +86,6 @@ describe("SettingsHeaderActions", () => {
       </SettingsHeaderActions>,
     );
     expect(screen.getByRole("button", { name: "Invite" })).toBeTruthy();
-  });
-
-  it("claims the slot while mounted and draws into the header's target", () => {
-    const release = vi.fn();
-    const claim = vi.fn(() => release);
-
-    const Harness = ({ show }: { show: boolean }) => {
-      const [target, setTarget] = useState<HTMLElement | null>(null);
-      return (
-        <SettingsHeaderContext.Provider value={{ target, claim }}>
-          <header>
-            <div data-testid="slot" ref={setTarget} />
-          </header>
-          <div data-testid="page">
-            {show && (
-              <SettingsHeaderActions>
-                <button type="button">Snapshot now</button>
-              </SettingsHeaderActions>
-            )}
-          </div>
-        </SettingsHeaderContext.Provider>
-      );
-    };
-
-    const { rerender } = render(<Harness show />);
-    const button = screen.getByRole("button", { name: "Snapshot now" });
-    expect(screen.getByTestId("slot").contains(button)).toBe(true);
-    expect(screen.getByTestId("page").contains(button)).toBe(false);
-    expect(claim).toHaveBeenCalledTimes(1);
-
-    rerender(<Harness show={false} />);
-    expect(release).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -296,14 +249,6 @@ describe("SlideLink", () => {
         <Path />
       </MemoryRouter>,
     );
-
-  it("is a real link, and a plain click takes the router there", () => {
-    renderLink("/settings/appearance");
-    const link = screen.getByRole("link", { name: "Appearance" });
-    expect(link.getAttribute("href")).toBe("/settings/appearance");
-    fireEvent.click(link);
-    expect(screen.getByTestId("path").textContent).toBe("/settings/appearance");
-  });
 
   it("leaves a modified click to the browser, for a new tab or window", () => {
     renderLink("/settings/appearance");

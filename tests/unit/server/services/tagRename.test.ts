@@ -79,12 +79,12 @@ describe("tagService", () => {
 
     const summary1 = tagService.getSummary(scope1);
     expect(summary1).toEqual([
-      { tag: "friends", count: 2 },
-      { tag: "work", count: 1 },
+      { tag: "friends", count: 2, total: 2 },
+      { tag: "work", count: 1, total: 1 },
     ]);
 
     const summary2 = tagService.getSummary(scope2);
-    expect(summary2).toEqual([{ tag: "friends", count: 1 }]);
+    expect(summary2).toEqual([{ tag: "friends", count: 1, total: 1 }]);
   });
 
   it("getSummary excludes tags from archived and deleted contacts", () => {

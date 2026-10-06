@@ -41,7 +41,7 @@ export const InstanceUsageTable = ({
         <span>Account</span>
         <span className="text-right">Calls</span>
         <span className="text-right">Tokens</span>
-        <span className="text-right">{showCost ? "Cost" : "Cached"}</span>
+        <span className="text-right">{showCost ? "Cost" : "Reused"}</span>
       </div>
       {byUser.map((row) => (
         <div

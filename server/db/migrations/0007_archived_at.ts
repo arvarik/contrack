@@ -1,5 +1,5 @@
 // =============================================================================
-// Migration 0007_contacts_archived_at
+// Migration 0007_archived_at
 // =============================================================================
 // A contact keeps the time it was archived. The Archived page showed the
 // last edit as if it were that time. Two triggers stamp it, as the trackedAt

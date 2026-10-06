@@ -35,7 +35,7 @@ import {
   Users,
 } from "lucide-react";
 import {
-  downloadUserExport,
+  downloadFile,
   useAdminUsers,
   useCreateUser,
   useDeleteUser,
@@ -162,6 +162,13 @@ const RowMenu = ({
     />
   );
 };
+
+/** One account's data as a download, named after it and today. */
+const exportAccount = (user: AdminUser) =>
+  downloadFile(
+    `/admin/users/${encodeURIComponent(user.id)}/export`,
+    `contrack-export-${user.username}-${new Date().toISOString().slice(0, 10)}.json`,
+  );
 
 // ---------------------------------------------------------------------------
 // Dialogs
@@ -523,7 +530,7 @@ const DeleteUserDialog = ({
           className="w-full"
           onClick={() => {
             setExporting(true);
-            downloadUserExport(user.id, user.username)
+            exportAccount(user)
               .then(() => toast.success("Export downloaded"))
               .catch((error: Error) => toast.error(error.message))
               .finally(() => setExporting(false));
@@ -560,7 +567,9 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
   const reset = useResetPassword();
   const sendResetLink = useSendResetLink();
   const { data: instanceSettings } = useInstanceSettings();
-  const mailConfigured = instanceSettings?.mailConfigured === true;
+  // A reset link needs mail and PUBLIC_URL. Without them the dialog offers
+  // only a temporary password.
+  const linksReady = instanceSettings?.mailLinksReady === true;
   const remove = useDeleteUser();
 
   const [editing, setEditing] = useState<AdminUser | null>(null);
@@ -571,10 +580,27 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(
     null,
   );
+  const [disabling, setDisabling] = useState<AdminUser | null>(null);
   const [deleting, setDeleting] = useState<{
     user: AdminUser;
     counts: OwnedCounts;
   } | null>(null);
+
+  const toggleEnabled = (user: AdminUser) =>
+    setEnabled.mutate(
+      { id: user.id, enabled: user.status === "disabled" },
+      {
+        onSuccess: ({ user: next }) => {
+          setDisabling(null);
+          toast.success(
+            next.status === "disabled"
+              ? `${next.username} is disabled and signed out everywhere`
+              : `${next.username} can sign in again`,
+          );
+        },
+        onError: (error: Error) => toast.error(error.message),
+      },
+    );
 
   /** The first click. It is meant to be refused; the refusal carries the counts. */
   const askToDelete = (user: AdminUser) =>
@@ -651,11 +677,11 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
                   </span>
                   {user.isSelf && <Badge tone="primary">You</Badge>}
                   {/*
-                    The account an un-secured instance runs as. Its data is
-                    this device's data, which is why it cannot be removed
-                    while sign-in is off.
+                    The account an un-secured instance runs as. It holds the
+                    data while sign-in is off, which is why it cannot be
+                    removed then.
                   */}
-                  {user.isLocalOwner && <Badge>This device</Badge>}
+                  {user.isLocalOwner && <Badge>Local account</Badge>}
                 </p>
                 <p className="text-xs text-on-surface-variant truncate">
                   {user.username} · {user.email}
@@ -699,22 +725,15 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
                   setResetting(user);
                 },
                 onExport: () =>
-                  downloadUserExport(user.id, user.username)
+                  exportAccount(user)
                     .then(() => toast.success("Export downloaded"))
                     .catch((error: Error) => toast.error(error.message)),
+                // Enable acts at once. Disable signs the person out
+                // everywhere, so it asks first.
                 onToggleEnabled: () =>
-                  setEnabled.mutate(
-                    { id: user.id, enabled: user.status === "disabled" },
-                    {
-                      onSuccess: ({ user: next }) =>
-                        toast.success(
-                          next.status === "disabled"
-                            ? `${next.username} is disabled and signed out everywhere`
-                            : `${next.username} can sign in again`,
-                        ),
-                      onError: (error: Error) => toast.error(error.message),
-                    },
-                  ),
+                  user.status === "disabled"
+                    ? toggleEnabled(user)
+                    : setDisabling(user),
                 onDelete: () => askToDelete(user),
               }}
             />
@@ -734,13 +753,27 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
         onClose={() => navigate("/settings/admin/users", { replace: true })}
       />
       <EditUserModal user={editing} onClose={() => setEditing(null)} />
+      <ConfirmDialog
+        isOpen={disabling !== null}
+        onClose={() => setDisabling(null)}
+        onConfirm={() => disabling && toggleEnabled(disabling)}
+        busy={setEnabled.isPending}
+        title={`Disable ${disabling?.username}?`}
+        confirmLabel="Disable account"
+        description={
+          <p>
+            They are signed out everywhere now and cannot sign in until you
+            enable the account again. Their contacts and tokens stay
+          </p>
+        }
+      />
       <DeleteUserDialog
         user={deleting?.user ?? null}
         counts={deleting?.counts ?? null}
         onClose={() => setDeleting(null)}
       />
 
-      {!mailConfigured ? (
+      {!linksReady ? (
         <ConfirmDialog
           isOpen={resetting !== null}
           onClose={() => setResetting(null)}
@@ -750,9 +783,9 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
           confirmLabel="Reset password"
           description={
             <p>
-              They are signed out everywhere and every token they made stops
-              working. You will get a temporary password to hand over, and they
-              must replace it before anything works for them
+              They are signed out everywhere now, and every API token and MCP
+              app they connected stops working. You get a temporary password to
+              hand over, and they must replace it before anything works for them
             </p>
           }
           onConfirm={() =>
@@ -775,8 +808,9 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
         >
           <div className="space-y-4">
             <p className="text-sm text-on-surface-variant text-pretty">
-              They are signed out everywhere and every token they made stops
-              working. Choose how to deliver the new password
+              {resetMethod === "email"
+                ? "Nothing changes until they open the link. Then they are signed out everywhere, and every API token and MCP app they connected stops working"
+                : "They are signed out everywhere now, and every API token and MCP app they connected stops working"}
             </p>
 
             <ChoiceGroup

@@ -15,7 +15,8 @@ import React, { useCallback, useMemo, useState } from "react";
 import { uploadAccountAvatar } from "../../api/auth";
 import { signedOutAccountAvatarUrl } from "../../lib/avatar";
 import { AccountPhotoField } from "./AccountPhotoField";
-import { AuthField } from "./AuthShell";
+import { toast } from "sonner";
+import { AuthField, touchFirst } from "./AuthShell";
 import { PasswordStrengthMeter } from "../../lib/passwordStrength";
 
 /** Kept in step with USERNAME_PATTERN in server/services/authService.ts. */
@@ -196,7 +197,7 @@ export function useAccountForm(): AccountForm {
  *
  * A failure during photo upload does not block account creation: the account
  * is already created and authenticated, so it resolves with `{ photoFailed: true }`
- * and lets the caller notify the user.
+ * and tells the person where to add the photo later.
  */
 export async function createAccountThenPhoto(
   submit: () => Promise<unknown>,
@@ -210,6 +211,9 @@ export async function createAccountThenPhoto(
     await uploadAccountAvatar(photo);
     return { photoFailed: false };
   } catch {
+    toast.error(
+      "Your account is ready. The photo did not upload. Add it in Settings → Account",
+    );
     return { photoFailed: true };
   }
 }
@@ -218,7 +222,8 @@ export async function createAccountThenPhoto(
  * The fields that create an account, in the order they are filled in.
  *
  * `autoFocus` is on the first field because each of the three screens is the
- * whole page with one thing to do on it.
+ * whole page with one thing to do on it. Not on a touch screen, where focus
+ * opens the keyboard over the form.
  */
 export const AccountFields = ({
   form,
@@ -263,7 +268,7 @@ export const AccountFields = ({
         onBlur={form.blur("displayName")}
         autoComplete="name"
         // eslint-disable-next-line jsx-a11y/no-autofocus
-        autoFocus
+        autoFocus={!touchFirst()}
       />
       <AuthField
         id="email"

@@ -118,7 +118,7 @@ export const MailView = () => {
           setPassword("");
         },
         onError: (err: Error) => {
-          toast.error(err.message || "Failed to save mail settings");
+          toast.error(err.message || "Could not save the mail settings");
         },
       },
     );
@@ -126,9 +126,9 @@ export const MailView = () => {
 
   const handleSendTest = () => {
     sendTest.mutate(adminEmail ? { to: adminEmail } : {}, {
-      onSuccess: (res) => toast.success(`Test message sent to ${res.to}`),
+      onSuccess: (res) => toast.success(`Test message sent to ${res.sentTo}`),
       onError: (err: Error) =>
-        toast.error(err.message || "Failed to send test message"),
+        toast.error(err.message || "Could not send the test message"),
     });
   };
 
@@ -146,7 +146,7 @@ export const MailView = () => {
         setReplyTo("");
       },
       onError: (err: Error) => {
-        toast.error(err.message || "Failed to clear mail settings");
+        toast.error(err.message || "Could not clear the mail settings");
       },
     });
   };

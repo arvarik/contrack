@@ -127,7 +127,14 @@ export const SettingsHome = () => {
     <div className={cn(SETTINGS_PAGE, "space-y-8")}>
       <SettingsIdentityRow />
 
-      <div className="lg:hidden">
+      {/* Below lg the list is long, so the field stays at the top while it
+        scrolls. Not while it shows results: they are the page then. */}
+      <div
+        className={cn(
+          "lg:hidden",
+          !isSearching && "sticky top-0 z-10 -mt-2 py-2 bg-surface",
+        )}
+      >
         <SettingsSearch value={query} onChange={setQuery} variant="landing" />
       </div>
 
@@ -135,49 +142,58 @@ export const SettingsHome = () => {
         <div className="space-y-8">
           <NeedsAttention />
 
-          {SETTINGS_GROUPS.map((group, groupIdx) => {
-            const pages = SETTINGS_PAGES.filter(
-              (page) =>
-                page.group === group.id &&
-                isSettingsPageVisible(page, { isAdmin, authRequired }),
-            );
+          {/* From lg the rail lists every page, so this list does not. */}
+          <p className="hidden lg:block text-sm text-on-surface-variant">
+            Choose a page in the list to see its settings
+          </p>
 
-            if (pages.length === 0) return null;
+          <div className="space-y-8 lg:hidden">
+            {SETTINGS_GROUPS.map((group, groupIdx) => {
+              const pages = SETTINGS_PAGES.filter(
+                (page) =>
+                  page.group === group.id &&
+                  isSettingsPageVisible(page, { isAdmin, authRequired }),
+              );
 
-            return (
-              <section
-                key={group.id}
-                className={arriving ? "tile-enter" : undefined}
-                style={
-                  arriving ? { animationDelay: tileDelay(groupIdx) } : undefined
-                }
-              >
-                <h2 className={SETTINGS_SECTION_HEADING}>{group.title}</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {pages.map((page) => (
-                    <SettingsLink
-                      key={page.id}
-                      to={page.path}
-                      icon={page.icon}
-                      title={
-                        page.id === "account"
-                          ? user?.displayName || user?.username || page.title
-                          : page.title
-                      }
-                      description={page.description}
-                      tone={page.tone ?? "primary"}
-                    />
-                  ))}
-                </div>
-              </section>
-            );
-          })}
+              if (pages.length === 0) return null;
+
+              return (
+                <section
+                  key={group.id}
+                  className={arriving ? "tile-enter" : undefined}
+                  style={
+                    arriving
+                      ? { animationDelay: tileDelay(groupIdx) }
+                      : undefined
+                  }
+                >
+                  <h2 className={SETTINGS_SECTION_HEADING}>{group.title}</h2>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {pages.map((page) => (
+                      <SettingsLink
+                        key={page.id}
+                        to={page.path}
+                        icon={page.icon}
+                        title={
+                          page.id === "account"
+                            ? user?.displayName || user?.username || page.title
+                            : page.title
+                        }
+                        description={page.description}
+                        tone={page.tone ?? "primary"}
+                      />
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
         </div>
       )}
 
       <p className="flex items-center gap-1.5 text-xs text-on-surface-variant px-1">
         <HardDrive className="w-3.5 h-3.5" />
-        Everything here is stored on this machine
+        Everything here is stored on the server
         <PhonePerch />
       </p>
     </div>

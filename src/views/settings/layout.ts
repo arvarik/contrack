@@ -31,6 +31,13 @@ export const SETTINGS_CARD = cn(CARD, "p-4 sm:p-6");
 /** The heading over a card ("Profile", "Who can join"), in line with the card's text. */
 export const SETTINGS_SECTION_HEADING = cn(SECTION_HEADING, "px-1 mb-2");
 
+/**
+ * A link inside a line of text: 44 px tall on a touch screen, so a finger
+ * can hit it, and unchanged with a mouse.
+ */
+export const TOUCH_LINK =
+  "pointer-coarse:inline-flex pointer-coarse:items-center pointer-coarse:min-h-[44px]";
+
 /** The name over a field on a settings card. */
 export const SETTINGS_LABEL = "block text-xs font-bold text-on-surface";
 

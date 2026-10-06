@@ -17,13 +17,13 @@ interface CacheTiersAccordionProps {
 
 /** Human-readable tier labels. */
 const TIER_LABELS: Record<string, string> = {
-  briefing: "Briefing",
-  rerank: "Rerank",
-  synthesis: "Synthesis",
+  briefing: "Briefings",
+  rerank: "Reranking results",
+  synthesis: "Ask answers",
   mentions: "Mentions",
   dailyInsight: "Daily insight",
-  queryParse: "Query parse",
-  hyde: "Query expansion",
+  queryParse: "Reading a question",
+  hyde: "Expanded questions",
 };
 
 /**
@@ -31,22 +31,22 @@ const TIER_LABELS: Record<string, string> = {
  *
  * "Rerank: 82%" tells you nothing unless you know what a rerank is and what
  * was avoided by not doing one. Each description names the feature in the
- * words the UI uses for it, then says what a cache hit means in practice.
+ * words the UI uses for it, then says what a reused answer means in practice.
  */
 const TIER_DESCRIPTIONS: Record<string, string> = {
   briefing:
-    "Catch me up summaries written for a single contact. A hit means the summary was reused instead of asking the model for it again",
+    "Catch me up summaries written for a single contact. Reused means the summary was reused instead of asking the model for it again",
   rerank:
-    "AI reordering of search results by relevance. A hit means this query was ranked before, so no model call was needed",
+    "AI reordering of search results by relevance. Reused means this query was ranked before, so no model call was needed",
   synthesis:
-    "The written answer to an Ask Contrack question. A hit means the same question had already been answered",
+    "The written answer to an Ask Contrack question. Reused means the same question had already been answered",
   mentions:
-    "Finding the people named inside a note you wrote. A hit means that exact note text was already parsed",
+    "Finding the people named inside a note you wrote. Reused means that exact note text was already parsed",
   dailyInsight:
-    "The daily observation shown on the Pulse page. A hit means today's insight was already generated",
+    "The daily observation shown on the Pulse page. Reused means today's insight was already generated",
   queryParse:
-    "The filters pulled out of an Ask Contrack question, such as a city, a company or a job title. A hit means this question was read before",
-  hyde: "An expanded version of your question, used to search by meaning instead of by keyword. A hit means the same question was expanded before",
+    "The filters pulled out of an Ask Contrack question, such as a city, a company or a job title. Reused means this question was read before",
+  hyde: "An expanded version of your question, used to search by meaning instead of by keyword. Reused means the same question was expanded before",
 };
 
 function formatTTL(ms: number): string {
@@ -73,10 +73,13 @@ export const CacheTiersAccordion = ({
       {/* Header — clickable */}
       <button
         onClick={() => setIsOpen(!isOpen)}
+        aria-expanded={isOpen}
         className="hit-area w-full flex items-center gap-2 group"
       >
         <DatabaseZap className="w-4 h-4 text-primary" />
-        <span className={cn(SECTION_HEADING, "mb-0")}>Cache tiers</span>
+        <span className={cn(SECTION_HEADING, "mb-0")}>
+          Saved answers by feature
+        </span>
         <motion.div
           animate={{ rotate: isOpen ? 180 : 0 }}
           transition={{ duration: DURATION.slow, ease: EASE }}
@@ -105,13 +108,13 @@ export const CacheTiersAccordion = ({
             <div className="mt-4 space-y-0 overflow-x-auto -mx-2 px-2">
               {/* Header row */}
               <div className="grid grid-cols-[minmax(120px,1fr)_56px_56px_56px_56px_56px_56px] gap-2 px-2 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant min-w-[504px]">
-                <span>Tier</span>
-                <span className="text-right">Entries</span>
-                <span className="text-right">Hits</span>
-                <span className="text-right">Misses</span>
-                <span className="text-right">Evicts</span>
-                <span className="text-right">Rate</span>
-                <span className="text-right">TTL</span>
+                <span>Feature</span>
+                <span className="text-right">Saved</span>
+                <span className="text-right">Reused</span>
+                <span className="text-right">New</span>
+                <span className="text-right">Dropped</span>
+                <span className="text-right">Reuse</span>
+                <span className="text-right">Kept</span>
               </div>
 
               {tiers.map(([name, tier], i) => (
@@ -128,7 +131,7 @@ export const CacheTiersAccordion = ({
                     </span>
                     {TIER_DESCRIPTIONS[name] && (
                       <InfoTip
-                        label={`About the ${TIER_LABELS[name] ?? name} cache`}
+                        label={`About ${TIER_LABELS[name] ?? name}`}
                         className="shrink-0"
                       >
                         {TIER_DESCRIPTIONS[name]}

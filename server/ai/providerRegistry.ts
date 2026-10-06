@@ -126,7 +126,7 @@ export function readStoredKey(
       unreadable.add(value);
       log.warn(
         "AIRegistry",
-        `The saved key for ${owner} cannot be decrypted, because the instance secret changed. Enter the key again in Settings → AI.`,
+        `The saved key for ${owner} cannot be decrypted, because the instance secret changed. Enter the key again in Settings → Administration → AI.`,
       );
     }
     return undefined;

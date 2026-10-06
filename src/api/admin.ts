@@ -84,6 +84,8 @@ export interface InstanceSettings {
   instanceName: string;
   instanceNameMax: number;
   mailConfigured?: boolean;
+  /** Mail is set up and PUBLIC_URL is set, so a mail can carry a link. */
+  mailLinksReady?: boolean;
   magicLinkSignIn?: boolean;
   trashRetentionDays?: number;
   trashRetentionDaysSource?: "setting" | "env" | "default";
@@ -367,7 +369,8 @@ export const useDeleteUser = () => {
 };
 
 /**
- * Download one account's data.
+ * Download a file the server answers with, under `filename`: an account's
+ * data or a snapshot.
  *
  * Fetched and turned into a blob rather than linked to directly. A plain
  * `<a href>` leaves the browser to render whatever comes back, so an expired
@@ -375,18 +378,15 @@ export const useDeleteUser = () => {
  * admin back in — and the shared client, which is what notices that, would
  * never have seen the request.
  */
-export async function downloadUserExport(
-  id: string,
-  username: string,
+export async function downloadFile(
+  path: string,
+  filename: string,
 ): Promise<void> {
-  const res = await apiFetch(`/admin/users/${encodeURIComponent(id)}/export`);
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
+  const res = await apiFetch(path);
+  const url = URL.createObjectURL(await res.blob());
   const link = document.createElement("a");
   link.href = url;
-  link.download = `contrack-export-${username}-${new Date()
-    .toISOString()
-    .slice(0, 10)}.json`;
+  link.download = filename;
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -756,7 +756,7 @@ export const useSendTestMail = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body?: { to?: string }) =>
-      apiJson<{ sent: true; to: string }>("/admin/mail/test", {
+      apiJson<{ sentTo: string }>("/admin/mail/test", {
         method: "POST",
         ...jsonBody(body ?? {}),
       }),

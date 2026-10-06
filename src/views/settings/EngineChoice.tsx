@@ -53,6 +53,8 @@ import {
   type EngineNeed,
   type WebSearchEngine,
 } from "../../../shared/webSearchEngine";
+import { cn } from "../../lib/utils";
+import { TOUCH_LINK } from "./layout";
 
 const RESEARCH = AI_FEATURES.find((feature) => feature.id === "research")!;
 
@@ -176,7 +178,10 @@ export function EngineChoice({ scope }: EngineChoiceProps) {
         ? blocked && (
             <Link
               to={setupLink(blocked.missing[0])}
-              className="font-semibold text-primary hover:underline"
+              className={cn(
+                "font-semibold text-primary hover:underline",
+                TOUCH_LINK,
+              )}
             >
               {webSearch.allowed ? "Set up web search" : "Turn web search on"}
             </Link>

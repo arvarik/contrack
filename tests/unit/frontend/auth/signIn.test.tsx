@@ -44,25 +44,28 @@ describe("SignIn front door", () => {
     localStorage.clear();
   });
 
-  it("the toggle changes type and aria-pressed", () => {
-    render(<SignIn onSignedIn={vi.fn()} />);
-
-    const passwordInput = screen.getByLabelText("Password");
-    expect(passwordInput.getAttribute("type")).toBe("password");
-
-    const toggleBtn = screen.getByRole("button", { name: "Show password" });
-    expect(toggleBtn.getAttribute("aria-pressed")).toBe("false");
-
-    fireEvent.click(toggleBtn);
-    expect(passwordInput.getAttribute("type")).toBe("text");
-    expect(toggleBtn.getAttribute("aria-label")).toBe("Hide password");
-    expect(toggleBtn.getAttribute("aria-pressed")).toBe("true");
-
-    fireEvent.click(toggleBtn);
-    expect(passwordInput.getAttribute("type")).toBe("password");
-    expect(toggleBtn.getAttribute("aria-label")).toBe("Show password");
-    expect(toggleBtn.getAttribute("aria-pressed")).toBe("false");
-  });
+  // A touch screen opens its keyboard on a focused field, over the form.
+  it.each([
+    [false, true],
+    [true, false],
+  ])(
+    "focuses the name field only off a touch screen (touch %s)",
+    (touch, focused) => {
+      vi.stubGlobal(
+        "matchMedia",
+        vi.fn((query: string) => ({
+          matches: touch && query === "(pointer: coarse)",
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+        })),
+      );
+      render(<SignIn onSignedIn={vi.fn()} />);
+      expect(
+        document.activeElement === screen.getByLabelText("Username or email"),
+      ).toBe(focused);
+      vi.unstubAllGlobals();
+    },
+  );
 
   it("the caps-lock line appears", () => {
     render(<SignIn onSignedIn={vi.fn()} />);

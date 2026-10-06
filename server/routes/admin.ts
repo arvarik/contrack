@@ -85,8 +85,10 @@ import {
 } from "../services/authService.ts";
 import {
   createAuthLink,
+  discardAuthLink,
   ADMIN_RESET_LINK_TTL_SECONDS,
 } from "../services/authLinkService.ts";
+import { snapshotFile } from "../services/backupService.ts";
 
 const router = Router();
 
@@ -211,16 +213,16 @@ router.post(
       link: resetUrl,
       expiresHours: 24,
     });
-    const sent = await mailService.send({
-      to: target.email,
-      subject: template.subject,
-      text: template.text,
-      html: template.html,
-    });
-    if (!sent) {
-      log.warn(
-        "Admin",
-        `Failed to send the password reset email for account ${target.id}`,
+    try {
+      await mailService.sendOrThrow({ to: target.email, ...template });
+    } catch (err) {
+      // A link nobody received must not stay redeemable, and the admin must
+      // not read "Sent".
+      discardAuthLink(link.id);
+      throw new AppError(
+        `Could not send the reset link: ${getErrorMessage(err)}`,
+        502,
+        { code: "MAIL_SEND_FAILED" },
       );
     }
     auditService.record({
@@ -276,6 +278,34 @@ router.get(
       `[${req.requestId}] GET /api/admin/users/${id}/export → ${payload.contacts.length} contacts`,
     );
     res.send(JSON.stringify(payload, null, 2));
+  }),
+);
+
+/**
+ * One snapshot as a download, so an admin can keep a copy off the server.
+ * Only a name the Backups list shows is served, and each download is in the
+ * audit log, because a snapshot holds every account's contacts.
+ */
+router.get(
+  "/backups/:filename",
+  requireAdmin,
+  asyncHandler(async (req, res) => {
+    const ctx = adminContext(req);
+    const filename = String(req.params.filename);
+    const file = snapshotFile(filename);
+    if (!file) {
+      throw new AppError("That snapshot does not exist", 404, {
+        code: "BACKUP_NOT_FOUND",
+      });
+    }
+    auditService.record({
+      actorUserId: ctx.actor.id,
+      action: "backup.downloaded",
+      targetType: "backup",
+      targetId: filename,
+      ip: ctx.ip,
+    });
+    res.download(file, filename);
   }),
 );
 
@@ -354,6 +384,8 @@ function settingsView() {
     instanceName: getInstanceName(),
     instanceNameMax: INSTANCE_NAME_MAX,
     mailConfigured: mailService.isConfigured(),
+    // Mail set up and PUBLIC_URL set: what a link in a mail needs.
+    mailLinksReady: mailService.canSendLinks(),
     magicLinkSignIn: isMagicLinkSignIn(),
     trashRetentionDays: lifecycle.trashRetentionDays.value,
     trashRetentionDaysSource: lifecycle.trashRetentionDays.source,

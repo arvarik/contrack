@@ -8,7 +8,7 @@
  *   vCard  another address book. The only format that also comes back IN, and
  *          the same module writes and reads it, so a round trip is lossless.
  *   CSV    a spreadsheet. Flat by definition: three emails become one cell.
- *   JSON   this app. Interactions, lists, action items and the merge log, which
+ *   JSON   this app. Interactions, lists, follow-ups and the merge log, which
  *          nothing else can carry.
  *
  * A plain `<a download>` rather than a fetch-and-blob: the browser already
@@ -49,7 +49,7 @@ const FORMATS: {
     icon: FileJson,
     title: "Everything (.json)",
     description:
-      "Every contact, interaction, list, action item and merge. The complete copy",
+      "Every contact, interaction, list, follow-up and merge. The complete copy",
   },
 ];
 

@@ -67,7 +67,7 @@ export const AISettingsView = () => {
           description={
             <>
               Off sends nothing to any AI provider, for every account. Search on
-              this server still works
+              the server still works
               {settings.instance.lockedByEnv && (
                 <span className="block mt-1 font-medium text-on-surface">
                   Set by <code className="font-mono">AI_DISABLED</code>
