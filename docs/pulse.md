@@ -232,12 +232,12 @@ Each row shows the ring, the name and the company. It also shows the cadence ("q
 
 1. Select **Select** in the page header.
 2. Choose the contacts, or select **Select all** in a group heading.
-3. Use the bar: **Track**, **Untrack**, or **Cadence** to give every selected contact one cadence.
+3. Use the bar: **Track**, **Stop tracking**, or **Cadence** to give every selected contact one cadence.
 4. Select **Done** to leave select mode.
 
 The bar shows the same toasts with **Undo** as the Network list. A new filter clears the selection, so the bar never acts on a contact you cannot see.
 
-With nobody tracked, the page says "Nobody is tracked yet". With **Tracked** chosen, **Show people to track** switches to **Not tracked**. When the filters leave nobody, **Clear filters** resets them.
+With no one tracked, the page says "No one is tracked yet". With **Tracked** chosen, **Show people to track** switches to **Not tracked**. When the filters leave no one, **Clear filters** resets them.
 
 ## Possible duplicates
 
