@@ -385,7 +385,7 @@ const n = (
  * `location` ("Boston, MA, USA") is read up to its first comma.
  */
 export const CITIES: Record<string, City> = {
-  // ── The big cities, with neighborhoods ────────────────────────────────
+  // The big cities, with neighborhoods
   "san francisco": {
     country: "US",
     region: "CA",
@@ -654,9 +654,9 @@ export const CITIES: Record<string, City> = {
     ],
   },
 
-  // ── Towns: a country, a postcode prefix and a center. Every pin stands
+  // Towns: a country, a postcode prefix and a center. Every pin stands
   // within 1.8 km of the center. Every street postcode in that circle starts
-  // with the prefix, checked in September 2026 against postal directories.
+  // with the prefix, checked against postal directories.
   // In the UK and Ireland the prefix is the outward code or the Eircode
   // routing key at the center itself, and the edge of the circle can be in
   // the next district.

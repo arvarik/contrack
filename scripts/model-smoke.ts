@@ -1,6 +1,4 @@
-// =============================================================================
 // npm run models:smoke — load the local search models and use each once
-// =============================================================================
 // The server runs two small models for search (see
 // server/services/search/modelFiles.ts): one embeds text, one scores a query
 // against a document. This loads both the way the server does, from MODEL_DIR
@@ -12,7 +10,6 @@
 // An operator can run it in a container as well:
 //
 //   docker exec contrack node scripts/model-smoke.ts
-// =============================================================================
 
 import "../server/utils/loadEnv.ts";
 import {

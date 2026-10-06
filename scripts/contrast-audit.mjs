@@ -1,15 +1,10 @@
 /**
  * contrast-audit — WCAG AA gate for text color.
  *
- * Static review cannot answer "is this text readable", because the answer
- * depends on what is behind it: a token, its alpha modifier, every ancestor
- * background, and every ancestor opacity, composited. So this drives a real
- * Chrome against a running dev server, walks the live DOM of each route, and
- * computes the true ratio for every visible text node.
- *
- * It exists because the palette shipped for a long time with a primary that
- * measured 2.39:1 at its worst — a defect no amount of reading the CSS would
- * have surfaced.
+ * Whether text is readable depends on what is behind it: a token, its alpha
+ * modifier, and every ancestor background and opacity, composited. So this
+ * drives a real Chrome against a running dev server, walks the live DOM of
+ * each route, and computes the true ratio for every visible text node.
  *
  * Usage:
  *   npm run dev                       # in another terminal
@@ -18,27 +13,17 @@
  *   npm run audit:contrast -- --theme dark
  *   npm run audit:contrast -- --theme both --accent "#b45309"
  *
- * Exits non-zero when any text fails, so it can gate CI.
+ * Exits non-zero when any text fails, so it can gate CI. Both palettes are
+ * walked by default. `--accent` also paints the five derived tokens against
+ * real backgrounds. `themeContrast.test.ts` checks the same palettes
+ * arithmetically, and this checks what a browser paints.
  *
- * Both palettes are walked by default. A theme is applied two ways at once,
- * because the app answers both: `data-theme` on <html> for a chosen palette,
- * and the emulated `prefers-color-scheme` for the stylesheet's own media
- * query. Setting only one of them would audit a page that is half dark.
- *
- * `--accent` additionally paints the five derived tokens, which is the only
- * way to see a picked accent composited against real backgrounds.
- * `tests/unit/frontend/style/themeContrast.test.ts` checks the palettes and
- * the derivation arithmetically and needs no browser; this checks what a
- * browser paints.
- *
- * Notes / limits:
- *   - Only text that is rendered on load is checked. States behind
- *     interaction (open modals, dropdowns, select mode, hover) are not. The
- *     active filter pill is one of those, which is why the static gate in
- *     tests/unit/frontend/style/themeContrast.test.ts exists alongside this.
- *   - Gradient-filled text is skipped: it is painted by its background, so
- *     its `color` is meaningless.
- *   - Disabled controls are reported separately. WCAG exempts them; an
+ * Limits:
+ *   - Only text rendered on load is checked, not open modals, dropdowns,
+ *     select mode or hover. `themeContrast.test.ts` covers those tokens.
+ *   - Gradient-filled text is skipped: its background paints it, so its
+ *     `color` means nothing.
+ *   - Disabled controls are reported apart. WCAG exempts them, but an
  *     unreadable label is still worth knowing about.
  */
 import { spawn } from "node:child_process";
@@ -55,9 +40,8 @@ const argOf = (name, fallback) => {
   const i = argv.indexOf(`--${name}`);
   return i >= 0 && argv[i + 1] ? argv[i + 1] : fallback;
 };
-// `npm run dev` serves on 3210 (server.ts runs Vite in middleware mode), and
-// this defaulted to a port nothing listens on — so a bare run connected to
-// nothing and reported zero failures for a dozen blank pages.
+// `npm run dev` serves on 3210. A wrong port reports zero failures for blank
+// pages.
 const BASE = argOf("url", "http://127.0.0.1:3210");
 
 const THEME_ARG = argOf("theme", "both");
@@ -115,8 +99,7 @@ const send = (m, p = {}) =>
 
 const AUDIT = String.raw`(() => {
   // Tailwind v4 alpha modifiers compute to oklab(... / a), which no rgb regex
-  // will match — so parse every color by painting it and reading the pixel.
-  // That handles rgb/rgba/oklab/oklch/color() uniformly.
+  // will match, so parse every color by painting it and reading the pixel.
   const _cv = document.createElement('canvas'); _cv.width = _cv.height = 1;
   const _ctx = _cv.getContext('2d', { willReadFrequently: true });
   const _cache = new Map();
@@ -205,16 +188,11 @@ const AUDIT = String.raw`(() => {
   return JSON.stringify(out);
 })()`;
 
-// Default sweep: every top-level route plus every Settings subpage.
-//
-// The administration pages are here from 2.0. Two things about them:
-// `/settings/ai-config` is now a redirect, so it is dropped — auditing a
-// `<Navigate>` measures whatever it lands on, twice. And every admin route is
-// behind `RequireAdmin`, so this must run against an instance with sign-in
-// switched off, where the principal is the local owner and the local owner is
-// an admin. On a gated instance Chrome arrives with no cookie, every one of
-// these renders the sign-in screen, and the run reports a cheerful zero for
-// twelve copies of the same page.
+// Default sweep: every top-level route plus every Settings subpage. Redirects
+// are left out, because auditing a `<Navigate>` measures its target twice.
+// Admin routes need an instance with sign-in off, where the local owner is an
+// admin. On a gated instance every route renders the sign-in screen and the
+// run reports zero failures for copies of one page.
 const DEFAULT_ROUTES = [
   ["network", "/"],
   ["pulse", "/pulse"],
@@ -236,11 +214,9 @@ const DEFAULT_ROUTES = [
   ["admin-audit", "/settings/admin/audit"],
 ];
 /**
- * The contact detail page is the most important one to check and the only one
- * whose URL is not static — and because of that it was silently skipped the
- * first time this ran. It also replaces the entire primary palette with the
- * contact's "vibe" color, so it is the page most likely to regress. Discover
- * a real id rather than leaving it out.
+ * The contact page is the only route without a static URL, and it replaces
+ * the primary palette with the contact's "vibe" color, so it is the page most
+ * likely to regress. Discover a real id for it.
  */
 async function withDetailRoute(routes) {
   try {
@@ -264,16 +240,12 @@ const routes = argOf("routes", null)
       .map((p) => [p, p])
   : await withDetailRoute(DEFAULT_ROUTES);
 /**
- * Paint a palette, both ways the app can be in one.
+ * Paint a palette both ways the app reads one: `data-theme`, which a chosen
+ * palette writes, and the emulated `prefers-color-scheme` (set before each
+ * navigation). Setting only one would audit a page that is half dark.
  *
- * `data-theme` is what a chosen palette writes; the emulated media feature is
- * what the stylesheet's own `prefers-color-scheme` block reads. Both are set
- * so that neither half of the CSS is left in the other palette.
- *
- * The accent, when given, is derived in the page: `src/lib/theme.ts` is a
- * module this script cannot import, so the five values are computed by asking
- * the running app for them. Every build ships that module, so the arithmetic
- * here is the arithmetic the product uses rather than a second copy of it.
+ * The accent is derived in the page with the app's own `src/lib/theme.ts`,
+ * which this script cannot import, so the arithmetic is the product's.
  */
 async function applyTheme(theme) {
   const accentScript = ACCENT
@@ -296,11 +268,9 @@ for (const theme of THEMES) {
   console.log(
     `\n──── ${theme} palette${ACCENT ? ` · accent ${ACCENT}` : ""} ────`,
   );
-  // Before the navigation, not after. The app follows `prefers-color-scheme`
-  // on its own when the theme setting is "system", so emulating it first means
-  // the page loads in the palette being audited rather than transitioning into
-  // it — and a `transition-all` control read mid-transition reports the color
-  // it is leaving, which is a failure that exists only in the measurement.
+  // Before the navigation, so the page loads in this palette. A
+  // `transition-all` control read mid-transition reports the color it is
+  // leaving, a failure that exists only in the measurement.
   await send("Emulation.setEmulatedMedia", {
     features: [{ name: "prefers-color-scheme", value: theme }],
   });

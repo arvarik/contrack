@@ -134,7 +134,7 @@ export interface BenchPlan {
 export const sqliteStamp = (date: Date): string =>
   date.toISOString().slice(0, 19).replace("T", " ");
 
-// ─── Randomness ────────────────────────────────────────────────────────────
+// Randomness
 
 export function hash32(text: string): number {
   return createHash("sha1").update(text).digest().readUInt32BE(0);
@@ -204,7 +204,7 @@ function fillPattern(
     .join("");
 }
 
-// ─── Small helpers ─────────────────────────────────────────────────────────
+// Small helpers
 
 /** Letters that no accent folds away, written in the letters of English. */
 const PLAIN: Record<string, string> = {
@@ -266,7 +266,7 @@ export function companyName(d: Dice, nouns: readonly string[]): string {
   return `${d.pick(COMPANY_FIRST)} ${d.pick(nouns)}`;
 }
 
-// ─── Places ────────────────────────────────────────────────────────────────
+// Places
 
 /** For a city the tables do not list: a plain address in a plain format. */
 const FALLBACK_COUNTRY: Country = {
@@ -407,13 +407,13 @@ function spotIn(
   return null;
 }
 
-// ─── Text ──────────────────────────────────────────────────────────────────
+// Text
 
 function fillTemplate(text: string, values: Record<string, string>): string {
   return text.replace(/\{(\w+)\}/g, (_, key: string) => values[key]);
 }
 
-// ─── The plan ──────────────────────────────────────────────────────────────
+// The plan
 
 export function planEnrichment(
   input: BenchInput,

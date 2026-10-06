@@ -1,6 +1,4 @@
-// =============================================================================
 // npm run models:fetch — put the local search models on disk ahead of time
-// =============================================================================
 // The server loads two small models for search (see
 // server/services/search/modelFiles.ts). Without this script, Transformers.js
 // downloads them from huggingface.co at first boot. With it, the files are on
@@ -17,10 +15,8 @@
 // the models and a container never reaches Hugging Face.
 //
 // It reads `.env` in the working directory first, as the server does, so a
-// MODEL_DIR, DATA_DIR or HF_ENDPOINT set there applies here too. Before, the
-// script filled `./models` while the server read `DATA_DIR/models` from
-// `.env`, and the server then downloaded the models anyway.
-// =============================================================================
+// MODEL_DIR, DATA_DIR or HF_ENDPOINT set there applies here too, and both
+// use the same folder.
 
 import "../server/utils/loadEnv.ts";
 import { createHash } from "node:crypto";

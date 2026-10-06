@@ -1,7 +1,4 @@
-// =============================================================================
-// bench-tenancy — the before picture
-// =============================================================================
-// Benchmarks tenant-scoped query and mutation latency.
+// bench-tenancy: tenant-scoped query and mutation latency.
 //
 // The 10-owner run is the one that matters: each owner reads and writes only
 // their own data across list endpoints, search, timeline, and dedupe scans.
@@ -9,7 +6,6 @@
 //   node scripts/bench-tenancy.ts                    # 1 owner, 5000 contacts
 //   OWNERS=10 CONTACTS_PER_OWNER=2000 node scripts/bench-tenancy.ts
 //   OWNERS=25 CONTACTS_PER_OWNER=2000 node scripts/bench-tenancy.ts
-// =============================================================================
 
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -310,7 +306,7 @@ async function main(): Promise<void> {
     ),
   );
 
-  // ── Isolation spot check ──────────────────────────────────────────────
+  // Isolation spot check
   // Verify that latency is measured strictly over one account's rows.
   // A fast endpoint that answers with everybody's data is not the thing being measured.
   const ownerOf = sqlite.prepare("SELECT ownerId FROM contacts WHERE id = ?");

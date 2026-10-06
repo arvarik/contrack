@@ -1,8 +1,7 @@
 /**
- * Names for the countries that faker has no Latin-script locale for. Faker's
+ * Names for the countries that faker has no Latin-script locale for: its
  * Japanese, Korean, Hebrew and Greek data are in their own scripts, and it
- * has nothing for Kenya, Singapore, Estonia or Lithuania, so people there
- * came out with English names.
+ * has nothing for Kenya, Singapore, Estonia or Lithuania.
  *
  * The names are common ones, written the way a contact list in Latin letters
  * holds them: given name first. A surname with a female form, in Greek and in
