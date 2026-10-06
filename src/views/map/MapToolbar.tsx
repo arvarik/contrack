@@ -11,12 +11,21 @@
  * - "Fit all" button, which the page fits (F does the same)
  * - Mobile filter sheet via Modal below `lg` breakpoint
  * - "0 of N match" empty state
- * - "Select" menu (box, lasso, all in view) as an `ActionMenu`, so it reads
- *   and behaves like every other menu in the app
+ * - "Select" menu (all in view, box, lasso) as an `ActionMenu`, so it reads
+ *   and behaves like every other menu in the app. Box and lasso need a
+ *   pointer, so a touch screen gets only All in view, and Box select names
+ *   the keyboard's way: move the map to the people, then All in view
+ * - Focus follows the field that shows: "Go to" puts it in the place box,
+ *   and Enter or Escape there puts it back in the filter box
  *
  * @module views/map/MapToolbar
  */
-import React, { useCallback, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import {
   Search,
@@ -45,13 +54,25 @@ import { prefersReducedMotion } from "./flyTo";
 import { MIN_OPEN_PX, measureInsets, paddingFor } from "./insets";
 import { cn } from "../../lib/utils";
 import { SELECTED_TINT, TONE_WASH } from "../../lib/styles";
-import { useMediaQuery } from "../../hooks/useMediaQuery";
+import { useMediaQuery, WIDE_QUERY } from "../../hooks/useMediaQuery";
 import { PaletteButton } from "../../components/command-palette/PaletteButton";
 
 const LAYER_OPTIONS: readonly SegmentedOption<MapLayer>[] = [
   { value: "pins", label: "Pins" },
   { value: "heat", label: "Heat" },
 ];
+
+/** Search fields take no spelling help: names and places are not words. */
+const SEARCH_FIELD = {
+  spellCheck: false,
+  autoCorrect: "off",
+  autoCapitalize: "off",
+} as const;
+
+/** What the page asks of the toolbar: "/" puts the focus in the filter. */
+export interface MapToolbarHandle {
+  focusFilter: () => void;
+}
 
 /**
  * A toolbar toggle's resting and selected looks. Selected is the tint and its
@@ -75,7 +96,8 @@ interface MapToolbarProps {
   onDeleteView?: (view: MapView) => void;
   /** Update and move, for the Views menu. */
   viewEdits?: Pick<ViewsMenuProps, "lastView" | "onUpdateView" | "onMoveView">;
-  inputRef?: React.RefObject<HTMLInputElement | null>;
+  /** The page's handle on the toolbar, for the "/" key. */
+  handleRef?: React.Ref<MapToolbarHandle>;
   /**
    * How much map an open contact leaves at the toolbar's left, in px. Null
    * or left out: the whole page. The toolbar keeps inside it, 16 px clear
@@ -101,7 +123,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
   onStartRename,
   onDeleteView,
   viewEdits,
-  inputRef: externalInputRef,
+  handleRef,
   room = null,
   onFitAll,
   onToggleInsights,
@@ -109,8 +131,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
   onStartLasso,
   isLassoActive = false,
 }) => {
-  const localInputRef = useRef<HTMLInputElement | null>(null);
-  const inputRef = externalInputRef || localInputRef;
+  const barInput = useRef<HTMLInputElement | null>(null);
 
   const [mode, setMode] = useState<"filter" | "goto">("filter");
   const [gotoQuery, setGotoQuery] = useState("");
@@ -119,9 +140,18 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
   /**
    * "/" focuses the filter, and the placeholder says so where a key can be
-   * pressed: under a mouse or a trackpad. A touch screen does not show it.
+   * pressed: under a mouse or a trackpad. A touch screen does not show it,
+   * and has no Shift+drag or lasso either.
    */
   const keyHint = useMediaQuery("(pointer: fine)");
+  const isWide = useMediaQuery(WIDE_QUERY);
+  // The filter box that mounts next takes the focus: back from Go to, or
+  // in the sheet that "/" opened below `lg`. The box that takes it clears
+  // the ask. The sheet's box mounts a render later than the sheet.
+  const [focusFilter, setFocusFilter] = useState(false);
+  // The facet suggestions show under the box that has the focus, and only
+  // there: open under a box that had lost it, they took Enter from a pin.
+  const [suggestIn, setSuggestIn] = useState<"bar" | "sheet" | null>(null);
 
   // `ActionMenu` owns the Select menu. This mirrors its open state so the
   // trigger keeps its active look while the menu is open.
@@ -129,23 +159,58 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
 
   const selectItems: ActionMenuItem[] = [
     {
-      id: "box",
-      label: "Box select",
-      hint: "Shift+drag",
-      onSelect: () => toast.info("Hold Shift and drag on the map to select"),
-    },
-    {
-      id: "lasso",
-      label: "Lasso select",
-      hint: "L",
-      onSelect: () => onStartLasso?.(),
-    },
-    {
       id: "in-view",
       label: "All in view",
       onSelect: () => onSelectInView?.(),
     },
+    ...(keyHint
+      ? [
+          {
+            id: "box",
+            label: "Box select",
+            hint: "Shift+drag",
+            onSelect: () =>
+              toast.info("Hold Shift and drag over the pins", {
+                description: "Or move the map to them and choose All in view",
+              }),
+          },
+          {
+            id: "lasso",
+            label: "Lasso select",
+            hint: "L",
+            onSelect: () => onStartLasso?.(),
+          },
+        ]
+      : []),
   ];
+
+  /** Back to the filter box, with the focus in it. */
+  const leaveGoto = useCallback(() => {
+    setMode("filter");
+    setGotoError(null);
+    setFocusFilter(true);
+  }, []);
+
+  // With a contact open, the toolbar keeps to the map the contact leaves.
+  const cramped = room !== null && room < MIN_OPEN_PX;
+  const roomWidth = room !== null ? room - 32 : null;
+  // Below `lg`, or beside an open contact, the filter box is in the sheet.
+  const barShows = isWide && !cramped;
+
+  useImperativeHandle(
+    handleRef,
+    () => ({
+      focusFilter: () => {
+        if (mode === "filter" && barShows) {
+          barInput.current?.focus();
+          return;
+        }
+        leaveGoto();
+        if (!barShows) setIsMobileSheetOpen(true);
+      },
+    }),
+    [barShows, leaveGoto, mode],
+  );
 
   // Go to place search
   const handleGoTo = useCallback(async () => {
@@ -171,8 +236,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
       }
       if (res.displayName) toast(`Showing ${res.displayName}`);
       setGotoQuery("");
-      setGotoError(null);
-      setMode("filter");
+      leaveGoto();
       setIsMobileSheetOpen(false);
     } catch (error) {
       // The server says which: nothing found, a busy geocoder, no server.
@@ -183,7 +247,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
     } finally {
       setGotoLoading(false);
     }
-  }, [map, gotoQuery]);
+  }, [map, gotoQuery, leaveGoto]);
 
   const renderToolbarContent = (isMobile = false) => (
     <div className="flex flex-col gap-2 w-full">
@@ -195,15 +259,35 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
           {mode === "filter" ? (
             <>
               <Search className="absolute left-3 w-4 h-4 text-on-surface-variant pointer-events-none" />
+              {/* Keyed: the two boxes share a place in the tree, and a
+                  shared input would never mount, so it would take no focus. */}
               <input
-                ref={isMobile ? undefined : inputRef}
+                key="filter"
+                ref={isMobile ? undefined : barInput}
                 type="text"
+                {...SEARCH_FIELD}
+                // Only when asked: back from Go to, or "/" in the sheet.
+                // eslint-disable-next-line jsx-a11y/no-autofocus
+                autoFocus={focusFilter}
                 value={filter.rawInput}
-                onChange={(e) => filter.setRawInput(e.target.value)}
+                onChange={(e) => {
+                  filter.setRawInput(e.target.value);
+                  setSuggestIn(isMobile ? "sheet" : "bar");
+                }}
+                onFocus={() => {
+                  setSuggestIn(isMobile ? "sheet" : "bar");
+                  setFocusFilter(false);
+                }}
+                onBlur={() => setSuggestIn(null)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     e.preventDefault();
                     filter.commit();
+                  } else if (e.key === "Escape" && filter.rawInput) {
+                    // Escape clears the box, as every search box does, and
+                    // leaves an open contact open.
+                    e.preventDefault();
+                    filter.setRawInput("");
                   }
                 }}
                 placeholder={
@@ -227,7 +311,13 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
             <>
               <MapPin className="absolute left-3 w-4 h-4 text-primary pointer-events-none" />
               <input
+                key="goto"
                 type="text"
+                {...SEARCH_FIELD}
+                // It mounts when a person asks for it, so it takes the
+                // focus: the toggle kept it, and typing went nowhere.
+                // eslint-disable-next-line jsx-a11y/no-autofocus
+                autoFocus
                 value={gotoQuery}
                 onChange={(e) => {
                   setGotoQuery(e.target.value);
@@ -238,7 +328,8 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
                     e.preventDefault();
                     handleGoTo();
                   } else if (e.key === "Escape") {
-                    setMode("filter");
+                    e.preventDefault();
+                    leaveGoto();
                   }
                 }}
                 placeholder="Go to place… (e.g. London)"
@@ -270,12 +361,8 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
         <button
           type="button"
           onClick={() => {
-            if (mode === "goto") {
-              setMode("filter");
-              setGotoError(null);
-            } else {
-              setMode("goto");
-            }
+            if (mode === "goto") leaveGoto();
+            else setMode("goto");
           }}
           aria-label={mode === "goto" ? "Back to filters" : "Go to place"}
           aria-pressed={mode === "goto"}
@@ -351,17 +438,19 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
         </div>
       )}
 
-      {/* Autocomplete Dropdown */}
-      {mode === "filter" && filter.parsed.activePrefix && (
-        <div className="relative w-full z-20">
-          <FacetAutocomplete
-            field={filter.parsed.activePrefix.field}
-            partial={filter.parsed.activePrefix.partial}
-            onSelect={filter.addFacet}
-            onDismiss={() => {}}
-          />
-        </div>
-      )}
+      {/* Autocomplete Dropdown, under the box that has the focus */}
+      {mode === "filter" &&
+        filter.parsed.activePrefix &&
+        suggestIn === (isMobile ? "sheet" : "bar") && (
+          <div className="relative w-full z-20">
+            <FacetAutocomplete
+              field={filter.parsed.activePrefix.field}
+              partial={filter.parsed.activePrefix.partial}
+              onSelect={filter.addFacet}
+              onDismiss={() => setSuggestIn(null)}
+            />
+          </div>
+        )}
 
       {/* 0 of N match empty state. Clear all is beside the pills. */}
       {filter.hasActiveFilter && filter.matchCount === 0 && (
@@ -473,10 +562,6 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
       )}
     </div>
   );
-
-  // With a contact open, the toolbar keeps to the map the contact leaves.
-  const cramped = room !== null && room < MIN_OPEN_PX;
-  const roomWidth = room !== null ? room - 32 : null;
 
   return (
     <>

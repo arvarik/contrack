@@ -4,7 +4,7 @@ import {
   refreshContact,
 } from "./contactCache";
 import { apiJson, jsonBody } from "./client";
-import { listRoutes } from "../../shared/contracts/lists";
+import { listRoutes, type ListMember } from "../../shared/contracts/lists";
 /**
  * List Management API Hooks — React Query hooks for contact lists.
  *
@@ -74,24 +74,35 @@ export const useUpdateList = () => {
 export const useListContacts = (listId: string | null) => {
   return useQuery({
     queryKey: ["list-contacts", listId],
-    queryFn: async ({ signal }): Promise<Contact[]> =>
-      (await apiJson(listRoutes.contacts, `/lists/${listId}/contacts`, {
-        signal,
-      })) as Contact[],
+    queryFn: ({ signal }): Promise<ListMember[]> =>
+      apiJson(listRoutes.contacts, `/lists/${listId}/contacts`, { signal }),
     enabled: !!listId,
     staleTime: STALE_TIMES.listContacts,
   });
 };
 
+/** New order at once, from a drag or Move up and Move down. A failure puts it back. */
 export const useReorderLists = () => {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (orderedIds: string[]) =>
       apiJson(listRoutes.reorder, `/lists/reorder`, jsonBody({ orderedIds })),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["lists"] });
-      queryClient.invalidateQueries({ queryKey: ["list-contacts"] });
+    onMutate: async (orderedIds) => {
+      await queryClient.cancelQueries({ queryKey: ["lists"] });
+      const before = queryClient.getQueryData<ContactList[]>(["lists"]);
+      if (before) {
+        const byId = new Map(before.map((l) => [l.id, l]));
+        queryClient.setQueryData(
+          ["lists"],
+          orderedIds.flatMap((id) => byId.get(id) ?? []),
+        );
+      }
+      return before;
     },
+    onError: (_error, _ids, before) => {
+      if (before) queryClient.setQueryData(["lists"], before);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["lists"] }),
   });
 };
 

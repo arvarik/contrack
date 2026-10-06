@@ -12,9 +12,10 @@
  * open part. When the contact closes, {@link settlePadding} eases the
  * padding away and the pin glides to the centre of the whole map.
  *
- * Every animation asks one question first. A person who set "reduce motion"
- * in their system asked for no animation, so for them the same move happens
- * with `jumpTo`, at the same end position. See WCAG 2.3.3.
+ * Every animation asks one question first. A person who chose Reduced in
+ * the Motion setting, or "reduce motion" in their system, asked for no
+ * animation, so for them the same move happens with `jumpTo`, at the same end
+ * position. See WCAG 2.3.3.
  *
  * @module views/map/flyTo
  */
@@ -57,10 +58,21 @@ export interface MovableMap {
   jumpTo: (options: CameraMove) => void;
 }
 
-/** True when this person asked their system for less animation. */
-export const prefersReducedMotion = (): boolean =>
-  typeof window !== "undefined" &&
-  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+/**
+ * True when this person asked for less animation: Reduced in the Motion
+ * setting (`data-motion` on the root, PreferencesContext), or their system.
+ */
+export function prefersReducedMotion(): boolean {
+  if (typeof window === "undefined") return false;
+  const setting =
+    typeof document === "undefined"
+      ? null
+      : document.documentElement.getAttribute("data-motion");
+  return (
+    setting === "reduced" ||
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
+  );
+}
 
 interface MoveOptions {
   /**

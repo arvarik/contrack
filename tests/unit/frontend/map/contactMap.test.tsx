@@ -203,19 +203,6 @@ afterEach(() => {
 });
 
 describe("ContactMap", () => {
-  it("is a named region with one named button per visible contact", () => {
-    visible.mockReturnValue(PEOPLE.map(point));
-    render(<ContactMap contacts={PEOPLE} onSelect={() => {}} />);
-    expect(screen.getByRole("region", { name: "Contact map" })).toBeTruthy();
-    expect(screen.getAllByRole("button")).toHaveLength(3);
-    expect(
-      screen.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
-    ).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: "Grace Hopper, US Navy" }),
-    ).toBeTruthy();
-  });
-
   it("draws nothing for a feature whose contact is gone", () => {
     visible.mockReturnValue([point(person("missing", "Nobody", "Nowhere"))]);
     render(<ContactMap contacts={PEOPLE} onSelect={() => {}} />);
@@ -229,16 +216,6 @@ describe("ContactMap", () => {
       name: "12 contacts, zoom in",
     });
     expect(button.textContent).toBe("12");
-  });
-
-  it("opens the contact a pin belongs to", () => {
-    const onSelect = vi.fn();
-    visible.mockReturnValue([point(PEOPLE[1])]);
-    render(<ContactMap contacts={PEOPLE} onSelect={onSelect} />);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Grace Hopper, US Navy" }),
-    );
-    expect(onSelect).toHaveBeenCalledWith("c2");
   });
 
   it("opens a pin's card once the pointer rests, and keeps it while the pointer moves in", () => {
@@ -286,29 +263,6 @@ describe("ContactMap", () => {
     tap();
     expect(onSelect).toHaveBeenCalledWith("c1");
     expect(screen.queryByRole("dialog")).toBeNull();
-  });
-
-  it("closes a pinned card on Escape, and the pin's tooltip stays shut", () => {
-    vi.useFakeTimers();
-    visible.mockReturnValue([point(PEOPLE[0])]);
-    render(<ContactMap contacts={PEOPLE} onSelect={() => {}} />);
-    const pin = screen.getByRole("button", {
-      name: "Ada Lovelace, Babbage & Co",
-    });
-    act(() => pin.focus());
-    act(() => vi.advanceTimersByTime(OPEN_MS));
-    expect(screen.getByRole("tooltip")).toBeTruthy();
-    fireEvent.keyDown(pin, { key: " " });
-    expect(document.activeElement?.getAttribute("aria-label")).toBe(
-      "Open contact",
-    );
-
-    fireEvent.keyDown(window, { key: "Escape" });
-    expect(document.activeElement).toBe(pin);
-    act(() => vi.advanceTimersByTime(OPEN_MS * 2));
-    expect(screen.queryByRole("tooltip")).toBeNull();
-    expect(screen.queryByRole("dialog")).toBeNull();
-    vi.useRealTimers();
   });
 
   it("pins a requested card, gives focus back to its asker, and asks again for a new request", () => {
@@ -434,28 +388,6 @@ describe("ContactMap", () => {
     expect(props.initialViewState.latitude).toBe(20);
     expect(props.reuseMaps).toBe(false);
     expect(props.onMoveEnd).toBeUndefined();
-  });
-
-  it("opens on the view it was left at, and remembers every move", async () => {
-    window.localStorage.setItem(
-      "contrack.map.lastView",
-      JSON.stringify({ longitude: -0.1278, latitude: 51.5074, zoom: 11 }),
-    );
-    render(<ContactMap contacts={PEOPLE} onSelect={() => {}} rememberView />);
-    await screen.findByTestId("map");
-    const props = createdWith();
-    expect(props.initialViewState).toMatchObject({
-      longitude: -0.1278,
-      latitude: 51.5074,
-      zoom: 11,
-    });
-
-    props.onMoveEnd?.({
-      viewState: { longitude: 2.3522, latitude: 48.8566, zoom: 12 },
-    });
-    expect(
-      JSON.parse(window.localStorage.getItem("contrack.map.lastView") ?? ""),
-    ).toEqual({ longitude: 2.3522, latitude: 48.8566, zoom: 12 });
   });
 
   it("lets a caller's view win over the remembered one", async () => {

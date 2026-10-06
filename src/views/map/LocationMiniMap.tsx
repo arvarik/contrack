@@ -25,9 +25,20 @@
  *    it has loaded, and then the map fades up through it. Nothing in between
  *    is shown: not the empty canvas, not the tiles painting in.
  *
+ * "Open in map" opens the contact beside the map where there is room for
+ * both. On a phone or a tablet the contact would cover the whole map, so it
+ * shows the pin and its card on the map instead.
+ *
  * @module views/map/LocationMiniMap
  */
-import { Suspense, lazy, useCallback, useEffect, useState } from "react";
+import {
+  Suspense,
+  lazy,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { Link, useMatch, useNavigate } from "react-router-dom";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { Hand } from "lucide-react";
@@ -39,7 +50,9 @@ import {
 import { Badge } from "../../components/ui/Badge";
 import { InfoTip } from "../../components/ui/InfoTip";
 import { cn } from "../../lib/utils";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { CONTACT_ZOOM } from "./mapMath";
+import { SIDE_BY_SIDE_QUERY } from "./insets";
 
 const ContactMap = lazy(() =>
   import("./ContactMap").then((m) => ({ default: m.ContactMap })),
@@ -76,7 +89,7 @@ const CAPTION_ROW = "flex flex-wrap items-center gap-x-3 gap-y-1 text-xs";
  * it is on a pointer.
  */
 const CAPTION_ACTION =
-  "inline-flex items-center min-h-[44px] sm:min-h-0 font-bold text-primary underline hover:text-on-surface transition-colors";
+  "inline-flex items-center min-h-[44px] sm:pointer-fine:min-h-0 font-bold text-primary underline hover:text-on-surface transition-colors";
 
 /**
  * How long one pin must hold still before its map is built, in ms.
@@ -104,8 +117,17 @@ export const LocationMiniMap = ({
 }: LocationMiniMapProps) => {
   const navigate = useNavigate();
   const placed = isValidLatLng(contact.lat, contact.lng);
-  const mapHref = `/map/contact/${contact.id}`;
-  const openInMap = useCallback(() => navigate(mapHref), [navigate, mapHref]);
+  // Beside the map where both fit, else the pin and its card on the map.
+  const sideBySide = useMediaQuery(SIDE_BY_SIDE_QUERY);
+  const mapHref = sideBySide ? `/map/contact/${contact.id}` : "/map";
+  const mapState = useMemo(
+    () => (sideBySide ? undefined : { pin: contact.id }),
+    [sideBySide, contact.id],
+  );
+  const openInMap = useCallback(
+    () => navigate(mapHref, { state: mapState }),
+    [navigate, mapHref, mapState],
+  );
   const [adjusting, setAdjusting] = useState(false);
   const openAdjust = useCallback(() => setAdjusting(true), []);
   const closeAdjust = useCallback(() => setAdjusting(false), []);
@@ -215,7 +237,7 @@ export const LocationMiniMap = ({
       )}
       <div className={CAPTION_ROW}>
         {!overTheMap && (
-          <Link to={mapHref} className={CAPTION_ACTION}>
+          <Link to={mapHref} state={mapState} className={CAPTION_ACTION}>
             Open in map
           </Link>
         )}

@@ -88,12 +88,25 @@ afterEach(() => {
 });
 
 describe("LocationMiniMap", () => {
-  it("draws the contact's pin and a way to the map page", async () => {
-    draw(ADA, true);
-    expect(await screen.findByTestId("contact-map")).toBeTruthy();
-    const link = screen.getByRole("link", { name: "Open in map" });
-    expect(link.getAttribute("href")).toBe("/map/contact/c1");
-  });
+  // Where the contact would cover the whole map, the link shows the pin.
+  it.each([
+    [true, "/map/contact/c1"],
+    [false, "/map"],
+  ])(
+    "draws the contact's pin and a way to the map (room beside it: %s)",
+    async (roomy, href) => {
+      vi.stubGlobal("matchMedia", (query: string) => ({
+        matches: roomy && query.includes("min-width"),
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      }));
+      draw(ADA, true);
+      expect(await screen.findByTestId("contact-map")).toBeTruthy();
+      const link = screen.getByRole("link", { name: "Open in map" });
+      expect(link.getAttribute("href")).toBe(href);
+      vi.unstubAllGlobals();
+    },
+  );
 
   it("opens the map on the contact, still, and with no card", async () => {
     draw(ADA, true);

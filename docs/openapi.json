@@ -3937,7 +3937,7 @@
     },
     "/api/lists/{id}/contacts": {
       "get": {
-        "summary": "The contacts in a list, newest first",
+        "summary": "Who is in a list, newest first: each member's name, photo, role and company",
         "parameters": [
           {
             "name": "id",
@@ -3953,7 +3953,7 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "$ref": "#/components/schemas/Contact" }
+                  "items": { "$ref": "#/components/schemas/ListMember" }
                 }
               }
             }
@@ -5101,6 +5101,18 @@
           "ownerId",
           "memberCount"
         ],
+        "additionalProperties": false
+      },
+      "ListMember": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "avatarUrl": { "type": ["string", "null"] },
+          "role": { "type": ["string", "null"] },
+          "company": { "type": ["string", "null"] }
+        },
+        "required": ["id", "name", "avatarUrl", "role", "company"],
         "additionalProperties": false
       },
       "MapContact": {

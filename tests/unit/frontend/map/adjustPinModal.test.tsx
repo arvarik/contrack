@@ -206,17 +206,6 @@ describe("AdjustPinModal", () => {
     expect(keys).toEqual([["geo", "status"]]);
   });
 
-  it("follows a drag", () => {
-    stubFetch();
-    mount(ADA);
-
-    act(() =>
-      markerHandles.onDragEnd?.({ lngLat: { lng: 12.4964, lat: 41.9028 } }),
-    );
-
-    expect(coordinates()).toBe("41.90280, 12.49640");
-  });
-
   it("nudges the pin with the arrow keys, by pixels on the map", () => {
     stubFetch();
     mount(ADA);

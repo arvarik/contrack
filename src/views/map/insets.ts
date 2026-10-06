@@ -32,6 +32,14 @@ export interface Insets {
  */
 export const MIN_OPEN_PX = 240;
 
+/**
+ * The narrowest window where an open contact leaves {@link MIN_OPEN_PX} of
+ * map beside it: the 64 px rail, the contact's 860 px from `lg` (App.tsx)
+ * and 240 px. Below it the contact covers the map, so "Open in map" shows
+ * the pin and its card instead (`LocationMiniMap`).
+ */
+export const SIDE_BY_SIDE_QUERY = "(min-width: 1164px)";
+
 const cover = (covered: number, size: number): number => {
   const overlap = Math.min(Math.max(covered, 0), size);
   return size - overlap >= MIN_OPEN_PX ? overlap : 0;

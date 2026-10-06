@@ -8,7 +8,6 @@
 import { z } from "zod";
 import { route } from "./route.ts";
 import { idsSchema, INTERNAL, okSchema } from "./common.ts";
-import { contactSchema } from "./contacts.ts";
 
 // =============================================================================
 // Request bodies
@@ -46,6 +45,17 @@ const listSchema = z
     memberCount: z.number().int(),
   })
   .meta({ id: "List" });
+
+/** A member as the Lists page shows one: the name, photo, role and company. */
+const listMemberSchema = z
+  .strictObject({
+    id: z.string(),
+    name: z.string(),
+    avatarUrl: z.string().nullable(),
+    role: z.string().nullable(),
+    company: z.string().nullable(),
+  })
+  .meta({ id: "ListMember" });
 
 // =============================================================================
 // Routes
@@ -85,8 +95,9 @@ export const listRoutes = {
   contacts: route({
     method: "GET",
     path: "/api/lists/:id/contacts",
-    summary: "The contacts in a list, newest first",
-    response: z.array(contactSchema),
+    summary:
+      "Who is in a list, newest first: each member's name, photo, role and company",
+    response: z.array(listMemberSchema),
   }),
   delete: route({
     method: "DELETE",
@@ -124,3 +135,4 @@ export const listRoutes = {
 };
 
 export type ContactList = z.infer<typeof listSchema>;
+export type ListMember = z.infer<typeof listMemberSchema>;

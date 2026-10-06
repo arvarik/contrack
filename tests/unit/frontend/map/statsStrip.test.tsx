@@ -21,7 +21,7 @@ describe("StatsStrip", () => {
         onOverdueOnlyChange={vi.fn()}
       />,
     );
-    expect(line().textContent).toContain("30 in view");
+    expect(line().textContent).toContain("30 on the map");
     rerender(
       <StatsStrip
         stats={{ inView: 12, matching: 30, overdue: 0 }}
@@ -29,7 +29,7 @@ describe("StatsStrip", () => {
         onOverdueOnlyChange={vi.fn()}
       />,
     );
-    expect(line().textContent).toContain("12 of 30 in view");
+    expect(line().textContent).toContain("12 in view, of 30 on the map");
     // Nothing to press when nobody in view is overdue.
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });

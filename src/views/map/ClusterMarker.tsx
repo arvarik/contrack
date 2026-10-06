@@ -73,6 +73,7 @@ export const ClusterMarker = memo(function ClusterMarker({
             .filter(Boolean)
             .join(" ") || undefined
         }
+        data-cluster-key={cluster.key}
         data-halo={halo || undefined}
         data-dimmed={dimmed || undefined}
         onClick={() => onExpand(cluster)}

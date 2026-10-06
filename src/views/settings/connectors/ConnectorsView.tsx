@@ -37,6 +37,17 @@ import type {
   ConnectorSummary,
 } from "../../../../shared/connectors";
 
+/**
+ * What a Google sign-in that did not finish says, by the reason the server
+ * puts in the address (`?error=`, server/routes/connectors.ts).
+ */
+const GOOGLE_FAILURES: Record<string, string> = {
+  denied: "Could not connect Google: access was not given",
+  expired: "Could not connect Google: the sign-in expired. Start it again",
+  "not-configured":
+    "Could not connect Google: sign-in with Google is not set up on this server",
+};
+
 export const ConnectorsView: React.FC = () => {
   const { data: connectors, isLoading, isError, refetch } = useConnectors();
   const { data: kinds } = useConnectorKinds();
@@ -68,7 +79,9 @@ export const ConnectorsView: React.FC = () => {
         { replace: true },
       );
     } else if (error) {
-      toast.error(`Google connection failed: ${error}`);
+      toast.error(
+        GOOGLE_FAILURES[error] ?? "Could not connect Google. Try again",
+      );
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);

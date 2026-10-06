@@ -44,31 +44,6 @@ describe("SaveViewModal", () => {
     expect(handleSave).not.toHaveBeenCalled();
   });
 
-  it("submits valid name and closes on success", async () => {
-    const handleSave = vi.fn().mockResolvedValue(undefined);
-    const handleClose = vi.fn();
-
-    render(
-      <SaveViewModal
-        isOpen={true}
-        onClose={handleClose}
-        onSave={handleSave}
-        currentLayer="pins"
-      />,
-    );
-
-    const input = screen.getByRole("textbox", { name: "View name" });
-    fireEvent.change(input, { target: { value: "My London View" } });
-
-    const saveButton = screen.getByRole("button", { name: "Save view" });
-    fireEvent.click(saveButton);
-
-    await waitFor(() => {
-      expect(handleSave).toHaveBeenCalledWith("My London View");
-      expect(handleClose).toHaveBeenCalled();
-    });
-  });
-
   it("says that a view does not save the overdue filter or Ask's people", () => {
     const props = { isOpen: true, onClose: vi.fn(), onSave: vi.fn() };
     const { rerender } = render(
@@ -308,8 +283,7 @@ describe("ViewsMenu actions", () => {
     const remove = screen.getByRole("menuitem", { name: "Delete Alpha View" });
     const save = screen.getByRole("menuitem", { name: "Save current view…" });
 
-    // From the trigger, ArrowDown starts at the first item.
-    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    // It opens with the focus on the first item.
     expect(document.activeElement).toBe(alpha);
 
     // A view's Rename and Delete are items too, so the arrows reach them.

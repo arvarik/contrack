@@ -700,7 +700,7 @@ there is none. `null` completes the open follow-ups.
 | `PATCH /api/lists/:id`                     | Change `name` or `icon`.                                                          | your data |
 | `DELETE /api/lists/:id`                    | Delete a list. Its contacts stay. A list that is already gone also answers `200`. | your data |
 | `PUT /api/lists/reorder`                   | Set the order: `{ orderedIds }`.                                                  | your data |
-| `GET /api/lists/:id/contacts`              | The list's contacts, without archived, trashed, merged or ghost contacts.         | your data |
+| `GET /api/lists/:id/contacts`              | Each member's name, photo, role and company, without archived or trashed ones.    | your data |
 | `POST /api/lists/:id/members`              | Add one contact: `{ contactId }`.                                                 | your data |
 | `DELETE /api/lists/:id/members/:contactId` | Remove one contact from the list.                                                 | your data |
 | `POST /api/lists/:id/members/bulk`         | Add many contacts: `{ contactIds }`. Answers `{ success, count }`.                | your data |
