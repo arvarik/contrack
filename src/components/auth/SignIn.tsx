@@ -15,7 +15,13 @@ import {
 } from "../../api/passkeys";
 import { isNetworkError } from "../../api/client";
 import { rateLimitMessage } from "../../lib/rateLimitMessage";
-import { AuthShell, AuthField, AuthSubmit, AuthError } from "./AuthShell";
+import {
+  AuthShell,
+  AuthField,
+  AuthSubmit,
+  AuthError,
+  touchFirst,
+} from "./AuthShell";
 import { PasskeyButton } from "./PasskeyButton";
 import { ForgotPassword } from "./ForgotPassword";
 import { requestMagicLink } from "../../api/authLinks";
@@ -83,7 +89,7 @@ export const SignIn = ({
   const autofillAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    if (savedIdentifier) {
+    if (savedIdentifier && !touchFirst()) {
       passwordRef.current?.focus();
     }
   }, [savedIdentifier]);
@@ -285,9 +291,10 @@ export const SignIn = ({
           spellCheck={false}
           required
           // The sign-in screen is the whole page and has one starting point.
-          // Focus password if prefilled; otherwise start on identifier.
+          // Focus password if prefilled; otherwise start on identifier. Not
+          // on a touch screen, where focus opens the keyboard.
           // eslint-disable-next-line jsx-a11y/no-autofocus
-          autoFocus={!savedIdentifier}
+          autoFocus={!savedIdentifier && !touchFirst()}
         />
         <AuthField
           ref={passwordRef}

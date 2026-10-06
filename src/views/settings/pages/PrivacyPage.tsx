@@ -92,7 +92,9 @@ export const PrivacyPage = () => {
       },
       onError: (err) => {
         toast.error(
-          err instanceof Error ? err.message : "Failed to clear search history",
+          err instanceof Error
+            ? err.message
+            : "Could not clear the search history",
         );
       },
     });
@@ -107,8 +109,8 @@ export const PrivacyPage = () => {
             title="Use AI"
             description={
               <>
-                Off sends nothing to any AI provider. Search on this server
-                still works
+                Off sends nothing to any AI provider. Search on the server still
+                works
                 {instanceAi?.lockedByEnv && (
                   <span className="block mt-1 font-medium text-on-surface">
                     Set by <code className="font-mono">AI_DISABLED</code>
@@ -189,7 +191,7 @@ export const PrivacyPage = () => {
 
       <section aria-labelledby="privacy-local">
         <h2 id="privacy-local" className={SETTINGS_SECTION_HEADING}>
-          What stays on this machine
+          What stays on the server
         </h2>
         <div className={cn(SETTINGS_CARD, "space-y-4")}>
           <p className="text-sm text-on-surface-variant text-pretty">
@@ -198,7 +200,7 @@ export const PrivacyPage = () => {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Fact icon={ShieldCheck} title="Search runs here">
-              Full-text search and search by meaning run on this server, with no
+              Full-text search and search by meaning run on the server, with no
               call to anyone else
             </Fact>
             <Fact
@@ -234,7 +236,7 @@ export const PrivacyPage = () => {
                   to="/settings/admin/ai"
                   className="font-semibold text-primary hover:underline"
                 >
-                  Change them in Administration → AI
+                  Change them in Settings → Administration → AI
                 </Link>
               </>
             ) : (

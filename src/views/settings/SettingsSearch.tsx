@@ -84,6 +84,9 @@ export const SettingsSearch = ({
           onKeyDown={handleKeyDown}
           placeholder="Search settings"
           aria-label="Search settings"
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
           className={cn(
             "w-full pl-10 pr-9 py-2.5 rounded-xl min-h-[44px] bg-surface-container-highest text-on-surface placeholder:text-on-surface-variant",
             // The clear button below is the one clear control; the
@@ -134,7 +137,7 @@ export const SettingsSearch = ({
                         key={hit.path}
                         to={hit.path}
                         onClick={picked}
-                        className="state-layer flex items-center px-3 py-2 rounded-xl text-on-surface font-semibold transition-colors min-h-[44px] sm:min-h-0"
+                        className="state-layer flex items-center px-3 py-2 rounded-xl text-on-surface font-semibold transition-colors min-h-[44px] sm:pointer-fine:min-h-0"
                       >
                         <span className="truncate">{hit.label}</span>
                       </SlideLink>

@@ -87,7 +87,7 @@ export const ResetPassword = ({
       title="Choose a new password"
       subtitle="Enter a new password for your Contrack account"
       onSubmit={handleSubmit}
-      footer="Once you set a new password, all other active sessions will be signed out"
+      footer="A new password signs you out everywhere else, and every API token and MCP app you connected stops working"
     >
       <div className="space-y-4">
         <AuthField

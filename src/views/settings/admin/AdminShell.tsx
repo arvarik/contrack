@@ -226,7 +226,7 @@ const ROLES: readonly Choice<UserRole>[] = [
   {
     value: "admin",
     label: "Admin",
-    hint: "Also manages accounts, instance settings and AI configuration",
+    hint: "Also manages accounts and every page under Administration",
   },
 ];
 

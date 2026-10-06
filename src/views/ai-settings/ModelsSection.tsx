@@ -61,7 +61,7 @@ export function ModelsSection({ settings }: { settings: AISettings }) {
           id="embedding-model"
           capability="embeddings"
           title="Embedding model"
-          summary="Turns each contact into numbers, to compare people by meaning. The built-in model runs on this server, free and offline. A hosted one gets every contact's profile text"
+          summary="Turns each contact into numbers, to compare people by meaning. The built-in model runs on the server, free and offline. A hosted one gets every contact's profile text"
           usedBy={featuresUsing("embedding")}
           state={capabilities.embeddings}
           autoLabel="Built-in (recommended)"
@@ -93,7 +93,7 @@ function RerankerRow({ reranker }: { reranker: AISettings["reranker"] }) {
     >
       <h3 className="text-sm font-bold text-on-surface">Reranker</h3>
       <p className="text-xs sm:text-sm text-on-surface-variant mt-0.5 text-pretty">
-        Puts Ask Contrack's best matches first. It runs on this server
+        Puts Ask Contrack's best matches first. It runs on the server
       </p>
       <p className="text-xs text-on-surface-variant mt-0.5">
         Used by {featuresUsing("reranker").join(", ")}

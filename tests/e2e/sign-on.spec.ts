@@ -154,18 +154,23 @@ test("passkey sign-on journey: setup, nudge, passkey sign-in, account settings, 
   });
   await expect(forgotBtn).toBeVisible();
   await forgotBtn.click();
+  // The button that had focus is gone, so the new title takes it.
   await expect(
     page.getByRole("heading", { name: "Reset your password" }),
-  ).toBeVisible();
+  ).toBeFocused();
   await expect(
-    page.getByText("This Contrack cannot send email", { exact: true }),
+    page.getByText(
+      "This Contrack cannot send email, so an admin resets it for you",
+    ),
   ).toBeVisible();
-  // The image ships node and the script. It has no tsx.
+  // The server command waits behind "I run this server". The image ships
+  // node and the script. It has no tsx.
+  await page.getByText("I run this server").click();
   await expect(
     page.getByText("node scripts/reset-password.ts <username>"),
   ).toBeVisible();
   await expectPageAccessible(page, testInfo, "forgot-password-panel");
-  await page.getByRole("button", { name: "Back to sign in" }).first().click();
+  await page.getByRole("button", { name: "Back to sign in" }).click();
   await expect(
     page.getByRole("heading", { name: "Welcome back" }),
   ).toBeVisible();

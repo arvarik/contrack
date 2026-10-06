@@ -26,7 +26,13 @@
  *
  * That pair is the app's one way of showing a value that is off its default.
  */
-import React, { useEffect, useRef, useState } from "react";
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useLocation } from "react-router-dom";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import type { Preferences } from "../../api/preferences";
@@ -52,6 +58,20 @@ interface SettingRowProps {
 }
 
 const CHANGED_LABEL = "Changed from the default";
+
+/**
+ * The level of a row's title. A row straight under the page's h1 is an h2,
+ * so headings never skip a level. A section with its own h2 wraps its rows
+ * in `RowsUnderHeading`, and they become h3.
+ */
+const RowHeading = createContext<"h2" | "h3">("h2");
+
+/** Rows under a section's h2: their titles are h3. */
+export const RowsUnderHeading = ({
+  children,
+}: {
+  children: React.ReactNode;
+}) => <RowHeading.Provider value="h3">{children}</RowHeading.Provider>;
 
 /**
  * The target of a settings search result: when the location's hash is `id`,
@@ -92,6 +112,7 @@ export const SettingRow = ({
   below = false,
 }: SettingRowProps) => {
   const { changed } = usePreferences();
+  const Heading = useContext(RowHeading);
   const { ref: rowRef, flashing } = useHashTarget<HTMLDivElement>(id);
   useResetScopeKey(prefKey, rowRef);
 
@@ -127,7 +148,9 @@ export const SettingRow = ({
       >
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="font-bold text-sm text-on-surface">{title}</h3>
+            <Heading className="font-bold text-sm text-on-surface">
+              {title}
+            </Heading>
             {isChanged && (
               <span
                 role="img"

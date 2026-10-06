@@ -17,14 +17,14 @@ interface SummaryBarProps {
 
 /**
  * The badge, shown only when it tells a reader something about their calls.
- * Mock mode means nothing reached a provider. The Gemini free tier means
+ * Simulated calls mean nothing reached a provider. The Gemini free tier means
  * Google may use the prompts, contacts' details included, to improve its
  * products, which is the one tier fact worth a warning.
  */
 function badgeFor(s: AIStatsSummary): { label: string; color: string } | null {
   if (s.tier === "MOCK")
     return {
-      label: "Mock mode",
+      label: "Simulated calls",
       color: "bg-warning/10 text-warning ring-warning/20",
     };
   if (s.freeTier)
@@ -41,10 +41,10 @@ function buildSummaryText(s: AIStatsSummary): string {
 
   const parts: string[] = [];
   parts.push(
-    `${session.totalInvocations} invocation${session.totalInvocations !== 1 ? "s" : ""}`,
+    `${session.totalInvocations} AI call${session.totalInvocations !== 1 ? "s" : ""}`,
   );
-  parts.push(`${session.freshCalls} fresh`);
-  parts.push(`${session.cachedCalls} cached`);
+  parts.push(`${session.freshCalls} new`);
+  parts.push(`${session.cachedCalls} reused`);
 
   if (session.totalTokens > 0) {
     parts.push(`${formatCompact(session.totalTokens)} tokens`);
@@ -52,7 +52,7 @@ function buildSummaryText(s: AIStatsSummary): string {
 
   // An estimate at list prices, so not on a free-tier key Google does not bill.
   if (tier === "LIVE" && !freeTier && session.estimatedCostUsd > 0) {
-    parts.push(`~$${session.estimatedCostUsd.toFixed(4)} est.`);
+    parts.push(`about $${session.estimatedCostUsd.toFixed(4)}`);
   }
 
   return parts.join(" · ");
@@ -114,7 +114,7 @@ export const SummaryBar = ({ summary, isLoading }: SummaryBarProps) => {
           </motion.div>
         ) : (
           <motion.div key="empty" className="text-on-surface-variant text-sm">
-            Unable to load AI usage data.
+            Could not load AI usage
           </motion.div>
         )}
       </AnimatePresence>

@@ -417,7 +417,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     path: "/settings/privacy",
     title: "Privacy and AI",
     description:
-      "Whether Contrack uses AI for you, and what stays on this machine",
+      "Whether Contrack uses AI for you, and what stays on the server",
     icon: Shield,
     group: "you",
     keywords: [
