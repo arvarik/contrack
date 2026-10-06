@@ -73,7 +73,9 @@ test("gives focus back to the list's row when its panel closes, and deletes a li
   });
   try {
     await page.goto("/settings/lists");
-    const row = page.getByRole("button", { name: /zz Lists to delete/ });
+    const row = page.locator("[data-list-row]:visible", {
+      hasText: "zz Lists to delete",
+    });
     await row.click();
     // The panel's X took the focus away with it: the row has it back.
     await page.getByRole("button", { name: "Close list" }).click();
@@ -90,8 +92,15 @@ test("gives focus back to the list's row when its panel closes, and deletes a li
     await remove.click();
     await dialog.getByRole("button", { name: "Delete list" }).click();
     await expect(row).toHaveCount(0);
-    // Focus lands on the lists, not on the page.
-    await expect(page.locator("[data-list-row]:visible").first()).toBeFocused();
+    // Focus lands in the lists (a row, or New list when none is left), not
+    // on the page.
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => !!document.activeElement?.closest("[data-list-pane]"),
+        ),
+      )
+      .toBe(true);
   } finally {
     await instance.api("DELETE", `/lists/${id}`).catch(() => {});
   }

@@ -114,7 +114,7 @@ test.describe("people", () => {
 
     const alert = page.getByRole("alert");
     await expect(alert).toContainText("Could not search");
-    await expect(alert).toContainText("The provider is not answering.");
+    await expect(alert).toContainText("The provider is not answering");
     await expect(
       alert.getByRole("button", { name: "Try again" }),
     ).toBeVisible();

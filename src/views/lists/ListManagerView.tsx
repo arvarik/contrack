@@ -9,7 +9,7 @@
  * A mouse reorders by drag. Each row's menu has Move up and Move down, for a
  * finger and for the keyboard, which a drag leaves out.
  */
-import React, { useState, useCallback } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowDown,
@@ -90,27 +90,54 @@ export const ListManagerView = () => {
   );
 
   /**
-   * Close the open list, and put focus on its row, or on the first row when
-   * it was deleted. The panel took the focus with it, and a keyboard was left
-   * on the page. Each layout draws the rows, so the visible one is chosen.
+   * Where focus goes once the open list has left the page: its row, or the
+   * first row after a delete, or the pane's first button (New list) when
+   * none is left. The panel took the focus with it, and a keyboard was left
+   * on the page. After a delete it waits for the refetch, so focus never
+   * lands on the deleted row, and for the panel's Delete dialog to finish
+   * its exit, because the dialog holds the focus until it is gone.
    */
-  const closeList = (focusId?: string) => {
-    setSelectedListId(null);
-    requestAnimationFrame(() => {
+  const pendingFocus = useRef<{ id?: string; gone?: string } | null>(null);
+  useEffect(() => {
+    const want = pendingFocus.current;
+    if (!want || selectedListId) return;
+    if (want.gone && lists.some((list) => list.id === want.gone)) return;
+    pendingFocus.current = null;
+    let frames = 60;
+    const attempt = () => {
+      if (document.querySelector('[role="dialog"]') && frames-- > 0) {
+        requestAnimationFrame(attempt);
+        return;
+      }
+      // Each layout draws the rows: the visible one is chosen.
+      const shown = (el: HTMLElement) => el.offsetParent !== null;
       const rows = Array.from(
         document.querySelectorAll<HTMLElement>("[data-list-row]"),
-      ).filter((row) => row.offsetParent !== null);
-      (rows.find((row) => row.dataset.listRow === focusId) ?? rows[0])?.focus();
-    });
+      ).filter(shown);
+      const pane = Array.from(
+        document.querySelectorAll<HTMLElement>("[data-list-pane]"),
+      ).find(shown);
+      (
+        rows.find((row) => row.dataset.listRow === want.id) ??
+        rows[0] ??
+        pane?.querySelector<HTMLElement>("button")
+      )?.focus();
+    };
+    requestAnimationFrame(attempt);
+  }, [lists, selectedListId]);
+
+  const closeList = (focusId?: string, goneId?: string) => {
+    pendingFocus.current = { id: focusId, gone: goneId };
+    setSelectedListId(null);
   };
 
   const handleListDeleted = (id: string) => {
-    if (selectedListId === id) closeList();
+    if (selectedListId === id) closeList(undefined, id);
   };
 
   // -- List panel (shared between mobile and desktop) -------------------------
   const ListPanel = (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div data-list-pane className="h-full flex flex-col overflow-hidden">
       {/* The count and New list, on the pane's own surface. No band and no
           title of its own: the shell's header above already says "Lists".
           On a phone the pane is the page and takes its gutter, so it lines
