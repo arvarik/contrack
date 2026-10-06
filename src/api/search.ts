@@ -1,8 +1,8 @@
+/** Search hooks validate streamed results and cancel obsolete requests. */
 import { z } from "zod";
 import { readNdjson } from "./ndjson";
 import type { FacetFilter } from "../../shared/searchFacets";
 import { apiFetch } from "./client";
-/** Search hooks validate streamed results and cancel obsolete requests. */
 import {
   queryOptions,
   useQuery,
@@ -31,24 +31,16 @@ export const useSearchContacts = (q: string, filters: FacetFilter[] = []) => {
       return res.json();
     },
     enabled: q.trim().length > 0,
-    // CRITICAL: keepPreviousData prevents the result list from emptying and
-    // re-filling on every debounced keystroke. Without this, each new query key
-    // starts with data=undefined → layout shift → results reappear. With it,
-    // the previous FTS5 results are held as placeholder while the new query
-    // resolves, creating a seamless "results refine" experience.
-    //
-    // The companion `isPlaceholderData` flag is available to consumers that
-    // want to visually dim stale placeholder results (e.g. opacity-70).
+    // Keeps the last results while the next query resolves, so the list does
+    // not empty and refill on each debounced keystroke.
     placeholderData: keepPreviousData,
   });
 };
 
 /**
- * Two-phase streaming semantic search hook.
- *
- * Leaving the component does not cancel a question. The Ask page reads this
- * hook from `SessionContext`, so its answer lands while the reader is on
- * another page, and the server keeps a finished answer in its cache.
+ * Two-phase streaming semantic search. Leaving the page does not cancel a
+ * question: Ask reads this hook from `SessionContext`, so the answer lands
+ * while the reader is elsewhere.
  */
 export const useSemanticSearch = () => {
   const [data, setData] = useState<SemanticSearchResult | null>(null);
@@ -59,10 +51,9 @@ export const useSemanticSearch = () => {
   const [error, setError] = useState<Error | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
   /**
-   * The question `mutate` was last given, or null when this hook has not
-   * asked one. Set before the request leaves, so a caller can tell "the same
-   * question, still being answered" apart from "a new question" without a
-   * ref of its own, and kept through an error, so Retry knows what to retry.
+   * The last question asked, or null. Set before the request leaves, so a
+   * caller can tell a question still being answered from a new one, and
+   * kept through an error, for Retry.
    */
   const [askedQuery, setAskedQuery] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -236,9 +227,7 @@ interface RefreshIndexResponse {
   missingCount?: number;
 }
 
-/**
- * Hook to inspect account-level semantic indexing coverage and queue status.
- */
+/** The account's semantic index coverage and queue. */
 export const useSearchCoverage = () => {
   return useQuery<SearchCoverage>({
     queryKey: ["search", "coverage"],
@@ -255,12 +244,9 @@ export const useSearchCoverage = () => {
 };
 
 /**
- * The account's pool of starter questions, for "Try asking" on Ask.
- *
- * The key sits under `contacts`, so every change that refreshes the contacts
- * (an import, a merge, a bulk edit) refreshes the pool too. The server keeps
- * the pool ready, so the request is a read from memory. The app fetches it
- * in an idle moment after it loads, and the Ask page opens with it in hand.
+ * The starter questions for "Try asking" on Ask. The key sits under
+ * `contacts`, so a change that refreshes the contacts refreshes the pool.
+ * The app fetches it in an idle moment after it loads.
  */
 export const starterQuestionsQuery = () =>
   queryOptions({
@@ -275,9 +261,7 @@ export const starterQuestionsQuery = () =>
 /** The starter question pool. See {@link starterQuestionsQuery}. */
 export const useStarterQuestions = () => useQuery(starterQuestionsQuery());
 
-/**
- * Hook to explicitly trigger indexing for missing or all contacts.
- */
+/** Indexes the missing contacts, or all of them. */
 export const useRefreshSearchIndex = () => {
   const queryClient = useQueryClient();
   return useMutation({
@@ -298,9 +282,7 @@ export const useRefreshSearchIndex = () => {
   });
 };
 
-// =============================================================================
-// Interaction search — notes with the date and the passage that matched
-// =============================================================================
+// Note search: notes with the date and the passage that matched
 
 /** The query-key prefix every note search shares, for invalidation. */
 export const INTERACTION_SEARCH_KEY = ["interactions", "search"] as const;
@@ -349,12 +331,8 @@ function interactionSearchQueryString(params: InteractionSearchParams): string {
 }
 
 /**
- * Search the notes.
- *
- * Enabled once there is something to search for: text, a period, a kind, or
- * a contact. The previous page is kept on screen while the next one loads,
- * for the same reason `useSearchContacts` keeps it: a list that empties and
- * refills on every keystroke is a list that jumps.
+ * Searches the notes, once there is text, a period, a kind or a contact to
+ * search for.
  */
 export const useInteractionSearch = (params: InteractionSearchParams) => {
   const active = Boolean(
@@ -374,10 +352,8 @@ export const useInteractionSearch = (params: InteractionSearchParams) => {
       return res.json();
     },
     enabled: active,
-    // The last answer stays on screen while the next one loads, so a new
-    // filter does not blank the page. With nothing to search for there is
-    // no next answer: the old one would stay on screen for good, and a
-    // cleared search showed the notes it had found.
+    // The last answer stays while the next loads, but not once there is
+    // nothing to search for, or a cleared search keeps its notes.
     placeholderData: (previous) => (active ? previous : undefined),
   });
 };

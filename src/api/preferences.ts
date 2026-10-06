@@ -1,14 +1,6 @@
 /**
- * Preferences API client.
- *
- * These settings used to be `localStorage` keys. They now live on the account,
- * so they follow it to another device and cannot be read by whoever signs in
- * next on the same browser.
- *
- * `apiJson` rather than a bare fetch: a 401 here means the same thing it means
- * anywhere else in the app and has to reach AuthGate.
- *
- * @module api/preferences
+ * The account's preferences. They live on the account, so they follow it to
+ * another device and stay hidden from the next person on the same browser.
  */
 import type { EngineChoice } from "../../shared/webSearchEngine";
 import { apiJson, jsonBody } from "./client";
@@ -68,24 +60,16 @@ export interface Preferences {
 export interface PreferencesResponse {
   preferences: Preferences;
   /**
-   * The keys this account has actually chosen.
-   *
-   * The difference between "the default, because nobody said" and "the
-   * default, because somebody chose it" is what makes the one-time migration
-   * out of localStorage safe: a key that is already stored is never
-   * overwritten by whatever the browser happens to be holding.
+   * The keys this account has chosen, which tells "the default, because
+   * nobody said" from "the default, because somebody chose it".
    */
   stored: (keyof Preferences)[];
 }
 
 /**
- * What the app uses when nobody has chosen.
- *
- * A copy of the server's defaults, because the app renders before the first
- * response arrives and a list that jumps from comfortable to compact a moment
- * after it paints is worse than one that waits.
- * `tests/unit/frontend/preferences/preferencesClient.test.ts` asserts this
- * object equals the server's, so the copy cannot drift.
+ * A copy of the server's defaults, for the render before the first answer.
+ * `tests/unit/frontend/preferences/preferencesClient.test.ts` holds it equal
+ * to the server's.
  */
 export const DEFAULT_PREFERENCES: Preferences = {
   theme: "system",
@@ -119,16 +103,9 @@ export const DEFAULT_PREFERENCES: Preferences = {
 };
 
 /**
- * Whether a value is the default for its key.
- *
- * A setting a person changed and then set back by hand is stored again, at
- * the default, so "stored" alone does not say "changed". Strings compare
- * without case, since an accent can arrive in either, and objects by their
- * JSON.
- *
- * @param key - The preference.
- * @param value - Its value now.
- * @returns True when the value is the default.
+ * Whether a value is the default for its key. "Stored" alone does not say
+ * "changed": a setting set back by hand is stored at the default. Strings
+ * compare without case (an accent arrives in either), objects by JSON.
  */
 export function isDefaultValue<K extends keyof Preferences>(
   key: K,

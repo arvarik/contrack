@@ -1,10 +1,7 @@
-// =============================================================================
 // Contracts: geo
-// =============================================================================
 // The account's contacts that have an address and no pin yet, and the
 // instance's address lookup switch. The place search and the map views are
-// still on the UNCONTRACTED list.
-// =============================================================================
+// on the UNCONTRACTED list.
 
 import { z } from "zod";
 import { route } from "./route.ts";

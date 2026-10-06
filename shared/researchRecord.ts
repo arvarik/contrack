@@ -1,6 +1,4 @@
-// =============================================================================
-// Contact research record — what enrichment read and what it added
-// =============================================================================
+// A contact's research record: what enrichment read and what it added.
 // Stored as JSON in `contacts.aiResearch`, written only by the enrichment
 // merge, and read by the dossier's Research card. One record per contact:
 //
@@ -13,13 +11,6 @@
 //                 marked "Not this person" can take back what it added
 //   rejectedSources  the pages of runs marked "Not this person", which later
 //                 runs leave out
-//
-// The dossier used to carry this as markdown inside `aiBackground`: the
-// sources as "Source 1", "Source 2" links to Google redirects, and a copy of
-// the about, career and education cards. Structured, the card can say where
-// each fact came from, and a second enrichment adds to the record instead of
-// being dropped because a dossier already existed.
-// =============================================================================
 
 import { z } from "zod";
 import { researchDepthSchema } from "./researchDepth.ts";
@@ -32,12 +23,9 @@ export const MAX_RESEARCH_SOURCES = 60;
 export const MAX_ADDED_ENTRIES = 150;
 
 /**
- * True for an absolute http or https address.
- *
- * The dossier renders every cited address as a link. The addresses come from
- * a provider's grounding metadata and from redirects it resolved, so nothing
- * but this check stands between a `javascript:` or `data:` address and an
- * anchor on the page.
+ * True for an absolute http or https address. The dossier links every cited
+ * address, which comes from a provider, so this check is all that keeps a
+ * `javascript:` or `data:` address out of an anchor.
  */
 function isWebUrl(value: string): boolean {
   if (!/^https?:\/\//i.test(value)) return false;
@@ -63,12 +51,8 @@ const researchSourceSchema = z.object({
 });
 
 /**
- * The record's sources, without any that do not parse.
- *
- * One page with a bad address must not cost the whole record: the dossier
- * would lose every run, and the next enrichment would start a fresh record
- * as if none had happened. A source is only an address and its title, so a
- * bad one is dropped and the rest stay.
+ * The record's sources, without any that do not parse. One bad address must
+ * not cost the whole record, so a bad source is dropped and the rest stay.
  */
 const researchSourcesSchema = z.preprocess(
   (value) =>
@@ -101,12 +85,6 @@ const researchAdditionSchema = z.object({
 });
 
 /**
- * One enrichment.
- *
- * `outcome` is what the person reads first: it added details, it read pages
- * but everything on them was already known, or no page matched the person.
- */
-/**
  * What a run spent: the web searches the provider reported, and the tokens
  * of every call, thinking included. Gemini does not always report the
  * searches of a pass that found nothing, so the count can be low.
@@ -118,10 +96,14 @@ const researchUsageSchema = z.object({
   outputTokens: z.number().int().nonnegative(),
 });
 
+/**
+ * One enrichment. `outcome` is what the person reads first: it added
+ * details, everything it read was already known, or no page matched.
+ */
 const researchRunSchema = z.object({
   at: z.string().max(40),
   models: z.array(z.string().max(120)).max(4),
-  /** Absent on runs recorded before there were two depths. */
+  /** Absent on older runs. */
   depth: researchDepthSchema.optional(),
   usage: researchUsageSchema.optional(),
   outcome: z.enum(["added", "nothing-new", "no-public-info"]),
@@ -166,9 +148,9 @@ export const researchRecordSchema = z.object({
   runs: z.array(researchRunSchema).max(MAX_RESEARCH_RUNS),
   sources: researchSourcesSchema,
   /**
-   * Every entry research added, newest last. One that the contact no longer
-   * has, the person removed, and research does not add it back. Absent on
-   * records written before it was kept.
+   * Every entry research added, newest last. One the contact lacks was
+   * removed by the person, and research does not add it back. Absent on
+   * older records.
    */
   addedEntries: z
     .array(researchAddedEntrySchema)
@@ -199,16 +181,9 @@ export type ResearchRecord = z.infer<typeof researchRecordSchema>;
 export type ResearchOutcome = ResearchRun["outcome"];
 
 /**
- * The record in a stored value, or null.
- *
- * The column is JSON text, and a value that does not parse or match is read
- * as no record rather than thrown on: the dossier still renders, and the next
- * enrichment writes a fresh record.
- *
- * A bad address is not a reason to lose the record. A source whose address
- * is not http or https is dropped, and a finding's bad address reads as
- * none. The enrichment merge writes through the same schema, so a bad
- * address from a new run is dropped the same way before it is stored.
+ * The record in a stored value, or null. A value that does not parse or
+ * match reads as no record, not an error. A bad source address is dropped
+ * and a finding's reads as none. The merge writes through the same schema.
  */
 export function parseResearchRecord(value: unknown): ResearchRecord | null {
   if (value == null || value === "") return null;
@@ -237,12 +212,10 @@ export function siteOf(url: string): string | null {
 }
 
 /**
- * The source a finding names, if any.
- *
- * The search pass names a site loosely: "finra.org" for a page on
- * brokercheck.finra.org, or "LinkedIn" for linkedin.com. A source matches
- * when its host is the named site, ends with it, or starts with its first
- * label.
+ * The source a finding names, if any. The search pass names a site loosely
+ * ("finra.org" for brokercheck.finra.org, "LinkedIn" for linkedin.com), so a
+ * source matches when its host is the site, ends with it, or starts with its
+ * first label.
  */
 export function sourceForSite(
   site: string | undefined,

@@ -1,28 +1,12 @@
 /**
- * PreferencesContext — the account's settings, and the theme they paint.
+ * The account's settings, and the theme they paint. They live on the
+ * account, not in `localStorage`, so they follow it to another device and
+ * two people on one browser do not share them.
  *
- * Everything in here used to be a `localStorage` key read directly by whichever
- * hook wanted it. That had two faults on a shared instance: a preference set on
- * a laptop never reached a phone, and `localStorage` is keyed by origin rather
- * than by account, so two people signing in and out of one browser shared every
- * value — including the search history, which is a list of the things somebody
- * looked for.
- *
- * So there is one fetch, one cache, and one writer. The provider is mounted
- * inside AuthGate's identity-keyed wrapper, which means signing in as somebody
- * else unmounts it and starts again rather than showing the previous account's
- * choices while the new ones load.
- *
- * ── Reading before the server answers ──────────────────────────────────────
- * `preferences` is the defaults until the fetch resolves, never `undefined`.
- * A hook that has to handle "not loaded yet" makes every call site handle it
- * too, and the honest answer for every one of these settings is the default.
- *
- * ── Writing ────────────────────────────────────────────────────────────────
- * Optimistic. A density toggle that waits for a round trip feels broken, and
- * the failure case is a preference that reverts — not lost data.
- *
- * @module contexts/PreferencesContext
+ * One fetch, one cache, one writer. The provider sits inside AuthGate's
+ * identity-keyed wrapper, so a new sign-in starts it again. `preferences` is
+ * the defaults until the fetch resolves, never `undefined`. Writes are
+ * optimistic: the worst case is a preference that reverts.
  */
 import {
   createContext,
@@ -99,11 +83,8 @@ const PreferencesContext = createContext<PreferencesContextValue>({
 });
 
 /**
- * The account's preferences and a way to change one.
- *
- * Safe to call anywhere inside the app. Outside the provider it answers with
- * the defaults and a setter that does nothing, which is what a test rendering
- * one component in isolation wants.
+ * The account's preferences and a way to change one. Outside the provider:
+ * the defaults and a setter that does nothing.
  */
 export const usePreferences = () => useContext(PreferencesContext);
 
@@ -113,18 +94,15 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   const { data, isSuccess } = useQuery({
     queryKey: QUERY_KEY,
     queryFn: fetchPreferences,
-    // The account is the only writer, and this provider is the only place that
-    // writes. Refetching on a window focus would replace an optimistic value
-    // with a stale one for no gain.
+    // This provider is the only writer, so a refetch on focus could only
+    // replace an optimistic value with a stale one.
     staleTime: Infinity,
     gcTime: Infinity,
   });
 
-  // Until the account answers, the theme and the accent come from whatever
-  // this browser last painted — which the boot script has already put on the
-  // screen. Starting from the defaults instead would repaint to light and back
-  // on every load, and would leave a browser that cannot reach the server
-  // showing the default rather than the choice.
+  // Until the account answers, the theme and the accent are what this
+  // browser last painted (the boot script's), so a load does not flash the
+  // defaults.
   const fallback = useMemo(() => {
     const cached = readThemeCache();
     return cached
@@ -164,8 +142,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       return { previous };
     },
     onError: (err, _patch, context) => {
-      // Put the old value back. The server refused or could not be reached, and
-      // a control left showing a choice that did not happen is a lie.
+      // The write failed: put the previous value back.
       if (context?.previous) {
         queryClient.setQueryData(QUERY_KEY, context.previous);
       }
@@ -235,25 +212,16 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     [setPreferences],
   );
 
-  // `mutate` is stable, the mutation object is not: a callback that closed
-  // over the object changed on every state of every reset, and with it the
-  // context value every consumer reads.
+  // `mutate` is stable. The mutation object is new on each state.
   const { mutate: resetMutate } = resetMutation;
   const resetPreference = useCallback(
     (key: keyof Preferences) => resetMutate(key),
     [resetMutate],
   );
 
-  // ── Painting it ──────────────────────────────────────────────────────────
-  // `mode` is derived, not stored. Keeping it in `useState` and setting it from
-  // the same effect that paints meant the attribute on <html> and the value
-  // consumers read landed in different commits — so a component that asks
-  // "which palette am I in" could be told "light" while the page was already
-  // dark. `useSyncExternalStore` subscribes to the machine's preference and
-  // gives every reader one answer per render.
-  //
-  // The subscription also does the job the old effect did: an operating system
-  // that switches at sunset moves the app with it.
+  // `mode` is derived, not stored, so the attribute on <html> and the value
+  // consumers read land in the same commit. The subscription also follows a
+  // system that switches palette at sunset.
   const systemPrefersDark = useSyncExternalStore(
     subscribeToColorScheme,
     getSystemPrefersDark,

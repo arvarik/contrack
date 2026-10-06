@@ -1,11 +1,8 @@
-// =============================================================================
 // Contracts: the read-only query routes
-// =============================================================================
 // The six REST routes in `server/routes/mcp.ts`, for an MCP client or a
-// script with a personal token. They answer plain rows and arrays, as they
-// always have. The JSON-RPC transport at /api/mcp has no contract: the MCP
-// SDK owns its protocol.
-// =============================================================================
+// script with a personal token. They answer plain rows and arrays. The
+// JSON-RPC transport at /api/mcp has no contract: the MCP SDK owns its
+// protocol.
 
 import { z } from "zod";
 import { route } from "./route.ts";
@@ -24,8 +21,8 @@ export const queryRoutes = {
     summary:
       "Contacts as raw rows, newest first. Trashed, merged and ghost contacts are left out",
     query: z.object({
-      // The cap holds for every value: a negative limit used to slip past it
-      // and read every row.
+      // The cap holds for every value, a negative limit included, or it
+      // would read every row.
       limit: queryInt(50, 1, 200).describe("1 to 200, 50 when absent"),
       offset: queryInt(0, 0, Number.MAX_SAFE_INTEGER).describe(
         "Rows to skip, 0 when absent",

@@ -58,11 +58,8 @@ export const listHistoryQuerySchema = z.object({
 });
 
 /**
- * Normalize a query for indexing and history deduplication:
- * - Lowercase
- * - Trim leading/trailing whitespace
- * - Collapse consecutive whitespace to a single space
- * - Strip a leading "? " (e.g. palette AI search prefix)
+ * A query for indexing and history deduplication: lower case, trimmed, runs
+ * of whitespace as one space, and no leading "? " (the palette's AI prefix).
  */
 export function normalizeQuery(raw: string): string {
   const stripped = raw.replace(/^\s*\?\s+/, "");

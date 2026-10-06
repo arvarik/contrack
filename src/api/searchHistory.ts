@@ -1,9 +1,4 @@
-/**
- * Search History API Client — hooks for recording, listing, pinning,
- * and deleting questions asked on the Ask Contrack page and command palette.
- *
- * @module api/searchHistory
- */
+/** Hooks for the history of questions asked on Ask and in the palette. */
 
 import {
   useInfiniteQuery,
@@ -38,9 +33,7 @@ function searchHistoryListKey(filters?: HistoryListFilters) {
   return [...SEARCH_HISTORY_KEY, "list", filters ?? {}] as const;
 }
 
-/**
- * List search history entries with infinite cursor pagination.
- */
+/** Search history, a cursor page at a time. */
 export function useSearchHistoryList(filters?: HistoryListFilters) {
   return useInfiniteQuery<HistoryListResponse, Error>({
     queryKey: searchHistoryListKey(filters),
@@ -63,9 +56,7 @@ export function useSearchHistoryList(filters?: HistoryListFilters) {
   });
 }
 
-/**
- * Tracking the last recorded search to avoid double recording within 2 seconds.
- */
+/** The last recorded search, so a repeat within 2 seconds is not recorded. */
 let lastRecorded: {
   mode: HistoryMode;
   normalizedQuery: string;
@@ -88,10 +79,8 @@ function shouldIgnoreRecord(mode: HistoryMode, query: string): boolean {
 }
 
 /**
- * Record a completed search question.
- *
- * Optimistically inserts at the top of the search history infinite query cache,
- * and ignores records whose normalized query and mode equal the last one within 2 seconds.
+ * Records a finished question at the top of the cached history. A repeat of
+ * the last normalized query and mode within 2 seconds is ignored.
  */
 export function useRecordSearch() {
   const queryClient = useQueryClient();
@@ -177,9 +166,7 @@ export function useRecordSearch() {
   });
 }
 
-/**
- * Toggle or set pinned state on a search history entry.
- */
+/** Pins or unpins a history entry. */
 export function useSetPinned() {
   const queryClient = useQueryClient();
 
@@ -230,9 +217,6 @@ export function useSetPinned() {
   });
 }
 
-/**
- * Delete a single search history entry.
- */
 export function useDeleteHistoryEntry() {
   const queryClient = useQueryClient();
 
@@ -281,9 +265,7 @@ export function useDeleteHistoryEntry() {
   });
 }
 
-/**
- * Clear search history, optionally filtered by mode.
- */
+/** Clears the history, or one mode's. */
 export function useClearHistory() {
   const queryClient = useQueryClient();
 

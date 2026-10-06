@@ -1,12 +1,7 @@
 /**
- * AI Settings API Hooks — capability-based AI configuration.
- *
- * Backs Settings → Administration → AI: provider credentials, OpenAI-
- * compatible servers, the model for each capability, model discovery, and
- * web search (the switch, the engine and SearXNG). Also the instance switch:
- * whether an admin turned AI off for every account.
- *
- * @module api/aiSettings
+ * Hooks for Settings → Administration → AI: provider keys, OpenAI-compatible
+ * servers, the model per capability, web search, and the instance's AI
+ * switch.
  */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "./client";
@@ -71,9 +66,8 @@ export interface AISettings {
         /** Display name of the provider serving this capability. */
         providerLabel: string;
         /**
-         * The concrete model that will run — populated in Auto mode too, so
-         * the UI can name it instead of saying "chosen automatically".
-         * Undefined only when the provider cannot say in advance.
+         * The model that will run, in Auto mode too. Undefined only when the
+         * provider cannot say in advance.
          */
         model?: string;
         /** Set when the target has no provider entry (the built-in model). */
@@ -214,9 +208,8 @@ export const useSetProviderKey = () => {
       });
       return res.json();
     },
-    // Settled, not success: the server stores the credential and *then*
-    // validates it, so a discovery failure still changed the view. Refreshing
-    // only on success left the newly-connected provider invisible until reload.
+    // Settled, not success: the server stores the key before it validates
+    // it, so a failed discovery still changed the view.
     onSettled: () => {
       qc.invalidateQueries({ queryKey: ["ai-settings"] });
     },

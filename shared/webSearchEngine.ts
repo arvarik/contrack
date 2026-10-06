@@ -1,20 +1,15 @@
-// =============================================================================
-// Web search engine: what contact research searches the web with
-// =============================================================================
-// Three engines, each run by a strategy on the server:
+// Web search engine: what contact research searches the web with. Three
+// engines, each run by a strategy on the server:
 //
 //   provider  the web search model's own search ("two-pass"), the default
 //   searxng   a self-hosted SearXNG runs the searches, and the Strong model
 //             reads the pages ("searxng")
 //   combined  both at once, with the facts of both kept ("combined")
 //
-// An admin sets the instance's engine (Settings → Administration → AI → Web
-// search). An account keeps "Instance default" or chooses its own on Contact
-// enrichment (the `webSearchEngine` preference). Every start that names no
-// strategy uses the account's engine: the Enrichment page, a contact's Enrich
-// menu, "Enrich new contacts automatically", and an API call. An engine that
-// cannot run, such as SearXNG with no address, gives way to one that can.
-// =============================================================================
+// An admin sets the instance's engine. An account keeps "Instance default" or
+// chooses its own (the `webSearchEngine` preference). A start that names no
+// strategy uses the account's engine. An engine that cannot run, such as
+// SearXNG with no address, gives way to one that can.
 
 import { z } from "zod";
 
@@ -49,11 +44,7 @@ export function engineFor(
   return choice === "default" ? instanceEngine : choice;
 }
 
-/**
- * The strategy each engine runs as. Every provider researches with
- * two-pass, which is the server's default whenever a provider serves
- * research.
- */
+/** The strategy each engine runs as. Every provider researches with two-pass. */
 export const ENGINE_STRATEGY: Record<
   WebSearchEngine,
   "two-pass" | "searxng" | "combined"

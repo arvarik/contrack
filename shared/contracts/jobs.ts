@@ -1,11 +1,8 @@
-// =============================================================================
 // Contracts: background jobs
-// =============================================================================
 // The admin's view of the job runner (server/jobs/runner.ts), under
 // /api/admin/jobs: every recurring job with its last run and its next, and
 // the jobs that failed in the last 24 hours. A job's payload is not part of
 // the answer.
-// =============================================================================
 
 import { z } from "zod";
 import { route } from "./route.ts";

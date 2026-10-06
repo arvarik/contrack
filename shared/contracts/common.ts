@@ -1,11 +1,6 @@
-// =============================================================================
-// Contracts: the pieces more than one area uses
-// =============================================================================
-// Dates, ID lists, the child records of a contact body, and the readers for
-// query strings that routes used to parse by hand. Request schemas here keep
-// the parse behavior they had in `server/utils/validators.ts`, transforms
-// included. Response schemas never transform.
-// =============================================================================
+// Contract pieces more than one area uses: dates, ID lists, a contact's child
+// records, and query string readers. Request schemas may transform. Response
+// schemas never do.
 
 import { z } from "zod";
 
@@ -28,23 +23,12 @@ export const dateSchema = z
   );
 
 /**
- * A date that has already happened.
+ * A date that has already happened, for an interaction. A future one would
+ * pin the contact's recency score at 100 (`recencyScore`) until the next
+ * real interaction.
  *
- * `dateSchema` alone is wrong for an interaction, because an interaction is
- * something that took place. A future one is a data error, and it has a cost
- * beyond the row itself: `contacts.lastContactedAt` is the newest interaction
- * date, and `recencyScore` returns 100 for any date at or ahead of now while
- * the curve underneath gives 91.68 one millisecond later. So one future
- * interaction pins a contact's recency signal at full marks until the next
- * real one arrives. Recorded as A-05 in `.agent/STATUS.md`.
- *
- * Five minutes of slack, and the reason is clocks rather than kindness. A
- * browser whose clock runs a minute ahead of the server stamps "now" as the
- * near future, and refusing that would refuse an honest write. Five minutes
- * cannot move a recency score that is measured in days.
- *
- * `nextFollowUpAt` deliberately keeps `dateSchema`: a follow-up is supposed to
- * be in the future.
+ * Five minutes of slack for a browser clock that runs ahead. A follow-up
+ * (`nextFollowUpAt`) keeps `dateSchema`: it belongs in the future.
  */
 const FUTURE_TOLERANCE_MS = 5 * 60 * 1000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -52,11 +36,9 @@ const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 export const pastDateSchema = dateSchema.refine(
   (value) => {
     if (value.length === 10) {
-      // A date with no time names a day rather than an instant, so the
-      // question is whether that day has arrived. One day of slack, for a
-      // client east of UTC whose local today is tomorrow here. A date-only
-      // value parses to midnight, so today can never be ahead of now anyway,
-      // and the `MIN` in interactionService holds the slack case.
+      // A date with no time names a day: has it arrived? One day of slack,
+      // for a client east of UTC whose today is tomorrow here. The `MIN` in
+      // interactionService holds the slack case.
       const latest = new Date(Date.now() + ONE_DAY_MS)
         .toISOString()
         .slice(0, 10);
@@ -75,10 +57,9 @@ export const idsSchema = z
   .transform((ids) => [...new Set(ids)]);
 
 /**
- * Whether Intl knows the zone. A bad name must be refused, not defaulted.
- *
- * A copy of `isValidTimeZone` in `server/services/search/datePhrases.ts`,
- * because `shared/` never imports `server/`. Change both together.
+ * Whether Intl knows the zone. A bad name is refused, not defaulted. A copy
+ * of `isValidTimeZone` in `server/services/search/datePhrases.ts`, because
+ * `shared/` never imports `server/`. Change both together.
  */
 export function isValidTimeZone(zone: string): boolean {
   try {
@@ -89,17 +70,9 @@ export function isValidTimeZone(zone: string): boolean {
   }
 }
 
-// =============================================================================
-// Query strings that routes read by hand before they had a contract
-// =============================================================================
-// These routes never refused a query value: a word where a number belongs
-// read as the default, and a number past the cap read as the cap. A repeated
-// key arrives as an array. A repeated `limit`, `role` or `company` was read
-// as its values joined by commas, while a repeated `fields`, `industry`,
-// `since` or `type` (`?fields=a&fields=b`, `/api/timeline?type=a&type=b`)
-// answered 500. The readers below keep all of that except the 500: they read
-// every repeated key as its values joined by commas. So no client that
-// worked starts getting a 400, and the ones that got a 500 get an answer.
+// Query string readers. They never refuse a value: a word where a number
+// belongs reads as the default, and a number past the cap as the cap. A
+// repeated key reads as its values joined by commas.
 
 /** Text, with a repeated key read as its values joined by commas. */
 export const queryText = z.preprocess(
@@ -123,15 +96,13 @@ export function queryInt(fallback: number, min: number, max: number) {
     .default(fallback);
 }
 
-// =============================================================================
 // The child records of a contact body
-// =============================================================================
 
 /**
  * An email address in its plain shape: a name, an @, and a domain with a
- * dot. Any text used to save, and the duplicate scan then matched people on
- * "n/a". The domain's labels hold no dot, so the check takes one pass: with
- * `[^\s@]+\.[^\s@]+` a long run of dots took minutes.
+ * dot, so the duplicate scan never matches people on "n/a". The domain's
+ * labels hold no dot, so the check is one pass: `[^\s@]+\.[^\s@]+` takes
+ * minutes on a long run of dots.
  */
 const emailText = z
   .string()
@@ -144,8 +115,7 @@ const emailText = z
 /**
  * A phone number: three digits or more, in any script. The rest is kept as
  * written: a vCard 4 "tel:" link, an en dash, full-width digits and the
- * invisible marks a phone's copy adds are all numbers people have, and an
- * import dropped them.
+ * invisible marks a phone's copy adds.
  */
 const phoneText = z
   .string()
@@ -264,9 +234,7 @@ export const childRecordsSchema = z.object({
   attributes: z.array(attributeSchema).max(100).optional(),
 });
 
-// =============================================================================
 // Answers more than one area sends
-// =============================================================================
 
 /** `{ success: true }`, the answer of a write that has nothing else to say. */
 export const okSchema = z.strictObject({ success: z.literal(true) });

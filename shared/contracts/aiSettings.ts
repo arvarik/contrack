@@ -1,10 +1,7 @@
-// =============================================================================
 // Contracts: AI settings (request schemas only)
-// =============================================================================
 // The /api/settings/ai routes have no contract yet: they are in
-// `UNCONTRACTED` in `index.ts`. Their other bodies are still written in
+// `UNCONTRACTED` in `index.ts`. Their other bodies are written in
 // `server/routes/aiSettings.ts`.
-// =============================================================================
 
 import { z } from "zod";
 

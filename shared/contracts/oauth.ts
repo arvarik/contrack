@@ -1,11 +1,8 @@
-// =============================================================================
 // Contracts: OAuth sign-in for MCP clients
-// =============================================================================
 // The metadata documents and the four protocol endpoints that MCP clients
 // call (server/routes/oauth.ts), and the consent page's two calls. The
 // protocol endpoints answer in OAuth's own words (RFC 6749, 7591, 8414,
 // 9728), so their field names are snake_case.
-// =============================================================================
 
 import { z } from "zod";
 import { route } from "./route.ts";

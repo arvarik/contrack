@@ -1,18 +1,13 @@
-// =============================================================================
 // Contracts: action items
-// =============================================================================
 // Follow-ups: the account's queue, the recently done, the badge count, and
 // one contact's own. A pending item's due date is what keeps the contact's
 // `nextFollowUpAt`, through a trigger in the database.
-// =============================================================================
 
 import { z } from "zod";
 import { route } from "./route.ts";
 import { dateSchema, idsSchema, INTERNAL, okSchema } from "./common.ts";
 
-// =============================================================================
 // Request bodies
-// =============================================================================
 
 const actionItemCreateSchema = z.object({
   title: z.string().trim().min(1, "Title is required"),
@@ -38,9 +33,7 @@ const actionItemUpdateSchema = z
     message: "No valid fields to update",
   });
 
-// =============================================================================
 // Answers
-// =============================================================================
 
 const actionItemColumns = {
   id: z.string(),
@@ -72,9 +65,7 @@ const queuedActionItemSchema = z
   })
   .meta({ id: "QueuedActionItem" });
 
-// =============================================================================
 // Routes
-// =============================================================================
 
 export const actionItemRoutes = {
   pending: route({

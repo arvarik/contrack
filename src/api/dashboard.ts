@@ -120,13 +120,9 @@ export const useDashboard = () => useQuery(dashboardQuery);
 export const useDashboardActivity = () => useQuery(dashboardActivityQuery);
 
 /**
- * Starts the data Pulse draws first, for a link to Pulse a person points at.
- *
- * Without it, Pulse's data was asked for only once its page had mounted, so
- * the first visit drew the page's card skeleton after its code arrived. Data
- * read a moment ago is not read again (`staleTime`). The daily insight is
- * left out: it can cost an AI call, and a pointer passing over the link is
- * not a reason to make one.
+ * Fetches the data Pulse draws first, when a link to Pulse is pointed at, so
+ * the first visit skips the skeleton. Not the daily insight: it can cost an
+ * AI call.
  */
 export function prefetchPulse(queryClient: QueryClient): void {
   void queryClient.prefetchQuery(dashboardQuery);
@@ -146,11 +142,8 @@ export const useDailyInsight = (options?: { enabled?: boolean }) => {
 };
 
 /**
- * Fetch CRM intelligence signals for the Cmd+K command palette zero-state.
- *
- * Returns action items due, catch-ups, and ghost alerts — all computed
- * from deterministic SQLite queries (no AI calls). Stale time is 2 minutes so
- * rapid Cmd+K opens don't re-fetch, but the data stays fresh enough to be useful.
+ * The palette's zero state: follow-ups due, catch-ups and ghost alerts, from
+ * plain SQL (no AI). Two minutes stale, so quick reopens do not refetch.
  */
 export const useZeroState = () => {
   return useQuery({

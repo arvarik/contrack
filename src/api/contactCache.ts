@@ -57,10 +57,9 @@ export function storeContact(client: QueryClient, contact: Contact): void {
 }
 
 /**
- * Refresh after a write that changed one contact, without the list of every
- * contact. The server's copy goes into the contact's row, so the other rows
- * stay as they are. With only an id, the contact is read alone first. If
- * that read fails, every contact query refreshes, as before.
+ * Refreshes after a write to one contact without refetching the list: the
+ * server's copy goes into its row. With only an id, the contact is read
+ * first. If that read fails, every contact query refreshes.
  */
 export async function refreshContact(
   client: QueryClient,
@@ -100,13 +99,9 @@ export function writeContactInOrder<T>(
 }
 
 /**
- * Write a few fields onto one contact in both caches, before the server has
- * answered, and hand back the way to undo it.
- *
- * The list holds the slim contact and the page holds the full one, so a
- * flag that changes on the page has to change in the list at the same time
- * or the row's ring disagrees with the header's. A write that fails calls
- * the rollback, which puts both caches back as they were.
+ * Writes a few fields onto one contact in both caches (the list's slim copy
+ * and the page's full one) before the server answers, and returns the
+ * rollback for a failed write.
  */
 export function patchContactCaches(
   client: QueryClient,

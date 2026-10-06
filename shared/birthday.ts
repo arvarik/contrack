@@ -1,12 +1,8 @@
 /**
- * Birthdays as people and address books write them, read one way on both
- * sides: the contact page, Pulse, and every vCard the app writes.
- *
- * A birthday is often a day with no year. Apple's address books write that
- * as the year 1604 and vCard 4 as "--0514". Both used to read as real
- * years: Pulse said "Turns 423", and "--0520" became 1 January 520.
- *
- * @module shared/birthday
+ * Birthdays as people and address books write them, read one way by the
+ * contact page, Pulse and the vCard writer. A day with no year is common:
+ * Apple writes it as the year 1604, vCard 4 as "--0514". Neither is a real
+ * year.
  */
 
 /** The year Apple's address books write for a birthday with no year. */
@@ -57,13 +53,10 @@ function isValidDay(month: number, day: number, year: number | null): boolean {
 }
 
 /**
- * Parse a birthday string into structured year/month/day.
- *
- * Supported formats:
+ * Parses a birthday into year, month and day, or null:
  * - "1990-05-14", "1990/05/14", "19900514"
  * - "05-14", "05/14", "--0514", "--05-14", and Apple's "1604-05-14"
  * - "May 14", "May 14, 1990", "14 May", "14 May 1990", "May 14th"
- * - Unparseable returns null.
  */
 export function parseBirthday(
   raw: string | null | undefined,

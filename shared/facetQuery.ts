@@ -1,16 +1,9 @@
 /**
- * Facet tokens in a search query, as pure data.
- *
- * GitHub-style filters: role:founder, company:stripe, location:london,
- * industry:fintech, tag:investor, score:>80, updated:>6m, added:<30d,
- * contacted:>90d,
- * missing:email, list:investors, near:London/50km, tracked:yes.
- *
- * The palette's tokenizer hook (`src/hooks/useQueryTokenizer.ts`) and the
- * server's Ask pipeline read facets with the same code, so a question typed
- * into either one means the same thing.
- *
- * @module shared/facetQuery
+ * Facet tokens in a search query: role:founder, company:stripe,
+ * location:london, industry:fintech, tag:investor, score:>80, updated:>6m,
+ * added:<30d, contacted:>90d, missing:email, list:investors,
+ * near:London/50km, tracked:yes. The palette (`useQueryTokenizer`) and the
+ * server's Ask pipeline both read facets with this code.
  */
 import {
   FACET_FIELDS,
@@ -82,14 +75,10 @@ export function parseFilterValue(
 }
 
 /**
- * Split a query into its facet filters and its free text.
- *
- * The palette's hook treats a facet at the end of the input with no space
- * after it as one still being typed, so the autocomplete can open. A query
- * that arrives whole, from a link like `/?q=tracked:no`, from the Inbox's
- * `/?q=missing:company` or from the Ask box, has no typist, so here a
- * trailing facet is a facet. A field the value parser rejects (`score:abc`)
- * stays in the free text.
+ * Splits a query into its facet filters and its free text. Unlike the
+ * palette's hook, which leaves a trailing facet to the autocomplete, a
+ * whole query (a `/?q=` link, the Ask box) reads a trailing facet as a
+ * facet. A value the parser rejects (`score:abc`) stays in the free text.
  */
 export function parseFacetQuery(input: string): {
   freeText: string;

@@ -1,12 +1,6 @@
 /**
- * What a relationship score means, in three bands.
- *
- * The server stores a score from 0 to 100 on every contact
- * (`contacts.relationshipScore`, see server/services/relationshipService).
- * A number alone asks the reader to know where "good" starts. The bands give
- * the number a word and a color, and every place that shows a score reads
- * them here: the ring around an avatar, the list row's accessible name, the
- * command palette, Pulse, and the map's hover card and insights.
+ * What a relationship score (0 to 100, `contacts.relationshipScore`) means,
+ * in three bands. Every place that shows a score reads them here.
  *
  * | Band      | Score     | Label     | Token     |
  * | --------- | --------- | --------- | --------- |
@@ -14,18 +8,11 @@
  * | `fading`  | 40 to 69  | "Fading"  | `warning` |
  * | `at-risk` | 0 to 39   | "At risk" | `error`   |
  *
- * A score exists only for a contact somebody tracks. `scoreView` is the one
- * reader every surface asks, and it answers in three states: `untracked`,
- * `unscored` and `scored`. Nothing on the client reads
- * `contacts.relationshipScore` without going through it.
- *
- * The band words mean one thing each. "Catch up" (a tracked contact past
- * its cadence) and "rising" and "cooling" (score movement) are other facts,
- * and Pulse names them itself.
+ * Only a tracked contact has a score. The client reads a score only through
+ * `scoreView`: `untracked`, `unscored` or `scored`. "Catch up", "rising" and
+ * "cooling" are other facts, which Pulse names itself.
  *
  * This file imports nothing, so the server and the client both read it.
- *
- * @module shared/scoreBand
  */
 
 type ScoreBand = "strong" | "fading" | "at-risk";
@@ -54,11 +41,8 @@ export const SCORE_BANDS: Readonly<Record<ScoreBand, ScoreBandInfo>> = {
 };
 
 /**
- * The band a score falls in.
- *
- * A score outside 0 to 100 is clamped first, so a stale cache value cannot
- * fall out of every band. A value that is not a number is At risk: the
- * caller that can have no score checks for that before it asks.
+ * The band a score falls in, after clamping to 0 to 100. A value that is
+ * not a number is At risk: a caller that can have no score checks first.
  */
 export function bandFor(score: number): ScoreBand {
   if (!Number.isFinite(score)) return "at-risk";
@@ -77,12 +61,9 @@ export function bandInfo(score: number): ScoreBandInfo {
 export const NO_SCORE_TEXT = "No interactions yet";
 
 /**
- * The score in words, for a tooltip or an accessible name.
- *
- * "Score 72, strong", or "No interactions yet" when `score` is null. A caller
- * that puts the text in the middle of a sentence ("Betty Clark, Global
- * Dynamics, score 72, strong") passes `{ sentence: true }` for a lowercase
- * first letter.
+ * The score in words: "Score 72, strong", or "No interactions yet" for null.
+ * `{ sentence: true }` lowercases the first letter, for mid-sentence use
+ * ("Rowan Vale, Northwind Partners, score 72, strong").
  */
 export function describeScore(
   score: number | null | undefined,
@@ -99,16 +80,12 @@ export function describeScore(
 export const NOT_TRACKED_TEXT = "Not tracked";
 
 /**
- * What a surface shows for a contact's score, in three states.
- *
- * - `untracked`: nobody chose to keep up with this contact. No ring, no
- *   words, no band. The stored score is a placeholder.
- * - `unscored`: tracked, but no interaction logged yet. The empty track and
- *   "No interactions yet".
+ * What a surface shows for a contact's score:
+ * - `untracked`: no ring, no words, no band. The stored score is a
+ *   placeholder.
+ * - `unscored`: tracked, nothing logged. The empty track and "No
+ *   interactions yet".
  * - `scored`: tracked with a score, clamped to 0 to 100, and its band.
- *
- * Every reader of the score on the client goes through this, so the ring, the
- * palette, the map and Pulse can never disagree about who has a score.
  */
 type ScoreView =
   | { kind: "untracked" }
@@ -127,12 +104,8 @@ export function scoreView(contact: {
 }
 
 /**
- * The score in words for a view, or null when there is nothing to say.
- *
- * A surface that names a contact ("Betty Clark, Global Dynamics, score 72,
- * strong") calls this and leaves the part out when it is null. Nobody tracks
- * an untracked contact, so the surface says nothing about its score rather
- * than calling it unknown.
+ * The score in words for a view, or null for an untracked contact, whose
+ * score a surface leaves out rather than calling it unknown.
  */
 export function scoreWords(
   view: ScoreView,
@@ -145,18 +118,9 @@ export function scoreWords(
 }
 
 /**
- * The score to show for a contact, or null when there is none to show.
- *
- * Two facts make a stored number mean nothing:
- *
- * 1. Nobody tracks this contact. The score is only computed for a contact a
- *    person chose to keep up with, so the column holds whatever it held
- *    before, or the default.
- * 2. Nothing is logged yet. The column defaults to 50, and 50 against no
- *    interaction is a placeholder, not a judgment.
- *
- * Most callers want `scoreView`, which names the two cases apart. This
- * function answers the number alone.
+ * The score to show, or null. A stored number means nothing when nobody
+ * tracks the contact (only tracked contacts are scored) or nothing is logged
+ * (the column defaults to 50). Most callers want `scoreView`.
  */
 export function contactScore(contact: {
   isTracked: boolean;

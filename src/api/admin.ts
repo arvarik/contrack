@@ -1,21 +1,12 @@
 /**
- * Administration API hooks.
+ * Hooks for Settings → Administration: accounts, invitations, instance
+ * settings, the audit log and snapshots.
  *
- * Backs Settings → Administration: the accounts on this instance, the
- * invitations that create them, the two instance settings, the audit log, and
- * the database snapshots.
+ * Every endpoint is class `admin` and answers a member with `403
+ * ADMIN_REQUIRED`. `RequireAdmin` only hides the UI. The 403 is the guard.
  *
- * Every endpoint here is class `admin` on the server and answers a member
- * with `403 ADMIN_REQUIRED`. `RequireAdmin` hides the UI; that 403 is what
- * actually stops anyone. The two are not the same guard and this module
- * assumes only the second.
- *
- * One rule shapes the read hooks: an admin sees *about* an account, never
- * *into* it. The list carries how many contacts each account holds and never
- * a contact. The single exception is the export, which exists for the day
- * somebody leaves and writes an audit row naming the account it read.
- *
- * @module api/admin
+ * An admin sees about an account, never into it: counts, not contacts. The
+ * one exception is the export, which writes an audit row naming the account.
  */
 import {
   useInfiniteQuery,
@@ -26,9 +17,7 @@ import {
 import { apiFetch, apiJson, jsonBody } from "./client";
 import { emitAuthStatusStale } from "../lib/appEvents";
 
-// ---------------------------------------------------------------------------
-// Shapes — these mirror the server exactly. See server/services/adminService.
-// ---------------------------------------------------------------------------
+// Shapes. These mirror server/services/adminService exactly.
 
 export type UserRole = "admin" | "member";
 
@@ -109,22 +98,17 @@ export interface AuditEntry {
 interface AuditPage {
   entries: AuditEntry[];
   /**
-   * The cursor for the next page, or null at the end.
-   *
-   * Opaque, and deliberately not a bare timestamp: `createdAt` has
-   * one-second resolution, so a timestamp cursor skips every row that shares
-   * a second with the last row of the page.
+   * The cursor for the next page, or null at the end. Opaque, not a
+   * timestamp: `createdAt` has one-second resolution, so a timestamp cursor
+   * skips rows that share the last row's second.
    */
   nextBefore: string | null;
 }
 
 /**
- * What opening a snapshot found.
- *
- * Every snapshot is read back as soon as it is written: opened read only, put
- * through `PRAGMA quick_check`, and counted against the live database. A
- * snapshot that reads perfectly and holds nothing is the failure that would
- * otherwise be found by somebody restoring it.
+ * What opening a snapshot found. Each snapshot is read back once written:
+ * opened read only, put through `PRAGMA quick_check`, and counted against the
+ * live database, so an empty snapshot is caught before a restore.
  */
 export interface BackupVerification {
   ok: boolean;
@@ -143,20 +127,11 @@ export interface BackupInfo {
   filename: string;
   sizeBytes: number;
   createdAt: string;
-  /**
-   * Null for a snapshot taken before 2.0, which is not the same as a failed
-   * check and must not be shown as one.
-   */
+  /** Null for a snapshot with no check on record. That is not a failed check. */
   verification: BackupVerification | null;
 }
 
-// ---------------------------------------------------------------------------
-// Query keys
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
 // Instance health
-// ---------------------------------------------------------------------------
 
 /** An account named by something other than its id. */
 export interface HealthAccount {
@@ -236,9 +211,7 @@ const adminKeys = {
   integrations: ["admin", "integrations"] as const,
 };
 
-// ---------------------------------------------------------------------------
 // Accounts
-// ---------------------------------------------------------------------------
 
 export const useAdminUsers = () =>
   useQuery({
@@ -251,24 +224,18 @@ export const useAdminUsers = () =>
   });
 
 /**
- * Invalidate everything an account change can touch.
- *
- * A role change moves an account in and out of the admin count, a disable
- * ends its sessions, and every one of them writes an audit row. Refreshing
- * the list alone leaves the log a page behind, which is the one view somebody
- * checks precisely because they are not sure what happened.
+ * Invalidates everything an account change can touch, the audit log
+ * included: every change writes an audit row.
  */
 function useAccountsChanged() {
   const qc = useQueryClient();
   return () => {
     qc.invalidateQueries({ queryKey: adminKeys.users });
     qc.invalidateQueries({ queryKey: adminKeys.audit });
-    // Deleting an account takes its invitations with it:
-    // `invitations.invitedBy` is NOT NULL with ON DELETE CASCADE, so the
-    // rows go and the list would keep serving them for its stale time.
+    // A deleted account's invitations go too (ON DELETE CASCADE).
     qc.invalidateQueries({ queryKey: adminKeys.invitations });
-    // And the caller may have changed their own standing. Nothing caches
-    // `/api/auth/status`, so nothing else would notice a demotion.
+    // The caller may have demoted themselves, and nothing caches
+    // `/api/auth/status`.
     emitAuthStatusStale();
   };
 }
@@ -282,9 +249,8 @@ export const useCreateUser = () => {
       displayName?: string;
       role: UserRole;
     }) =>
-      // No `temporaryPassword`: the server generates twenty characters from a
-      // 62-character alphabet, and an admin typing one they thought of is the
-      // reason instances end up with three accounts sharing a password.
+      // No `temporaryPassword`: the server generates a random one, so no two
+      // accounts share a password an admin made up.
       apiJson<{ user: AdminUser; temporaryPassword: string }>("/admin/users", {
         method: "POST",
         ...jsonBody(input),
@@ -349,12 +315,9 @@ export const useSetUserEnabled = () => {
 };
 
 /**
- * Delete an account.
- *
- * Two steps, and the first one is a refusal. Called without a decision the
- * server answers `409 USER_HAS_DATA` carrying what the account owns, which is
- * how the confirmation dialog knows the four numbers to show. Only a call
- * that says `purge` removes anything.
+ * Deletes an account in two steps. Without `purge` the server answers `409
+ * USER_HAS_DATA` with what the account owns, for the confirmation dialog.
+ * Only a call with `purge` removes anything.
  */
 export const useDeleteUser = () => {
   const changed = useAccountsChanged();
@@ -369,14 +332,9 @@ export const useDeleteUser = () => {
 };
 
 /**
- * Download a file the server answers with, under `filename`: an account's
- * data or a snapshot.
- *
- * Fetched and turned into a blob rather than linked to directly. A plain
- * `<a href>` leaves the browser to render whatever comes back, so an expired
- * session would open a tab containing a JSON error instead of signing the
- * admin back in — and the shared client, which is what notices that, would
- * never have seen the request.
+ * Downloads a server file (an account's data or a snapshot) as `filename`.
+ * Fetched as a blob, not linked, so an expired session reaches the shared
+ * client and signs the admin back in instead of opening a JSON error.
  */
 export async function downloadFile(
   path: string,
@@ -395,9 +353,7 @@ export async function downloadFile(
   window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
-// ---------------------------------------------------------------------------
 // Invitations
-// ---------------------------------------------------------------------------
 
 export const useInvitations = () =>
   useQuery({
@@ -418,8 +374,7 @@ export const useCreateInvitation = () => {
       expiresInDays?: number;
       send?: boolean;
     }) =>
-      // `link` is in this response and nowhere else. The database holds only
-      // the SHA-256 of the secret inside it.
+      // `link` is in this response only. The database holds its SHA-256.
       apiJson<{
         id: string;
         link: string;
@@ -459,9 +414,7 @@ export function invitationState(
   return "pending";
 }
 
-// ---------------------------------------------------------------------------
 // Instance settings
-// ---------------------------------------------------------------------------
 
 export const useInstanceSettings = () =>
   useQuery({
@@ -490,21 +443,15 @@ export const useUpdateInstanceSettings = () => {
     onSuccess: (settings) => {
       qc.setQueryData(adminKeys.settings, settings);
       qc.invalidateQueries({ queryKey: adminKeys.audit });
-      // `/api/auth/status` reports `registrationOpen` and `instanceName` to
-      // the sign-in screen, and the gate holds both in state rather than in
-      // the query cache — so invalidating a query key could never have
-      // refreshed them. Without this an admin who closes registration and
-      // then signs out in the same tab is still offered "Create one" on the
-      // way back in, and one who renames the instance sees the old name in
-      // the sidebar and the browser tab until a reload.
+      // The gate holds `registrationOpen` and `instanceName` from
+      // `/api/auth/status` in state, not in the query cache, so it must
+      // re-read them.
       emitAuthStatusStale();
     },
   });
 };
 
-// ---------------------------------------------------------------------------
 // Integrations
-// ---------------------------------------------------------------------------
 
 /** The General page's integrations. SearXNG is on Administration → AI. */
 interface IntegrationsConfig {
@@ -543,18 +490,13 @@ export const useUpdateIntegrations = () => {
   });
 };
 
-// ---------------------------------------------------------------------------
 // Audit log
-// ---------------------------------------------------------------------------
 
 const AUDIT_PAGE_SIZE = 50;
 
 /**
- * The log, newest first, a page at a time.
- *
- * An infinite query rather than an offset one: rows arrive while somebody is
- * reading, and an offset would show them the same row twice and skip another.
- * The cursor is what the previous page returned.
+ * The log, newest first, a page at a time. A cursor, not an offset, because
+ * rows arrive while somebody reads, and an offset would repeat and skip rows.
  */
 export const useAuditLog = (actions: readonly string[] | null) => {
   // The key must carry the filter, or the unfiltered pages already in the
@@ -566,8 +508,7 @@ export const useAuditLog = (actions: readonly string[] | null) => {
     queryFn: ({ pageParam, signal }) => {
       const params = new URLSearchParams({ limit: String(AUDIT_PAGE_SIZE) });
       if (pageParam) params.set("before", pageParam);
-      // Filtered in SQL, not here. Narrowing a fetched page would show two
-      // sign-ins out of fifty rows with no way to reach the rest.
+      // Filtered in SQL, not here: a filtered page would hide the rest.
       if (filter) params.set("action", filter);
       return apiJson<AuditPage>(`/admin/audit?${params}`, { signal });
     },
@@ -577,11 +518,9 @@ export const useAuditLog = (actions: readonly string[] | null) => {
 };
 
 /**
- * The actions the log records, grouped the way somebody looks for them.
- *
- * Nobody arrives asking for `user.invitation.revoked`. They arrive asking
- * "what happened to the accounts" or "who has been signing in", so the filter
- * offers those and expands to the exact list the server validates against.
+ * The logged actions in the groups a person looks for, such as "who has
+ * been signing in". Each group expands to the exact actions the server
+ * validates against.
  */
 export const AUDIT_GROUPS = [
   {
@@ -642,9 +581,7 @@ export const AUDIT_GROUPS = [
   },
 ] as const;
 
-// ---------------------------------------------------------------------------
 // Backups
-// ---------------------------------------------------------------------------
 
 export const useBackups = () =>
   useQuery({
@@ -657,12 +594,8 @@ export const useBackups = () =>
   });
 
 /**
- * The instance health panel.
- *
- * Refetched on an interval, because the numbers that matter most are the ones
- * that move: whose scan is running, how big the write-ahead log is, how many
- * requests were refused. Fifteen seconds is slow enough to be free on a page
- * only admins open and fast enough that watching it is useful.
+ * The instance health panel, refetched every fifteen seconds because its
+ * numbers move: running scans, the write-ahead log, refused requests.
  */
 export const useInstanceHealth = () =>
   useQuery({
@@ -684,9 +617,7 @@ export const useCreateBackup = () => {
   });
 };
 
-// ---------------------------------------------------------------------------
 // Mail
-// ---------------------------------------------------------------------------
 
 interface MailConfig {
   source: "env" | "settings" | "none";

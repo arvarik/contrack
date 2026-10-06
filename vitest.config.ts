@@ -6,18 +6,10 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "json", "html"],
       /**
-       * A floor, not a target.
-       *
-       * Coverage used to be collected and not enforced, which made it a
-       * number somebody could read and nothing more. The matrix and manifest tests are what hold the isolation
-       * guarantee up, and before this a pull request could delete them and go
-       * green.
-       *
-       * Set two points under what was measured when this landed, which is
-       * both what extra F2 specifies and roughly the room a normal change
-       * needs. Only imported files are instrumented, so a test that reaches
-       * into a large untested module lowers the total by adding coverage —
-       * two points is what absorbs that.
+       * A floor, not a target, so a change cannot delete the matrix and
+       * manifest tests that hold isolation up and still pass. Two points
+       * under the measured number: only imported files are instrumented, so a
+       * test that reaches a large untested module lowers the total.
        *
        * Raise these when the real number moves up. Lowering one is a decision
        * that belongs in a pull request description.
@@ -29,22 +21,13 @@ export default defineConfig({
         functions: 74,
         lines: 76,
         /**
-         * The server, on its own.
+         * The server on its own, so uncovered frontend code cannot hide lost
+         * server tests in the project total.
          *
-         * The two sets of numbers are close, because the server is most of
-         * what gets instrumented — only imported files are, and the unit
-         * project reaches a small part of the frontend. So this is not a
-         * higher bar so much as an independent one: a change that adds a lot
-         * of uncovered frontend drags the project total down, and without
-         * this line that would be indistinguishable from somebody deleting
-         * the tests that hold the isolation guarantee up.
-         *
-         * Measured at 76.77 / 63.74 / 81.76 / 78.71. Read from
-         * `coverage/coverage-final.json` and aggregated over the glob, NOT
-         * from the `server` row of the text report: that row covers the
-         * top-level `server/*.ts` files alone and reads about fourteen points
-         * higher, which is how these were set two points too high the first
-         * time they were written.
+         * Measured at 76.77 / 63.74 / 81.76 / 78.71, aggregated over the glob
+         * from `coverage/coverage-final.json`. Not the text report's `server`
+         * row: it covers only the top-level `server/*.ts` files and reads
+         * about fourteen points higher.
          */
         "**/server/**": {
           statements: 74,
@@ -67,11 +50,9 @@ export default defineConfig({
         },
       },
       {
-        // The search quality gate. Same real database as the integration
-        // project, and the same setup file builds it, but the eval is its own
-        // project because it answers a different question: integration asks
-        // whether a route behaves, and this asks whether ranking still ranks
-        // the same way. A failure here is a number to look at, not a bug.
+        // The search quality gate, on the integration project's real
+        // database. It asks whether ranking still ranks the same way. A
+        // failure is a number to look at, not a bug.
         test: {
           name: "eval",
           environment: "node",
@@ -83,10 +64,8 @@ export default defineConfig({
         },
       },
       {
-        // Contract tests call REAL provider APIs and are deliberately NOT in
-        // the default run: cloning the repo and running `npm test` must work
-        // with no credentials at all. Each provider block skips itself when its
-        // key is absent, so one key exercises one provider.
+        // Calls real provider APIs, so it is not in `npm test`, which needs
+        // no credentials. A provider without a key skips itself.
         //   npm run test:contract
         test: {
           name: "contract",
@@ -112,37 +91,14 @@ export default defineConfig({
           include: ["tests/integration/**/*.test.ts"],
           setupFiles: ["./tests/integration-setup.ts"],
           testTimeout: 20_000,
-          /**
-           * No retries. There were two, absorbing socket-layer noise from
-           * supertest binding and closing a fresh HTTP server for every single
-           * request — roughly 500 listen/close cycles a run, which recycles
-           * ephemeral ports faster than closed sockets leave TIME_WAIT.
-           *
-           * `makeTestApp` now listens once per file and every request goes to
-           * that server, which removes the recycling rather than retrying past
-           * it. Measured at roughly one failed run in six before, and none in
-           * thirty after.
-           *
-           * Retries are not reinstated without a cause: they hide exactly the
-           * kind of order- and state-dependent bug this suite exists to catch,
-           * and the flakes they were absorbing here presented as impossible
-           * statuses — a 404 from a registered route, a 403 from a router with
-           * no 403 in it — which cost far more to diagnose than they would
-           * have to fail honestly.
-           */
-          // One PROCESS per file, not one worker thread.
+          // No retries: they hide the order- and state-dependent bugs this
+          // suite exists to catch. `makeTestApp` listens once per file, so
+          // there is no port recycling to retry past.
           //
-          // These tests configure the server through `process.env` — the auth
-          // middleware reads it per request precisely so a test can toggle
-          // enforcement. Worker threads share one process, so `AUTH_REQUIRED`
-          // set by the auth file lands on every file running beside it, and
-          // their requests start failing on a credential they never asked for.
-          //
-          // That was a real flake, not a theory: roughly one integration run in
-          // five failed somewhere unrelated to auth, and it reproduced on
-          // demand by running the auth file alongside any other. Per-file
-          // processes give each file its own environment — which is what the
-          // per-file temp DATA_DIR in integration-setup.ts already assumes.
+          // One process per file, not one worker thread: these tests set
+          // `process.env` (the auth middleware reads it per request), and
+          // threads share one environment, so `AUTH_REQUIRED` from one file
+          // would reach the others.
           pool: "forks",
         },
       },
