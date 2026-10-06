@@ -706,13 +706,13 @@ there is none. `null` completes the open follow-ups.
 
 ## Tags
 
-| Endpoint                | What it does                                                                                                                              | Access    |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `GET /api/tags`         | Every tag you use, as a plain array of strings.                                                                                           | your data |
-| `GET /api/tags/summary` | Each tag with the number of contacts that carry it, by name: `{ tags: [{ tag, count }] }`. Archived and trashed contacts do not count.    | your data |
-| `PATCH /api/tags/:tag`  | Rename a tag on all your contacts: `{ "to": "new-name" }`. A contact that already has the new tag keeps one copy. Answers `{ affected }`. | your data |
-| `DELETE /api/tags/:tag` | Remove a tag from all your contacts. Answers `{ affected }`.                                                                              | your data |
-| `GET /api/industries`   | Every industry your contacts name, as a plain array of strings.                                                                           | your data |
+| Endpoint                | What it does                                                                                                                                                                                                   | Access    |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `GET /api/tags`         | Every tag you use, as a plain array of strings.                                                                                                                                                                | your data |
+| `GET /api/tags/summary` | Each tag with the number of contacts that carry it, by name: `{ tags: [{ tag, count, total }] }`. `count` leaves out archived and trashed contacts, and `total`, which a rename or a delete changes, has them. | your data |
+| `PATCH /api/tags/:tag`  | Rename a tag on all your contacts: `{ "to": "new-name" }`. A contact that already has the new tag keeps one copy. Answers `{ affected }`.                                                                      | your data |
+| `DELETE /api/tags/:tag` | Remove a tag from all your contacts. Answers `{ affected }`.                                                                                                                                                   | your data |
+| `GET /api/industries`   | Every industry your contacts name, as a plain array of strings.                                                                                                                                                | your data |
 
 ## Search
 

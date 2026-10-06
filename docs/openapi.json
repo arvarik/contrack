@@ -4349,9 +4349,10 @@
                         "type": "object",
                         "properties": {
                           "tag": { "type": "string" },
-                          "count": { "type": "integer" }
+                          "count": { "type": "integer" },
+                          "total": { "type": "integer" }
                         },
-                        "required": ["tag", "count"],
+                        "required": ["tag", "count", "total"],
                         "additionalProperties": false
                       }
                     }

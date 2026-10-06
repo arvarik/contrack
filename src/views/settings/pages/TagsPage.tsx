@@ -8,11 +8,12 @@
  *
  * @module views/settings/pages/TagsPage
  */
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   AlertCircle,
   Check,
+  ChevronRight,
   Hash,
   Loader2,
   Merge,
@@ -46,6 +47,22 @@ import { SETTINGS_INPUT, SETTINGS_PAGE } from "../layout";
 const ROW_ACTION =
   "hit-area state-layer p-2.5 rounded-xl text-on-surface-variant min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors";
 
+const contacts = (n: number) => `${n} ${n === 1 ? "contact" : "contacts"}`;
+
+/**
+ * Who a rename or a delete changes. It changes every contact with the tag,
+ * and the list shows only the ones not archived and not in the Trash.
+ */
+function reach(t: TagSummary): string {
+  const hidden = t.total - t.count;
+  return hidden > 0
+    ? `${contacts(t.total)}, ${hidden} of them archived or in the Trash`
+    : contacts(t.total);
+}
+
+const errorText = (err: unknown, fallback: string) =>
+  err instanceof Error ? err.message : fallback;
+
 export const TagsPage = () => {
   const { data: tags = [], isLoading, isError, refetch } = useTagSummary();
   const renameMutation = useRenameTag();
@@ -57,6 +74,18 @@ export const TagsPage = () => {
   const [mergeSource, setMergeSource] = useState<TagSummary | null>(null);
   const [mergeTarget, setMergeTarget] = useState("");
   const [tagToDelete, setTagToDelete] = useState<TagSummary | null>(null);
+  // The tag whose Rename button takes focus back once the list shows it, so
+  // focus does not fall to the page after a rename or its Esc.
+  const focusTag = useRef<string | null>(null);
+  useEffect(() => {
+    if (editingTag !== null || focusTag.current === null) return;
+    const button = document.querySelector<HTMLElement>(
+      `[data-rename-tag="${CSS.escape(focusTag.current)}"]`,
+    );
+    if (!button) return;
+    button.focus();
+    focusTag.current = null;
+  }, [editingTag, tags]);
 
   // Filter and sort alphabetically
   const filteredTags = useMemo(
@@ -75,27 +104,41 @@ export const TagsPage = () => {
   };
 
   const cancelEditing = () => {
+    focusTag.current = editingTag;
     setEditingTag(null);
     setEditValue("");
   };
 
-  const handleRenameSubmit = async (fromTag: string) => {
+  const handleRenameSubmit = async (item: TagSummary) => {
     const trimmed = editValue.trim();
-    if (!trimmed || trimmed === fromTag) {
+    if (!trimmed || trimmed === item.tag) {
       cancelEditing();
+      return;
+    }
+    // A name another tag has joins the two. That is a merge, so it asks
+    // first, in the merge dialog that says so.
+    const other = tags.find(
+      (t) =>
+        t.tag !== item.tag && t.tag.toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (other) {
+      cancelEditing();
+      setMergeSource(item);
+      setMergeTarget(other.tag);
       return;
     }
     try {
       const result = await renameMutation.mutateAsync({
-        from: fromTag,
+        from: item.tag,
         to: trimmed,
       });
       toast(
-        `Renamed "${fromTag}" to "${trimmed}" (${result.affected} contact${result.affected === 1 ? "" : "s"} updated)`,
+        `Renamed "${item.tag}" to "${trimmed}" (${contacts(result.affected)} updated)`,
       );
       cancelEditing();
+      focusTag.current = trimmed;
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Failed to rename tag");
+      toast(errorText(err, "Could not rename the tag"));
     }
   };
 
@@ -112,12 +155,13 @@ export const TagsPage = () => {
         to: trimmed,
       });
       toast(
-        `Merged "${mergeSource.tag}" into "${trimmed}" (${result.affected} contact${result.affected === 1 ? "" : "s"} updated)`,
+        `Merged "${mergeSource.tag}" into "${trimmed}" (${contacts(result.affected)} updated)`,
       );
+      focusTag.current = trimmed;
       setMergeSource(null);
       setMergeTarget("");
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Failed to merge tags");
+      toast(errorText(err, "Could not merge the tags"));
     }
   };
 
@@ -126,11 +170,11 @@ export const TagsPage = () => {
     try {
       const result = await deleteMutation.mutateAsync(tagToDelete.tag);
       toast(
-        `Deleted tag "${tagToDelete.tag}" from ${result.affected} contact${result.affected === 1 ? "" : "s"}`,
+        `Deleted tag "${tagToDelete.tag}" from ${contacts(result.affected)}`,
       );
       setTagToDelete(null);
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Failed to delete tag");
+      toast(errorText(err, "Could not delete the tag"));
     }
   };
 
@@ -162,6 +206,9 @@ export const TagsPage = () => {
                 placeholder="Filter tags"
                 className={SEARCH_INPUT}
                 aria-label="Filter tags"
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
               />
             </div>
           )}
@@ -190,7 +237,7 @@ export const TagsPage = () => {
                       <form
                         onSubmit={(e) => {
                           e.preventDefault();
-                          void handleRenameSubmit(item.tag);
+                          void handleRenameSubmit(item);
                         }}
                         className="flex items-center gap-2 flex-1 max-w-md"
                       >
@@ -240,6 +287,10 @@ export const TagsPage = () => {
                         <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-primary/10 text-on-primary-wash shrink-0">
                           {item.count}
                         </span>
+                        <ChevronRight
+                          aria-hidden="true"
+                          className="w-4 h-4 text-on-surface-variant shrink-0"
+                        />
                       </Link>
                     )}
                   </div>
@@ -249,6 +300,7 @@ export const TagsPage = () => {
                       <button
                         type="button"
                         onClick={() => startEditing(item)}
+                        data-rename-tag={item.tag}
                         className={cn(ROW_ACTION, "hover:text-on-surface")}
                         aria-label={`Rename ${item.tag}`}
                         title="Rename"
@@ -303,10 +355,9 @@ export const TagsPage = () => {
             className="space-y-4"
           >
             <p className="text-sm text-on-surface-variant">
-              All {mergeSource.count}{" "}
-              {mergeSource.count === 1 ? "contact" : "contacts"} tagged with{" "}
-              <strong>{mergeSource.tag}</strong> will be updated to the target
-              tag, and <strong>{mergeSource.tag}</strong> will be removed
+              The {reach(mergeSource)} tagged <strong>{mergeSource.tag}</strong>{" "}
+              get the tag below instead, and <strong>{mergeSource.tag}</strong>{" "}
+              goes. A contact with both keeps one
             </p>
 
             <div>
@@ -321,6 +372,9 @@ export const TagsPage = () => {
                 onChange={(e) => setMergeTarget(e.target.value)}
                 placeholder="Choose or enter tag name…"
                 className={FORM_INPUT}
+                spellCheck={false}
+                autoCorrect="off"
+                autoCapitalize="off"
               />
               <datalist id="existing-tags">
                 {tags
@@ -367,7 +421,7 @@ export const TagsPage = () => {
           onClose={() => setTagToDelete(null)}
           onConfirm={handleConfirmDelete}
           title={`Delete tag "${tagToDelete.tag}"?`}
-          description={`Removes "${tagToDelete.tag}" from ${tagToDelete.count} ${tagToDelete.count === 1 ? "contact" : "contacts"}. The contacts themselves will not be deleted`}
+          description={`Removes "${tagToDelete.tag}" from ${reach(tagToDelete)}. The contacts stay`}
           confirmLabel="Delete tag"
           tone="danger"
           busy={deleteMutation.isPending}
