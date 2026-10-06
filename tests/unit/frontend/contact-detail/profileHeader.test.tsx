@@ -342,7 +342,7 @@ describe("the contact header", () => {
     const items = within(menu).getAllByRole("menuitem");
     // Each enrich row says the time a contact takes, to a screen reader too.
     const names = [
-      "Change colour",
+      "Change color",
       `Enrich contact, ${depthTime("standard")}`,
       `Enrich deeply, ${depthTime("deep")}`,
       "Copy basic details",
@@ -475,9 +475,9 @@ describe("the contact header", () => {
     mount(<ProfileHeader {...props} />);
     const kebab = screen.getByRole("button", { name: "Contact actions" });
     fireEvent.click(kebab);
-    fireEvent.click(screen.getByRole("menuitem", { name: "Change colour" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Change color" }));
 
-    const group = screen.getByRole("radiogroup", { name: "Contact colour" });
+    const group = screen.getByRole("radiogroup", { name: "Contact color" });
     const blue = within(group).getByRole("radio", { name: "Blue" });
     expect(blue.getAttribute("aria-checked")).toBe("true");
     expect(document.activeElement).toBe(blue);
@@ -496,7 +496,7 @@ describe("the contact header", () => {
     expect(emerald.getAttribute("aria-checked")).toBe("true");
     expect(document.activeElement).toBe(emerald);
     // Choosing keeps the picker open, so colours can be compared.
-    expect(screen.getByRole("radiogroup", { name: "Contact colour" })).toBe(
+    expect(screen.getByRole("radiogroup", { name: "Contact color" })).toBe(
       group,
     );
 

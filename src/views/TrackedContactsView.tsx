@@ -4,7 +4,7 @@
  * A settings page, under Your data, at `/settings/tracked`: the rail stays
  * beside it, the way it does beside every other settings page. It has two
  * more doors, the Tracked chip's Manage link on the Network page and the
- * Keeping up card on Pulse. It scrolls itself, so the virtualised list has
+ * Keeping up card on Pulse. It scrolls itself, so the virtualized list has
  * its own scroller, and the shell draws its header with Select in the
  * header's actions.
  *
@@ -42,7 +42,7 @@
  *    group's heading, Done, and a bar with Track, Stop tracking, a Cadence menu
  *    (the four cadences the app offers: Weekly, Monthly, Quarterly and
  *    Yearly) and the count. The same Undo toasts as the Network bar.
- * 6. Past 200 rows the list is virtualised, the way the Network list is:
+ * 6. Past 200 rows the list is virtualized, the way the Network list is:
  *    the groups flatten into one list of headings and rows.
  * 7. When no one is tracked, an `EmptyState` says so, and the Not tracked
  *    group under it is the way in. When the filters leave no one, an
@@ -659,7 +659,7 @@ export const TrackedContactsView = () => {
     [handleBulkCadence],
   );
 
-  // ── The rows, flat, for the virtualised list ──────────────────────────
+  // ── The rows, flat, for the virtualized list ──────────────────────────
   const items = useMemo(
     (): Item[] =>
       groups.flatMap((group): Item[] => [
@@ -901,7 +901,7 @@ export const TrackedContactsView = () => {
           </div>
         )}
 
-        {/* Past 200 rows: one flat list of headings and rows, virtualised. */}
+        {/* Past 200 rows: one flat list of headings and rows, virtualized. */}
         {!isLoading && virtual && (
           <div
             ref={listRef}
@@ -956,7 +956,7 @@ export const TrackedContactsView = () => {
         {/* The bar: the count, Track, Stop tracking and the cadence. It is the
             column's last child and sticks to the bottom of the scroller, so
             it is exactly as wide as the cards above it, beside the rail at
-            every width. Fixed to the window, it was centred on the window
+            every width. Fixed to the window, it was centered on the window
             instead: past the cards on a desktop, and over the rail's
             Settings gear at 768 px. The column's bottom padding is the gap
             it sticks at, so the last row scrolls clear of it. */}

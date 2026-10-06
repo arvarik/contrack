@@ -196,7 +196,7 @@ export const SettingsShell = () => {
         PAGE_TOP,
         // A page that owns its scrolling is a full-width tool, and its
         // header spans the column, unless it is `boxed`. Every other page is
-        // a centred box, and the header takes the same box, so the title
+        // a centered box, and the header takes the same box, so the title
         // starts above the page's first card and not off to its left.
         ownsScrolling
           ? cn(currentSubpage?.boxed ? SETTINGS_BOX : PAGE_X, "shrink-0")
@@ -221,7 +221,7 @@ export const SettingsShell = () => {
             className="settings-stage flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-surface outline-none"
             onClickCapture={onStageClickCapture}
           >
-            {/* Every page centres its header and its body in the same width:
+            {/* Every page centers its header and its body in the same width:
               the stage less a scrollbar's lane, kept whether or not the page
               scrolls. Without it a title sat 5.5 px further left on a page
               long enough to scroll. A page that owns its scrolling keeps

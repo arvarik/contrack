@@ -15,7 +15,7 @@
 import { CARD, PAGE_X, SECTION_HEADING } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
-/** The box the header and the page share: centred, at most 56rem wide. */
+/** The box the header and the page share: centered, at most 56rem wide. */
 export const SETTINGS_BOX = cn(PAGE_X, "w-full max-w-4xl mx-auto");
 
 /**

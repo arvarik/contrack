@@ -151,13 +151,13 @@ const Section = ({
 };
 
 /**
- * A labelled input that can also be wrong.
+ * A labeled input that can also be wrong.
  *
  * The `error` half matches `AuthField` on the sign-in screens deliberately.
  * This component used to route validation messages through `hint`, so "These
- * don't match" rendered in the same muted grey as "At least 8 characters" —
+ * don't match" rendered in the same muted gray as "At least 8 characters" —
  * indistinguishable from ordinary help, with no `aria-invalid` for anybody
- * not reading the colour. The identical sentence on the forced-password
+ * not reading the color. The identical sentence on the forced-password
  * screen was red and announced.
  */
 const Field = ({

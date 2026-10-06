@@ -1260,7 +1260,7 @@ export const ContactList = () => {
         )}
         actions={
           // Keyed, so Select and Done are new buttons and not the old ones
-          // relabelled: focus follows the mode to Done and back to Select
+          // relabeled: focus follows the mode to Done and back to Select
           // (`useSwapFocus`), where it sat on "Select all" and "Import".
           isSelectMode ? (
             <>
@@ -1292,7 +1292,7 @@ export const ContactList = () => {
             <>
               {/*
                 Select and Import are icon buttons, and New is the page's
-                call to action. Each is named for a screen reader and labelled
+                call to action. Each is named for a screen reader and labeled
                 under its glyph for a pointer or a long press, so the row
                 costs one word of space per action and still says what it
                 does. The gap keeps the three 44 px tap boxes apart.

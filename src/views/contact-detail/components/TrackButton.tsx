@@ -40,7 +40,7 @@
  *
  * **One width, whatever it says.** Every word the button can show from the
  * menu, the default and the `t` key is drawn in one grid cell, invisibly,
- * and the glyph and the current word are drawn over them, centred. The cell
+ * and the glyph and the current word are drawn over them, centered. The cell
  * is as wide as the widest word, so choosing a cadence never moves the
  * control's left edge. That matters because the header's cluster is
  * right-aligned: a control that grows pulls its own label out from under
@@ -221,7 +221,7 @@ export const TrackButton = ({ contact, compact = false }: TrackButtonProps) => {
             ) : (
               // One cell, many layers: the words it may show, invisible, set
               // the width, and the glyph and the current word are drawn over
-              // them together, centred. A short word such as Track sits in
+              // them together, centered. A short word such as Track sits in
               // the middle of the button, not against its left edge with a
               // gap before the chevron. Each sizer leaves room for the glyph
               // and the gap after it: `pl-5` is the 16 px glyph and 4 px.

@@ -1,8 +1,8 @@
 /**
  * Donut: the composition of the network as a ring, 96 px, in one hue.
  *
- * Each slice is the primary colour at a step of opacity, the largest slice
- * darkest, so the ring reads as one thing shaded rather than six colours
+ * Each slice is the primary color at a step of opacity, the largest slice
+ * darkest, so the ring reads as one thing shaded rather than six colors
  * fighting. "Other" is the neutral track tone. The total sits in the
  * middle. A slice carries its words in a `<title>` for a pointer.
  */
@@ -11,7 +11,7 @@ import React from "react";
 export interface DonutSlice {
   label: string;
   count: number;
-  /** A CSS colour, a `var(--color-…)` token. */
+  /** A CSS color, a `var(--color-…)` token. */
   color: string;
   /** The stroke's opacity, 0 to 1. Default 1. */
   opacity?: number;

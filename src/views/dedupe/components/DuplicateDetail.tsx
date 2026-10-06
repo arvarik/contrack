@@ -173,7 +173,7 @@ export const DuplicateDetail = ({
         </div>
       )}
 
-      {/* A model's reason, in the colour that means a model wrote it. */}
+      {/* A model's reason, in the color that means a model wrote it. */}
       {ai && (
         <div className="flex items-start gap-2.5 rounded-xl bg-ai/5 p-3">
           <Sparkles

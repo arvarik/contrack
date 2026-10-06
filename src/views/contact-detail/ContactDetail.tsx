@@ -51,7 +51,7 @@ export const ContactDetail = () => {
           inside the 44 px follow-up banner when there is one, where 16 px
           left it half on the banner and half off. No fill of its own: it
           wears the surface under it, the banner's wash or the page, where a
-          page-coloured square sat on the red wash. */}
+          page-colored square sat on the red wash. */}
       {isOverlayActive && (
         <button
           onClick={handleClose}

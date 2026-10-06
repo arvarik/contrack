@@ -131,7 +131,7 @@ export function FeatureMap({ scope }: { scope: "instance" | "account" }) {
                       </span>
                     )}
                     {links ? (
-                      // Underlined, so the link does not rely on its colour.
+                      // Underlined, so the link does not rely on its color.
                       <Link
                         to={`#${ROLE_ANCHORS[part.role]}`}
                         className={cn(

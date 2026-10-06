@@ -109,7 +109,7 @@ export const AdjustPinModal = ({
   const [findError, setFindError] = useState<string | null>(null);
 
   // A reopened dialog starts from the pin as it is now, not from the last
-  // drag that was cancelled.
+  // drag that was canceled.
   useEffect(() => {
     if (isOpen) setPin(start);
     // eslint-disable-next-line react-hooks/exhaustive-deps

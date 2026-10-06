@@ -1,5 +1,5 @@
 /**
- * Field: one labelled value, or one labelled list of values, in the Details
+ * Field: one labeled value, or one labeled list of values, in the Details
  * card.
  *
  * The card had three ways to add a value, and each looked different (finding

@@ -117,13 +117,13 @@ interface TimelineProps {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * The info colour on its own 10 percent wash: a call or a social message.
+ * The info color on its own 10 percent wash: a call or a social message.
  * Info is not one of the shared tones, so it keeps this pair.
  */
 const INFO_WASH = "bg-info/10 text-info";
 
 /**
- * The glyph for an interaction type, on its colour's wash. Every other type
+ * The glyph for an interaction type, on its color's wash. Every other type
  * reads from the shared tones (`TONE_WASH`), which
  * `tests/unit/frontend/style/themeContrast.test.ts` measures.
  */
@@ -136,7 +136,7 @@ function getInteractionStyle(type: string): { Icon: LucideIcon; tone: string } {
     case "email":
       return { Icon: Mail, tone: TONE_WASH.success };
     case "note":
-      // The AI colour, as a glyph on its own 10 percent wash.
+      // The AI color, as a glyph on its own 10 percent wash.
       return { Icon: FileText, tone: "bg-ai/10 text-ai" };
     case "message":
     case "sms":
@@ -200,7 +200,7 @@ function startOfWeek(now: Date, weekStartDay: 0 | 1 = 1): Date {
 /**
  * Sort the entries newest first and split them into headed groups.
  *
- * A group is a run of neighbours with the same heading. An entry in a future
+ * A group is a run of neighbors with the same heading. An entry in a future
  * week goes under its month, so a later September entry can stand above
  * "This week" with an earlier September group below it. The two groups are
  * not merged, because that would break the date order.
@@ -601,7 +601,7 @@ export const Timeline = ({
   );
 
   // After a delete, the kebab that opened the dialog is gone. Focus goes to
-  // a neighbour's title in the render that hides the entry. The dialog's
+  // a neighbor's title in the render that hides the entry. The dialog's
   // own return runs later, finds its target gone, and changes nothing.
   useEffect(() => {
     const id = focusAfterDelete.current;

@@ -25,8 +25,8 @@ export const ContactTags = ({
   updateContact,
   className,
 }: ContactTagsProps) => {
-  // No AI colour: a tag records no source, and a person types, imports or
-  // researches them alike. The AI colour means a model wrote this.
+  // No AI color: a tag records no source, and a person types, imports or
+  // researches them alike. The AI color means a model wrote this.
   const tagChips: Chip[] = (contact.tags || []).map((t) => ({
     id: t.id,
     label: t.tag,

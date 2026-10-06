@@ -395,7 +395,7 @@ export const ContactProfile = ({
   // brand blue at 2.84:1 against the background. Every accent token follows,
   // the wash ink too: the selected tint and the list chips carry
   // `text-on-primary-wash`, and the app accent's ink on a vibe's wash was the
-  // wrong colour.
+  // wrong color.
   const themeStyles = Object.fromEntries(
     Object.entries(vibeTokens(known?.themeColor, mode)).map(
       ([token, value]) => [`--color-${token}`, value],

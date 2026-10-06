@@ -8,7 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export const OPEN_MS = 250;
 export const GRACE_MS = 300;
-/** A card opens at once within this long of another, so neighbours scan fast. */
+/** A card opens at once within this long of another, so neighbors scan fast. */
 const WARM_MS = 500;
 
 export function useHoverCard<T>() {

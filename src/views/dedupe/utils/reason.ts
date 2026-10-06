@@ -71,7 +71,7 @@ export function guessMatchType(reasoning: string): string {
   return "";
 }
 
-/** True when a model wrote the reason. Only those wear the AI colour. */
+/** True when a model wrote the reason. Only those wear the AI color. */
 export const isAiReason = (matchType: string): boolean => matchType === "ai";
 
 /** The reason a row shows, without a closing period. */

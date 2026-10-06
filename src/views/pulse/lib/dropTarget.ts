@@ -2,7 +2,7 @@
  * Where a card lands in customize mode, as plain geometry.
  *
  * The drag used dnd-kit's `closestCenter` against the cards' own boxes. Up
- * next can be 800 px tall, so its centre sat 400 px from the pointer, and
+ * next can be 800 px tall, so its center sat 400 px from the pointer, and
  * the card the drop went to was not the card under the pointer. Here the
  * pointer decides, in two steps:
  *

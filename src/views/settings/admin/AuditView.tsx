@@ -284,7 +284,7 @@ const EntryRow = ({ entry }: { entry: AuditEntry }) => {
           </p>
         )}
         {entry.ip && (
-          // Not `/80`. The variant colour at 80 percent measures 4.01:1 on
+          // Not `/80`. The variant color at 80 percent measures 4.01:1 on
           // white and 3.87:1 on the zebra row, both under AA.
           <p className="text-xs text-on-surface-variant font-mono mt-0.5">
             {entry.ip}

@@ -52,7 +52,7 @@ interface DetailsCardProps {
   updateContact: (args: { id: string; data: ContactUpdateData }) => void;
   /**
    * The Research card asked for a detail: "city" opens Location's add form
-   * and "workEmail" opens Email's, labelled work. `onDetailRequestDone`
+   * and "workEmail" opens Email's, labeled work. `onDetailRequestDone`
    * spends the request once the field has opened.
    */
   detailRequest?: DetailRequest | null;
@@ -96,7 +96,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
   onDetailRequestDone,
 }) => {
   // The Research card's "Add a city" and "Add a work email" open these
-  // fields labelled "work": research looks for the person at their job.
+  // fields labeled "work": research looks for the person at their job.
   const requestFor = (anchor: ResearchAnchor) =>
     detailRequest?.anchor === anchor ? detailRequest.key : undefined;
   /**

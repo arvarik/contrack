@@ -220,7 +220,7 @@ export const CardFrame = ({
             cardId={cardId}
             customize={customize}
             // One line of the title, 15 px at a line height of 1.5, below
-            // the line's top inset: the controls centre on the title.
+            // the line's top inset: the controls center on the title.
             className="absolute right-4 sm:right-5 top-2 h-[22.5px]"
           />
         )}

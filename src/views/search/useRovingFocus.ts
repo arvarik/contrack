@@ -11,7 +11,7 @@
  *
  * Enter and Space stay with the result itself, a button. A list that draws
  * only the rows near the screen (`VirtualRows`) works too: a step lands on
- * a drawn neighbour, and focus scrolls it into view. A row that is not
+ * a drawn neighbor, and focus scrolls it into view. A row that is not
  * drawn takes no focus, and the Tab stop stays where it was: a stop on a
  * missing row took the whole list out of the Tab order.
  *

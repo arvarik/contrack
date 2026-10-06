@@ -135,7 +135,7 @@ const BRIEFING_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
  *
  * It was a sparkle button beside the company name that opened a modal. The
  * button had no label, and the modal covered the page the points were about.
- * Here it is a card at the top of the dossier. It has a labelled button, and
+ * Here it is a card at the top of the dossier. It has a labeled button, and
  * the points stay on screen while the person scrolls.
  */
 function BriefingCard({
@@ -220,7 +220,7 @@ function BriefingCard({
           <ul className="mt-4 space-y-3">
             {points.map((point, index) => (
               <li key={index} className="flex gap-3">
-                {/* A model wrote the points, so the bullet is the AI colour. */}
+                {/* A model wrote the points, so the bullet is the AI color. */}
                 <span aria-hidden="true" className="text-ai font-bold">
                   •
                 </span>
@@ -396,7 +396,7 @@ const DossierContent = ({
       {contact.about && <AboutSection about={contact.about} />}
 
       {/* AI custom attributes. Enrichment writes them, so each name wears
-          the AI colour. */}
+          the AI color. */}
       {contact.attributes && contact.attributes.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {contact.attributes.map(

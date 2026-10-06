@@ -122,7 +122,7 @@ export const ContactListModals = ({
 
   /**
    * Whether Add from text is still open when an extraction returns. A person
-   * who closed it while the model read the text has cancelled, so the form
+   * who closed it while the model read the text has canceled, so the form
    * stays shut and no toast reports the result.
    */
   const smartPasteOpen = useRef(isSmartPasteOpen);

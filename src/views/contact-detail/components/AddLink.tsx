@@ -14,7 +14,7 @@
  * 2. Pressed, it becomes a field in its place, "Paste a link". Enter adds the
  *    link and closes the field. Escape closes it. Leaving the field with
  *    text adds the text, and leaving it empty closes it.
- * 3. The text is tidied before it is saved (`normaliseLink`): trimmed, with
+ * 3. The text is tidied before it is saved (`normalizeLink`): trimmed, with
  *    `https://` in front when it has no scheme, and it has to read as a web
  *    address whose host has a dot. A link the contact already has, in any
  *    spelling (with `www.` or without, a trailing slash or not, http or
@@ -59,7 +59,7 @@ const withScheme = (text: string) =>
  * and turn a name like "bücher.de" into "xn--bcher-kva.de", and that is not
  * what the person pasted.
  */
-export function normaliseLink(text: string): string | null {
+export function normalizeLink(text: string): string | null {
   const trimmed = text.trim();
   if (!trimmed || /\s/.test(trimmed)) return null;
   const link = withScheme(trimmed);
@@ -171,7 +171,7 @@ export const AddLink = ({
   /** Adds the text when it is a new link. True when the field may close. */
   const commit = (): boolean => {
     if (!draft.trim()) return true;
-    const link = normaliseLink(draft);
+    const link = normalizeLink(draft);
     if (!link) {
       setError(NOT_A_LINK);
       return false;

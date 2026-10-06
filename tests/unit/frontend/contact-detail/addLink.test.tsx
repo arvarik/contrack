@@ -21,7 +21,7 @@ import {
 import {
   AddLink,
   linkKey,
-  normaliseLink,
+  normalizeLink,
 } from "../../../../src/views/contact-detail/components/AddLink";
 import { ADD_BUTTON_SMALL } from "../../../../src/lib/styles";
 
@@ -29,20 +29,20 @@ afterEach(() => {
   cleanup();
 });
 
-describe("normaliseLink", () => {
+describe("normalizeLink", () => {
   it("puts https:// in front of text with no scheme, and keeps the rest as written", () => {
-    expect(normaliseLink("github.com/ada")).toBe("https://github.com/ada");
-    expect(normaliseLink("  www.linkedin.com/in/Ada  ")).toBe(
+    expect(normalizeLink("github.com/ada")).toBe("https://github.com/ada");
+    expect(normalizeLink("  www.linkedin.com/in/Ada  ")).toBe(
       "https://www.linkedin.com/in/Ada",
     );
-    expect(normaliseLink("example.com:8080/x")).toBe(
+    expect(normalizeLink("example.com:8080/x")).toBe(
       "https://example.com:8080/x",
     );
   });
 
   it("keeps a link that has its scheme", () => {
-    expect(normaliseLink("http://ada.dev")).toBe("http://ada.dev");
-    expect(normaliseLink("https://x.com/ada?ref=1")).toBe(
+    expect(normalizeLink("http://ada.dev")).toBe("http://ada.dev");
+    expect(normalizeLink("https://x.com/ada?ref=1")).toBe(
       "https://x.com/ada?ref=1",
     );
   });
@@ -60,7 +60,7 @@ describe("normaliseLink", () => {
     ["another scheme", "ftp://example.com/file"],
     ["a user name in the address", "https://ada:secret@example.com"],
   ])("refuses %s", (_label, text) => {
-    expect(normaliseLink(text)).toBeNull();
+    expect(normalizeLink(text)).toBeNull();
   });
 });
 

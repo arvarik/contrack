@@ -77,7 +77,7 @@ export interface SettingsPage {
   description: string;
   icon: LucideIcon;
   group: SettingsGroup;
-  /** The colour of the page's tile on the landing list. Primary by default. */
+  /** The color of the page's tile on the landing list. Primary by default. */
   tone?: Tone;
   admin?: boolean;
   needsAccount?: boolean;
@@ -86,7 +86,7 @@ export interface SettingsPage {
   load: () => Promise<SettingsPageModule>;
   ownsScrolling?: boolean;
   /**
-   * A page that owns its scrolling but sits in the centred settings box, as
+   * A page that owns its scrolling but sits in the centered settings box, as
    * every page that does not own it: the shell's header takes the box too,
    * so the title starts at the same place as on every other settings page.
    */
@@ -214,7 +214,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       },
       {
         id: "accent",
-        label: "Accent colour",
+        label: "Accent color",
         keywords: ["accent", "colour", "color", "brand", "primary", "palette"],
       },
       {
@@ -681,7 +681,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
   },
   {
     // A page in the shell like every other: the rail stays beside it. It
-    // scrolls itself, so its virtualised list has a scroller of its own.
+    // scrolls itself, so its virtualized list has a scroller of its own.
     id: "tracked",
     path: "/settings/tracked",
     title: NAMES.tracked.title,

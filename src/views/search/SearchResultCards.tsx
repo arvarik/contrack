@@ -124,7 +124,7 @@ export const ResultCard = ({
           Why this person is here: each field that answers the question,
           named, with the question's words marked (`MatchedFields`). A
           server without that list sends the one-line reason instead, which
-          wears the AI colour.
+          wears the AI color.
         */}
           {match.matchedOn?.length ? (
             <MatchedFields fields={match.matchedOn} />

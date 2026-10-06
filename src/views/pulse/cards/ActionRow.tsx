@@ -63,7 +63,7 @@ interface ActionRowProps {
 
 /**
  * The leading glyph's circle: 24 px on screen with a 44 px tap box, and the
- * hover layer rather than a fill, so the glyph keeps its group's colour.
+ * hover layer rather than a fill, so the glyph keeps its group's color.
  */
 const GLYPH =
   "hit-area state-layer w-6 h-6 rounded-full flex items-center justify-center shrink-0 cursor-pointer";

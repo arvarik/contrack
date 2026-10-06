@@ -6,7 +6,7 @@
  * the name, and delete in a kebab. None of them is something a person does
  * every visit, so they all live here now, in one menu built on `ActionMenu`:
  *
- * 1. Change colour, which opens the colour picker under this button.
+ * 1. Change color, which opens the color picker under this button.
  * 2. Enrich contact and Enrich deeply, which research this one contact on
  *    the web at the Standard or the Deep depth. Each row's hint is the time
  *    a contact takes.
@@ -32,7 +32,7 @@
  * Change avatar was here. It is the pencil on the avatar now, beside the
  * thing it changes (`ProfileHeader`).
  *
- * The colour picker renders in the same positioned wrapper as the button, so
+ * The color picker renders in the same positioned wrapper as the button, so
  * it opens under it and Escape can hand focus back to it.
  */
 import { useCallback, useRef, useState } from "react";
@@ -211,8 +211,8 @@ export const ContactActionsMenu = ({
   const shareSheet = hasShareSheet();
   const items: ActionMenuItem[] = [
     {
-      id: "colour",
-      label: "Change colour",
+      id: "color",
+      label: "Change color",
       icon: Palette,
       onSelect: () => setPickerOpen(true),
     },

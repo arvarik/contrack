@@ -191,7 +191,7 @@ export const LocationMiniMap = ({
           {/*
             The placeholder is the floor of this box, not a stand-in that is
             swapped out. The map is laid over it and fades up once it has
-            loaded, so the frame holds one steady colour from the first
+            loaded, so the frame holds one steady color from the first
             frame to the last and never blinks between two of them.
           */}
           <MapSkeleton />

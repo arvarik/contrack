@@ -56,7 +56,7 @@ export const PULSE_ROW = `state-layer lift group ${PULSE_ROW_STATIC}`;
 
 /**
  * A chip: a fact at the right edge of a row, "In 10 days", "+12". No border
- * and no caps. Its colour is a tone, `TONE_WASH[tone]` beside it.
+ * and no caps. Its color is a tone, `TONE_WASH[tone]` beside it.
  */
 export const PULSE_CHIP =
   "shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold tabular-nums whitespace-nowrap";
@@ -72,7 +72,7 @@ export const CHECK_RING_REST = "border-current/75";
 
 /**
  * The tone of each Up next group. The group's dot and its rows' leading
- * glyph read from it, so the eye can follow one colour down the queue.
+ * glyph read from it, so the eye can follow one color down the queue.
  */
 export const GROUP_TONE: Record<UpNextGroup, Tone> = {
   overdue: "error",
@@ -93,7 +93,7 @@ export const DUE_TONE: Record<UpNextItem["dueChip"]["variant"], Tone> = {
 /**
  * The Composition donut's ramp: one hue at six steps of opacity, the
  * largest slice darkest, and the neutral track tone for "Other". The AI
- * colour is not here: it marks AI-derived data, and a count of people by
+ * color is not here: it marks AI-derived data, and a count of people by
  * industry is not that.
  */
 export const COMPOSITION_RAMP = {
@@ -107,7 +107,7 @@ export const COMPOSITION_RAMP = {
  * Each column pads its cards by 4 px (`p-1`), room for the drop ring in
  * Customize and for a lifted card's shadow. The grid's `-m-1` takes that
  * back, so a card's edge lines up with the title's. Its 16 px gap and the
- * two paddings make 24 px between cards in neighbouring columns, the same
+ * two paddings make 24 px between cards in neighboring columns, the same
  * as between cards in one column: at 1024 px the rows had 32 and 24.
  *
  * From `xl` the columns are 5, 3 and 4 parts, and the middle one is never

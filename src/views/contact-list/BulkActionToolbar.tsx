@@ -181,13 +181,13 @@ export const BulkActionToolbar = ({
           className="text-primary"
         />
 
-        {/* Bulk colour picker */}
+        {/* Bulk color picker */}
         <div className="relative shrink-0" ref={bulkColorPickerRef}>
           <button
             type="button"
             onClick={() => setShowBulkColorPicker((v) => !v)}
             disabled={nothingSelected}
-            title="Change colour"
+            title="Change color"
             aria-expanded={showBulkColorPicker}
             className={cn(
               BAR_BUTTON,
@@ -196,7 +196,7 @@ export const BulkActionToolbar = ({
             )}
           >
             <Palette className="w-4 h-4" />
-            <span className={BAR_LABEL}>Colour</span>
+            <span className={BAR_LABEL}>Color</span>
           </button>
 
           <AnimatePresence>
@@ -209,7 +209,7 @@ export const BulkActionToolbar = ({
               >
                 {VIBES.map((vibe) => (
                   <button
-                    aria-label={`Set colour to ${vibe.label}`}
+                    aria-label={`Set color to ${vibe.label}`}
                     key={vibe.id}
                     onClick={() => {
                       onColorChange(vibe.id);

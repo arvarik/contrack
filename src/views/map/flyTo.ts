@@ -2,15 +2,15 @@
  * How the map moves to a contact, and how it makes room for one.
  *
  * Opening a contact from a pin, or from a link on the contact page, ends on
- * the same view: that person centred at {@link CONTACT_ZOOM}, or closer if
+ * the same view: that person centered at {@link CONTACT_ZOOM}, or closer if
  * the map was already closer. The move is an animation, because a map that
  * jumps leaves the reader to find where they landed.
  *
- * "Centred" means centred in the part of the map nothing covers. The open
+ * "Centered" means centered in the part of the map nothing covers. The open
  * contact covers the right of the map on a wide screen, so the fly-to takes
  * the covers as MapLibre padding (see `insets.ts`), and the pin lands in the
  * open part. When the contact closes, {@link settlePadding} eases the
- * padding away and the pin glides to the centre of the whole map.
+ * padding away and the pin glides to the center of the whole map.
  *
  * Every animation asks one question first. A person who chose Reduced in
  * the Motion setting, or "reduce motion" in their system, asked for no
@@ -95,9 +95,9 @@ export function flyToContact(
 }
 
 /**
- * Give the map new covers without changing what is centred.
+ * Give the map new covers without changing what is centered.
  *
- * The map keeps its centre in the open part, so the view slides by half the
+ * The map keeps its center in the open part, so the view slides by half the
  * difference. Nothing happens when the padding is already this. The move
  * takes the contact's 400 ms slide by default, and a caller that moves the
  * map with another cover passes that cover's duration and curve.

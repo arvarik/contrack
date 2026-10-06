@@ -18,7 +18,7 @@
  * `transition-all` here used to animate the card's own drag transform, so the
  * card trailed the pointer.
  *
- * The component is memoised, and its `children` are the page's card
+ * The component is memoized, and its `children` are the page's card
  * elements, built once per change of their data. A step of the drag renders
  * the grid again and this component only where its place changed: the
  * card's content keeps the same element and React skips it.

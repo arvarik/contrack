@@ -7,7 +7,7 @@
  * text: text inside a scaled SVG scales with it, and at a desktop width
  * eleven SVG units render at twenty-two pixels, which is bigger than the
  * card's title. HTML labels stay 12 px at every width. The letters sit in a
- * seven-row grid the same height as the SVG, so each letter is centred on
+ * seven-row grid the same height as the SVG, so each letter is centered on
  * its row.
  *
  * A pointer over a square, or a tap on it, shows one tooltip with the day's
@@ -82,7 +82,7 @@ interface Cell {
 interface ActiveCell {
   dayStr: string;
   words: string;
-  /** The square's centre and top, in px from the wrapper's top left. */
+  /** The square's center and top, in px from the wrapper's top left. */
   x: number;
   y: number;
 }

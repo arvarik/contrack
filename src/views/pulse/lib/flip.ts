@@ -2,7 +2,7 @@
  * The motion of the Pulse grid while a card is moved.
  *
  * A card that changes place in the DOM jumps there. Each time the drag's
- * draft moves a card, its neighbours shift: the slot opens a gap in one
+ * draft moves a card, its neighbors shift: the slot opens a gap in one
  * column and closes one in another, a card folds to its slot when it is
  * picked up, and unfolds when it is let go. FLIP makes each of those a
  * slide. `capture` measures every card before the change, `play` measures

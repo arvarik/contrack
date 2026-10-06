@@ -22,13 +22,13 @@
  *
  * 1. The name is the page's h1 and takes focus when a contact opens.
  * 2. The ring around the avatar is the relationship score (ScoreRingAvatar).
- *    The contact's own colour is the page accent, not the ring. The pencil
+ *    The contact's own color is the page accent, not the ring. The pencil
  *    on the ring's lower right changes the picture (`AvatarEditButton`).
  * 3. The meta line is text. Facts (place, local time with its zone, weather)
  *    are plain, and links look like links, with ↗ because they open a new
  *    tab. "+ link" ends the line with no dot before it, because it is an
  *    action and not a fact (`AddLink`).
- * 4. The header has no primary button. Colour, enrichment, copy, share,
+ * 4. The header has no primary button. Color, enrichment, copy, share,
  *    archive and delete sit in the kebab, and the pencil on the avatar
  *    changes the avatar. Wide, a note starts in the composer under the
  *    tabs, which is the first thing in the Timeline column, so a button for
@@ -162,7 +162,7 @@ const shortPlace = (text: string | null | undefined): string | null =>
   text?.split(",")[0]?.trim() || null;
 
 /** "Linkedin" from "linkedin": the label used when a link has no handle. */
-const capitalise = (text: string) =>
+const capitalize = (text: string) =>
   text.charAt(0).toUpperCase() + text.slice(1);
 
 /** The text a social link shows: its handle, else its platform, else its host. */
@@ -178,7 +178,7 @@ function socialLinkName(sl: ContactSocialLink): string {
   }
   // Capitalize platform name for known ones
   if (!sl.handle && isKnown) {
-    displayName = capitalise(sl.platform);
+    displayName = capitalize(sl.platform);
   }
 
   // Clean up LinkedIn auto-generated suffixes for display
@@ -221,7 +221,7 @@ function websiteName(url: string): string {
  * The products people know put the control on the picture: GitHub an Edit
  * button with a pencil over its corner, Google a pen on the picture in the
  * account menu, Discord's app a pencil on the avatar. Slack and Discord's
- * desktop put a labelled button beside it, which this header has no room
+ * desktop put a labeled button beside it, which this header has no room
  * for, and Notion and LinkedIn make the picture itself the button, which
  * this one cannot be: a scored ring is already the button that explains the
  * score. A layer that shows on hover over the picture would never show on a
@@ -229,16 +229,16 @@ function websiteName(url: string): string {
  *
  * So it is a small round badge of its own, a sibling of the score button and
  * never inside it, on the ring's lower right, where the corner of the box
- * puts its centre on the circle:
+ * puts its center on the circle:
  *
  * 1. 28 px on the 96 px avatar and 24 px on the narrow header's 56 px one,
  *    each with the 44 px tap box of `hit-area`. The box sits 10 px out from
- *    the badge's centre, towards the empty corner: centred, on the 56 px
+ *    the badge's center, toward the empty corner: centered, on the 56 px
  *    avatar it reached past the avatar's middle, and a tap on the face,
  *    which asks for the score, opened the picker. The pencil still wins the
  *    taps where the two boxes meet, as the later control.
  * 2. At rest it is lightly clear: the card face at 85 percent with a blur,
- *    a hairline edge and a 2 px ring in the page's colour that cuts it out
+ *    a hairline edge and a 2 px ring in the page's color that cuts it out
  *    of the score ring, and the pencil in the variant ink. It shows at rest
  *    on every screen, so a phone, which has no hover, always has it.
  * 3. On hover and on focus the face turns solid and the pencil takes the
@@ -266,7 +266,7 @@ const AvatarEditButton = ({
     title="Change avatar"
     className={cn(
       "hit-area absolute right-0 bottom-0 z-10 flex items-center justify-center rounded-full",
-      // The tap box, moved out towards the corner (see 1 above).
+      // The tap box, moved out toward the corner (see 1 above).
       "after:translate-x-2.5 after:translate-y-2.5",
       narrow ? "size-6" : "size-7",
       "bg-surface-container-lowest/85 backdrop-blur-sm border border-outline-variant/70 ring-2 ring-surface shadow-sm",
@@ -391,7 +391,7 @@ const QUICK_ACTION =
  *    The composer is on the Timeline tab, and this works from every tab.
  *    A ghost has no row: its one step is Promote to contact.
  * 3. The tiles share the row equally, on the page's primary wash, so they
- *    take the contact's own colour. Each is at least 52 px tall.
+ *    take the contact's own color. Each is at least 52 px tall.
  * 4. Only on a touch screen. A computer with a narrow window has no use for
  *    tel: and sms: links, and has the composer on the page.
  */
@@ -513,7 +513,7 @@ export const ContactIntro = ({
   return (
     <div className={cn("flex flex-col gap-3", className)}>
       {headline}
-      {/* A model wrote the summary, so it wears the AI colour. */}
+      {/* A model wrote the summary, so it wears the AI color. */}
       {contact.aiSummary && (
         <div className="flex items-start gap-2 bg-ai/10 text-on-ai-wash rounded-xl p-3 max-w-fit">
           <Sparkles aria-hidden="true" className="w-4 h-4 mt-0.5 shrink-0" />
@@ -755,7 +755,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
     const platformKey = sl.platform?.toLowerCase() || "other";
     const isKnown = hasKnownIcon(platformKey);
     const displayName = socialLinkName(sl);
-    const platformName = isKnown ? capitalise(platformKey) : undefined;
+    const platformName = isKnown ? capitalize(platformKey) : undefined;
     metaItems.push({
       key: `link-${sl.id}`,
       node: (
@@ -893,7 +893,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
             />
             {/* The warning ink on the card face, lifted off the page by its
                 shadow. White on a raw amber measured about 2 to 1. It sits
-                just under the avatar, centred: over the ring's bottom edge,
+                just under the avatar, centered: over the ring's bottom edge,
                 where it sat before the pencil came, it ran into the pencil
                 at both sizes. The narrow header drops the glyph and some
                 padding: at 95 px the chip was wider than the 56 px avatar

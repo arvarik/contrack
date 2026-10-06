@@ -8,7 +8,7 @@ import { TOUCH_QUERY } from "../../../lib/platform";
 /**
  * The pencil after an editable value.
  *
- * A pointer shows a grey wash on hover, and that was the only sign a value
+ * A pointer shows a gray wash on hover, and that was the only sign a value
  * could be edited. A phone has no hover, so nothing said it. The pencil shows
  * at 40 percent on a coarse pointer (touch) and whenever the value has
  * keyboard focus. It is sized in `em`, so it follows the text it sits beside,

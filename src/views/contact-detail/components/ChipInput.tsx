@@ -8,7 +8,7 @@
  * three.
  *
  * 1. Each chip shows its text and a remove button named "Remove <noun>
- *    <text>". A chip that enrichment found wears the AI colour and a sparkle.
+ *    <text>". A chip that enrichment found wears the AI color and a sparkle.
  * 2. "+ Add" is a button. It opens a field in its place. Enter adds the text
  *    and keeps the field open for the next one. A comma splits: "beta,
  *    gamma" adds two. Escape, or leaving an empty field, closes
@@ -30,7 +30,7 @@ import { ADD_BUTTON, ADD_BUTTON_SMALL, ADD_FIELD } from "../../../lib/styles";
 export interface Chip {
   id: string;
   label: string;
-  /** True when enrichment found the value. Drawn in the AI colour. */
+  /** True when enrichment found the value. Drawn in the AI color. */
   ai?: boolean;
 }
 

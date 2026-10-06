@@ -42,7 +42,7 @@ interface UpNextCardProps {
  */
 const FIRST_ROWS = 8;
 
-/** A theme colour for the confetti, read at the moment it fires. */
+/** A theme color for the confetti, read at the moment it fires. */
 const themeColor = (name: string, fallback: string) => {
   if (typeof document === "undefined") return fallback;
   const value = getComputedStyle(document.documentElement)
@@ -118,7 +118,7 @@ export const UpNextCard = ({
       items.length === 0
     ) {
       // Fire confetti when the last item is cleared, in the palette's own
-      // colours, so a rose accent gets rose confetti. Not when less motion
+      // colors, so a rose accent gets rose confetti. Not when less motion
       // is asked for, by the Motion setting or by the system.
       if (!prefersReducedMotion()) {
         confetti({
@@ -132,7 +132,7 @@ export const UpNextCard = ({
           ],
         });
       }
-      // And the bird takes a lap of honour across the top of the page. The
+      // And the bird takes a lap of honor across the top of the page. The
       // overlay decides whether it actually flies: it runs the swoop only at
       // level "full", and reduced motion, from the account or the operating
       // system, is already "off" by the time it reads the level.
@@ -184,7 +184,7 @@ export const UpNextCard = ({
       ) : (
         // The pane. From lg it scrolls inside the card, capped near the
         // viewport, and the group headings stick to it in the card's own
-        // colour. The gutter is reserved so the rows never shift when the
+        // color. The gutter is reserved so the rows never shift when the
         // pane starts to scroll. Below lg it has no cap and the headings
         // scroll with the page. It is a named group and each section holds
         // its own list under its heading: a list may own only list items,

@@ -212,7 +212,7 @@ const STATUS_WORDS: Record<JobStatus, string> = {
   running: "Running",
   done: "Done",
   failed: "Failed",
-  cancelled: "Cancelled",
+  cancelled: "Canceled",
 };
 
 /** "dailyInsight" as "Daily insight". */

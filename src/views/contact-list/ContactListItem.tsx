@@ -176,12 +176,12 @@ const ContactListItemInner = ({
   // One selected look: the open contact, or a row picked in select mode.
   const selected = showSelection && (isSelectMode ? isSelected : active);
 
-  // The row's name says the score in words, so the ring's colour is never the
+  // The row's name says the score in words, so the ring's color is never the
   // only sign of it: "Betty Clark, Global Dynamics, score 72, strong". The
   // middle part is the line printed under the name, the company or else the
   // role, and it is left out when the row prints neither. A contact nobody
   // tracks has no ring and no score words: "Betty Clark, Global Dynamics".
-  // The follow-up closes it, for the same reason the glyph's colour is not
+  // The follow-up closes it, for the same reason the glyph's color is not
   // enough: "…, follow-up 3 days overdue".
   const view = scoreView(contact);
   const rowName = [
@@ -223,7 +223,7 @@ const ContactListItemInner = ({
       className={cn(
         listRow(selected),
         // The row rises toward the pointer (`useProximityLift` on the
-        // list), so its transition names `translate` with its colours.
+        // list), so its transition names `translate` with its colors.
         "proximity-row transition-[translate,color,background-color]",
         // Compact trims the padding, not the information: the same name and
         // company are shown, just in less vertical space.

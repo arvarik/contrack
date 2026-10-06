@@ -3,7 +3,7 @@
  *
  * Three things sit over the map: the contact that opens over it from the
  * right on a wide screen, the open insights panel, and the tab bar over its
- * bottom on a phone. The map's centre should be the centre of what a person
+ * bottom on a phone. The map's center should be the center of what a person
  * can see, so each becomes MapLibre padding. A fly-to then lands its pin in
  * the open part of the map, and a cluster that splits, splits around a point
  * the reader can see.
@@ -27,8 +27,8 @@ export interface Insets {
 
 /**
  * Below this much open map, the cover is the whole map, and centring in the
- * rest would centre in a sliver. On a phone the contact covers the map edge
- * to edge, and the pin is centred for the moment the contact closes.
+ * rest would center in a sliver. On a phone the contact covers the map edge
+ * to edge, and the pin is centered for the moment the contact closes.
  */
 export const MIN_OPEN_PX = 240;
 

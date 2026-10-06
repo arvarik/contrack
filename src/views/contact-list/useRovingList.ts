@@ -16,13 +16,13 @@
  *                        picks it in select mode
  *
  * Space and PageDown used to scroll the list itself. The focused row left
- * the virtualised range, unmounted, and focus fell to the page.
+ * the virtualized range, unmounted, and focus fell to the page.
  *
- * The rows are virtualised, so the row that owns the Tab stop is not always
+ * The rows are virtualized, so the row that owns the Tab stop is not always
  * mounted. Two consequences, both handled here:
  *
- *   - Moving focus scrolls the virtualiser to the row first and focuses it once
- *     it exists, retrying for a few frames while the virtualiser renders it,
+ *   - Moving focus scrolls the virtualizer to the row first and focuses it once
+ *     it exists, retrying for a few frames while the virtualizer renders it,
  *     and holding on for a few more in case a re-measure unmounts it again.
  *   - When the active row is scrolled out and unmounted, the container takes
  *     the Tab stop instead (`containerProps.tabIndex`) and hands focus to the
@@ -30,7 +30,7 @@
  *
  * Handlers live on the rows rather than on the container. A row is already an
  * interactive element, and one stable handler that reads the row's index from
- * a data attribute keeps memoised rows from re-rendering.
+ * a data attribute keeps memoized rows from re-rendering.
  *
  * @module views/contact-list/useRovingList
  */
@@ -51,7 +51,7 @@ const MAX_FRAMES = 60;
 
 /**
  * How many frames focus must stay on the row before the hook lets go. The
- * virtualiser can mount a row from stale measurements and unmount it a frame
+ * virtualizer can mount a row from stale measurements and unmount it a frame
  * later once it re-measures, which drops focus to the document.
  */
 const HOLD_FRAMES = 4;
@@ -64,11 +64,11 @@ interface RovingListOptions {
    * the contact that is open. `-1` or omitted means no selection.
    */
   selectedIndex?: number;
-  /** The row's element, or null when the virtualiser has not mounted it. */
+  /** The row's element, or null when the virtualizer has not mounted it. */
   getElement: (index: number) => HTMLElement | null;
   /** The text type-ahead matches against, usually the name. */
   getLabel: (index: number) => string;
-  /** Bring the row into view. Omit for a list that is not virtualised. */
+  /** Bring the row into view. Omit for a list that is not virtualized. */
   scrollToIndex?: (index: number) => void;
   /** Whether the row is mounted now. Omit when every row always is. */
   isRendered?: (index: number) => boolean;
@@ -127,7 +127,7 @@ export function useRovingList(options: RovingListOptions): RovingList {
   const activeIndex = count === 0 ? -1 : clamp(storedIndex, count);
 
   // The latest options and index, for handlers that must keep one identity so
-  // memoised rows do not re-render on every list render.
+  // memoized rows do not re-render on every list render.
   const optionsRef = useRef(options);
   const activeRef = useRef(activeIndex);
   useLayoutEffect(() => {
@@ -177,13 +177,13 @@ export function useRovingList(options: RovingListOptions): RovingList {
         held = 0;
         if (element) {
           // Both scrolls align to the nearest edge, so the browser's own
-          // scroll-into-view agrees with the virtualiser's rather than
+          // scroll-into-view agrees with the virtualizer's rather than
           // fighting it, and it covers a row mounted but left off screen.
           element.focus();
           landed ||= document.activeElement === element;
         } else {
           // Ask again. A list that was hidden a moment ago (a phone coming
-          // back from a contact) lost its scroll position, and the virtualiser
+          // back from a contact) lost its scroll position, and the virtualizer
           // measured its rows at zero height while it was hidden.
           optionsRef.current.scrollToIndex?.(target);
         }

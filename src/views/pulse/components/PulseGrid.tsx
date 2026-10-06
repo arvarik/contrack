@@ -48,7 +48,7 @@
  *
  * The motion. Every card that changes place slides there (FLIP on
  * `transform` alone, `lib/flip.ts`). Nothing lays the page out frame by
- * frame. The cards are memoised elements from the page, so a step of the
+ * frame. The cards are memoized elements from the page, so a step of the
  * drag renders the grid, not the queue, the heatmap or the charts. The
  * preview stays inside the window, and a phone's finger still picks the
  * target past its edge. Reduced motion, from the system or the Motion row in
@@ -356,7 +356,7 @@ interface PulseGridProps {
   /** The saved layout's visible columns. */
   layout: VisibleColumns;
   isEditing: boolean;
-  /** Each card's element, built by the page and memoised on its data. */
+  /** Each card's element, built by the page and memoized on its data. */
   cards: Record<PulseCardId, React.ReactNode>;
   onHide: (cardId: string) => void;
   onMoveToColumn: (cardId: string, targetColumn: PulseColumn) => void;
@@ -562,8 +562,8 @@ export const PulseGrid = ({
       onDragCancel: ({ active }) => {
         const at = live.current.origin;
         return at
-          ? `Cancelled. ${titleOf(active.id)} stays in ${placeWords(at)}.`
-          : `Cancelled. ${titleOf(active.id)} stays where it was.`;
+          ? `Canceled. ${titleOf(active.id)} stays in ${placeWords(at)}.`
+          : `Canceled. ${titleOf(active.id)} stays where it was.`;
       },
     }),
     [],

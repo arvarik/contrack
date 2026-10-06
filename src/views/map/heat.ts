@@ -3,10 +3,10 @@
  *
  * It reads its own unclustered copy of the contacts (to a heatmap a cluster
  * is one point), weighs every person, scales to the densest place, and
- * colours density with a ramp that turns with the basemap: darkest for the
+ * colors density with a ramp that turns with the basemap: darkest for the
  * most over a light map, brightest over a dark one. From zoom 7 it fades,
  * and the pins come back. The approach follows MapLibre's heatmap example
- * and the usual cartography of colour ramps.
+ * and the usual cartography of color ramps.
  *
  * @module views/map/heat
  */
@@ -50,7 +50,7 @@ export function heatWeight(notes: number): number {
   return WEIGHT_STOPS[WEIGHT_STOPS.length - 1][1];
 }
 
-/** A point's density at its centre per unit of weight: MapLibre's kernel. */
+/** A point's density at its center per unit of weight: MapLibre's kernel. */
 const KERNEL_PEAK = 1 / Math.sqrt(2 * Math.PI);
 
 /** The ramp spans this many doublings: 1/128 of the densest place to all of it. */
@@ -67,7 +67,7 @@ const MIN_DENSEST = 4;
  *
  * The densest place is the heaviest 1 degree cell, about 110 km, which is
  * the heat's radius at a country's zoom. Past 128 people it stops growing,
- * so one person keeps a colour on the ramp's first stop, and a bigger place
+ * so one person keeps a color on the ramp's first stop, and a bigger place
  * shows as a wider core rather than a darker one.
  */
 export function heatIntensity(
@@ -127,16 +127,16 @@ export interface HeatStop {
   color: string;
 }
 
-/** The least over a light map: BluYl's first colour, a pale yellow. */
+/** The least over a light map: BluYl's first color, a pale yellow. */
 const PALE: Oklch = { l: 0.97, c: 0.1, h: 112 };
-/** The most over a dark map: viridis' last colour, a bright yellow. */
+/** The most over a dark map: viridis' last color, a bright yellow. */
 const BRIGHT: Oklch = { l: 0.92, c: 0.17, h: 105 };
 /** The accent end's lightness: the most on a light map, the least on a dark one. */
 const DEEP = { light: 0.45, dark: 0.4 } as const;
 /** Each stop's opacity, from the least to the most. */
 const ALPHAS = [0.3, 0.45, 0.6, 0.72, 0.8, 0.86, 0.9, 0.94];
 
-/** Mix two colours in OKLCH, the short way round the hue circle. */
+/** Mix two colors in OKLCH, the short way round the hue circle. */
 function mix(from: Oklch, to: Oklch, t: number): Oklch {
   let turn = to.h - from.h;
   if (turn > 180) turn -= 360;
@@ -150,8 +150,8 @@ function mix(from: Oklch, to: Oklch, t: number): Oklch {
 
 /**
  * The ramp for an accent, `--color-primary` as the page computes it, in one
- * palette. Null when the value is not a hex colour, the form every token
- * takes: the map then draws no heat rather than a colour of its own.
+ * palette. Null when the value is not a hex color, the form every token
+ * takes: the map then draws no heat rather than a color of its own.
  */
 export function heatStops(
   primary: string,

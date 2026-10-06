@@ -109,7 +109,7 @@ export const InsightCard = ({
         {/* The category the model gave the insight, whole and in sentence
             case, on a quiet line over it. Beside the title it was cut to
             "Relationship Maintenanc…" and pushed the title onto two lines.
-            The AI colour marks what a model wrote. */}
+            The AI color marks what a model wrote. */}
         {insight.category && (
           <p className={cn(PULSE_TYPE.meta, "flex items-center gap-1.5")}>
             <Sparkles

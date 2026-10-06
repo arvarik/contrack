@@ -552,7 +552,7 @@ test.describe("the contact header", () => {
     // depths follow the colour: AI actions about this contact. Each ends
     // with its time, because research runs on Gemini here.
     await expect(menu.getByRole("menuitem")).toHaveText([
-      "Change colour",
+      "Change color",
       /^Enrich contactabout \d+ s$/,
       /^Enrich deeplyabout \d+ s$/,
       "Copy basic details",
@@ -565,7 +565,7 @@ test.describe("the contact header", () => {
     // Opened by a click, focus is on the first item. The browser draws the
     // ring only once a key moves it.
     await expect(
-      menu.getByRole("menuitem", { name: "Change colour" }),
+      menu.getByRole("menuitem", { name: "Change color" }),
     ).toBeFocused();
     await expectPageAccessible(page, testInfo, "contact-actions-menu");
 
@@ -573,7 +573,7 @@ test.describe("the contact header", () => {
     await expectVisibleFocus(menu.getByRole("menuitem", { name: "Delete" }));
     await page.keyboard.press("ArrowDown");
     await expect(
-      menu.getByRole("menuitem", { name: "Change colour" }),
+      menu.getByRole("menuitem", { name: "Change color" }),
     ).toBeFocused();
     await page.keyboard.press("Escape");
     await expect(menu).toBeHidden();
@@ -583,10 +583,10 @@ test.describe("the contact header", () => {
     // use, and Escape hands focus back to the menu button.
     await page.keyboard.press("Enter");
     await expect(
-      menu.getByRole("menuitem", { name: "Change colour" }),
+      menu.getByRole("menuitem", { name: "Change color" }),
     ).toBeFocused();
     await page.keyboard.press("Enter");
-    const colours = page.getByRole("radiogroup", { name: "Contact colour" });
+    const colours = page.getByRole("radiogroup", { name: "Contact color" });
     await expect(colours).toBeVisible();
     await expect(colours.getByRole("radio", { checked: true })).toBeFocused();
     await expectPageAccessible(page, testInfo, "contact-colour-picker");

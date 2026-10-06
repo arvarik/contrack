@@ -1,7 +1,7 @@
 /**
  * AppearancePage — How Contrack looks on this account.
  *
- * Theme, accent colour, text size, motion, the corvid, and list density.
+ * Theme, accent color, text size, motion, the corvid, and list density.
  */
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { useListDensity } from "../../../hooks/useListDensity";
@@ -52,9 +52,9 @@ export const AppearancePage = () => {
 
         <SettingRow
           id="accent"
-          title="Accent colour"
+          title="Accent color"
           prefKey="accent"
-          description="The colour of links, buttons, and anything that wants your attention. Each one is adjusted to stay readable in light and dark"
+          description="The color of links, buttons, and anything that wants your attention. Each one is adjusted to stay readable in light and dark"
         >
           <AccentPicker
             value={preferences.accent}

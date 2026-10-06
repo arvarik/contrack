@@ -69,7 +69,7 @@ export function readLastView(): MapViewState | null {
 }
 
 /**
- * Remember a view. Six decimals of a degree is a tenth of a metre, and two
+ * Remember a view. Six decimals of a degree is a tenth of a meter, and two
  * of zoom is finer than a wheel step, so the string stays short and the
  * reopened map is the same map.
  */

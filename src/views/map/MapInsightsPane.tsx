@@ -323,7 +323,7 @@ const Bars = ({
 const ROW_HEIGHT = 56;
 
 /**
- * The people in view, the overdue first and then by name. Virtualised: a
+ * The people in view, the overdue first and then by name. Virtualized: a
  * network can put thousands in view.
  */
 const People = ({

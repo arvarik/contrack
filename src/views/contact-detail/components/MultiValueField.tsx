@@ -101,7 +101,7 @@ const LABEL_CHIP = "shrink-0";
 
 /**
  * An address as far as its first two parts, "1 Main St, Springfield", which
- * is enough to tell two addresses apart without reading out a postcode.
+ * is enough to tell two addresses apart without reading out a postal code.
  */
 const shortAddress = (value: string): string =>
   value

@@ -37,7 +37,7 @@ interface KeepingUpCardProps {
 /**
  * The four segments of the bar, in order, with the group each links to.
  * Strong, fading and at risk are tones. "No interactions yet" is not a
- * state of a relationship, so it is the bar's neutral track colour.
+ * state of a relationship, so it is the bar's neutral track color.
  */
 const SEGMENTS = [
   { key: "strong", label: "Strong", fill: TONE_DOT.success, hash: "strong" },

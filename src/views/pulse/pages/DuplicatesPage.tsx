@@ -11,7 +11,7 @@
  *
  * To review is the queue. Merge history is every recent merge, by a person
  * or by Contrack, each with Undo. It used to be a panel behind an
- * unlabelled button on Settings, so the Undo a merge needs was the hardest
+ * unlabeled button on Settings, so the Undo a merge needs was the hardest
  * thing on the screen to find. `?view=merged` opens it, from Settings and
  * from the check's "2 merged automatically".
  *

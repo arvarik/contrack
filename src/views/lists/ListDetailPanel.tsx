@@ -235,7 +235,7 @@ export const ListDetailPanel = ({
                     "hit-area state-layer p-2 rounded-xl transition-colors flex items-center justify-center",
                     // The tint says "chosen" by hue alone, so the swatch
                     // ring is the second cue. The panel sits on the page
-                    // surface, so the ring's gap takes that colour.
+                    // surface, so the ring's gap takes that color.
                     active
                       ? cn(
                           SELECTED_TINT,
