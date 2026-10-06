@@ -311,7 +311,7 @@ describe("a stream that ends without a done frame", () => {
     await waitFor(() =>
       expect(screen.getByText("Import complete")).toBeTruthy(),
     );
-    expect(screen.getByText("2 new unique contacts")).toBeTruthy();
+    expect(screen.getByText("2 new contacts")).toBeTruthy();
     // The remembered import is kept until the person dismisses it.
     expect(recallImport("acct-1")?.importId).toBe(importId);
 
@@ -352,7 +352,7 @@ describe("a stream that ends without a done frame", () => {
     await waitFor(() =>
       expect(screen.getByText("Import complete")).toBeTruthy(),
     );
-    expect(screen.getByText("1 new unique contacts")).toBeTruthy();
+    expect(screen.getByText("1 new contact")).toBeTruthy();
     expect(server.statusPolls()).toHaveLength(1);
   });
 });
@@ -557,7 +557,7 @@ describe("rows the server could not write", () => {
     // The retry finished. The summary is the server's new one and the list
     // is gone.
     await waitFor(() =>
-      expect(screen.getByText("3 new unique contacts")).toBeTruthy(),
+      expect(screen.getByText("3 new contacts")).toBeTruthy(),
     );
     expect(screen.queryByText(/could not be imported/)).toBeNull();
   });
@@ -618,7 +618,7 @@ describe("reopening the modal", () => {
     });
     mount();
 
-    expect(screen.getByText(/click to upload/i)).toBeTruthy();
+    expect(screen.getByText(/choose a file/i)).toBeTruthy();
     expect(server.statusPolls()).toHaveLength(0);
     expect(localStorage.getItem(importKey("acct-2"))).not.toBeNull();
   });
@@ -641,7 +641,7 @@ describe("reopening the modal", () => {
     );
     // The upload area comes back once the reconnect card has animated out.
     await waitFor(() =>
-      expect(screen.getByText(/click to upload/i)).toBeTruthy(),
+      expect(screen.getByText(/choose a file/i)).toBeTruthy(),
     );
     expect(recallImport("acct-1")).toBeNull();
   });
