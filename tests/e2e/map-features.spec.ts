@@ -65,6 +65,12 @@ test.describe("map features - filters and place search", () => {
     // Press / on page
     await page.keyboard.press("/");
     await expect(filterInput).toBeFocused();
+
+    // Escape clears the box, as every search box does.
+    await filterInput.fill("zzz");
+    await page.keyboard.press("Escape");
+    await expect(filterInput).toHaveValue("");
+    await expect(filterInput).toBeFocused();
   });
 
   test("Go to place search navigates map using mock geo search", async ({
@@ -96,16 +102,17 @@ test.describe("map features - filters and place search", () => {
     const gotoBtn = page.getByRole("button", { name: "Go to place" });
     await gotoBtn.click();
 
+    // The box the toggle shows takes the focus, and gives it back to the
+    // filter box when it is done.
     const placeInput = page.getByRole("textbox", { name: "Go to place" });
-    await expect(placeInput).toBeVisible();
+    await expect(placeInput).toBeFocused();
 
     await placeInput.fill("Reykjavik");
     await placeInput.press("Enter");
 
-    // Place input completes and switches back to filter mode
     await expect(
       page.getByRole("textbox", { name: "Filter contacts" }),
-    ).toBeVisible();
+    ).toBeFocused();
   });
 
   test("shows inline error when place search finds nothing", async ({
@@ -325,14 +332,16 @@ test.describe("map features - filters and place search", () => {
     await expect(followupDialog).toBeVisible();
 
     // Fill title and submit with default "Tomorrow" preset
-    await followupDialog.getByLabel("Task title *").fill("Virginia catch up");
+    await followupDialog
+      .getByRole("textbox", { name: "Follow-up *" })
+      .fill("Virginia catch up");
     await followupDialog
       .getByRole("button", { name: "Add to 2 contacts" })
       .click();
 
     // Verify success toast
     await expect(
-      page.getByText("Added follow-up for 2 contacts"),
+      page.getByText("Follow-up added for 2 contacts"),
     ).toBeVisible();
 
     // Verify action items created for both contacts via API
@@ -535,6 +544,8 @@ test.describe("map features - filters and place search", () => {
     await page.getByRole("button", { name: "Saved views" }).click();
     const menu = page.getByRole("menu", { name: "Saved views" });
     await expect(menu).toBeVisible();
+    // It opens with the focus on an item, as a menu does.
+    await expect(menu.getByRole("menuitem").first()).toBeFocused();
     await expectPageAccessible(page, testInfo, "map-views-menu");
 
     // Open Save view modal and check accessibility

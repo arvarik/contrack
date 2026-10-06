@@ -4,10 +4,22 @@
  * Responsive layout:
  *  - Mobile: shows list OR detail panel (never both), with slide transitions
  *  - Desktop (md+): side-by-side — narrow list panel + full detail panel
+ *
+ * A mouse reorders by drag. Each row's menu has Move up and Move down, for a
+ * finger and for the keyboard, which a drag leaves out.
  */
 import React, { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { GripVertical, Plus, List, Users, ChevronLeft } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronLeft,
+  ChevronRight,
+  GripVertical,
+  List,
+  Plus,
+  Users,
+} from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { useLists, useReorderLists, useCreateList } from "../../api";
 
@@ -17,8 +29,8 @@ import { cn } from "../../lib/utils";
 import { CARD, SELECTED_ROW } from "../../lib/styles";
 import { SETTINGS_BOX } from "../settings/layout";
 import { toast } from "sonner";
-import { activateOnKey } from "../../lib/a11y";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { ActionMenu } from "../../components/ui/ActionMenu";
 
 export const ListManagerView = () => {
   const { data: lists = [], isLoading } = useLists();
@@ -44,17 +56,17 @@ export const ListManagerView = () => {
     if (dragIdx === null || dragIdx === idx) return;
     setDragOverIdx(idx);
   };
+  /** Put the list at `from` at `to`, by a drop or a Move item. */
+  const move = (from: number, to: number) => {
+    if (from === to || to < 0 || to >= lists.length) return;
+    const newOrder = [...lists];
+    const [moved] = newOrder.splice(from, 1);
+    newOrder.splice(to, 0, moved);
+    reorderLists.mutate(newOrder.map((l) => l.id));
+  };
   const handleDrop = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
-    if (dragIdx === null || dragIdx === idx) {
-      setDragIdx(null);
-      setDragOverIdx(null);
-      return;
-    }
-    const newOrder = [...lists];
-    const [moved] = newOrder.splice(dragIdx, 1);
-    newOrder.splice(idx, 0, moved);
-    reorderLists.mutate(newOrder.map((l) => l.id));
+    if (dragIdx !== null) move(dragIdx, idx);
     setDragIdx(null);
     setDragOverIdx(null);
   };
@@ -70,7 +82,7 @@ export const ListManagerView = () => {
         setIsCreateOpen(false);
         toast.success(`List "${name}" created`);
       } catch {
-        toast.error("Failed to create list");
+        toast.error("Could not create the list");
       }
     },
     [createList],
@@ -98,8 +110,13 @@ export const ListManagerView = () => {
               <>
                 {lists.length} {lists.length === 1 ? "list" : "lists"}
                 {/* Beside an open list the column is narrow, and the grips
-                    say it alone. */}
-                {lists.length > 1 && !selectedListId && " · drag to reorder"}
+                    say it alone. A finger cannot drag: its way is the menu. */}
+                {lists.length > 1 && !selectedListId && (
+                  <span className="hidden pointer-fine:inline">
+                    {" "}
+                    · drag to reorder
+                  </span>
+                )}
               </>
             )}
           </p>
@@ -116,7 +133,7 @@ export const ListManagerView = () => {
       )}
 
       {/* List rows */}
-      <div className="flex-1 overflow-y-auto py-3 px-4 md:px-2 space-y-1.5">
+      <div className="flex-1 overflow-y-auto py-3 px-4 md:px-2">
         {isLoading ? (
           <div className="space-y-2 p-1">
             {[1, 2, 3].map((i) => (
@@ -137,104 +154,107 @@ export const ListManagerView = () => {
             }}
           />
         ) : (
-          lists.map((list, idx) => {
-            const isDragging = dragIdx === idx;
-            const isDragTarget = dragOverIdx === idx;
-            const isSelected = selectedListId === list.id;
+          <ul aria-label="Lists" className="space-y-1.5">
+            {lists.map((list, idx) => {
+              const isDragging = dragIdx === idx;
+              const isDragTarget = dragOverIdx === idx;
+              const isSelected = selectedListId === list.id;
 
-            return (
-              <div
-                tabIndex={0}
-                role="button"
-                key={list.id}
-                draggable
-                onDragStart={(e) => handleDragStart(e, idx)}
-                onDragOver={(e) => handleDragOver(e, idx)}
-                onDrop={(e) => handleDrop(e, idx)}
-                onDragEnd={handleDragEnd}
-                className={cn(
-                  "group state-layer flex items-center gap-3 p-3 rounded-xl transition-all cursor-pointer select-none",
-                  isSelected && SELECTED_ROW,
-                  isDragging && "opacity-40",
-                  // The row a drop lands on: a dashed outline, the drop
-                  // target's line. The focus ring is a solid one, so a solid
-                  // outline or a ring here read as keyboard focus. No fill
-                  // either, because a `bg-*` utility would replace the
-                  // selected row's tint.
-                  isDragTarget && "outline-2 outline-dashed outline-primary/60",
-                )}
-                onClick={() => setSelectedListId(isSelected ? null : list.id)}
-                onKeyDown={activateOnKey(() =>
-                  setSelectedListId(isSelected ? null : list.id),
-                )}
-              >
-                {/* Grip handle — visible on hover on desktop, always subtle on mobile */}
-                <div
-                  role="presentation"
-                  className="text-on-surface-variant/25 group-hover:text-on-surface-variant transition-colors cursor-grab active:cursor-grabbing shrink-0 touch-none"
-                  onMouseDown={(e) => e.stopPropagation()}
-                >
-                  <GripVertical className="w-4 h-4" />
-                </div>
-
-                {/* Icon */}
-                <div
+              return (
+                <li
+                  key={list.id}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, idx)}
+                  onDragOver={(e) => handleDragOver(e, idx)}
+                  onDrop={(e) => handleDrop(e, idx)}
+                  onDragEnd={handleDragEnd}
                   className={cn(
-                    "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors",
-                    isSelected
-                      ? "bg-primary/15 text-on-primary-wash"
-                      : "bg-surface-container-low text-on-surface-variant",
+                    "group flex items-center rounded-xl transition-all select-none",
+                    isSelected && SELECTED_ROW,
+                    isDragging && "opacity-40",
+                    // The row a drop lands on: a dashed outline, the drop
+                    // target's line. The focus ring is a solid one, so a solid
+                    // outline or a ring here read as keyboard focus. No fill
+                    // either, because a `bg-*` utility would replace the
+                    // selected row's tint.
+                    isDragTarget &&
+                      "outline-2 outline-dashed outline-primary/60",
                   )}
                 >
-                  <ListIcon icon={list.icon} className="w-5 h-5" />
-                </div>
-
-                {/* Name + count */}
-                <div className="flex-1 min-w-0">
-                  <p
-                    className={cn(
-                      "font-bold text-sm truncate",
-                      isSelected && "text-on-primary-wash",
-                    )}
+                  <button
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() =>
+                      setSelectedListId(isSelected ? null : list.id)
+                    }
+                    className="state-layer flex-1 min-w-0 flex items-center gap-3 p-3 rounded-xl text-left cursor-pointer"
                   >
-                    {list.name}
-                  </p>
-                  <p className="text-xs text-on-surface-variant flex items-center gap-1 mt-0.5">
-                    <Users className="w-3 h-3" />
-                    {list.memberCount ?? 0}{" "}
-                    {list.memberCount === 1 ? "contact" : "contacts"}
-                  </p>
-                </div>
-
-                {/* Chevron */}
-                <div
-                  className={cn(
-                    "transition-colors shrink-0",
-                    isSelected
-                      ? "text-on-primary-wash"
-                      : "text-on-surface-variant/30 group-hover:text-on-surface-variant",
-                  )}
-                >
-                  <svg
-                    className={cn(
-                      "w-4 h-4 transition-transform",
-                      isSelected && "md:rotate-90",
-                    )}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
+                    {/* The grip says a mouse can drag the row. A finger cannot. */}
+                    <GripVertical
+                      aria-hidden="true"
+                      className="hidden pointer-fine:block w-4 h-4 shrink-0 text-on-surface-variant/25 group-hover:text-on-surface-variant transition-colors cursor-grab"
                     />
-                  </svg>
-                </div>
-              </div>
-            );
-          })
+
+                    <span
+                      className={cn(
+                        "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors",
+                        isSelected
+                          ? "bg-primary/15 text-on-primary-wash"
+                          : "bg-surface-container-low text-on-surface-variant",
+                      )}
+                    >
+                      <ListIcon icon={list.icon} className="w-5 h-5" />
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span
+                        className={cn(
+                          "block font-bold text-sm truncate",
+                          isSelected && "text-on-primary-wash",
+                        )}
+                      >
+                        {list.name}
+                      </span>
+                      <span className="text-xs text-on-surface-variant flex items-center gap-1 mt-0.5">
+                        <Users className="w-3 h-3" aria-hidden="true" />
+                        {list.memberCount ?? 0}{" "}
+                        {list.memberCount === 1 ? "contact" : "contacts"}
+                      </span>
+                    </span>
+
+                    <ChevronRight
+                      aria-hidden="true"
+                      className={cn(
+                        "w-4 h-4 shrink-0 transition-[color,rotate]",
+                        isSelected
+                          ? "text-on-primary-wash md:rotate-90"
+                          : "text-on-surface-variant/30 group-hover:text-on-surface-variant",
+                      )}
+                    />
+                  </button>
+                  <ActionMenu
+                    label={`${list.name} actions`}
+                    className="shrink-0 mr-1"
+                    items={[
+                      {
+                        id: "up",
+                        label: "Move up",
+                        icon: ArrowUp,
+                        disabled: idx === 0,
+                        onSelect: () => move(idx, idx - 1),
+                      },
+                      {
+                        id: "down",
+                        label: "Move down",
+                        icon: ArrowDown,
+                        disabled: idx === lists.length - 1,
+                        onSelect: () => move(idx, idx + 1),
+                      },
+                    ]}
+                  />
+                </li>
+              );
+            })}
+          </ul>
         )}
       </div>
     </div>
