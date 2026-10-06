@@ -29,9 +29,17 @@ import { usePreferences } from "../contexts/PreferencesContext";
 // ---------------------------------------------------------------------------
 
 const STYLES = [
-  { value: "avataaars", label: "Cartoon" },
-  { value: "lorelei", label: "Illustrated" },
-  { value: "bottts", label: "Bot" },
+  {
+    value: "avataaars",
+    label: "Cartoon",
+    hint: "Choose a cartoon, then Apply",
+  },
+  {
+    value: "lorelei",
+    label: "Illustrated",
+    hint: "Choose a drawing, then Apply",
+  },
+  { value: "bottts", label: "Bot", hint: "Choose a bot, then Apply" },
 ] as const;
 
 type AvatarStyle = (typeof STYLES)[number]["value"];
@@ -215,7 +223,7 @@ export const AvatarPickerModal = ({
                 "flex-1 min-h-[44px] sm:pointer-fine:min-h-0",
               )}
             >
-              {t === "avatar" ? "🎭 Choose avatar" : "📷 Upload image"}
+              {t === "avatar" ? "Choose an avatar" : "Upload a photo"}
             </button>
           ))}
         </div>
@@ -284,9 +292,8 @@ export const AvatarPickerModal = ({
                 })}
               </div>
 
-              {/* Randomize hint */}
-              <p className="text-[11px] text-on-surface-variant opacity-60 text-center">
-                Select any cartoon above, then click Apply
+              <p className="text-xs text-on-surface-variant text-center">
+                {STYLES.find(({ value }) => value === style)?.hint}
               </p>
             </motion.div>
           )}
@@ -354,7 +361,7 @@ export const AvatarPickerModal = ({
                     <p className="text-sm font-semibold text-on-surface">
                       {isDragActive
                         ? "Drop it here"
-                        : "Drop a photo or click to browse"}
+                        : "Choose a photo, or drop one here"}
                     </p>
                     <p className="text-xs text-on-surface-variant mt-1">
                       JPEG, PNG, WebP, GIF, AVIF · up to 10 MB
