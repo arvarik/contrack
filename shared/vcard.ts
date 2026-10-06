@@ -30,6 +30,8 @@
 // back a structure. Nothing above the parser has to know about any of it.
 // =============================================================================
 
+import { vcardBirthdayLine } from "./birthday.ts";
+
 // ---------------------------------------------------------------------------
 // The shape a parsed card takes
 // ---------------------------------------------------------------------------
@@ -541,7 +543,10 @@ export function serializeVCard(contact: VCardInput): string {
 
   if (contact.company) push(`ORG:${escapeValue(contact.company)}`);
   if (contact.role) push(`TITLE:${escapeValue(contact.role)}`);
-  if (contact.birthday) push(`BDAY:${escapeValue(contact.birthday)}`);
+  // Apple's form for a day with no year, and nothing for text that is no
+  // date: "BDAY:05-14" or "BDAY:sometime in May" is no vCard date.
+  const birthday = contact.birthday && vcardBirthdayLine(contact.birthday);
+  if (birthday) push(birthday);
   if (contact.about) push(`NOTE:${escapeValue(contact.about)}`);
 
   for (const email of contact.emails ?? []) {

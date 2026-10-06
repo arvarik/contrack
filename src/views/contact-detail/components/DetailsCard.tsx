@@ -114,10 +114,8 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
     label: text,
   }));
 
-  const addPreference = (text: string) => {
-    // "Tea, Jazz" is two preferences, and a comma inside one would split it
-    // on the next read anyway.
-    const next = splitPreferences([...preferences, text].join(","));
+  const addPreferences = (texts: string[]) => {
+    const next = splitPreferences([...preferences, ...texts].join(","));
     if (next.length === preferences.length) return;
     onUpdate("preferences", next.join(", "));
   };
@@ -140,13 +138,28 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
     ai: !!interest.isAiGenerated,
   }));
 
-  const saveInterests = (next: ContactUpdateData["interests"]) =>
-    updateContact({ id: contactId, data: { interests: next } });
+  // The server reads `isAiGenerated` as a boolean, and the list comes back
+  // with 1 and 0: sent back as numbers, every interest research found lost
+  // its mark on the next edit.
+  const saveInterests = (next: NonNullable<ContactUpdateData["interests"]>) =>
+    updateContact({
+      id: contactId,
+      data: {
+        interests: next.map((item) => ({
+          ...item,
+          isAiGenerated: !!item.isAiGenerated,
+        })),
+      },
+    });
 
-  const addInterest = (text: string) =>
+  const addInterests = (texts: string[]) =>
     saveInterests([
       ...interests,
-      { id: Math.random().toString(), interest: text, isAiGenerated: false },
+      ...texts.map((interest) => ({
+        id: crypto.randomUUID(),
+        interest,
+        isAiGenerated: false,
+      })),
     ]);
 
   const removeInterest = (chip: Chip) => {
@@ -271,7 +284,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
       <Field label="Preferences">
         <ChipInput
           chips={preferenceChips}
-          onAdd={addPreference}
+          onAdd={addPreferences}
           onRemove={removePreference}
           noun="preference"
         />
@@ -280,7 +293,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
       <Field label="Interests">
         <ChipInput
           chips={interestChips}
-          onAdd={addInterest}
+          onAdd={addInterests}
           onRemove={removeInterest}
           noun="interest"
         />

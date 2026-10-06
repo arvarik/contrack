@@ -10,8 +10,9 @@
  * 1. Each chip shows its text and a remove button named "Remove <noun>
  *    <text>". A chip that enrichment found wears the AI colour and a sparkle.
  * 2. "+ Add" is a button. It opens a field in its place. Enter adds the text
- *    and keeps the field open for the next one. Escape, or leaving an empty
- *    field, closes it. Leaving a field with text adds the text.
+ *    and keeps the field open for the next one. A comma splits: "beta,
+ *    gamma" adds two. Escape, or leaving an empty field, closes
+ *    it. Leaving a field with text adds the text.
  * 3. Focus never falls to the page. After a remove it moves to the next
  *    chip's remove button, or to "+ Add" when no chip is left. When the field
  *    closes by key, it returns to "+ Add".
@@ -24,7 +25,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Plus, Sparkles, X } from "lucide-react";
 import { cn } from "../../../lib/utils";
-import { ADD_BUTTON_SMALL, ADD_FIELD } from "../../../lib/styles";
+import { ADD_BUTTON, ADD_BUTTON_SMALL, ADD_FIELD } from "../../../lib/styles";
 
 export interface Chip {
   id: string;
@@ -35,13 +36,18 @@ export interface Chip {
 
 interface ChipInputProps {
   chips: readonly Chip[];
-  /** Called with the trimmed text. Never called with an empty string or a duplicate. */
-  onAdd: (text: string) => void;
+  /** Called with the new texts, trimmed: never empty, never a duplicate. */
+  onAdd: (texts: string[]) => void;
   onRemove: (chip: Chip) => void;
   /** The singular noun, in lower case: "tag", "preference", "interest". */
   noun: string;
   /** The add button's visible text after the plus. Default "Add". */
   addText?: string;
+  /**
+   * The small "+ tag" of the header's chip row. In the Details card the
+   * button is the card's one "+ Add", as under every other field.
+   */
+  small?: boolean;
 }
 
 export const ChipInput = ({
@@ -50,6 +56,7 @@ export const ChipInput = ({
   onRemove,
   noun,
   addText = "Add",
+  small = false,
 }: ChipInputProps) => {
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
@@ -87,13 +94,21 @@ export const ChipInput = ({
     else addButton.current?.focus();
   }, [chips, adding]);
 
-  const exists = (text: string) =>
-    chips.some((chip) => chip.label.toLowerCase() === text.toLowerCase());
-
+  /** Add each comma-separated part that is new, in one call. */
   const commit = () => {
-    const text = draft.trim();
+    const text = draft;
     setDraft("");
-    if (text && !exists(text)) onAdd(text);
+    const seen = new Set(chips.map((chip) => chip.label.toLowerCase()));
+    const added = text
+      .split(",")
+      .map((part) => part.trim())
+      .filter((part) => {
+        const key = part.toLowerCase();
+        if (!part || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    if (added.length) onAdd(added);
   };
 
   const close = (byKey: boolean) => {
@@ -178,9 +193,12 @@ export const ChipInput = ({
           type="button"
           aria-label={`Add ${noun}`}
           onClick={() => setAdding(true)}
-          className={ADD_BUTTON_SMALL}
+          className={small ? ADD_BUTTON_SMALL : ADD_BUTTON}
         >
-          <Plus aria-hidden="true" className="w-3.5 h-3.5" />
+          <Plus
+            aria-hidden="true"
+            className={small ? "w-3.5 h-3.5" : "w-4 h-4"}
+          />
           {addText}
         </button>
       )}
