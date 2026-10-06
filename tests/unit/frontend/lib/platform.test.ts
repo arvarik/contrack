@@ -143,14 +143,15 @@ describe("on Windows and Linux", () => {
     expect(platformModule.chordLabel(["Ctrl", "Alt", "H"])).toBe("Ctrl+Alt+H");
   });
 
-  it("lists Ctrl Alt for the navigation keys and Quick interaction", async () => {
+  it("lists Ctrl Alt for the navigation keys and Log an interaction, and Alt for ⌥", async () => {
     const { shortcuts } = await loadOn("Linux x86_64");
     const table = shortcuts.SHORTCUTS;
     expect(keysOf(table, "Go to Network")).toEqual(["Ctrl", "Alt", "H"]);
     expect(keysOf(table, "Go to Pulse")).toEqual(["Ctrl", "Alt", "P"]);
     expect(keysOf(table, "Go to Map")).toEqual(["Ctrl", "Alt", "M"]);
     expect(keysOf(table, "Go to Settings")).toEqual(["Ctrl", "Alt", ","]);
-    expect(keysOf(table, "Quick interaction")).toEqual(["Ctrl", "Alt", "I"]);
+    expect(keysOf(table, "Log an interaction")).toEqual(["Ctrl", "Alt", "I"]);
+    expect(keysOf(table, "Move the value up one place")).toEqual(["Alt", "↑"]);
   });
 
   it("lists Ctrl for the ⌘ shortcuts, and the browser's Alt arrows for Back and Forward", async () => {

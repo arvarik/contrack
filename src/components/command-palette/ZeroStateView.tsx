@@ -20,7 +20,7 @@ import {
   ClipboardList,
   Radar,
   Ghost,
-  LayoutDashboard,
+  Users,
   Activity,
   Map,
   Settings,
@@ -148,7 +148,7 @@ const NAV_ROW =
 export const NAV_ITEMS = [
   {
     label: NAMES.network.label,
-    icon: LayoutDashboard,
+    icon: Users,
     path: "/",
     shortcut: NAV_SHORTCUTS["/"]?.keys,
   },

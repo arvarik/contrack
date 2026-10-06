@@ -254,9 +254,13 @@ test("on a contact page the skip link lands on the contact's name", async ({
  * actions menu for a pencil on the avatar itself. It sits on the picture,
  * left of the name, so it comes before the name in the Tab order as it does
  * on the screen.
+ *
+ * Both budgets went up by one when the sidebar got a Command palette
+ * button for a mouse, beside Keyboard shortcuts. Before it, ⌘K was the
+ * only way in from a desktop.
  */
 test.describe("Tab budget", () => {
-  test("a contact's name is within 20 Tabs of the top of the page", async ({
+  test("a contact's name is within 21 Tabs of the top of the page", async ({
     page,
     seed,
   }) => {
@@ -266,19 +270,19 @@ test.describe("Tab budget", () => {
     ).toBeVisible();
     await startFromBody(page);
 
-    const presses = await tabsToReach(page, "#contact-heading", 20);
-    expect(presses).toBeLessThanOrEqual(20);
+    const presses = await tabsToReach(page, "#contact-heading", 21);
+    expect(presses).toBeLessThanOrEqual(21);
   });
 
-  test("the first row on Network is within 17 Tabs, and the list is one stop", async ({
+  test("the first row on Network is within 18 Tabs, and the list is one stop", async ({
     page,
   }) => {
     await page.goto("/");
     await expect(page.getByText("Ada Lovelace")).toBeVisible();
     await startFromBody(page);
 
-    const presses = await tabsToReach(page, LIST_ROW, 17);
-    expect(presses).toBeLessThanOrEqual(17);
+    const presses = await tabsToReach(page, LIST_ROW, 18);
+    expect(presses).toBeLessThanOrEqual(18);
     await expect(
       page
         .locator("#contact-list")

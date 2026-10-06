@@ -29,7 +29,7 @@ close the dialog.
   the same thing.
 - `⌘` is the Command key and `⇧` is the Shift key. For the keys on Windows
   and Linux, see [Windows and Linux](#windows-and-linux).
-- `⌥` is the Option key. On Windows and Linux it is the `Alt` key.
+- `⌥` is the Option key. On Windows and Linux, Contrack shows `Alt`.
 - A single-key shortcut never fires while focus is in a text field. There, a
   letter you type is only a letter.
 
@@ -40,8 +40,8 @@ keys of your computer in the shortcuts dialog, in **Settings → Keyboard** and
 in the hints beside buttons.
 
 - Press `Ctrl` in place of `⌘`: `Ctrl K` opens the command palette,
-  `Ctrl Enter` saves the interaction you are writing, and `Ctrl Z` undoes the
-  last skip on the Duplicates page.
+  `Ctrl Enter` saves the interaction you are writing, and `Ctrl A` selects
+  every contact in select mode.
 - Press `Ctrl Alt` in place of `⌘ ⇧`: `Ctrl Alt H` goes to Network,
   `Ctrl Alt P` to Pulse, `Ctrl Alt M` to Map, `Ctrl Alt S` to Ask Contrack,
   `Ctrl Alt ,` to Settings, and `Ctrl Alt I` opens the
@@ -53,13 +53,23 @@ The navigation keys do not use `Ctrl ⇧`, because the browser keeps
 `Ctrl ⇧ I` (developer tools), `Ctrl ⇧ P` (a private window in Firefox) and
 `Ctrl ⇧ M` (the profile menu in Chrome) for itself, and a page cannot use
 them. Some keyboard layouts type a character with `Ctrl Alt` (the `AltGr`
-key), for example `ś` or `@`. That character goes into the field, and the
-page stays where it is.
+key), for example `ś` or `@`. In a text field that character goes into the
+field, and the page stays where it is. Outside a field the key works as its
+letter.
+
+## When the browser takes a key
+
+A browser can keep a key for itself before the page sees it. On a Mac,
+Firefox opens a private window on `⌘ ⇧ P`, Chrome opens its profile menu on
+`⌘ ⇧ M`, and some browsers open their home page or history on `⌘ ⇧ H`. Then
+press `⌃ ⌥` (Control and Option) in place of `⌘ ⇧`: `⌃ ⌥ P` goes to Pulse
+in every browser. The `⌃ ⌥` keys work for every navigation key and for
+`⌘ ⇧ I`.
 
 ## Turn off single-key shortcuts
 
 A single-key shortcut is one key with no modifier, such as `N` or `/`. You can
-set one off by mistake when focus is not where you think it is.
+press one by mistake when focus is not where you think it is.
 
 1. Open **Settings → Keyboard**.
 2. Turn off **Single-key shortcuts**.
@@ -93,14 +103,18 @@ These work on every page.
 ## Global
 
 These work on every page. `⌘ ⇧ I` opens the **Log an interaction** dialog,
-and pressing it again closes the dialog. `⌘ Enter` saves the note you are
-writing, on a contact's **Timeline** and in the **Log an interaction** dialog.
+and pressing it again closes the dialog. On a contact page the dialog opens
+for that contact. `⌘ Enter` saves the note you are writing, on a contact's
+**Timeline** and in the **Log an interaction** dialog. `⌥ T` moves focus to
+the notifications, where **Undo** waits for 10 seconds after a change. After
+**Undo**, focus goes back to where it was.
 
 | Keys      | What it does                         | Single key |
 | --------- | ------------------------------------ | ---------- |
 | `?`       | Show keyboard shortcuts              | Always on  |
 | `⌘ K`     | Open command palette                 | No         |
-| `⌘ ⇧ I`   | Quick interaction                    | No         |
+| `⌘ ⇧ I`   | Log an interaction                   | No         |
+| `⌥ T`     | Go to the notifications, for Undo    | No         |
 | `⌘ Enter` | Save the interaction you are writing | No         |
 
 ## Pulse
@@ -110,40 +124,47 @@ has focus, so press `Tab` to reach the queue first. `Enter` on a focused row
 opens its contact. On a button, a link or a menu item, `Enter` does what that
 control does. See [The Pulse page](pulse.md#the-pulse-page).
 
-| Keys       | What it does                  | Single key |
-| ---------- | ----------------------------- | ---------- |
-| `J`        | Next item in Up next          | Yes        |
-| `K`        | Previous item in Up next      | Yes        |
-| `↑` or `↓` | Move between items in Up next | No         |
-| `D`        | Mark item done                | Yes        |
-| `S`        | Snooze item                   | Yes        |
-| `L`        | Log note for contact          | Yes        |
-| `C`        | Toggle customize layout       | Yes        |
-| `Enter`    | Open the highlighted contact  | No         |
+| Keys       | What it does                                  | Single key |
+| ---------- | --------------------------------------------- | ---------- |
+| `J`        | Next item in Up next                          | Yes        |
+| `K`        | Previous item in Up next                      | Yes        |
+| `↑` or `↓` | Move between items in Up next                 | No         |
+| `D`        | Mark item done                                | Yes        |
+| `S`        | Snooze item                                   | Yes        |
+| `L`        | Log note for contact                          | Yes        |
+| `C`        | Toggle customize layout                       | Yes        |
+| `Enter`    | Open the highlighted contact                  | No         |
+| `Space`    | Mark the highlighted item done, or log a note | No         |
 
 ## Network
 
 These work on the **Network** page, and in the list beside an open contact.
-`/`, `N`, `V`, `J` and `K` work when focus is not in a field. `N` opens
-**New contact** and `V` opens **Add from text**. `J` and `K` open the next
-and the previous contact in the list. The arrow keys, `Home`, `End`, the
-letters and `Enter` work once the list has focus. There, `J` and `K` are
-letters like the others. The list is one `Tab` stop. See
+`/`, `N`, `V`, `J` and `K` work when focus is not in a field, a dialog or a
+menu, and Caps Lock does not stop them. `N` opens **New contact** and `V`
+opens **Add from text**. `J` and `K` open the next and the previous contact
+in the list. The arrow keys, `Home`, `End`, the letters and `Enter` work once
+the list has focus. There, `J` and `K` are letters like the others. The list
+is one `Tab` stop. In the search box, `↓` moves to the list. In select mode,
+`Space` and `Enter` select a contact, `⇧ Enter` selects every contact from
+the last one you chose, and `⌘ A` selects every contact the list shows. See
 [The Network list](contacts.md#the-network-list).
 
-| Keys       | What it does                           | Single key |
-| ---------- | -------------------------------------- | ---------- |
-| `/`        | Focus search                           | Yes        |
-| `N`        | New contact                            | Yes        |
-| `V`        | Smart paste (AI parse)                 | Yes        |
-| `Esc`      | Exit selection mode                    | No         |
-| `↑` or `↓` | Move through the contact list          | No         |
-| `J`        | Open the next contact                  | Yes        |
-| `K`        | Open the previous contact              | Yes        |
-| `Home`     | First contact                          | No         |
-| `End`      | Last contact                           | No         |
-| `A–Z`      | Jump to the next name with that letter | Always on  |
-| `Enter`    | Open the contact                       | No         |
+| Keys       | What it does                                  | Single key |
+| ---------- | --------------------------------------------- | ---------- |
+| `/`        | Focus search                                  | Yes        |
+| `N`        | New contact                                   | Yes        |
+| `V`        | Add from text                                 | Yes        |
+| `Esc`      | Exit selection mode                           | No         |
+| `↑` or `↓` | Move through the contact list                 | No         |
+| `J`        | Open the next contact                         | Yes        |
+| `K`        | Open the previous contact                     | Yes        |
+| `Home`     | First contact                                 | No         |
+| `End`      | Last contact                                  | No         |
+| `A–Z`      | Jump to the next name with that letter        | Always on  |
+| `Enter`    | Open the contact, or select it in select mode | No         |
+| `Space`    | Select or clear the contact, in select mode   | No         |
+| `⇧ Enter`  | Select every contact from the last one chosen | No         |
+| `⌘ A`      | Select every contact shown, in select mode    | No         |
 
 ## Map
 
@@ -153,34 +174,36 @@ and `Space` moves into its card's buttons. The single keys do nothing while a
 menu is open or a dialog has the focus. See
 [Select contacts on the map](map.md#select-contacts-on-the-map).
 
-| Keys    | What it does                   | Single key |
-| ------- | ------------------------------ | ---------- |
-| `/`     | Focus search                   | Yes        |
-| `F`     | Fit all in view                | Yes        |
-| `I`     | Toggle insights pane           | Yes        |
-| `L`     | Lasso select                   | Yes        |
-| `Esc`   | Clear selection or close card  | No         |
-| `Enter` | Open contact                   | No         |
-| `Space` | Card actions                   | No         |
-| `⌥ ↑`   | Move a view up, in **Views**   | No         |
-| `⌥ ↓`   | Move a view down, in **Views** | No         |
+| Keys    | What it does                              | Single key |
+| ------- | ----------------------------------------- | ---------- |
+| `/`     | Focus search                              | Yes        |
+| `F`     | Fit all in view                           | Yes        |
+| `I`     | Toggle insights pane                      | Yes        |
+| `L`     | Lasso select                              | Yes        |
+| `Esc`   | Close the contact, or clear the selection | No         |
+| `Enter` | Open contact                              | No         |
+| `Space` | Card actions                              | No         |
+| `⌥ ↑`   | Move a view up, in Views                  | No         |
+| `⌥ ↓`   | Move a view down, in Views                | No         |
 
 ## Contact
 
 These work on a contact page, also on a contact open over the map. `T` tracks
 the contact at your default cadence, or stops tracking it, and the toast
 offers **Undo**. `Enter` and `Esc` work on a value in the header or in the
-**Details** card. `⌥ ↑` and `⌥ ↓` move an address, an email or a phone. The
-first one in each field is the primary one. See
+**Details** card. Elsewhere on the page, `Enter` starts a note. `⌥ ↑` and
+`⌥ ↓` move an address, an email or a phone. The first one in each field is
+the primary one. After a click on the page, `Space`, `Page Down` and the
+arrow keys scroll it. See
 [The contact page](contacts.md#the-contact-page).
 
-| Keys    | What it does                  | Single key |
-| ------- | ----------------------------- | ---------- |
-| `T`     | Track or untrack this contact | Yes        |
-| `Enter` | Edit the value that has focus | No         |
-| `Esc`   | Cancel the edit               | No         |
-| `⌥ ↑`   | Move the value up one place   | No         |
-| `⌥ ↓`   | Move the value down one place | No         |
+| Keys    | What it does                                   | Single key |
+| ------- | ---------------------------------------------- | ---------- |
+| `T`     | Track this contact, or stop tracking it        | Yes        |
+| `Enter` | Edit the value that has focus, or start a note | No         |
+| `Esc`   | Cancel the edit                                | No         |
+| `⌥ ↑`   | Move the value up one place                    | No         |
+| `⌥ ↓`   | Move the value down one place                  | No         |
 
 ## Ask Contrack
 
@@ -219,14 +242,14 @@ control.
   and actions. See [Command palette](search.md#command-palette).
 - **@mentions**: in a note, type `@` and the start of a name. `↑` and `↓`
   move through the names, `Enter` picks one, and `Esc` closes the list.
-- **Select mode**: in the Network list, `⌘ A` selects every contact the list
-  shows, when focus is not in a field. On Windows and Linux, press `Ctrl` in
-  place of `⌘`.
 - **Menus**: `↑` and `↓` move through the items, `Home` and `End` jump to the
   ends, and a letter moves to the next item that starts with it. `Esc`
-  closes the menu and returns focus to its button.
-- **Dialogs**: `Tab` stays inside an open dialog. `Esc` closes it, and focus
-  returns to the control that opened it.
+  closes the menu and returns focus to its button. This also holds for the
+  menu that a right click on a contact opens. While a menu is open, its
+  letters never reach the page behind it.
+- **Dialogs**: a dialog opens with focus in its first field. `Tab` stays
+  inside an open dialog. `Esc` closes it, and focus returns to the control
+  that opened it. The page's keys wait while a dialog is open.
 
 ## Related
 

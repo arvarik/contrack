@@ -99,12 +99,12 @@ export class RouteErrorBoundary extends Component<Props, State> {
               )}
             </div>
             <h2 className="text-lg font-bold font-headline">
-              {isChunk ? "Couldn't load this page" : "Something went wrong"}
+              {isChunk ? "Could not load this page" : "Something went wrong"}
             </h2>
             <p className="text-sm text-on-surface-variant leading-relaxed">
               {isChunk
-                ? "Contrack couldn't download the rest of the app — the server may be restarting. Your data is safe"
-                : "This view crashed unexpectedly. The rest of the app is still working — you can retry or navigate elsewhere"}
+                ? "Contrack could not download the rest of the app. The server may be restarting. Your data is safe"
+                : "This page hit an error. The rest of Contrack still works, so retry or go to another page"}
             </p>
             {/*
               The raw message helps on a real crash and only confuses on a

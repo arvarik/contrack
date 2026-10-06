@@ -257,8 +257,10 @@ const ResponsiveLayout = () => {
     // The safe areas: the status bar and the camera's cutout, when the page
     // fills the screen (`viewport-fit=cover`). On its side, a phone's cutout
     // is at the left or the right, and the sidebar sat under it.
-    <div className="h-dvh w-full flex overflow-hidden bg-surface text-on-surface font-body font-medium pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
-      {/*
+    <div className="h-dvh w-full flex flex-col overflow-hidden bg-surface text-on-surface font-body font-medium pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+      <ConnectionBanner />
+      <div className="flex-1 min-h-0 flex">
+        {/*
         The sidebar used to be suppressed (`hidden lg:flex`) whenever a contact
         was open, which meant that between 768 and 1023 px — an iPad in
         portrait — opening a contact left the screen with no global navigation
@@ -266,12 +268,12 @@ const ResponsiveLayout = () => {
         The only way out was the in-page Back link. Navigation chrome is not
         something to reclaim space from; it stays mounted at every width.
       */}
-      <SkipLink />
-      <div className="hidden md:flex shrink-0">
-        <Sidebar />
-      </div>
+        <SkipLink />
+        <div className="hidden md:flex shrink-0">
+          <Sidebar />
+        </div>
 
-      {/*
+        {/*
         One page boundary for every route, and it stays mounted.
 
         Each lazy page used to sit in a Suspense of its own, new on each
@@ -286,16 +288,16 @@ const ResponsiveLayout = () => {
         The sidebar and the tab bar are outside it, and mark the page a
         person pressed at once (`lib/pendingNav`).
       */}
-      <Suspense
-        fallback={
-          <div className="flex-1 min-w-0 h-full overflow-hidden">
-            {fallbackVariant && <RouteFallback variant={fallbackVariant} />}
-          </div>
-        }
-      >
-        {fullPage || (
-          <>
-            {/*
+        <Suspense
+          fallback={
+            <div className="flex-1 min-w-0 h-full overflow-hidden">
+              {fallbackVariant && <RouteFallback variant={fallbackVariant} />}
+            </div>
+          }
+        >
+          {fullPage || (
+            <>
+              {/*
         Dynamic Middle/Main Panel mapping to either the List or the Map.
 
         On the map this pane is the main landmark. On the list it is the main
@@ -312,143 +314,144 @@ const ResponsiveLayout = () => {
         paint and on each frame of a drag (`LEFT_PANE` has the bounds, and
         the Settings list shares them).
       */}
-            <section
-              id={
-                isMapActive || (!isWide && !showsPane)
-                  ? MAIN_CONTENT_ID
-                  : undefined
-              }
-              data-pane="list"
-              role={isMapActive || !isWide ? "main" : "complementary"}
-              aria-label={
-                isMapActive
-                  ? NAMES.map.label
-                  : isWide
-                    ? "Contacts"
-                    : NAMES.network.label
-              }
-              tabIndex={-1}
-              className={`
+              <section
+                id={
+                  isMapActive || (!isWide && !showsPane)
+                    ? MAIN_CONTENT_ID
+                    : undefined
+                }
+                data-pane="list"
+                role={isMapActive || !isWide ? "main" : "complementary"}
+                aria-label={
+                  isMapActive
+                    ? NAMES.map.label
+                    : isWide
+                      ? "Contacts"
+                      : NAMES.network.label
+                }
+                tabIndex={-1}
+                className={`
         ${showsPane && !isMapActive ? "hidden lg:flex" : "flex"}
         ${isMapActive ? "flex-1 z-0" : "flex-1 min-w-0 lg:flex-none lg:w-(--pane-width) bg-surface-container-lowest z-10 lg:z-[15]"}
         h-full flex-col relative outline-none
       `}
-            >
-              <Routes>
-                <Route
-                  path="/map"
-                  element={
-                    <RouteErrorBoundary viewName="Map">
-                      <MapView />
-                    </RouteErrorBoundary>
-                  }
-                />
-                <Route
-                  path="/map/contact/:id"
-                  element={
-                    <RouteErrorBoundary viewName="Map">
-                      <MapView />
-                    </RouteErrorBoundary>
-                  }
-                />
-                <Route
-                  path="*"
-                  element={
-                    <RouteErrorBoundary viewName="ContactList">
-                      <ContactList />
-                    </RouteErrorBoundary>
-                  }
-                />
-              </Routes>
+              >
+                <Routes>
+                  <Route
+                    path="/map"
+                    element={
+                      <RouteErrorBoundary viewName="Map">
+                        <MapView />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="/map/contact/:id"
+                    element={
+                      <RouteErrorBoundary viewName="Map">
+                        <MapView />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                  <Route
+                    path="*"
+                    element={
+                      <RouteErrorBoundary viewName="ContactList">
+                        <ContactList />
+                      </RouteErrorBoundary>
+                    }
+                  />
+                </Routes>
 
-              {/* The list's right edge, from `lg`, where the list and the contact
+                {/* The list's right edge, from `lg`, where the list and the contact
             sit side by side. Below it the list fills the row. Inside the
             list's landmark, on its edge. From `lg` the list sits a layer
             over the contact (15 over 10), so the grip past the seam paints
             and takes the pointer, and under the sidebar (20), whose Account
             menu opens across the list. */}
-              {!isMapActive && (
-                <ResizeHandle
-                  {...LEFT_PANE}
-                  label="Resize the contact list"
-                  className="hidden lg:block absolute inset-y-0 right-0"
-                />
-              )}
-            </section>
+                {!isMapActive && (
+                  <ResizeHandle
+                    {...LEFT_PANE}
+                    label="Resize the contact list"
+                    className="hidden lg:block absolute inset-y-0 right-0"
+                  />
+                )}
+              </section>
 
-            {/* Right Pane: Standard Detail View */}
-            {!isMapActive && (
-              <main
-                id={isWide || showsPane ? MAIN_CONTENT_ID : undefined}
-                tabIndex={-1}
-                aria-label="Contact"
-                className={`
+              {/* Right Pane: Standard Detail View */}
+              {!isMapActive && (
+                <main
+                  id={isWide || showsPane ? MAIN_CONTENT_ID : undefined}
+                  tabIndex={-1}
+                  aria-label="Contact"
+                  className={`
           ${showsPane ? "flex" : "hidden lg:flex"}
           flex-1 min-w-0 bg-surface z-10 h-full overflow-hidden relative flex-col outline-none
         `}
-              >
-                <Routes location={location}>
-                  <Route path="/" element={<StartRedirect />} />
-                  <Route
-                    path="/contact/:id"
-                    element={
-                      <RouteErrorBoundary viewName="ContactDetail">
-                        <ContactDetail />
-                      </RouteErrorBoundary>
-                    }
-                  />
-                  <Route path="*" element={<NotFoundPanel />} />
-                </Routes>
-              </main>
-            )}
+                >
+                  <Routes location={location}>
+                    <Route path="/" element={<StartRedirect />} />
+                    <Route
+                      path="/contact/:id"
+                      element={
+                        <RouteErrorBoundary viewName="ContactDetail">
+                          <ContactDetail />
+                        </RouteErrorBoundary>
+                      }
+                    />
+                    <Route path="*" element={<NotFoundPanel />} />
+                  </Routes>
+                </main>
+              )}
 
-            {/* Map Overlay Detail View */}
-            {isMapActive && (
-              <AnimatePresence>
-                {isContactSelected && (
-                  // A region inside the page rather than a second main: the map
-                  // stays the page's main content while a contact is open over it.
-                  <motion.section
-                    aria-label="Contact"
-                    // The map reads this to centre a pin beside the contact, not
-                    // under it (`insets.ts`). The panel sits flush with the map's
-                    // right edge, so its width is what it covers.
-                    data-covers-map="right"
-                    initial={{ x: "100%", opacity: 0.5 }}
-                    animate={{ x: 0, opacity: 1 }}
-                    exit={{ x: "100%", opacity: 0 }}
-                    transition={{ type: "spring", bounce: 0, duration: 0.4 }}
-                    // z 40 on a phone, under the tab bar's 50, so the bar stays on
-                    // top and tappable over the contact, as it does over
-                    // /contact/:id. The map page is z 0, so 40 still covers every
-                    // pin and bar on it. From md there is no tab bar.
-                    className="absolute right-0 top-0 bottom-0 w-full md:w-[760px] lg:w-[860px] md:max-w-[calc(100vw-64px)] z-40 md:z-[100] shadow-2xl bg-surface overflow-hidden flex flex-col h-full"
-                  >
-                    <Routes location={location}>
-                      <Route
-                        path="/map/contact/:id"
-                        element={
-                          <RouteErrorBoundary viewName="ContactDetail">
-                            <ContactDetail />
-                          </RouteErrorBoundary>
-                        }
-                      />
-                    </Routes>
-                  </motion.section>
-                )}
-              </AnimatePresence>
-            )}
-          </>
-        )}
-      </Suspense>
+              {/* Map Overlay Detail View */}
+              {isMapActive && (
+                <AnimatePresence>
+                  {isContactSelected && (
+                    // A region inside the page rather than a second main: the map
+                    // stays the page's main content while a contact is open over it.
+                    <motion.section
+                      aria-label="Contact"
+                      // The map reads this to centre a pin beside the contact, not
+                      // under it (`insets.ts`). The panel sits flush with the map's
+                      // right edge, so its width is what it covers.
+                      data-covers-map="right"
+                      initial={{ x: "100%", opacity: 0.5 }}
+                      animate={{ x: 0, opacity: 1 }}
+                      exit={{ x: "100%", opacity: 0 }}
+                      transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+                      // z 40 on a phone, under the tab bar's 50, so the bar stays on
+                      // top and tappable over the contact, as it does over
+                      // /contact/:id. The map page is z 0, so 40 still covers every
+                      // pin and bar on it. From md there is no tab bar.
+                      className="absolute right-0 top-0 bottom-0 w-full md:w-[760px] lg:w-[860px] md:max-w-[calc(100vw-64px)] z-40 md:z-[100] shadow-2xl bg-surface overflow-hidden flex flex-col h-full"
+                    >
+                      <Routes location={location}>
+                        <Route
+                          path="/map/contact/:id"
+                          element={
+                            <RouteErrorBoundary viewName="ContactDetail">
+                              <ContactDetail />
+                            </RouteErrorBoundary>
+                          }
+                        />
+                      </Routes>
+                    </motion.section>
+                  )}
+                </AnimatePresence>
+              )}
+            </>
+          )}
+        </Suspense>
 
-      {/*
+        {/*
         Mobile Nav — always mounted. It used to unmount on the detail view, so
         on a phone the screen users spend the most time on was also the one
         with no way to reach Pulse, Map, Ask Contrack, or Settings. The detail view
         already reserves `pb-32` at this width, so the bar has room to sit.
       */}
-      <MobileNav />
+        <MobileNav />
+      </div>
     </div>
   );
 };
@@ -529,7 +532,6 @@ export default function App() {
             <ResponsiveLayout />
           </DedupeProvider>
         </AISearchProvider>
-        <ConnectionBanner />
         <CommandPalette />
         <KeyboardShortcutsModal
           isOpen={shortcutsOpen}

@@ -35,6 +35,9 @@ const nav = (key: string): string[] => [...NAV_MODIFIERS, key];
 const BACK_KEYS = IS_APPLE ? ["⌘", "["] : ["Alt", "←"];
 const FORWARD_KEYS = IS_APPLE ? ["⌘", "]"] : ["Alt", "→"];
 
+/** The Option key on a Mac, the Alt key elsewhere. */
+const ALT = IS_APPLE ? "⌥" : "Alt";
+
 export interface Shortcut {
   /** The heading the shortcut sits under. Must be in `SHORTCUT_GROUP_ORDER`. */
   group: string;
@@ -148,6 +151,13 @@ export const SHORTCUTS: readonly Shortcut[] = [
     bareLetter: false,
     page: "/pulse",
   },
+  {
+    group: NAMES.pulse.label,
+    keys: ["Space"],
+    description: "Mark the highlighted item done, or log a note",
+    bareLetter: false,
+    page: "/pulse",
+  },
   // Navigation. Two modifiers, so that no letter typed into a field can
   // reach it: Cmd+Shift on a Mac, Ctrl+Alt on Windows and Linux.
   {
@@ -210,7 +220,14 @@ export const SHORTCUTS: readonly Shortcut[] = [
   {
     group: "Global",
     keys: nav("I"),
-    description: "Quick interaction",
+    description: "Log an interaction",
+    bareLetter: false,
+  },
+  // Sonner's own key: it takes focus to the toasts, where Undo waits.
+  {
+    group: "Global",
+    keys: [ALT, "T"],
+    description: "Go to the notifications, for Undo",
     bareLetter: false,
   },
   // The composer, on a contact and in the quick interaction dialog. Ctrl
@@ -242,7 +259,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   {
     group: NAMES.network.label,
     keys: ["V"],
-    description: "Smart paste (AI parse)",
+    description: "Add from text",
     bareLetter: true,
     page: "/",
   },
@@ -303,7 +320,29 @@ export const SHORTCUTS: readonly Shortcut[] = [
   {
     group: NAMES.network.label,
     keys: ["Enter"],
-    description: "Open the contact",
+    description: "Open the contact, or select it in select mode",
+    bareLetter: false,
+    page: "/",
+  },
+  // Select mode: a long press, or Select in the list's header.
+  {
+    group: NAMES.network.label,
+    keys: ["Space"],
+    description: "Select or clear the contact, in select mode",
+    bareLetter: false,
+    page: "/",
+  },
+  {
+    group: NAMES.network.label,
+    keys: ["⇧", "Enter"],
+    description: "Select every contact from the last one chosen",
+    bareLetter: false,
+    page: "/",
+  },
+  {
+    group: NAMES.network.label,
+    keys: [MOD_KEY, "A"],
+    description: "Select every contact shown, in select mode",
     bareLetter: false,
     page: "/",
   },
@@ -340,7 +379,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   {
     group: NAMES.map.label,
     keys: ["Esc"],
-    description: "Clear selection or close card",
+    description: "Close the contact, or clear the selection",
     bareLetter: false,
     page: "/map",
   },
@@ -358,22 +397,37 @@ export const SHORTCUTS: readonly Shortcut[] = [
     bareLetter: false,
     page: "/map",
   },
+  {
+    group: NAMES.map.label,
+    keys: [ALT, "↑"],
+    description: "Move a view up, in Views",
+    bareLetter: false,
+    page: "/map",
+  },
+  {
+    group: NAMES.map.label,
+    keys: [ALT, "↓"],
+    description: "Move a view down, in Views",
+    bareLetter: false,
+    page: "/map",
+  },
 
   // Track is the one action on a contact with a key of its own. It does
   // what the header's Track button does, toast and Undo included.
   {
     group: "Contact",
     keys: ["T"],
-    description: "Track or untrack this contact",
+    description: "Track this contact, or stop tracking it",
     bareLetter: true,
     page: "/contact/:id",
   },
   // A contact's details. Every value edits in place: it is a button at rest
   // and a field once opened. The pencil after a value is the visible sign.
+  // Outside a control, Enter starts a note (`useContactListKeyboard`).
   {
     group: "Contact",
     keys: ["Enter"],
-    description: "Edit the value that has focus",
+    description: "Edit the value that has focus, or start a note",
     bareLetter: false,
     page: "/contact/:id",
   },
@@ -387,14 +441,14 @@ export const SHORTCUTS: readonly Shortcut[] = [
   // An address, an email or a phone. The first one is the primary one.
   {
     group: "Contact",
-    keys: ["⌥", "↑"],
+    keys: [ALT, "↑"],
     description: "Move the value up one place",
     bareLetter: false,
     page: "/contact/:id",
   },
   {
     group: "Contact",
-    keys: ["⌥", "↓"],
+    keys: [ALT, "↓"],
     description: "Move the value down one place",
     bareLetter: false,
     page: "/contact/:id",

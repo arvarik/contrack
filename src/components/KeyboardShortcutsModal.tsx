@@ -11,13 +11,13 @@
  *
  * ```
  * ┌ Keyboard shortcuts ─────────────────────────────────────── ✕ ┐
+ * │ Press ? to open this anywhere               All shortcuts →   │
+ * │                                                               │
  * │ NAVIGATION                     │ MAP                          │
  * │ Go to Network        ⌘ ⇧ H     │ Focus search              /  │
  * │ …                              │ Fit all in view           F  │
  * │ GLOBAL                         │ …                            │
  * │ Open command palette   ⌘ K     │                              │
- * │                                                               │
- * │ Press ? to open this anywhere               All shortcuts →   │
  * └───────────────────────────────────────────────────────────────┘
  * ```
  *
@@ -28,8 +28,9 @@
  *    with none says so in one line.
  * 3. With single-key shortcuts off, the letters that switch turns off are
  *    dimmed, and the footer says so with the way to turn them back on.
- * 4. The footer links to Settings, Keyboard, which lists every shortcut in
- *    the app. Below `sm` the columns stack.
+ * 4. The line above the columns links to Settings → Keyboard, which lists
+ *    every shortcut in the app. It used to be a footer, below the fold on a
+ *    contact page in a short window. Below `sm` the columns stack.
  * 5. The keys are the platform's: ⌘ ⇧ H on a Mac, Ctrl Alt H on Windows and
  *    Linux. `lib/shortcuts` builds them from `lib/platform`.
  *
@@ -116,6 +117,27 @@ export const KeyboardShortcutsModal = ({ isOpen, onClose }: Props) => {
       title="Keyboard shortcuts"
       size="xl"
     >
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs text-on-surface-variant">
+        {someOff ? (
+          <p>Single-key shortcuts are off, so the dimmed keys do nothing</p>
+        ) : (
+          <p className="flex items-center gap-1.5">
+            Press <Keycap>?</Keycap> to open this anywhere
+          </p>
+        )}
+        <Link
+          to={
+            someOff
+              ? "/settings/keyboard#single-key-shortcuts"
+              : "/settings/keyboard"
+          }
+          onClick={onClose}
+          className={BTN_QUIET}
+        >
+          {someOff ? "Turn them on" : "All shortcuts"}
+          <ArrowRight aria-hidden="true" className="w-3.5 h-3.5" />
+        </Link>
+      </div>
       {/*
         A tab stop of its own. The list can be longer than a short viewport
         and holds nothing interactive, so without one the scrolling region
@@ -150,28 +172,6 @@ export const KeyboardShortcutsModal = ({ isOpen, onClose }: Props) => {
             </section>
           )}
         </div>
-      </div>
-
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-xs text-on-surface-variant">
-        {someOff ? (
-          <p>Single-key shortcuts are off, so the dimmed keys do nothing</p>
-        ) : (
-          <p className="flex items-center gap-1.5">
-            Press <Keycap>?</Keycap> to open this anywhere
-          </p>
-        )}
-        <Link
-          to={
-            someOff
-              ? "/settings/keyboard#single-key-shortcuts"
-              : "/settings/keyboard"
-          }
-          onClick={onClose}
-          className={BTN_QUIET}
-        >
-          {someOff ? "Turn them on" : "All shortcuts"}
-          <ArrowRight aria-hidden="true" className="w-3.5 h-3.5" />
-        </Link>
       </div>
     </Modal>
   );

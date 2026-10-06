@@ -2,7 +2,7 @@
  * platform.ts: which keys this computer has, and the chords built on them.
  *
  * A Mac has a ⌘ key, and Windows and Linux do not. The navigation keys and
- * Quick interaction were ⌘ ⇧ and a letter, and the handlers read `metaKey`
+ * Log an interaction were ⌘ ⇧ and a letter, and the handlers read `metaKey`
  * alone, so on Windows and Linux they answered only to the Windows key or
  * the Super key, which the system keeps for itself. `Ctrl ⇧` is not the
  * answer there: the browser keeps `Ctrl ⇧ I` (developer tools), `Ctrl ⇧ P`
@@ -68,7 +68,7 @@ export const IS_APPLE = isApplePlatform();
 /** The key that does ⌘'s job: ⌘ on a Mac, Ctrl elsewhere. */
 export const MOD_KEY: string = IS_APPLE ? "⌘" : "Ctrl";
 
-/** The keys held for the navigation keys and Quick interaction. */
+/** The keys held for the navigation keys and Log an interaction. */
 export const NAV_MODIFIERS: readonly string[] = IS_APPLE
   ? ["⌘", "⇧"]
   : ["Ctrl", "Alt"];

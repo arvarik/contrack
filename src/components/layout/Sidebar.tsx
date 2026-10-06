@@ -14,19 +14,21 @@
  */
 import { Link, useLocation } from "react-router-dom";
 import {
-  LayoutDashboard,
+  Users,
   Map,
   Settings as SettingsIcon,
   Sparkles,
   Activity,
   Keyboard,
+  Command,
 } from "lucide-react";
 import { useCallback } from "react";
 import { navLink, SECTION_BG } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { useUrgentActionItemCount, useDedupeCount } from "../../api";
 import { useRecent } from "../../contexts/SessionContext";
-import { openKeyboardShortcuts } from "../../lib/appEvents";
+import { openCommandPalette, openKeyboardShortcuts } from "../../lib/appEvents";
+import { chordLabel, MOD_KEY } from "../../lib/platform";
 import { SidebarIdentity } from "../auth/AccountIdentity";
 import { CorvidMark } from "../brand/CorvidMark";
 import { perchProps } from "../brand/CorvidFlight";
@@ -168,10 +170,11 @@ export const Sidebar = () => {
         SECTION_BG,
         // The height its parent leaves, which pads for the status bar, and
         // a scroll of its own on a short touch screen: a phone on its side
-        // is 393 px tall, and Settings sat below it. Only there, since a
-        // scroll box clips the labels that stand out to its right, and a
-        // short laptop window needs them.
-        "w-16 h-full min-h-0 [@media(max-height:40rem)_and_(pointer:coarse)]:overflow-y-auto scrollbar-hide hidden md:flex flex-col items-center pt-6 pb-3 gap-6 shrink-0 relative z-20",
+        // is 393 px tall. Only there, since a scroll box clips the labels
+        // that stand out to its right, and a short laptop window needs them.
+        // There the rail packs tight too, so Settings is on screen and not
+        // below a fold that nothing marks.
+        "w-16 h-full min-h-0 [@media(max-height:40rem)_and_(pointer:coarse)]:overflow-y-auto [@media(max-height:30rem)]:gap-1 [@media(max-height:30rem)]:pt-2 [@media(max-height:30rem)]:pb-1 scrollbar-hide hidden md:flex flex-col items-center pt-6 pb-3 gap-6 shrink-0 relative z-20",
       )}
     >
       {/*
@@ -202,7 +205,7 @@ export const Sidebar = () => {
           className={navLink(isHome)}
           aria-label={NAMES.network.label}
         >
-          <LayoutDashboard className="w-6 h-6" />
+          <Users className="w-6 h-6" />
         </Link>
       </RailTooltip>
 
@@ -316,7 +319,22 @@ export const Sidebar = () => {
       <div className="flex flex-col items-center gap-2 w-full">
         {/* Not on a device with no mouse or trackpad, such as a tablet on its
             own: there is no keyboard to use the shortcuts with. */}
-        <div className="[@media(not_(any-pointer:fine))]:hidden">
+        <div className="[@media(not_(any-pointer:fine))]:hidden flex flex-col items-center gap-2">
+          {/* The palette for a mouse. A touch screen has it in each page's
+              header (`PaletteButton`). */}
+          <RailTooltip
+            label="Command palette"
+            shortcut={chordLabel([MOD_KEY, "K"])}
+          >
+            <button
+              type="button"
+              onClick={openCommandPalette}
+              className={navLink(false)}
+              aria-label="Command palette"
+            >
+              <Command className="w-6 h-6" />
+            </button>
+          </RailTooltip>
           <RailTooltip label="Keyboard shortcuts" shortcut="?">
             <button
               type="button"
