@@ -1,11 +1,6 @@
 /**
- * ConnectorsView — Settings view for managing data connectors.
- *
- * Provides a gallery for adding new sources (Calendar, IMAP, Google, etc.),
- * lists active connectors with status and next sync schedules, and exposes
- * run history inspection and manual sync triggers.
- *
- * @module views/settings/connectors/ConnectorsView
+ * ConnectorsView: the Connectors settings page. It adds connectors, lists
+ * them with their status and schedule, and opens their run history.
  */
 
 import React, { useEffect, useState } from "react";
@@ -247,14 +242,12 @@ export const ConnectorsView: React.FC = () => {
         </section>
       )}
 
-      {/* Add connector sheet */}
       <AddConnectorSheet
         isOpen={addSheetOpen}
         onClose={() => setAddSheetOpen(false)}
         onSelectKind={handleSelectKind}
       />
 
-      {/* Calendar form modal */}
       <CalendarFormModal
         isOpen={calendarModalOpen}
         onClose={() => {
@@ -264,7 +257,6 @@ export const ConnectorsView: React.FC = () => {
         connector={editingConnector?.kind === "ics" ? editingConnector : null}
       />
 
-      {/* IMAP form modal */}
       <ImapFormModal
         isOpen={imapModalOpen}
         onClose={() => {
@@ -274,7 +266,6 @@ export const ConnectorsView: React.FC = () => {
         connector={editingConnector?.kind === "imap" ? editingConnector : null}
       />
 
-      {/* Google form modal */}
       <GoogleFormModal
         isOpen={googleModalOpen}
         onClose={() => {
@@ -286,7 +277,6 @@ export const ConnectorsView: React.FC = () => {
         }
       />
 
-      {/* Run history drawer */}
       <RunHistoryDrawer
         isOpen={historyDrawerOpen}
         onClose={() => {

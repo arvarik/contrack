@@ -1,10 +1,6 @@
 /**
- * CalendarFormModal — modal form for adding or editing an ICS calendar connector.
- *
- * Captures private ICS URL (masked like a capability), sync interval, lookback period,
- * attendee filter, and description opt-in.
- *
- * @module views/settings/connectors/CalendarFormModal
+ * CalendarFormModal: adds or edits an ICS calendar connector. The URL is
+ * masked, because a private ICS address grants access to the calendar.
  */
 
 import React, { useEffect, useState } from "react";
@@ -177,7 +173,6 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
       size="md"
     >
       <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-        {/* Privacy line */}
         <div className="rounded-lg bg-surface-container p-3 text-xs text-on-surface-variant leading-relaxed">
           <p>
             <strong>Privacy:</strong> Only event times, titles, and participant
@@ -188,7 +183,6 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
 
         <FormError message={formError} />
 
-        {/* Name */}
         <div>
           <label htmlFor="connector-name" className={FIELD_HEADING}>
             Connector name
@@ -204,7 +198,6 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           />
         </div>
 
-        {/* ICS URL */}
         <div>
           <label htmlFor="connector-ics-url" className={FIELD_HEADING}>
             Private ICS calendar URL
@@ -244,7 +237,6 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
         />
         <LookbackField value={lookbackDays} onChange={setLookbackDays} />
 
-        {/* Max Attendees */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label htmlFor="connector-max-attendees" className={FIELD_HEADING}>
@@ -297,7 +289,6 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           </div>
         </div>
 
-        {/* Include description switch */}
         <div className="flex items-center justify-between gap-3 pt-2">
           <div>
             <span className="block text-xs font-semibold text-on-surface">
@@ -314,7 +305,6 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           />
         </div>
 
-        {/* Test Result Indicator */}
         {testResult && (
           <div
             role="status"
@@ -327,7 +317,6 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           </div>
         )}
 
-        {/* Actions */}
         <div className="flex items-center justify-between gap-3 pt-2">
           <button
             type="button"

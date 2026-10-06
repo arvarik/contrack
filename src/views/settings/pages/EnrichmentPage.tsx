@@ -1,16 +1,10 @@
 /**
- * EnrichmentPage — Research contacts on the web to fill in missing details.
- *
- * The page's settings first, then its tool. The settings are the two that
- * every start uses: "Enrich new contacts automatically" and the web search
- * engine (`EngineChoice`), with the admin's research count. The tool below
- * them (AISearchView) chooses a depth and contacts for one batch.
+ * EnrichmentPage: the two settings every research run uses (enrich new
+ * contacts, the web search engine), then the research tool.
  *
  * The engine is the account's own when the instance has more than one
  * account. With one, it is the instance's, the same value as Administration
- * → AI → Web search, so it is one choice wherever it is shown.
- *
- * @module views/settings/pages/EnrichmentPage
+ * → AI → Web search.
  */
 import { AISearchView } from "../../ai-search";
 import { SettingRow } from "../SettingRow";

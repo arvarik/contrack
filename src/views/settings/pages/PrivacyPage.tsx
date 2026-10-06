@@ -1,18 +1,12 @@
 /**
- * PrivacyPage — Privacy and AI settings for this account.
+ * PrivacyPage: the AI switch, the search history, what stays on the server,
+ * and what each AI feature uses.
  *
- * The AI switch, the search history, what stays on the server, and what
- * each AI feature uses (`FeatureMap`), with a link to AI usage.
- *
- * The switch is the account's own, "Use AI for my account", when the
- * instance has more than one account. With one, that account is the admin
- * and the instance is theirs alone: two switches, one for the account and
- * one for the instance, did the same thing in two places. The page then
- * shows one, "Use AI", which is the instance's switch. Turning it on also
- * turns the account's own back on, so a switch left off before cannot keep
- * AI off unseen.
- *
- * @module views/settings/pages/PrivacyPage
+ * With more than one account, the switch is the account's own ("Use AI for
+ * my account"). With one, that account is the admin's, so the page shows
+ * one switch, the instance's ("Use AI"), instead of two that do the same
+ * thing. Turning it on also turns the account's own back on, so a switch
+ * left off cannot keep AI off unseen.
  */
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
@@ -68,9 +62,8 @@ export const PrivacyPage = () => {
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
   const { data } = useSearchHistoryList();
   const clearMutation = useClearHistory();
-  // An admin can turn AI off for every account. The account's own switch
-  // cannot turn it back on then, so it shows off, cannot be pressed, and
-  // says why.
+  // With AI off for the instance, the account's switch shows off, cannot be
+  // pressed, and says why.
   const { data: instanceAi } = useInstanceAi();
   const instanceOff = instanceAi?.aiOff === true;
   const { data: aiSettings } = useAISettings();

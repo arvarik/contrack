@@ -1,11 +1,4 @@
-/**
- * ImapFormModal — modal form for adding or editing a Mailbox (IMAP) connector.
- *
- * Captures host, port, credentials, folder list, self aliases, sync interval,
- * lookback days, rollup option, and AI summaries opt-in.
- *
- * @module views/settings/connectors/ImapFormModal
- */
+/** ImapFormModal: adds or edits a mailbox (IMAP) connector. */
 
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -239,7 +232,6 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
       size="md"
     >
       <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-        {/* Privacy line */}
         <div className="rounded-lg bg-surface-container p-3 text-xs text-on-surface-variant leading-relaxed">
           <p>
             <strong>Privacy:</strong> Headers only by default (From, To, Cc,
@@ -250,7 +242,6 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
 
         <FormError message={formError} />
 
-        {/* Name */}
         <div>
           <label htmlFor="imap-connector-name" className={FIELD_HEADING}>
             Connector name
@@ -265,7 +256,6 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
           />
         </div>
 
-        {/* Host and Port */}
         <div className="grid grid-cols-3 gap-3">
           <div className="col-span-2">
             <label htmlFor="imap-host" className={FIELD_HEADING}>
@@ -294,7 +284,6 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
           </div>
         </div>
 
-        {/* Username */}
         <div>
           <label htmlFor="imap-username" className={FIELD_HEADING}>
             Username / email
@@ -309,7 +298,6 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
           />
         </div>
 
-        {/* App password */}
         <div>
           <label htmlFor="imap-password" className={FIELD_HEADING}>
             {isEditing
@@ -347,7 +335,6 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
           </p>
         </div>
 
-        {/* Folders */}
         <div>
           <label htmlFor="imap-folders" className={FIELD_HEADING}>
             Folders to sync
@@ -365,7 +352,6 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
           </p>
         </div>
 
-        {/* Aliases */}
         <div>
           <label htmlFor="imap-aliases" className={FIELD_HEADING}>
             Also treat these addresses as mine
@@ -389,7 +375,6 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
         />
         <LookbackField value={lookbackDays} onChange={setLookbackDays} />
 
-        {/* Rollup toggle */}
         <SwitchTile
           title="Roll up emails per contact per day"
           description="Consolidates multiple daily emails with the same person into one timeline entry"
@@ -397,7 +382,6 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
           onChange={setRollup}
         />
 
-        {/* AI summaries */}
         <SwitchTile
           title="Generate AI summaries"
           description="Fetches email bodies for matched contacts to generate concise interaction notes"
@@ -412,7 +396,6 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
           onChange={setGhostThreshold}
         />
 
-        {/* Test Result feedback */}
         {testResult && (
           <div
             className={cn(
@@ -424,7 +407,6 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
           </div>
         )}
 
-        {/* Actions */}
         <div className="flex items-center justify-between pt-2">
           <button
             type="button"

@@ -1,10 +1,6 @@
 /**
- * KeyboardPage — Single-key shortcuts and keyboard reference table.
- *
- * Switch for singleKeyShortcuts, plus the full SHORTCUTS table grouped
- * by SHORTCUT_GROUP_ORDER, clearly marking which keys the switch turns off.
- *
- * @module views/settings/pages/KeyboardPage
+ * KeyboardPage: the single-key shortcuts switch, and every shortcut by
+ * group, marked where the switch turns it off.
  */
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { SettingRow } from "../SettingRow";

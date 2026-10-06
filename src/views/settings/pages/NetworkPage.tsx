@@ -1,8 +1,6 @@
 /**
- * NetworkPage — Where Contrack opens, contacts list defaults, and weather.
- *
- * Start page, list sort, recent contacts, the default cadence, whether new
- * contacts start tracked, week start, weather, and temperature unit.
+ * NetworkPage: where Contrack opens, the contact list's defaults, the
+ * default cadence, tracking, the week's start and the weather.
  */
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import {
@@ -124,11 +122,10 @@ export const NetworkPage = () => {
           />
         </SettingRow>
 
-        {/* The four cadences, and the stored one when it is off the list:
-            every 2 months or every 6 months, saved before 2.0, shows as a
-            fifth option in its place in the order, so the select never
-            names a default the account does not have. A Select, not a
-            Segmented: five words do not fit a trough at phone width. */}
+        {/* A stored cadence off the list (every 2 or 6 months, from before
+            2.0) shows as a fifth option, so the select never names a
+            default the account does not have. A Select, because five words
+            do not fit a Segmented at phone width. */}
         <SettingRow
           id="cadence"
           title="Default cadence"
