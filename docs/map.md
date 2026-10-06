@@ -75,7 +75,7 @@ The map flies to a contact, a place or a view. With **Reduced** in **Settings �
 The line in the bottom left corner says who is on the map and in view. Only people with a place are on the map, so its count can be lower than the count on the Network page.
 
 - "30 on the map" when all of them are in view, "12 in view, of 30 on the map" when some of the people who match are off the screen, or "No one in view".
-- While the contacts load, it says "Loading contacts…". When they do not load, it says "Could not load contacts", and the map offers **Retry**. With no pins at all, it says "No one is on the map yet", and the middle of the map says how a contact gets a place, with **Go to Network**.
+- While the contacts load, it says "Loading contacts…". When they do not load, it says "Could not load your contacts", and the map offers **Try again**. With no pins at all, it says "No one is on the map yet", and the middle of the map says how a contact gets a place, with **Go to Network**.
 - **4 overdue** counts the people in view whose follow-up day has passed. Select it to show only them, and select it again to show everyone. **Clear all** turns it off too.
 - **6 not on the map** counts the contacts with an address and no pin (see [Who is on the map](#who-is-on-the-map)).
 - **Fit all** shows when no one is in view.

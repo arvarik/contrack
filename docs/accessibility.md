@@ -186,7 +186,7 @@ Windows. Do steps 1 to 4 with both.
    twice, and nothing is read while you type.
 2. Switch to **Notes** with the arrow keys and type a word. You hear "N notes
    for …". Choose **Last 30 days**, and you hear the new count once.
-3. Stop the server and ask again. You hear "Search failed" as an
+3. Stop the server and ask again. You hear "Could not search" as an
    interruption, and nothing from the status region.
 4. Leave the page and come back. The results show, and nothing is read.
 5. Open the shortcuts dialog. You hear "Keyboard shortcuts, dialog".

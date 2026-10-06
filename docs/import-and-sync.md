@@ -84,7 +84,7 @@ A row that cannot be saved stays on the server with its reason, and the
 summary lists it. **Retry failed rows** runs these rows again, with no need
 for the file. **Settings → Import** also lists **Recent imports**, newest
 first, with each status (**Complete**, **Checking**, **Running**, or
-**Failed**) and its counts. Select **Retry** on a row with failed rows. If an
+**Failed**) and its counts. Select **Try again** on a row with failed rows. If an
 import saved nothing, import the file again.
 
 ### Duplicates at import
