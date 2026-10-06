@@ -1,6 +1,4 @@
-// =============================================================================
-// Integration Tests — a duplicate decision, from merge to undo and back
-// =============================================================================
+// Integration: a duplicate decision, from merge to undo and back
 // What happens to a pair after somebody, or something, decides about it:
 //
 // - An undo keeps the two apart, so the next scan does not merge them again.
@@ -9,7 +7,6 @@
 // - No pair waits in the review for a contact that was merged away, and a
 //   merge of one says it cannot rather than answering "merged".
 // - Every merge answer carries its history row, for an Undo.
-// =============================================================================
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import request from "supertest";
@@ -98,9 +95,7 @@ beforeEach(() => {
 });
 afterEach(() => choose("default"));
 
-// ---------------------------------------------------------------------------
 // Undo
-// ---------------------------------------------------------------------------
 
 describe("undoing an automatic merge", () => {
   const pair = [
@@ -242,9 +237,7 @@ describe("undoing an automatic merge", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Keep separate, and its undo
-// ---------------------------------------------------------------------------
 
 describe("restoring a pair kept separate", () => {
   async function dismissedPair(): Promise<{ id: string; ids: string[] }> {
@@ -302,9 +295,7 @@ describe("restoring a pair kept separate", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // The contact a merged one became
-// ---------------------------------------------------------------------------
 
 describe("GET /api/dedupe/merged-into/:contactId", () => {
   it("answers null for a live contact and 404 for an unknown one", async () => {
@@ -360,9 +351,7 @@ describe("GET /api/dedupe/merged-into/:contactId", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // No pair waits for a contact that was merged away
-// ---------------------------------------------------------------------------
 
 describe("pairs after a merge", () => {
   it("leave the review when a pair's contact merges from its own row", async () => {
@@ -509,9 +498,7 @@ describe("pairs after a merge", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // What the answers carry
-// ---------------------------------------------------------------------------
 
 describe("what a merge answers", () => {
   it("names its history rows, for an Undo", async () => {

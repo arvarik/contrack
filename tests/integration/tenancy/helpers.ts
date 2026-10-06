@@ -1,16 +1,8 @@
-// =============================================================================
-// Two-user test harness
-// =============================================================================
-// Phase 2 proves isolation, and isolation cannot be proven with one account.
-// Every test in the matrix needs two real users with real sessions and real
-// rows, created the way production creates them, so this builds them once.
-//
-// `seedOwner` deliberately goes through the public API rather than inserting
-// rows directly. A row written by hand would carry whatever ownerId the test
-// chose, which proves nothing. A row written through POST /api/contacts is
-// stamped by the same code path a browser hits, so the assertion is about the
-// product and not about the fixture.
-// =============================================================================
+// Two-user test harness.
+// Isolation needs two real users with real sessions and rows, created as
+// production creates them. `seedOwner` goes through the public API, not
+// direct inserts, so each row is stamped by the code a browser hits and not
+// with an ownerId the test chose.
 
 import request from "supertest";
 import type http from "http";
@@ -232,18 +224,11 @@ export function rowsOwnedBy(table: string, ownerId: string): number {
   return row.n;
 }
 
-/**
- * Remove every account and every owned row.
- *
- * Order matters. `users` is referenced with ON DELETE RESTRICT, so the owned
- * rows have to go first or the delete fails. Phase 1 changes this to keep or
- * recreate the permanent local owner (see 06-phase-1-storage.md, task 1.13).
- */
+/** Remove every account and every owned row, then create the local owner again. */
 export function resetAccounts(): void {
-  // The owned rows go first: `users` is referenced with ON DELETE RESTRICT, so
-  // deleting an account that still owns a contact fails. Since Phase 1 the
-  // local owner owns every row written with auth off, which is why a plain
-  // DELETE FROM users no longer works on its own.
+  // The owned rows go first: `users` is referenced with ON DELETE RESTRICT,
+  // and the local owner owns every row written with auth off, so a plain
+  // DELETE FROM users fails on its own.
   sqlite.exec(`
     DELETE FROM events;
     DELETE FROM jobs;

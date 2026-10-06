@@ -1,20 +1,14 @@
-// =============================================================================
-// Integration: Account Profile Pictures (/api/auth/me/avatar)
-// =============================================================================
-// Spec: docs/v2/profile-pictures.md section 6 & 7.
-//
-// Verifies:
-// 1. Uploading a valid image (PNG) normalizes through sharp to 512px cover JPEG
-//    at quality 82 under uploads/u/<userId>/profile/profile-<timestamp>.jpg.
-// 2. Profile photo is visible to its owner (200) and any other signed-in user
-//    on the instance (200), but returns 401 without credentials.
-// 3. Contact avatars in avatars/ remain strictly owner-only (404 to second account).
-// 4. Replacing an avatar deletes the previous file on disk and updates the URL.
+// Integration: account profile pictures (/api/auth/me/avatar).
+// 1. A valid image (PNG) normalizes through sharp to a 512px cover JPEG at
+//    quality 82 under uploads/u/<userId>/profile/profile-<timestamp>.jpg.
+// 2. The photo is visible to its owner and any other signed-in user on the
+//    instance (200), and returns 401 without credentials.
+// 3. Contact avatars in avatars/ stay owner-only (404 to a second account).
+// 4. Replacing an avatar deletes the previous file and updates the URL.
 // 5. Deleting an avatar deletes the file, sets avatarUrl to null, and is idempotent.
 // 6. SVG uploads and non-image bytes fail with 400 VALIDATION_ERROR.
-// 7. Files exceeding 10 MB fail with 413 PAYLOAD_TOO_LARGE.
+// 7. Files over 10 MB fail with 413 PAYLOAD_TOO_LARGE.
 // 8. GET /api/auth/status and GET /api/auth/me carry avatarUrl.
-// =============================================================================
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";

@@ -1,11 +1,8 @@
-// =============================================================================
 // Integration: how the server serves the web app (server/serveClient.ts)
-// =============================================================================
 // In production the server sends dist/, and index.html for any page a person
 // opens, wherever the app is installed. In development Vite's reload socket
 // sits on the app's own server, so a page dials the port it came from and
 // never the socket of another dev server on the same machine.
-// =============================================================================
 
 import { afterEach, describe, expect, it } from "vitest";
 import fs from "node:fs";

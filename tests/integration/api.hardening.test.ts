@@ -1,6 +1,4 @@
-// =============================================================================
 // Integration: request-surface hardening — body limits and response headers
-// =============================================================================
 
 import { describe, it, expect } from "vitest";
 import request from "supertest";
@@ -11,8 +9,7 @@ const app = makeTestApp();
 describe("body size limits", () => {
   it("refuses an oversized body on an ordinary route with a 413", async () => {
     // parse-contact takes pasted text; nothing legitimate pastes 1.2 MB.
-    // Before the split this was accepted — every route inherited the 50 MB
-    // limit sized for bulk import, unauthenticated routes included.
+    // The 50 MB limit is for bulk import only, not every route.
     const res = await request(app)
       .post("/api/parse-contact")
       .send({ text: "x".repeat(1_200_000) });

@@ -1,14 +1,8 @@
-// =============================================================================
-// Integration: server-side user preferences
-// =============================================================================
-// These settings used to live in `localStorage`, which is keyed by origin and
-// not by account. The two things this file has to prove are therefore not the
-// same thing: that a preference survives a round trip, and that it belongs to
-// one account.
-//
-// The second is the reason the feature exists, so it is tested from both ends:
-// two signed-in accounts, and a personal token acting for one of them.
-// =============================================================================
+// Integration: server-side user preferences.
+// Two claims: a preference survives a round trip, and it belongs to one
+// account (`localStorage` is per origin, not per account). The second is
+// tested from both ends: two signed-in accounts, and a personal token acting
+// for one of them.
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
@@ -396,10 +390,10 @@ describe("closing an account", () => {
 /**
  * The default cadence.
  *
- * The menus offer four cadences since 2.0: weekly, monthly, quarterly and
- * yearly. Every 2 months and every 6 months were choices before that, and an
- * account that saved one must keep it: a stored value the schema refuses is
- * skipped on read, and the account would drop to quarterly without a word.
+ * The menus offer four cadences: weekly, monthly, quarterly and yearly. A
+ * stored every 2 months or every 6 months must still load, because a value
+ * the schema refuses is skipped on read and the account would drop to
+ * quarterly without a word.
  *
  * Last in the file, with an account of its own: the isolation test above
  * counts the accounts that have rows.
@@ -427,7 +421,7 @@ describe("the default cadence", () => {
       expect(res.status, String(days)).toBe(200);
       expect(getPreferences(C.user.id).defaultCadenceDays).toBe(days);
     }
-    // A row written before 2.0, straight into the table.
+    // A retired cadence, written straight into the table.
     sqlite
       .prepare(
         `INSERT INTO user_settings (userId, key, value) VALUES (?, ?, ?)

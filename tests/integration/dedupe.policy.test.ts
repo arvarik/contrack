@@ -1,16 +1,9 @@
-// =============================================================================
-// Integration Tests — one merge policy, on every path that merges
-// =============================================================================
-// Three paths can merge two contacts with nobody asked: a scan somebody
-// starts, the check every import runs, and the check that runs after a
-// contact is added by hand. Each used to carry its own numbers. The import
-// path scored a shared phone 0.99 where the scan scored it 0.95, and ran at a
-// fixed 0.93 whatever the account had chosen in Settings.
-//
-// So this file asks the same questions of every path. Does the preset reach
-// it? Does it score a pair the way the others do? Does it stop at a household
-// on one phone line?
-// =============================================================================
+// Integration: one merge policy, on every path that merges.
+// Three paths merge two contacts with nobody asked: a scan somebody starts,
+// the check every import runs, and the check after a contact is added by
+// hand. Each is asked the same questions. Does the Settings preset reach it?
+// Does it score a pair as the others do? Does it stop at a household on one
+// phone line?
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import request from "supertest";
@@ -109,9 +102,7 @@ function reset(): void {
 beforeEach(() => reset());
 afterEach(() => choose("default"));
 
-// ---------------------------------------------------------------------------
 // The preset reaches every path
-// ---------------------------------------------------------------------------
 
 describe("the account's preset is the threshold", () => {
   it("resolves from the stored preference, and defaults to balanced", () => {
@@ -124,8 +115,7 @@ describe("the account's preset is the threshold", () => {
 
   it("reaches the import", async () => {
     // A shared phone number scores 0.95: enough for the balanced preset and
-    // not for the cautious one. The import used to run at 0.93 whatever the
-    // account had chosen.
+    // not for the cautious one, so the import must use the account's preset.
     await seed([{ name: "Robert Castellanos", phones: ["+34 555 867 5309"] }]);
     const [imported] = await seed([
       { name: "Bob Castellanos", phones: ["555-867-5309"] },
@@ -192,7 +182,7 @@ describe("the account's preset is the threshold", () => {
       { name: "Bob Castellanos", phones: ["555-867-5309"] },
     ]);
 
-    // The browser sends the mode and nothing else now.
+    // The browser sends the mode and nothing else.
     choose("conservative");
     await scanThroughApi({ mode: "quick" });
     expect(anyMerged(ids)).toBe(false);
@@ -222,9 +212,7 @@ describe("the account's preset is the threshold", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // The two paths score a pair the same way
-// ---------------------------------------------------------------------------
 
 describe("the import and the scan agree on what a match is worth", () => {
   /** Six pairs, one per rule, in a corpus with nothing else in it. */
@@ -338,9 +326,7 @@ describe("the import and the scan agree on what a match is worth", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // What weakens a match
-// ---------------------------------------------------------------------------
 
 describe("a shared number between two different first names", () => {
   it("is reviewed in an import, with the reason written on it", async () => {
@@ -420,8 +406,8 @@ describe("a father and a son", () => {
   });
 
   it("are not an exact name match on the import path either", async () => {
-    // Both normalize to "robert hale" and the import path used to claim
-    // that as one name at one company, which is auto-merge territory.
+    // Both normalize to "robert hale", and one name at one company would be
+    // auto-merge territory.
     const [senior] = await seed([
       { name: "Robert Hale Sr.", company: "Hale & Sons" },
     ]);
@@ -622,9 +608,7 @@ describe("a value many contacts carry", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // A pair marked as different people
-// ---------------------------------------------------------------------------
 
 describe("a pair marked as different people", () => {
   /** "Not the same person", as the review screen records it. */

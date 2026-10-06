@@ -1,11 +1,8 @@
-// =============================================================================
 // Integration: the research layer that runs every research request
-// =============================================================================
 // The one-contact route and the batch queue both call research(), with the
 // technique and the web search the request chose. A start checks the choice
 // before anything is spent, every technique's result has every field, and an
 // AI switch turned off mid-run stops the next model call or web search.
-// =============================================================================
 
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import request from "supertest";

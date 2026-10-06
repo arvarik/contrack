@@ -1,12 +1,7 @@
-// =============================================================================
-// Integration test setup — real SQLite database in an isolated temp directory
-// =============================================================================
-// Runs BEFORE each integration test file imports any server module, so
-// server/db.ts opens its database (and creates uploads/) inside a fresh
-// temp DATA_DIR instead of the repo root. Each test file gets its own
-// directory — vitest isolates module state per file, so each file also gets
-// its own database connection, migrations, and FTS index.
-// =============================================================================
+// Integration test setup: a real SQLite database in a temp directory.
+// Runs before each integration file imports a server module, so server/db.ts
+// opens its database (and creates uploads/) in a fresh temp DATA_DIR. Vitest
+// isolates module state per file, so each file gets its own database.
 
 import { vi } from "vitest";
 import { mkdtempSync } from "fs";
@@ -14,16 +9,10 @@ import { tmpdir } from "os";
 import path from "path";
 
 /**
- * Integration tests use the REAL database. Said explicitly, because the unit
- * project's setup (tests/setup.ts) replaces `server/db.ts` with stubs whose
- * `get()` returns undefined, and `npm test` runs both projects in one command.
- *
- * When a worker carried that mock into an integration file, the symptoms were
- * a 404 where a 400 was expected and a contact with no `lastContactedAt`:
- * nothing that points at a mocked database, which is what made it expensive to
- * chase. Declaring the unmock costs nothing and removes the possibility.
- * `makeTestApp` also asserts the connection is real, so if this ever stops
- * working the failure names itself.
+ * Integration tests use the real database. The unit setup (tests/setup.ts)
+ * stubs `server/db.ts`, and `npm test` runs both projects in one command, so
+ * a worker could carry that mock into an integration file and fail in ways
+ * that never point at it. `makeTestApp` also asserts the connection is real.
  */
 vi.unmock("../server/db.ts");
 

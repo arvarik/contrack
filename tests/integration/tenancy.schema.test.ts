@@ -1,16 +1,10 @@
-// =============================================================================
-// Integration Tests — the tenancy schema of a new database
-// =============================================================================
-// A new database gets its ownership columns, triggers and composite indexes
-// from the baseline migration (server/db/migrations/0001_baseline.ts). This
-// file reads what the first boot left behind, then boots again against the
-// same file.
-//
-// The second boot matters because every start runs the migration runner,
-// every index installer and the steps server/db.ts runs on every boot. A step
-// that is not idempotent shows up as a changed schema, a second local owner,
-// a migration applied twice, or a version that moved.
-// =============================================================================
+// Integration: the tenancy schema of a new database.
+// The baseline migration (server/db/migrations/0001_baseline.ts) gives a new
+// database its ownership columns, triggers and composite indexes. This reads
+// what the first boot left, then boots again against the same file: every
+// start runs the migration runner, the index installers and the boot steps,
+// and a step that is not idempotent shows as a changed schema, a second local
+// owner, a migration applied twice, or a version that moved.
 
 import { describe, it, expect, afterAll, vi } from "vitest";
 import type Database from "better-sqlite3";

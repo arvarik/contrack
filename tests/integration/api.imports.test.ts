@@ -1,19 +1,12 @@
-// =============================================================================
-// Integration Tests — an import that can be interrupted and asked again
-// =============================================================================
-// A bulk import used to exist only for the life of its request. Two things
-// followed. A stream that ended without its `done` frame left the browser
-// showing "Import complete" over an import it knew nothing about, and a
-// second attempt created every contact again under fresh ids.
+// Integration: an import that can be interrupted and asked again.
+// Every import has an id the caller chooses and a record the server keeps, so
+// a stream that ends without its `done` frame does not claim success and a
+// second attempt does not create every contact again. The same request twice
+// imports once, the record says where an import is, a failed row is kept and
+// can run again, and a record whose process died settles on the next read.
 //
-// Every import now has an id the caller chooses and a record the server
-// keeps. These tests are about that record: the same request twice imports
-// once, the record says where an import is, a row that fails is kept and can
-// be run again, and a record whose process died settles on the next read.
-//
-// The JSON path runs its duplicate check after a settle delay, shortened
-// here so the tests wait milliseconds rather than seconds.
-// =============================================================================
+// The JSON path runs its duplicate check after a settle delay, shortened here
+// to milliseconds.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import request from "supertest";
@@ -136,9 +129,7 @@ function reset(): void {
 beforeEach(() => reset());
 afterEach(() => vi.restoreAllMocks());
 
-// ---------------------------------------------------------------------------
 // The record
-// ---------------------------------------------------------------------------
 
 describe("every import leaves a record", () => {
   it("answers a streamed import with its id first and its status last", async () => {
@@ -217,9 +208,7 @@ describe("every import leaves a record", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // The same request twice
-// ---------------------------------------------------------------------------
 
 describe("the same import id twice", () => {
   it("imports once on the stream, and answers the second request from the record", async () => {
@@ -306,9 +295,7 @@ describe("the same import id twice", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // A row that fails
-// ---------------------------------------------------------------------------
 
 describe("a row that fails", () => {
   /** Make the child-record write throw for one name, the way a bad row would. */
@@ -437,9 +424,7 @@ describe("a row that fails", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // An import that stops between two batches
-// ---------------------------------------------------------------------------
 
 describe("an import that stops part way", () => {
   it("keeps the batches it saved, and the rows it never reached can be retried", async () => {
@@ -501,9 +486,7 @@ describe("an import that stops part way", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // A check that never finished
-// ---------------------------------------------------------------------------
 
 describe("an import whose duplicate check was interrupted", () => {
   it("is finished on the next read, and the summary counts what the check found", async () => {
@@ -579,9 +562,7 @@ describe("an import whose duplicate check was interrupted", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // The service, without a request
-// ---------------------------------------------------------------------------
 
 describe("bulkCreateContacts without an import id", () => {
   it("is still all or nothing", async () => {

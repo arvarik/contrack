@@ -1,12 +1,9 @@
-// =============================================================================
-// Integration Tests — what turning tracking on and off means
-// =============================================================================
+// Integration: what turning tracking on and off means
 // `trackedAt` is written by two database triggers, so every path that flips
 // the flag records the moment the same way. The cadence is set when a contact
 // is tracked: from the body when it names one, else from the owner's default,
 // and only for rows that were untracked. A new contact follows the
 // `trackNewContacts` preference only when a person adds it by hand.
-// =============================================================================
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import { sqlite } from "../../server/db.ts";

@@ -1,14 +1,8 @@
-// =============================================================================
-// Integration: npm run db:enrich makes a test network and fills it in
-// =============================================================================
-// scripts/bench/run.ts fills in the contacts that carry the `benchseed` tag,
-// and creates them first for an account that has none. These tests run it on
-// the real schema, with its triggers, and check what matters to the person
-// who reads the result: a seed gives the same people on any database, a
-// second run changes nothing, the words a contact has survive, the people
-// who are not tagged are not touched, and the server's next boot has nothing
-// left to redo.
-// =============================================================================
+// Integration: npm run db:enrich makes a test network and fills it in.
+// scripts/bench/run.ts runs on the real schema, with its triggers. A seed
+// gives the same people on any database, a second run changes nothing, a
+// contact's words survive, untagged people are not touched, and the server's
+// next boot has nothing left to redo.
 
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import crypto from "node:crypto";

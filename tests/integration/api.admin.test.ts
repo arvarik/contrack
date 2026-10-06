@@ -1,23 +1,13 @@
-// =============================================================================
-// Integration Tests — the admin API
-// =============================================================================
-// Phase 3 turns a classification into a guard. Fourteen routes carried the
-// `admin` class through Phase 2 and nothing enforced it; thirteen more arrive
-// here. Every one of them is now closed to a member, and the manifest test
-// proves the guard sits on each route. This file proves what happens behind
-// the guard: accounts are created, invited, disabled, and finally deleted with
-// everything they own.
+// Integration: the admin API.
+// Every admin route is closed to a member, and the manifest test proves the
+// guard sits on each one. This file covers what happens behind the guard:
+// accounts are created, invited, disabled, and deleted with all they own.
 //
-// Two conventions run through the file.
-//
-//   • Every describe that needs a particular arrangement of accounts starts
-//     from a clean instance and holds its own handles. Sharing one admin
-//     across the whole file was tried first and made every last-admin case
-//     depend on the case above it.
-//   • Everything runs with AUTH_REQUIRED on. With authentication off the
-//     implicit principal is the local owner, which is an admin, so every
-//     assertion about a member being refused would pass for the wrong reason.
-// =============================================================================
+//   • Each describe that needs a set of accounts starts from a clean instance
+//     and holds its own handles, so no last-admin case depends on another.
+//   • Everything runs with AUTH_REQUIRED on. With it off the implicit
+//     principal is the local owner, an admin, so a member's refusal would pass
+//     for the wrong reason.
 
 import {
   describe,
@@ -69,9 +59,7 @@ interface Handle {
   cookie: string[];
 }
 
-// =============================================================================
 // Harness
-// =============================================================================
 
 function cookieFrom(res: request.Response): string[] {
   return (res.headers["set-cookie"] as unknown as string[]) ?? [];
@@ -216,9 +204,7 @@ beforeEach(() => {
   __resetAuthRateLimits();
 });
 
-// =============================================================================
 // 3.1 Role enforcement
-// =============================================================================
 
 const ADMIN_ROUTES = ROUTE_MANIFEST.filter((r) => r.class === "admin");
 
@@ -299,9 +285,7 @@ describe("every admin route", () => {
   });
 });
 
-// =============================================================================
 // 3.2 User management
-// =============================================================================
 
 describe("managing accounts", () => {
   let admin: Handle;
@@ -356,9 +340,8 @@ describe("managing accounts", () => {
     // `createSession` writes `new Date(...).toISOString()` while the count
     // compares against `datetime('now')`, and SQLite compares TEXT byte by
     // byte: a `T` sorts after a space, so a session that expired earlier
-    // today counted as live until the UTC date rolled over. The account's own
-    // list at GET /api/auth/sessions reads the same column the same way, so
-    // the two would have disagreed if only one of them were fixed.
+    // today would count as live until the UTC date rolled over. The account's
+    // own list at GET /api/auth/sessions reads the same column the same way.
     const before = await as(admin)(
       request(app).get(`/api/admin/users/${member.id}`),
     );
@@ -516,9 +499,7 @@ describe("managing accounts", () => {
   });
 });
 
-// =============================================================================
 // 3.4 Temporary password and the forced change
-// =============================================================================
 
 describe("an account whose password an admin chose", () => {
   let admin: Handle;
@@ -671,9 +652,7 @@ describe("resetting a password", () => {
   });
 });
 
-// =============================================================================
 // 3.3 Invitations
-// =============================================================================
 
 describe("invitations", () => {
   let admin: Handle;
@@ -1032,9 +1011,7 @@ describe("invitations", () => {
   });
 });
 
-// =============================================================================
 // 3.5 Disable and enable
-// =============================================================================
 
 describe("disabling an account", () => {
   let admin: Handle;
@@ -1101,9 +1078,7 @@ describe("disabling an account", () => {
   });
 });
 
-// =============================================================================
 // 3.5 The guards
-// =============================================================================
 
 describe("the guards on removing an administrator", () => {
   let sole: Handle;
@@ -1131,8 +1106,8 @@ describe("the guards on removing an administrator", () => {
   it("allows all three once a second admin exists", async () => {
     const second = await createAndActivate(sole, "secondadmin", "admin");
 
-    // Aiming at yourself is refused for a different reason now that the
-    // instance would still have an administrator.
+    // Aiming at yourself is refused for a different reason when the instance
+    // would still have an administrator.
     const self = await as(sole)(
       request(app).post(`/api/admin/users/${sole.id}/disable`),
     );
@@ -1153,10 +1128,8 @@ describe("the guards on removing an administrator", () => {
     ).toBeDefined();
 
     // And so is resetting your own password. A reset deletes every session of
-    // its target, so an admin who aimed it at themselves was signed out by
-    // their own request, holding neither the old password nor the new one:
-    // the response carrying it went to a browser that was already being
-    // torn down. Your own password is changed through
+    // its target, so an admin would be signed out by their own request without
+    // the new password. Your own password is changed through
     // `POST /api/auth/change-password`, which keeps the session it is made on.
     const before = (
       sqlite
@@ -1210,9 +1183,7 @@ describe("the guards on removing an administrator", () => {
   });
 });
 
-// =============================================================================
 // The account that owns this device's data
-// =============================================================================
 
 describe("an instance nobody has secured", () => {
   // Authentication is off, so the caller with no credential is the local
@@ -1287,9 +1258,7 @@ describe("an instance nobody has secured", () => {
   });
 });
 
-// =============================================================================
 // 3.5 Delete with a data decision
-// =============================================================================
 
 describe("deleting an account", () => {
   let admin: Handle;
@@ -1539,9 +1508,7 @@ describe("deleting an account", () => {
   });
 });
 
-// =============================================================================
 // 3.5 Purge cost
-// =============================================================================
 
 describe("the purge budget", () => {
   it(
@@ -1588,9 +1555,7 @@ describe("the purge budget", () => {
   );
 });
 
-// =============================================================================
 // 3.8 The audit log
-// =============================================================================
 
 describe("the audit log", () => {
   let admin: Handle;

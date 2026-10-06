@@ -1,15 +1,11 @@
-// =============================================================================
-// Integration Tests — a pair no model checks
-// =============================================================================
-// The check after an import and the check after a contact is added never ask
-// a model. They used to keep every vector neighbor that scored 0.60 or more,
-// at its full score, while a scan without a provider kept only 0.75 or more,
-// at 0.7 of it. One LinkedIn import filled the review with people who shared
-// nothing but an employer and a first name.
+// Integration: a pair no model checks.
+// The checks after an import and after a contact is added never ask a model,
+// so they keep only vector neighbors at 0.75 or more, at 0.7 of the score, as
+// a scan without a provider does. Otherwise one import fills the review with
+// people who share only an employer and a first name.
 //
-// The vector store is stubbed here: integration runs with no embedder, and
-// what is under test is what the check does with a neighbor, not the KNN.
-// =============================================================================
+// The vector store is stubbed: integration runs with no embedder, and what is
+// under test is what the check does with a neighbor, not the KNN.
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 

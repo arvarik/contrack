@@ -1,13 +1,9 @@
-// =============================================================================
-// Integration: keyword search among 5,000 contacts
-// =============================================================================
+// Integration: keyword search among 5,000 contacts.
 // The forms of a name people type: a nickname and a surname, a phone number
 // as bare digits, a hyphenated name with or without its hyphens, the first
 // letters of a rare name, and a misspelling. Each finds its contact among
-// 5,000, with decoys built to defeat the old candidate step: hundreds of
-// names that share the first two letters, and people who share one word of
-// a misspelled name.
-// =============================================================================
+// 5,000, with decoys: hundreds of names that share the first two letters,
+// and people who share one word of a misspelled name.
 
 import { beforeAll, describe, expect, it } from "vitest";
 import { faker } from "@faker-js/faker";
@@ -161,8 +157,7 @@ describe("keyword search finds the forms of a name among 5,000 contacts", () => 
   it("ranks a close misspelling above people who share one word of it", () => {
     // Forty people carry "Jonathon" or "Smyth" in their company, so each is
     // a partial match. Jonathan Smith matches no word as typed, but his name
-    // scores 0.94, which ranks above partial matches. It used to rank below
-    // every one of them.
+    // scores 0.94, which ranks above partial matches.
     const broad = lexicalSearch(scope(), "Jonathon Smyth", 100, null, true);
     const smith = searchService.searchFts(scope(), "Jonathan Smith")[0].id;
     expect(broad[0].contactId).toBe(smith);

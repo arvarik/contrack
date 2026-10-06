@@ -1,31 +1,13 @@
-// =============================================================================
-// Integration Tests — what counts as one person
-// =============================================================================
-// The dedupe engine has two rules that act without asking anybody: a shared
-// email address scores 0.98 and a shared phone number scores 0.95, both above
-// the 0.93 auto-merge threshold. Everything else reaches a person first.
+// Integration: what counts as one person.
+// A shared email (0.98) and a shared phone (0.95) score above the 0.93
+// auto-merge threshold, so an error here deletes somebody. Two rules are
+// pinned, through both `runScan` and `runImportScan`, which are separate code:
 //
-// So the rules that decide "this address identifies one person" are the ones
-// worth testing at the level of the real pipeline rather than the matcher. An
-// error here does not produce a bad suggestion, it deletes somebody.
-//
-// Two changes are covered:
-//
-// 1. A SHARED MAILBOX IS NOT AN IDENTITY. `team.northwind@example.net` is an
-//    employer's inbox and `haddad.family@example.net` is a household's. The
-//    eval corpus measured 15 of 45 unasked merges coming from exactly this.
-//    The pair must still be COMPARED, because two colleagues can also be two
-//    records of one person, so the test checks that it survives as a
-//    suggestion rather than that it disappears.
-//
-// 2. A MIDDLE NAME IS A DUPLICATE. "Anton Kovacs" and "Anton Peter Kovacs"
-//    scored 0.643 to 0.750, which is the band a provider verifies, so with no
-//    provider configured the engine found 1 of 15. It is now a rule of its
-//    own at 0.88, which is below auto: found, and still reviewed.
-//
-// Both paths matter, and they are separate code: `runScan` for a scan somebody
-// asks for, `runImportScan` for the check every import runs.
-// =============================================================================
+// 1. A shared mailbox (`team.northwind@example.net`, a household address) is
+//    not an identity. The pair is still compared, because two colleagues can
+//    be one person, so it must survive as a suggestion.
+// 2. A middle name is a duplicate. "Anton Kovacs" and "Anton Peter Kovacs" is
+//    a rule of its own at 0.88, below auto: found, and still reviewed.
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { sqlite, ensureLocalOwner } from "../../server/db.ts";

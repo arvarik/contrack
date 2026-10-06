@@ -1,13 +1,10 @@
-// =============================================================================
 // Integration: AI keys saved in Settings are sealed at rest
-// =============================================================================
 // Keys entered on the AI providers page are sealed with the instance secret,
 // as SMTP passwords, connector feeds and Google OAuth are, so a backup or a
 // copy of the database holds no key in plain text.
 //
 // Built-in keys are saved through the service, not the route, because the
 // route checks the key against the real vendor.
-// =============================================================================
 
 import crypto from "node:crypto";
 import { describe, it, expect, afterEach } from "vitest";

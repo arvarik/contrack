@@ -239,10 +239,8 @@ describe("GET /api/dashboard", () => {
   });
 });
 
-// =============================================================================
 // Tracking on the payload: catchUp and tracking, in their own account so the
 // other cases above cannot move the numbers.
-// =============================================================================
 
 /** A SQLite timestamp `days` ago, the way the triggers write `trackedAt`. */
 function sqliteDaysAgo(days: number): string {

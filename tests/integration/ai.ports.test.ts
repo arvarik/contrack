@@ -1,15 +1,10 @@
-// =============================================================================
-// Integration Tests — the embedder and reranker ports
-// =============================================================================
+// Integration: the embedder and reranker ports.
 // Search and dedupe reach a model only through `currentEmbedder()` and
-// `currentReranker()`. A recording embedder stands in for the model here, so
-// the test sees what each real caller asks for: the search index and the
-// duplicate index embed documents, through the same port, and Ask embeds the
-// question. A model that is not local never reads the question of an account
-// with AI off, whether it embeds it or reranks for it, and a model pinned
-// during a backfill reads nothing of the round already under way. The stores
-// rebuild for an embedder with a new id.
-// =============================================================================
+// `currentReranker()`. A recording embedder shows what each caller asks for:
+// the search and duplicate indexes embed documents through the same port, and
+// Ask embeds the question. A model that is not local never reads the question
+// of an account with AI off, a model pinned during a backfill reads nothing of
+// the round under way, and the stores rebuild for an embedder with a new id.
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { ensureLocalOwner, sqlite } from "../../server/db.ts";

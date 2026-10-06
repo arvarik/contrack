@@ -1,12 +1,9 @@
-// =============================================================================
-// Integration Tests — domain events and their subscribers
-// =============================================================================
+// Integration: domain events and their subscribers.
 // A write records an event in its own transaction, and the subscribers react
 // after the commit (server/events/). Three guarantees:
 //
 //   1. A rename through PATCH and through PUT gets the same reactions: the
-//      dedupe vector, the search index and the duplicate check. Before the
-//      events, PATCH skipped the first and the last.
+//      dedupe vector, the search index and the duplicate check.
 //   2. An event recorded in a transaction that rolls back is never
 //      dispatched, even when a nested write asks for a dispatch before the
 //      rollback.
@@ -15,9 +12,8 @@
 //
 // The search index is proved by its own call: the `search_vector_update`
 // trigger queues a renamed contact too, so the queue row alone would pass
-// without the subscriber. Background jobs are off, as in every integration
-// file, so the duplicate check is the job row it leaves queued.
-// =============================================================================
+// without the subscriber. Background jobs are off, so the duplicate check is
+// the job row it leaves queued.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import request from "supertest";

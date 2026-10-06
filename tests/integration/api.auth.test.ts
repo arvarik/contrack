@@ -1,15 +1,10 @@
-// =============================================================================
-// Integration: the credential layer — setup, sign-in, sessions, gating
-// =============================================================================
+// Integration: the credential layer: setup, sign-in, sessions, gating.
 // The middleware reads env per request, so enforcement is toggled inside the
-// tests rather than at import time, and reset in afterAll so ordering never
-// leaks into other files.
+// tests and reset in afterAll, so ordering never leaks into other files.
 //
-// Every test that changes accounts cleans up after itself: the database is
-// shared across the whole file (one temp DATA_DIR per file, per the setup),
-// so a stray user row would make the next describe block's `setupRequired`
-// assertion wrong for reasons it cannot see.
-// =============================================================================
+// Every test that changes accounts cleans up: the database is shared across
+// the file, so a stray user row would break the next block's
+// `setupRequired` assertion.
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import request from "supertest";
@@ -38,12 +33,9 @@ const ACCOUNT = {
 /**
  * Remove every account and every row it owns, then put the local owner back.
  *
- * `DELETE FROM users` on its own stopped working in Phase 1. Owned rows
- * reference `users` with ON DELETE RESTRICT, and the local owner owns
- * everything written with auth off, so the delete fails on the first contact.
- * Recreating the local owner afterwards is not tidiness: with auth off,
- * attachPrincipal has no principal without it, and every direct INSERT in this
- * file needs an owner to name.
+ * Owned rows reference `users` with ON DELETE RESTRICT, so `DELETE FROM users`
+ * alone fails on the first contact. The local owner comes back because with
+ * auth off attachPrincipal needs it, and every direct INSERT here names it.
  */
 function wipeAccounts(): void {
   sqlite.exec(`
@@ -74,14 +66,10 @@ function localOwner(): { id: string; username: string } {
 /**
  * Create the first account and return its session cookie.
  *
- * Clears the rate-limit window immediately before the call rather than relying
- * on the file-level `beforeEach`. Both credential endpoints are guarded by a
- * fixed window shared by every test in this file, and a test that legitimately
- * calls setup more than five times (the invalid-input loops do) would trip it.
- * A tripped limiter returns 429 with no Set-Cookie, so `cookie` came back
- * undefined and the *next* request failed with a baffling status several lines
- * away from the actual cause — which is exactly the shape of flake that eats an
- * afternoon.
+ * Clears the rate-limit window right before the call. The credential
+ * endpoints share one fixed window across this file, and the invalid-input
+ * loops call setup more than five times. A tripped limiter returns 429 with no
+ * Set-Cookie, and the next request fails far from the cause.
  */
 async function setupAccount(overrides: Partial<typeof ACCOUNT> = {}) {
   __resetAuthRateLimits();
@@ -128,8 +116,6 @@ beforeEach(() => {
   __resetAuthRateLimits();
   __resetAuthWarnings();
 });
-
-// =============================================================================
 
 describe("first-run setup", () => {
   beforeEach(wipeAccounts);
@@ -256,8 +242,6 @@ describe("first-run setup", () => {
   });
 });
 
-// =============================================================================
-
 describe("sign in", () => {
   beforeEach(async () => {
     wipeAccounts();
@@ -356,8 +340,6 @@ describe("sign in", () => {
   });
 });
 
-// =============================================================================
-
 describe("gating", () => {
   let cookie: string[];
 
@@ -392,7 +374,7 @@ describe("gating", () => {
   });
 
   it("rejects a forged session cookie, and one that does not decode", async () => {
-    // `%E0%A4%A` made decodeURIComponent throw, and every route answered 500.
+    // `%E0%A4%A` makes decodeURIComponent throw, which must not answer 500.
     for (const value of ["made-up-value", "%E0%A4%A"]) {
       const res = await request(app)
         .get("/api/contacts")
@@ -435,8 +417,6 @@ describe("gating", () => {
     }
   });
 });
-
-// =============================================================================
 
 describe("the signed-in account", () => {
   let cookie: string[];
@@ -521,8 +501,6 @@ describe("the signed-in account", () => {
     expect(res.status).toBe(401);
   });
 });
-
-// =============================================================================
 
 describe("sessions", () => {
   let cookie: string[];
@@ -650,8 +628,6 @@ describe("sessions", () => {
   });
 });
 
-// =============================================================================
-
 describe("requireAdmin", () => {
   // api.admin.test.ts sends an admin and a member to every admin route. A
   // request with no principal is answered 401 by the auth middleware before
@@ -673,8 +649,6 @@ describe("requireAdmin", () => {
   });
 });
 
-// =============================================================================
-
 describe("a personal API token", () => {
   // Minting, scope, revocation, expiry and lastUsedAt are in
   // api.tokens.test.ts, on tokens the real endpoint issued.
@@ -691,8 +665,6 @@ describe("a personal API token", () => {
     expect(res.status).toBe(401);
   });
 });
-
-// =============================================================================
 
 describe("a disabled account", () => {
   beforeEach(() => {
@@ -724,7 +696,7 @@ describe("a disabled account", () => {
     const data = await request(app).get("/api/contacts").set("Cookie", cookie);
     expect(data.status).toBe(401);
 
-    // The right password now gets a straight answer, because whoever holds it
+    // The right password gets a straight answer, because whoever holds it
     // has already proved the account is theirs. A wrong one still gets the
     // shared "incorrect username or password", so this cannot enumerate.
     __resetAuthRateLimits();
@@ -738,8 +710,6 @@ describe("a disabled account", () => {
     expect(wrong.res.body.error.code).toBe("INVALID_CREDENTIALS");
   });
 });
-
-// =============================================================================
 
 describe("auth off with a real account", () => {
   beforeEach(() => {
@@ -790,8 +760,6 @@ describe("auth off with a real account", () => {
     }
   });
 });
-
-// =============================================================================
 
 describe("data ownership", () => {
   beforeEach(() => {
@@ -852,8 +820,8 @@ function countUsers(): number {
 /**
  * Accounts somebody can actually sign in to.
  *
- * `countUsers()` is never zero since Phase 1: the local owner exists from
- * boot. "No account yet" now means no account with a password.
+ * `countUsers()` is never zero, because the local owner exists from boot.
+ * "No account yet" means no account with a password.
  */
 function countSignInAccounts(): number {
   return (
@@ -864,8 +832,6 @@ function countSignInAccounts(): number {
       .get() as { n: number }
   ).n;
 }
-
-// =============================================================================
 
 describe("session lifetime", () => {
   let cookie: string[];
@@ -927,8 +893,6 @@ describe("session lifetime", () => {
     ).toBe(200);
   });
 });
-
-// =============================================================================
 
 describe("setup reports what is waiting", () => {
   beforeEach(() => {

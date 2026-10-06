@@ -1,6 +1,4 @@
-// =============================================================================
 // Integration: every Ask answer says which fields answer the question
-// =============================================================================
 // "Who is interested in machine learning?" finds people through different
 // fields: an interest, a role, an about text, a tag. Each result carries the
 // fields that matched, with no model call, on every path an answer takes:
@@ -10,7 +8,6 @@
 //
 // The real pipeline and database run here. Only the provider is scripted, at
 // the gateway, so the AI check's citations are known.
-// =============================================================================
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";

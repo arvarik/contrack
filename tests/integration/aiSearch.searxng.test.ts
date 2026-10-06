@@ -1,12 +1,9 @@
-// =============================================================================
 // Integration: research through SearXNG, alone and beside the research model
-// =============================================================================
 // SearXNG research runs the provider research's own searches, reads the
 // result pages that name the person, and turns them into fact lines with
 // their pages before the extraction reads them. The combined strategy runs
 // it beside the research model's own search, keeps the facts of both, and
 // stands on either one when the other finds nothing.
-// =============================================================================
 
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import request from "supertest";

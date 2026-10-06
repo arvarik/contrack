@@ -1,17 +1,9 @@
-// =============================================================================
-// Integration: the merge and scan paths, run again with two seeded owners
-// =============================================================================
-// `api.merge.test.ts` runs every merge scenario on a single-account instance
-// and `dedupe.test.ts` checks the engine's shape. Both still pass, and neither
-// can see the failure this file is about.
-//
-// `merging.ts` re-parents sixty child statements by contact id alone. That is
-// safe only because one statement proved both contacts share the caller's
-// owner first. With one account on the instance, a broken check looks exactly
-// like a working one. So the same merges run here against two accounts holding
-// rows that are identical in every visible field, and each assertion says both
-// what moved and what did not.
-// =============================================================================
+// Integration: the merge and scan paths, with two seeded owners.
+// `merging.ts` re-parents sixty child statements by contact id alone, which is
+// safe only because one statement first proves both contacts share the
+// caller's owner. With one account, a broken check looks like a working one,
+// so these merges run against two accounts holding rows identical in every
+// visible field, and each assertion says what moved and what did not.
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
@@ -302,9 +294,9 @@ describe("a scan reads one account's contacts", () => {
     // the SQL invisible, and the join is what stops the database reading every
     // account's addresses and phone numbers on every scan.
     //
-    // So this context is built for A and then deliberately given B's rows too.
-    // The JavaScript filter can no longer mask anything, and the four whole
-    // table loads are pinned on their own. Both accounts hold a contact named
+    // So this context is built for A and then given B's rows too, so the
+    // JavaScript filter masks nothing, and the four whole table loads are
+    // pinned on their own. Both accounts hold a contact named
     // "Casey Twin" at casey.twin@example.com, so a pair would span them.
     const ctx = buildPassContext(A.scope, "pass-scope-check");
     const strangers = sqlite

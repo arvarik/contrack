@@ -1,17 +1,12 @@
-// =============================================================================
-// Integration: a self-hosted OpenAI-compatible endpoint, end to end
-// =============================================================================
-// The Ollama story has one shape that matters and no test covered it: an
-// install whose ONLY provider is a custom endpoint, with every capability left
-// on Automatic — which is what a user gets by adding an endpoint and touching
-// nothing else. Resolution named the provider but no model, and the compat
-// adapter refuses to be called without one, so every AI request failed on a
-// correctly connected server.
+// Integration: a self-hosted OpenAI-compatible endpoint, end to end.
+// An install whose only provider is a custom endpoint, with every capability
+// on Automatic, which is what adding an endpoint and touching nothing else
+// gives. Resolution must name a model, because the compat adapter refuses a
+// call without one.
 //
 // A stub speaking the OpenAI wire format stands in for Ollama. It is a real
-// HTTP server, so the OpenAI SDK, the base-URL handling, model discovery, and
-// the JSON-mode ladder all execute for real; only the model is fake.
-// =============================================================================
+// HTTP server, so the OpenAI SDK, the base-URL handling, model discovery and
+// the JSON-mode ladder all run for real. Only the model is fake.
 
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
 import http from "http";

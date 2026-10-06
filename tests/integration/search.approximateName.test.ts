@@ -1,6 +1,4 @@
-// =============================================================================
 // Unit & Bounded Search Tests — Approximate Name Matching
-// =============================================================================
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { sqlite, ensureLocalOwner } from "../../server/db.ts";

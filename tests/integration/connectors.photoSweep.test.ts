@@ -1,13 +1,9 @@
-// =============================================================================
-// The stored Google photo sweep
-// =============================================================================
-// Contacts synced before photos were copied locally still hold a
-// googleusercontent.com URL, and a later sync rewrites it only for a contact
-// Google sends again. The boot sweep copies each one into the owner's uploads,
-// clears a photo Google no longer serves, and leaves a temporary failure for
-// the next boot. The network is stubbed at safeFetch, as in
-// connectors.photos.test.ts.
-// =============================================================================
+// Integration: the stored Google photo sweep.
+// A contact can still hold a googleusercontent.com URL, and a sync rewrites
+// it only for a contact Google sends again. The boot sweep copies each one
+// into the owner's uploads, clears a photo Google no longer serves, and
+// leaves a temporary failure for the next boot. The network is stubbed at
+// safeFetch, as in connectors.photos.test.ts.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

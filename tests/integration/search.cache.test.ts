@@ -1,19 +1,15 @@
-// =============================================================================
-// Integration: the two Ask cache tiers
-// =============================================================================
+// Integration: the two Ask cache tiers.
 // L1 answers the same words twice. L2, the semantic cache, answers the same
-// question in other words, with no model call. Both must drop an answer once
-// a contact changes or two contacts merge, both must keep one account's
-// answers from another, and L2 must never mistake a question about Munich
-// for one about Berlin, however close their vectors are.
+// question in other words, with no model call. Both drop an answer once a
+// contact changes or two contacts merge, both keep accounts apart, and L2
+// never mistakes a question about Munich for one about Berlin, however close
+// their vectors are.
 //
 // The real pipeline and database run here. The provider is scripted at the
-// gateway, and each question's vector is chosen by the test, so "close" and
-// "far" are exact numbers rather than whatever a model happens to return.
-// Hits are read from the answer's `cached` flag: the planner's own cache
-// keys on the question's text, so a count of planner calls cannot show an
-// L1 miss after an edit.
-// =============================================================================
+// gateway and the test chooses each vector, so "close" and "far" are exact.
+// Hits are read from the answer's `cached` flag: the planner's own cache keys
+// on the text, so a count of planner calls cannot show an L1 miss after an
+// edit.
 
 import {
   afterAll,

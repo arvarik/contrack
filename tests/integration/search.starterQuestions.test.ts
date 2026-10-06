@@ -1,6 +1,4 @@
-// =============================================================================
 // Integration: the pool of starter questions behind "Try asking" on Ask
-// =============================================================================
 // The pool is built from the account's own contacts. Every question names a
 // value two people share (one is enough in a network under ten), in words
 // the search answers with no model, so a press always finds the people the
@@ -11,7 +9,6 @@
 // The real database and search pipeline run here. Integration tests run in
 // mock mode, so Ask answers without a model, which is the path that must
 // find these people on its own.
-// =============================================================================
 
 import { beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";

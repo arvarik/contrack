@@ -1,15 +1,10 @@
-// =============================================================================
-// Integration Tests — the storage guarantees Phase 1 makes
-// =============================================================================
-// Four claims that only mean something against a real SQLite file with
-// sqlite-vec loaded:
+// Integration: the storage guarantees, on a real SQLite file with sqlite-vec:
 //
 //   • The boot refuses to start on a sqlite-vec too old for partition keys.
 //   • The three places that build vec0 DDL build the same DDL.
 //   • A contact update is cheap. The FTS delete is an indexed rowid probe,
 //     not a scan of the virtual table.
 //   • Rebuilding the index for a realistic corpus takes well under a second.
-// =============================================================================
 
 import { describe, it, expect } from "vitest";
 import Database from "better-sqlite3";
@@ -56,8 +51,8 @@ describe("vec0 table DDL", () => {
   it("is identical wherever it is built", () => {
     // Three call sites build this: the boot rebuild in db.ts and the two
     // model-change rebuilds in the embedding stores. If one of them drops the
-    // partition key, every scoped KNN Phase 2 writes returns nothing for rows
-    // written afterwards, and nothing fails until then.
+    // partition key, every scoped KNN returns nothing for rows written
+    // afterwards, and nothing else fails.
     const probe = new Database(":memory:");
     sqliteVec.load(probe);
     try {

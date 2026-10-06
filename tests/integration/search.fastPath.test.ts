@@ -1,15 +1,12 @@
-// =============================================================================
-// Integration: the Ask Contrack fast path
-// =============================================================================
+// Integration: the Ask Contrack fast path.
 // Names, emails and phone numbers are answered locally with no model call.
 // Every other question streams the local hybrid list first. A plan the
 // database can prove (confident hard filters, or recency alone) is answered
 // without the reranker. AI off, or a provider failure, leaves the local list
-// as the answer, marked unverified, never the old keyword-only fallback.
+// as the answer, marked unverified.
 //
 // The real pipeline and database run here. Only the provider is scripted, at
 // the gateway, so a call the pipeline makes is a call these tests can count.
-// =============================================================================
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
@@ -181,8 +178,8 @@ describe("questions show the local list first", () => {
 
   it("falls back to the local hybrid list, not the keyword list, when the provider fails", async () => {
     script(null);
-    // Every word must match for the old keyword fallback, and "knows" is in
-    // nobody's profile, so it found nobody. The local list keeps the answer.
+    // A keyword search needs every word, and "knows" is in nobody's profile,
+    // so it finds nobody. The local list keeps the answer.
     expect(
       searchService.searchFts(scope(), "someone who knows about beekeeping"),
     ).toEqual([]);

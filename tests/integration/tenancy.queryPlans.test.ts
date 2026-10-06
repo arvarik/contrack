@@ -1,20 +1,14 @@
-// =============================================================================
-// Integration Tests — the owner predicate has to be an index seek
-// =============================================================================
-// Every tenant read carries `WHERE ownerId = ?`. A predicate SQLite has to
-// evaluate row by row is slow: on a ten-account instance it reads
-// ten times the rows it returns, and the cost grows with the number of people
-// using the instance rather than with the size of one person's data.
+// Integration: the owner predicate is an index seek.
+// Every tenant read carries `WHERE ownerId = ?`. Evaluated row by row, its
+// cost grows with the number of accounts, not with one person's data.
 //
-// For each core statement, this file runs EXPLAIN QUERY PLAN and asserts two things:
-// the owner-led index appears, and no full scan of the table does. The database is
-// seeded with multiple accounts and contacts and then ANALYZE'd, because the planner
-// prefers a scan on an empty/small table and would make assertions pass for the wrong reason.
+// For each core statement this runs EXPLAIN QUERY PLAN and asserts that the
+// owner-led index appears and no full scan of the table does. The database
+// holds several accounts and is ANALYZE'd, because the planner prefers a scan
+// on a small table and would pass for the wrong reason.
 //
-// The SQL below is copied from the statement each row names. When a statement
-// changes shape, this file has to be updated with it, which is the point: the
-// plan is part of the statement's contract, not an accident of it.
-// =============================================================================
+// The SQL is copied from the statement each row names, so a statement that
+// changes shape changes this file too: the plan is part of its contract.
 
 import { describe, it, expect, beforeAll } from "vitest";
 import crypto from "crypto";
@@ -26,15 +20,13 @@ import { ACTIVE_CONTACT_SQL } from "../../server/services/search/ftsIndex.ts";
 const CONTACTS_PER_OWNER = 500;
 
 /**
- * How many accounts the instance holds.
+ * How many small accounts the instance holds beside the two large ones.
  *
- * Two accounts of 500 contacts is enough
- * for every statement that carries a second predicate or a sort the composite
- * answers. It is not enough for `lists`, whose only owner-selectivity is the
- * owner column itself: with two accounts an owner seek returns half the table,
- * so SQLite scans instead, and it is right to. Eight more small accounts make
- * the column selective, which is what a real instance looks like and what the
- * composite indexes were built for.
+ * Two accounts are enough for a statement with a second predicate or a sort
+ * the composite answers, but not for `lists`, whose only selectivity is the
+ * owner column: an owner seek over two accounts returns half the table, so
+ * SQLite rightly scans. Eight more make the column selective, as on a real
+ * instance.
  */
 const SMALL_OWNERS = 8;
 

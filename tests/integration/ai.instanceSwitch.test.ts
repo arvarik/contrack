@@ -1,17 +1,13 @@
-// =============================================================================
-// Integration: the instance AI switch
-// =============================================================================
-// An admin can turn AI off for every account, on the AI providers page or
-// with AI_DISABLED in the environment. The switch is checked in one place, the
-// provider lookup (getProvider), so every generation, provider embedding,
-// model discovery and model test stops there. These tests prove the lookup
-// and the paths that lean on it: capability resolution, the gateway,
-// embeddings, the daily model refresh, auto-enrichment and the per-account
-// rule that joins both switches.
+// Integration: the instance AI switch.
+// An admin turns AI off for every account on the AI providers page or with
+// AI_DISABLED. The one check is in getProvider, so generation, provider
+// embeddings, model discovery and model tests all stop there. These tests
+// cover the lookup and the paths that lean on it: capability resolution, the
+// gateway, embeddings, the daily model refresh, auto-enrichment and the
+// per-account rule that joins both switches.
 //
 // No real provider is reached. Keys are saved through the service, and the
 // one endpoint is a loopback port that refuses at once.
-// =============================================================================
 
 import crypto from "node:crypto";
 import { describe, it, expect, afterEach, vi } from "vitest";

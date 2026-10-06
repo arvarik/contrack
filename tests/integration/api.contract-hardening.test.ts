@@ -233,8 +233,7 @@ describe("API and UI data contracts", () => {
   });
 
   it("caps the MCP query route at 200 rows", async () => {
-    // Unbounded values used to reach SQL directly. A negative limit read as no
-    // limit at all, and now reads as one row.
+    // A negative limit reads as one row, not as no limit at all.
     const owner = localOwnerId();
     sqlite.transaction(() => {
       for (let i = 0; i < 201; i++) {

@@ -1,19 +1,14 @@
-// =============================================================================
-// Integration Tests — the isolation matrix
-// =============================================================================
-// Three real accounts, three real sessions, rows written through the public
-// API. For every `scoped` route, user B tries to reach user A's data and must
-// fail, and A's rows must be unchanged afterwards. The third account writes
-// nothing, so every total it is shown must be zero.
-// Every scoped route must be isolated: write its test here, add its key to `COVERED`,
-// and ensure `isolated: true` in the route manifest. The `COVERED` list below is
-// checked against the manifest in both directions, so a route cannot be marked `isolated`
-// without a test in this file, and a test here cannot cover a route the manifest has not
-// marked isolated.
+// Integration: the isolation matrix.
+// Three real accounts and sessions, rows written through the public API. For
+// every `scoped` route, user B tries to reach user A's data and fails, and A's
+// rows stay unchanged. The third account writes nothing, so every total it
+// sees is zero.
 //
-// Auth is on for this file. Isolation between two accounts is only meaningful
-// when both had to sign in.
-// =============================================================================
+// A scoped route needs its test here, its key in `COVERED`, and
+// `isolated: true` in the route manifest. `COVERED` is checked against the
+// manifest both ways.
+//
+// Auth is on, because isolation means something only when both had to sign in.
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import request from "supertest";
@@ -408,9 +403,7 @@ afterAll(() => {
   resetAccounts();
 });
 
-// =============================================================================
 // Reading one contact
-// =============================================================================
 
 describe("GET /api/contacts/:id", () => {
   it("answers a foreign id and an unknown id with the same 404", async () => {
@@ -474,9 +467,7 @@ describe("GET /api/contacts/:id/score", () => {
   });
 });
 
-// =============================================================================
 // List endpoints
-// =============================================================================
 
 describe("list endpoints return only the caller's rows", () => {
   it("GET /api/contacts (slim) excludes the other owner", async () => {
@@ -543,9 +534,7 @@ describe("list endpoints return only the caller's rows", () => {
   });
 });
 
-// =============================================================================
 // Writing
-// =============================================================================
 
 describe("POST /api/contacts", () => {
   it("stamps the caller and leaves the other owner's counts alone", async () => {
@@ -738,9 +727,7 @@ describe("POST /api/contacts/:id/research/reject", () => {
   });
 });
 
-// =============================================================================
 // Bulk endpoints
-// =============================================================================
 
 describe("bulk endpoints affect only the caller's rows", () => {
   it("POST /api/contacts/bulk-delete reports and deletes B's rows only", async () => {
@@ -926,9 +913,7 @@ describe("the record an import leaves", () => {
   });
 });
 
-// =============================================================================
 // Uploads
-// =============================================================================
 
 describe("the /uploads guard", () => {
   it("serves an owner their own file", async () => {
@@ -1028,9 +1013,7 @@ describe("GET /api/link-preview/unfurl", () => {
   });
 });
 
-// =============================================================================
 // Interactions
-// =============================================================================
 
 describe("GET /api/contacts/:id/timeline", () => {
   it("answers a foreign parent and an unknown one the same way", async () => {
@@ -1264,9 +1247,7 @@ describe("GET /api/contacts/:id/relationships", () => {
   });
 });
 
-// =============================================================================
 // Action items
-// =============================================================================
 
 describe("action item collections carry only the caller's rows", () => {
   it("GET /api/action-items excludes the other owner", async () => {
@@ -1403,9 +1384,7 @@ describe("action items under a contact", () => {
   });
 });
 
-// =============================================================================
 // Lists
-// =============================================================================
 
 describe("lists", () => {
   it("GET /api/lists excludes the other owner", async () => {
@@ -1563,9 +1542,7 @@ describe("list membership checks both sides", () => {
   });
 });
 
-// =============================================================================
 // Dashboard, insight, zero-state
-// =============================================================================
 
 describe("GET /api/dashboard", () => {
   it("counts only the caller's rows", async () => {
@@ -1724,9 +1701,7 @@ describe("GET /api/command-palette/zero-state", () => {
   });
 });
 
-// =============================================================================
 // Search
-// =============================================================================
 // Every search channel reads from an index that holds the whole instance, so
 // each one is asked for A's rare name by an account that does not own it.
 
@@ -1896,8 +1871,8 @@ describe("GET /api/search/coverage", () => {
     expect(resC.body.total).toBe(0);
     expect(resC.body.coverage).toBe(100);
 
-    // A and B each see their own count. The old last line compared B's total
-    // with itself plus A's, which holds whenever A has a contact.
+    // A and B each see their own count. Comparing B's total with itself plus
+    // A's would hold whenever A has a contact.
     for (const actor of [A, B]) {
       const res = await asUser(actor)(request(app).get("/api/search/coverage"));
       expect(res.status).toBe(200);
@@ -2077,9 +2052,7 @@ describe("search history (/api/search/history)", () => {
   });
 });
 
-// =============================================================================
 // AI Search
-// =============================================================================
 // The batch queue lives in memory, not in SQLite, so nothing about it is
 // protected by a WHERE clause. Every read of it is checked here.
 
@@ -2088,8 +2061,8 @@ describe("AI Search batches belong to the account that started them", () => {
 
   it("sets no cooldown after a batch", async () => {
     // A real run, with no provider configured, so every job fails at once and
-    // the batch finishes in milliseconds. It used to set a five-minute
-    // cooldown, so a second enrichment answered 429 with no request made.
+    // the batch finishes in milliseconds. A cooldown would make a second
+    // enrichment answer 429 with no request made.
     jobQueue.__resetForTests();
     const subject = await asUser(A)(
       request(app).post("/api/contacts").send({ name: "Cooldown Subject" }),
@@ -2354,9 +2327,7 @@ describe("POST /api/ai-search", () => {
   });
 });
 
-// =============================================================================
 // The shared AI cache
-// =============================================================================
 
 describe("the AI cache drops one account's entries at a time", () => {
   it("keeps another account's entry when an owner is invalidated", () => {
@@ -2392,9 +2363,7 @@ describe("the AI cache drops one account's entries at a time", () => {
   });
 });
 
-// =============================================================================
 // AI stats
-// =============================================================================
 
 describe("AI stats count the caller's own work", () => {
   beforeAll(() => {
@@ -2488,9 +2457,7 @@ describe("AI stats count the caller's own work", () => {
   });
 });
 
-// =============================================================================
 // Dedupe: scans, suggestions, merges, and the merge log
-// =============================================================================
 // Dedupe is the one feature whose whole job is to decide that two rows are the
 // same person. Two rules govern it, and both are proved below: a scan reads
 // one account's contacts, and a merge refuses a pair the caller does not own
@@ -3003,13 +2970,10 @@ describe("dedupe scans and merges stop at the account that asked", () => {
   });
 });
 
-// =============================================================================
 // Trash, export, and the MCP surface
-// =============================================================================
 // Trash, export, and MCP isolation. The export is the widest read in
 // the app: one request returns six tables at once, so it is the one place a
 // single missing predicate hands over somebody's whole account.
-// =============================================================================
 
 describe("the trash holds one account's deleted contacts", () => {
   const create = async (actor: Actor, name: string) => {
@@ -3875,9 +3839,7 @@ describe("map views isolation", () => {
   });
 });
 
-// =============================================================================
 // The matrix and the manifest agree
-// =============================================================================
 
 const scoped = ROUTE_MANIFEST.filter((r) => r.class === "scoped");
 const key = (r: { method: string; path: string }) => `${r.method} ${r.path}`;

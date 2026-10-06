@@ -1,21 +1,11 @@
-// =============================================================================
-// Integration: the /healthz liveness probe
-// =============================================================================
-// Docker's HEALTHCHECK holds no credential, so the probe must answer on a
-// gated instance.
+// Integration: the /healthz liveness probe.
+// Docker's HEALTHCHECK holds no credential, so the probe answers on a gated
+// instance. It also names the schema versions (the last migration applied and
+// the last the build holds), so an operator can confirm a migration ran.
 //
-// It used to answer `{ status: "ok" }` and this file asserted exactly that:
-// no versions, no counts, no configuration. Extra F4 adds the schema
-// versions so an operator can confirm a migration ran without opening the
-// database, and that is a deliberate widening of what an unauthenticated
-// caller is told. Since the migration ledger, that is the last migration the
-// database applied and the last one the build holds.
-//
-// The guard did not go away, it moved. The payload is asserted key by key, so
-// a count, a name, a setting or an account added here later fails this file
-// rather than shipping. Everything richer belongs on `GET /api/admin/health`,
-// which needs an admin.
-// =============================================================================
+// The payload is asserted key by key, so a count, a name, a setting or an
+// account added here fails this file. Anything richer belongs on
+// `GET /api/admin/health`, which needs an admin.
 
 import { describe, it, expect, afterEach } from "vitest";
 import request from "supertest";

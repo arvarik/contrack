@@ -1,20 +1,13 @@
-// =============================================================================
-// Integration Tests — streams reach the browser a piece at a time
-// =============================================================================
-// A compressor holds what it is given until it has enough to compress well,
-// so a compressed stream would arrive in lumps, the last one at the end. The
-// server therefore leaves its streams alone (server/middleware/compression.ts)
-// and every test here asks the way a browser does, with
-// `Accept-Encoding: gzip, deflate, br, zstd`.
+// Integration: streams reach the browser a piece at a time.
+// A compressor holds what it gets until it can compress well, so the server
+// leaves its streams alone (server/middleware/compression.ts). Every test asks
+// as a browser does, with `Accept-Encoding: gzip, deflate, br, zstd`.
 //
-// Each test reads its stream while the server still holds it open: Ask while
-// the planner has not answered, the brief while the model has not, the
-// research and duplicate streams while their job runs. A piece that arrives
-// in that window is a piece no compressor kept back. The client decodes
-// whatever encoding comes back, as a browser would, so a server that did
-// compress a stream fails here on time, with "nothing arrived", rather than
-// on unreadable bytes.
-// =============================================================================
+// Each test reads its stream while the server still holds it open (Ask before
+// the planner answers, the brief before the model does, research and duplicate
+// streams while their job runs), so a piece that arrives was not held back.
+// The client decodes any encoding, so a compressed stream fails here on time,
+// with "nothing arrived", not on unreadable bytes.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import http from "http";

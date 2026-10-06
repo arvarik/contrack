@@ -1,19 +1,12 @@
-// =============================================================================
-// Integration Tests — personal tokens, open registration, instance settings
-// =============================================================================
-// The second half of Phase 3. A person signs in and gets a cookie; a script
-// carries a personal token instead. This file proves the token is a credential
-// for exactly one account, that it cannot be used to manage that account, and
-// that revoking it stops the script and nothing else.
-//
-// Registration and the instance settings sit here too, because they are the
-// other two ways an account comes into being and the one place an admin turns
-// the first of them on.
+// Integration: personal tokens, open registration, instance settings.
+// A script carries a personal token in place of a cookie. The token is a
+// credential for one account, it cannot manage that account, and revoking it
+// stops the script and nothing else. Registration and the instance settings
+// sit here too, as the other ways an account comes into being.
 //
 // Authentication is on throughout. With it off the caller with no credential
-// is the local owner, which is an admin, and half of these assertions would
-// pass for the wrong reason.
-// =============================================================================
+// is the local owner, an admin, and half of these would pass for the wrong
+// reason.
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import request from "supertest";
@@ -128,9 +121,7 @@ beforeEach(() => {
   __resetAuthRateLimits();
 });
 
-// =============================================================================
 // 3.6 Personal tokens
-// =============================================================================
 
 describe("a personal token", () => {
   let owner: Handle;
@@ -313,7 +304,7 @@ describe("a personal token", () => {
     // stamp above cannot catch a format mismatch, because its year differs
     // and the date bytes alone settle the comparison. This one differs from
     // `datetime('now')` first at the `T`, which sorts after a space, so
-    // without `datetime()` around the column the token was still live.
+    // without `datetime()` around the column the token would still be live.
     const today = await mintToken(other, "Expired an hour ago");
     sqlite
       .prepare("UPDATE api_tokens SET expiresAt = ? WHERE name = ?")
@@ -444,9 +435,7 @@ describe("a personal token", () => {
   });
 });
 
-// =============================================================================
 // 3.7 Open registration
-// =============================================================================
 
 describe("open registration", () => {
   let admin: Handle;
@@ -524,9 +513,7 @@ describe("open registration", () => {
   });
 });
 
-// =============================================================================
 // 3.7 Instance settings
-// =============================================================================
 
 describe("instance settings", () => {
   let admin: Handle;
@@ -598,9 +585,7 @@ describe("instance settings", () => {
   });
 });
 
-// =============================================================================
 // 3.11 and 3.12 Status and profile
-// =============================================================================
 
 describe("what the status endpoint reports", () => {
   let admin: Handle;
@@ -629,9 +614,7 @@ describe("what the status endpoint reports", () => {
   });
 });
 
-// =============================================================================
 // 3.10 Instance-wide AI stats
-// =============================================================================
 
 describe("the instance view of AI usage", () => {
   let admin: Handle;
