@@ -57,6 +57,9 @@ import { buildVCard, vCardFileName } from "../../../lib/contactLinks";
 import { isEnriching, useAISearch } from "../../../contexts/AISearchContext";
 import { depthTime } from "../../../lib/researchDepth";
 import { useAiAllowed } from "../../../hooks/useAiAllowed";
+import { aiSetupLine } from "../../../hooks/useAiSetup";
+import { withUndo } from "../../../lib/undoToast";
+import { useBlockedAi } from "./EnrichMenu";
 import { VibePickerPopover } from "./VibePickerPopover";
 import type { ProfileHeaderProps } from "./ProfileHeader";
 
@@ -170,6 +173,12 @@ export const ContactActionsMenu = ({
   const aiAllowed = useAiAllowed();
   const search = useAISearch();
   const enriching = isEnriching(search, contact.id);
+  // No model or no web search: the rows say so, and a press says why.
+  const blocked = useBlockedAi("research");
+  const enrich = (depth: "standard" | "deep") =>
+    blocked
+      ? toast.error(aiSetupLine(blocked))
+      : search.startSearch([contact.id], { limitAs: "toast", depth });
 
   const copy = (text: string, success: string) => {
     copyToClipboard(text).then(
@@ -179,21 +188,23 @@ export const ContactActionsMenu = ({
   };
 
   const failed = (err: Error) =>
-    toast.error(`Failed: ${err instanceof Error ? err.message : String(err)}`);
+    toast.error(
+      `Could not save: ${err instanceof Error ? err.message : String(err)}`,
+    );
 
-  const toggleArchive = () => {
-    if (contact.isArchived) {
-      unarchiveContact(contact.id, {
-        onSuccess: () => toast.success(`${contact.name} restored to network`),
-        onError: failed,
-      });
-    } else {
-      archiveContact(contact.id, {
-        onSuccess: () => toast.success(`${contact.name} archived`),
-        onError: failed,
-      });
-    }
-  };
+  // Each way, with Undo, as the Network list's Archive has.
+  const archive = () =>
+    archiveContact(contact.id, {
+      onSuccess: () =>
+        toast.success(`${contact.name} archived`, withUndo(unarchive)),
+      onError: failed,
+    });
+  const unarchive = () =>
+    unarchiveContact(contact.id, {
+      onSuccess: () =>
+        toast.success(`${contact.name} is back in Network`, withUndo(archive)),
+      onError: failed,
+    });
 
   // The share row says what the browser can do: share, or only save a file.
   const shareSheet = hasShareSheet();
@@ -212,33 +223,27 @@ export const ContactActionsMenu = ({
             id: "enrich",
             label: enriching ? "Enriching…" : "Enrich contact",
             icon: Sparkles,
-            hint:
-              enriching || !search.depthFiguresApply
+            hint: blocked
+              ? "Needs AI"
+              : enriching || !search.depthFiguresApply
                 ? undefined
                 : depthTime("standard"),
             speakHint: true,
             disabled: enriching,
-            onSelect: () =>
-              search.startSearch([contact.id], {
-                limitAs: "toast",
-                depth: "standard",
-              }),
+            onSelect: () => enrich("standard"),
           },
           {
             id: "enrich-deep",
             label: "Enrich deeply",
             icon: Sparkles,
-            hint:
-              enriching || !search.depthFiguresApply
+            hint: blocked
+              ? "Needs AI"
+              : enriching || !search.depthFiguresApply
                 ? undefined
                 : depthTime("deep"),
             speakHint: true,
             disabled: enriching,
-            onSelect: () =>
-              search.startSearch([contact.id], {
-                limitAs: "toast",
-                depth: "deep",
-              }),
+            onSelect: () => enrich("deep"),
           },
         ]
       : []),
@@ -264,7 +269,7 @@ export const ContactActionsMenu = ({
       id: "archive",
       label: contact.isArchived ? "Unarchive" : "Archive",
       icon: contact.isArchived ? ArchiveRestore : Archive,
-      onSelect: toggleArchive,
+      onSelect: contact.isArchived ? unarchive : archive,
       disabled: archivePending,
     },
     {

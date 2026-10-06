@@ -13,6 +13,18 @@
 // =============================================================================
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+// AI is set up unless a test says otherwise.
+const aiSetup = vi.hoisted(() => ({
+  current: null as null | {
+    why: "model";
+    state: "setup";
+    fix?: { label: string; path: string };
+  },
+}));
+vi.mock("../../../../src/hooks/useAiSetup", () => ({
+  useAiSetup: () => aiSetup.current,
+  aiSetupLine: () => "No AI model is set up. Ask an admin to set one up",
+}));
 import {
   act,
   cleanup,
@@ -593,9 +605,15 @@ describe("the contact actions", () => {
     expect(mutate).toHaveBeenCalledWith("c1", expect.any(Object));
     const opts = mutate.mock.calls[0][1];
     opts.onSuccess();
-    expect(toastMock.success).toHaveBeenCalledWith("Thomas Walker archived");
+    // With Undo, as the Network list's Archive has.
+    expect(toastMock.success).toHaveBeenCalledWith(
+      "Thomas Walker archived",
+      expect.objectContaining({
+        action: expect.objectContaining({ label: "Undo" }),
+      }),
+    );
     opts.onError(new Error("offline"));
-    expect(toastMock.error).toHaveBeenCalledWith("Failed: offline");
+    expect(toastMock.error).toHaveBeenCalledWith("Could not save: offline");
   });
 
   it("unarchives an archived contact, from Unarchive in place of Archive", () => {
@@ -607,7 +625,8 @@ describe("the contact actions", () => {
     const mutate = props.unarchiveContact as ReturnType<typeof vi.fn>;
     mutate.mock.calls[0][1].onSuccess();
     expect(toastMock.success).toHaveBeenCalledWith(
-      "Thomas Walker restored to network",
+      "Thomas Walker is back in Network",
+      expect.any(Object),
     );
   });
 
