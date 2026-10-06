@@ -13,11 +13,13 @@
  * 1. The editor. A tiptap instance named "Note", described by the
  *    placeholder for the chosen type, with @mentions of the people in the
  *    network.
- * 2. The next-action line. A date in it ("next Tuesday at 2pm") becomes a
- *    follow-up task on save, and the parsed date shows beside the field. The
- *    "⌘ Enter to save" hint sits at the end of the line, from `sm`.
+ * 2. The follow-up line. A date in it ("next Tuesday at 2pm") becomes a
+ *    follow-up on save, and the parsed date shows beside the field. A
+ *    weekday is always the next one: on a Monday, "Friday" is this Friday.
+ *    The "⌘ Enter to save" hint sits at the end of the line, from `sm`.
  * 3. A message line, only after a Save that cannot go ahead: "Write something
- *    first", or in the dialog "Choose a contact first".
+ *    first", a follow-up with no date, or in the dialog "Choose a contact
+ *    first".
  * 4. The action bar: the type control (a radiogroup, text from `sm` and
  *    glyphs below) and Save.
  *
@@ -34,6 +36,9 @@
  *
  * - Nothing is cleared until the server has the note, and then only the part
  *   that was sent (`lib/composerSubmission`).
+ * - A Save with only a follow-up saves only the follow-up. It used to write
+ *   an empty note as well, and that note counted as talking to the person:
+ *   their "last contacted" and their score moved for a reminder.
  * - On the contact page the draft is on disk within a moment of typing, per
  *   account and contact (`lib/composerDrafts`). The compact composer keeps no
  *   draft: the dialog opens empty, and its contact can change under the text.
@@ -50,11 +55,11 @@ import Mention from "@tiptap/extension-mention";
 import { FileText, Phone, Handshake, Mail, CalendarClock } from "lucide-react";
 import * as chrono from "chrono-node";
 import { toast } from "sonner";
-import { formatWhen } from "../lib/datetime";
 import { LinkPreviewExtension } from "./LinkPreviewExtension";
 import { getMentionSuggestion } from "./MentionSuggestion";
 import { Segmented, type SegmentedOption } from "./ui/Segmented";
 import { useAddInteraction, useContactNames } from "../api";
+import { useCreateActionItem } from "../api/actionItems";
 import type { Interaction } from "../types";
 import { COMPOSER, KBD_SM, TAG_PILL } from "../lib/styles";
 import { cn } from "../lib/utils";
@@ -82,15 +87,16 @@ const INTERACTION_TYPES: readonly SegmentedOption<InteractionKind>[] = [
 
 /** Placeholder copy per interaction type. Also the editor's description. */
 const PLACEHOLDERS: Record<InteractionKind, string> = {
-  note: "Write a quick note...",
-  call: "Summarize the call...",
-  meeting: "Capture meeting highlights...",
-  email: "Log an email interaction...",
+  note: "Write a quick note…",
+  call: "Summarize the call…",
+  meeting: "Capture meeting highlights…",
+  email: "Log an email interaction…",
 };
 
 /** What a Save that cannot go ahead says. */
 const COMPOSER_MESSAGES = {
   empty: "Write something first",
+  date: "Add a date to the follow-up, like Friday or May 3",
   contact: "Choose a contact first",
 } as const;
 
@@ -100,41 +106,50 @@ type Problem = keyof typeof COMPOSER_MESSAGES;
 const DRAFT_WRITE_DELAY_MS = 300;
 
 /**
- * The follow-up task in a "next action" line, or null when it names no date.
+ * The first date in a follow-up line, always ahead of `now`: on a Monday,
+ * "Friday" is this Friday, not the one three days ago.
+ */
+function parseFollowUp(text: string, now = new Date()) {
+  return chrono.parse(text, now, { forwardDate: true })[0] ?? null;
+}
+
+/**
+ * The follow-up in a follow-up line, or null when it names no date.
  *
  * The date is what chrono found. The title is the rest of the line with the
  * date and the small words around it removed, so "Send slides next Tuesday"
  * becomes "Send slides", and a line that is only a date becomes "Follow up".
  */
-function followUpFromText(
+export function followUpFromText(
   text: string,
+  now = new Date(),
 ): { title: string; dueAt: string } | null {
-  const parsedDate = chrono.parseDate(text);
-  if (!parsedDate) return null;
-  const chronoResult = chrono.parse(text)[0];
-  let actionItemTitle = "Follow up";
-
-  if (chronoResult && chronoResult.text) {
-    let titleText = text.replace(chronoResult.text, "").trim();
-
-    let previous;
-    do {
-      previous = titleText;
-      titleText = titleText
-        .replace(/^(on|at|by|in|for|with|the|to)\s+/i, "")
-        .trim();
-      titleText = titleText
-        .replace(/\s+(on|at|by|in|for|with|the|to)$/i, "")
-        .trim();
-    } while (titleText !== previous);
-
-    if (titleText.length > 0) {
-      actionItemTitle = titleText.charAt(0).toUpperCase() + titleText.slice(1);
-    }
-  }
-
-  return { title: actionItemTitle, dueAt: parsedDate.toISOString() };
+  const found = parseFollowUp(text, now);
+  if (!found) return null;
+  let title = text.replace(found.text, "").trim();
+  let previous;
+  do {
+    previous = title;
+    title = title
+      .replace(/^(on|at|by|in|for|with|the|to)\s+/i, "")
+      .replace(/\s+(on|at|by|in|for|with|the|to)$/i, "")
+      .trim();
+  } while (title !== previous);
+  return {
+    title: title ? title.charAt(0).toUpperCase() + title.slice(1) : "Follow up",
+    dueAt: found.start.date().toISOString(),
+  };
 }
+
+/** A follow-up's date with its weekday, so a wrong day shows: "Fri, Oct 9, 2:00 PM". */
+const followUpWhen = (date: Date) =>
+  date.toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 
 /**
  * What is left of the follow-up line once the submitted part is removed.
@@ -151,11 +166,62 @@ function followUpRemainder(current: string, submitted: string): string {
   return current;
 }
 
-/** The title an interaction is stored with, from its type and content. */
-function titleFor(kind: InteractionKind, hasContent: boolean): string {
-  if (kind !== "note") return `Logged ${kind}`;
-  return hasContent ? "Quick Note" : "Action Scheduled";
-}
+/** The editor's own box: 16 px on a phone, where iOS zooms a smaller field. */
+const EDITOR_CLASS =
+  "prose prose-sm max-w-none min-h-[80px] text-base sm:text-sm text-on-surface break-words prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1";
+
+/** @mentions of the people `contacts` names when somebody types @. */
+const mentions = (contacts: Parameters<typeof getMentionSuggestion>[0]) =>
+  Mention.configure({
+    HTMLAttributes: {
+      class:
+        "bg-primary/10 text-on-primary-wash font-bold px-1 py-0.5 rounded-md cursor-pointer",
+    },
+    suggestion: getMentionSuggestion(contacts),
+  });
+
+/**
+ * The editor alone, for a note already saved: the timeline's overlay edits
+ * with it, so a note keeps its paragraphs and its @mentions. Its text used
+ * to open as raw HTML in a plain box.
+ */
+export const NoteEditor = ({
+  html,
+  onChange,
+}: {
+  html: string;
+  /** The note as HTML, or "" when it is empty. */
+  onChange: (html: string) => void;
+}) => {
+  const { data: contacts = [] } = useContactNames();
+  const contactsRef = useRef(contacts);
+  useEffect(() => {
+    contactsRef.current = contacts;
+  }, [contacts]);
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      mentions(() => contactsRef.current),
+      LinkPreviewExtension,
+    ],
+    content: html,
+    onUpdate: ({ editor }) => onChange(editor.isEmpty ? "" : editor.getHTML()),
+    editorProps: {
+      attributes: {
+        role: "textbox",
+        "aria-label": "Note",
+        "aria-multiline": "true",
+        class: EDITOR_CLASS,
+      },
+    },
+  });
+  return (
+    <EditorContent
+      editor={editor}
+      className="custom-tiptap focus-frame bg-surface-container-low rounded-xl px-3 py-2"
+    />
+  );
+};
 
 interface InteractionComposerProps {
   /**
@@ -182,7 +248,7 @@ interface InteractionComposerProps {
   onContactMissing?: () => void;
   /**
    * The narrow contact page's form. The composer is one line, the editor
-   * alone, until something in it takes focus. Then the next-action line,
+   * alone, until something in it takes focus. Then the follow-up line,
    * the type control and Save open under it. It closes again when focus
    * leaves and there is nothing written.
    */
@@ -244,11 +310,12 @@ const Composer = ({
     contactsRef.current = allContacts;
   }, [allContacts]);
   const addInteraction = useAddInteraction();
+  const createFollowUp = useCreateActionItem();
   const [followUpText, setFollowUpText] = useState(draft?.followUpText ?? "");
   const followUpRef = useRef(followUpText);
   const [isSaving, setIsSaving] = useState(false);
   const [problem, setProblem] = useState<Problem | null>(null);
-  const parsedDate = chrono.parseDate(followUpText);
+  const parsedDate = parseFollowUp(followUpText)?.start.date();
   const placeholderId = React.useId();
   const messageId = React.useId();
 
@@ -263,6 +330,7 @@ const Composer = ({
    */
   const editorRef = useRef<Editor | null>(null);
   const pendingRef = useRef(false);
+  const followUpInput = useRef<HTMLInputElement>(null);
   const submitRef = useRef<() => void>(() => {});
   const contactIdRef = useRef(contactId);
   useEffect(() => {
@@ -335,6 +403,13 @@ const Composer = ({
       editor.commands.focus();
       return;
     }
+    // A follow-up needs a date: a line with none used to vanish on Save.
+    const followUpItem = followUpFromText(followUp);
+    if (followUp.trim() && !followUpItem) {
+      setProblem("date");
+      followUpInput.current?.focus();
+      return;
+    }
     const target = contactIdRef.current;
     if (!target) {
       setProblem("contact");
@@ -343,24 +418,34 @@ const Composer = ({
     }
     setProblem(null);
 
-    const payload: Partial<Interaction> = {
-      type: kind,
-      title: titleFor(kind, !isEditorEmpty),
-      content: isEditorEmpty ? null : editor.getHTML(),
-      date: new Date().toISOString(),
-    };
-    const followUpItem = followUpFromText(followUp);
-    if (followUpItem) payload.actionItem = followUpItem;
-
     // Nothing is cleared yet. The mark records where the submitted content
     // ends and follows it through anything typed while the request is out.
     const mark = markSubmission(editor);
     pendingRef.current = true;
     setIsSaving(true);
     try {
-      await addInteraction.mutateAsync({ contactId: target, data: payload });
+      if (isEditorEmpty) {
+        // Only a follow-up: no note, so nobody counts as contacted.
+        await createFollowUp.mutateAsync({
+          contactId: target,
+          ...followUpItem!,
+        });
+      } else {
+        const payload: Partial<Interaction> = {
+          type: kind,
+          title: INTERACTION_LABELS[kind],
+          content: editor.getHTML(),
+          date: new Date().toISOString(),
+        };
+        if (followUpItem) payload.actionItem = followUpItem;
+        await addInteraction.mutateAsync({ contactId: target, data: payload });
+      }
 
-      if (followUpItem) toast.success("Follow-up scheduled!");
+      if (followUpItem) {
+        toast.success(
+          `Follow-up set for ${followUpWhen(new Date(followUpItem.dueAt))}`,
+        );
+      }
       // Only now, and only the submitted part.
       removeSubmitted(editor, mark);
       setFollowUpText((current) => followUpRemainder(current, followUp));
@@ -371,12 +456,19 @@ const Composer = ({
       // On disk before anything else happens. A 401 here is followed by the
       // gate taking the screen, and the note must already be kept by then.
       persistNow();
-      toast.error("Failed to log interaction");
+      toast.error("Could not save the note");
     } finally {
       pendingRef.current = false;
       setIsSaving(false);
     }
-  }, [addInteraction, onContactMissing, onSaved, persistNow, persistSoon]);
+  }, [
+    addInteraction,
+    createFollowUp,
+    onContactMissing,
+    onSaved,
+    persistNow,
+    persistSoon,
+  ]);
 
   useEffect(() => {
     submitRef.current = submit;
@@ -410,13 +502,7 @@ const Composer = ({
         showOnlyWhenEditable: false,
       }),
       SubmitExtension,
-      Mention.configure({
-        HTMLAttributes: {
-          class:
-            "bg-primary/10 text-on-primary-wash font-bold px-1 py-0.5 rounded-md cursor-pointer",
-        },
-        suggestion: getMentionSuggestion(() => contactsRef.current),
-      }),
+      mentions(() => contactsRef.current),
       LinkPreviewExtension,
     ],
     content: draft?.html ?? "",
@@ -442,8 +528,7 @@ const Composer = ({
         "aria-label": "Note",
         "aria-multiline": "true",
         "aria-describedby": placeholderId,
-        class:
-          "prose prose-sm max-w-none min-h-[80px] text-base sm:text-sm text-on-surface break-words prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1",
+        class: EDITOR_CLASS,
       },
     },
   });
@@ -558,7 +643,7 @@ const Composer = ({
           {PLACEHOLDERS[type]}
         </span>
 
-        {/* The next-action line, and the save hint at its end */}
+        {/* The follow-up line, and the save hint at its end */}
         <div
           className={cn(
             "mt-4 flex items-center gap-3 relative",
@@ -578,7 +663,8 @@ const Composer = ({
               className="w-4 h-4 text-primary mr-2.5 shrink-0"
             />
             <input
-              aria-label="Next action"
+              ref={followUpInput}
+              aria-label="Follow-up"
               // The phone keyboard's return key reads Done and puts the
               // keyboard away, so Save is in view. On a desktop, Enter here
               // still does nothing and ⌘ Enter saves.
@@ -596,11 +682,11 @@ const Composer = ({
               value={followUpText}
               onChange={(e) => {
                 setFollowUpText(e.target.value);
-                if (e.target.value.trim()) setProblem(null);
+                setProblem(null);
               }}
               // Short enough for a phone's field: the long example was cut
               // mid-word at 390 px.
-              placeholder="Next action, like follow up Tuesday"
+              placeholder="Follow-up, like call back Tuesday"
               // A field draws no `::after`, so the 44 px tap floor on a phone
               // has to be the field's own height. 16 px there stops iOS
               // zooming in.
@@ -608,7 +694,7 @@ const Composer = ({
             />
             {parsedDate && (
               <span className={cn(TAG_PILL, "ml-2 shrink-0")}>
-                {formatWhen(parsedDate.toISOString())}
+                {followUpWhen(parsedDate)}
               </span>
             )}
           </div>

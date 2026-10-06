@@ -1119,9 +1119,7 @@ test.describe("the timeline", () => {
 
     // Edit opens the note ready to change.
     await page.keyboard.press("Enter");
-    await expect(
-      page.getByRole("textbox", { name: "Interaction title" }),
-    ).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Title" })).toBeVisible();
   });
 });
 

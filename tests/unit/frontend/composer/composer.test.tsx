@@ -38,7 +38,10 @@ import {
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { InteractionComposer } from "../../../../src/components/InteractionComposer";
+import {
+  followUpFromText,
+  InteractionComposer,
+} from "../../../../src/components/InteractionComposer";
 import { QuickInteractionModal } from "../../../../src/components/QuickInteractionModal";
 import { draftKey } from "../../../../src/lib/composerDrafts";
 
@@ -151,7 +154,7 @@ const typeButton = (name: "Note" | "Call" | "Meeting" | "Email") =>
     screen.getByRole("radiogroup", { name: "Interaction type" }),
   ).getByRole("radio", { name });
 const followUpInput = () =>
-  screen.getByLabelText("Next action") as HTMLInputElement;
+  screen.getByLabelText("Follow-up") as HTMLInputElement;
 
 /**
  * jsdom lays nothing out, so a Range has no rectangles. ProseMirror asks for
@@ -197,12 +200,12 @@ describe("names", () => {
     const description = () =>
       document.getElementById(editor.getAttribute("aria-describedby") ?? "")
         ?.textContent;
-    expect(description()).toBe("Write a quick note...");
+    expect(description()).toBe("Write a quick note…");
 
     // The id is fixed when the editor is created, and the text behind it
     // follows the type.
     fireEvent.click(typeButton("Call"));
-    expect(description()).toBe("Summarize the call...");
+    expect(description()).toBe("Summarize the call…");
     expect(typeButton("Call").getAttribute("aria-checked")).toBe("true");
     expect(typeButton("Note").getAttribute("aria-checked")).toBe("false");
   });
@@ -262,7 +265,8 @@ describe("the controls", () => {
     expect(saveButton().getAttribute("aria-describedby")).toBeNull();
   });
 
-  it("saves with ⌘ Enter from the next-action line too", async () => {
+  it("saves only a follow-up, with no empty note, from ⌘ Enter on its line", async () => {
+    // An empty note counted as being in touch: "last contacted" moved.
     const saves = stubServer();
     mount();
     await editorElement();
@@ -272,13 +276,34 @@ describe("the controls", () => {
 
     fireEvent.keyDown(followUpInput(), { key: "Enter", metaKey: true });
     await waitFor(() => expect(saves).toHaveLength(1));
-    expect(saves[0].body.title).toBe("Action Scheduled");
-    expect(saves[0].body.content).toBeNull();
-    expect(saves[0].body.actionItem).toMatchObject({ title: "Call back" });
+    expect(saves[0].url).toContain("/contacts/contact-1/action-items");
+    expect(saves[0].body).toEqual({
+      title: "Call back",
+      dueAt: expect.any(String),
+    });
     await act(async () => {
       saves[0].resolve();
     });
     await waitFor(() => expect(followUpInput().value).toBe(""));
+  });
+
+  it("keeps a follow-up with no date and asks for one", async () => {
+    const saves = stubServer();
+    mount();
+    await editorElement();
+    fireEvent.change(followUpInput(), { target: { value: "Send the deck" } });
+    fireEvent.click(saveButton());
+    expect((await screen.findByRole("alert")).textContent).toMatch(
+      /^Add a date to the follow-up/,
+    );
+    expect(followUpInput().value).toBe("Send the deck");
+    expect(saves).toHaveLength(0);
+  });
+
+  it("reads a weekday as the next one: on a Monday, Friday is this Friday", () => {
+    const monday = new Date(2026, 9, 5, 9);
+    const due = new Date(followUpFromText("Call back Friday", monday)!.dueAt);
+    expect([due.getMonth(), due.getDate()]).toEqual([9, 9]);
   });
 
   it("shows the ⌘ Enter hint at the end of the next-action line", async () => {
@@ -399,7 +424,7 @@ describe("the compact composer", () => {
     expect(saves[0].url).toContain("/contacts/contact-7/interactions");
     expect(saves[0].body).toMatchObject({
       type: "meeting",
-      title: "Logged meeting",
+      title: "Meeting",
     });
     await act(async () => {
       saves[0].resolve();
@@ -754,7 +779,7 @@ describe("a save that succeeds", () => {
     fireEvent.keyDown(pm, { key: "Enter", ctrlKey: true });
     await waitFor(() => expect(saves).toHaveLength(1));
     expect(saves[0].body.type).toBe("call");
-    expect(saves[0].body.title).toBe("Logged call");
+    expect(saves[0].body.title).toBe("Call");
     expect(saves[0].body.actionItem).toMatchObject({ title: "Call again" });
 
     await act(async () => {
