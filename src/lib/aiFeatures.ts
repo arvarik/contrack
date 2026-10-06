@@ -1,15 +1,15 @@
 /**
  * aiFeatures: what each AI feature uses, in one table.
  *
- * Models are chosen by role on Settings → AI (the Fast model, the
+ * Models are chosen by role on Settings → Administration → AI (the Fast model, the
  * Strong model, the embedding model), but people think by feature: "why
  * did research find nothing", "what reads my notes". This table maps one to
  * the other, and every place that says which model does what reads it:
  *
- *   - the "What each feature uses" list on Settings → AI, with a link
+ *   - the "What each feature uses" list on Settings → Administration → AI, with a link
  *     from each part to its control
  *   - the same list, read-only, on Privacy and AI
- *   - the "Used by" line under each model on Settings → AI
+ *   - the "Used by" line under each model on Settings → Administration → AI
  *
  * `featureStatus` says whether a feature works now, and if not, why, from
  * the same settings view the pages read.
@@ -37,7 +37,7 @@ const ROLE_NAMES: Record<AiRole, string> = {
   webSearch: "Web search",
 };
 
-/** The row on Settings → AI where each role is changed. */
+/** The row on Settings → Administration → AI where each role is changed. */
 export const ROLE_ANCHORS: Record<AiRole, string> = {
   fast: "fast-model",
   strong: "strong-model",
@@ -166,7 +166,7 @@ export interface FeatureStatus {
   /** Why it is not ready, in a sentence. */
   reason?: string;
   /**
-   * What an admin does about it on Settings → AI: the words of a
+   * What an admin does about it on Settings → Administration → AI: the words of a
    * link, and the row it goes to. None for an account's own switch, which
    * is on its own page.
    */
@@ -175,11 +175,11 @@ export interface FeatureStatus {
 
 interface FeatureFix {
   label: string;
-  /** A row on Settings → AI. */
+  /** A row on Settings → Administration → AI. */
   anchor: string;
 }
 
-/** The row on Settings → AI that gives an engine a need it lacks. */
+/** The row on Settings → Administration → AI that gives an engine a need it lacks. */
 export const NEED_ANCHORS: Record<EngineNeed, string> = {
   off: "allow-web-search",
   "web-search": "searxng",

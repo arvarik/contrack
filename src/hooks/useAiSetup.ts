@@ -52,7 +52,9 @@ export function useAiSetup(featureId: string, enabled = true): AiSetup | null {
       };
     }
     const feature = AI_FEATURES.find(({ id }) => id === featureId);
-    if (!settings || !feature) return null;
+    // An answer without its instance block, such as an older server's,
+    // leaves the buttons as they were.
+    if (!settings?.instance || !feature) return null;
     const status = featureStatus(feature, settings, { accountAiOn: true });
     if (status.state === "ready") return null;
     // With no provider at all, a model cannot be chosen yet: connecting one
@@ -69,7 +71,7 @@ export function useAiSetup(featureId: string, enabled = true): AiSetup | null {
       fix:
         isAdmin && fix
           ? {
-              label: `${fix.label} in Settings → AI`,
+              label: `${fix.label} in Settings → Administration → AI`,
               path: `/settings/admin/ai#${fix.anchor}`,
             }
           : undefined,

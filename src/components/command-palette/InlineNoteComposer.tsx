@@ -129,7 +129,7 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
       onComplete();
     } catch (err: unknown) {
       toast.error(
-        `Failed to log ${type}: ${err instanceof Error ? err.message : String(err)}`,
+        `Could not log the ${type}: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }, [

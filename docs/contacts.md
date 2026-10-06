@@ -26,12 +26,17 @@ phone, a contact opens over the list.
 - **Recent**: the contacts you opened last, at the top. **Recent contacts**
   on the same settings page sets how many, and 0 hides the row.
 - **Letter rail**: in a list sorted by name, with no search and 15 or more
-  people. Tap or drag a letter to jump to it.
+  people. Tap or drag a letter to jump to it. A short window, such as a phone
+  on its side, has no room for it and does not show it.
+- **List chips**: a mouse wheel scrolls the row of chips. To move a list's
+  chip, drag it with a mouse, or open its menu with a right click or a long
+  press and choose **Move left** or **Move right**.
 - **Row menu**: right-click a row for **View contact**, **Copy email** and
   **Archive**. For the list's keys, see
   [Keyboard shortcuts](keyboard-shortcuts.md#network).
 - **Command palette**: on a touch screen, the first button above the list
-  opens the [command palette](search.md#command-palette).
+  opens the [command palette](search.md#command-palette). With a mouse, the
+  sidebar's **Command palette** button does.
 
 ### Select several contacts
 
@@ -42,15 +47,15 @@ phone, a contact opens over the list.
    and **Select all** selects every contact the list shows.
 3. Press a button in the bar at the bottom, then **Done** or `Esc`.
 
-| Button                   | What it does                                                                                         |
-| ------------------------ | ---------------------------------------------------------------------------------------------------- |
-| **Track** or **Untrack** | Tracks the selection at your default cadence, with **Undo**. **Untrack** shows when all are tracked. |
-| **Archive**              | Archives the selection, with **Undo**.                                                               |
-| **List**                 | Adds the selection to a list.                                                                        |
-| **Field**                | Sets **Role / title**, **Company**, **Industry** or **Location** for all of them, with **Undo**.     |
-| **Color**                | Sets the page colour of each contact.                                                                |
-| **CSV**                  | Copies the name, role, company, location, first email and first phone to the clipboard.              |
-| **Delete**               | Moves the selection to the trash, with **Undo**.                                                     |
+| Button                         | What it does                                                                                                                                             |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Track** or **Stop tracking** | Tracks the selection at your default cadence, with **Undo**. The toast says how many were tracked already. **Stop tracking** shows when all are tracked. |
+| **Archive**                    | Archives the selection, with **Undo**.                                                                                                                   |
+| **Add to list**                | Adds the selection to a list.                                                                                                                            |
+| **Edit field**                 | Sets **Role / title**, **Company**, **Industry** or **Location** for all of them, with **Undo**.                                                         |
+| **Colour**                     | Sets the page colour of each contact.                                                                                                                    |
+| **Copy CSV**                   | Copies the name, role, company, location, first email and first phone to the clipboard.                                                                  |
+| **Delete**                     | Moves the selection to the trash, with **Undo**.                                                                                                         |
 
 ## Add a contact
 
@@ -60,7 +65,8 @@ Press **New**, the plus button above the list.
   **Save contact**. In the list, `N` opens the form too.
 - **Add from text**: paste an email signature, a bio or rough notes, and
   press **Extract contact**. AI fills in the **New contact** form for you to
-  check. `V` opens it too. It needs an AI provider. See
+  check. `V` opens it too. It needs an AI provider: without one, the dialog
+  says what is missing and links to the fix. See
   [Connect a provider](ai.md#connect-a-provider).
 - **New list**: see [Lists](#lists).
 

@@ -146,25 +146,27 @@ in the list. The arrow keys, `Home`, `End`, the letters and `Enter` work once
 the list has focus. There, `J` and `K` are letters like the others. The list
 is one `Tab` stop. In the search box, `↓` moves to the list. In select mode,
 `Space` and `Enter` select a contact, `⇧ Enter` selects every contact from
-the last one you chose, and `⌘ A` selects every contact the list shows. See
+the last one you chose, and `⌘ A` selects every contact the list shows. To
+move a list's chip, open its menu with a right click, a long press or the
+menu key, and choose **Move left** or **Move right**. See
 [The Network list](contacts.md#the-network-list).
 
-| Keys       | What it does                                  | Single key |
-| ---------- | --------------------------------------------- | ---------- |
-| `/`        | Focus search                                  | Yes        |
-| `N`        | New contact                                   | Yes        |
-| `V`        | Add from text                                 | Yes        |
-| `Esc`      | Exit selection mode                           | No         |
-| `↑` or `↓` | Move through the contact list                 | No         |
-| `J`        | Open the next contact                         | Yes        |
-| `K`        | Open the previous contact                     | Yes        |
-| `Home`     | First contact                                 | No         |
-| `End`      | Last contact                                  | No         |
-| `A–Z`      | Jump to the next name with that letter        | Always on  |
-| `Enter`    | Open the contact, or select it in select mode | No         |
-| `Space`    | Select or clear the contact, in select mode   | No         |
-| `⇧ Enter`  | Select every contact from the last one chosen | No         |
-| `⌘ A`      | Select every contact shown, in select mode    | No         |
+| Keys               | What it does                                  | Single key |
+| ------------------ | --------------------------------------------- | ---------- |
+| `/`                | Focus search                                  | Yes        |
+| `N`                | New contact                                   | Yes        |
+| `V`                | Add from text                                 | Yes        |
+| `Esc`              | Exit selection mode                           | No         |
+| `↑` or `↓`         | Move through the contact list                 | No         |
+| `J`                | Open the next contact                         | Yes        |
+| `K`                | Open the previous contact                     | Yes        |
+| `Home`             | First contact                                 | No         |
+| `End`              | Last contact                                  | No         |
+| `A–Z`              | Jump to the next name with that letter        | Always on  |
+| `Enter` or `Space` | Open the contact, or select it in select mode | No         |
+| `PgUp` or `PgDn`   | Move a screen of contacts                     | No         |
+| `⇧ Enter`          | Select every contact from the last one chosen | No         |
+| `⌘ A`              | Select every contact shown, in select mode    | No         |
 
 ## Map
 

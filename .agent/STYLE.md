@@ -165,13 +165,19 @@ lift. The Network list is the one exception: its rows rise toward the pointer
 Every control a finger can reach has a hit box of at least 44 by 44 CSS
 pixels. Use `IconButton` for an icon button. Add `hit-area` to a control that
 looks smaller (a chip's remove button, a swatch). Give rows and inputs
-`min-h-[44px]` below `sm`. ❌ `hit-area` on a form field or inside
-`overflow-hidden`. `tests/e2e/metrics.spec.ts` measures every visible control
-on a 390 px phone.
+`min-h-[44px]`, and drop it only for a mouse: `sm:pointer-fine:min-h-0`, never
+`sm:min-h-0`. A tablet and a phone on its side are wider than `sm` and still
+touch screens. ❌ `hit-area` on a form field or inside `overflow-hidden`.
+`tests/e2e/metrics.spec.ts` measures every visible control on a 390 px phone.
 
 ### Other phone rules
 
-- No hover-only control below `sm`. Every action shows at rest.
+- No hover-only control on a touch screen, at any width. A control that waits
+  for hover hides only for a mouse (`pointer-fine:opacity-0`,
+  `sm:pointer-fine:w-0`), and every action shows at rest on a touch screen.
+- An icon-only control is labelled with `RailTooltip` (`side="bottom"` under
+  a header button). A mouse sees the label on hover and a finger on a long
+  press.
 - Key chips (`<kbd>`) hide below `sm`.
 - Inputs are 16 px on a phone, so iOS does not zoom.
 
@@ -260,8 +266,10 @@ states:
   The `t` key, the palette and the bulk bars run the same `useTrackToggle`,
   with the same toast and Undo.
 - A control keeps one shape and one width whatever its state says.
-- The words: Track, Tracked, Untrack, Not tracked, Stop tracking, Keeping up,
-  Catch up, cadence. Strong, Fading and At risk are band words only.
+- The words: Track, Tracked, Not tracked, Stop tracking, Keeping up, Catch
+  up, cadence. "Stop tracking" is the action everywhere: the Track menu, the
+  bulk bars, the palette and the toasts. ❌ "Untrack". Strong, Fading and At
+  risk are band words only.
 
 ## 8. Pulse
 

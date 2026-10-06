@@ -317,18 +317,18 @@ export const SHORTCUTS: readonly Shortcut[] = [
     alwaysOn: true,
     page: "/",
   },
+  // Select mode: a long press, or Select in the list's header.
   {
     group: NAMES.network.label,
-    keys: ["Enter"],
+    keys: ["Enter", "Space"],
     description: "Open the contact, or select it in select mode",
     bareLetter: false,
     page: "/",
   },
-  // Select mode: a long press, or Select in the list's header.
   {
     group: NAMES.network.label,
-    keys: ["Space"],
-    description: "Select or clear the contact, in select mode",
+    keys: ["PgUp", "PgDn"],
+    description: "Move a screen of contacts",
     bareLetter: false,
     page: "/",
   },

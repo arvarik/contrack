@@ -495,7 +495,7 @@ export const CommandPalette = () => {
       toast.success(`Created contact ${newContact.name}`);
     } catch (e: unknown) {
       toast.error(
-        `Failed to create contact: ${e instanceof Error ? e.message : String(e)}`,
+        `Could not create the contact: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
   };
@@ -526,7 +526,7 @@ export const CommandPalette = () => {
       toast.success(`Logged ${kind} for ${contact.name}`);
     } catch (e: unknown) {
       toast.error(
-        `Failed to log interaction: ${e instanceof Error ? e.message : String(e)}`,
+        `Could not log the interaction: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
   };
