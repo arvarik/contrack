@@ -1156,7 +1156,7 @@ test.describe("the composer", () => {
     await editor.click();
     await page.keyboard.press("ControlOrMeta+Enter");
     await expect(
-      page.getByRole("button", { name: "Logged meeting", exact: true }),
+      page.getByRole("button", { name: "Meeting", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByText("Walked through the quarterly plan"),
@@ -1274,7 +1274,7 @@ test.describe("phone", () => {
 
     // The composer is one line, above the first entry.
     const editor = page.getByRole("textbox", { name: "Note" });
-    const nextAction = page.getByRole("textbox", { name: "Next action" });
+    const nextAction = page.getByRole("textbox", { name: "Follow-up" });
     const save = page.getByRole("button", { name: "Save", exact: true });
     await expect(editor).toBeVisible();
     expect((await editor.boundingBox())!.y).toBeLessThan(
