@@ -119,9 +119,7 @@ test("passkey sign-on journey: setup, nudge, passkey sign-in, account settings, 
 
   // Empty state appears
   await expect(
-    page.getByText(
-      "No passkeys yet. Add one to sign in without typing a password",
-    ),
+    page.getByText("Add one to sign in without typing a password"),
   ).toBeVisible();
 
   // 7. Sign out and verify that passkey button now fails with alert
