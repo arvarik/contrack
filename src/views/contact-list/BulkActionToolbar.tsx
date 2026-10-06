@@ -4,7 +4,7 @@ import {
   Archive,
   ListPlus as AddToListIcon,
   Pencil,
-  Download,
+  Copy,
   Palette,
   Radar,
   Trash2,
@@ -69,8 +69,9 @@ interface BulkActionToolbarProps {
   selectedCount?: number;
   isPending: boolean;
   /**
-   * Track the selection, or untrack it. The bar reads Untrack when every
-   * selected contact is tracked and Track otherwise, and sends the answer.
+   * Track the selection, or stop tracking it. The bar reads Stop tracking
+   * when every selected contact is tracked and Track otherwise, and sends
+   * the answer.
    */
   onTrack: (next: boolean) => void;
   selectionTracked: SelectionTracked;
@@ -153,7 +154,7 @@ export const BulkActionToolbar = ({
             score and Pulse are about. */}
         <BulkActionBtn
           icon={<Radar className="w-4 h-4" />}
-          label={selectionTracked === "all" ? "Untrack" : "Track"}
+          label={selectionTracked === "all" ? "Stop tracking" : "Track"}
           onClick={() => onTrack(selectionTracked !== "all")}
           disabled={isPending || nothingSelected}
           className="text-primary"
@@ -167,26 +168,27 @@ export const BulkActionToolbar = ({
         />
         <BulkActionBtn
           icon={<AddToListIcon className="w-4 h-4" />}
-          label="List"
+          label="Add to list"
           onClick={onAddToList}
           disabled={nothingSelected}
           className="text-primary"
         />
         <BulkActionBtn
           icon={<Pencil className="w-4 h-4" />}
-          label="Field"
+          label="Edit field"
           onClick={onEditField}
           disabled={nothingSelected}
           className="text-primary"
         />
 
-        {/* Bulk Color Picker */}
+        {/* Bulk colour picker */}
         <div className="relative shrink-0" ref={bulkColorPickerRef}>
           <button
             type="button"
             onClick={() => setShowBulkColorPicker((v) => !v)}
             disabled={nothingSelected}
-            title="Change color"
+            title="Change colour"
+            aria-expanded={showBulkColorPicker}
             className={cn(
               BAR_BUTTON,
               "disabled:opacity-40",
@@ -194,7 +196,7 @@ export const BulkActionToolbar = ({
             )}
           >
             <Palette className="w-4 h-4" />
-            <span className={BAR_LABEL}>Color</span>
+            <span className={BAR_LABEL}>Colour</span>
           </button>
 
           <AnimatePresence>
@@ -226,9 +228,10 @@ export const BulkActionToolbar = ({
           </AnimatePresence>
         </div>
 
+        {/* It copies the rows as CSV text, and downloads no file. */}
         <BulkActionBtn
-          icon={<Download className="w-4 h-4" />}
-          label="CSV"
+          icon={<Copy className="w-4 h-4" />}
+          label="Copy CSV"
           onClick={onExportCSV}
           disabled={nothingSelected}
           className="text-on-surface-variant"

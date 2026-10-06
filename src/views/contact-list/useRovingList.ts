@@ -8,9 +8,15 @@
  * focus between rows, and Tab leaves the list in one press.
  *
  *   ArrowDown, ArrowUp   the next or previous row
+ *   PageDown, PageUp     a screen of rows on or back
  *   Home, End            the first or last row
  *   a letter or a digit  the next row whose label starts with it, wrapping
  *   Enter                opens the row (a link opens itself, or `onOpen`)
+ *   Space                presses the row, as a click does: it opens it, or
+ *                        picks it in select mode
+ *
+ * Space and PageDown used to scroll the list itself. The focused row left
+ * the virtualised range, unmounted, and focus fell to the page.
  *
  * The rows are virtualised, so the row that owns the Tab stop is not always
  * mounted. Two consequences, both handled here:
@@ -35,6 +41,7 @@ import React, {
   useRef,
   useState,
 } from "react";
+import { scrollParent } from "../../lib/scrollParent";
 
 /** The attribute that tells the handlers which row an event came from. */
 export const ROVING_INDEX_ATTR = "data-roving-index";
@@ -99,6 +106,14 @@ function indexOf(element: EventTarget | null): number | null {
   if (!(element instanceof HTMLElement)) return null;
   const raw = element.getAttribute(ROVING_INDEX_ATTR);
   return raw === null ? null : Number(raw);
+}
+
+/** About a screen of rows: the scroller's height in rows of this one's. */
+function pageOf(row: HTMLElement): number {
+  const scroller = scrollParent(row);
+  return scroller && row.offsetHeight
+    ? Math.max(1, Math.floor(scroller.clientHeight / row.offsetHeight) - 1)
+    : 10;
 }
 
 /** The first character a type-ahead key is compared with. */
@@ -199,6 +214,16 @@ export function useRovingList(options: RovingListOptions): RovingList {
           return move(Math.min(current + 1, count - 1));
         case "ArrowUp":
           return move(Math.max(current - 1, 0));
+        case "PageDown":
+          return move(
+            Math.min(current + pageOf(event.currentTarget), count - 1),
+          );
+        case "PageUp":
+          return move(Math.max(current - pageOf(event.currentTarget), 0));
+        case " ":
+          event.preventDefault();
+          event.currentTarget.click();
+          return;
         case "Home":
           return move(0);
         case "End":

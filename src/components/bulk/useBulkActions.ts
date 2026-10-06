@@ -7,7 +7,7 @@
  *   `describeCadence` gives it ("3 contacts, quarterly")
  * - Archive (with undo toast)
  * - Add to list
- * - Color / vibe update
+ * - Colour / vibe update
  * - Field edit (with undo toast)
  * - CSV export to clipboard
  * - Add-to-list and bulk-edit modal open/close states
@@ -47,6 +47,13 @@ interface ContactLike {
  * chip reads Untrack before the first row is chosen.
  */
 export type SelectionTracked = "all" | "none" | "mixed";
+
+/** "1 contact", "3 contacts". */
+const say = (count: number) => `${count} contact${count === 1 ? "" : "s"}`;
+
+/** The words of an error, for the toast after "Could not …:". */
+const reason = (err: unknown) =>
+  err instanceof Error ? err.message : String(err);
 
 /** The list cache by id: what a write is about to replace. */
 const cachedById = (client: QueryClient) =>
@@ -91,23 +98,14 @@ export function useBulkActions({
           onUndo: () =>
             bulkRestore.mutate(ids, {
               onError: (err) =>
-                toast.error(
-                  `Could not restore: ${err instanceof Error ? err.message : String(err)}`,
-                ),
+                toast.error(`Could not restore: ${reason(err)}`),
             }),
         });
         onComplete?.();
       },
-      onError: (err) =>
-        toast.error(
-          `Delete failed: ${err instanceof Error ? err.message : String(err)}`,
-        ),
+      onError: (err) => toast.error(`Could not delete: ${reason(err)}`),
     });
   }, [getIds, bulkDelete, bulkRestore, onComplete]);
-
-  const say = (count: number) => `${count} contact${count === 1 ? "" : "s"}`;
-  const reason = (err: unknown) =>
-    err instanceof Error ? err.message : String(err);
 
   /**
    * The tracked flag by id: from the contacts the caller passed, else from
@@ -144,15 +142,18 @@ export function useBulkActions({
    * Track (`next: true`) or untrack the selection.
    *
    * Only the ids that differ are sent: Track leaves a tracked contact's
-   * cadence alone, and Untrack leaves an untracked one untouched. The toast
-   * names the count that changed and offers Undo, which flips the same ids
-   * back. An undone untrack tracks them again at the default cadence, and
-   * the toast says so, because the cadence each one had is gone.
+   * cadence alone, and Stop tracking leaves an untracked one untouched. The
+   * toast names the count that changed, says how many already were, and
+   * offers Undo, which flips the same ids back. An undone stop tracks them
+   * again at the default cadence, and the toast says so, because the
+   * cadence each one had is gone.
    */
   const handleBulkTrack = useCallback(
     (next: boolean) => {
-      const ids = getIds().filter((id) => trackedById.get(id) !== next);
+      const selected = getIds();
+      const ids = selected.filter((id) => trackedById.get(id) !== next);
       if (ids.length === 0) return;
+      const already = selected.length - ids.length;
       bulkUpdate.mutate(
         { ids, data: { isTracked: next } },
         {
@@ -161,27 +162,32 @@ export function useBulkActions({
               next
                 ? `Tracking ${say(count)}`
                 : `Stopped tracking ${say(count)}`,
-              withUndo(() =>
-                bulkUpdate.mutate(
-                  { ids, data: { isTracked: !next } },
-                  {
-                    onSuccess: ({ count: undone }) =>
-                      toast.success(
-                        next
-                          ? `Stopped tracking ${say(undone)}`
-                          : `Tracking ${say(undone)} again, at the default cadence`,
-                      ),
-                    onError: (err) =>
-                      toast.error(`Could not undo: ${reason(err)}`),
-                  },
+              {
+                description: already
+                  ? `${already} ${already === 1 ? "was" : "were"} ${next ? "already tracked" : "not tracked"}`
+                  : undefined,
+                ...withUndo(() =>
+                  bulkUpdate.mutate(
+                    { ids, data: { isTracked: !next } },
+                    {
+                      onSuccess: ({ count: undone }) =>
+                        toast.success(
+                          next
+                            ? `Stopped tracking ${say(undone)}`
+                            : `Tracking ${say(undone)} again, at the default cadence`,
+                        ),
+                      onError: (err) =>
+                        toast.error(`Could not undo: ${reason(err)}`),
+                    },
+                  ),
                 ),
-              ),
+              },
             );
             onComplete?.();
           },
           onError: (err) =>
             toast.error(
-              `${next ? "Tracking" : "Untracking"} failed: ${reason(err)}`,
+              `Could not ${next ? "track" : "stop tracking"}: ${reason(err)}`,
             ),
         },
       );
@@ -207,7 +213,7 @@ export function useBulkActions({
             onComplete?.();
           },
           onError: (err) =>
-            toast.error(`Cadence update failed: ${reason(err)}`),
+            toast.error(`Could not change the cadence: ${reason(err)}`),
         },
       );
     },
@@ -237,10 +243,7 @@ export function useBulkActions({
           );
           onComplete?.();
         },
-        onError: (err) =>
-          toast.error(
-            `Archive failed: ${err instanceof Error ? err.message : String(err)}`,
-          ),
+        onError: (err) => toast.error(`Could not archive: ${reason(err)}`),
       },
     );
   }, [getIds, bulkUpdate, onComplete, queryClient]);
@@ -253,16 +256,12 @@ export function useBulkActions({
         { listId, contactIds },
         {
           onSuccess: ({ count }) => {
-            toast.success(
-              `Added ${count} contact${count !== 1 ? "s" : ""} to list`,
-            );
+            toast.success(`Added ${say(count)} to the list`);
             setIsAddToListOpen(false);
             onComplete?.();
           },
           onError: (err) =>
-            toast.error(
-              `Failed: ${err instanceof Error ? err.message : String(err)}`,
-            ),
+            toast.error(`Could not add to the list: ${reason(err)}`),
         },
       );
     },
@@ -277,15 +276,11 @@ export function useBulkActions({
         { ids, data: { themeColor: vibeId } },
         {
           onSuccess: ({ count }) => {
-            toast.success(
-              `Updated color for ${count} contact${count !== 1 ? "s" : ""}`,
-            );
+            toast.success(`Changed the colour of ${say(count)}`);
             onComplete?.();
           },
           onError: (err) =>
-            toast.error(
-              `Color update failed: ${err instanceof Error ? err.message : String(err)}`,
-            ),
+            toast.error(`Could not change the colour: ${reason(err)}`),
         },
       );
     },
@@ -327,10 +322,7 @@ export function useBulkActions({
             setIsBulkEditOpen(false);
             onComplete?.();
           },
-          onError: (err) =>
-            toast.error(
-              `Update failed: ${err instanceof Error ? err.message : String(err)}`,
-            ),
+          onError: (err) => toast.error(`Could not update: ${reason(err)}`),
         },
       );
     },
@@ -380,9 +372,7 @@ export function useBulkActions({
 
     copyToClipboard(csv)
       .then(() => {
-        toast.success(
-          `Copied ${selected.length} contact${selected.length !== 1 ? "s" : ""} as CSV`,
-        );
+        toast.success(`Copied ${say(selected.length)} as CSV`);
         onComplete?.();
       })
       .catch(() => {

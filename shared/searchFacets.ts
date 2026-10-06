@@ -172,6 +172,34 @@ function matchesTrackedFilter(isTracked: boolean, value: string): boolean {
   return false;
 }
 
+/**
+ * The values a facet takes, when `filter` holds one it does not know: "yes
+ * or no" for `tracked:maybe`. Null for a value it knows, and for a facet
+ * that takes any text. An unknown value matches nobody, and the list said
+ * "Try fewer letters", which was no help.
+ */
+export function unknownFacetValue(filter: FacetFilter): string | null {
+  const v = facetNeedle(filter);
+  switch (filter.field) {
+    case "tracked":
+      return /^(yes|no|true|false|1|0)$/.test(v) ? null : "yes or no";
+    case "missing":
+      return /^(company|location|email|phone)$/.test(v)
+        ? null
+        : "company, location, email or phone";
+    case "score":
+      return isNaN(parseInt(v, 10)) ? "a number, such as >80" : null;
+    case "updated":
+      return facetCutoff(v) ? null : "a time, such as >3m";
+    case "contacted":
+      return v === "never" || facetCutoff(v)
+        ? null
+        : "never, or a time such as >90d";
+    default:
+      return null;
+  }
+}
+
 /** Missing field check: missing:company, missing:location, missing:email, missing:phone */
 function matchesMissingFilter(contact: FacetContact, field: string): boolean {
   switch (field) {

@@ -96,6 +96,22 @@ describe("useRovingList", () => {
     expect(document.activeElement).toBe(row("Ada Lovelace"));
   });
 
+  it("keeps focus in the list on PageDown and presses the row on Space", () => {
+    const onClick = vi.fn();
+    render(<List />);
+    act(() => row("Ada Lovelace").focus());
+    // No scroller here, so a page is ten rows, clamped at the end.
+    fireEvent.keyDown(row("Ada Lovelace"), { key: "PageDown" });
+    expect(document.activeElement).toBe(row("Grace Hopper"));
+    fireEvent.keyDown(row("Grace Hopper"), { key: "PageUp" });
+    expect(document.activeElement).toBe(row("Ada Lovelace"));
+
+    row("Ada Lovelace").addEventListener("click", onClick);
+    const allowed = fireEvent.keyDown(row("Ada Lovelace"), { key: " " });
+    expect(allowed).toBe(false);
+    expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
   it("jumps by first letter, and the same letter again walks through the matches", () => {
     render(<List />);
     act(() => row("Ada Lovelace").focus());
@@ -245,10 +261,14 @@ describe("AlphabetRail", () => {
     expect(onJump).toHaveBeenLastCalledWith(3);
   });
 
-  it("jumps on Enter, through the button's own click", () => {
+  it("jumps on Enter, through the button's own click, and not twice on a tap", () => {
     const onJump = vi.fn();
     render(<AlphabetRail index={index} activeBucket="A" onJump={onJump} />);
     fireEvent.click(letter("G"));
     expect(onJump).toHaveBeenCalledWith(3);
+    // A tap jumps on pointerdown. Its click lands on the overlapping tap
+    // box of the next letter, and must not jump again.
+    fireEvent.click(letter("E"), { detail: 1 });
+    expect(onJump).toHaveBeenCalledTimes(1);
   });
 });

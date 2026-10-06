@@ -162,7 +162,7 @@ export const CreateListModal = ({
             disabled={!name.trim() || isPending}
             className="btn-primary ml-auto"
           >
-            {isPending ? "Creating..." : "Create list"}
+            {isPending ? "Creating…" : "Create list"}
           </button>
         </div>
       </form>
