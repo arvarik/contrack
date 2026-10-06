@@ -69,7 +69,7 @@ export function vecTableWidth(
  * The three status columns every vec0 table carries beside its vector.
  *
  * They are sqlite-vec METADATA columns, which means a predicate on one is
- * evaluated inside the K-nearest-neighbour scan rather than after it. That is
+ * evaluated inside the K-nearest-neighbor scan rather than after it. That is
  * the difference between "the ten nearest rows, of which some are archived"
  * and "the ten nearest rows that are not archived".
  *
@@ -129,7 +129,7 @@ export type VecElement = "float" | "int8";
  * The element a vec0 table must store.
  *
  * `search_embeddings` is int8: a quarter of the space, with the same
- * neighbours up to rounding (`services/search/vectorScale.ts`).
+ * neighbors up to rounding (`services/search/vectorScale.ts`).
  * `contact_embeddings` stays float, because dedupe compares its distances
  * with fixed thresholds.
  */

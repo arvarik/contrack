@@ -53,13 +53,13 @@ router.get(
       throw new ValidationError("An avatar needs a seed");
     }
 
-    // An absent or unrecognised `theme` is not an error: the monogram then
+    // An absent or unrecognized `theme` is not an error: the monogram then
     // carries its own `prefers-color-scheme` rule and answers for both
     // palettes, which is what the default `system` theme wants.
     const theme = isAvatarTheme(req.query.theme) ? req.query.theme : undefined;
 
     // `look` is how a contact's pronouns reach the face (`f`, `m` or `n`).
-    // Absent or unrecognised, the avatar service reads the look from the seed.
+    // Absent or unrecognized, the avatar service reads the look from the seed.
     const look = parseAvatarLook(req.query.look);
 
     const svg = renderAvatar({

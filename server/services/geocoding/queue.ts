@@ -161,7 +161,7 @@ async function drainQueue(): Promise<void> {
  *
  * A row with `geoSource = 'manual'` is one somebody dragged into place, and
  * the geocoder's answer for the same text does not outrank that. The guard
- * is in the statement itself, so every path through this module honours it,
+ * is in the statement itself, so every path through this module honors it,
  * and a task queued before the pin was moved lands on nothing when it drains.
  * A row the geocoder does place is marked `'geocoder'` in the same write.
  */

@@ -8,7 +8,7 @@
 // It never delays the list. The stage has a budget,
 // `SEARCH_RERANK_BUDGET_MS` (25 ms by default). When the scores arrive after
 // it, the list keeps its RRF order and the late scores are dropped. A job
-// that has not reached the worker yet is cancelled. A worker busy with an
+// that has not reached the worker yet is canceled. A worker busy with an
 // embedding backfill is the usual reason for a late score.
 //
 // It reads questions only, the `conceptual` kind. A name, an email, a phone

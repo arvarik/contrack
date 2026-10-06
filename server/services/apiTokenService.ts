@@ -23,7 +23,7 @@ import { NotFoundError, ValidationError } from "../utils/AppError.ts";
 import { auditService } from "./auditService.ts";
 import { getUserById, type User } from "./authService.ts";
 
-/** The prefix every personal token carries, so a leaked one is recognisable. */
+/** The prefix every personal token carries, so a leaked one is recognizable. */
 export const TOKEN_PREFIX = "ctk_";
 
 /** How much of a token is shown in a list, enough to tell two apart. */

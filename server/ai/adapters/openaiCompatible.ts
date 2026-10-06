@@ -233,7 +233,7 @@ export class OpenAICompatibleAdapter implements AIProvider {
       );
     } catch (error) {
       if (options.signal?.aborted)
-        throw new AppError("AI call cancelled by caller", 499, {
+        throw new AppError("AI call canceled by caller", 499, {
           code: "CANCELLED",
         });
       // A piece already sent cannot be taken back. A model that spent its

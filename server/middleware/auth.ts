@@ -158,7 +158,7 @@ function readCookie(req: Request, name: string): string | null {
  *
  * `SameSite=Strict` keeps the cookie off a request from another site. A page
  * on a sibling subdomain is the same site, though, so it still sends the
- * cookie. `refuseCrossSiteWrites` is the second half of the CSRF defence.
+ * cookie. `refuseCrossSiteWrites` is the second half of the CSRF defense.
  *
  * `Secure` is set only when the request arrived over HTTPS. Hard-coding it
  * would break plain-HTTP local use (`http://localhost:3210`), which is the

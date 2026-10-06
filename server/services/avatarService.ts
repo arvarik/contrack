@@ -95,7 +95,7 @@ export const FRIENDLY_MOUTH = ["default", "smile", "serious"] as const;
  * Expressions that must never reach a contact's face.
  *
  * Asserted in the tests rather than merely commented, because the failure mode
- * is silent: DiceBear ignores an option value it does not recognise, so a
+ * is silent: DiceBear ignores an option value it does not recognize, so a
  * single typo in the allow-lists above would quietly restore the *entire*
  * pool — angry brows included — with nothing to notice at runtime.
  */

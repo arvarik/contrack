@@ -439,7 +439,7 @@ export function missingTopics(contact: HydratedContact): string[] {
   if (!contact.socialLinks?.length) missing.push("public profiles");
   if (!contact.about) missing.push("a professional summary");
   if (!contact.attributes?.length)
-    missing.push("awards, publications, talks or licences");
+    missing.push("awards, publications, talks or licenses");
   if (!contact.interests?.length) missing.push("interests");
   return missing;
 }
@@ -507,7 +507,7 @@ Topics:
 - Skill: tools, methods or fields a page says they work with
 - Language: languages they speak
 - Interest: hobbies, sports and causes they do or did
-- Other: anything else notable, like a licence or a registration number
+- Other: anything else notable, like a license or a registration number
 
 Examples:
 - Past role: Associate, Harbor Point Partners, New York, Jan 2018 to Aug 2020 [brokercheck.finra.org]
@@ -642,7 +642,7 @@ ${suggestedSearches(contact)
   .map((query) => `- ${query}`)
   .join("\n")}
 
-Then follow what you find: former employers, schools, cities, profile handles and co-authors lead to more pages. Useful places are company team and about pages, university and alumni pages, conference and speaker pages, podcasts and interviews, publications and patents, GitHub, Google Scholar, news, sports and race results, and public registries such as licence lookups.
+Then follow what you find: former employers, schools, cities, profile handles and co-authors lead to more pages. Useful places are company team and about pages, university and alumni pages, conference and speaker pages, podcasts and interviews, publications and patents, GitHub, Google Scholar, news, sports and race results, and public registries such as license lookups.
 
 ${pagesThatCount(contact)}
 ${repeat}
@@ -735,8 +735,8 @@ Rules:${current}
 - industry: the industry of the current employer, in two to four words.
 - interests: at most six short labels of one to four words, like "Marathon running", from Interest facts and from sports a fact says they played. One label for each activity: races, marathons and coaching in one sport are one interest.
 - tags: three to eight short lower-case tags about the person's work, like "restructuring" or "quant research".
-- attributes: notable facts that fit no field above, like awards (only prizes, honours, fellowships and scholarships a fact names, never an accomplishment at work), licences, registrations, publications, talks, patents, board seats, volunteer roles, languages or a hometown. Give each kind one entry, named for what it is ("Awards", "Licences", "Registrations", "Publications", "Volunteering", "Hometown"), never "Other", and join several values with "; ", like {"name": "Awards", "value": "Forbes 30 Under 30 (2021); Dean's List (2016)"}.
-- addresses: only a home address a fact gives as the person's, as it is written, labelled "home". Never an employer's office.
+- attributes: notable facts that fit no field above, like awards (only prizes, honors, fellowships and scholarships a fact names, never an accomplishment at work), licenses, registrations, publications, talks, patents, board seats, volunteer roles, languages or a hometown. Give each kind one entry, named for what it is ("Awards", "Licenses", "Registrations", "Publications", "Volunteering", "Hometown"), never "Other", and join several values with "; ", like {"name": "Awards", "value": "Forbes 30 Under 30 (2021); Dean's List (2016)"}.
+- addresses: only a home address a fact gives as the person's, as it is written, labeled "home". Never an employer's office.
 - Leave out what describes the employer, a team, a product or a job posting rather than this person.${namesake}
 Return null or an empty list for anything the facts do not state.
 

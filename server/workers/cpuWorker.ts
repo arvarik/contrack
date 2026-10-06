@@ -246,7 +246,7 @@ async function runEmbed(id: number, job: EmbedJob): Promise<void> {
 // ---------------------------------------------------------------------------
 
 port.on("message", (message: HostMessage) => {
-  // Cancelling happens on the host, which drops a job that has not been sent
+  // Canceling happens on the host, which drops a job that has not been sent
   // yet. Stopping one that is already running would mean checking a flag
   // between batches here, and that is deliberately not built: nothing in the
   // product cancels a running job, and a path with no caller and no test is

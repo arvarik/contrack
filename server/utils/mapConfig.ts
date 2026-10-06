@@ -31,7 +31,7 @@ const ROOT_RELATIVE = /^\/(?!\/)[^\s\\]*$/;
  * The style URL a value names, or null when it names none.
  *
  * An absolute URL must be https and carry no credentials, and it comes back
- * normalised. Its origin goes into a response header, so anything the URL
+ * normalized. Its origin goes into a response header, so anything the URL
  * parser does not accept is refused here rather than escaped there.
  */
 export function parseStyleUrl(value: string): string | null {

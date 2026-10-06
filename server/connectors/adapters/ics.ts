@@ -336,7 +336,7 @@ export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
         for (const instance of instances) {
           if (instance.event?.status === "CANCELLED") continue;
 
-          // Check if explicit recurrence override marks it cancelled
+          // Check if explicit recurrence override marks it canceled
           const recDateStr = instance.start.toISOString();
           const shortDateStr = recDateStr.slice(0, 10);
           if (

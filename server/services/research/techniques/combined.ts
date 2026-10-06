@@ -61,7 +61,7 @@ function reason(outcome: SourceOutcome): string {
 /**
  * One source's search, stopped at its own deadline when the run has one. A
  * source stopped there failed, and the other one's facts still count. A
- * cancelled run still throws.
+ * canceled run still throws.
  *
  * @param name - The source, for the reason: "The web search model's search".
  */

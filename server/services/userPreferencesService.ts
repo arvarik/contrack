@@ -94,7 +94,7 @@ export const preferenceSchemas = {
   theme: z.enum(THEME_MODES),
   accent: z
     .string()
-    .regex(/^#[0-9a-fA-F]{6}$/, "An accent is a six-digit hex colour")
+    .regex(/^#[0-9a-fA-F]{6}$/, "An accent is a six-digit hex color")
     .transform((hex) => hex.toLowerCase()),
   listDensity: z.enum(["comfortable", "compact"]),
   recentLimit: z.number().int().min(0).max(10),

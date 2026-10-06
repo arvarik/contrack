@@ -58,7 +58,7 @@ const PLATFORM_DOMAINS: readonly (readonly [string, readonly string[]])[] = [
  * The platform a social link belongs to, from its host: "linkedin",
  * "twitter", "youtube", or "other".
  *
- * It matched on the text of the whole URL, so `includes("x.com")` labelled
+ * It matched on the text of the whole URL, so `includes("x.com")` labeled
  * dropbox.com and netflix.com "twitter", and a LinkedIn URL anywhere in a
  * query string made any link "linkedin". It reads the host now: `www.` off,
  * then the domain itself or a subdomain of it, so "netflix.com" is not

@@ -110,7 +110,7 @@ export interface Technique {
   needs(): Need[];
   /**
    * Find facts about the contact. It builds its own prompts. It throws only
-   * when the run stops: cancelled, past its deadline, or refused by an AI
+   * when the run stops: canceled, past its deadline, or refused by an AI
    * switch. Anything else it says in the outcome.
    */
   run(request: ResearchRequest, ctx: TechniqueContext): Promise<SourceOutcome>;

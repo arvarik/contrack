@@ -21,7 +21,7 @@
 //   link    confident enough to attach the mention to an existing contact
 //   review  plausible, so make the ghost AND a suggestion pairing it with
 //           the candidate, reviewed in the same queue as a duplicate
-//   ghost   nothing close, so a new person, which is the old behaviour
+//   ghost   nothing close, so a new person, which is the old behavior
 //
 // The middle one is the point. An exact match either found somebody or made a
 // ghost, with nothing in between, so every near miss became a second record

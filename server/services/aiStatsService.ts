@@ -190,7 +190,7 @@ export function recordInvocation(entry: InvocationEntry): void {
  * `cacheTiers` is different in kind: the tiers are one in-process LRU shared
  * by the whole instance, and their hit and miss counters describe everybody's
  * traffic. A member sees their own spending; only an admin sees the
- * instance's cache behaviour, so the field is omitted rather than faked.
+ * instance's cache behavior, so the field is omitted rather than faked.
  */
 export function getSummary(scope: Scope, options: { admin: boolean }) {
   // 1. Session aggregates from ai_invocations

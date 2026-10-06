@@ -6,7 +6,7 @@
 //
 //   - LOG_LEVEL sets the lowest level written: error, warn, info or debug.
 //     Unset means info. Another value logs one warning and runs at info.
-//   - Colours only on a terminal. `docker logs` and a file get plain text.
+//   - Colors only on a terminal. `docker logs` and a file get plain text.
 //   - An Error in the details is written as its name, message and stack.
 //     JSON.stringify writes an Error as {}, so a connector failure lost its
 //     cause.

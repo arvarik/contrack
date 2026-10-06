@@ -248,7 +248,7 @@ const _stmts = {
     "SELECT embedding FROM contact_embeddings WHERE contactId = ?",
   ),
   // `ownerId` is the vec0 partition key, so sqlite-vec reads one owner's
-  // chunks rather than the whole table and the neighbours can never come from
+  // chunks rather than the whole table and the neighbors can never come from
   // another account. `ownerId IN (...)` is not supported on a partition
   // column, so this is one owner per statement by design.
   knn: sqlite.prepare(`

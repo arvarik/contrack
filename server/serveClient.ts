@@ -33,7 +33,7 @@ export function assertDevHost(host: string, production: boolean): void {
  * In development, Vite's middleware, with its reload socket on `server`.
  * Vite's default in middleware mode is a socket of its own on port 24678.
  * Two dev servers cannot share that port, and the page of the second one
- * dialled the first one's socket even with hot reload off. On the app's own
+ * dialed the first one's socket even with hot reload off. On the app's own
  * server, each page dials the port it came from.
  *
  * In production, the files in `distPath`, and `index.html` for any other

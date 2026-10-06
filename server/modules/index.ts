@@ -3,7 +3,7 @@
 // =============================================================================
 // The order of this list is the order createApp() mounts the routers in, and
 // Express matches a request against them in that order. So the order is part
-// of the behaviour: the mcp module stays before the contacts module (see
+// of the behavior: the mcp module stays before the contacts module (see
 // server/modules/mcp/index.ts). A new feature adds its folder and one line
 // here. See server/modules/module.ts for what a module holds.
 // =============================================================================

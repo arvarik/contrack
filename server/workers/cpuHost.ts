@@ -88,13 +88,13 @@ let tail: Promise<unknown> = Promise.resolve();
 /**
  * Jobs the caller has asked to stop.
  *
- * Cancelling has to work in two places, because a job spends most of its life
+ * Canceling has to work in two places, because a job spends most of its life
  * in neither. A job still in the queue is dropped here and never reaches the
  * worker at all; a job already running is forwarded, and the worker notices
- * between batches. Only forwarding would have meant that cancelling a
+ * between batches. Only forwarding would have meant that canceling a
  * backfill queued behind another one did nothing.
  */
-const cancelledJobs = new Set<number>();
+const canceledJobs = new Set<number>();
 
 /**
  * The most jobs that were ever posted to the worker at the same time.
@@ -239,7 +239,7 @@ function submit(
       new Promise<JobResult>((resolve, reject) => {
         void ensureWorker().then(
           (active) => {
-            if (cancelledJobs.delete(id)) {
+            if (canceledJobs.delete(id)) {
               reject(new Error(CANCELLED));
               return;
             }
@@ -269,7 +269,7 @@ function submit(
  */
 export function cancelJob(id: number): void {
   if (!pending.has(id)) {
-    cancelledJobs.add(id);
+    canceledJobs.add(id);
     return;
   }
   const message: HostMessage = { type: "cancel", id };
@@ -389,7 +389,7 @@ export async function __resetCpuWorker(
   options: { fallbackOnly?: boolean } = {},
 ): Promise<void> {
   await stopCpuWorker();
-  cancelledJobs.clear();
+  canceledJobs.clear();
   maxInFlight = 0;
   // Tests only, and the reason this is not something production does: a
   // process that has loaded the model cannot start over, and pretending it

@@ -16,7 +16,7 @@ const LOOK_PARAM: Record<AvatarLook, string> = {
   neutral: "n",
 };
 
-/** Read a `look` query value. Anything unrecognised means "decide from the seed". */
+/** Read a `look` query value. Anything unrecognized means "decide from the seed". */
 export function parseAvatarLook(value: unknown): AvatarLook | undefined {
   if (typeof value !== "string") return undefined;
   return (Object.keys(LOOK_PARAM) as AvatarLook[]).find(

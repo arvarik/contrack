@@ -84,7 +84,7 @@ function recencyScore(daysSinceContact: number, cadenceDays: number): number {
  * The five signals behind a score, each 0–100, with the weight applied to it.
  *
  * Returned rather than discarded because a bare number out of 100 attached to
- * a person is a judgement nobody can check. "42" means nothing; "you last
+ * a person is a judgment nobody can check. "42" means nothing; "you last
  * spoke 8 months ago, against a 90-day cadence" is something you can act on or
  * disagree with.
  */

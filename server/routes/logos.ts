@@ -129,7 +129,7 @@ async function fillLogo(
       await writeFileAtomically(missPath, new Date().toISOString());
     } catch (writeErr) {
       // The answer is still a miss. Without the marker the next request asks
-      // Google again, which is the old behaviour and not a failure.
+      // Google again, which is the old behavior and not a failure.
       log.warn(
         "Logo",
         `Could not record the logo miss for ${domain}: ${getErrorMessage(writeErr)}`,

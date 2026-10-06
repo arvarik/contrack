@@ -20,7 +20,7 @@ const INTERNAL = new Set([
   "scoreDirty",
 ]);
 
-/** Fields that only draw the app: a picture path and a colour. */
+/** Fields that only draw the app: a picture path and a color. */
 const DRAWING = new Set([
   "avatarUrl",
   "themeColor",

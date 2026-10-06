@@ -27,7 +27,7 @@ import {
 /**
  * Stability tier for a model.
  * - "stable": GA model
- * - "preview": may change behaviour or be withdrawn; sorts after stable
+ * - "preview": may change behavior or be withdrawn; sorts after stable
  */
 export type ModelStability = "stable" | "preview";
 
@@ -35,7 +35,7 @@ export type ModelStability = "stable" | "preview";
  * Functional model class — describes what tier of capability the model offers.
  * Used by consumers to express a preference via `routing.prefer`.
  * - "lite":  Cheapest, fastest — good for simple extraction/classification
- * - "flash": Mid-tier — reasoning, summarisation, structured output, research
+ * - "flash": Mid-tier — reasoning, summarization, structured output, research
  * - "pro":   Most capable, slowest and dearest
  */
 export type ModelClass = "lite" | "flash" | "pro";

@@ -674,12 +674,12 @@ export class SharedWork<T> {
     const current = entry;
     current.users++;
     let onAbort: (() => void) | undefined;
-    const cancelled = new Promise<never>((_, reject) => {
+    const canceled = new Promise<never>((_, reject) => {
       onAbort = () => reject(signal?.reason);
       signal?.addEventListener("abort", onAbort, { once: true });
     });
     try {
-      return await Promise.race([current.promise, cancelled]);
+      return await Promise.race([current.promise, canceled]);
     } finally {
       if (onAbort) signal?.removeEventListener("abort", onAbort);
       current.users--;

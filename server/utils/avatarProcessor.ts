@@ -95,7 +95,7 @@ export function isBase64DataUri(url: string | null | undefined): url is string {
 }
 
 /**
- * Normalise and save an account profile photo.
+ * Normalize and save an account profile photo.
  *
  * Resizes to 512px cover, auto-rotates by EXIF orientation, strips metadata,
  * converts to JPEG quality 82, and saves to uploads/u/<userId>/profile/.

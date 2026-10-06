@@ -31,7 +31,7 @@ export interface TranslateOptions {
    * - "objects":         every `type: "object"` node (Anthropic — its grammar
    *                      wants the constraint even on bare object nodes)
    * - "with-properties": only nodes that declare properties (OpenAI/compat —
-   *                      the historical behaviour, preserved exactly)
+   *                      the historical behavior, preserved exactly)
    */
   sealObjects: "objects" | "with-properties";
 }

@@ -148,7 +148,7 @@ export function getInstanceName(): string {
  * The value reaches an unauthenticated sign-in screen, so it is trimmed,
  * length-capped, and stripped of the control characters that would let a name
  * span lines or hide text after itself. It is rendered as text by React and
- * never as markup, so this is belt and braces rather than the only defence.
+ * never as markup, so this is belt and braces rather than the only defense.
  *
  * An empty string clears it, which is why this cannot simply reject empties.
  */
@@ -445,7 +445,7 @@ export async function createUser(input: {
   const created = sqlite.transaction(() => {
     const isFirst = countUsers() === 0;
     // The first account is an admin whatever the caller asked for. After
-    // that an explicit 'admin' is honoured (an admin creating an admin, or
+    // that an explicit 'admin' is honored (an admin creating an admin, or
     // an invitation issued for one) and everything else is a member.
     const role = isFirst
       ? "admin"
@@ -624,7 +624,7 @@ export function setUserAvatar(userId: string, url: string | null): User {
 /**
  * Change a password, verifying the current one first.
  *
- * Every other session is revoked on success. That is the behaviour people
+ * Every other session is revoked on success. That is the behavior people
  * expect from a password change — if you are changing it because you think
  * someone else has it, leaving their session alive defeats the point.
  *

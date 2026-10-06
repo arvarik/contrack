@@ -34,7 +34,7 @@ const scrypt = promisify(crypto.scrypt) as (
  * Current cost parameters.
  *
  * N=2^16 with r=8 costs ~64 MB and ~100 ms per hash on a modern laptop. That
- * is deliberately slow — it is the entire defence against someone who has
+ * is deliberately slow — it is the entire defense against someone who has
  * stolen the database file and is grinding the hash offline. It also bounds
  * online guessing to roughly ten attempts a second per core, on top of the
  * rate limiter in front of the login route.

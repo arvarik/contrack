@@ -10,7 +10,7 @@
 // an older version of the database, so one long reader — a dedupe scan, a
 // full export — holds every checkpoint off for as long as it runs, and the
 // WAL grows for the whole time. Nothing in this codebase has ever called a
-// checkpoint, so the only defence was that single-user instances rarely have
+// checkpoint, so the only defense was that single-user instances rarely have
 // a long reader and a busy writer at the same time. A shared instance does.
 //
 // Two numbers come out of here, and both are for the admin health panel:

@@ -503,7 +503,7 @@ export async function synthesizeSearchResults(
     return `No contacts matched "${query}". Try rephrasing or broadening the search.`;
   }
 
-  // Render industry and location as labelled fields so the LLM can ground
+  // Render industry and location as labeled fields so the LLM can ground
   // an industry or a geographic claim against the literal value. The plan's
   // requested filters below name industries, so the facts must carry them.
   const contactSummaries = contacts

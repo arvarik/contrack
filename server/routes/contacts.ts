@@ -250,7 +250,7 @@ router.post(
  * The import id a request carries, or a fresh one.
  *
  * The browser makes the id when a file is chosen and sends it in
- * `X-Import-Id`, so a second request for the same file is recognised as the
+ * `X-Import-Id`, so a second request for the same file is recognized as the
  * same import. A caller that sends none gets one made here and returned, and
  * its import is recorded the same way.
  */

@@ -189,7 +189,7 @@ export async function withRetry<T>(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     if (opts.signal?.aborted) {
-      throw new AppError("AI call cancelled by caller", 499, {
+      throw new AppError("AI call canceled by caller", 499, {
         code: "CANCELLED",
       });
     }
@@ -199,9 +199,9 @@ export async function withRetry<T>(
     } catch (err) {
       lastErr = err;
 
-      // Caller cancelled mid-flight — never retry.
+      // Caller canceled mid-flight — never retry.
       if (opts.signal?.aborted) {
-        throw new AppError("AI call cancelled by caller", 499, {
+        throw new AppError("AI call canceled by caller", 499, {
           code: "CANCELLED",
         });
       }

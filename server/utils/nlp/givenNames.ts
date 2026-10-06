@@ -9,7 +9,7 @@
 // Absence is the answer for most names, and it is deliberate. A name only gets
 // a line when at least nine in ten people who carry it, across the countries
 // that report it, share one gender. Jordan, Taylor, Kim, Jean, Andrea in Italy,
-// the Sikh names such as Harpreet, and most romanised Chinese given names do
+// the Sikh names such as Harpreet, and most romanized Chinese given names do
 // not reach that bar, so they have no line and the caller draws a neutral face.
 //
 // The text stays one string with an index of line starts rather than a Map of

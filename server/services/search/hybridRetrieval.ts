@@ -477,7 +477,7 @@ async function vectorRetrieval(
 // =============================================================================
 // Traits are a SOFT signal — a contact matching multiple traits ranks
 // higher but is not gated on them. Each trait becomes its own ranked list
-// in the RRF fusion, labelled `trait`, and the lists share one weight.
+// in the RRF fusion, labeled `trait`, and the lists share one weight.
 // Always intersected with the hard pre-filter set (if any) and the facets,
 // so boosts can't surface excluded contacts.
 

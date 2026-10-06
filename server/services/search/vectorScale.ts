@@ -5,7 +5,7 @@
 // quarter of the space of a float. One scale for the whole table turns a
 // component into a byte: round(component × scale), clamped to ±90. The query
 // goes through the same scale, so every L2 distance is the float distance
-// times the scale, up to rounding, and the order of the neighbours is kept.
+// times the scale, up to rounding, and the order of the neighbors is kept.
 //
 // One scale for the table, not one per vector, because an L2 distance
 // subtracts one vector's components from another's, so both must share a

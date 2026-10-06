@@ -460,7 +460,7 @@ function countMatches(
 
 export const importService = {
   /**
-   * Record the start of an import, or recognise one already recorded.
+   * Record the start of an import, or recognize one already recorded.
    *
    * Returns `repeated: true` when the id names an import this account has
    * already run to a commit, and nothing more should happen. Throws 409 when

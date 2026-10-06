@@ -190,7 +190,7 @@ function followUpTo(
 
 /**
  * Map a contact body to the contacts-table insert values.
- * Centralised here so createContact + bulkCreateContacts stay DRY.
+ * Centralized here so createContact + bulkCreateContacts stay DRY.
  * Any field not listed here will never reach the database.
  */
 function buildInsertValues(

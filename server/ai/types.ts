@@ -84,7 +84,7 @@ export interface AIGenerateOptions {
 
   /**
    * Caller cancellation signal. When the signal aborts (e.g. the HTTP client
-   * disconnected) the active SDK call is cancelled and no further retries
+   * disconnected) the active SDK call is canceled and no further retries
    * are attempted. The thrown error is an `AppError` with code `"CANCELLED"`.
    */
   signal?: AbortSignal;

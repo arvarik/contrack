@@ -10,7 +10,7 @@
  * - If one caller aborts, its promise rejects immediately with the abort reason.
  *   The underlying operation CONTINUES running for remaining callers.
  * - If ALL waiting callers abort, the underlying operation's AbortController
- *   is aborted, cancelling downstream provider work and preventing wasted quota.
+ *   is aborted, canceling downstream provider work and preventing wasted quota.
  */
 
 import { log } from "./logger.ts";

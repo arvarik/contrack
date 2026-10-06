@@ -8,7 +8,7 @@
 //   - Per-attempt AbortSignal-backed timeout (default 60s).
 //   - Exponential backoff with jitter on transient failures.
 //   - Caller-cancellation via options.signal.
-//   - Tolerant JSON validation for responseFormat === "json", normalised so
+//   - Tolerant JSON validation for responseFormat === "json", normalized so
 //     the text callers get back always parses.
 // =============================================================================
 
@@ -407,7 +407,7 @@ export class AnthropicAdapter implements AIProvider {
       );
     } catch (error) {
       if (options.signal?.aborted)
-        throw new AppError("AI call cancelled by caller", 499, {
+        throw new AppError("AI call canceled by caller", 499, {
           code: "CANCELLED",
         });
       if (sent) throw error;

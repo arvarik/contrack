@@ -10,7 +10,7 @@
 //   socket is actually torn down (not just abandoned).
 // - Exponential backoff + jitter on transient failures (5xx/429/timeout/
 //   socket reset).
-// - Tolerant JSON validation when responseFormat === "json", normalised so
+// - Tolerant JSON validation when responseFormat === "json", normalized so
 //   the text callers get back always parses.
 // - Caller-cancellation: if the request's AbortSignal aborts, no further
 //   retries are attempted and an AppError(code: CANCELLED) is thrown.
@@ -388,7 +388,7 @@ export class OpenAIAdapter implements AIProvider {
       );
     } catch (error) {
       if (options.signal?.aborted)
-        throw new AppError("AI call cancelled by caller", 499, {
+        throw new AppError("AI call canceled by caller", 499, {
           code: "CANCELLED",
         });
       if (sent) throw error;

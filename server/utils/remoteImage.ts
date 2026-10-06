@@ -166,7 +166,7 @@ export async function fetchRemoteImage(
 
 /** Sort a failure before the body arrived into permanent or transient. */
 function classifyFetchError(err: unknown, signal?: AbortSignal): unknown {
-  // The caller cancelled. That is not a fact about the image, and the
+  // The caller canceled. That is not a fact about the image, and the
   // caller needs to see its own reason to stop.
   if (signal?.aborted) return signal.reason ?? err;
   if (err instanceof RemoteImageError) return err;

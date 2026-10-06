@@ -10,7 +10,7 @@ import {
 // =============================================================================
 // Ask Contrack's vectors: one int8 vector per contact in `search_embeddings`
 // and one per passage in `search_passage_vectors` (`vectorScale.ts`), both
-// partitioned by owner. This file writes them, finds their neighbours, keeps
+// partitioned by owner. This file writes them, finds their neighbors, keeps
 // them in step with the embeddings capability, and backfills them.
 //
 // It runs no model. Every vector comes from the embedder
@@ -256,7 +256,7 @@ export function findSearchNeighbors(
   const selectors: string[] = [];
   if (preFilterIds) selectors.push("SELECT value FROM json_each(?)");
   // The facets run inside the KNN, before `k`, so a contact the facets keep
-  // is never lost to closer neighbours they drop.
+  // is never lost to closer neighbors they drop.
   if (facets)
     selectors.push(
       `SELECT c.id FROM contacts c WHERE c.ownerId = ? AND (${facets.sql})`,
@@ -305,7 +305,7 @@ export function getSearchEmbeddingCount(scope: Scope): number {
 /**
  * Read passage vectors in the same space as contact vectors and the query.
  *
- * `CROSS JOIN` fixes the order of the join: the nearest-neighbour search is
+ * `CROSS JOIN` fixes the order of the join: the nearest-neighbor search is
  * the outer loop and runs once, and each of its rows looks up its passage.
  * Left to choose, SQLite plans from the row counts at the last ANALYZE. After
  * a bulk index those say "2 passages" for a table of twenty thousand, and it

@@ -11,7 +11,7 @@
 // message the worker sends carries the id of the job it belongs to, so two
 // jobs in flight cannot be confused for one.
 //
-// Cancelling is handled entirely on the host, which drops a job that has not
+// Canceling is handled entirely on the host, which drops a job that has not
 // been sent yet. The message kind is still here because the host is where the
 // decision belongs and a running job may want it later; the worker ignores
 // it, because nothing in the product cancels a running job and an untested
@@ -137,5 +137,5 @@ export function unflatten(result: EmbedResult): Float32Array[] {
   return out;
 }
 
-/** The error a cancelled job rejects with. Recognised by the host. */
+/** The error a canceled job rejects with. Recognized by the host. */
 export const CANCELLED = "job-cancelled";

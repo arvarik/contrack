@@ -189,7 +189,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   }
 
   if (options.enableRequestLogging) {
-    // `dev` colours its status codes, so it runs only on a terminal.
+    // `dev` colors its status codes, so it runs only on a terminal.
     const morganFormat =
       process.env.NODE_ENV !== "production" && process.stdout.isTTY
         ? "dev"
@@ -299,7 +299,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
 
   // Every feature's routers, in the order of server/modules/index.ts.
   // Express matches in mount order, so that list's order is part of the
-  // behaviour: the mcp module mounts before the contacts module. The admin
+  // behavior: the mcp module mounts before the contacts module. The admin
   // module comes first, and every route in it carries requireAdmin itself, so
   // that the manifest test can see the guard in each route's stack.
   mountModules(app);

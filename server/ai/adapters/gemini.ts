@@ -120,7 +120,7 @@ const MAX_PAUSE_MS = 15 * 60_000;
  *
  * A Gemini 429 carries a `google.rpc.RetryInfo` detail, `"retryDelay": "37s"`,
  * which is Google's own answer to "when will this model take requests again".
- * Honouring it replaces the guessed per-tier limits the router used to hold.
+ * Honoring it replaces the guessed per-tier limits the router used to hold.
  */
 export function pauseForError(error: unknown): number {
   const match = getErrorMessage(error).match(
@@ -262,7 +262,7 @@ export class GeminiAdapter implements AIProvider {
   /**
    * The bookkeeping after a failed call. A request Google refused is not
    * counted, a free-tier quota is noted, and a routed model sits out so the
-   * retry picks another. A cancelled call says nothing about the model.
+   * retry picks another. A canceled call says nothing about the model.
    */
   private recordFailure(
     error: unknown,
@@ -466,7 +466,7 @@ export class GeminiAdapter implements AIProvider {
       });
     } catch (error) {
       if (options.signal?.aborted)
-        throw new AppError("AI call cancelled by caller", 499, {
+        throw new AppError("AI call canceled by caller", 499, {
           code: "CANCELLED",
         });
       if (sent) throw error;
@@ -563,7 +563,7 @@ export class GeminiAdapter implements AIProvider {
 
     // Validate JSON at the adapter boundary so downstream callers never
     // crash on `JSON.parse` of a malformed model response, and hand them the
-    // parsed value re-serialised, so a fence or a stray sentence is gone.
+    // parsed value re-serialized, so a fence or a stray sentence is gone.
     // We deliberately do this for routed AND explicit-model paths so
     // behavior is uniform.
     if (options.responseFormat === "json" && !options.enableSearchGrounding) {

@@ -65,7 +65,7 @@ import {
 import type { Scope } from "../../tenancy/scope.ts";
 import type { NormalizedContact, RawPair, ValueFrequency } from "./types.ts";
 
-/** How many vector neighbours one new contact is compared with. */
+/** How many vector neighbors one new contact is compared with. */
 const KNN_LIMIT = 5;
 
 /**
@@ -207,7 +207,7 @@ function isCandidate(
  *
  * Four matchers in order of certainty: a shared email address, a shared phone
  * number, a name that matches exactly or through a nickname, and a vector
- * neighbour that scores high enough on the full signal set. Each one takes
+ * neighbor that scores high enough on the full signal set. Each one takes
  * the first claim on a pair, so a contact that shares an email is reported as
  * an email match and never scored a second time as a fuzzy one.
  *
@@ -424,7 +424,7 @@ export function findIncrementalPairs(
     }
   }
 
-  // 4. Vector neighbours, scored on the full signal set.
+  // 4. Vector neighbors, scored on the full signal set.
   if (corpus.embeddingsAvailable) {
     try {
       const queryVector = getEmbedding(contactId);
