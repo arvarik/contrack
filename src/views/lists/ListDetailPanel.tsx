@@ -17,7 +17,7 @@ import {
 } from "../../api";
 import { type ContactList } from "../../types";
 import type { ListMember } from "../../../shared/contracts/lists";
-import { ListIcon } from "../contact-list/CreateListModal";
+import { ICON_OPTIONS, ListIcon } from "../contact-list/CreateListModal";
 import { cn } from "../../lib/utils";
 import { withUndo } from "../../lib/undoToast";
 import {
@@ -28,32 +28,6 @@ import {
 } from "../../lib/styles";
 import { AddPeople } from "./AddPeople";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
-
-/** The icons a list can wear, by the names `ListIcon` draws. */
-const ICON_OPTIONS = [
-  "star",
-  "heart",
-  "crown",
-  "flame",
-  "rocket",
-  "target",
-  "gem",
-  "award",
-  "briefcase",
-  "users",
-  "globe",
-  "zap",
-  "shield",
-  "coffee",
-  "music",
-  "camera",
-  "book-open",
-  "trending-up",
-  "anchor",
-  "flag",
-  "sparkles",
-  "sun",
-];
 
 interface ListDetailPanelProps {
   list: ContactList;
