@@ -29,8 +29,7 @@ import { SIDE_PANEL_SCROLLER } from "../../components/layout/SidePanel";
 import { cn } from "../../lib/utils";
 import { HistoryEntryRow } from "./HistoryEntryRow";
 import { groupHistoryEntries } from "./historyGroups";
-import { NO_AUTOCORRECT } from "../../components/ui/SearchField";
-import { ClearButton } from "../../components/ui/SearchField";
+import { ClearButton, NO_AUTOCORRECT } from "../../components/ui/SearchField";
 
 interface HistoryPaneParts {
   count: number;

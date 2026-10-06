@@ -217,12 +217,8 @@ export function AISearchProgressOverlay({
               )}
             </span>
             <button
-              aria-label={
-                isComplete
-                  ? "Dismiss research progress"
-                  : "Minimize research progress"
-              }
-              onClick={isComplete ? onDismiss : () => setIsMinimized(true)}
+              aria-label="Dismiss research progress"
+              onClick={onDismiss}
               className={BTN_QUIET}
             >
               Dismiss

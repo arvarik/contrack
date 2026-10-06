@@ -11,7 +11,7 @@ import { differenceInCalendarDays } from "date-fns";
 import { CardFrame } from "../components/CardFrame";
 import { ScoreRingAvatar } from "../../../components/ScoreRingAvatar";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
-import { TONE_TEXT, TONE_WASH } from "../../../lib/styles";
+import { TEXT_LINK, TONE_TEXT, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import {
   PULSE_CHIP,
@@ -23,7 +23,6 @@ import { describeDueChip } from "../lib/upNext";
 import { isPlainDay, parseServerTime } from "../../../lib/datetime";
 import type { UpcomingBirthday } from "../lib/birthdays";
 import { useConnectors } from "../../../api/connectors";
-import { TEXT_LINK } from "../../../lib/styles";
 
 interface MeetingItem {
   title: string;

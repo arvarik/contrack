@@ -8,15 +8,10 @@ type HeatmapStep = 0 | 1 | 2 | 3 | 4 | 5;
 
 export function heatmapScale(counts: number[]): (count: number) => HeatmapStep {
   const positive = counts.filter((c) => c > 0).sort((a, b) => a - b);
-
-  if (positive.length === 0) {
-    return (count: number): HeatmapStep => (count <= 0 ? 0 : 1);
-  }
-
   const unique = Array.from(new Set(positive));
 
-  // All equal positive counts (e.g. [1, 1, 1] or [5, 5])
-  if (unique.length === 1) {
+  // No positive counts, or all equal ([1, 1, 1] or [5, 5]).
+  if (unique.length <= 1) {
     return (count: number): HeatmapStep => (count <= 0 ? 0 : 1);
   }
 
