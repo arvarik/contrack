@@ -1,18 +1,12 @@
 // @vitest-environment jsdom
-// =============================================================================
-// AccentPicker — a radiogroup that behaves like one
-// =============================================================================
-// Two things are easy to get wrong here and neither shows up by clicking.
+// AccentPicker is a radiogroup that behaves like one.
 //
-// The role promises keyboard behavior. Only the selected option is a tab
-// stop, so without arrow handling the other seven swatches cannot be reached
-// from a keyboard at all — the control would be worse for a keyboard user than
-// eight plain buttons.
+// Only the selected option is a tab stop, so without arrow keys the other
+// seven swatches cannot be reached from a keyboard at all.
 //
-// And the swatch has to show what the app will paint. The default accent is
-// never derived (the shipped palette is hand-tuned and measured), so deriving
-// it for the swatch would put a color on screen that appears nowhere else.
-// =============================================================================
+// The swatch shows what the app will paint. The default accent is never
+// derived (the shipped palette is hand-tuned), so deriving it for the swatch
+// would show a color that appears nowhere else.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";

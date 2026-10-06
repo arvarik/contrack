@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
-// =============================================================================
 // Unit: the parts of Administration → AI that read the feature table
-// =============================================================================
+//
 // "What each feature uses" says whether each feature works and what it runs
 // on. On the AI page each part links to its control and each reason to its
 // fix; on Privacy and AI it is read-only and follows the account's own
 // switch. A model row names the features it serves, and says how its model
 // was chosen only when the select does not already say it.
-// =============================================================================
 
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

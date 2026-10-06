@@ -1,16 +1,10 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The contact header
-// =============================================================================
-// The header had a palette button, an archive button, a kebab and an unnamed
-// sparkle at the same rank as the name. It now has no primary button, only a
-// kebab with the rare actions in it, Enrich contact among them: a note starts
-// in the composer under the tabs. The avatar carries its own pencil, "Change
-// avatar", a button beside the score button and never inside it. Links on
-// the meta line say that they open a new tab, and "+ link" after them adds
-// one. The weather asks a third party for the contact's coordinates, so the
-// narrow header, which has no room for it, must not ask.
-// =============================================================================
+// The contact header has no primary button, only a kebab with the rare
+// actions, Enrich contact among them. The avatar carries its own "Change
+// avatar" pencil, beside the score button and never inside it. Links on the
+// meta line say that they open a new tab, and "+ link" after them adds one.
+// The weather asks a third party for the contact's coordinates, so the narrow
+// header, which has no room for it, must not ask.
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // AI is set up unless a test says otherwise.
@@ -1014,11 +1008,9 @@ describe("the narrow header", () => {
 });
 
 describe("the follow-up banner", () => {
-  // The banner read "Pending follow-up alert", which said neither what was
-  // due nor when. It says the fact now, in calendar days, in the words and
-  // tones Pulse gives a due chip: overdue is the error red, today the
-  // primary, and a later day within the week neutral. Past the week the
-  // Details card has it.
+  // The banner says the fact, in calendar days, in the words and tones Pulse
+  // gives a due chip: overdue is the error red, today the primary, and a later
+  // day within the week neutral. Past the week the Details card has it.
   const TUESDAY_NOON = new Date(2026, 8, 22, 12, 0);
   /** 9 AM on a day of September 2026, in the reader's zone, as the API sends. */
   const dueOn = (day: number) => new Date(2026, 8, day, 9, 0).toISOString();

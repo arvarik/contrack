@@ -1,14 +1,9 @@
 // @vitest-environment jsdom
-// =============================================================================
-// SearchView — the index's one line under the search box
-// =============================================================================
-// People search reads the contacts that have been indexed. While some are
-// not, the page says so in one slim row under the search box, with the
-// action that fixes it, and it says nothing once every contact is indexed.
-// There is no coverage card, no hero and no explanation any more. The row is
-// the real SearchCoverageBar; only the coverage it reads is set here, and
-// `fetch` records what its buttons send.
-// =============================================================================
+// SearchView's one line about the index under the search box. While some
+// contacts are not indexed, one slim row says so with the action that fixes
+// it, and it says nothing once every contact is indexed. The row is the real
+// SearchCoverageBar. Only its coverage is set here, and `fetch` records what
+// its buttons send.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import {

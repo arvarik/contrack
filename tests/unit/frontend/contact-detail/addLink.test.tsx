@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
-// =============================================================================
 // "+ link": a new link from the contact header's meta line
-// =============================================================================
+//
 // A button with the "+ tag" look opens a field in its place. Enter adds and
 // closes, Escape closes, leaving with text adds, leaving empty closes. The
 // text is tidied (https:// in front when it has none) and has to be a web
 // address whose host has a dot, and a link the contact already has, in any
 // spelling, is refused. A refusal says why beside the field and keeps the
 // field open with the text in it. Focus never falls to the page.
-// =============================================================================
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {

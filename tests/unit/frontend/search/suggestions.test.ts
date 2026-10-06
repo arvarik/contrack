@@ -1,6 +1,4 @@
-// =============================================================================
 // Ask Contrack's "Try asking": six questions drawn from the account's pool
-// =============================================================================
 import { describe, expect, it } from "vitest";
 import {
   SUGGESTION_COUNT,

@@ -1,6 +1,4 @@
-// =============================================================================
 // Unit: how the dossier's Research card words a research record
-// =============================================================================
 
 import { describe, it, expect } from "vitest";
 import {

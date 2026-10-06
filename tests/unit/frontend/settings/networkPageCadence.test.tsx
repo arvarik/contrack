@@ -1,12 +1,8 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The Default cadence setting
-// =============================================================================
-// The select offers the four cadences the app offers, one word each. An
-// account that saved every 2 months or every 6 months before 2.0 keeps it:
-// the select shows the stored value, as a fifth option in its place in the
-// order, rather than naming a default the account does not have.
-// =============================================================================
+// The Default cadence select offers the app's four cadences, one word each. An
+// account with an older stored cadence (every 2 or 6 months) keeps it: the
+// select shows it as a fifth option in its place in the order, rather than
+// naming a default the account does not have.
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";

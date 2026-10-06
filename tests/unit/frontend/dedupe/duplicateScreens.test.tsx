@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
-// =============================================================================
 // The places a merge is announced, undone or found again
-// =============================================================================
+//
 // - The contact page's banner merges and keeps apart with Undo, and a merge
 //   that keeps the other contact moves the page to it.
 // - A merged contact's old page opens the contact it merged into.
@@ -9,7 +8,6 @@
 // - Merge history tells two entries for one name apart, puts a merge near
 //   midnight under the right day, and its Undo keeps the two apart.
 // - The check says what it did when it is done.
-// =============================================================================
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   act,
@@ -218,8 +216,8 @@ describe("a merged contact's old page", () => {
   });
 
   it("stays on the contact an Undo brought back", async () => {
-    // The server's answer changes with the undo. A cached answer sent the
-    // page straight back to the contact it had just left.
+    // The server's answer changes with the undo, so a cached answer would send
+    // the page straight back to the contact it had just left.
     let merged = true;
     vi.stubGlobal(
       "fetch",

@@ -1,21 +1,14 @@
 // @vitest-environment jsdom
-// =============================================================================
-// Applying a theme, and the cache the next page load reads
-// =============================================================================
-// `applyTheme` has two jobs and the second one is the easy one to get wrong.
-//
-// It paints: an attribute on <html> and, for a chosen accent, inline
+// `applyTheme` paints: an attribute on <html> and, for a chosen accent, inline
 // custom properties that beat the stylesheet.
 //
-// And it remembers, for `public/theme-boot.js` to replay before the first
-// frame of the next load. That cache is the only reason a chosen dark theme
-// does not flash white on every navigation, and the subtle rule in it is that
-// "system" must NOT be pinned: a browser that cached `dark` last night on a
+// It also caches the theme for `public/theme-boot.js` to replay before the
+// first frame of the next load, so a dark theme does not flash white. The
+// cache must not pin "system": a browser that cached `dark` last night on a
 // dark machine must not paint dark this morning on a light one.
 //
-// The boot script is plain JavaScript loaded by the browser, so it is executed
-// here against the same cache rather than trusted to agree with this module.
-// =============================================================================
+// The boot script is plain JavaScript, so it runs here against the same cache
+// rather than being trusted to agree with this module.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "node:fs";

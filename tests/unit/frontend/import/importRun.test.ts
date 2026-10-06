@@ -1,12 +1,7 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The import stream reader and the remembered import
-// =============================================================================
-// The reader's one job is to tell a finished import from a dropped
-// connection. The old reader returned whatever it had when the body ended,
-// and the modal showed that as success. The storage helpers keep the id the
-// browser made so a reload can find the import again, per account.
-// =============================================================================
+// The import stream reader tells a finished import from a dropped connection,
+// so the modal never shows a partial read as success. The storage helpers keep
+// the id the browser made, per account, so a reload can find the import again.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   IMPORT_KEY_PREFIX,
@@ -85,8 +80,8 @@ describe("readImportStream", () => {
     s.push(frame({ phase: "importing", processed: 2, total: 9 }));
     s.end();
 
-    // This is the case the old reader got wrong: it returned a count of
-    // zero here and the modal showed "Import complete" over it.
+    // The body ended mid-import, so a count of zero here must not read as
+    // "Import complete".
     expect(await reading).toEqual({ kind: "interrupted" });
   });
 

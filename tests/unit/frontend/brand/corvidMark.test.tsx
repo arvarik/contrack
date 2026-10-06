@@ -1,18 +1,17 @@
 // @vitest-environment jsdom
 /**
- * The corvid in the app.
+ * The corvid in the app. What every surface relies on:
  *
- * What every surface relies on: the mark is silent to a screen reader unless
- * asked to speak, it never takes focus, its eye wears the token rather than
- * the stroke, the glyph is the small optical size (every part, heavier, with a
- * larger eye), and two birds on one page do not share an id.
- *
- * The motion phase added two more: every part carries `data-part`, which is
- * what the shared keyframes select on, and `idle` starts the blink timer.
- *
- * The living corvid adds the split the whole design rests on: the ring is
- * its own path outside the bird's group, so nothing that moves the bird can
- * move the ring, and `alive` starts a life only where a life can be seen.
+ * - The mark is silent to a screen reader unless asked to speak, and never
+ *   takes focus.
+ * - Its eye wears the token rather than the stroke.
+ * - The glyph is the small optical size: every part, heavier, a larger eye.
+ * - Two birds on one page do not share an id.
+ * - Every part carries `data-part`, which the shared keyframes select on, and
+ *   `idle` starts the blink timer.
+ * - The ring is its own path outside the bird's group, so nothing that moves
+ *   the bird can move the ring, and `alive` starts a life only where it can
+ *   be seen.
  */
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

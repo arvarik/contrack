@@ -91,9 +91,9 @@ describe("scoreContactMatch", () => {
     expect(scoreContactMatch(contact, "analytical")).toBe(20);
   });
 
-  // A phone field left empty normalizes to no digits at all, and "no
-  // digits" is inside every number. Without the guard, one blank phone
-  // made the contact match every numeric query.
+  // A phone field left empty normalizes to no digits at all, and "no digits"
+  // is inside every number. Without the guard, one blank phone would make the
+  // contact match every numeric query.
   it("never matches an empty phone against a number", () => {
     expect(
       scoreContactMatch({ name: "Alice", phones: [{ phone: "" }] }, "555"),

@@ -1,23 +1,16 @@
 /**
- * A statement ends without a period.
+ * A statement ends without a period: "Find and merge contacts that are the
+ * same person", not "... the same person.". That covers a page's subtitle, a
+ * row's description, a hint, an empty state, a card's subtitle, a dialog's
+ * description and sentence strings such as toasts and errors. Several
+ * sentences keep the periods between them and drop the last one.
  *
- * The line under a page's title, a row's description, a field's hint, an
- * empty state's body, a card's subtitle and a dialog's description are
- * statements, and the app writes them without a closing period: "Find and
- * merge contacts that are the same person", not "... the same person.". A
- * statement of several sentences keeps the periods between them and drops
- * the last one. The app used to do both, sometimes on one page.
+ * The scan reads every file under src/, and the registry and destination
+ * names at run time. An ellipsis ("Searching…") is not a period.
  *
- * The scan reads every file under src/: the props those statements travel
- * in, the text between tags, and every sentence written as a string (a
- * toast, an error, a banner). It reads the registry and the destination
- * names at run time. An ellipsis ("Searching…", "Loading...") is not a
- * period.
- *
- * Words a person hears and never reads keep their period, because a speech
- * engine ends a sentence on it: an accessible name, the search's live
- * region and the drag announcements. Two strings copy another system's words
- * exactly, and keep them.
+ * Words a person only hears keep their period, because a speech engine ends a
+ * sentence on it: accessible names, the search's live region and the drag
+ * announcements. Two strings copy another system's words exactly.
  */
 import { describe, expect, it } from "vitest";
 import fs from "node:fs";

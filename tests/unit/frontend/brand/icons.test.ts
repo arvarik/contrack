@@ -1,17 +1,13 @@
 /**
- * The generated brand assets.
+ * The generated brand assets. `public/` holds only what
+ * `scripts/brand/build-icons.ts` writes, and `docs/brand/` holds its brand
+ * kit. Every SVG is compared byte for byte with a fresh render, so an edit to
+ * the paths, sizes or fonts without `npm run brand:icons` fails here.
  *
- * `public/` holds what `scripts/brand/build-icons.ts` writes, and nothing
- * else, and `docs/brand/` holds the brand kit it writes. Every SVG the
- * script draws is compared byte for byte with a fresh render, so an edit to
- * the paths, the optical sizes or the fonts without `npm run brand:icons`
- * fails here rather than shipping an icon that disagrees with the sidebar.
- *
- * A raster's bytes depend on the libvips and librsvg that drew it, so the
- * rasters are held to what can be promised about them: each is the size
- * its name and its link say, the touch and maskable icons are opaque, the
- * icon file holds the three favicon frames, and the maskable icon's bird
- * keeps inside the circle a launcher may crop to.
+ * A raster's bytes depend on the libvips and librsvg that drew it, so each
+ * raster is checked for what can be promised: its size matches its name and
+ * link, the touch and maskable icons are opaque, the icon file holds three
+ * favicon frames, and the maskable bird keeps inside a launcher's crop circle.
  */
 import fs from "node:fs";
 import path from "node:path";

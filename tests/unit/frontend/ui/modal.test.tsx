@@ -63,8 +63,8 @@ describe("dialog interaction", () => {
       </Modal>,
     );
     const dialog = screen.getByRole("dialog", { name: "Contact details" });
-    // A dialog that renders its own header draws its own close control. A
-    // hidden one used to take focus on open and show as a box in the corner.
+    // A dialog that renders its own header draws its own close control, and
+    // no hidden one takes focus on open.
     expect(screen.queryByRole("button", { name: "Close dialog" })).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(dialog));
     const first = screen.getByLabelText("First input");

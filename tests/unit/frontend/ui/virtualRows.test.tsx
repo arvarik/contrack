@@ -1,13 +1,8 @@
 // @vitest-environment jsdom
-// =============================================================================
-// VirtualRows: a long list draws only the rows near the screen
-// =============================================================================
-// The Duplicates picker and the Enrichment list drew all 5,824 contacts, and
-// the Manual merge tab took 44 s to show. Up to 200 rows the list is plain;
-// past that it draws what the virtualizer asks for in the nearest scroller.
-// jsdom has no layout, so the virtualizer is replaced by one that asks for
-// the first ten rows and records the options it was given.
-// =============================================================================
+// VirtualRows: a long list draws only the rows near the screen. Up to 200 rows
+// the list is plain, and past that it draws what the virtualizer asks for in
+// the nearest scroller. jsdom has no layout, so the virtualizer is replaced by
+// one that asks for the first ten rows and records its options.
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";

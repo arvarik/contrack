@@ -1,23 +1,16 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The Track button, the menu behind it, and the `t` key
-// =============================================================================
-// One control says whether a person keeps up with a contact, and how often.
-// It is one menu button, 32 px tall, with no divider: "◎ Track ▾" before the
-// contact is tracked and "◎ Quarterly ▾" after, in the selected tint. The
-// menu offers four cadences in one word each, Weekly, Monthly, Quarterly and
-// Yearly, and while tracked the current one is checked and Stop tracking
-// comes last. A cadence saved before 2.0 (60 or 180 days) still shows, as
-// one more checked row in its place. Every change toasts, and tracking and
-// stopping carry an Undo that puts the contact back as it was, cadence
-// included. The `t` key stays a one-key toggle through the same hook, so the
-// words and the Undo are tested once here.
+// The Track button, its menu, and the `t` key.
 //
-// The control must not change width when its word changes. The header
-// cluster is right-aligned, so every word the button can show sizes the
-// label, and the current word is drawn over them. That is checked here, and
-// measured for real in tests/e2e/contact.spec.ts.
-// =============================================================================
+// One menu button, 32 px tall: "◎ Track ▾" before the contact is tracked and
+// "◎ Quarterly ▾" after. The menu offers Weekly, Monthly, Quarterly and
+// Yearly, with the current one checked and Stop tracking last. An older
+// cadence (60 or 180 days) still shows as one more checked row. Every change
+// toasts, and tracking and stopping carry an Undo that restores the cadence
+// too. The `t` key toggles through the same hook.
+//
+// The header cluster is right-aligned, so the button must not change width
+// with its word: every word sizes the label and the current one is drawn over
+// them. tests/e2e/contact.spec.ts measures it for real.
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -182,7 +175,7 @@ describe("TrackButton", () => {
     );
     unmount();
 
-    // A cadence off the list, saved before 2.0, in its short form.
+    // An older cadence off the list, in its short form.
     mount(<TrackButton contact={{ ...TRACKED, cadenceDays: 60 }} />);
     const off = screen.getByRole("button", {
       name: "Tracking every 2 months, change or stop",

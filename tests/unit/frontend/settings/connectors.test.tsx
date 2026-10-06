@@ -149,9 +149,7 @@ describe("Frontend Connectors Components", () => {
       </MemoryRouter>,
     );
 
-  // =========================================================================
   // 1. CalendarFormModal
-  // =========================================================================
   describe("CalendarFormModal", () => {
     it("displays error feedback when testing connection fails", async () => {
       const mutateAsyncMock = vi
@@ -413,9 +411,7 @@ describe("Frontend Connectors Components", () => {
     });
   });
 
-  // =========================================================================
   // 2. ConnectorCard
-  // =========================================================================
   describe("ConnectorCard", () => {
     it("renders active, paused, error, needs_reauth status badges", () => {
       const { unmount: unmount1 } = renderWithClient(
@@ -721,9 +717,7 @@ describe("Frontend Connectors Components", () => {
     });
   });
 
-  // =========================================================================
   // 3. RunHistoryDrawer
-  // =========================================================================
   describe("RunHistoryDrawer", () => {
     const mockConnector = createMockConnector({
       id: "conn-history-test",
@@ -949,9 +943,7 @@ describe("Frontend Connectors Components", () => {
     });
   });
 
-  // =========================================================================
   // 4. ConnectorsView
-  // =========================================================================
   describe("ConnectorsView", () => {
     it("renders loading skeleton", () => {
       vi.mocked(connectorsApi.useConnectors).mockReturnValue({

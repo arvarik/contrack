@@ -1,13 +1,8 @@
 // @vitest-environment jsdom
-// =============================================================================
-// ActionMenu: a kebab that behaves as a menu
-// =============================================================================
-// `role="menu"` promises keys: focus inside on open, the arrows and Home and
-// End move, Escape goes back to the button. The contact page's menus carried
-// the role without the keys. The header kebab, each detail row's kebab and
-// each link's actions now share this one primitive, so its keys are checked
-// here once.
-// =============================================================================
+// ActionMenu: a kebab that behaves as a menu. `role="menu"` promises keys:
+// focus inside on open, the arrows and Home and End move, Escape goes back to
+// the button. The header kebab, each detail row's kebab and each link's
+// actions share this primitive, so its keys are checked here once.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import {

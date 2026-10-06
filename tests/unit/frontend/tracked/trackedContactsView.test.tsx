@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
-// =============================================================================
 // The Tracked contacts page
-// =============================================================================
+//
 // One page groups everyone by their ring state, At risk to Not tracked, with
 // a toggle on every row and a bar for many at once. The groups, their ids
 // (the Keeping up card links to them), the row's words, the order switch,
 // select mode with the cadence menu, and the empty state are pinned here,
 // and so are the two rows of filters (tracking, and when you last spoke),
 // which live in the page's address.
-// =============================================================================
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -430,8 +428,8 @@ describe("the Tracked contacts page", () => {
     expect(document.activeElement).toBe(
       screen.getByRole("button", { name: "Done" }),
     );
-    // In the column with the cards, stuck to the bottom of the scroller, and
-    // no longer fixed to the window, where it covered the rail.
+    // In the column with the cards, stuck to the bottom of the scroller, not
+    // fixed to the window, where it would cover the rail.
     const bar = screen.getByRole("toolbar", { name: "Bulk actions" });
     const box = bar.parentElement!;
     expect(box.className).toContain("sticky");
@@ -473,7 +471,7 @@ describe("the Tracked contacts page", () => {
   });
 });
 
-// ─── The filters ────────────────────────────────────────────────────────────
+// The filters
 
 /** Two more people nobody tracks: one met ten days ago, one 500 days ago. */
 const WITH_TALKS: Contact[] = [

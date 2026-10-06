@@ -1,13 +1,9 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The navigation keys, in src/hooks/useGlobalNavShortcuts.ts
-// =============================================================================
-// The keys used to read `metaKey` alone, so on Windows and Linux they
-// answered only to the Windows key or the Super key. Ctrl Alt is the form
-// there, because the browser keeps Ctrl ⇧ P and Ctrl ⇧ M. Both forms work
-// everywhere, and a character typed with AltGr (Ctrl Alt on a European
-// Windows layout) never moves the page.
-// =============================================================================
+// The navigation keys in src/hooks/useGlobalNavShortcuts.ts. They answer to
+// both the meta key and Ctrl Alt, because on Windows and Linux the meta key is
+// the Windows or Super key, and the browser keeps Ctrl ⇧ P and Ctrl ⇧ M. A
+// character typed with AltGr (Ctrl Alt on a European Windows layout) never
+// moves the page.
 import { act, render, screen } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";

@@ -1,20 +1,14 @@
 // @vitest-environment jsdom
-// =============================================================================
-// Starting enrichment, and saying why a start was refused
-// =============================================================================
-// A cooldown, or the enrichment lock another account holds, is not a
-// failure. The Enrichment settings page prints the message on the page, so
-// the context keeps it in `limitMessage` and shows no toast. "Enrich contact"
-// in a contact's actions menu has no page to print it on, because the menu
-// closes as the item is chosen, so it asks for a toast as well
-// (`limitAs: "toast"`). Without it a refused start said nothing at all.
+// A cooldown, or the enrichment lock another account holds, is not a failure.
+// The Enrichment settings page prints the message (`limitMessage`, no toast).
+// "Enrich contact" in a contact's actions menu has no page to print it on,
+// because the menu closes, so it asks for a toast too (`limitAs: "toast"`).
 //
 // `startSearch` keeps one identity for the provider's life, so the memoized
-// context value does not change on every render of the provider.
+// context value does not change on every render.
 //
-// Every start names the web search engine that runs: the account's own, or
-// the instance's, or, when that cannot run, the one research gives way to.
-// =============================================================================
+// Every start names the web search engine that runs: the account's own, the
+// instance's, or the one research falls back to.
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render } from "@testing-library/react";
@@ -209,7 +203,7 @@ describe("startSearch", () => {
 
   it("starts without a toast: the progress panel says it", () => {
     // The panel opens at the toasts' corner, and a success toast over it
-    // said what the panel already showed.
+    // would say what the panel already shows.
     const { latest } = mount();
     act(() => latest().startSearch(["c1"], { limitAs: "toast" }));
     act(() => lastCallbacks().onSuccess({ batchId: "b1", jobCount: 1 }));

@@ -1,18 +1,11 @@
 // @vitest-environment jsdom
-// =============================================================================
-// SearchView — a question stays attached to its own results
-// =============================================================================
-// Two defects, one cause. The view kept "the previous query" in a ref of its
-// own, separate from the search state, so clearing the search left the ref
-// behind and the same question was refused for ever. And the synthesis bar
-// was handed the editable input rather than the question that produced the
-// results, so typing question B and pressing Synthesize summarized A's
-// contacts under B's words.
+// SearchView keeps a question attached to its own results. After a clear the
+// same question can be asked again, and Synthesize sends the question that
+// produced the results, not whatever is typed in the input.
 //
-// Every test here drives the real view through the DOM, with `fetch` stubbed
-// to answer NDJSON the way the server does. The request bodies are recorded,
-// because "which question did the server receive" is the whole point.
-// =============================================================================
+// Every test drives the real view through the DOM, with `fetch` answering
+// NDJSON as the server does. The request bodies are recorded, because which
+// question the server received is the point.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   act,
@@ -30,13 +23,11 @@ import { SessionProvider } from "../../../../src/contexts/SessionContext";
 import { PreferencesProvider } from "../../../../src/contexts/PreferencesContext";
 import { SearchView } from "../../../../src/views/SearchView";
 
-// The page reads its search hooks off the `api` barrel, and the barrel pulls
-// in every API module in the app. Coverage instruments what is imported, so
-// loading twenty modules this file never exercises dragged the project
-// totals under their floors. The hooks stay real, from their own file. The contact card and
-// the result cards are stubbed for the same reason: what is under test is
-// which question the server receives, and a card that shows a name is
-// enough to see the results arrive.
+// The page reads its search hooks off the `api` barrel, which pulls in every
+// API module, and coverage instruments what is imported. So the barrel is
+// stubbed and the hooks stay real, from their own file. The contact card and
+// result cards are stubbed too: a card that shows a name is enough to see the
+// results arrive.
 vi.mock("../../../../src/api", async () => {
   const search = await import("../../../../src/api/search");
   return {

@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
-// =============================================================================
 // The shortcuts table in src/lib/shortcuts.ts
-// =============================================================================
-// Every plan registers its keys in one table, and the `?` dialog renders from
-// it. These checks catch what a person would otherwise find by pressing a key:
-// two actions on the same keys, a row with nothing to press, a switch that
-// gates the wrong shortcuts, and a destination under an old name.
-// =============================================================================
+//
+// Every feature registers its keys in one table, and the `?` dialog renders
+// from it. These checks catch what a person would otherwise find by pressing
+// a key: two actions on the same keys, a row with nothing to press, a switch
+// that gates the wrong shortcuts, and a destination under an old name.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import { cleanup, render, screen, within } from "@testing-library/react";

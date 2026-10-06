@@ -1,31 +1,18 @@
-// =============================================================================
-// The contrast gate — both palettes, and every accent somebody can pick
-// =============================================================================
-// The browser-driven `scripts/contrast-audit.mjs` is the real measurement: it
-// composites the live DOM and can see what a token actually lands on. It needs
-// Chrome and a running server, so it cannot gate a pull request.
+// The contrast gate for both palettes and every accent somebody can pick.
 //
-// This is the tripwire that can. It answers three questions the audit cannot
-// answer cheaply:
+// `scripts/contrast-audit.mjs` measures the live DOM, but it needs Chrome and a
+// running server, so it cannot gate a pull request. This test can. It checks:
 //
-//   1. Do `src/index.css` and `src/lib/theme.ts` still hold the same palettes?
-//      The derivation reads the surfaces from the TypeScript copy, so a value
-//      changed in one file and not the other makes every guarantee below a
-//      statement about a palette nobody paints.
-//   2. Does the DARK palette clear WCAG AA everywhere the LIGHT one does?
-//      A new palette is the easiest place in an app to ship unreadable text.
-//   3. Does EVERY accent a person can choose clear it? That is 6,000 colors
-//      across the hue circle, in both palettes, and it is the only way to make
-//      a color picker safe: the alternative is a control that lets somebody
-//      make their own app unreadable.
+//   1. `src/index.css` and `src/lib/theme.ts` hold the same palettes. The
+//      derivation reads the surfaces from the TypeScript copy.
+//   2. The dark palette clears WCAG AA everywhere the light one does.
+//   3. Every accent a person can choose clears it: 6,000 colors across the hue
+//      circle, in both palettes. That is what makes a color picker safe.
 //
-// One pairing is excluded and named rather than quietly dropped: `text-primary`
-// on a `bg-primary/15` or `/20` wash, which the shipped light primary does not
-// clear. `--color-on-primary-wash` is what carries text there instead, and the
-// last block holds both halves: the wash token clears every alpha, and the
-// primary still does not, which is why the token exists. A source scan keeps
-// the two from being written together again.
-// =============================================================================
+// One pairing is excluded by name: `text-primary` on a `bg-primary/15` or `/20`
+// wash, which the light primary does not clear. `--color-on-primary-wash`
+// carries text there. The last block checks that the wash token clears every
+// alpha and the primary does not, and a source scan keeps the two apart.
 
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
@@ -61,11 +48,8 @@ const css = fs.readFileSync(
 );
 
 /**
- * Surfaces a piece of text can land on.
- *
- * `surface-variant` is deliberately absent: `bg-surface-variant` appears
- * nowhere in the app, and asserting against a background nothing uses inflates
- * the contract past what the shipped palette was measured for.
+ * Surfaces a piece of text can land on. `surface-variant` is left out because
+ * `bg-surface-variant` appears nowhere in the app.
  */
 const SURFACES = [
   "surface",
@@ -90,11 +74,9 @@ const TEXT_TOKENS = [
 ] as const;
 
 /**
- * Alphas each token's own wash is enforced at.
- *
- * `primary` stops at 0.10, which is the heaviest wash `text-primary` is
- * allowed to sit on. Anything heavier carries `text-on-primary-wash`
- * instead, and that token is held to the full set in the last block.
+ * Alphas each token's own wash is enforced at. `primary` stops at 0.10, the
+ * heaviest wash `text-primary` may sit on. Heavier washes carry
+ * `text-on-primary-wash`, which the last block holds to the full set.
  */
 const ENFORCED_WASH_ALPHAS: Partial<
   Record<(typeof TEXT_TOKENS)[number], number[]>
@@ -152,9 +134,7 @@ function casesFor(palette: Palette, alphas = ENFORCED_WASH_ALPHAS) {
   return cases;
 }
 
-// ---------------------------------------------------------------------------
 // 1. The two files agree
-// ---------------------------------------------------------------------------
 
 /** Pull one `--color-*` block out of the stylesheet. */
 function tokensFrom(block: string): Record<string, string> {
@@ -230,9 +210,7 @@ describe("index.css and theme.ts hold the same palettes", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // 2. Both palettes clear AA
-// ---------------------------------------------------------------------------
 
 describe.each(["light", "dark"] as const)("the %s palette", (mode) => {
   const cases = casesFor(PALETTES[mode]);
@@ -277,9 +255,7 @@ describe("the dark palette is not the sloppier of the two", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // 3. Every accent somebody can pick
-// ---------------------------------------------------------------------------
 
 /** The worst contrast `text-primary` reaches for a given primary. */
 function worstPrimary(primaryHex: string, mode: ResolvedMode): number {
@@ -398,9 +374,7 @@ describe("deriveAccent", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // 4. The cases that are recorded rather than enforced, with their numbers
-// ---------------------------------------------------------------------------
 
 describe("the heavier primary washes", () => {
   /** The worst a text color reaches on `primary/<alpha>` in one palette. */
@@ -431,13 +405,10 @@ describe("the heavier primary washes", () => {
   });
 
   it("still could not carry it with the primary, which is why the token exists", () => {
-    // Pinned from both sides on purpose. If a future light primary clears its
-    // own 15% wash then `--color-on-primary-wash` is dead weight and this test
-    // says so by failing, rather than leaving a token nobody can justify.
-    //
-    // The browser-driven audit cannot see either number: an active filter pill
-    // and a hover state are both behind an interaction, and it reads what is on
-    // screen at load. That is why this file exists.
+    // Pinned from both sides: if a light primary ever clears its own 15% wash,
+    // `--color-on-primary-wash` is dead weight and this fails. The browser
+    // audit cannot see either number, because an active filter pill and a
+    // hover state are behind an interaction.
     const fifteen = washWorst(LIGHT, LIGHT.primary, 0.15);
     expect(fifteen).toBeGreaterThan(4.15);
     expect(fifteen).toBeLessThan(AA);
@@ -452,14 +423,11 @@ describe("the heavier primary washes", () => {
   });
 
   it("never writes the primary and a heavy wash into one class string", () => {
-    // The rule the two tests above imply, checked against the source. A class
-    // string that names both is a pill whose text is 4.21:1, and neither the
-    // palette tests nor the browser audit can see it.
-    //
-    // One string at a time, which is what the app writes: a wash and its text
-    // are set together. A wash on one element and a color on a child three
-    // lines down is outside this check, and `scripts/contrast-audit.mjs` with
-    // a populated instance is what would find that.
+    // The rule the two tests above imply, checked against the source: a class
+    // string that names both is a pill whose text is 4.21:1. The check reads
+    // one string at a time, as the app sets a wash and its text together. A
+    // wash on one element and a color on a child is left to
+    // `scripts/contrast-audit.mjs`.
     const root = path.join(here, "../../../../src");
     const files: string[] = [];
     const walk = (dir: string) => {
@@ -472,9 +440,9 @@ describe("the heavier primary washes", () => {
     walk(root);
 
     // No leading boundary: a class string starts right after a quote or a
-    // brace as often as after a space, and requiring one made this scan pass
-    // on a line that named both. The trailing guards are what matter, so
-    // `bg-primary/150` and `text-primary-dim` do not count.
+    // brace as often as after a space, and requiring one would let a line that
+    // names both pass. The trailing guards keep `bg-primary/150` and
+    // `text-primary-dim` out.
     const heavyWash = /bg-primary\/(?:15|20)(?!\d)/;
     const primaryText = /text-primary(?![-\w])/;
     const offenders: string[] = [];
@@ -543,9 +511,7 @@ describe("the heavier primary washes", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // The highlighter and the AI hue
-// ---------------------------------------------------------------------------
 
 describe("the highlighter", () => {
   it.each(["light", "dark"] as const)(
@@ -588,8 +554,8 @@ describe("the AI color keeps its hue to itself", () => {
     const { ACCENT_PRESETS } =
       await import("../../../../src/components/ui/AccentPicker");
     // The color on screen is the derived primary, in each palette, and it
-    // must clear that palette's own AI color: a preset that passed in light
-    // came within 26 degrees of the dark AI color.
+    // must clear that palette's own AI color: a preset that passes in light
+    // can still come close to the dark AI color.
     const offenders: string[] = [];
     const check = (name: string, hex: string) => {
       if (rgbToOklch(hexToRgb(hex)).c < 0.05) return; // a gray has no hue

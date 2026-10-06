@@ -1,11 +1,9 @@
 // @vitest-environment jsdom
-// =============================================================================
 // ContactListsSection: the "Add to a list" menu on the contact page
-// =============================================================================
+//
 // The section draws a chip per list the contact is on, and one `ActionMenu`
 // with a row per list it is not on yet. Choosing a row adds the contact to
 // that list. With no list left to add, the menu button is not drawn at all.
-// =============================================================================
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";

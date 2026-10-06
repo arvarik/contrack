@@ -1,13 +1,7 @@
 // @vitest-environment jsdom
-// =============================================================================
-// A contact list row says the score in its name
-// =============================================================================
-// The ring's color carried the score and nothing else did, so a screen reader
-// user and anyone who cannot tell the colors apart got nothing from it. The
-// row's link now names the person, the line under the name, and the score in
-// words: "Betty Clark, Global Dynamics, score 72, strong". The ring is then
+// A contact list row says the score in its name, so color is not the only
+// sign: "Betty Clark, Global Dynamics, score 72, strong". The ring is then
 // decorative, so the score is said once, and its tooltip stays for a pointer.
-// =============================================================================
 import React from "react";
 import {
   afterAll,
@@ -205,8 +199,8 @@ describe("the ring in the row", () => {
 });
 
 describe("the prefetch", () => {
-  // A tap ends before the 100 ms hover timer, so a phone never prefetched,
-  // and the timeline was never prefetched at all.
+  // A tap ends before the 100 ms hover timer, so a press starts the prefetch,
+  // and the timeline is prefetched too.
   it("starts loading the contact and its timeline on a press", () => {
     const prefetch = vi
       .spyOn(QueryClient.prototype, "prefetchQuery")
@@ -221,8 +215,8 @@ describe("the prefetch", () => {
 
 describe("the selected look", () => {
   // One look for a selected row: the tint (`row-selected`), and the name in
-  // the ink that reads on the tint. The open contact wore a ring and a
-  // picked row an outline, and both read as keyboard focus.
+  // the ink that reads on the tint. No ring or outline, which read as keyboard
+  // focus.
   const name = (row: HTMLElement) => within(row).getByText("Betty Clark");
 
   it("marks the open contact with the tint", () => {
@@ -246,9 +240,9 @@ describe("the selected look", () => {
     expect(name(row).classList.contains("text-on-surface")).toBe(true);
   });
 
-  // The Recent strip repeats a person who is also a row in the list under
-  // it, and the open contact looked selected twice. The copy is current for
-  // a screen reader and shows its checkbox, and never takes the tint.
+  // The Recent strip repeats a person who is also a row in the list under it,
+  // so the open contact must not look selected twice. The copy is current for
+  // a screen reader, shows its checkbox, and never takes the tint.
   it("keeps the Recent copy of the open contact current, with no tint", () => {
     const row = mount(makeContact(), { active: true, showSelection: false });
     expect(row.getAttribute("aria-current")).toBe("page");
@@ -268,8 +262,8 @@ describe("the selected look", () => {
 });
 
 describe("the follow-up glyph", () => {
-  // The calendar glyph said nothing, and it was red for today where Pulse
-  // uses the primary. It takes the due chip's tones and says the fact.
+  // The calendar glyph takes the due chip's tones (the primary for today, as
+  // on Pulse) and says the fact.
   afterEach(() => {
     vi.useRealTimers();
   });
@@ -306,8 +300,8 @@ describe("the follow-up glyph", () => {
     expect(row.querySelector('[title^="Follow-up"]')).toBeNull();
   });
 
-  // The glyph's color and its tooltip were the only signs of it. The
-  // row's name closes with the same words.
+  // The glyph's color and tooltip are not the only signs of it: the row's
+  // name closes with the same words.
   it("closes the row's name with the follow-up", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date(2026, 8, 22, 12, 0));
@@ -317,9 +311,9 @@ describe("the follow-up glyph", () => {
     );
   });
 
-  // Between 768 and 1023 px the glyph sat at the end of the name's line,
-  // and moved with the width of the city in the column beside it. It has a
-  // slot of its own in that column, on every row, empty with no follow-up.
+  // Between 768 and 1023 px the glyph has a slot of its own in the city
+  // column, on every row, empty with no follow-up, so it does not move with
+  // the width of the city.
   it("keeps a slot of one width for the glyph in the tablet column", () => {
     const slotOf = (row: HTMLElement) =>
       row.querySelector(".md\\:flex.lg\\:hidden > span.w-3\\.5");

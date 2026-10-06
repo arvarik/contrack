@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
 /**
- * The Network list when it fails to load, and what it draws again.
- *
- * A 500 hid the empty state and put nothing in its place, so the list was
- * blank: the connection banner speaks only when the server is out of reach.
- * And the rows were handed `navigate`, which is new on each change of path,
- * so opening a contact drew every row again.
+ * The Network list when it fails to load, and what it draws again. A 500
+ * says the contacts did not load and offers Try again, because the connection
+ * banner speaks only when the server is out of reach. Opening a contact
+ * redraws only the rows that changed, so the rows are not handed `navigate`,
+ * which changes with each path.
  *
  * The real ContactList renders here. The API is stubbed.
  */

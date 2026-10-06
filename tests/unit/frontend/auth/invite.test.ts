@@ -1,16 +1,8 @@
 // @vitest-environment jsdom
-// =============================================================================
-// One-time credentials — the link, and the value read out loud
-// =============================================================================
-// Three things in 2.0 exist exactly once: the invitation link, the temporary
-// password an administrator hands over, and a personal API token. Each is
-// shown on one screen and never again, so a bug in how one is read or
-// displayed does not fail loudly — it fails when somebody cannot sign in with
-// a password they were sure they copied correctly.
-//
-// These are the pure parts of that journey. The rest is rendering.
-// @vitest-environment jsdom
-// =============================================================================
+// One-time credentials: the invitation link, the temporary password an
+// administrator hands over, and a personal API token. Each is shown once, so a
+// bug in how one is read or displayed fails quietly, when somebody cannot sign
+// in with a password they were sure they copied. These are the pure parts.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   groupSecret,
@@ -69,10 +61,8 @@ describe("invitation links", () => {
   });
 
   it("survives a href it cannot parse", () => {
-    // These really do throw from `new URL`. The first version of this test
-    // used "" and "::not a url::", and neither throws — both resolve against
-    // the base and return a perfectly good URL — so the try/catch it was
-    // written to cover could have been deleted with the test still green.
+    // These really do throw from `new URL`. "" and "::not a url::" do not:
+    // both resolve against the base and return a good URL.
     for (const href of ["http://", "https://[", "http://a b", "//"]) {
       expect(() => new URL(href)).toThrow();
       expect(parseInvitationToken(href)).toBeNull();

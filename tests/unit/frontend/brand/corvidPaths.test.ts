@@ -1,17 +1,13 @@
 /**
- * The corvid's geometry.
+ * The corvid's geometry. The paths are hand-traced numbers, so these are the
+ * checks a number can fail: every string parses, every optical size is a
+ * subset of the mark's parts and gets heavier as it gets smaller, the ink
+ * keeps its padding, every master lands inside the tile with its inset clear,
+ * and the thinking head still turns about the rig's neck.
  *
- * The paths are hand-traced numbers, so the checks are the ones a number can
- * fail: every string parses as the two commands the parser accepts, every
- * optical size is a subset of the mark's parts and gets heavier as it gets
- * smaller, the ink keeps its padding inside the box, every master lands
- * inside the tile with its inset clear, and the thinking head still turns
- * about the rig's neck.
- *
- * The brand's colors are literals, because a favicon cannot read a token.
- * So the last checks hold each literal to the token it copies, which leaves
- * the palette's own pairs to `style/themeContrast.test.ts`, and measure the
- * pairs only the brand has: the tile, GitHub's dark page and the name at 7:1.
+ * The brand's colors are literals, because a favicon cannot read a token. The
+ * last checks hold each literal to the token it copies, and measure the pairs
+ * only the brand has: the tile, GitHub's dark page and the name at 7:1.
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";

@@ -1,10 +1,8 @@
-// =============================================================================
 // The Tracked contacts page's filters, as rules
-// =============================================================================
+//
 // Two rows of pills (tracking, and when you last spoke) and an order, kept
 // in the page's address. The address rules, each row's rule, and the edges
 // of "Past month" and "Past year" are pinned here.
-// =============================================================================
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   DEFAULT_TRACKED_VIEW,

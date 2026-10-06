@@ -1,20 +1,13 @@
 /**
- * The corvid's flights, measured.
+ * The corvid's flights, measured. Every flight is flown frame by frame at 60
+ * fps, over many seeds and three windows, and checked on every frame:
  *
- * `planFlight` is pure so that "the bird left the window", "the bird flew
- * upside down" and "the bird landed somewhere other than its ring" are
- * failures a test can see. Every flight here is flown frame by frame at 60
- * frames a second, over many seeds and three windows, and every promise is
- * checked on every frame rather than on the waypoints the route was drawn
- * through:
- *
- * - It leaves as the logo and lands as the logo, at the perch's place and
- *   size, so the swap between the perch's bird and the flying one is
- *   invisible at both ends.
- * - It stays inside the window, and away from the perch inside the part of
- *   the window a flight may cross.
+ * - It leaves and lands as the logo, at the perch's place and size, so the
+ *   swap to and from the perch's bird is invisible.
+ * - It stays inside the window, and away from the perch inside the part a
+ *   flight may cross.
  * - It faces the way it goes, turning round rather than flying backwards.
- * - It is random: seeds give different routes, and one seed gives one route.
+ * - Seeds give different routes, and one seed gives one route.
  */
 import { describe, expect, it } from "vitest";
 import {

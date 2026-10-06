@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
-// =============================================================================
 // Pulse: the rules a browser journey does not pin cheaply
-// =============================================================================
+//
 // The journeys are in tests/e2e/pulse.spec.ts: the masthead and its jumps,
 // the rows and their keys, Tab into the queue, the Inbox and Composition
 // links, the heatmap, customize mode with the mouse, the keyboard and a
 // phone. Here: the keys that must do nothing (a row nobody sees, an open
 // menu), the Undo of done, snooze and reset, the Tab stops of the queue,
 // its first rows on one column, and what each card says when it is empty.
-// =============================================================================
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
 import {

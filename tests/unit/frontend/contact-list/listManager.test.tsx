@@ -3,10 +3,9 @@
  * The Lists page's count row and its drop target. The journeys (open a list,
  * add people, remove with Undo, Move up) are in `tests/e2e/lists.spec.ts`.
  *
- * The count row was left out while the lists loaded, so on a cold load the
- * rows arrived 68 px lower than the skeleton. It shows while they load, with
- * no count. A row a drag hovers wore a solid primary outline, which is what
- * the focus ring looks like: it is dashed now.
+ * The count row shows while the lists load, with no count, so the rows do
+ * not land lower than the skeleton. A row a drag hovers wears a dashed
+ * outline, so it does not look like the focus ring.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";

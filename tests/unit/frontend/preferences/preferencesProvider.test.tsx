@@ -1,21 +1,13 @@
 // @vitest-environment jsdom
-// =============================================================================
-// PreferencesProvider — the reader, the writer, and the one-time migration
-// =============================================================================
-// Three behaviors that only show up in the wiring, so none of them is covered
-// by the service tests or the hook tests.
+// PreferencesProvider: three behaviors that only show up in the wiring.
 //
-// Reading before the server answers. The provider hands out the defaults
-// rather than `undefined`, because the alternative makes every call site
-// handle a state whose honest answer is "the default".
+// Before the server answers, it hands out the defaults, not `undefined`.
 //
-// Writing optimistically, and putting the value BACK when the write fails. A
-// control that keeps showing a choice the server refused is a lie, and it is
-// the case nobody exercises by hand.
+// It writes optimistically and puts the value back when the write fails, so a
+// control never keeps showing a choice the server refused.
 //
-// The migration, which must run exactly once and must not overwrite a choice
-// the account already made on another device.
-// =============================================================================
+// The migration runs exactly once and never overwrites a choice the account
+// made on another device.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
@@ -37,11 +29,8 @@ let stored: Record<string, unknown> = {};
 let refusePatch = false;
 
 /**
- * When set, every PATCH waits on this before answering.
- *
- * That is what makes "optimistic" testable at all: with the response held
- * open, a value that has already changed on screen can only have come from the
- * optimistic write.
+ * When set, every PATCH waits on this before answering, so a value that has
+ * already changed on screen can only come from the optimistic write.
  */
 let holdPatch: Promise<void> | null = null;
 let releasePatch: (() => void) | null = null;

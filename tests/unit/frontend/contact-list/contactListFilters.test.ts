@@ -117,10 +117,9 @@ describe("useContactListFilters", () => {
     ]);
   });
 
-  // A link to the list carries a facet. The Inbox links to
-  // `/?q=tracked:no` and `/?q=missing:company`, and the Composition legend
-  // to `/?q=industry:Technology`. The list used to score the facet as a
-  // name and match nobody.
+  // A link to the list carries a facet. The Inbox links to `/?q=tracked:no`
+  // and `/?q=missing:company`, and the Composition legend to
+  // `/?q=industry:Technology`. The facet filters, it is not scored as a name.
   it("applies a facet from the query, and scores the free text that is left", () => {
     mockPreferences = { listSort: "name" };
     const people = [

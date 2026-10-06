@@ -1,16 +1,12 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The local time on a contact's meta line, its zone, and the weather
-// =============================================================================
-// "New York · 2:13 PM EDT". The zone is the abbreviation people write when
-// one exists, found by asking a short list of locales, and the short offset
-// when none does ("GMT+4"), never "<City> Time". A screen reader hears the
-// long name, so an abbreviation is never all it gets. The formatters are made
-// once per zone: the clock asks every minute.
+// The local time on a contact's meta line, its zone, and the weather:
+// "New York · 2:13 PM EDT". The zone is the abbreviation people write when one
+// exists, found by asking a short list of locales, else the short offset
+// ("GMT+4"), never "<City> Time". A screen reader hears the long name. The
+// formatters are made once per zone, because the clock asks every minute.
 //
 // Every case names a fixed moment, so daylight saving is pinned: January is
 // winter in the north, July is winter in the south.
-// =============================================================================
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -53,8 +49,7 @@ describe("zoneName", () => {
 
   it("falls back to the short offset where no locale has an abbreviation", () => {
     // "en-US" says "GMT-3" for São Paulo, and so does every other locale on
-    // the list. The old code said "Sao Paulo Time", which tells nobody how
-    // far away that is.
+    // the list. "Sao Paulo Time" would tell nobody how far away that is.
     expect(zoneName("America/Sao_Paulo", JULY)).toEqual({
       short: "GMT-3",
       long: "Brasilia Standard Time",

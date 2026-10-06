@@ -191,8 +191,8 @@ describe("the photo circle before the account exists", () => {
   afterEach(() => cleanup());
 
   // The setup, register and join screens have no session, and the avatar
-  // route sits behind the sign-in gate: an `<img>` of `/api/avatar/initials`
-  // got a 401 there and showed a broken image.
+  // route sits behind the sign-in gate, so an `<img>` of
+  // `/api/avatar/initials` would get a 401 there and show a broken image.
   it("draws the monogram in the page, with no request to the avatar route", () => {
     const FormWrapper = () => {
       const form = useAccountForm();

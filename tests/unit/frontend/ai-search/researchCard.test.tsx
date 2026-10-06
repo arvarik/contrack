@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
-// =============================================================================
 // Unit: the Research card's next steps and "Not this person"
-// =============================================================================
+//
 // When the latest research found nobody, found little, or was taken back,
 // the card asks for one more detail: a school and a former name typed in the
 // card, which save and search again at once, and a city, a work email or a
 // link opened on the page. Each run in the history can be taken back as
 // someone else with the same name.
-// =============================================================================
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 // AI is set up: the Enrich buttons ask `useAiSetup`.

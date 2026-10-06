@@ -1,19 +1,14 @@
 /**
- * The corvid's rig.
+ * The promises the corvid's rig makes to everything that draws with it:
  *
- * The rig is what lets the one drawing move, so the checks are the promises
- * it makes to everything that draws with it:
- *
- * 1. At rest it is the logo, point for point, and its path data is the
- *    mark's to within a rounding of the handles.
- * 2. The ring is not part of it. Nothing a pose does can move the ring,
- *    because the rig never draws one.
+ * 1. At rest it is the logo, point for point, to within a rounding of the
+ *    handles.
+ * 2. It never draws the ring, so no pose can move the ring.
  * 3. The nape is the one new line, hidden in the ring and drawn from the
  *    crown when the bird is out.
- * 4. Turning round is a true mirror, about the neck, so a bird that faces the
- *    other way is the same bird and not a new drawing.
- * 5. Whatever the numbers, it draws finite points, and a wing in any part of
- *    a wingbeat keeps its length and never goes flat.
+ * 4. Turning round is a true mirror about the neck.
+ * 5. Whatever the numbers, it draws finite points, and a wing keeps its
+ *    length and never goes flat through a wingbeat.
  * 6. A barrel roll turns the points and not the pen, so the bird edge on is
  *    a line as thick as its strokes.
  */

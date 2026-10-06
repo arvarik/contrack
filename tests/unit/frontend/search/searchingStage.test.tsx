@@ -1,21 +1,17 @@
 // @vitest-environment jsdom
 /**
- * The Ask page's wait for AI: the stage and the search flight.
+ * The Ask page's wait for AI: when `useCorvidSearchFlight` puts up the stage,
+ * sends the bird out, and calls it home. The flight is the overlay's
+ * (`brand/corvidFlight.test.tsx`), so this file listens to the hook's events:
  *
- * `useCorvidSearchFlight` decides when the stage goes up, when the bird in
- * the search box flies out to hunt, and when it is called home. The flight
- * itself is the overlay's (`brand/corvidFlight.test.tsx`), so this file
- * listens to the events the hook sends it:
- *
- * 1. A quick answer shows nothing: no stage, no flight.
+ * 1. A quick answer shows no stage and no flight.
  * 2. A slow one puts up the stage after `STAGE_DELAY_MS` and sends the bird
- *    out `TAKEOFF_DELAY_MS` later, from the search box, into the page round
- *    the search column: the column is the flight's `avoid`, from the top of
- *    the search box down.
- * 3. The answer calls the bird home. The search box keeps its bird until
- *    the bird is back, so it has somewhere to land.
- * 4. At "subtle" and "off" nothing flies, and the stage holds a larger bird.
- *    So does a window with no room round the column to hunt in.
+ *    out `TAKEOFF_DELAY_MS` later, from the search box, round the search
+ *    column (the flight's `avoid`, from the top of the search box down).
+ * 3. The answer calls the bird home. The search box keeps its bird until the
+ *    bird is back, so it has somewhere to land.
+ * 4. At "subtle" and "off", or with no room round the column, nothing flies
+ *    and the stage holds a larger bird.
  */
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

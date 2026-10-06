@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
-// =============================================================================
 // SearchCoverageBar — a hosted embedding model and an account with AI off
-// =============================================================================
+//
 // A hosted model sends each contact to the provider, so the server does not
 // index an account with AI off, and it refuses "Index missing" for one. The
 // bar then offers nothing to press: the row under the search box stays away,
 // and the card on the AI settings page says why its button is gone.
-// =============================================================================
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import { cleanup, render, screen } from "@testing-library/react";

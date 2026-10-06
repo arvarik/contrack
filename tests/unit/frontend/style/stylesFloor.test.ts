@@ -1,20 +1,14 @@
 /**
- * The type floor and the button shape, checked against the source.
+ * Two rules from `.agent/STYLE.md`, checked against the source:
  *
- * Two rules from `.agent/STYLE.md` that a screenshot review finds late and a
- * scan finds on the pull request that breaks them:
- *
- *   1. No text under 11 px. `text-[9px]` and `text-[10px]` were the two sizes
- *      the review found on 138 lines, from the tab bar labels to the palette
- *      shortcut chips.
+ *   1. No text under 11 px, so no `text-[9px]` or `text-[10px]`.
  *   2. A filled primary button is a rounded rectangle (`.btn-primary`), not a
- *      pill. The review found five primary shapes. `rounded-full` with a
- *      solid `bg-primary` fill is a pill button, and pills belong to chips,
- *      filter pills and `Segmented`.
+ *      pill. `rounded-full` with a solid `bg-primary` fill is a pill, and
+ *      pills belong to chips, filter pills and `Segmented`.
  *
- * The browser metrics scan (tests/e2e/metrics.spec.ts) measures the rendered
- * sizes on a phone. This file is the cheaper half: it runs in milliseconds on
- * every file under src/, including screens the browser suite never opens.
+ * tests/e2e/metrics.spec.ts measures the rendered sizes on a phone. This scan
+ * is the cheap half: it covers every file under src/, including screens the
+ * browser suite never opens.
  */
 import { describe, it, expect } from "vitest";
 import fs from "node:fs";
@@ -209,12 +203,9 @@ describe("the button shape", () => {
 });
 
 /**
- * The one look, held by a scan.
- *
- * Section 1 of the 2.0 design review found six hover recipes on three pages,
- * ten focus rings, two label trackings, a color token that did not exist
- * and a transition on a property that does not exist. Each rule below keeps
- * one of those from coming back on a pull request that nobody screenshots.
+ * The one look, held by a scan. Each rule below keeps a second hover recipe,
+ * focus ring or label tracking, a color token or transition property that
+ * does not exist, and the like from landing on a pull request.
  */
 describe("the one look", () => {
   /** Class strings with their file and line, comments blanked. */
@@ -249,10 +240,10 @@ describe("the one look", () => {
   });
 
   it("names no color token that does not exist", () => {
-    // `danger` was never a token, so `text-danger` painted nothing and a
-    // destructive button looked like every other one. `outline` is not one
-    // either (`outline-variant` is), so `border-outline/20` drew its border
-    // in the text color.
+    // `danger` is not a token, so `text-danger` paints nothing and a
+    // destructive button looks like every other one. `outline` is not one
+    // either (`outline-variant` is), so `border-outline/20` draws its border in
+    // the text color.
     const offenders = everyClassString()
       .filter(({ text }) =>
         /(?<![-\w])(?:[a-z-]+:)*(?:text|bg|ring|border|divide|fill|stroke|from|via|to|decoration)-(?:danger|outline)(?![-\w])/.test(
@@ -264,11 +255,9 @@ describe("the one look", () => {
   });
 
   it("paints with the color tokens, never a raw palette color", () => {
-    // `bg-emerald-500` is one green in both palettes and matches no token,
-    // so the palette's health dot and the avatar ring showed one band in two
-    // greens, and amber washes ignored the dark palette. A status is
-    // `success`, `warning`, `error` or `info`, and a gray is a surface or an
-    // ink token.
+    // A raw palette color such as `bg-emerald-500` is one color in both
+    // palettes and matches no token. A status is `success`, `warning`, `error`
+    // or `info`, and a gray is a surface or an ink token.
     const raw =
       /(?<![-\w])(?:[a-z-]+:)*(?:text|bg|ring|border|divide|fill|stroke|from|via|to|decoration|shadow|outline|accent|caret|placeholder)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}(?![\w])/;
     const offenders = everyClassString()
@@ -278,7 +267,7 @@ describe("the one look", () => {
   });
 
   it("transitions only properties that exist", () => {
-    // `transition-[shadow,…]` names no CSS property, so the shadow jumped.
+    // `transition-[shadow,…]` names no CSS property, so the shadow would jump.
     const offenders = everyClassString()
       .filter(({ text }) =>
         /transition-\[[^\]]*(?<![-\w])shadow(?![-\w])/.test(text),
@@ -382,9 +371,9 @@ describe("the one look", () => {
   });
 
   it("hides a control until hover only for a mouse", () => {
-    // `opacity-0` with `pointer-coarse:opacity-100` hid the control on any
-    // screen that is not coarse. A control shows for keyboard focus too,
-    // which a tooltip on hover does not, so the focus reveal names it.
+    // `opacity-0` with `pointer-coarse:opacity-100` hides the control on any
+    // screen that is not coarse. A control shows for keyboard focus too, which
+    // a tooltip on hover does not, so the focus reveal names it.
     const hidden = /(?<![-:\w/])opacity-0(?![-\w])/;
     const focusReveal =
       /(?:group-)?focus(?:-within|-visible)?(?:\/\w+)?:opacity-100(?![-\w])/;
@@ -422,9 +411,8 @@ describe("the one look", () => {
 
   it("names translate, not transform, in a transition list", () => {
     // Tailwind's `translate-*`, `scale-*` and `rotate-*` set the `translate`,
-    // `scale` and `rotate` properties, not `transform`. A list that names
-    // `transform` animates none of them: the side panel faded in place and
-    // the switch's knob jumped. `transition-transform` names all four.
+    // `scale` and `rotate` properties, not `transform`, so a list that names
+    // `transform` animates none of them. `transition-transform` names all four.
     const offenders = everyClassString()
       .filter(({ text }) =>
         /(?<![-\w])transition-\[[^\]]*\btransform\b/.test(text),
@@ -465,9 +453,8 @@ describe("the one look", () => {
 });
 
 /**
- * One helper for one act, so the act looks and fails the same everywhere.
- * The Network row's Copy email wrote to the clipboard itself, and said
- * nothing when the browser refused.
+ * One helper for one act, so the act looks and fails the same everywhere,
+ * for example a copy that says so when the browser refuses.
  */
 describe("the shared helpers", () => {
   /** The files outside `owner` whose source matches `pattern`. */

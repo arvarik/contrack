@@ -1,16 +1,10 @@
 // @vitest-environment jsdom
-// =============================================================================
-// usePanelPlacement: where a menu or a listbox opens
-// =============================================================================
-// The panel goes into the browser's top layer through the Popover API, so
-// nothing later in the page can paint over it (the sort menu once opened
-// under the selected contact row: header and row were both z-10). It is
-// placed from the trigger's box: under it, or above it when the space below
-// runs out, on the edge asked for, or the other edge when that one would
-// run off the window. jsdom has no top layer, so the attribute is checked
-// with and without a stubbed `showPopover`, and the numbers come from
-// stubbed boxes.
-// =============================================================================
+// usePanelPlacement: where a menu or a listbox opens. The panel goes into the
+// browser's top layer through the Popover API, so nothing later in the page
+// paints over it. It opens under the trigger, or above when the space below
+// runs out, on the edge asked for, or the other edge when that one would run
+// off the window. jsdom has no top layer, so the attribute is checked with and
+// without a stubbed `showPopover`, and the numbers come from stubbed boxes.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React, { useRef, useState } from "react";
 import {

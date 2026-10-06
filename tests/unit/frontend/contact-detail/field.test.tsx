@@ -1,13 +1,10 @@
 // @vitest-environment jsdom
 /**
- * The Details card's one pattern for a value, in the DOM.
- *
- * The card had three ways to add a value, uppercase labels under an uppercase
- * heading, a 19 px label select, and a remove button beside each row. Each
- * value is now a `Field`: a sentence case label, the value that edits in
- * place, a label chip, a kebab with the row's actions, and one "+ Add"
- * button. These tests read the names a screen reader hears and press the keys
- * a keyboard user presses.
+ * The Details card's one pattern for a value, in the DOM. Each value is a
+ * `Field`: a sentence case label, the value that edits in place, a label
+ * chip, a kebab with the row's actions, and one "+ Add" button. These tests
+ * read the names a screen reader hears and press the keys a keyboard user
+ * presses.
  *
  * `LocationMiniMap` loads MapLibre, which needs WebGL, so it is a stub here.
  * `sonner` is a spy, so a test can read a toast and press its "Undo".
@@ -57,9 +54,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-// ---------------------------------------------------------------------------
 // Fixtures
-// ---------------------------------------------------------------------------
 
 const ADA = {
   id: "c1",
@@ -182,9 +177,7 @@ const firstToast = () => {
   return { label, duration, action };
 };
 
-// ---------------------------------------------------------------------------
 // Field
-// ---------------------------------------------------------------------------
 
 describe("Field", () => {
   it("names a group by its label, holds its children and draws no add button", () => {
@@ -199,9 +192,7 @@ describe("Field", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // The card
-// ---------------------------------------------------------------------------
 
 describe("DetailsCard", () => {
   it("keeps the uppercase heading as an h2 and labels fields in sentence case", () => {
@@ -441,9 +432,7 @@ describe("DetailsCard", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // The rows
-// ---------------------------------------------------------------------------
 
 describe("MultiValueField", () => {
   it("puts the pencil after every value", () => {

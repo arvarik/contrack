@@ -1,14 +1,10 @@
 // @vitest-environment jsdom
-// =============================================================================
-// ScoreBreakdown: the panel that explains a score opens inside the window
-// =============================================================================
-// The panel hung from the trigger's right edge, inside the page. On the
-// contact header the ring sits at the pane's left edge, so the 288 px panel
-// ran about 150 px past the pane, and the pane clipped it. The panel now opens
-// in the browser's top layer, placed from the trigger by `usePanelPlacement`.
-// jsdom has no layout, so the boxes are stubbed: a trigger 96 px wide at 24 px
-// from the window's left edge, like the header ring.
-// =============================================================================
+// ScoreBreakdown opens inside the window. On the contact header the ring sits
+// at the pane's left edge, so the 288 px panel would run past the pane and be
+// clipped. It opens in the browser's top layer, placed from the trigger by
+// `usePanelPlacement`. jsdom has no layout, so the boxes are stubbed: a
+// trigger 96 px wide at 24 px from the window's left edge, like the header
+// ring.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

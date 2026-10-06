@@ -1,13 +1,11 @@
 /**
- * The corvid's repertoire.
+ * The corvid's repertoire. Every perch act is made fresh from a random
+ * source, and keeps the promises the app leans on:
  *
- * Every act the bird plays on its perch is made fresh from a random source.
- * The promises measured here are the ones the rest of the app leans on:
- *
- * 1. Every act starts and ends at the logo. A bird that finished a preen a
- *    degree off would be a logo a degree off until the next act.
- * 2. No two are quite alike: timings, reaches and repeats vary with the
- *    seed, and one seed always gives the same act.
+ * 1. Every act starts and ends at the logo, so the logo is never left a
+ *    degree off until the next act.
+ * 2. Timings, reaches and repeats vary with the seed, and one seed always
+ *    gives the same act.
  * 3. Tracks add, proportions multiply, and a weight fades a whole motion.
  */
 import { describe, expect, it } from "vitest";
@@ -165,9 +163,8 @@ describe("holds", () => {
     expect(sampleTrack(tracks.headX!, 2000)).toBe(1);
   });
 
-  // A bird's head moves in snaps and holds. Before a hold had a key of its
-  // own, each turn in these three acts swept across the whole hold, 350 to
-  // 1,900 ms.
+  // A bird's head moves in snaps and holds, so every turn in these three acts
+  // is a snap, never a sweep across the hold.
   it("make each head turn in glance, cock and look back a snap", () => {
     const HEAD = ["headAngle", "headX", "headY", "headFacing"] as const;
     for (const make of [makeGlance, makeCock, makeLookBack]) {
