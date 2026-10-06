@@ -719,14 +719,14 @@
                       "anyOf": [
                         {
                           "type": "string",
-                          "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+                          "pattern": "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$"
                         },
                         {
                           "type": "object",
                           "properties": {
                             "email": {
                               "type": "string",
-                              "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+                              "pattern": "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$"
                             },
                             "label": { "type": ["string", "null"] },
                             "isPrimary": {
@@ -751,14 +751,14 @@
                       "anyOf": [
                         {
                           "type": "string",
-                          "pattern": "^(?=(?:\\D*\\d){3})[\\d\\s+().\\/#*,;a-zA-Z-]+$"
+                          "pattern": "^(?:\\P{Nd}*\\p{Nd}){3}"
                         },
                         {
                           "type": "object",
                           "properties": {
                             "phone": {
                               "type": "string",
-                              "pattern": "^(?=(?:\\D*\\d){3})[\\d\\s+().\\/#*,;a-zA-Z-]+$"
+                              "pattern": "^(?:\\P{Nd}*\\p{Nd}){3}"
                             },
                             "label": { "type": ["string", "null"] },
                             "isPrimary": {
@@ -1094,14 +1094,14 @@
                       "anyOf": [
                         {
                           "type": "string",
-                          "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+                          "pattern": "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$"
                         },
                         {
                           "type": "object",
                           "properties": {
                             "email": {
                               "type": "string",
-                              "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+                              "pattern": "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$"
                             },
                             "label": { "type": ["string", "null"] },
                             "isPrimary": {
@@ -1126,14 +1126,14 @@
                       "anyOf": [
                         {
                           "type": "string",
-                          "pattern": "^(?=(?:\\D*\\d){3})[\\d\\s+().\\/#*,;a-zA-Z-]+$"
+                          "pattern": "^(?:\\P{Nd}*\\p{Nd}){3}"
                         },
                         {
                           "type": "object",
                           "properties": {
                             "phone": {
                               "type": "string",
-                              "pattern": "^(?=(?:\\D*\\d){3})[\\d\\s+().\\/#*,;a-zA-Z-]+$"
+                              "pattern": "^(?:\\P{Nd}*\\p{Nd}){3}"
                             },
                             "label": { "type": ["string", "null"] },
                             "isPrimary": {
@@ -1445,14 +1445,14 @@
                       "anyOf": [
                         {
                           "type": "string",
-                          "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+                          "pattern": "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$"
                         },
                         {
                           "type": "object",
                           "properties": {
                             "email": {
                               "type": "string",
-                              "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+                              "pattern": "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$"
                             },
                             "label": { "type": ["string", "null"] },
                             "isPrimary": {
@@ -1477,14 +1477,14 @@
                       "anyOf": [
                         {
                           "type": "string",
-                          "pattern": "^(?=(?:\\D*\\d){3})[\\d\\s+().\\/#*,;a-zA-Z-]+$"
+                          "pattern": "^(?:\\P{Nd}*\\p{Nd}){3}"
                         },
                         {
                           "type": "object",
                           "properties": {
                             "phone": {
                               "type": "string",
-                              "pattern": "^(?=(?:\\D*\\d){3})[\\d\\s+().\\/#*,;a-zA-Z-]+$"
+                              "pattern": "^(?:\\P{Nd}*\\p{Nd}){3}"
                             },
                             "label": { "type": ["string", "null"] },
                             "isPrimary": {
@@ -2400,14 +2400,14 @@
                         "anyOf": [
                           {
                             "type": "string",
-                            "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+                            "pattern": "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$"
                           },
                           {
                             "type": "object",
                             "properties": {
                               "email": {
                                 "type": "string",
-                                "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+                                "pattern": "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$"
                               },
                               "label": { "type": ["string", "null"] },
                               "isPrimary": {
@@ -2433,14 +2433,14 @@
                         "anyOf": [
                           {
                             "type": "string",
-                            "pattern": "^(?=(?:\\D*\\d){3})[\\d\\s+().\\/#*,;a-zA-Z-]+$"
+                            "pattern": "^(?:\\P{Nd}*\\p{Nd}){3}"
                           },
                           {
                             "type": "object",
                             "properties": {
                               "phone": {
                                 "type": "string",
-                                "pattern": "^(?=(?:\\D*\\d){3})[\\d\\s+().\\/#*,;a-zA-Z-]+$"
+                                "pattern": "^(?:\\P{Nd}*\\p{Nd}){3}"
                               },
                               "label": { "type": ["string", "null"] },
                               "isPrimary": {
@@ -2903,14 +2903,14 @@
                           "anyOf": [
                             {
                               "type": "string",
-                              "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+                              "pattern": "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$"
                             },
                             {
                               "type": "object",
                               "properties": {
                                 "email": {
                                   "type": "string",
-                                  "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+                                  "pattern": "^[^\\s@]+@[^\\s@.]+(?:\\.[^\\s@.]+)+$"
                                 },
                                 "label": { "type": ["string", "null"] },
                                 "isPrimary": {
@@ -2935,14 +2935,14 @@
                           "anyOf": [
                             {
                               "type": "string",
-                              "pattern": "^(?=(?:\\D*\\d){3})[\\d\\s+().\\/#*,;a-zA-Z-]+$"
+                              "pattern": "^(?:\\P{Nd}*\\p{Nd}){3}"
                             },
                             {
                               "type": "object",
                               "properties": {
                                 "phone": {
                                   "type": "string",
-                                  "pattern": "^(?=(?:\\D*\\d){3})[\\d\\s+().\\/#*,;a-zA-Z-]+$"
+                                  "pattern": "^(?:\\P{Nd}*\\p{Nd}){3}"
                                 },
                                 "label": { "type": ["string", "null"] },
                                 "isPrimary": {
