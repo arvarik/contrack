@@ -34,7 +34,8 @@ import { CLOSE_PALETTE_EVENT, OPEN_PALETTE_EVENT } from "../../lib/appEvents";
 import type { SemanticMatch, ZeroStateInsight } from "../../types";
 import { formatFacet } from "../../../shared/facetQuery";
 import { getMode, insightPath, looksLikeQuestion } from "./utils";
-import { AiMode, useAiSetup } from "./AiMode";
+import { AiMode } from "./AiMode";
+import { useAiSetup } from "../../hooks/useAiSetup";
 import { NAV_ITEMS, ZeroStateView } from "./ZeroStateView";
 import { LogMode } from "./LogMode";
 import { LOG_TITLES, parseLogInput, type LogKind } from "./actionMode";
@@ -167,7 +168,7 @@ export const CommandPalette = () => {
   const { addEntry } = searchHistory;
 
   // Why AI cannot answer, while the palette is in `?` mode.
-  const aiSetup = useAiSetup(open && mode === "ai", aiAllowed);
+  const aiSetup = useAiSetup("ask", open && mode === "ai");
 
   // ── Shift-to-peek state ──
   const [peekVisible, setPeekVisible] = useState(false);

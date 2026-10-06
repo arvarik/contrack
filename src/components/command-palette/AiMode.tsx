@@ -12,15 +12,12 @@
  *
  * @module components/command-palette/AiMode
  */
-import { useMemo } from "react";
 import { Command } from "cmdk";
 import { ArrowUpRight, HelpCircle, Settings, Sparkles } from "lucide-react";
-import { useAISettings } from "../../api/aiSettings";
-import { AI_FEATURES, featureStatus } from "../../lib/aiFeatures";
 import { NAMES } from "../../lib/names";
 import { cn } from "../../lib/utils";
 import type { SemanticMatch } from "../../types";
-import { useAuth } from "../auth/AuthGate";
+import { aiSetupLine, type AiSetup } from "../../hooks/useAiSetup";
 import { AIResultCard, AIShimmerRow } from "./AiComponents";
 import { AiStarters } from "./AiStarters";
 import { SynthesisBar } from "./SynthesisBar";
@@ -30,65 +27,6 @@ import {
   GROUP_HEADING_PRIMARY,
   ITEM_CURRENT,
 } from "./utils";
-
-/** Why AI cannot answer, and the page that fixes it, if this person can. */
-export interface AiSetup {
-  why: "account" | "instance" | "model";
-  fix?: { label: string; path: string };
-}
-
-const ASK = AI_FEATURES.find((feature) => feature.id === "ask")!;
-
-/**
- * Whether Ask has AI behind it, read the way Settings reads it
- * (`featureStatus`). Null while it is ready, and while the settings load.
- */
-export function useAiSetup(enabled: boolean, aiAllowed: boolean) {
-  const { data: settings } = useAISettings({ enabled: enabled && aiAllowed });
-  const { isAdmin } = useAuth();
-  return useMemo((): AiSetup | null => {
-    if (!aiAllowed) {
-      return {
-        why: "account",
-        fix: {
-          label: "Turn AI on in Privacy and AI",
-          path: "/settings/privacy",
-        },
-      };
-    }
-    if (!settings) return null;
-    const status = featureStatus(ASK, settings, { accountAiOn: true });
-    if (status.state === "ready") return null;
-    // With no provider at all, a model cannot be chosen yet: connecting one
-    // comes first. The row said "Choose a Fast model" with nothing to choose.
-    const noProvider =
-      settings.providers.length === 0 && settings.customEndpoints.length === 0;
-    const fix =
-      !settings.instance.aiOff && noProvider
-        ? { label: "Connect a provider", anchor: "providers" }
-        : status.fix;
-    return {
-      why: settings.instance.aiOff ? "instance" : "model",
-      fix:
-        isAdmin && fix
-          ? {
-              label: `${fix.label} on Administration → AI`,
-              path: `/settings/admin/ai#${fix.anchor}`,
-            }
-          : undefined,
-    };
-  }, [aiAllowed, settings, isAdmin]);
-}
-
-/** The line about AI's state: what is off, and who can turn it on. */
-const SETUP_WORDS: Record<AiSetup["why"], { state: string; ask: string }> = {
-  account: { state: "AI is off for your account", ask: "" },
-  instance: {
-    state: "AI is off on this instance",
-    ask: "Ask an admin to turn it on",
-  },
-  model: { state: "No AI model is set up", ask: "Ask an admin to set one up" },
-};
 
 const CENTERED = "py-8 text-center text-sm text-on-surface-variant";
 
@@ -122,11 +60,7 @@ export const AiMode = (props: AiModeProps) => {
     !props.loading &&
     !props.pending &&
     results.length > 0;
-  const setupLine = setup
-    ? [SETUP_WORDS[setup.why].state, !setup.fix && SETUP_WORDS[setup.why].ask]
-        .filter(Boolean)
-        .join(". ")
-    : null;
+  const setupLine = setup ? aiSetupLine(setup) : null;
 
   if (part === "notes") {
     if (props.error) {
