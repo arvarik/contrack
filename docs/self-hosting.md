@@ -246,7 +246,9 @@ table.
 
 - **Settings → Administration → Backups** lists each snapshot with its check:
   **Verified**, **Failed** or **Not checked**. **Snapshot now** takes one at
-  once.
+  once, and the download button on a row saves that snapshot to your
+  computer. The audit log records each download, because a snapshot holds
+  every account's contacts.
 - **Settings → Administration → General** sets **Backups** (Off, 6 hours, 12
   hours, 24 hours or 7 days) and **Snapshots to keep** (3, 7, 14 or 30).
   `BACKUP_INTERVAL_HOURS` and `BACKUP_KEEP` set them from the environment.
@@ -257,7 +259,8 @@ table.
 ### Copy them to another machine
 
 A snapshot on the same disk is not a backup, and it holds only the database.
-Copy these to another machine on a schedule:
+Download one from **Backups**, or copy these to another machine on a
+schedule:
 
 - the newest verified snapshot from `backups/`
 - the `uploads/` folder
