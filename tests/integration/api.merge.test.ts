@@ -279,7 +279,7 @@ describe("cluster merge from overlapping suggestions", () => {
     const c = await createContact({ name: "Overlap C" });
     const suggestionBC = seedSuggestion(b, c);
 
-    // The old behaviour: primary A (not in the pair) silently picked B as
+    // The old behavior: primary A (not in the pair) silently picked B as
     // the duplicate. It must refuse instead.
     const res = await request(app)
       .post(`/api/dedupe/suggestions/${suggestionBC}/merge`)
@@ -435,7 +435,7 @@ describe("a merge keeps the duplicate's follow-up tasks", () => {
       "Return the call",
       "2027-04-01T09:00:00.000Z",
     );
-    // A completed task moves too, and it does not count towards the cache.
+    // A completed task moves too, and it does not count toward the cache.
     const done = await createTask(
       duplicateId,
       "Already done",

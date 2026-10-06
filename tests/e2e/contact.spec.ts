@@ -338,7 +338,7 @@ test.describe("the Network header and start panel", () => {
       page.locator("header").getByRole("button", { name: "Command palette" }),
     ).toBeHidden();
 
-    // Named for a screen reader, labelled for a pointer, no visible text.
+    // Named for a screen reader, labeled for a pointer, no visible text.
     for (const name of ["Select", "Import", "New"]) {
       const button = page.getByRole("button", { name, exact: true });
       await expect(button).toBeVisible();
@@ -458,7 +458,7 @@ test.describe("the list's width", () => {
  * The header's menu.
  *
  * The header used to show a palette icon and an archive icon at the same rank
- * as the name, with delete in a menu and an unlabelled sparkle beside the
+ * as the name, with delete in a menu and an unlabeled sparkle beside the
  * company. Every action is now in the "Contact actions" menu, which behaves
  * as a menu: focus inside on open, the arrows and Home and End move, Escape
  * returns to the button. There is no button to log: the composer is the first
@@ -549,7 +549,7 @@ test.describe("the contact header", () => {
     await kebab.click();
     const menu = page.getByRole("menu", { name: "Contact actions" });
     // Change avatar left for the pencil on the avatar, and the two enrich
-    // depths follow the colour: AI actions about this contact. Each ends
+    // depths follow the color: AI actions about this contact. Each ends
     // with its time, because research runs on Gemini here.
     await expect(menu.getByRole("menuitem")).toHaveText([
       "Change colour",
@@ -579,19 +579,19 @@ test.describe("the contact header", () => {
     await expect(menu).toBeHidden();
     await expect(kebab).toBeFocused();
 
-    // Change colour, from the keyboard: the picker opens on the colour in
+    // Change color, from the keyboard: the picker opens on the color in
     // use, and Escape hands focus back to the menu button.
     await page.keyboard.press("Enter");
     await expect(
       menu.getByRole("menuitem", { name: "Change colour" }),
     ).toBeFocused();
     await page.keyboard.press("Enter");
-    const colours = page.getByRole("radiogroup", { name: "Contact colour" });
-    await expect(colours).toBeVisible();
-    await expect(colours.getByRole("radio", { checked: true })).toBeFocused();
-    await expectPageAccessible(page, testInfo, "contact-colour-picker");
+    const colors = page.getByRole("radiogroup", { name: "Contact colour" });
+    await expect(colors).toBeVisible();
+    await expect(colors.getByRole("radio", { checked: true })).toBeFocused();
+    await expectPageAccessible(page, testInfo, "contact-color-picker");
     await page.keyboard.press("Escape");
-    await expect(colours).toBeHidden();
+    await expect(colors).toBeHidden();
     await expect(kebab).toBeFocused();
 
     // Archive from the menu, and the item turns into its undo.
@@ -651,7 +651,7 @@ test.describe("the contact header", () => {
     await expect(pencil).toHaveCSS("outline-style", "solid");
   });
 
-  test("+ link adds a link after the others, labelled by its host", async ({
+  test("+ link adds a link after the others, labeled by its host", async ({
     page,
     instance,
   }) => {
@@ -986,7 +986,7 @@ test.describe("tracking", () => {
     await page.keyboard.press("Escape");
   });
 
-  // The Tracked page's bar was fixed to the window and centred on it: at
+  // The Tracked page's bar was fixed to the window and centered on it: at
   // 800 px it started at x 24 over the rail's Settings gear, and at 1440 px
   // it ran past the cards on both sides.
   test.describe("the Tracked page at 800 px", () => {

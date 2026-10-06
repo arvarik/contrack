@@ -5,7 +5,7 @@
 // for the whole table. The boot migration turns a float table into int8
 // without re-embedding anything, and it must keep every row, the partition
 // key and the three status columns. The KNN must still find the same
-// neighbours, up to rounding. The scale must be set once, from all the
+// neighbors, up to rounding. The scale must be set once, from all the
 // vectors of the first write, and start over with a new model.
 // =============================================================================
 
@@ -79,7 +79,7 @@ function spread(seed: number): Float32Array {
   return v;
 }
 
-describe("the neighbours of real vectors", () => {
+describe("the neighbors of real vectors", () => {
   it("keeps the float KNN's nearest contacts, up to rounding", () => {
     // The search gate's MiniLM vectors: 300 contacts and 79 questions.
     const fixture = loadFixture();

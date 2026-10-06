@@ -139,7 +139,7 @@ test.describe("map", () => {
       overlay.getByRole("button", { name: "Analytical Engineer" }),
     ).toBeVisible();
 
-    // With nothing else listening, Escape closes the contact. The cancelled
+    // With nothing else listening, Escape closes the contact. The canceled
     // field hands focus back to the value it edited, which does not answer
     // Escape, so the next press belongs to the map page.
     await expect(
@@ -519,7 +519,7 @@ test.describe("map", () => {
     await expect(zoomOut).toBeEnabled();
   });
 
-  test("centres the open contact's pin in the part of the map it leaves open", async ({
+  test("centers the open contact's pin in the part of the map it leaves open", async ({
     page,
   }) => {
     await stubBasemap(page);
@@ -654,7 +654,7 @@ test.describe("map", () => {
     await page.goto(`/contact/${ada.id}`);
 
     // Nothing of the map is on screen until it has loaded: the frame holds
-    // one colour, and the map fades up through it.
+    // one color, and the map fades up through it.
     const mini = page.getByRole("region", { name: "Location map" });
     await expect(mini).toHaveAttribute("data-map-ready", "true");
     await expect(
@@ -681,7 +681,7 @@ test.describe("map", () => {
     await expect(card).toContainText("London, UK");
 
     // A pin carries a z-index so the open contact's pin stands above its
-    // neighbours. The card stands above every pin.
+    // neighbors. The card stands above every pin.
     const stacking = await page.evaluate(() => {
       const above = (selector: string) =>
         Number(

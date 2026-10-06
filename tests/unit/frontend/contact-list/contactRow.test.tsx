@@ -2,8 +2,8 @@
 // =============================================================================
 // A contact list row says the score in its name
 // =============================================================================
-// The ring's colour carried the score and nothing else did, so a screen reader
-// user and anyone who cannot tell the colours apart got nothing from it. The
+// The ring's color carried the score and nothing else did, so a screen reader
+// user and anyone who cannot tell the colors apart got nothing from it. The
 // row's link now names the person, the line under the name, and the score in
 // words: "Betty Clark, Global Dynamics, score 72, strong". The ring is then
 // decorative, so the score is said once, and its tooltip stays for a pointer.
@@ -306,7 +306,7 @@ describe("the follow-up glyph", () => {
     expect(row.querySelector('[title^="Follow-up"]')).toBeNull();
   });
 
-  // The glyph's colour and its tooltip were the only signs of it. The
+  // The glyph's color and its tooltip were the only signs of it. The
   // row's name closes with the same words.
   it("closes the row's name with the follow-up", () => {
     vi.useFakeTimers({ toFake: ["Date"] });

@@ -2,7 +2,7 @@
 // =============================================================================
 // PreferencesProvider — the reader, the writer, and the one-time migration
 // =============================================================================
-// Three behaviours that only show up in the wiring, so none of them is covered
+// Three behaviors that only show up in the wiring, so none of them is covered
 // by the service tests or the hook tests.
 //
 // Reading before the server answers. The provider hands out the defaults

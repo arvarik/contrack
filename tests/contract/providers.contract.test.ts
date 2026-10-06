@@ -65,7 +65,7 @@ const LIST_SCHEMA = {
   items: { type: "string" as const },
 };
 const LIST_PROMPT =
-  "Name three primary colours. Return a JSON array of strings.";
+  "Name three primary colors. Return a JSON array of strings.";
 
 /** A grounded question no model can answer from memory. */
 const SEARCH_PROMPT = `Search the web and name one headline published on ${new Date()
@@ -209,7 +209,7 @@ describe.skipIf(!openai.usable)("OpenAI", () => {
       const models = await new OpenAIAdapter(openaiKey()!).listModels();
 
       expect(models.length).toBeGreaterThan(0);
-      // OpenAI returns bare ids, so capability is a guess and must be labelled
+      // OpenAI returns bare ids, so capability is a guess and must be labeled
       // as one — the UI marks these differently.
       expect(models[0].capabilityConfidence).toBe("guessed");
       expect(models.some((m) => m.capabilities.includes("embeddings"))).toBe(

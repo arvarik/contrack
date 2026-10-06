@@ -227,7 +227,7 @@ describe("when the answer is not certain enough to act on", () => {
 
     const result = resolve("Priya Raghunathan");
 
-    // Both match exactly. The ghost is penalised, so the person the account
+    // Both match exactly. The ghost is penalized, so the person the account
     // actually knows wins, and the margin is wide enough to link.
     expect(result.kind).toBe("link");
     expect(result.kind === "link" && result.match.contactId).toBe(real);
@@ -238,7 +238,7 @@ describe("when the answer is not certain enough to act on", () => {
 
     const result = resolve("Yusuf Demirci");
 
-    // This is the behaviour that stops an account collecting one ghost per
+    // This is the behavior that stops an account collecting one ghost per
     // mention of the same unknown person.
     expect(result.kind).toBe("link");
     expect(result.kind === "link" && result.match.contactId).toBe(ghost);

@@ -61,7 +61,7 @@ describe("startBackupSchedule", () => {
     expect(startBackupSchedule()).toBeNull();
   });
 
-  it("honours an explicit interval", () => {
+  it("honors an explicit interval", () => {
     process.env.BACKUP_INTERVAL_HOURS = "6";
     handle = startBackupSchedule();
     expect(handle).not.toBeNull();

@@ -4,14 +4,14 @@
 // =============================================================================
 // Two things are easy to get wrong here and neither shows up by clicking.
 //
-// The role promises keyboard behaviour. Only the selected option is a tab
+// The role promises keyboard behavior. Only the selected option is a tab
 // stop, so without arrow handling the other seven swatches cannot be reached
 // from a keyboard at all — the control would be worse for a keyboard user than
 // eight plain buttons.
 //
 // And the swatch has to show what the app will paint. The default accent is
 // never derived (the shipped palette is hand-tuned and measured), so deriving
-// it for the swatch would put a colour on screen that appears nowhere else.
+// it for the swatch would put a color on screen that appears nowhere else.
 // =============================================================================
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -52,7 +52,7 @@ describe("keyboard", () => {
     expect(onChange).toHaveBeenLastCalledWith(ACCENT_PRESETS[0].value);
   });
 
-  it("starts from the first swatch when a custom colour is chosen", () => {
+  it("starts from the first swatch when a custom color is chosen", () => {
     const onChange = vi.fn();
     render(<AccentPicker value="#123456" onChange={onChange} mode="light" />);
 
@@ -77,7 +77,7 @@ describe("keyboard", () => {
     expect(reachable).toHaveLength(1);
   });
 
-  it("still offers a tab stop when the colour is a custom one", () => {
+  it("still offers a tab stop when the color is a custom one", () => {
     // Otherwise the whole row drops out of the tab order the moment somebody
     // picks something off it.
     render(<AccentPicker value="#123456" onChange={() => {}} mode="light" />);
@@ -90,7 +90,7 @@ describe("what the swatches show", () => {
     render(
       <AccentPicker value={DEFAULT_ACCENT} onChange={() => {}} mode="light" />,
     );
-    // Deriving it would be close, and visibly not the colour on the buttons
+    // Deriving it would be close, and visibly not the color on the buttons
     // beside it — `applyTheme` leaves the hand-tuned values alone for this one.
     expect(swatches()[0].style.backgroundColor).toBe("rgb(0, 106, 145)");
     expect(deriveAccent(DEFAULT_ACCENT, "light").primary).not.toBe(
@@ -98,7 +98,7 @@ describe("what the swatches show", () => {
     );
   });
 
-  it("paints the derived colour for every other preset", () => {
+  it("paints the derived color for every other preset", () => {
     render(
       <AccentPicker value={DEFAULT_ACCENT} onChange={() => {}} mode="light" />,
     );
@@ -114,7 +114,7 @@ describe("what the swatches show", () => {
     );
   });
 
-  it("paints a different colour in each palette", () => {
+  it("paints a different color in each palette", () => {
     const { rerender } = render(
       <AccentPicker value={DEFAULT_ACCENT} onChange={() => {}} mode="light" />,
     );

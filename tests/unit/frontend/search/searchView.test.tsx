@@ -6,7 +6,7 @@
 // own, separate from the search state, so clearing the search left the ref
 // behind and the same question was refused for ever. And the synthesis bar
 // was handed the editable input rather than the question that produced the
-// results, so typing question B and pressing Synthesize summarised A's
+// results, so typing question B and pressing Synthesize summarized A's
 // contacts under B's words.
 //
 // Every test here drives the real view through the DOM, with `fetch` stubbed
@@ -434,7 +434,7 @@ describe("asking the same question again", () => {
 });
 
 describe("the question the results belong to", () => {
-  it("synthesises the answered question, not whatever is being typed", async () => {
+  it("synthesizes the answered question, not whatever is being typed", async () => {
     const sent = stubFetch();
     renderView();
 

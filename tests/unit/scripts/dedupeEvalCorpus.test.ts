@@ -70,7 +70,7 @@ describe("validateCorpus", () => {
     expect(() => validateCorpus(corpus)).not.toThrow();
   });
 
-  it("still refuses an unlabelled name collision between two groups", () => {
+  it("still refuses an unlabeled name collision between two groups", () => {
     // The older check, which the one above does not replace.
     const distractor = corpus.contacts.find((c) =>
       c.key.startsWith("distractor-"),

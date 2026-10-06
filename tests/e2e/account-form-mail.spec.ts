@@ -17,7 +17,7 @@ import { SETUP_HEADING } from "./fixtures/accounts";
 test("says it emails links once outgoing mail is set up", async ({
   browser,
 }) => {
-  // The address is never dialled: this page sends nothing.
+  // The address is never dialed: this page sends nothing.
   const local = await ContrackInstance.start({
     authRequired: true,
     env: {

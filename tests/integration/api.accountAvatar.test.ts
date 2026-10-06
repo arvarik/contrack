@@ -4,7 +4,7 @@
 // Spec: docs/v2/profile-pictures.md section 6 & 7.
 //
 // Verifies:
-// 1. Uploading a valid image (PNG) normalises through sharp to 512px cover JPEG
+// 1. Uploading a valid image (PNG) normalizes through sharp to 512px cover JPEG
 //    at quality 82 under uploads/u/<userId>/profile/profile-<timestamp>.jpg.
 // 2. Profile photo is visible to its owner (200) and any other signed-in user
 //    on the instance (200), but returns 401 without credentials.
@@ -105,7 +105,7 @@ describe("POST /api/auth/me/avatar", () => {
     expect(res.body.error.code).toBe("PAYLOAD_TOO_LARGE");
   });
 
-  it("normalises a valid photo into JPEG and stores it under uploads/u/<id>/profile/", async () => {
+  it("normalizes a valid photo into JPEG and stores it under uploads/u/<id>/profile/", async () => {
     const res = await asUser(userA)(
       request(app)
         .post("/api/auth/me/avatar")

@@ -101,7 +101,7 @@ describe("invitation links", () => {
 });
 
 describe("taking the invitation out of the address bar", () => {
-  // The reads are memoised for the life of the page, so each test loads a
+  // The reads are memoized for the life of the page, so each test loads a
   // fresh copy of the module, the way a new page does.
   type Credentials = typeof import("../../../../src/lib/credentials");
   let takeInvitationToken: Credentials["takeInvitationToken"];
@@ -123,9 +123,9 @@ describe("taking the invitation out of the address bar", () => {
   });
 
   it("gives the same answer on a second call", () => {
-    // This is the whole point of the memoisation. StrictMode mounts,
+    // This is the whole point of the memoization. StrictMode mounts,
     // unmounts and remounts every component in development, and an
-    // un-memoised second read would run after the first had already cleaned
+    // un-memoized second read would run after the first had already cleaned
     // the URL: the gate would capture the token, lose it, and show an empty
     // join form to somebody holding a valid invitation.
     window.history.replaceState({}, "", "/join?token=abc123");

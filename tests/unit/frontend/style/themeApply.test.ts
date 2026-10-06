@@ -208,7 +208,7 @@ describe("the cache the boot script reads", () => {
     systemPrefersDark(false);
     runBoot();
     // A dark-palette accent painted over a light page would be the wrong six
-    // colours, so none are applied and the app derives them a moment later.
+    // colors, so none are applied and the app derives them a moment later.
     expect(root().style.getPropertyValue("--color-primary")).toBe("");
   });
 
@@ -222,7 +222,7 @@ describe("the cache the boot script reads", () => {
     expect(root().hasAttribute("data-theme")).toBe(false);
   });
 
-  it("refuses to set anything that is not a colour token", () => {
+  it("refuses to set anything that is not a color token", () => {
     localStorage.setItem(
       THEME_CACHE_KEY,
       JSON.stringify({

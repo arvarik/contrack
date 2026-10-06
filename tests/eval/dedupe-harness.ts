@@ -186,9 +186,9 @@ export function normalizeEvalContact(contact: EvalContact) {
  * The ways the engine could reach this pair at all.
  *
  * Recall counts a pair the engine did not produce against it, which is only a
- * fair count when the engine had some route to it. Every labelled duplicate
+ * fair count when the engine had some route to it. Every labeled duplicate
  * has to share a blocking key, an exact normalized name (which is D3's route)
- * or a surname (which is D5's). A labelled pair with none of those would
+ * or a surname (which is D5's). A labeled pair with none of those would
  * lower recall for ever and name no bug.
  *
  * Lives here rather than in the corpus file because reaching
@@ -311,10 +311,10 @@ function round(n: number): number {
  * Score one pass's output against the labels.
  *
  * The ground truth is closed: every pair the pass produced that is not a
- * labelled duplicate is a false positive, whether it is a named hard negative
+ * labeled duplicate is a false positive, whether it is a named hard negative
  * or two contacts nobody thought about. `validateCorpus` is what makes that
  * fair — it refuses a corpus in which two records of one person could go
- * unlabelled.
+ * unlabeled.
  */
 export function scorePass(
   pairs: RawPair[],

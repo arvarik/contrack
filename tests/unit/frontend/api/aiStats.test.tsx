@@ -9,7 +9,7 @@
 // was the design decision rather than the code.
 //
 // The decision is append, and this is what holds it. Every test here fails
-// against the behaviour it replaced.
+// against the behavior it replaced.
 // =============================================================================
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";

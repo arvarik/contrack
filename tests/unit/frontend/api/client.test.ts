@@ -7,13 +7,13 @@
 // the whole app to change screen, and only `AuthGate` can do that. A view
 // cannot, and eleven views deciding separately would decide it eleven ways.
 //
-// So every call goes through `src/api/client.ts`, which recognises the answer
+// So every call goes through `src/api/client.ts`, which recognizes the answer
 // and announces it once on the window. A module that calls `fetch` directly
 // opts out of that silently: it still works, it still shows an error, and the
 // person is left staring at a failed page with no way to sign back in.
 //
 // The first block below is the scanner that stops that from creeping back.
-// The rest pin the behaviour it is protecting.
+// The rest pin the behavior it is protecting.
 // =============================================================================
 import fs from "node:fs";
 import path from "node:path";

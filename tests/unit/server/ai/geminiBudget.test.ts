@@ -91,7 +91,7 @@ describe("Gemini call budget", () => {
     ).rejects.toMatchObject({ code: "AI_INVALID_JSON" });
     expect(sdk.generate).toHaveBeenCalledTimes(1);
   });
-  it("does not start or reserve work for an already cancelled caller", async () => {
+  it("does not start or reserve work for an already canceled caller", async () => {
     const adapter = new GeminiAdapter("test-only-key");
     const controller = new AbortController();
     controller.abort();

@@ -1,5 +1,5 @@
 /**
- * contrast-audit — WCAG AA gate for text colour.
+ * contrast-audit — WCAG AA gate for text color.
  *
  * Static review cannot answer "is this text readable", because the answer
  * depends on what is behind it: a token, its alpha modifier, every ancestor
@@ -69,7 +69,7 @@ const THEMES = THEME_ARG === "both" ? ["light", "dark"] : [THEME_ARG];
 
 const ACCENT = argOf("accent", null);
 if (ACCENT && !/^#[0-9a-fA-F]{6}$/.test(ACCENT)) {
-  console.error(`--accent takes a six-digit hex colour (got "${ACCENT}")`);
+  console.error(`--accent takes a six-digit hex color (got "${ACCENT}")`);
   process.exit(2);
 }
 const chrome = spawn(
@@ -115,7 +115,7 @@ const send = (m, p = {}) =>
 
 const AUDIT = String.raw`(() => {
   // Tailwind v4 alpha modifiers compute to oklab(... / a), which no rgb regex
-  // will match — so parse every colour by painting it and reading the pixel.
+  // will match — so parse every color by painting it and reading the pixel.
   // That handles rgb/rgba/oklab/oklch/color() uniformly.
   const _cv = document.createElement('canvas'); _cv.width = _cv.height = 1;
   const _ctx = _cv.getContext('2d', { willReadFrequently: true });
@@ -144,7 +144,7 @@ const AUDIT = String.raw`(() => {
   const lum = c => 0.2126*lin(c.r) + 0.7152*lin(c.g) + 0.0722*lin(c.b);
   const ratio = (a, b) => { const la = lum(a), lb = lum(b); const hi = Math.max(la,lb), lo = Math.min(la,lb); return (hi+0.05)/(lo+0.05); };
 
-  // Composite every ancestor background down to an opaque colour, honouring
+  // Composite every ancestor background down to an opaque color, honoring
   // each ancestor's own element opacity.
   const effectiveBg = el => {
     let acc = { r:255, g:255, b:255, a:1 };
@@ -239,7 +239,7 @@ const DEFAULT_ROUTES = [
  * The contact detail page is the most important one to check and the only one
  * whose URL is not static — and because of that it was silently skipped the
  * first time this ran. It also replaces the entire primary palette with the
- * contact's "vibe" colour, so it is the page most likely to regress. Discover
+ * contact's "vibe" color, so it is the page most likely to regress. Discover
  * a real id rather than leaving it out.
  */
 async function withDetailRoute(routes) {
@@ -299,7 +299,7 @@ for (const theme of THEMES) {
   // Before the navigation, not after. The app follows `prefers-color-scheme`
   // on its own when the theme setting is "system", so emulating it first means
   // the page loads in the palette being audited rather than transitioning into
-  // it — and a `transition-all` control read mid-transition reports the colour
+  // it — and a `transition-all` control read mid-transition reports the color
   // it is leaving, which is a failure that exists only in the measurement.
   await send("Emulation.setEmulatedMedia", {
     features: [{ name: "prefers-color-scheme", value: theme }],
@@ -332,7 +332,7 @@ for (const theme of THEMES) {
   }
 }
 
-console.log("\n──── failures grouped by colour pair ────");
+console.log("\n──── failures grouped by color pair ────");
 const groups = new Map();
 for (const f of all) {
   const key = `[${f.theme}] ${f.fg} on ${f.bgHex}${f.disabled ? "  [disabled]" : ""}`;

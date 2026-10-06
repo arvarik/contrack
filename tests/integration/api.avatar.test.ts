@@ -15,7 +15,7 @@ import { doubleMetaphone } from "../../server/utils/nlp/index.ts";
 const app = makeTestApp();
 
 /**
- * Superagent only fills `res.text` for content types it recognises as text, and
+ * Superagent only fills `res.text` for content types it recognizes as text, and
  * `image/svg+xml` is not one — it buffers into `res.body` instead. Read
  * whichever the response actually populated.
  */

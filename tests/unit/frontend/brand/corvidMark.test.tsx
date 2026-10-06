@@ -211,7 +211,7 @@ describe("CorvidMark, alive", () => {
 });
 
 describe("CorvidTile", () => {
-  it("draws the white bird on the gradient tile in fixed colours", () => {
+  it("draws the white bird on the gradient tile in fixed colors", () => {
     const { container } = render(<CorvidTile size={24} />);
     const svg = svgOf(container);
     expect(svg.getAttribute("aria-hidden")).toBe("true");

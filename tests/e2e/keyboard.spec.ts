@@ -4,7 +4,7 @@
  * Each test starts with focus on the body, presses real keys, and asserts
  * where focus went and that a sighted keyboard user could see it there
  * (WCAG 2.1.1, 2.4.3, 2.4.7). The focus ring is checked in both palettes,
- * because it is drawn from a colour token and the dark palette has its own.
+ * because it is drawn from a color token and the dark palette has its own.
  */
 import { test, expect } from "./fixtures/test";
 import { expectVisibleFocus } from "./fixtures/a11y";

@@ -62,7 +62,7 @@ function fly(plan: FlightPlan, step = 1000 / 60): FlightFrame[] {
   return frames;
 }
 
-const perchCentre = (perch: FlightPerch) => {
+const perchCenter = (perch: FlightPerch) => {
   const [x, y] = bodyCentre(HOME_POSE);
   return [
     perch.left + (x / 100) * perch.size,
@@ -71,7 +71,7 @@ const perchCentre = (perch: FlightPerch) => {
 };
 
 const expectHome = (frame: FlightFrame, perch: FlightPerch) => {
-  const [x, y] = perchCentre(perch);
+  const [x, y] = perchCenter(perch);
   expect(frame.x).toBeCloseTo(x, 6);
   expect(frame.y).toBeCloseTo(y, 6);
   expect(frame.size).toBeCloseTo(perch.size, 6);
@@ -134,7 +134,7 @@ for (const kind of ["loop", "sortie", "swoop", "search"] as FlightKind[]) {
 
       it(`stays in the window, and in the flight box away from the perch, on ${name}`, () => {
         const box = flightBox(viewport);
-        const [px, py] = perchCentre(perch);
+        const [px, py] = perchCenter(perch);
         for (const seed of SEEDS) {
           const plan = planFlight({
             kind,
@@ -795,7 +795,7 @@ describe("a search round the column", () => {
 
   /** The frames away from the perch: not leaving it, not landing on it. */
   const away = (frames: FlightFrame[], perch: FlightPerch) => {
-    const [px, py] = perchCentre(perch);
+    const [px, py] = perchCenter(perch);
     return frames.filter((f) => Math.hypot(f.x - px, f.y - py) >= 110);
   };
 

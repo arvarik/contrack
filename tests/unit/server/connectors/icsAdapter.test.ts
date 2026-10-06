@@ -108,7 +108,7 @@ describe("icsAdapter", () => {
     );
 
     expect(result.ok).toBe(true);
-    // Four VEVENT blocks, but node-ical folds the cancelled override into its
+    // Four VEVENT blocks, but node-ical folds the canceled override into its
     // series, so the feed holds three events.
     expect(result.detail).toBe("Connected successfully (3 events found)");
   });
@@ -155,7 +155,7 @@ describe("icsAdapter", () => {
     );
     expect(allHands).toBeUndefined();
 
-    // 2. Check that the cancelled instance (2026-01-12) was skipped
+    // 2. Check that the canceled instance (2026-01-12) was skipped
     const cancelledInstance = interactionEvents.find((e) =>
       "externalId" in e && typeof e.externalId === "string"
         ? e.externalId.includes("2026-01-12") ||
@@ -164,7 +164,7 @@ describe("icsAdapter", () => {
     );
     expect(cancelledInstance).toBeUndefined();
 
-    // 3. Check that each recurring instance that was not cancelled was produced
+    // 3. Check that each recurring instance that was not canceled was produced
     const weekly = interactionEvents.flatMap((e) =>
       "externalId" in e && e.externalId.startsWith("weekly-sync@example.com")
         ? [e.externalId]

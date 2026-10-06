@@ -9,7 +9,7 @@
 // closes as the item is chosen, so it asks for a toast as well
 // (`limitAs: "toast"`). Without it a refused start said nothing at all.
 //
-// `startSearch` keeps one identity for the provider's life, so the memoised
+// `startSearch` keeps one identity for the provider's life, so the memoized
 // context value does not change on every render of the provider.
 //
 // Every start names the web search engine that runs: the account's own, or

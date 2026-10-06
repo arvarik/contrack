@@ -14,9 +14,9 @@
 //      statement about a palette nobody paints.
 //   2. Does the DARK palette clear WCAG AA everywhere the LIGHT one does?
 //      A new palette is the easiest place in an app to ship unreadable text.
-//   3. Does EVERY accent a person can choose clear it? That is 6,000 colours
+//   3. Does EVERY accent a person can choose clear it? That is 6,000 colors
 //      across the hue circle, in both palettes, and it is the only way to make
-//      a colour picker safe: the alternative is a control that lets somebody
+//      a color picker safe: the alternative is a control that lets somebody
 //      make their own app unreadable.
 //
 // One pairing is excluded and named rather than quietly dropped: `text-primary`
@@ -198,7 +198,7 @@ describe("index.css and theme.ts hold the same palettes", () => {
     expect(system).toEqual(chosen);
   });
 
-  it("defines a colour scheme for both palettes", () => {
+  it("defines a color scheme for both palettes", () => {
     // Without it the browser paints scrollbars, form controls and the canvas
     // behind the page from its own default, which does not follow the tokens.
     expect(css).toMatch(/:root\s*\{\s*color-scheme:\s*light;/);
@@ -237,7 +237,7 @@ describe("index.css and theme.ts hold the same palettes", () => {
 describe.each(["light", "dark"] as const)("the %s palette", (mode) => {
   const cases = casesFor(PALETTES[mode]);
 
-  it("checks more than sixty colour pairs", () => {
+  it("checks more than sixty color pairs", () => {
     // A gate that silently stopped generating cases would pass everything.
     expect(cases.length).toBeGreaterThan(60);
   });
@@ -344,7 +344,7 @@ describe("deriveAccent", () => {
     expect(failures).toEqual([]);
   });
 
-  it("returns the colour that was asked for, not a different hue", () => {
+  it("returns the color that was asked for, not a different hue", () => {
     // The whole point of a picker. Lightness is negotiable because the
     // contract demands it; hue is not, and a naive clamp into the sRGB gamut
     // turns a bright red into an orange.
@@ -369,8 +369,8 @@ describe("deriveAccent", () => {
     }
   });
 
-  it("keeps a colour that already clears the contract", () => {
-    // The search stops at the first lightness that passes, so a colour already
+  it("keeps a color that already clears the contract", () => {
+    // The search stops at the first lightness that passes, so a color already
     // dark enough comes back untouched. Anything else would mean the picker
     // quietly ignores half its own range.
     const alreadyDark = "#00405a";
@@ -403,7 +403,7 @@ describe("deriveAccent", () => {
 // ---------------------------------------------------------------------------
 
 describe("the heavier primary washes", () => {
-  /** The worst a text colour reaches on `primary/<alpha>` in one palette. */
+  /** The worst a text color reaches on `primary/<alpha>` in one palette. */
   const washWorst = (palette: Palette, text: string, alpha: number) =>
     Math.min(
       ...PILL_SURFACES.map((surface) =>
@@ -457,7 +457,7 @@ describe("the heavier primary washes", () => {
     // palette tests nor the browser audit can see it.
     //
     // One string at a time, which is what the app writes: a wash and its text
-    // are set together. A wash on one element and a colour on a child three
+    // are set together. A wash on one element and a color on a child three
     // lines down is outside this check, and `scripts/contrast-audit.mjs` with
     // a populated instance is what would find that.
     const root = path.join(here, "../../../../src");
@@ -531,8 +531,8 @@ describe("the heavier primary washes", () => {
   });
 
   it("returns the primary unchanged when it already reads on its own wash", () => {
-    // Not an optimisation, a guarantee: a dark accent that already works keeps
-    // one colour for both jobs, so a pill and the text beside it match.
+    // Not an optimization, a guarantee: a dark accent that already works keeps
+    // one color for both jobs, so a pill and the text beside it match.
     expect(deriveWashText(DARK.primary, DARK, "dark")).toBe(DARK.primary);
   });
 
@@ -573,7 +573,7 @@ describe("the highlighter", () => {
   });
 });
 
-describe("the AI colour keeps its hue to itself", () => {
+describe("the AI color keeps its hue to itself", () => {
   const hueGap = (a: number, b: number) => {
     const d = Math.abs(a - b) % 360;
     return d > 180 ? 360 - d : d;
@@ -587,12 +587,12 @@ describe("the AI colour keeps its hue to itself", () => {
       await import("../../../../src/lib/theme");
     const { ACCENT_PRESETS } =
       await import("../../../../src/components/ui/AccentPicker");
-    // The colour on screen is the derived primary, in each palette, and it
-    // must clear that palette's own AI colour: a preset that passed in light
-    // came within 26 degrees of the dark AI colour.
+    // The color on screen is the derived primary, in each palette, and it
+    // must clear that palette's own AI color: a preset that passed in light
+    // came within 26 degrees of the dark AI color.
     const offenders: string[] = [];
     const check = (name: string, hex: string) => {
-      if (rgbToOklch(hexToRgb(hex)).c < 0.05) return; // a grey has no hue
+      if (rgbToOklch(hexToRgb(hex)).c < 0.05) return; // a gray has no hue
       for (const mode of ["light", "dark"] as const) {
         const painted = deriveAccent(hex, mode).primary;
         const { h, c } = rgbToOklch(hexToRgb(painted));

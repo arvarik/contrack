@@ -54,7 +54,7 @@ test.describe("the left pane", () => {
   test("shows each pane's scroll bar only while the pointer or the keyboard is in it", async ({
     page,
   }) => {
-    // The thumb's colour, first in `scrollbar-color`: transparent at rest.
+    // The thumb's color, first in `scrollbar-color`: transparent at rest.
     const thumbShows = (scroller: ReturnType<typeof page.locator>) =>
       scroller.evaluate(
         (el) =>

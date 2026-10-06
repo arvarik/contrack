@@ -82,7 +82,7 @@ export async function expectNoViolations(
  * Wait for every finite animation on the page to finish.
  *
  * axe measures contrast through ancestor opacity, so an entrance animation
- * caught mid-fade reads as a colour that exists for one frame and fails a
+ * caught mid-fade reads as a color that exists for one frame and fails a
  * rule the settled page passes. Spinners and pulses run forever and are
  * left alone. Bounded, because a page is not held hostage by an animation
  * that never resolves.

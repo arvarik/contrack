@@ -243,7 +243,7 @@ describe("a path spelled with different capitals", () => {
   it("is counted, because Express routes it to the same handler", async () => {
     // Express routes case-insensitively unless the app sets
     // `case sensitive routing`, and this one does not: GET /API/Contacts
-    // returns 200. So a capitalised AI path reaches the same billable handler,
+    // returns 200. So a capitalized AI path reaches the same billable handler,
     // and matching the cost patterns against the path as it arrived let one
     // capital letter escape both limiters entirely.
     const reachable = await as(alice)(request(app).get("/API/Contacts"));

@@ -1,9 +1,9 @@
 // =============================================================================
-// Unit: the server log's level, its details and its colours
+// Unit: the server log's level, its details and its colors
 // =============================================================================
 // DEBUG lines printed in production: one import wrote 12,000 of them. An
 // Error in the details printed as {}, so a failed connector lost its cause.
-// And `docker logs` held ANSI colour codes.
+// And `docker logs` held ANSI color codes.
 // =============================================================================
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -71,7 +71,7 @@ describe("log", () => {
     expect(details.error.stack).toContain("logger.test.ts");
   });
 
-  it("colours a line only when stdout is a terminal", () => {
+  it("colors a line only when stdout is a terminal", () => {
     const own = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
     try {
       for (const isTTY of [true, false]) {

@@ -477,7 +477,7 @@ describe("the entity guard", () => {
     expect(vi.mocked(embedText).mock.calls[0][1]?.aborted).toBe(true);
   });
 
-  it("stops a cancelled search while the local embedding worker stalls", async () => {
+  it("stops a canceled search while the local embedding worker stalls", async () => {
     await seedLocal();
     const controller = new AbortController();
     vi.mocked(embedText).mockImplementation(() => new Promise(() => {}));

@@ -3,7 +3,7 @@
 // =============================================================================
 // The two things worth guarding here are the two that fail silently:
 //
-//   1. An option value DiceBear does not recognise is ignored, not rejected.
+//   1. An option value DiceBear does not recognize is ignored, not rejected.
 //      So a typo in an allow-list would quietly restore the full expression
 //      pool — angry eyebrows and all — with nothing observable at runtime.
 //      Hence the schema-conformance tests below.
@@ -110,14 +110,14 @@ describe("look pools", () => {
     expect(AVATAR_LOOK_POOLS.female.facialHairProbability).toBe(0);
   });
 
-  it("gives a neutral face natural hair colours from DiceBear's palette", () => {
+  it("gives a neutral face natural hair colors from DiceBear's palette", () => {
     const palette = (
       avataaarsSchema as unknown as {
         properties: { hairColor: { default: string[] } };
       }
     ).properties.hairColor.default;
-    for (const colour of AVATAR_LOOK_POOLS.neutral.hairColor)
-      expect(palette).toContain(colour);
+    for (const color of AVATAR_LOOK_POOLS.neutral.hairColor)
+      expect(palette).toContain(color);
     expect(AVATAR_LOOK_POOLS.neutral.hairColor).not.toContain("f59797");
   });
 
@@ -282,7 +282,7 @@ describe("drawing for a dark palette", () => {
     expect(svg).toContain("var(--fg)");
   });
 
-  it("pins the colours when a theme is named", () => {
+  it("pins the colors when a theme is named", () => {
     const light = renderAvatar({
       style: "initials",
       seed: "Ada Lovelace",
@@ -367,7 +367,7 @@ describe("the default avatar and its URL", () => {
     expect(defaultAvatarUrl("Jordan Lee", "n/a")).not.toContain("look=");
   });
 
-  it("recognises a default avatar for the contact's own name only", () => {
+  it("recognizes a default avatar for the contact's own name only", () => {
     expect(isDefaultAvatarFor(defaultAvatarUrl("Ann Lee"), "Ann Lee")).toBe(
       true,
     );

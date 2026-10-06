@@ -2,20 +2,20 @@
 // Integration Tests — a pair no model checks
 // =============================================================================
 // The check after an import and the check after a contact is added never ask
-// a model. They used to keep every vector neighbour that scored 0.60 or more,
+// a model. They used to keep every vector neighbor that scored 0.60 or more,
 // at its full score, while a scan without a provider kept only 0.75 or more,
 // at 0.7 of it. One LinkedIn import filled the review with people who shared
 // nothing but an employer and a first name.
 //
 // The vector store is stubbed here: integration runs with no embedder, and
-// what is under test is what the check does with a neighbour, not the KNN.
+// what is under test is what the check does with a neighbor, not the KNN.
 // =============================================================================
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-const { neighbours } = vi.hoisted(() => ({
-  /** A contact's id to the neighbours its KNN answers with. */
-  neighbours: new Map<string, { contactId: string; distance: number }[]>(),
+const { neighbors } = vi.hoisted(() => ({
+  /** A contact's id to the neighbors its KNN answers with. */
+  neighbors: new Map<string, { contactId: string; distance: number }[]>(),
 }));
 
 vi.mock("../../server/services/dedupe/embeddings.ts", async (importActual) => {
@@ -27,13 +27,13 @@ vi.mock("../../server/services/dedupe/embeddings.ts", async (importActual) => {
     ...actual,
     isEmbeddingAvailable: () => true,
     getEmbedding: (id: string) =>
-      neighbours.has(id) ? new Float32Array([1]) : null,
+      neighbors.has(id) ? new Float32Array([1]) : null,
     findNearestNeighbors: (
       _scope: unknown,
       _vector: unknown,
       _limit: unknown,
       excludeId?: string,
-    ) => neighbours.get(excludeId ?? "") ?? [],
+    ) => neighbors.get(excludeId ?? "") ?? [],
   };
 });
 
@@ -59,7 +59,7 @@ async function seedPair(
     b,
   ] as Parameters<typeof contactService.bulkCreateContacts>[1]);
   const [idA, idB] = createdIds;
-  neighbours.set(idB, [{ contactId: idA, distance: distanceFor(similarity) }]);
+  neighbors.set(idB, [{ contactId: idA, distance: distanceFor(similarity) }]);
   return [idA, idB];
 }
 
@@ -79,7 +79,7 @@ function suggestions() {
 }
 
 beforeEach(() => {
-  neighbours.clear();
+  neighbors.clear();
   sqlite.exec("DELETE FROM dedupe_suggestions");
   sqlite.exec("DELETE FROM dedupe_merge_log");
   sqlite.exec("DELETE FROM contacts");

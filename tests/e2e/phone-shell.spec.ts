@@ -5,7 +5,7 @@
  * - While a note is typed, the tab bar steps aside and Save stays in view in
  *   a keyboard-short viewport, and the editor is 16 px so iOS does not zoom
  * - A sheet has a grab handle and drags down to close
- * - The theme chosen in the app colours the browser bar
+ * - The theme chosen in the app colors the browser bar
  * - Hashed assets are cached for good, and the page is checked every time
  * - On its side, the rail scrolls to Settings
  *
@@ -97,7 +97,7 @@ test.describe("phone shell", () => {
     await expect(sheet).toBeHidden();
   });
 
-  test("the chosen theme colours the browser bar, and hashed assets are cached for good", async ({
+  test("the chosen theme colors the browser bar, and hashed assets are cached for good", async ({
     page,
     request,
   }) => {

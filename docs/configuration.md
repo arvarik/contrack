@@ -398,7 +398,7 @@ change them with `GET` and `PATCH /api/auth/preferences` (see
 | Setting                               | Page                 | Choices                            | Default          | Key                  |
 | ------------------------------------- | -------------------- | ---------------------------------- | ---------------- | -------------------- |
 | **Theme**                             | Appearance           | Light, Dark, System                | System           | `theme`              |
-| **Accent colour**                     | Appearance           | Any colour                         | `#006a91`        | `accent`             |
+| **Accent color**                      | Appearance           | Any color                          | `#006a91`        | `accent`             |
 | **Text size**                         | Appearance           | Default, Large                     | Default          | `textScale`          |
 | **Motion**                            | Appearance           | System, Reduced                    | System           | `motion`             |
 | **Corvid motion**                     | Appearance           | Full, Subtle, Off                  | Full             | `mascotMotion`       |

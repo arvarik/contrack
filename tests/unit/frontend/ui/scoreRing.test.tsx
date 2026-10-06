@@ -2,9 +2,9 @@
 // =============================================================================
 // ScoreRingAvatar: the ring around an avatar shows the relationship score
 // =============================================================================
-// The ring used to be the contact's theme colour, and people read a red ring
-// as trouble. It now says one thing. The arc length is the score, the colour
-// is the band from shared/scoreBand, and the words say the same so colour is
+// The ring used to be the contact's theme color, and people read a red ring
+// as trouble. It now says one thing. The arc length is the score, the color
+// is the band from shared/scoreBand, and the words say the same so color is
 // never the only sign.
 //
 // A score belongs to a contact somebody tracks. So the ring has three states,
@@ -76,7 +76,7 @@ describe("the arc", () => {
     [100, "success"],
     [55, "warning"],
     [5, "error"],
-  ])("colours a score of %i with the %s token", (score, token) => {
+  ])("colors a score of %i with the %s token", (score, token) => {
     const { arc, root } = mount({
       contact: person({ relationshipScore: score }),
     });
@@ -88,7 +88,7 @@ describe("the arc", () => {
 
   it("draws no arc and says so when there is no logged interaction", () => {
     // The column defaults to 50, so a never-contacted person still carries a
-    // score. It is a placeholder, not a judgement.
+    // score. It is a placeholder, not a judgment.
     const { arc, circles, root } = mount({
       contact: person({ relationshipScore: 50, lastContactedAt: null }),
     });
@@ -142,7 +142,7 @@ describe("a contact nobody tracks", () => {
 
 describe("the picture", () => {
   // A list built again, on each return to the Network page, found its
-  // pictures gone from memory and drew grey circles for a frame.
+  // pictures gone from memory and drew gray circles for a frame.
   it("holds a picture once it has loaded", () => {
     const img = mount().picture.querySelector("img")!;
     expect(isImageKept(img.src)).toBe(false);

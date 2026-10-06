@@ -206,7 +206,7 @@ describe("the Research card", () => {
 // The briefing card
 // ---------------------------------------------------------------------------
 // The briefing moved from a modal behind the sparkle to a card at the top of
-// the Dossier tab, with a labelled button, a status line and an error line.
+// the Dossier tab, with a labeled button, a status line and an error line.
 
 /** A contact with nothing in it, so the card offers to write a briefing. */
 const BLANK = { id: "test", name: "Test" } as Contact;

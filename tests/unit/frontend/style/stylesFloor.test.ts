@@ -167,7 +167,7 @@ describe("the button shape", () => {
 
   it("gives every button an edge under its face, and takes it away when disabled", () => {
     // The depth: a solid shadow `--btn-lift` below the face, in the edge
-    // colour, which the border shares. Hover raises the face 1 px and press
+    // color, which the border shares. Hover raises the face 1 px and press
     // sinks it until 1 px of edge is left, so the edge's bottom never moves.
     const shared = block(".btn-primary,\n  .btn-secondary,\n  .btn-danger");
     expect(shared).toContain(
@@ -212,7 +212,7 @@ describe("the button shape", () => {
  * The one look, held by a scan.
  *
  * Section 1 of the 2.0 design review found six hover recipes on three pages,
- * ten focus rings, two label trackings, a colour token that did not exist
+ * ten focus rings, two label trackings, a color token that did not exist
  * and a transition on a property that does not exist. Each rule below keeps
  * one of those from coming back on a pull request that nobody screenshots.
  */
@@ -248,11 +248,11 @@ describe("the one look", () => {
     expect([...new Set(offenders)]).toEqual([]);
   });
 
-  it("names no colour token that does not exist", () => {
+  it("names no color token that does not exist", () => {
     // `danger` was never a token, so `text-danger` painted nothing and a
     // destructive button looked like every other one. `outline` is not one
     // either (`outline-variant` is), so `border-outline/20` drew its border
-    // in the text colour.
+    // in the text color.
     const offenders = everyClassString()
       .filter(({ text }) =>
         /(?<![-\w])(?:[a-z-]+:)*(?:text|bg|ring|border|divide|fill|stroke|from|via|to|decoration)-(?:danger|outline)(?![-\w])/.test(
@@ -263,11 +263,11 @@ describe("the one look", () => {
     expect([...new Set(offenders)]).toEqual([]);
   });
 
-  it("paints with the colour tokens, never a raw palette colour", () => {
+  it("paints with the color tokens, never a raw palette color", () => {
     // `bg-emerald-500` is one green in both palettes and matches no token,
     // so the palette's health dot and the avatar ring showed one band in two
     // greens, and amber washes ignored the dark palette. A status is
-    // `success`, `warning`, `error` or `info`, and a grey is a surface or an
+    // `success`, `warning`, `error` or `info`, and a gray is a surface or an
     // ink token.
     const raw =
       /(?<![-\w])(?:[a-z-]+:)*(?:text|bg|ring|border|divide|fill|stroke|from|via|to|decoration|shadow|outline|accent|caret|placeholder)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d{2,3}(?![\w])/;
@@ -335,17 +335,17 @@ describe("the one look", () => {
     expect([...new Set(offenders)]).toEqual([]);
   });
 
-  it("draws no coloured bar down a leading edge", () => {
-    // A tinted box with a sliver of colour on its left is the stock accent of
+  it("draws no colored bar down a leading edge", () => {
+    // A tinted box with a sliver of color on its left is the stock accent of
     // generated interfaces. A selection is the tint, a category is a tone.
     // The forms: a thick left or inline-start border, a left border in a
-    // status colour, a hairline left border beside a status border colour,
+    // status color, a hairline left border beside a status border color,
     // a narrow `before:` or `after:` box with a fill, and an inset shadow.
     // A pane's neutral hairline (`border-l border-outline-variant/30`) is a
     // divider, not a bar.
     const STATUS = "(?:primary|error|warning|success|info|ai)(?:/\\d+)?";
     const thick = /(?<![-\w])(?:[a-z-]+:)*border-[ls]-(?:[1-9]|\[)/;
-    const coloured = new RegExp(
+    const colored = new RegExp(
       `(?<![-\\w])(?:[a-z-]+:)*border-[ls]-${STATUS}(?![-\\w])`,
     );
     const hairline = /(?<![-\w])(?:[a-z-]+:)*border-[ls](?![-\w])/;
@@ -358,7 +358,7 @@ describe("the one look", () => {
     const inset = /shadow-\[inset_\d+px_0/;
     const isBar = (text: string) =>
       thick.test(text) ||
-      coloured.test(text) ||
+      colored.test(text) ||
       (hairline.test(text) && statusBorder.test(text)) ||
       (pseudoBox.test(text) && pseudoFill.test(text)) ||
       inset.test(text);

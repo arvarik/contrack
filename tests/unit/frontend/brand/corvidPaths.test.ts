@@ -8,7 +8,7 @@
  * inside the tile with its inset clear, and the thinking head still turns
  * about the rig's neck.
  *
- * The brand's colours are literals, because a favicon cannot read a token.
+ * The brand's colors are literals, because a favicon cannot read a token.
  * So the last checks hold each literal to the token it copies, which leaves
  * the palette's own pairs to `style/themeContrast.test.ts`, and measure the
  * pairs only the brand has: the tile, GitHub's dark page and the name at 7:1.
@@ -81,7 +81,7 @@ describe("the corvid's paths", () => {
       );
     }
     // At 16 px the silhouette only: the C, the wing, the outer tail and the
-    // head. The chest and the inner feather merge with their neighbours.
+    // head. The chest and the inner feather merge with their neighbors.
     expect(CORVID_OPTICAL.tiny.parts).toEqual([
       "ring",
       "wing",
@@ -133,13 +133,13 @@ describe("the corvid's paths", () => {
     expect(ink.maxX).toBeLessThanOrEqual(92.3);
     expect(ink.minY).toBeGreaterThanOrEqual(8);
     expect(ink.maxY).toBeLessThanOrEqual(92);
-    // Centred top to bottom.
+    // Centered top to bottom.
     expect(ink.minY + ink.maxY).toBeCloseTo(CORVID_BOX, 0);
   });
 
   it("puts the eye in the head, between the crown and the head line", () => {
     const eye = pathBounds([CORVID_PATHS.head]);
-    // The head line starts at x 27 and runs right of the eye's centre.
+    // The head line starts at x 27 and runs right of the eye's center.
     expect(CORVID_EYE.cx).toBeGreaterThan(eye.minX);
     expect(CORVID_EYE.cx).toBeLessThan(eye.maxX);
     // Below the crown's top, above the beak's lower edge.
@@ -163,7 +163,7 @@ describe("the corvid's paths", () => {
       expect(right, size).toBeLessThanOrEqual(TILE.box - inset + 0.1);
       expect(top, size).toBeGreaterThanOrEqual(inset - 0.1);
       expect(bottom, size).toBeLessThanOrEqual(TILE.box - inset + 0.1);
-      // The wider axis fills the room, and the bird is centred on the other.
+      // The wider axis fills the room, and the bird is centered on the other.
       expect(right - left, size).toBeCloseTo(TILE.box - 2 * inset, 1);
       expect(top + bottom, size).toBeCloseTo(TILE.box, 1);
     }
@@ -193,7 +193,7 @@ describe("the corvid's paths", () => {
   });
 });
 
-describe("the brand's colours", () => {
+describe("the brand's colors", () => {
   it("copies each literal from the token it names", () => {
     // `style/themeContrast.test.ts` holds LIGHT and DARK to the stylesheet.
     expect(BRAND.mark).toBe(LIGHT.primary);

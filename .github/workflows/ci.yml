@@ -20,7 +20,7 @@ on:
 
 concurrency:
   # A newer push supersedes an in-flight run for the same ref. Tags and main
-  # are never cancelled — those produce published artifacts.
+  # are never canceled — those produce published artifacts.
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 

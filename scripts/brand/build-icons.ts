@@ -21,8 +21,8 @@
  *
  *   corvid-mark.svg, .png             the logo on a light ground
  *   corvid-mark-dark.svg, .png        the logo on a dark ground
- *   corvid-mark-black.svg             one colour, for print
- *   corvid-mark-white.svg             one colour, reversed
+ *   corvid-mark-black.svg             one color, for print
+ *   corvid-mark-white.svg             one color, reversed
  *   corvid-app-icon.svg, -1024.png    the app icon's master
  *   contrack-lockup.svg, .png         the mark and the name, light ground
  *   contrack-lockup-dark.svg, .png    the same, dark ground
@@ -31,11 +31,11 @@
  *                                     the README (see `animatedLockup.ts`)
  *   social-preview.png                1280 by 640, the repository's card
  *   corvid-optical-sizes.png          the four masters at the sizes they serve
- *   corvid-mark-variants.png          the four colour versions on their grounds
+ *   corvid-mark-variants.png          the four color versions on their grounds
  *   corvid-poses.svg, .png            the model sheet (see `poseSheet.ts`)
  *
- * Every colour here is a literal from `BRAND` and `TILE`. A favicon cannot
- * read CSS tokens, and librsvg, which sharp rasterises through, does not
+ * Every color here is a literal from `BRAND` and `TILE`. A favicon cannot
+ * read CSS tokens, and librsvg, which sharp rasterizes through, does not
  * resolve `var()` either. `tests/unit/frontend/brand/corvidPaths.test.ts`
  * checks each literal against the token it copies. Every word is an outline
  * in the app's own faces (see `type.ts`), so no render depends on the fonts
@@ -209,7 +209,7 @@ function tileSvg(options: TileOptions): string {
   ].join("\n");
 }
 
-/** The four colour versions of the logo, for the brand kit. */
+/** The four color versions of the logo, for the brand kit. */
 export const MARK_VARIANTS = {
   "corvid-mark": {
     ink: BRAND.mark,
@@ -274,7 +274,7 @@ interface LockupOptions {
 /**
  * The lockup: the mark and the name, in the proportions of `<Wordmark>`.
  * The name is set at 0.7 of the mark's height, tracked as the app's
- * headings are, and its ink is centred on the mark's. The gap is the
+ * headings are, and its ink is centered on the mark's. The gap is the
  * component's 8 px at 28 px, scaled. The box keeps the mark's own side
  * margin after the name too. Units are pixels at the PNG's size.
  */
@@ -345,7 +345,7 @@ async function lockupSvg(
 
 /**
  * A link card: the app icon at left, the name and one line of the
- * description at right, the group centred on the light surface. The link
+ * description at right, the group centered on the light surface. The link
  * preview is 1200 by 630 and the repository card 1280 by 640. Everything
  * scales with the height, so the two are one composition.
  */
@@ -477,7 +477,7 @@ export function icoFile(
     directory.writeUInt8(size >= 256 ? 0 : size, at + 1);
     directory.writeUInt8(0, at + 2); // no palette
     directory.writeUInt8(0, at + 3);
-    directory.writeUInt16LE(1, at + 4); // colour planes
+    directory.writeUInt16LE(1, at + 4); // color planes
     directory.writeUInt16LE(32, at + 6); // bits a pixel
     directory.writeUInt32LE(data.length, at + 8);
     directory.writeUInt32LE(offset, at + 12);
@@ -630,7 +630,7 @@ async function opticalSheet(): Promise<Buffer> {
     .toBuffer();
 }
 
-/** The four colour versions of the logo on the grounds they are for. */
+/** The four color versions of the logo on the grounds they are for. */
 async function variantSheet(): Promise<Buffer> {
   const cell = 200;
   const pad = 24;

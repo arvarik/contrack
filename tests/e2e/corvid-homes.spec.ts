@@ -62,7 +62,7 @@ test.describe("the bird while the AI works", () => {
     page,
     seed,
   }, testInfo) => {
-    // The bar offers to summarise only once there are three results, and
+    // The bar offers to summarize only once there are three results, and
     // only with a model to write it.
     await serveAiModels(page);
     await answerPeopleSearch(page, [

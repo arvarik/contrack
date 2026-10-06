@@ -2,7 +2,7 @@
 /**
  * The bird's other homes.
  *
- * Two behaviours that only exist because a surface asked for them, and
+ * Two behaviors that only exist because a surface asked for them, and
  * that a person would only notice if they broke:
  *
  * 1. The sign-in card's bird shakes its head at a wrong password, once per

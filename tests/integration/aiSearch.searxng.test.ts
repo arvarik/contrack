@@ -855,7 +855,7 @@ describe("research with both searches", () => {
     });
   });
 
-  it("still stops at once when the run is cancelled", async () => {
+  it("still stops at once when the run is canceled", async () => {
     firmResults();
     byCapability.deep = reply(READ_LINES, "mock-reader");
     researchHangs();

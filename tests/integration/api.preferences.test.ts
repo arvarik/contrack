@@ -89,7 +89,7 @@ describe("PATCH /api/auth/preferences", () => {
     expect(res.status).toBe(200);
     expect(res.body.preferences).toMatchObject({
       theme: "dark",
-      // Stored lower-case, so two spellings of one colour are one value.
+      // Stored lower-case, so two spellings of one color are one value.
       accent: "#7a1fa2",
       recentLimit: 0,
       dedupePreset: "conservative",
@@ -136,7 +136,7 @@ describe("PATCH /api/auth/preferences", () => {
 
   it.each([
     ["a theme that is not a theme", { theme: "neon" }],
-    ["an accent that is not a colour", { accent: "blue" }],
+    ["an accent that is not a color", { accent: "blue" }],
     ["an accent with no hash", { accent: "7a1fa2" }],
     ["a recent limit past the maximum", { recentLimit: 11 }],
     ["a recent limit below zero", { recentLimit: -1 }],

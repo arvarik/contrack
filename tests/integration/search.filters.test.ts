@@ -215,7 +215,7 @@ describe("facets run before the limit", () => {
     ]);
   });
 
-  it("keeps a filtered contact the nearest neighbours would crowd out", () => {
+  it("keeps a filtered contact the nearest neighbors would crowd out", () => {
     // Every engineer sits on the query vector. Rhea Quill points the other way.
     const unit = (sign: number) => {
       const v = new Float32Array(384);

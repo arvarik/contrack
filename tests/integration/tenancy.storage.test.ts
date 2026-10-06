@@ -91,7 +91,7 @@ describe("vec0 table DDL", () => {
       ).sql;
       expect(actual, table).toContain("PARTITION KEY");
       // Compare what SQLite stored against what db.ts would have written,
-      // ignoring the whitespace SQLite normalises away.
+      // ignoring the whitespace SQLite normalizes away.
       const squash = (s: string) => s.replace(/\s+/g, " ").trim();
       expect(squash(actual)).toBe(
         squash(vecTableDdl(table, dimension, vecElementFor(table))),

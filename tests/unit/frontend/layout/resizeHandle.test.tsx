@@ -252,7 +252,7 @@ describe("ResizeHandle", () => {
     expect(holdStyle()).toBeUndefined();
   });
 
-  it("ends the drag when the pointer is cancelled or the capture is lost", () => {
+  it("ends the drag when the pointer is canceled or the capture is lost", () => {
     render(<Layout />);
     const edge = separator();
     fireEvent.pointerDown(edge, pointer(400));

@@ -63,17 +63,17 @@ Open **Settings → Network and contacts**.
 The relationship score is a number from 0 to 100. Only tracked contacts have one. The ring around the picture shows it:
 
 - The length of the arc is the score. A score of 72 fills 72 percent of the ring, clockwise from the top.
-- The colour of the arc is the band.
+- The color of the arc is the band.
 
-| Band        | Score     | Colour |
-| ----------- | --------- | ------ |
-| **Strong**  | 70 to 100 | Green  |
-| **Fading**  | 40 to 69  | Amber  |
-| **At risk** | 0 to 39   | Red    |
+| Band        | Score     | Color |
+| ----------- | --------- | ----- |
+| **Strong**  | 70 to 100 | Green |
+| **Fading**  | 40 to 69  | Amber |
+| **At risk** | 0 to 39   | Red   |
 
 - A contact that nobody tracks has no ring. The picture fills the whole circle.
 - A tracked contact with no logged interaction shows an empty ring. Its tooltip says "No interactions yet".
-- Colour is never the only sign. The tooltip says the score in words, for example "Score 72, strong".
+- Color is never the only sign. The tooltip says the score in words, for example "Score 72, strong".
 
 ### See why a contact has its score
 
@@ -167,7 +167,7 @@ The **Completed** line says "Nothing completed yet", or for example "3 completed
 
 **Keeping up** shows the people you track. A bar splits them into **Strong**, **Fading**, **At risk** and **No interactions yet**, and each part of the legend opens that group on the Tracked contacts page. The large number says how many are within their cadence, for example "31 of 42 within cadence". When anybody is past cadence, **11 to catch up** jumps to **Catch up**. After four weeks of weekly score records, **Rising** and **Cooling** each show up to three tracked contacts whose score moved by 3 or more in four weeks. **Manage** opens the Tracked contacts page. With no one tracked, the card says "No one is tracked yet" and offers **Choose people**.
 
-**Activity** shows the last 12 weeks as squares, one for each day. A stronger colour means more interactions. The columns start on the day that **Week starts on** sets in **Settings → Network and contacts**. Point at a square, or tap it, to read the day, for example "Wed, Sep 17: 2 notes, 1 call". Under the squares, a line shows the weekly totals, the last four weeks against the four before, and this week by type.
+**Activity** shows the last 12 weeks as squares, one for each day. A stronger color means more interactions. The columns start on the day that **Week starts on** sets in **Settings → Network and contacts**. Point at a square, or tap it, to read the day, for example "Wed, Sep 17: 2 notes, 1 call". Under the squares, a line shows the weekly totals, the last four weeks against the four before, and this week by type.
 
 **Daily insight** shows one observation that AI writes about your network. AI writes a new one each day, and again after your contacts change. Without an insight, the card says why. With no Fast model set up, an admin reads "Set up a Fast model to get one" and a member reads "Your admin has not set up AI yet". When the provider fails, the card reads "Could not write today's insight" and offers **Try again**. An account with AI off reads "AI is off for your account". See [Connect a provider](ai.md#connect-a-provider).
 

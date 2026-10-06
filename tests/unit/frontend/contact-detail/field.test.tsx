@@ -701,7 +701,7 @@ describe("an add form opened from elsewhere on the page", () => {
     expect(screen.getByRole("button", { name: "Add email" })).toBeTruthy();
   });
 
-  it("opens Location for the Research card's Add a city, and Email for its work email, both labelled work", () => {
+  it("opens Location for the Research card's Add a city, and Email for its work email, both labeled work", () => {
     const done = vi.fn();
     drawCard(
       { addresses: [], emails: [] },

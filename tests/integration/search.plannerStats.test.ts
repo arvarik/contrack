@@ -3,7 +3,7 @@
 // =============================================================================
 // SQLite plans from the row counts of its last ANALYZE. After a server indexed
 // 5,800 contacts, the counts said "2 rows" for 22,000 passages, the planner put
-// `search_passages` first, and the k = 300 nearest-neighbour search ran once
+// `search_passages` first, and the k = 300 nearest-neighbor search ran once
 // for every passage: 145 seconds for a question that takes 60 ms. These tests
 // recreate that state, counts from a tiny table and then a bulk insert, and
 // read the plan the real queries get. A plan is deterministic where a timing
@@ -73,7 +73,7 @@ function firstStep(run: () => void): string {
 describe("the passage queries, with statistics from before a bulk index", () => {
   it("start from the vector search and from the full-text index", () => {
     const scope = scopeForOwnerId(ownerId);
-    // Starting from `search_passages` ran the nearest-neighbour search once
+    // Starting from `search_passages` ran the nearest-neighbor search once
     // for each of its rows, and the keyword query scanned the contacts first.
     expect(
       firstStep(() => findPassageNeighbors(scope, new Float32Array(384))),

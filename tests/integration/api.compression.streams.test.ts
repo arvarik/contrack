@@ -347,7 +347,7 @@ describe("event streams", () => {
   it("answers an MCP client on its event stream as it is", async () => {
     // tools/list is about 10 KB, far over the threshold, and the MCP SDK
     // answers it as an event stream. The SDK also marks its streams
-    // `Cache-Control: no-transform`, which the package honours on its own,
+    // `Cache-Control: no-transform`, which the package honors on its own,
     // so this holds even without the stream rule. It is here for the route.
     const stream = await open(
       "POST",

@@ -1871,7 +1871,7 @@ describe("POST /api/search/synthesize", () => {
     );
   });
 
-  it("refuses a mixed list rather than summarising the half it owns", async () => {
+  it("refuses a mixed list rather than summarizing the half it owns", async () => {
     // A contact created here, rather than one from the seed, because earlier
     // tests in this file archive and delete B's rows. The two calls below
     // differ by one id, so the 409 can only be about ownership.
@@ -2436,7 +2436,7 @@ describe("AI stats count the caller's own work", () => {
   it("shows the shared cache counters to an admin and to nobody else", async () => {
     // The tiers are one in-process cache for the whole instance, so their hit
     // and miss counts describe everybody's traffic. A member's own spending is
-    // theirs; the instance's cache behaviour is not.
+    // theirs; the instance's cache behavior is not.
     //
     // Every actor here is a member: the local owner account boot creates takes
     // the admin role, and `createUser` gives it to the first account only.

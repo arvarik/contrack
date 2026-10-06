@@ -53,7 +53,7 @@ phone, a contact opens over the list.
 | **Archive**                    | Archives the selection, with **Undo**.                                                                                                                   |
 | **Add to list**                | Adds the selection to a list.                                                                                                                            |
 | **Edit field**                 | Sets **Role / title**, **Company**, **Industry** or **Location** for all of them, with **Undo**.                                                         |
-| **Colour**                     | Sets the page colour of each contact.                                                                                                                    |
+| **Color**                      | Sets the page color of each contact.                                                                                                                     |
 | **Copy CSV**                   | Copies the name, role, company, location, first email and first phone to the clipboard.                                                                  |
 | **Delete**                     | Moves the selection to the trash, with **Undo**.                                                                                                         |
 
@@ -112,7 +112,7 @@ returns to the same place in the list.
 
 The **Contact actions** menu, the three dots, holds these items in order:
 
-1. **Change colour**: paints this contact's page only, in Blue, Emerald,
+1. **Change color**: paints this contact's page only, in Blue, Emerald,
    Amber, Rose, Pink or Teal.
 2. **Enrich contact** and **Enrich deeply**: contact research at the Standard
    or the Deep depth, when AI is on for you. See
@@ -131,9 +131,9 @@ The **Contact actions** menu, the three dots, holds these items in order:
 
 | Field              | What it holds                                                                                     |
 | ------------------ | ------------------------------------------------------------------------------------------------- |
-| **Location**       | Addresses, each labelled home, work or other. The first one places the map pin.                   |
-| **Email**          | Email addresses, each labelled work, personal or other.                                           |
-| **Phone**          | Phone numbers, each labelled mobile, work, home or other.                                         |
+| **Location**       | Addresses, each labeled home, work or other. The first one places the map pin.                    |
+| **Email**          | Email addresses, each labeled work, personal or other.                                            |
+| **Phone**          | Phone numbers, each labeled mobile, work, home or other.                                          |
 | **Birthday**       | A day, with a year or without: "May 14", "May 14, 1990". A badge shows when it is within 30 days. |
 | **Industry**       | One industry. The box suggests common ones.                                                       |
 | **Preferences**    | Short notes, such as "Tea" or "Morning calls".                                                    |

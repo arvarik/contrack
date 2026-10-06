@@ -4,7 +4,7 @@
  * Checks:
  * 1. /settings/duplicates:
  *    - Full-width Segmented control ("Check" and "Manual merge") unclipped and unwrapped.
- *    - "Merge history" is a labelled link in the header's corner.
+ *    - "Merge history" is a labeled link in the header's corner.
  *    - expectPageAccessible and expectFloors hold.
  * 2. /search:
  *    - The coverage row is shown under the search box before a search when < 100%.

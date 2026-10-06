@@ -7,14 +7,14 @@ tests win, and this file needs a fix.
 
 ## 1. Visual language
 
-### Colour
+### Color
 
 - One primary (`--color-primary`, `#006a91` light, `#6ec6ee` dark) for actions,
-  links, selection and focus. A contact's colour replaces the primary on that
+  links, selection and focus. A contact's color replaces the primary on that
   contact's page only. A picked accent derives its own readable palette
   (`src/lib/theme.ts`).
 - Warm paper surfaces, from `surface` up to `surface-container-highest`. Text
-  is `on-surface` or `on-surface-variant`. Semantic colours: `success`,
+  is `on-surface` or `on-surface-variant`. Semantic colors: `success`,
   `warning`, `error`, `info`.
 - Text on a primary wash (`bg-primary/10` to `/20`) is `text-on-primary-wash`,
   never `text-primary`, so it clears AA. `themeContrast.test.ts` holds every
@@ -23,12 +23,12 @@ tests win, and this file needs a fix.
   data (enriched interests and tags, the AI note glyph), never AI features or
   controls, which use the primary. No vibe or accent preset sits within 30
   degrees of its hue.
-- ❌ `violet-*`, `fuchsia-*`, `purple-*`, `indigo-*`, or any raw palette colour
+- ❌ `violet-*`, `fuchsia-*`, `purple-*`, `indigo-*`, or any raw palette color
   for a category.
 
 ### Tones
 
-A category colour comes from one map in `src/lib/styles.ts`, so a colour means
+A category color comes from one map in `src/lib/styles.ts`, so a color means
 the same thing everywhere: `TONE_DOT` (a 6 px dot), `TONE_WASH` (a chip or tile
 on its 10 percent wash), `TONE_TEXT` (the ink).
 
@@ -127,7 +127,7 @@ lift. The Network list is the one exception: its rows rise toward the pointer
 - A selected row is `SELECTED_ROW` (a 10 percent primary tint) with its name in
   `text-on-primary-wash`. A selected pill or chip is `SELECTED_TINT`. A radio
   option adds a `RadioDot`, through `ChoiceGroup` or `Segmented`.
-- ❌ A coloured bar down a box's edge, a ring on a selected row, a filled
+- ❌ A colored bar down a box's edge, a ring on a selected row, a filled
   primary pill for a selection.
 - **One focus ring**: the base layer's 2 px primary outline. A composite field
   uses `focus-frame`. ❌ `focus:ring-*`, `focus-visible:ring-*`,
@@ -191,7 +191,7 @@ touch screens. ❌ `hit-area` on a form field or inside `overflow-hidden`.
 - No hover-only control on a touch screen, at any width. A control that waits
   for hover hides only for a mouse (`pointer-fine:opacity-0`,
   `sm:pointer-fine:w-0`), and every action shows at rest on a touch screen.
-- An icon-only control is labelled with `RailTooltip` (`side="bottom"` under
+- An icon-only control is labeled with `RailTooltip` (`side="bottom"` under
   a header button, `bottom-end` at a header's right end). A mouse sees the
   label on hover and a finger on a long press. An icon-only `ActionMenu`
   passes `title`, and the menu draws the tooltip.
@@ -280,11 +280,11 @@ The relationship score belongs to the people a person chose to track. Every
 surface asks `scoreView` in `shared/scoreBand.ts`, which answers one of three
 states:
 
-| State       | Shows                                                                       |
-| ----------- | --------------------------------------------------------------------------- |
-| `untracked` | No ring, no chip, no words                                                  |
-| `unscored`  | The empty track and "No interactions yet"                                   |
-| `scored`    | The arc in its band colour (Strong, Fading, At risk) and "Score 72, strong" |
+| State       | Shows                                                                      |
+| ----------- | -------------------------------------------------------------------------- |
+| `untracked` | No ring, no chip, no words                                                 |
+| `unscored`  | The empty track and "No interactions yet"                                  |
+| `scored`    | The arc in its band color (Strong, Fading, At risk) and "Score 72, strong" |
 
 - An untracked contact is never at risk, and no row speaks a score for it.
 - One control sets the flag on a contact page: `TrackButton`, with the
@@ -368,6 +368,6 @@ the Undo.
 - ❌ A swipe card for a decision that changes data. It hides the comparison
   and rewards speed. A swipe may speed up a row action that a button also
   does, never replace it.
-- The AI colour and glyph mark a reason a model wrote. A reason from a fixed
+- The AI color and glyph mark a reason a model wrote. A reason from a fixed
   rule takes the neutral ink and the glyph of what matched: an envelope for an
   email, a phone for a number.

@@ -75,7 +75,7 @@ run it on their own machine or server, alone or with a few trusted accounts.
 
 ### Calm, clear design
 
-- Surfaces, not lines. One primary colour for action, one colour that means
+- Surfaces, not lines. One primary color for action, one color that means
   "a model wrote this".
 - Plain words, one name for each place, sentence case everywhere.
 - Motion is small and purposeful, and reduced motion always wins.

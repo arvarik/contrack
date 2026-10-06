@@ -209,7 +209,7 @@ const MUTED = BRAND.onSurfaceVariant;
 
 const num = (n: number) => String(Math.round(n * 100) / 100);
 
-/** The middle of a drawing, for centring a cell on it. */
+/** The middle of a drawing, for centering a cell on it. */
 function middle(pose: CorvidPose, ring: boolean): Vec {
   if (ring) return [50, 50];
   const d = drawCorvid(pose);

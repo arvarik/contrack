@@ -19,7 +19,7 @@
 //    deterministic numbers. With a provider configured, recall is higher than
 //    anything in this file.
 //
-// 2. THE CORPUS IS ADVERSARIAL. A third of the labelled pairs are hard
+// 2. THE CORPUS IS ADVERSARIAL. A third of the labeled pairs are hard
 //    negatives written to be as confusing as they can be: a father and a son
 //    at one firm, a couple on one phone line, two people on a team alias.
 //    Precision here is precision against that, not precision on somebody's
@@ -113,7 +113,7 @@ describe("the corpus", () => {
         reachRoutes(byKey.get(pair.a)!, byKey.get(pair.b)!).length === 0,
     );
 
-    // A labelled duplicate the engine has no route to would lower recall for
+    // A labeled duplicate the engine has no route to would lower recall for
     // ever and name no bug.
     expect(unreachable.map((p) => `${p.a} ↔ ${p.b}`)).toEqual([]);
   });

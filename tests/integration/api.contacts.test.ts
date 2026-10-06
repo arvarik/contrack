@@ -212,7 +212,7 @@ describe("social links saved without a platform", () => {
     socialLinks: { url: string; platform: string }[];
   }) => Object.fromEntries(body.socialLinks.map((l) => [l.url, l.platform]));
 
-  it("are labelled by their host when a contact is created", async () => {
+  it("are labeled by their host when a contact is created", async () => {
     const res = await request(app)
       .post("/api/contacts")
       .send({
@@ -231,7 +231,7 @@ describe("social links saved without a platform", () => {
     });
   });
 
-  it("are labelled by their host when a contact is updated, and keep a platform that was sent", async () => {
+  it("are labeled by their host when a contact is updated, and keep a platform that was sent", async () => {
     const created = await request(app)
       .post("/api/contacts")
       .send({ name: "Link Updater" });

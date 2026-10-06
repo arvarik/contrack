@@ -150,10 +150,10 @@ describe("the worker thread", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Cancelling
+// Canceling
 // ---------------------------------------------------------------------------
 
-describe("cancelling", () => {
+describe("canceling", () => {
   it("cancels an embedding queued through runOnWorker without starting a fallback", async () => {
     const controller = new AbortController();
     const fallback = vi.fn(async () => "fallback");
@@ -176,7 +176,7 @@ describe("cancelling", () => {
   it("drops a job that is still queued, without sending it", async () => {
     // Submitting chains through microtasks and `cancelJob` is synchronous, so
     // the second job is certainly still in the queue here. That is what makes
-    // this deterministic: an earlier version cancelled a job that might have
+    // this deterministic: an earlier version canceled a job that might have
     // already finished and accepted either outcome, which is a test that
     // cannot fail.
     startJob({ kind: "embed", texts: [], batchSize: 8 });
@@ -194,8 +194,8 @@ describe("cancelling", () => {
 
     cancelJob(id);
 
-    // Cancelling one job is not cancelling the queue, and the job behind the
-    // cancelled one still runs rather than being stranded.
+    // Canceling one job is not canceling the queue, and the job behind the
+    // canceled one still runs rather than being stranded.
     await expect(first).resolves.toMatchObject({ kind: "embed" });
     await expect(third).resolves.toMatchObject({ kind: "embed" });
   });

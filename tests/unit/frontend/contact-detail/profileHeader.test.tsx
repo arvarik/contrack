@@ -328,14 +328,14 @@ describe("the contact header", () => {
     expect(screen.getByRole("button", { name: "Add to Network" })).toBeTruthy();
   });
 
-  it("has no top-level colour, archive, enrichment or briefing buttons", () => {
+  it("has no top-level color, archive, enrichment or briefing buttons", () => {
     mount(<ProfileHeader {...makeProps()} />);
     for (const name of [/colou?r/i, /archive/i, /enrich/i, /briefing/i]) {
       expect(screen.queryByRole("button", { name })).toBeNull();
     }
   });
 
-  it("lists the eight contact actions in order, the two enrich depths after the colour", () => {
+  it("lists the eight contact actions in order, the two enrich depths after the color", () => {
     mount(<ProfileHeader {...makeProps()} />);
     fireEvent.click(screen.getByRole("button", { name: "Contact actions" }));
     const menu = screen.getByRole("menu", { name: "Contact actions" });
@@ -470,7 +470,7 @@ describe("the contact header", () => {
     });
   });
 
-  it("opens the colour picker from the kebab and returns focus on Escape", () => {
+  it("opens the color picker from the kebab and returns focus on Escape", () => {
     const props = makeProps();
     mount(<ProfileHeader {...props} />);
     const kebab = screen.getByRole("button", { name: "Contact actions" });
@@ -495,7 +495,7 @@ describe("the contact header", () => {
     });
     expect(emerald.getAttribute("aria-checked")).toBe("true");
     expect(document.activeElement).toBe(emerald);
-    // Choosing keeps the picker open, so colours can be compared.
+    // Choosing keeps the picker open, so colors can be compared.
     expect(screen.getByRole("radiogroup", { name: "Contact colour" })).toBe(
       group,
     );

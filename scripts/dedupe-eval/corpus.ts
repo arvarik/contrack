@@ -642,7 +642,7 @@ function transpose(word: string): string {
  *
  * The guard is not theoretical. Taking the last three letters of the other
  * person's name spelled the base name straight back whenever the two happened
- * to end alike: "Edw" and Gaspard's "ard" rebuilt "Edward", so a pair labelled
+ * to end alike: "Edw" and Gaspard's "ard" rebuilt "Edward", so a pair labeled
  * `siblings` held two records of one name and measured nothing.
  */
 function siblingFirstName(first: string, other: string): string {
@@ -1233,7 +1233,7 @@ const OTHER_LAST_POOL =
  *
  * The shared-inbox recipe builds its team alias from the company name, so two
  * rows of that recipe sharing a company share an alias, and the corpus grows
- * an email link between two people nobody labelled. One more company than
+ * an email link between two people nobody labeled. One more company than
  * there are rows keeps the company unique within a recipe.
  */
 const BASE_COMPANY_POOL =
@@ -1261,7 +1261,7 @@ const BASES_PER_RECIPE = 13;
  *
  * Both pools cycling independently was the first attempt, and
  * `validateCorpus` refused it: two indices that agree modulo both pool lengths
- * produce one name, which put two unlabelled records of the same person in a
+ * produce one name, which put two unlabeled records of the same person in a
  * corpus whose whole purpose is that the labels are complete.
  */
 function baseFor(index: number): BasePerson {
@@ -1300,7 +1300,7 @@ function baseFor(index: number): BasePerson {
  *
  * Advancing inside `FORMAL_FIRSTS` does not fix it. `validateCorpus` refused
  * that: "Edward" beside the base surname "Hatherleigh" is a name a later base
- * index owns, so the corpus grew an unlabelled duplicate. The second person
+ * index owns, so the corpus grew an unlabeled duplicate. The second person
  * needs a first-name pool of its own, which is what `OTHER_FIRST_POOL` is.
  */
 function otherFor(index: number): BasePerson {
@@ -1579,7 +1579,7 @@ export function validateCorpus(corpus: Corpus): void {
   for (const pair of negatives) named.add(pairId(pair.a, pair.b));
 
   // An accidental identity overlap between two groups. Either it is a
-  // duplicate nobody labelled, or it is a near miss nobody named.
+  // duplicate nobody labeled, or it is a near miss nobody named.
   const byName = new Map<string, EvalContact[]>();
   const byEmail = new Map<string, EvalContact[]>();
   const byPhone = new Map<string, EvalContact[]>();
@@ -1623,7 +1623,7 @@ export function validateCorpus(corpus: Corpus): void {
 
   // A hard negative that carries one name twice.
   //
-  // The check above cannot see this, because a labelled negative is allowed to
+  // The check above cannot see this, because a labeled negative is allowed to
   // share a name and two of these kinds are built to. The rest are not, and a
   // pair of identical names under one of those labels measures nothing: no
   // signal separates two records that agree on every field, so the gate counts

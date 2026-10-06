@@ -422,12 +422,12 @@ describe.each([GEMINI, OPENAI, ANTHROPIC, COMPAT])(
       await expect(run).rejects.toMatchObject({ code: "CANCELLED" });
       await settle();
       expect(pieces).toEqual(["Ada "]);
-      // The SDK call is cancelled too, and nothing falls back to generate.
+      // The SDK call is canceled too, and nothing falls back to generate.
       expect(c.lastSignal()?.aborted).toBe(true);
       expect(c.plainCalls()).toBe(0);
     });
 
-    it("starts nothing for a caller that has already cancelled", async () => {
+    it("starts nothing for a caller that has already canceled", async () => {
       const controller = new AbortController();
       controller.abort();
       const { pieces, onDelta } = collect();
