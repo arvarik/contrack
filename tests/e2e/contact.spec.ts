@@ -1410,18 +1410,18 @@ test.describe("phone", () => {
     }
   });
 
-  test("the narrow header keeps Track as the glyph and the chevron, with the words in the name", async ({
+  test("the narrow header shows Track as the glyph, the cadence and the chevron, with the words in the name", async ({
     page,
     seed,
   }) => {
     await page.goto(`/contact/${seed.byName("Ada Lovelace").id}`);
     await expect(contactHeading(page, "Ada Lovelace")).toBeVisible();
 
-    // The cadence is in the name and the tooltip, not in words on screen.
+    // The cadence in a word, and in full in the name and the tooltip.
     const tracked = page.getByRole("button", {
       name: "Tracking quarterly, change or stop",
     });
-    await expect(tracked).toHaveText("");
+    await expect(tracked).toHaveText("Quarterly");
     await expect(tracked).toHaveAttribute(
       "title",
       "Tracking quarterly, change or stop",

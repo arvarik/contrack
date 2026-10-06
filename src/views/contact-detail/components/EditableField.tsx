@@ -59,8 +59,11 @@ export function EditableField({
   inputLabel,
   kind,
   href,
+  display,
 }: {
   value: string | null;
+  /** What shows at rest, when it is not the value: a headline's new part. */
+  display?: string;
   /**
    * Saves the value. A promise that resolves to `false` or to an `Error`
    * means the save failed, and the field shows the error's message.
@@ -263,7 +266,9 @@ export function EditableField({
         className,
       )}
     >
-      <span className="min-w-0 break-words">{value || placeholder}</span>
+      <span className="min-w-0 break-words">
+        {display ?? (value || placeholder)}
+      </span>
       {saved ? (
         <Check className="w-3.5 h-3.5 text-success" aria-label="Saved" />
       ) : (

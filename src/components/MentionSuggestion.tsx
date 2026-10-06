@@ -106,7 +106,7 @@ const MentionList = forwardRef<
               </span>
             )}
             {item.isGhost && (
-              <span className={cn(LABEL, "ml-auto")}>Ghost</span>
+              <span className={cn(LABEL, "ml-auto")}>Not added</span>
             )}
           </button>
         );

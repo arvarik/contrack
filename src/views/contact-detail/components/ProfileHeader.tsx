@@ -383,49 +383,71 @@ const QUICK_ACTION =
  * The narrow header's last row: what a person with a phone in hand opens a
  * contact for.
  *
- * 1. Call and Message use the primary phone, the first in Details. Email
- *    uses the primary email. A tile shows only when the contact has the
- *    value, so no tile leads nowhere.
+ * 1. Call and Message use the phone, and with two or more numbers they ask
+ *    which one first. Email uses the primary email. A tile shows only when
+ *    the contact has the value, so no tile leads nowhere.
  * 2. Log note opens the quick note sheet for this contact (`openQuickNote`).
  *    The composer is on the Timeline tab, and this works from every tab.
  *    A ghost has no row: its one step is Promote to contact.
  * 3. The tiles share the row equally, on the page's primary wash, so they
  *    take the contact's own colour. Each is at least 52 px tall.
+ * 4. Only on a touch screen. A computer with a narrow window has no use for
+ *    tel: and sms: links, and has the composer on the page.
  */
 const QuickActions = ({ contact }: { contact: Contact }) => {
-  const phone = contact.phones?.[0]?.phone;
+  const phones = (contact.phones ?? []).filter((p) => p.phone);
   const email = contact.emails?.[0]?.email;
-  const links: { label: string; href: string | null; Icon: LucideIcon }[] = [
-    { label: "Call", href: phone ? telHref(phone) : null, Icon: Phone },
-    {
-      label: "Message",
-      href: phone ? smsHref(phone) : null,
-      Icon: MessageCircle,
-    },
-    { label: "Email", href: email ? mailtoHref(email) : null, Icon: Mail },
-  ];
+  const tile = cn(QUICK_ACTION, TONE_WASH.primary);
+  /** A tile that dials or texts: a link for one number, a chooser for more. */
+  const phoneTile = (label: string, Icon: LucideIcon, href: typeof telHref) => {
+    const numbers = phones.flatMap((p) => {
+      const to = href(p.phone);
+      return to ? [{ ...p, to }] : [];
+    });
+    const face = (
+      <>
+        <Icon aria-hidden="true" className="w-5 h-5" />
+        {label}
+      </>
+    );
+    if (numbers.length > 1)
+      return (
+        <ActionMenu
+          label={`${label}, choose a number`}
+          className="flex-1 basis-0 min-w-0 max-w-36"
+          triggerClassName={cn(tile, "w-full max-w-none")}
+          triggerContent={face}
+          items={numbers.map((p, i) => ({
+            id: `${i}`,
+            label: p.label ? `${p.phone}, ${p.label}` : p.phone,
+            onSelect: () => window.location.assign(p.to),
+          }))}
+        />
+      );
+    return numbers[0] ? (
+      <a href={numbers[0].to} className={tile}>
+        {face}
+      </a>
+    ) : null;
+  };
   return (
     <div
       role="group"
       aria-label="Quick actions"
-      className="mt-3 flex items-stretch gap-2"
+      className="mt-3 hidden pointer-coarse:flex items-stretch gap-2"
     >
-      {links.map(({ label, href, Icon }) =>
-        href ? (
-          <a
-            key={label}
-            href={href}
-            className={cn(QUICK_ACTION, TONE_WASH.primary)}
-          >
-            <Icon aria-hidden="true" className="w-5 h-5" />
-            {label}
-          </a>
-        ) : null,
+      {phoneTile("Call", Phone, telHref)}
+      {phoneTile("Message", MessageCircle, smsHref)}
+      {email && (
+        <a href={mailtoHref(email)} className={tile}>
+          <Mail aria-hidden="true" className="w-5 h-5" />
+          Email
+        </a>
       )}
       <button
         type="button"
         onClick={() => openQuickNote(contact.id)}
-        className={cn(QUICK_ACTION, TONE_WASH.primary)}
+        className={tile}
       >
         <PenLine aria-hidden="true" className="w-5 h-5" />
         Log note
@@ -437,6 +459,27 @@ const QuickActions = ({ contact }: { contact: Contact }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // ContactIntro: the headline and the AI summary
 // ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * What a headline says that the role and company line above it does not.
+ * "Partner at Northwind | Investor" under "Partner at Northwind" is
+ * "Investor". Each part between | · • is dropped when it is only the role,
+ * the company and small words. Null when nothing is left.
+ */
+export function newInHeadline({
+  headline,
+  role,
+  company,
+}: Pick<Contact, "headline" | "role" | "company">): string | null {
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const known = [role, company].filter(Boolean).map((s) => norm(s!));
+  const parts = (headline ?? "").split(/\s*[|·•]\s*/).filter((part) => {
+    let rest = norm(part);
+    for (const k of known) rest = rest.replace(k, "");
+    return !/^(at|of|and|for)?$/.test(rest);
+  });
+  return parts.length ? parts.join(" · ") : null;
+}
 
 /**
  * The headline and the summary, when they add something.
@@ -453,31 +496,17 @@ export const ContactIntro = ({
   onUpdate: (field: string, val: string) => void;
   className?: string;
 }) => {
-  let headline: React.ReactNode = null;
-  if (contact.headline) {
-    // Hide the headline when it only repeats the role and company, which the
-    // line above already shows.
-    const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-    const headlineNorm = normalize(contact.headline);
-    const isDuplicate =
-      headlineNorm ===
-        normalize(`${contact.role || ""} at ${contact.company || ""}`) ||
-      headlineNorm ===
-        normalize(`${contact.role || ""} ${contact.company || ""}`) ||
-      (contact.role && headlineNorm === normalize(contact.role)) ||
-      (contact.company && headlineNorm === normalize(contact.company));
-    if (!isDuplicate) {
-      headline = (
-        <div className="text-base text-on-surface-variant font-medium italic">
-          <EditableField
-            value={contact.headline}
-            onSave={(val) => onUpdate("headline", val)}
-            placeholder="Add headline"
-          />
-        </div>
-      );
-    }
-  }
+  const fresh = newInHeadline(contact);
+  const headline = fresh && (
+    <div className="text-base text-on-surface-variant font-medium italic">
+      <EditableField
+        value={contact.headline}
+        display={fresh}
+        onSave={(val) => onUpdate("headline", val)}
+        placeholder="Add headline"
+      />
+    </div>
+  );
 
   if (!headline && !contact.aiSummary) return null;
   return (
@@ -901,15 +930,15 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                         : connectorSource.platform
                     : null;
                   const ghostText = sourceName
-                    ? `Seen ${count} time${count === 1 ? "" : "s"} in your ${sourceName}. Waiting to be populated`
-                    : "Created automatically from a mention. Waiting to be populated";
+                    ? `Seen ${count} time${count === 1 ? "" : "s"} in your ${sourceName}, and not added yet`
+                    : "Named in a note, and not added yet";
 
                   return (
                     <div className="absolute -top-3 -right-3 flex items-center justify-center w-8 h-8 rounded-full bg-surface-container-highest border-2 border-surface-container-lowest shadow-sm z-20 group/ghosticon cursor-help">
                       <Sparkles className="w-4 h-4 text-primary opacity-80 group-hover/ghosticon:opacity-100 transition-opacity" />
                       <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-surface text-on-surface text-xs font-medium p-2.5 rounded-xl shadow-lg border border-surface-container opacity-0 pointer-events-none group-hover/ghosticon:opacity-100 transition-all z-50 text-center leading-relaxed">
                         <strong className="block text-primary mb-0.5">
-                          Ghost profile
+                          Not in your network
                         </strong>
                         {ghostText}
                       </div>
@@ -921,12 +950,17 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
 
           {/* Identity */}
           <div className="flex-1 min-w-0 w-full">
-            {/* The name, then the actions. On a narrow screen the actions
-                wrap under the name. */}
+            {/* The name, then the actions. Wide, the actions keep the top
+                right corner however long the name. Narrow, they wrap under
+                a name that needs the line, so a name breaks between its
+                words: beside Track at 320 px, "Whitfield" broke at a
+                letter. */}
             <div
               className={cn(
-                "flex items-center justify-between",
-                narrow ? "gap-2" : "flex-wrap gap-x-4 gap-y-3",
+                "flex justify-between",
+                narrow
+                  ? "flex-wrap items-center gap-x-2 gap-y-1"
+                  : "items-start gap-4",
               )}
             >
               {/*
@@ -941,11 +975,11 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                 tabIndex={-1}
                 className={cn(
                   "min-w-0 font-extrabold font-headline tracking-tight text-on-surface flex flex-wrap items-center gap-x-2 gap-y-1 py-0.5 outline-none",
-                  narrow ? "text-2xl" : "text-4xl",
+                  narrow ? "text-2xl" : "text-4xl flex-1",
                 )}
               >
-                {/* A long name wraps inside its own box, at any letter if
-                    it must, and never runs under Track at 375 px. */}
+                {/* A long name wraps between its words, and inside a word
+                    only when one word is wider than the whole line. */}
                 <EditableField
                   value={contact.name}
                   onSave={(val) => onUpdate("name", val)}
@@ -971,19 +1005,19 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                     onClick={() => {
                       promoteGhost(contact.id, {
                         onSuccess: () =>
-                          toast.success(`${contact.name} promoted to network!`),
+                          toast.success(`${contact.name} added to Network`),
                       });
                     }}
                     disabled={promotePending}
                     className="btn-secondary"
                   >
                     <Sparkles aria-hidden="true" className="w-4 h-4" />
-                    {promotePending ? "Promoting…" : "Promote to contact"}
+                    {promotePending ? "Adding…" : "Add to Network"}
                   </button>
                 )}
 
                 {/* Track: a menu that says the cadence while tracked. A
-                    ghost cannot be tracked: it shows Promote to contact. */}
+                    ghost cannot be tracked: it shows Add to Network. */}
                 {!contact.isGhost && (
                   <TrackButton contact={contact} compact={narrow} />
                 )}
@@ -1077,14 +1111,14 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                 onClick={() => {
                   promoteGhost(contact.id, {
                     onSuccess: () =>
-                      toast.success(`${contact.name} promoted to network!`),
+                      toast.success(`${contact.name} added to Network`),
                   });
                 }}
                 disabled={promotePending}
                 className="btn-secondary mt-3"
               >
                 <Sparkles aria-hidden="true" className="w-4 h-4" />
-                {promotePending ? "Promoting…" : "Promote to contact"}
+                {promotePending ? "Adding…" : "Add to Network"}
               </button>
             )}
 

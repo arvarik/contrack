@@ -92,6 +92,7 @@ vi.mock("../../../../src/contexts/PreferencesContext", async (original) => {
 import { depthTime } from "../../../../src/lib/researchDepth";
 import {
   ContactIntro,
+  newInHeadline,
   ProfileHeader,
   type ProfileHeaderProps,
 } from "../../../../src/views/contact-detail/components/ProfileHeader";
@@ -311,9 +312,7 @@ describe("the contact header", () => {
       />,
     );
     expect(screen.queryByRole("button", { name: /^Track/ })).toBeNull();
-    expect(
-      screen.getByRole("button", { name: "Promote to contact" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add to Network" })).toBeTruthy();
   });
 
   it("has no top-level colour, archive, enrichment or briefing buttons", () => {
@@ -401,8 +400,8 @@ describe("the contact header", () => {
     const pencil = screen.getByRole("button", { name: "Change avatar" });
     const chip = screen.getByText("Archived");
     // The badge holds the tooltip that names it.
-    const badge =
-      screen.getByText("Ghost profile").parentElement!.parentElement!;
+    const badge = screen.getByText("Not in your network").parentElement!
+      .parentElement!;
     // The pencil holds the lower right corner, the chip sits under the
     // avatar, and the ghost badge holds the upper right corner.
     expect(pencil.className).toContain("bottom-0");
@@ -622,12 +621,12 @@ describe("the contact actions", () => {
   it("promotes a ghost with its own button", () => {
     const props = makeProps({ contact: makeContact({ isGhost: true }) });
     mount(<ProfileHeader {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: "Promote to contact" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to Network" }));
     const mutate = props.promoteGhost as ReturnType<typeof vi.fn>;
     expect(mutate).toHaveBeenCalledWith("c1", expect.any(Object));
     mutate.mock.calls[0][1].onSuccess();
     expect(toastMock.success).toHaveBeenCalledWith(
-      "Thomas Walker promoted to network!",
+      "Thomas Walker added to Network",
     );
   });
 
@@ -984,7 +983,7 @@ describe("the narrow header", () => {
         })}
       />,
     );
-    const promote = screen.getByRole("button", { name: "Promote to contact" });
+    const promote = screen.getByRole("button", { name: "Add to Network" });
     expect(promote.className).toContain("mt-3");
     // After the meta line, not in the name row above it.
     expect(
@@ -1070,5 +1069,18 @@ describe("the headline and the summary", () => {
       />,
     );
     expect(container.textContent).toBe("");
+  });
+
+  it("shows only the part of a headline the role line does not say", () => {
+    const at = { role: "Partner", company: "Northwind Partners" };
+    expect(
+      newInHeadline({
+        ...at,
+        headline: "Partner at Northwind Partners | Investor",
+      }),
+    ).toBe("Investor");
+    expect(
+      newInHeadline({ ...at, headline: "Partner, Northwind Partners" }),
+    ).toBeNull();
   });
 });
