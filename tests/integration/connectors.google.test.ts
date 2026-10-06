@@ -42,6 +42,7 @@ import {
   listCorrespondents,
 } from "../../server/connectors/service.ts";
 import { ConnectorAuthError } from "../../server/connectors/errors.ts";
+import * as secretBox from "../../server/utils/secretBox.ts";
 import * as gateway from "../../server/ai/gateway.ts";
 import type { SyncEvent } from "../../server/connectors/types.ts";
 
@@ -174,85 +175,114 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       expect(row?.codeVerifier).toBeDefined();
     });
 
-    it("GET /api/connectors/google/callback exchanges code and creates Google connector", async () => {
+    /**
+     * Come back from Google's consent screen as `email`, with a mocked code
+     * exchange that hands out `refreshToken` (Google sends none on a repeat
+     * consent).
+     */
+    async function signInWithGoogle(email: string, refreshToken?: string) {
       const state = crypto.randomUUID();
-      const codeVerifier = crypto.randomBytes(32).toString("base64url");
       sqlite
         .prepare(
           `INSERT INTO oauth_states (state, ownerId, kind, codeVerifier, createdAt)
            VALUES (?, ?, 'google', ?, CURRENT_TIMESTAMP)`,
         )
-        .run(state, memberActor.user.id, codeVerifier);
-
-      // Mock OAuth2 client getToken and userinfo
-      const mockOAuthInstance = {
-        getToken: vi.fn().mockResolvedValue({
-          tokens: {
-            access_token: "mock-access-token",
-            refresh_token: "mock-refresh-token-123",
-            expiry_date: Date.now() + 3600 * 1000,
-            scope: "https://www.googleapis.com/auth/gmail.readonly",
-          },
-        }),
-        setCredentials: vi.fn(),
-      };
-
+        .run(state, memberActor.user.id, "verifier");
       vi.spyOn(google.auth, "OAuth2").mockImplementation(
         class {
-          getToken = mockOAuthInstance.getToken;
-          setCredentials = mockOAuthInstance.setCredentials;
+          getToken = vi.fn().mockResolvedValue({
+            tokens: {
+              access_token: `access-${email}`,
+              refresh_token: refreshToken,
+              expiry_date: Date.now() + 3600 * 1000,
+              scope: "https://www.googleapis.com/auth/gmail.readonly",
+            },
+          });
+          setCredentials = vi.fn();
         } as unknown as typeof google.auth.OAuth2,
       );
       vi.spyOn(google, "oauth2").mockReturnValue({
-        userinfo: {
-          get: vi.fn().mockResolvedValue({
-            data: { email: "alice@example.com" },
-          }),
-        },
+        userinfo: { get: vi.fn().mockResolvedValue({ data: { email } }) },
       } as unknown as ReturnType<typeof google.oauth2>);
-
-      // Also mock test() inside createConnector
       vi.spyOn(googleAdapter, "test").mockResolvedValue({
         ok: true,
-        detail: "Connected to Google Workspace as alice@example.com",
+        detail: `Connected to Google Workspace as ${email}`,
       });
-
       const res = await request(server)
-        .get(
-          `/api/connectors/google/callback?code=mock-auth-code&state=${state}`,
-        )
+        .get(`/api/connectors/google/callback?code=code&state=${state}`)
         .set("Cookie", memberActor.cookie);
+      // The state is used up either way.
+      expect(
+        sqlite.prepare("SELECT 1 FROM oauth_states WHERE state = ?").get(state),
+      ).toBeUndefined();
+      return res;
+    }
 
+    /** Each Google connector's account and refresh token, by address. */
+    const googleAccounts = () =>
+      Object.fromEntries(
+        (
+          sqlite
+            .prepare(
+              "SELECT secret FROM connectors WHERE ownerId = ? AND kind = 'google'",
+            )
+            .all(memberActor.user.id) as { secret: string }[]
+        ).map(({ secret }) => {
+          const opened = JSON.parse(secretBox.open(secret));
+          return [opened.email, opened.refreshToken];
+        }),
+      );
+
+    it("GET /api/connectors/google/callback exchanges code and creates Google connector", async () => {
+      const res = await signInWithGoogle(
+        "alice@example.com",
+        "mock-refresh-token-123",
+      );
       expect(res.status).toBe(302);
       expect(res.headers.location).toBe(
         "/settings/connectors?connected=google",
       );
 
-      // Verify oauth_states row was deleted
-      const checkState = sqlite
-        .prepare("SELECT * FROM oauth_states WHERE state = ?")
-        .get(state);
-      expect(checkState).toBeUndefined();
-
-      // Verify connector created in database
-      const connectors = listConnectors(memberActor.scope);
-      const googleConn = connectors.find((c) => c.kind === "google");
-      expect(googleConn).toBeDefined();
+      const googleConn = listConnectors(memberActor.scope).find(
+        (c) => c.kind === "google",
+      );
       expect(googleConn?.name).toBe("Google (alice@example.com)");
       expect(googleConn?.status).toBe("active");
       expect(googleConn?.secretPresent).toBe(true);
       expect(googleConn?.config).toMatchObject({ summaries: true });
     });
 
-    it("GET /api/connectors/google/callback rejects invalid or expired state", async () => {
+    // A second account wrote its tokens over the first one's connector.
+    it("keeps a second Google account on its own connector, and a returning one on its own", async () => {
+      await signInWithGoogle("alice@example.com", "alice-refresh");
+      await signInWithGoogle("bob@example.com", "bob-refresh");
+      expect(googleAccounts()).toEqual({
+        "alice@example.com": "alice-refresh",
+        "bob@example.com": "bob-refresh",
+      });
+
+      // Alice again, with no new refresh token: her connector keeps hers.
+      await signInWithGoogle("Alice@Example.com");
+      expect(googleAccounts()).toEqual({
+        "Alice@Example.com": "alice-refresh",
+        "bob@example.com": "bob-refresh",
+      });
+    });
+
+    // The browser opens the callback as a page: never raw JSON.
+    it("sends a failed callback back to Connectors with a reason", async () => {
       const res = await request(server)
         .get(
           "/api/connectors/google/callback?code=bad-code&state=non-existent-state",
         )
         .set("Cookie", memberActor.cookie);
+      expect(res.status).toBe(302);
+      expect(res.headers.location).toBe("/settings/connectors?error=expired");
 
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("INVALID_STATE");
+      const denied = await request(server)
+        .get("/api/connectors/google/callback?error=access_denied")
+        .set("Cookie", memberActor.cookie);
+      expect(denied.headers.location).toBe("/settings/connectors?error=denied");
     });
   });
 

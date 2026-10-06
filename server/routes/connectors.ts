@@ -10,13 +10,13 @@
 
 import crypto from "node:crypto";
 import { CodeChallengeMethod, google } from "../connectors/googleApis.ts";
-import { Router } from "express";
+import { Router, type Response } from "express";
 import { z } from "zod";
 import { sqlite } from "../db.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { validateBody } from "../utils/validators.ts";
 import { requireSession } from "../middleware/auth.ts";
-import { scopeOf } from "../tenancy/scope.ts";
+import { scopeOf, type Scope } from "../tenancy/scope.ts";
 import { log } from "../utils/logger.ts";
 import { AppError } from "../utils/AppError.ts";
 import * as secretBox from "../utils/secretBox.ts";
@@ -213,6 +213,41 @@ connectorsRouter.get(
   }),
 );
 
+/**
+ * Why a Google sign-in did not finish. The browser opened the callback as a
+ * page, so a failure goes back to Connectors, which says it in words: a
+ * thrown error showed the person raw JSON.
+ */
+type GoogleFailure = "denied" | "expired" | "failed" | "not-configured";
+
+const backToConnectors = (res: Response, reason: GoogleFailure) =>
+  res.redirect(`/settings/connectors?error=${reason}`);
+
+/**
+ * The Google connector that already holds this account, by its address.
+ * Each account keeps its own connector and tokens: matched by kind alone, a
+ * second account's sign-in wrote its tokens over the first one's.
+ */
+function googleConnectorFor(scope: Scope, email: string) {
+  const rows = sqlite
+    .prepare(
+      "SELECT id, secret FROM connectors WHERE ownerId = ? AND kind = 'google'",
+    )
+    .all(scope.ownerId) as { id: string; secret: string | null }[];
+  for (const row of rows) {
+    if (!row.secret) continue;
+    try {
+      const secret = JSON.parse(secretBox.open(row.secret)) as GoogleSecret;
+      if (secret.email?.toLowerCase() === email.toLowerCase()) {
+        return { id: row.id, secret };
+      }
+    } catch {
+      // A secret that cannot be opened holds no account to match.
+    }
+  }
+  return null;
+}
+
 // ── GET /google/callback ───────────────────────────────────────────────────
 // Handles the redirect back from Google OAuth consent screen.
 connectorsRouter.get(
@@ -225,17 +260,9 @@ connectorsRouter.get(
       error?: string;
     };
 
-    if (error) {
-      return res.redirect(
-        `/settings/connectors?error=${encodeURIComponent(error)}`,
-      );
-    }
-
-    if (!code || !state) {
-      throw new AppError("Missing OAuth code or state", 400, {
-        code: "INVALID_STATE",
-      });
-    }
+    // Google's own refusal, such as access_denied.
+    if (error) return backToConnectors(res, "denied");
+    if (!code || !state) return backToConnectors(res, "expired");
 
     const stateRow = sqlite
       .prepare("SELECT * FROM oauth_states WHERE state = ?")
@@ -249,32 +276,19 @@ connectorsRouter.get(
         }
       | undefined;
 
-    if (!stateRow) {
-      throw new AppError("Invalid or expired OAuth state", 400, {
-        code: "INVALID_STATE",
-      });
-    }
+    if (!stateRow) return backToConnectors(res, "expired");
 
     // Immediately consume the state
     sqlite.prepare("DELETE FROM oauth_states WHERE state = ?").run(state);
 
-    if (stateRow.ownerId !== req.principal!.user.id) {
-      throw new AppError("OAuth state owner mismatch", 403, {
-        code: "FORBIDDEN",
-      });
-    }
-
+    // A state another account started is refused like a stale one.
     const ageMs = Date.now() - new Date(stateRow.createdAt).getTime();
-    if (ageMs > 15 * 60 * 1000) {
-      throw new AppError("OAuth state has expired", 400, {
-        code: "EXPIRED_STATE",
-      });
+    if (stateRow.ownerId !== req.principal!.user.id || ageMs > 15 * 60 * 1000) {
+      return backToConnectors(res, "expired");
     }
 
     const creds = getGoogleOAuthCredentials();
-    if (!creds) {
-      throw new AppError("Google OAuth client is not configured", 500);
-    }
+    if (!creds) return backToConnectors(res, "not-configured");
 
     const redirectUri = `${publicOrigin(req)}/api/connectors/google/callback`;
     // The code exchange and the address lookup time out like a sync's calls.
@@ -297,9 +311,7 @@ connectorsRouter.get(
       log.error("Connectors", "Google token exchange failed", {
         error: tokenErr,
       });
-      return res.redirect(
-        `/settings/connectors?error=${encodeURIComponent((tokenErr as Error).message)}`,
-      );
+      return backToConnectors(res, "failed");
     }
 
     const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
@@ -315,42 +327,33 @@ connectorsRouter.get(
         error: userErr,
       });
     }
+    // Without its address the account cannot be told from another one, and
+    // a guess could put its tokens on someone else's connector.
+    if (!userEmail) return backToConnectors(res, "failed");
 
     const scope = scopeOf(req);
-    const existing = listConnectors(scope).find((c) => c.kind === "google");
+    const existing = googleConnectorFor(scope, userEmail);
     const hasGmailReadonly = (tokens.scope || "").includes("gmail.readonly");
 
     if (existing) {
-      const nextSecret: GoogleSecret = {
-        refreshToken: tokens.refresh_token || "",
-        accessToken: tokens.access_token || undefined,
-        expiryDate: tokens.expiry_date || undefined,
-        email: userEmail,
-      };
-
-      if (!nextSecret.refreshToken) {
-        const row = sqlite
-          .prepare("SELECT secret FROM connectors WHERE id = ? AND ownerId = ?")
-          .get(existing.id, scope.ownerId) as
-          { secret: string | null } | undefined;
-        if (row?.secret) {
-          try {
-            const opened = JSON.parse(secretBox.open(row.secret));
-            nextSecret.refreshToken = opened.refreshToken;
-          } catch {
-            // ignore
-          }
-        }
-      }
-
+      // Google sends a refresh token on the first consent only, so a sign-in
+      // that brings none keeps the one this account has.
       await updateConnector(
         scope,
         existing.id,
         {
           status: "active",
-          secret: nextSecret,
+          secret: {
+            refreshToken: tokens.refresh_token || existing.secret.refreshToken,
+            accessToken: tokens.access_token || undefined,
+            expiryDate: tokens.expiry_date || undefined,
+            email: userEmail,
+          } satisfies GoogleSecret,
           config: {
-            ...(existing.config as Record<string, unknown>),
+            ...(getConnector(scope, existing.id)?.config as Record<
+              string,
+              unknown
+            >),
             summaries: hasGmailReadonly,
           },
         },
@@ -361,7 +364,7 @@ connectorsRouter.get(
         scope,
         {
           kind: "google",
-          name: userEmail ? `Google (${userEmail})` : "Google Workspace",
+          name: `Google (${userEmail})`,
           config: {
             syncContacts: true,
             syncEmail: true,
