@@ -29,6 +29,7 @@ import { ActionMenu } from "../../../components/ui/ActionMenu";
 import { CARD, INLINE_INPUT, SECTION_HEADING } from "../../../lib/styles";
 
 import { LocationMiniMap } from "../../map/LocationMiniMap";
+import { useMapLink } from "../../map/mapLink";
 import { IndustryField } from "./IndustryField";
 import { BirthdayField } from "./BirthdayField";
 import { ChipInput, type Chip } from "./ChipInput";
@@ -113,6 +114,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
       : contact.location
         ? [{ id: "legacy-init", value: contact.location, label: "home" }]
         : [];
+  const mapLink = useMapLink(contactId);
   const isPlaced = contact.lat !== null && contact.lng !== null;
 
   // Preferences are one string on the contact, so a chip is one part of it.
@@ -199,7 +201,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
           openLabel="work"
           onOpenRequestDone={onDetailRequestDone}
           isAddress
-          mapHref={isPlaced ? `/map/contact/${contactId}` : undefined}
+          mapLink={isPlaced ? mapLink : undefined}
           afterRows={
             <LocationMiniMap
               contact={contact}

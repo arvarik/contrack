@@ -31,14 +31,7 @@
  *
  * @module views/map/LocationMiniMap
  */
-import {
-  Suspense,
-  lazy,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { Link, useMatch, useNavigate } from "react-router-dom";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { Hand } from "lucide-react";
@@ -50,9 +43,8 @@ import {
 import { Badge } from "../../components/ui/Badge";
 import { InfoTip } from "../../components/ui/InfoTip";
 import { cn } from "../../lib/utils";
-import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { CONTACT_ZOOM } from "./mapMath";
-import { SIDE_BY_SIDE_QUERY } from "./insets";
+import { useMapLink } from "./mapLink";
 
 const ContactMap = lazy(() =>
   import("./ContactMap").then((m) => ({ default: m.ContactMap })),
@@ -118,15 +110,10 @@ export const LocationMiniMap = ({
   const navigate = useNavigate();
   const placed = isValidLatLng(contact.lat, contact.lng);
   // Beside the map where both fit, else the pin and its card on the map.
-  const sideBySide = useMediaQuery(SIDE_BY_SIDE_QUERY);
-  const mapHref = sideBySide ? `/map/contact/${contact.id}` : "/map";
-  const mapState = useMemo(
-    () => (sideBySide ? undefined : { pin: contact.id }),
-    [sideBySide, contact.id],
-  );
+  const mapLink = useMapLink(contact.id);
   const openInMap = useCallback(
-    () => navigate(mapHref, { state: mapState }),
-    [navigate, mapHref, mapState],
+    () => navigate(mapLink.to, { state: mapLink.state }),
+    [navigate, mapLink],
   );
   const [adjusting, setAdjusting] = useState(false);
   const openAdjust = useCallback(() => setAdjusting(true), []);
@@ -237,7 +224,11 @@ export const LocationMiniMap = ({
       )}
       <div className={CAPTION_ROW}>
         {!overTheMap && (
-          <Link to={mapHref} state={mapState} className={CAPTION_ACTION}>
+          <Link
+            to={mapLink.to}
+            state={mapLink.state}
+            className={CAPTION_ACTION}
+          >
             Open in map
           </Link>
         )}

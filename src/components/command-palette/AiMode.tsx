@@ -75,9 +75,7 @@ export const AiMode = (props: AiModeProps) => {
         <div className="pt-6 pb-3 text-center text-sm text-on-surface-variant">
           <Sparkles className="w-8 h-8 text-primary mx-auto mb-3" />
           <p className="font-bold text-on-surface mb-1">Ask AI</p>
-          <p className="text-xs">
-            Ask anything about your network in plain English
-          </p>
+          <p className="text-xs">Ask about your network in plain English</p>
           {setupLine && (
             <p className="mt-3 mx-auto max-w-md text-xs text-warning text-balance">
               {setupLine}. Answers use keyword and meaning search only

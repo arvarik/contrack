@@ -79,6 +79,8 @@ export interface ActionMenuItem {
   onSelect?: () => void;
   /** An in-app route. The item renders as a link to it. */
   to?: string;
+  /** The route's state, for a link that tells the next page what to show. */
+  state?: unknown;
   /** Destructive: drawn in the error colour on its own surface tone. */
   danger?: boolean;
   disabled?: boolean;
@@ -355,6 +357,7 @@ export const ActionMenu = ({
         <Link
           key={item.id}
           to={item.to}
+          state={item.state}
           role={role}
           aria-checked={isCheckable ? isChecked : undefined}
           aria-label={spokenName}

@@ -156,7 +156,7 @@ export const ListPicker: React.FC<ListPickerProps> = ({
       {lists.length === 0 ? (
         <div className="px-3 py-6 text-center text-sm text-on-surface-variant">
           <p className="font-bold text-on-surface mb-1">No lists yet</p>
-          <p className="text-xs">Create a list from the Settings page first</p>
+          <p className="text-xs">Create a list in Settings → Lists first</p>
         </div>
       ) : (
         // A listbox the palette's input names the current row of
