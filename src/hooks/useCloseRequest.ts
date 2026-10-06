@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { touchFirst } from "../lib/platform";
 
 interface Watcher {
   onclose: (() => void) | null;
@@ -38,7 +39,7 @@ export function useCloseRequest(open: boolean, onClose: () => void): void {
     if (!open) return;
     const Watcher = (globalThis as { CloseWatcher?: WatcherConstructor })
       .CloseWatcher;
-    if (!Watcher || !window.matchMedia?.("(pointer: coarse)").matches) return;
+    if (!Watcher || !touchFirst()) return;
     let watcher: Watcher;
     try {
       watcher = new Watcher();

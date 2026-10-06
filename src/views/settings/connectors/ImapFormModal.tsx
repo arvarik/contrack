@@ -118,6 +118,23 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
 
+  /**
+   * The settings the server stores. The test sends the same, because a test
+   * that keeps the saved password must name the saved server and username.
+   */
+  const formConfig = () => ({
+    host: host.trim(),
+    port,
+    secure: port === 993,
+    username: username.trim(),
+    folders: parsedFolders.length ? parsedFolders : ["INBOX"],
+    aliases: parsedAliases,
+    lookbackDays,
+    rollup,
+    ghostThreshold,
+    summaries,
+  });
+
   const handleTest = async () => {
     setFormError(null);
     if (!host.trim()) {
@@ -136,18 +153,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
     try {
       const res = await testConnector.mutateAsync({
         kind: "imap",
-        config: {
-          host: host.trim(),
-          port,
-          secure: port === 993,
-          username: username.trim(),
-          folders: parsedFolders.length ? parsedFolders : ["INBOX"],
-          aliases: parsedAliases,
-          lookbackDays,
-          rollup,
-          ghostThreshold,
-          summaries,
-        },
+        config: formConfig(),
         // Editing with the field empty keeps the saved password, so the
         // test uses the saved one too.
         secret: password ? { password } : undefined,
@@ -187,18 +193,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
       return;
     }
 
-    const config = {
-      host: trimmedHost,
-      port,
-      secure: port === 993,
-      username: trimmedUsername,
-      folders: parsedFolders.length ? parsedFolders : ["INBOX"],
-      aliases: parsedAliases,
-      lookbackDays,
-      rollup,
-      ghostThreshold,
-      summaries,
-    };
+    const config = formConfig();
 
     try {
       if (isEditing && connector) {

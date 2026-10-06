@@ -50,7 +50,7 @@ import { Segmented, type SegmentedOption } from "../../components/ui/Segmented";
 import type { MapLayer, MapView } from "../../api/mapViews";
 import { ViewsMenu, type ViewsMenuProps } from "./ViewsMenu";
 import type { MapFilter } from "./useMapFilter";
-import { prefersReducedMotion } from "./flyTo";
+import { prefersReducedMotion } from "../../lib/motion";
 import { MIN_OPEN_PX, measureInsets, paddingFor } from "./insets";
 import { cn } from "../../lib/utils";
 import { SELECTED_TINT, TONE_WASH } from "../../lib/styles";

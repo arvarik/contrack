@@ -11,13 +11,8 @@
 
 import React, { useState } from "react";
 import { Mail, Loader2, ArrowLeft } from "lucide-react";
-import {
-  AuthShell,
-  AuthField,
-  AuthSubmit,
-  AuthError,
-  touchFirst,
-} from "./AuthShell";
+import { AuthShell, AuthField, AuthSubmit, AuthError } from "./AuthShell";
+import { touchFirst } from "../../lib/platform";
 import { requestPasswordReset } from "../../api/authLinks";
 import { isNetworkError } from "../../api/client";
 import { rateLimitMessage } from "../../lib/rateLimitMessage";

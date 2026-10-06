@@ -67,10 +67,10 @@ import {
   usePendingSuggestions,
   useRestoreSuggestion,
 } from "../../../api";
-import { cn } from "../../../lib/utils";
+import { cn, errorText, plural } from "../../../lib/utils";
 import { CARD, LABEL, SELECTED_ROW } from "../../../lib/styles";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
-import { pageKeyTaken } from "../../pulse/lib/pageKeys";
+import { isPageKeyTaken } from "../../../lib/keyboard";
 import { UNDO_DURATION_MS } from "../../../lib/undoToast";
 import { useSingleKeyShortcuts } from "../../../hooks/useSingleKeyShortcuts";
 import { useMediaQuery, WIDE_QUERY } from "../../../hooks/useMediaQuery";
@@ -91,9 +91,6 @@ const MERGE_LIMIT = 10;
 const UNDO_TOAST = "duplicates-undo";
 
 const LEVELS: MatchLevel[] = ["very-likely", "likely", "check"];
-
-const errorText = (err: unknown) =>
-  err instanceof Error ? err.message.replace(/\.$/, "") : String(err);
 
 /** What tells one contact from another of the same name. */
 function hint(contact: ReviewContact): string | null {
@@ -440,10 +437,10 @@ export const DuplicateQueue = () => {
       nextAt.current = 0;
       announce(
         failed > 0 ? "warning" : "success",
-        `Merged ${merged} ${merged === 1 ? "group" : "groups"}`,
+        `Merged ${plural(merged, "group", "groups")}`,
         () => undoMerges(qc, mergeLogIds, false).then(() => {}),
         failed > 0
-          ? `${failed} ${failed === 1 ? "contact" : "contacts"} could not be merged`
+          ? `${plural(failed, "contact", "contacts")} could not be merged`
           : undefined,
       );
     } catch (err) {
@@ -459,7 +456,7 @@ export const DuplicateQueue = () => {
       // A key another control used first is its own (an arrow that moved
       // the radio of the contact to keep must not also merge the group), and
       // so is a key in a field, a dialog or a menu.
-      if (pageKeyTaken(e)) return;
+      if (isPageKeyTaken(e)) return;
       const target = e.target instanceof Element ? e.target : null;
       // The arrows move the contact to keep. The letters still decide, so a
       // person who just chose the contact presses L from where they are.

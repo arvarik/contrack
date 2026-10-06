@@ -11,7 +11,9 @@
  *
  * Enter and Space stay with the result itself, a button. A list that draws
  * only the rows near the screen (`VirtualRows`) works too: a step lands on
- * a drawn neighbour, and focus scrolls it into view.
+ * a drawn neighbour, and focus scrolls it into view. A row that is not
+ * drawn takes no focus, and the Tab stop stays where it was: a stop on a
+ * missing row took the whole list out of the Tab order.
  *
  * @module views/search/useRovingFocus
  */
@@ -30,12 +32,10 @@ export function useRovingFocus(count: number) {
   const active = Math.min(stored, Math.max(count - 1, 0));
   const listRef = useRef<HTMLDivElement>(null);
 
-  /** Move the Tab stop to a result and focus it, when it is drawn. */
+  /** Focus a result, when it is drawn. Its focus moves the Tab stop. */
   const focusAt = useCallback(
     (index: number) => {
-      if (count === 0) return;
       const target = Math.min(Math.max(index, 0), count - 1);
-      setStored(target);
       listRef.current
         ?.querySelector<HTMLElement>(`[data-roving="${target}"]`)
         ?.focus();
@@ -56,5 +56,5 @@ export function useRovingFocus(count: number) {
     },
   });
 
-  return { listRef, itemProps, focusAt, active };
+  return { listRef, itemProps, focusAt };
 }

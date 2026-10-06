@@ -14,13 +14,8 @@ import { KeyRound, Loader2, LogOut } from "lucide-react";
 import { changePassword } from "../../api/auth";
 import { isNetworkError } from "../../api/client";
 import { rateLimitMessage } from "../../lib/rateLimitMessage";
-import {
-  AuthShell,
-  AuthField,
-  AuthSubmit,
-  AuthError,
-  touchFirst,
-} from "./AuthShell";
+import { AuthShell, AuthField, AuthSubmit, AuthError } from "./AuthShell";
+import { touchFirst } from "../../lib/platform";
 import { MIN_PASSWORD_LENGTH, passwordProblem } from "./accountForm";
 import { useAuth } from "./AuthGate";
 

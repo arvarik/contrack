@@ -14,15 +14,16 @@
  * @module lib/datetime
  */
 
-import { parseServerTime } from "../../shared/dates";
+import { isPlainDay, parseServerTime } from "../../shared/dates";
 
 /**
  * Parse a timestamp from the API, whichever of the two forms it is in, or
- * null. It lives in `shared/dates.ts`, because the map's rows are built by
- * shared code that counts a follow-up's day the way the client does.
- * Re-exported here so the client keeps one date module.
+ * null, and tell a plain day from an instant. They live in
+ * `shared/dates.ts`, because the map's rows are built by shared code that
+ * counts a follow-up's day the way the client does. Re-exported here so the
+ * client keeps one date module.
  */
-export { parseServerTime };
+export { isPlainDay, parseServerTime };
 
 /** An absolute date and time, in the reader's own locale and zone. */
 export function formatWhen(
@@ -59,7 +60,7 @@ export function formatDue(
 ): string {
   const date = parseServerTime(value);
   if (!date) return "Unknown";
-  const dayOnly = /^\d{4}-\d{2}-\d{2}$/.test(value ?? "");
+  const dayOnly = isPlainDay(value ?? "");
   return date.toLocaleString(undefined, {
     weekday: "short",
     month: "short",

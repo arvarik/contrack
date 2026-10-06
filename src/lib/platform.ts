@@ -110,3 +110,18 @@ export function navChordKey(event: KeyboardEvent): string {
   if (event.code === "Comma") return ",";
   return event.code.startsWith("Key") ? event.code.slice(3).toLowerCase() : "";
 }
+
+/**
+ * True on a touch screen: the main pointer is a finger. A field that takes
+ * focus there opens the on-screen keyboard over the page, so a screen puts
+ * focus in its first field only for a mouse or a trackpad.
+ *
+ * @returns False where the browser cannot tell, such as a test without
+ *   `matchMedia`.
+ */
+export function touchFirst(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(pointer: coarse)").matches === true
+  );
+}

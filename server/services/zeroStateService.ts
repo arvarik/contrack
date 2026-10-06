@@ -38,9 +38,9 @@ export interface ZeroStatePayload {
 
 // ─── Prepared Statements (cached on first call) ──────────────────────────────
 // Three statements, each taking the owner as its first bound parameter. The
-// dedupe count reads `dedupe_suggestions.ownerId` directly rather than joining
-// back to contacts, because a suggestion names two contacts and both share the
-// owner by the mismatch trigger.
+// follow-up count is the badge's (`actionItemService.getUrgentCount`) and the
+// duplicate count is the review's (`getPendingClusterCount`), so the palette
+// never disagrees with them.
 //
 // A catch-up is a tracked contact past its cadence: the same rule as the
 // Catch up group on Pulse, from `catchUp.ts`, so the two never disagree about

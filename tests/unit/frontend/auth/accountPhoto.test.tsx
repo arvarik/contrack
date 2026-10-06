@@ -15,6 +15,7 @@ import {
   createAccountThenPhoto,
   useAccountForm,
 } from "../../../../src/components/auth/accountForm";
+import { toast } from "sonner";
 import { uploadAccountAvatar } from "../../../../src/api/auth";
 
 vi.mock("../../../../src/api/auth", () => ({
@@ -158,16 +159,21 @@ describe("createAccountThenPhoto", () => {
   });
 
   it("keeps the account when the photo fails, and says so", async () => {
+    const error = vi.spyOn(toast, "error");
     const submit = vi.fn().mockResolvedValue({ ok: true });
     vi.mocked(uploadAccountAvatar).mockRejectedValue(
       new Error("Upload failed"),
     );
     const photo = new File(["bytes"], "photo.png", { type: "image/png" });
 
-    await expect(createAccountThenPhoto(submit, photo)).resolves.toEqual({
-      photoFailed: true,
-    });
+    await expect(createAccountThenPhoto(submit, photo)).resolves.toBe(
+      undefined,
+    );
     expect(submit).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledWith(
+      expect.stringContaining("The photo did not upload"),
+    );
+    error.mockRestore();
   });
 
   it("rethrows a failed submit and uploads nothing", async () => {

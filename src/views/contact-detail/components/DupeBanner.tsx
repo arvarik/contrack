@@ -26,7 +26,7 @@ import {
   useRestoreSuggestion,
   useSuggestionForContact,
 } from "../../../api";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import { TONE_WASH } from "../../../lib/styles";
 import { withUndo } from "../../../lib/undoToast";
 import { DuplicateComparison } from "../../dedupe/components/DuplicateComparison";
@@ -41,9 +41,6 @@ import type { PersistedDedupeSuggestion } from "../../../types";
 interface DupeBannerProps {
   contactId: string;
 }
-
-const errorText = (err: unknown) =>
-  err instanceof Error ? err.message.replace(/\.$/, "") : String(err);
 
 export const DupeBanner = ({ contactId }: DupeBannerProps) => {
   const { data: suggestion, isLoading } = useSuggestionForContact(contactId);

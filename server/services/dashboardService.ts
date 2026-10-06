@@ -13,6 +13,7 @@ import { RequestCoalescer } from "../utils/requestCoalescer.ts";
 import {
   addCalendarDays,
   dayInZone,
+  isPlainDay,
   isoWeekStart,
   parseServerTime,
   weekStartOf,
@@ -369,7 +370,7 @@ export const dashboardService = {
         ).filter((r) => {
           const day = dayInZone(r.startsAt, timeZone);
           if (!day || day > lastDay) return false;
-          if (/^\d{4}-\d{2}-\d{2}$/.test(r.startsAt)) return day >= today;
+          if (isPlainDay(r.startsAt)) return day >= today;
           const end = parseServerTime(r.endsAt) ?? parseServerTime(r.startsAt);
           return end !== null && end > now;
         });

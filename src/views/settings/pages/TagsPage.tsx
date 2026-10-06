@@ -39,7 +39,7 @@ import {
   FORM_LABEL,
   SEARCH_INPUT,
 } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { cn, errorText, plural } from "../../../lib/utils";
 import { tagFilterPath } from "../../contact-list/hooks/useContactListFilters";
 import { SETTINGS_INPUT, SETTINGS_PAGE } from "../layout";
 
@@ -47,7 +47,7 @@ import { SETTINGS_INPUT, SETTINGS_PAGE } from "../layout";
 const ROW_ACTION =
   "hit-area state-layer p-2.5 rounded-xl text-on-surface-variant min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors";
 
-const contacts = (n: number) => `${n} ${n === 1 ? "contact" : "contacts"}`;
+const contacts = (n: number) => plural(n, "contact", "contacts");
 
 /**
  * Who a rename or a delete changes. It changes every contact with the tag,
@@ -59,9 +59,6 @@ function reach(t: TagSummary): string {
     ? `${contacts(t.total)}, ${hidden} of them archived or in the Trash`
     : contacts(t.total);
 }
-
-const errorText = (err: unknown, fallback: string) =>
-  err instanceof Error ? err.message : fallback;
 
 export const TagsPage = () => {
   const { data: tags = [], isLoading, isError, refetch } = useTagSummary();
@@ -277,7 +274,7 @@ export const TagsPage = () => {
                       // Network list showing the contacts with the tag.
                       <Link
                         to={tagFilterPath(item.tag)}
-                        aria-label={`${item.tag}, ${item.count} ${item.count === 1 ? "contact" : "contacts"}`}
+                        aria-label={`${item.tag}, ${contacts(item.count)}`}
                         title="See who has this tag"
                         className="hit-area group/tag flex items-center gap-3 min-w-0 rounded-md"
                       >

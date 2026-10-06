@@ -15,13 +15,8 @@ import {
 } from "../../api/passkeys";
 import { isNetworkError } from "../../api/client";
 import { rateLimitMessage } from "../../lib/rateLimitMessage";
-import {
-  AuthShell,
-  AuthField,
-  AuthSubmit,
-  AuthError,
-  touchFirst,
-} from "./AuthShell";
+import { AuthShell, AuthField, AuthSubmit, AuthError } from "./AuthShell";
+import { touchFirst } from "../../lib/platform";
 import { PasskeyButton } from "./PasskeyButton";
 import { ForgotPassword } from "./ForgotPassword";
 import { requestMagicLink } from "../../api/authLinks";

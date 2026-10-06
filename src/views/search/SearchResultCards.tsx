@@ -9,7 +9,7 @@
  * props, and so does its question mark, so Tab reaches the mark of the
  * current card only.
  */
-import React, { useLayoutEffect, useRef } from "react";
+import React from "react";
 import {
   Sparkles,
   Briefcase,
@@ -55,14 +55,6 @@ export const ResultCard = ({
 }: ResultCardProps) => {
   /** AI did not check this match. "Approximate" says more, so it wins. */
   const unverified = !match.approximate && isUnverified(match, isFallback);
-  // The question mark's button follows the card's Tab stop. `InfoTip` takes
-  // no tabIndex, so it is set on the element.
-  const tipRef = useRef<HTMLSpanElement>(null);
-  const tabIndex = itemProps?.tabIndex;
-  useLayoutEffect(() => {
-    const button = tipRef.current?.querySelector("button");
-    if (button && tabIndex !== undefined) button.tabIndex = tabIndex;
-  }, [tabIndex, unverified]);
   return (
     <div
       // The fade-in makes each card its own layer. The card whose question
@@ -179,17 +171,18 @@ export const ResultCard = ({
         Escape or a press anywhere else (`InfoTip`).
       */}
       {unverified && (
-        <span ref={tipRef} className="absolute top-3 right-3">
-          <InfoTip
-            label={`${match.name}: not verified by AI`}
-            tone="warning"
-            align="end"
-          >
-            <strong className="block font-bold">Not verified by AI</strong>
-            {match.name} matches your words or their meaning, but AI did not
-            check the match
-          </InfoTip>
-        </span>
+        <InfoTip
+          label={`${match.name}: not verified by AI`}
+          tone="warning"
+          align="end"
+          // The question mark follows the card's Tab stop.
+          tabIndex={itemProps?.tabIndex}
+          className="absolute top-3 right-3"
+        >
+          <strong className="block font-bold">Not verified by AI</strong>
+          {match.name} matches your words or their meaning, but AI did not check
+          the match
+        </InfoTip>
       )}
     </div>
   );

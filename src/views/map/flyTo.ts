@@ -22,6 +22,7 @@
 import type { PaddingOptions } from "maplibre-gl";
 import { samePadding } from "./insets";
 import { CONTACT_ZOOM } from "./mapMath";
+import { prefersReducedMotion } from "../../lib/motion";
 
 /** Long enough to follow the move, short enough not to wait for it. */
 export const FLY_DURATION_MS = 800;
@@ -56,22 +57,6 @@ export interface MovableMap {
   flyTo: (options: CameraMove) => void;
   easeTo: (options: CameraMove) => void;
   jumpTo: (options: CameraMove) => void;
-}
-
-/**
- * True when this person asked for less animation: Reduced in the Motion
- * setting (`data-motion` on the root, PreferencesContext), or their system.
- */
-export function prefersReducedMotion(): boolean {
-  if (typeof window === "undefined") return false;
-  const setting =
-    typeof document === "undefined"
-      ? null
-      : document.documentElement.getAttribute("data-motion");
-  return (
-    setting === "reduced" ||
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
-  );
 }
 
 interface MoveOptions {

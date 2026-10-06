@@ -38,20 +38,20 @@ describe("parseLinkedInCSV", () => {
       '"Notes:","When exporting your connection data, you may notice..."',
       "",
       "First Name,Last Name,URL,Email Address,Company,Position,Connected On",
-      "Ada,Lovelace,https://www.linkedin.com/in/ada-lovelace,ada@example.com,Analytical Engines,Founder,01 Jan 2024",
+      "Rowan,Vale,https://www.linkedin.com/in/rowan-vale,rowan@example.com,Northwind Partners,Founder,01 Jan 2024",
     ].join("\n");
 
     const [contact] = await parseLinkedInCSV(csv);
 
     expect(contact).toMatchObject({
-      name: "Ada Lovelace",
-      company: "Analytical Engines",
+      name: "Rowan Vale",
+      company: "Northwind Partners",
       role: "Founder",
-      emails: [{ email: "ada@example.com", label: "work", isPrimary: true }],
+      emails: [{ email: "rowan@example.com", label: "work", isPrimary: true }],
       socialLinks: [
         {
           platform: "linkedin",
-          url: "https://www.linkedin.com/in/ada-lovelace",
+          url: "https://www.linkedin.com/in/rowan-vale",
         },
       ],
     });
@@ -98,16 +98,16 @@ describe("parseGoogleCSV", () => {
   it("still reads the older export's column names", async () => {
     const csv = [
       "Name,Given Name,Family Name,E-mail 1 - Type,E-mail 1 - Value,Organization 1 - Name,Organization 1 - Title",
-      "Grace Hopper,Grace,Hopper,* Work,grace@example.com,Navy,Admiral",
+      "Ines Faro,Ines,Faro,* Work,ines@example.com,Northwind Partners,Partner",
     ].join("\n");
 
     const [contact] = await parseGoogleCSV(csv);
 
     expect(contact).toMatchObject({
-      name: "Grace Hopper",
-      company: "Navy",
-      role: "Admiral",
-      emails: [{ email: "grace@example.com", label: "work", isPrimary: true }],
+      name: "Ines Faro",
+      company: "Northwind Partners",
+      role: "Partner",
+      emails: [{ email: "ines@example.com", label: "work", isPrimary: true }],
     });
   });
 });

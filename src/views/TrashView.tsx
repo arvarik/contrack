@@ -12,7 +12,7 @@ import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { CARD, ICON_BTN, SECTION_HEADING } from "../lib/styles";
 import { EmptyState } from "../components/ui/EmptyState";
 import { CorvidMark } from "../components/brand/CorvidMark";
-import { cn } from "../lib/utils";
+import { cn, errorText, plural } from "../lib/utils";
 import { fallbackAvatarUrl } from "../lib/avatar";
 import type { TrashedContact } from "../types";
 import { SETTINGS_PAGE } from "./settings/layout";
@@ -40,7 +40,7 @@ function deletedLabel(deletedAt: string): string {
   return `Deleted ${days} days ago`;
 }
 
-const days = (count: number) => `${count} ${count === 1 ? "day" : "days"}`;
+const days = (count: number) => plural(count, "day", "days");
 
 export const TrashView = () => {
   const { data, isLoading } = useTrash();
@@ -51,8 +51,6 @@ export const TrashView = () => {
   const empty = useEmptyTrash();
   const [purgeTarget, setPurgeTarget] = useState<TrashedContact | null>(null);
   const [confirmEmpty, setConfirmEmpty] = useState(false);
-  const errorText = (err: unknown) =>
-    err instanceof Error ? err.message : String(err);
 
   const handleRestore = (item: TrashedContact) => {
     restore.mutate(item.id, {
@@ -67,7 +65,7 @@ export const TrashView = () => {
       onSuccess: ({ count }) => {
         setConfirmEmpty(false);
         toast.success(
-          `Deleted ${count} ${count === 1 ? "contact" : "contacts"} forever`,
+          `Deleted ${plural(count, "contact", "contacts")} forever`,
         );
       },
       onError: (err) =>
@@ -119,8 +117,8 @@ export const TrashView = () => {
       <div className={cn(CARD, "p-0")}>
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 sm:px-6 py-3 bg-surface-container-low rounded-t-2xl">
           <p className={SECTION_HEADING}>
-            {items.length} {items.length === 1 ? "contact" : "contacts"} ·
-            removed for good {days(retentionDays)} after deletion
+            {plural(items.length, "contact", "contacts")} · removed for good{" "}
+            {days(retentionDays)} after deletion
           </p>
           <button
             type="button"
@@ -216,9 +214,9 @@ export const TrashView = () => {
         title="Empty the Trash?"
         description={
           <p>
-            {items.length} {items.length === 1 ? "contact" : "contacts"} and
-            their whole history, with every interaction, note and follow-up, are
-            deleted. This cannot be undone
+            {plural(items.length, "contact", "contacts")} and their whole
+            history, with every interaction, note and follow-up, are deleted.
+            This cannot be undone
           </p>
         }
         confirmLabel="Empty trash"
