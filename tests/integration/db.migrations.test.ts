@@ -66,6 +66,8 @@ const ADDED_SINCE_FIXTURE = [
   "contacts",
   "contacts_archive_stamp_ins",
   "contacts_archive_stamp_upd",
+  // 0008_correspondent_names: connector_links gains a column
+  "connector_links",
 ];
 
 interface MasterRow {

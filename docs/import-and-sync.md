@@ -198,9 +198,13 @@ stops every Google connector on the instance.
    the link to go to the app. This is normal for a self-hosted server.
 
 Contrack asks for read-only access to your contacts, calendar events, email
-address, and Gmail headers, or whole messages with summaries. Each account has
-one Google connector. To add summaries later, connect again with **Generate AI
-summaries** on, and Contrack updates the connector you have. **Edit** sets
+address, and Gmail headers, or whole messages with summaries. Each Google
+account has its own connector: connect a second account and it gets a second
+connector, and the first keeps its own access. To add summaries later, connect
+the same account again with **Generate AI summaries** on, and Contrack updates
+its connector. When a sign-in does not finish, for example because you did not
+give access or it took too long, the Connectors page says why, and nothing
+changes. **Edit** sets
 **Synced data types** (**Google Contacts (People API)**, **Gmail messages**,
 **Google Calendar events**) and the options below. Google Contacts become
 untracked contacts, with their photos copied to your server.
@@ -240,7 +244,10 @@ The people Contrack counts are on **Settings → Correspondents**, most often
 seen first. The **Correspondents** button on the Connectors page shows how
 many wait. For each person:
 
-- **Add as contact** makes a contact with their name, email, and phone.
+- **Add as contact** makes a contact with their email or phone and the name
+  their mail or meeting gave, for example "Rowan Vale". When there was only
+  an address, it asks for the name first, filled in from the address, for
+  example "Rowan Vale" for `rowan.vale@example.com`.
 - **Ignore** hides them. They do not come back, and they never become a
   ghost.
 
