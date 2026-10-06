@@ -262,7 +262,10 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
           {mode === "filter" ? (
             <>
               <Search className="absolute left-3 w-4 h-4 text-on-surface-variant pointer-events-none" />
+              {/* Keyed: the two boxes share a place in the tree, and a
+                  shared input would never mount, so it would take no focus. */}
               <input
+                key="filter"
                 ref={isMobile ? undefined : barInput}
                 type="text"
                 {...SEARCH_FIELD}
@@ -308,6 +311,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
             <>
               <MapPin className="absolute left-3 w-4 h-4 text-primary pointer-events-none" />
               <input
+                key="goto"
                 type="text"
                 {...SEARCH_FIELD}
                 // It mounts when a person asks for it, so it takes the

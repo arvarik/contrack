@@ -3,12 +3,13 @@
  * itself, take them out and Undo it, and move a list with its row menu, the
  * way a finger or the keyboard reorders.
  */
+import { expectPageAccessible } from "./fixtures/a11y";
 import { expect, test } from "./fixtures/test";
 
 test("adds people to a list, takes one out with Undo, and moves a list up", async ({
   page,
   instance,
-}) => {
+}, testInfo) => {
   const made: string[] = [];
   const make = async (name: string) => {
     const { id } = await instance.api<{ id: string }>("POST", "/lists", {
@@ -29,8 +30,15 @@ test("adds people to a list, takes one out with Undo, and moves a list up", asyn
     const second = rows.filter({ hasText: "zz Lists second" });
     await second.getByRole("button").first().click();
     const add = page.getByRole("combobox", { name: "Add people" });
-    await expect(page.getByText("No members yet")).toBeVisible();
+    // Each width has its own copy of the panel: the one on screen.
+    await expect(
+      page.getByText("No members yet").filter({ visible: true }),
+    ).toBeVisible();
     await add.fill("ada love");
+    await expect(
+      page.getByRole("option", { name: /Ada Lovelace/ }),
+    ).toBeVisible();
+    await expectPageAccessible(page, testInfo, "settings-lists-add-people");
     await add.press("Enter");
     // The field keeps the focus for the next name.
     await expect(add).toBeFocused();
