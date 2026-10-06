@@ -43,8 +43,6 @@ export interface RetrievalCandidate {
 
 export interface RetrievalResult {
   candidates: RetrievalCandidate[];
-  /** Semantic candidates require downstream evidence verification. */
-  highConfidence: boolean;
   /** Pre-filter summary for logs and debug UI. */
   preFilterSummary: string;
   /**
@@ -136,12 +134,6 @@ function matchedText(re: RegExp, haystack: string): string | undefined {
     .replace(/^[^\p{L}\p{N}]/u, "")
     .trim();
 }
-
-/**
- * Active contacts only: ghosts, archived and soft-merged contacts never reach a
- * search result.
- */
-const ACTIVE_GATE_SQL = ACTIVE_CONTACT_SQL;
 
 /**
  * Compile matchers into one case-insensitive word-boundary regex. The boundary
@@ -251,7 +243,7 @@ function applyHardFilters(
         ${childText},
         ${addressText}
       FROM contacts c
-      WHERE c.ownerId = ? AND ${ACTIVE_GATE_SQL}${temporalSql}${facetClause}
+      WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL}${temporalSql}${facetClause}
     `,
     )
     .all(scope.ownerId, ...temporalParams, ...(facets?.params ?? [])) as {
@@ -780,7 +772,6 @@ export async function hybridRetrieval(
       );
       return {
         candidates: [],
-        highConfidence: false,
         preFilterSummary: `no-match: ${hardFilterSummary}`,
         plan,
         allowed,
@@ -832,10 +823,6 @@ export async function hybridRetrieval(
       )
     : local.candidates;
 
-  // Phase 3: confidence. A high FTS ratio does not prove a natural-language
-  // constraint, and the service has its own name-prefix shortcut.
-  const highConfidence = false;
-
   const elapsed = Date.now() - t0;
   log.info(
     "HybridRetrieval",
@@ -846,12 +833,11 @@ export async function hybridRetrieval(
       `[planner ${planned - t0}ms, filter ${filtered - planned}ms, retrieval ${Date.now() - filtered}ms] ` +
       `(kind=${local.intent.kind}, plan: ${plan ? `conf=${plan.confidence}` : "none"}, ` +
       `filter: ${hardFilterSummary}, ` +
-      `confidence: ${highConfidence ? "HIGH" : "low"})`,
+      `confidence: low)`,
   );
 
   return {
     candidates: fused,
-    highConfidence,
     preFilterSummary: hardFilterSummary,
     plan,
     queryVector: local.queryVector,
