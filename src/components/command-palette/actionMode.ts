@@ -11,18 +11,9 @@
  * @module components/command-palette/actionMode
  */
 
-import {
-  INTERACTION_LABELS,
-  type InteractionKind,
-} from "../../lib/interactionKinds";
+import type { InteractionKind } from "../../lib/interactionKinds";
 
 export type LogKind = InteractionKind;
-
-/**
- * The title a logged interaction gets, by kind: the composer's, so the same
- * act reads the same on the timeline wherever it was logged.
- */
-export const LOG_TITLES: Readonly<Record<LogKind, string>> = INTERACTION_LABELS;
 
 /** The kinds, in the order the palette lists them. */
 export const LOG_KINDS: readonly LogKind[] = [

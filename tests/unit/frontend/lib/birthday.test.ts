@@ -1,12 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
-  parseBirthday,
   getUpcomingBirthdayInfo,
   getUpcomingBirthdayDays,
   formatBirthdayDisplay,
   birthdayText,
 } from "../../../../src/lib/birthday.ts";
-import { birthdayValue } from "../../../../shared/birthday.ts";
+import { birthdayValue, parseBirthday } from "../../../../shared/birthday.ts";
 
 describe("pulse.birthdays parseBirthday", () => {
   it.each([

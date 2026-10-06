@@ -6,8 +6,6 @@
  */
 import { parseBirthday } from "../../shared/birthday";
 
-export { parseBirthday };
-
 interface UpcomingBirthdayInfo {
   daysUntil: number;
   turningAge: number | null;

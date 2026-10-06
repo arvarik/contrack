@@ -17,9 +17,8 @@ import {
   birthdayText,
   formatBirthdayDisplay,
   getUpcomingBirthdayDays,
-  parseBirthday,
 } from "../../../lib/birthday";
-import { birthdayValue } from "../../../../shared/birthday";
+import { birthdayValue, parseBirthday } from "../../../../shared/birthday";
 
 export const BirthdayField = ({
   value,

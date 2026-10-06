@@ -38,7 +38,8 @@ import { AiMode } from "./AiMode";
 import { useAiSetup } from "../../hooks/useAiSetup";
 import { NAV_ITEMS, ZeroStateView } from "./ZeroStateView";
 import { LogMode } from "./LogMode";
-import { LOG_TITLES, parseLogInput, type LogKind } from "./actionMode";
+import { parseLogInput, type LogKind } from "./actionMode";
+import { INTERACTION_LABELS } from "../../lib/interactionKinds";
 import { InlineNoteComposer } from "./InlineNoteComposer";
 import { PaletteFooter, enterActionFor } from "./PaletteFooter";
 import { PeopleMode } from "./PeopleMode";
@@ -515,7 +516,7 @@ export const CommandPalette = () => {
         contactId: contact.id,
         data: {
           type: kind,
-          title: LOG_TITLES[kind],
+          title: INTERACTION_LABELS[kind],
           content: text,
           date: new Date().toISOString(),
         },
