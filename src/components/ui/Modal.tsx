@@ -116,9 +116,9 @@ interface ModalProps {
 export function Modal({
   isOpen,
   onClose,
-  title,
+  title: openTitle,
   ariaLabel = "Dialog",
-  children,
+  children: openChildren,
   size = "md",
   returnFocusRef,
 }: ModalProps) {
@@ -148,6 +148,15 @@ export function Modal({
     previousFocus.current = document.activeElement as HTMLElement | null;
   }
   wasOpen.current = isOpen;
+
+  // What the open dialog showed, kept through its exit animation. A caller
+  // clears the thing a dialog names as it closes, and the title read
+  // "Disable undefined?" while the dialog faded out. Every dialog, and every
+  // `ConfirmDialog` in it, keeps its words this way, so no caller needs a
+  // fallback for them.
+  const shown = useRef({ title: openTitle, children: openChildren });
+  if (isOpen) shown.current = { title: openTitle, children: openChildren };
+  const { title, children } = shown.current;
 
   // The drag follows the finger down only. On release it either closes the
   // sheet from where it is (the closing animation starts at `--sheet-drag`)
