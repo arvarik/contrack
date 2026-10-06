@@ -254,10 +254,20 @@ test.describe("map", () => {
       await insights.click();
       await expect(insights).toHaveAttribute("aria-expanded", "false");
 
-      await page
-        .getByRole("button", { name: "2 contacts at one place, list them" })
-        .click();
+      const stacked = page.getByRole("button", {
+        name: "2 contacts at one place, list them",
+      });
       const list = page.getByRole("list", { name: "People at this place" });
+      // From the keyboard, Escape closes the list and the focus goes back
+      // to its cluster, not to the page.
+      await stacked.focus();
+      await page.keyboard.press("Enter");
+      await expect(list).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(list).toHaveCount(0);
+      await expect(stacked).toBeFocused();
+
+      await stacked.click();
       await expect(list.getByRole("button")).toHaveCount(2);
       const alan = list.getByRole("button", {
         name: "Alan Turing, Same Place Ltd",
