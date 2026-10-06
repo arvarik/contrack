@@ -15,8 +15,7 @@ import {
 } from "../../../../shared/cadence";
 import { Segmented } from "../../../components/ui/Segmented";
 import { Select } from "../../../components/ui/Select";
-import { Switch } from "../../../components/ui/Switch";
-import { SettingRow } from "../SettingRow";
+import { PrefSwitchRow, SettingRow } from "../SettingRow";
 import { SETTINGS_CARD, SETTINGS_PAGE } from "../layout";
 
 export const Stepper = ({
@@ -151,19 +150,12 @@ export const NetworkPage = () => {
           />
         </SettingRow>
 
-        <SettingRow
+        <PrefSwitchRow
           id="track-new"
           title="Track new contacts"
           prefKey="trackNewContacts"
           description="Contacts you add by hand start tracked. Imports and connectors never do"
-          inline
-        >
-          <Switch
-            label="Track new contacts"
-            checked={preferences.trackNewContacts}
-            onChange={(next) => setPreference("trackNewContacts", next)}
-          />
-        </SettingRow>
+        />
 
         <SettingRow
           id="week-start"
@@ -182,19 +174,12 @@ export const NetworkPage = () => {
           />
         </SettingRow>
 
-        <SettingRow
+        <PrefSwitchRow
           id="weather"
           title="Weather"
           prefKey="showWeather"
           description="Shows the weather beside a contact's local time. Contrack asks Open-Meteo for the weather where the contact is"
-          inline
-        >
-          <Switch
-            label="Weather"
-            checked={preferences.showWeather}
-            onChange={(next) => setPreference("showWeather", next)}
-          />
-        </SettingRow>
+        />
 
         <SettingRow
           id="temp-unit"

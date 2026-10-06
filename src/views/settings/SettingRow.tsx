@@ -20,6 +20,7 @@ import type { Preferences } from "../../api/preferences";
 import { cn } from "../../lib/utils";
 import { CHANGED_MARK } from "../../lib/styles";
 import { useResetScopeKey } from "./ResetToDefaults";
+import { Switch } from "../../components/ui/Switch";
 
 interface SettingRowProps {
   /** Stable kebab-case hash id. */
@@ -142,5 +143,39 @@ export const SettingRow = ({
           ))}
       </div>
     </div>
+  );
+};
+
+type BooleanPref = {
+  [K in keyof Preferences]: Preferences[K] extends boolean ? K : never;
+}[keyof Preferences];
+
+/** A row whose control is one on/off preference, named by the row's title. */
+export const PrefSwitchRow = ({
+  id,
+  title,
+  prefKey,
+  description,
+}: {
+  id: string;
+  title: string;
+  prefKey: BooleanPref;
+  description: string;
+}) => {
+  const { preferences, setPreference } = usePreferences();
+  return (
+    <SettingRow
+      id={id}
+      title={title}
+      prefKey={prefKey}
+      description={description}
+      inline
+    >
+      <Switch
+        label={title}
+        checked={preferences[prefKey]}
+        onChange={(next) => setPreference(prefKey, next)}
+      />
+    </SettingRow>
   );
 };

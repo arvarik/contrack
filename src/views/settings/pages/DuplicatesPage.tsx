@@ -6,12 +6,10 @@
 import { ArrowRight, Copy, History } from "lucide-react";
 import { Link } from "react-router-dom";
 import { DedupeView } from "../../dedupe";
-import { SettingRow } from "../SettingRow";
+import { PrefSwitchRow, SettingRow } from "../SettingRow";
 import { SettingsHeaderActions } from "../SettingsHeader";
 import { Segmented } from "../../../components/ui/Segmented";
-import { Switch } from "../../../components/ui/Switch";
 import { useDedupeSettings } from "../../../hooks/useDedupeSettings";
-import { usePreferences } from "../../../contexts/PreferencesContext";
 import { NAMES } from "../../../lib/names";
 import { useDedupeCount } from "../../../api";
 import { cn } from "../../../lib/utils";
@@ -38,7 +36,6 @@ const DEDUPE_PRESET_COPY = {
 
 export const DuplicatesPage = () => {
   const { preset, setPreset } = useDedupeSettings();
-  const { preferences, setPreference } = usePreferences();
   const { data: dedupeData } = useDedupeCount();
   const dedupeCount =
     typeof dedupeData === "number" ? dedupeData : (dedupeData?.count ?? 0);
@@ -93,33 +90,19 @@ export const DuplicatesPage = () => {
             />
           </SettingRow>
 
-          <SettingRow
+          <PrefSwitchRow
             id="dedupe-on-create"
             title="Check new contacts automatically"
             prefKey="dedupeOnCreate"
             description="A few seconds after you add one"
-            inline
-          >
-            <Switch
-              label="Check new contacts automatically"
-              checked={preferences.dedupeOnCreate}
-              onChange={(next) => setPreference("dedupeOnCreate", next)}
-            />
-          </SettingRow>
+          />
 
-          <SettingRow
+          <PrefSwitchRow
             id="dedupe-on-import"
             title="Check imports automatically"
             prefKey="dedupeOnImport"
             description="When each import finishes"
-            inline
-          >
-            <Switch
-              label="Check imports automatically"
-              checked={preferences.dedupeOnImport}
-              onChange={(next) => setPreference("dedupeOnImport", next)}
-            />
-          </SettingRow>
+          />
         </div>
       </section>
     </div>
