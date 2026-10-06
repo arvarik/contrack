@@ -445,6 +445,24 @@ test.describe("Settings — Tools and Data", () => {
     }
   });
 
+  test("Trash empties after one confirmation", async ({ page, instance }) => {
+    const { id } = await instance.api<{ id: string }>("POST", "/contacts", {
+      name: "Tess Trashed",
+    });
+    await instance.api("DELETE", `/contacts/${id}`);
+
+    await page.goto("/settings/trash");
+    await page.getByRole("button", { name: "Empty trash" }).click();
+    const dialog = page.getByRole("dialog", { name: "Empty the Trash?" });
+    await dialog.getByRole("button", { name: "Empty trash" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Trash is empty" }),
+    ).toBeVisible();
+    expect(
+      (await instance.api<{ items: { id: string }[] }>("GET", "/trash")).items,
+    ).toEqual([]);
+  });
+
   test("enrichment page filters by who and by research state, each pill counted", async ({
     page,
   }) => {
@@ -647,7 +665,7 @@ test.describe("Tracked contacts", () => {
       unscored.getByRole("link", { name: "Zuri Untracked" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Untrack Zuri Untracked" }),
+      page.getByRole("button", { name: "Stop tracking Zuri Untracked" }),
     ).toBeVisible();
 
     // Select mode: the bar, and one group at a time.
