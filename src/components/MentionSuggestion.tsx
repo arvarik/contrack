@@ -161,6 +161,8 @@ export const getMentionSuggestion = (contacts: () => ContactSlim[]) => ({
     let popup: HTMLElement | null = null;
     let stopUpdates: (() => void) | null = null;
     let caret: (() => DOMRect | null) | null | undefined;
+    /** Whether the list shows a name. With no match it draws nothing. */
+    let shown = false;
     // One reference for the list's lifetime, reading the latest caret, so
     // autoUpdate keeps following it after each keystroke.
     const reference: VirtualElement = {
@@ -183,6 +185,7 @@ export const getMentionSuggestion = (contacts: () => ContactSlim[]) => ({
 
     return {
       onStart: (props: SuggestionProps<ContactSlim, MentionNodeAttrs>) => {
+        shown = props.items.length > 0;
         component = new ReactRenderer(MentionList, {
           props,
           editor: props.editor,
@@ -210,6 +213,7 @@ export const getMentionSuggestion = (contacts: () => ContactSlim[]) => ({
 
       onUpdate(props: SuggestionProps<ContactSlim, MentionNodeAttrs>) {
         component.updateProps(props);
+        shown = props.items.length > 0;
 
         if (!props.clientRect) return;
         caret = props.clientRect;
@@ -218,7 +222,10 @@ export const getMentionSuggestion = (contacts: () => ContactSlim[]) => ({
 
       onKeyDown(props: SuggestionKeyDownProps) {
         if (props.event.key === "Escape") {
-          if (popup) popup.style.display = "none";
+          // Nothing on screen: the Escape is the card's or the page's. With
+          // spaces in a query, an @ with no match lasts to the line's end.
+          if (!shown || !popup || popup.style.display === "none") return false;
+          popup.style.display = "none";
           return true;
         }
 
