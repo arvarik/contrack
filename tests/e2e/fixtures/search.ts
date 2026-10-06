@@ -145,3 +145,26 @@ export async function failPeopleSearch(
     }),
   );
 }
+
+/**
+ * AI settings with every model role served, so a button that needs AI
+ * (a briefing, a synthesis, Add from text) is ready. No test has a key, so
+ * the answers themselves are scripted at their own routes.
+ */
+export async function serveAiModels(page: Page): Promise<void> {
+  const resolved = {
+    providerId: "gemini",
+    providerLabel: "Google Gemini",
+    model: "gemini-test",
+  };
+  await page.route("**/api/settings/ai", async (route) => {
+    const json = await (await route.fetch()).json();
+    for (const capability of ["quick", "deep", "research", "embeddings"]) {
+      json.capabilities[capability] = {
+        ...json.capabilities[capability],
+        resolved,
+      };
+    }
+    await route.fulfill({ json });
+  });
+}

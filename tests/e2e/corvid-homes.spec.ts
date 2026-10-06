@@ -19,7 +19,11 @@
 import { devices, type Page } from "@playwright/test";
 import { test, expect } from "./fixtures/test";
 import { expectPageAccessible, expectVisibleFocus } from "./fixtures/a11y";
-import { answerPeopleSearch, personMatch } from "./fixtures/search";
+import {
+  answerPeopleSearch,
+  personMatch,
+  serveAiModels,
+} from "./fixtures/search";
 
 const { defaultBrowserType: _webkit, ...PHONE } = devices["Pixel 7"];
 
@@ -57,7 +61,9 @@ test.describe("the bird while the AI works", () => {
     page,
     seed,
   }, testInfo) => {
-    // The bar offers to summarise only once there are three results.
+    // The bar offers to summarise only once there are three results, and
+    // only with a model to write it.
+    await serveAiModels(page);
     await answerPeopleSearch(page, [
       personMatch(seed.byName("Ada Lovelace")),
       personMatch(seed.byName("Grace Hopper")),

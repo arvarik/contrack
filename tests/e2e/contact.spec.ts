@@ -331,18 +331,20 @@ test.describe("the Network header and start panel", () => {
     await page.goto("/");
     await expect(page.getByText("Ada Lovelace")).toBeVisible();
 
-    // ⌘K opens the palette under a mouse. Its button is for a touch screen.
+    // Under a mouse the sidebar holds the palette's button. The header's is
+    // for a touch screen.
     await expect(
-      page.getByRole("button", { name: "Command palette" }),
+      page.locator("header").getByRole("button", { name: "Command palette" }),
     ).toBeHidden();
 
-    // Named for a screen reader, titled for a pointer, no visible text.
+    // Named for a screen reader, labelled for a pointer, no visible text.
     for (const name of ["Select", "Import", "New"]) {
       const button = page.getByRole("button", { name, exact: true });
       await expect(button).toBeVisible();
-      await expect(button).toHaveAttribute("title", name);
       await expect(button).toHaveText("");
     }
+    await page.getByRole("button", { name: "Import", exact: true }).hover();
+    await expect(page.getByText("Import", { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "New", exact: true }).click();
     const menu = page.getByRole("menu", { name: "New" });
@@ -1172,8 +1174,9 @@ test.describe("the composer", () => {
   }, testInfo) => {
     const writerId = await ownContact(instance, "Zach Dialog");
     const mentionedId = await ownContact(instance, "Zelda Mentioned");
-    await page.goto(`/contact/${writerId}`);
-    await expect(contactHeading(page, "Zach Dialog")).toBeVisible();
+    // From the Network page the dialog asks for the contact first.
+    await page.goto("/");
+    await expect(page.getByText("Zach Dialog")).toBeVisible();
 
     await page.keyboard.press("Meta+Shift+KeyI");
     const dialog = page.getByRole("dialog", { name: "Log an interaction" });
@@ -1208,6 +1211,14 @@ test.describe("the composer", () => {
     await editor.press("ControlOrMeta+Enter");
     await expect(dialog).toBeHidden();
     await expect(page.getByText("Note logged for Zach Dialog")).toBeVisible();
+
+    // On a contact's page the dialog opens for that contact, ready to write.
+    await page.goto(`/contact/${writerId}`);
+    await expect(contactHeading(page, "Zach Dialog")).toBeVisible();
+    await page.keyboard.press("Meta+Shift+KeyI");
+    await expect(dialog.getByRole("textbox", { name: "Note" })).toBeFocused();
+    await page.keyboard.press("Meta+Shift+KeyI");
+    await expect(dialog).toBeHidden();
 
     // The mention links the note to the person it names.
     await page.goto(`/contact/${mentionedId}`);
@@ -1567,14 +1578,14 @@ test.describe("phone", () => {
     // The header keeps its height, so the row is still under the finger.
     expect((await ada.boundingBox())!.y).toBe(before.y);
     await expect(
-      page.getByRole("button", { name: "View contact" }),
+      page.getByRole("menuitem", { name: "View contact" }),
     ).toBeHidden();
 
-    // A right click is still the row's menu.
+    // A right click is still the row's menu, with focus on its first item.
     await listRow(page, seed, "Grace Hopper").click({ button: "right" });
     await expect(
-      page.getByRole("button", { name: "View contact" }),
-    ).toBeVisible();
+      page.getByRole("menuitem", { name: "View contact" }),
+    ).toBeFocused();
     await page.keyboard.press("Escape");
   });
 

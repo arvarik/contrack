@@ -49,6 +49,7 @@ const SIDEBAR_STOPS = [
   { role: "link", name: /^Pulse/ },
   { role: "link", name: "Map" },
   { role: "link", name: "Ask Contrack" },
+  { role: "button", name: "Command palette" },
   { role: "button", name: "Keyboard shortcuts" },
   { role: "link", name: "Settings" },
 ] as const;
