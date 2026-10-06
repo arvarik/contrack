@@ -16,7 +16,8 @@ import { uploadAccountAvatar } from "../../api/auth";
 import { signedOutAccountAvatarUrl } from "../../lib/avatar";
 import { AccountPhotoField } from "./AccountPhotoField";
 import { toast } from "sonner";
-import { AuthField, touchFirst } from "./AuthShell";
+import { AuthField } from "./AuthShell";
+import { touchFirst } from "../../lib/platform";
 import { PasswordStrengthMeter } from "../../lib/passwordStrength";
 
 /** Kept in step with USERNAME_PATTERN in server/services/authService.ts. */
@@ -196,25 +197,21 @@ export function useAccountForm(): AccountForm {
  * Run account creation followed by photo upload when a photo was selected.
  *
  * A failure during photo upload does not block account creation: the account
- * is already created and authenticated, so it resolves with `{ photoFailed: true }`
- * and tells the person where to add the photo later.
+ * is already created and authenticated, so a toast tells the person where to
+ * add the photo later.
  */
 export async function createAccountThenPhoto(
   submit: () => Promise<unknown>,
   photo: File | null,
-): Promise<{ photoFailed: boolean }> {
+): Promise<void> {
   await submit();
-  if (!photo) {
-    return { photoFailed: false };
-  }
+  if (!photo) return;
   try {
     await uploadAccountAvatar(photo);
-    return { photoFailed: false };
   } catch {
     toast.error(
       "Your account is ready. The photo did not upload. Add it in Settings → Account",
     );
-    return { photoFailed: true };
   }
 }
 

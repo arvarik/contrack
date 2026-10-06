@@ -48,16 +48,6 @@ export const WRONG_CREDENTIALS = "Incorrect username or password.";
  */
 const ShakeContext = createContext<(() => void) | null>(null);
 
-/**
- * True on a touch screen. A field that takes focus there opens the keyboard
- * over the form, so these screens focus their first field only with a
- * mouse or a trackpad.
- */
-export const touchFirst = (): boolean =>
-  typeof window !== "undefined" &&
-  !!window.matchMedia &&
-  window.matchMedia("(pointer: coarse)").matches;
-
 export const AuthShell = ({
   icon,
   title,
