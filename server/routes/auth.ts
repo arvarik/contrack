@@ -94,6 +94,7 @@ import {
 } from "../utils/avatarProcessor.ts";
 import { mailLinkOrigin } from "../utils/publicOrigin.ts";
 import { oauthIssuer } from "../services/oauthService.ts";
+import type { SessionMethod } from "../../shared/devices.ts";
 import {
   renderPasswordResetEmail,
   renderMagicLinkEmail,
@@ -181,6 +182,35 @@ function ipOf(req: Request): string | null {
   return req.ip ?? null;
 }
 
+/** The refusal a disabled account gets at sign-in. */
+function accountDisabled(): AppError {
+  return new AppError(
+    "This account has been disabled. Ask an administrator to re-enable it.",
+    403,
+    { code: "ACCOUNT_DISABLED" },
+  );
+}
+
+/**
+ * Start a session for `user` and set its cookie. With `remember` false the
+ * session lasts at most a day and the cookie ends with the browser.
+ */
+function startSession(
+  req: Request,
+  res: Response,
+  user: User,
+  method: SessionMethod,
+  remember = true,
+): void {
+  const session = createSession(user.id, req.headers["user-agent"] ?? null, {
+    method,
+    remember,
+  });
+  setSessionCookie(req, res, session.secret, session.expiresAt, {
+    sessionOnly: !remember,
+  });
+}
+
 // Status
 
 /**
@@ -263,10 +293,7 @@ router.post(
 
     // Sign the new account in immediately — making someone re-type the
     // password they just chose twice in a row is pure friction.
-    const session = createSession(user.id, req.headers["user-agent"] ?? null, {
-      method: "password",
-    });
-    setSessionCookie(req, res, session.secret, session.expiresAt);
+    startSession(req, res, user, "password");
 
     res.status(201).json({ user: publicUser(user) });
   }),
@@ -294,10 +321,7 @@ router.post(
     }
 
     const user = await createUser({ ...req.body, role: "member" });
-    const session = createSession(user.id, req.headers["user-agent"] ?? null, {
-      method: "password",
-    });
-    setSessionCookie(req, res, session.secret, session.expiresAt);
+    startSession(req, res, user, "password");
     auditService.record({
       actorUserId: user.id,
       action: "user.created",
@@ -361,21 +385,10 @@ router.post(
         details: { matched: true, reason: "disabled" },
         ip: ipOf(req),
       });
-      throw new AppError(
-        "This account has been disabled. Ask an administrator to re-enable it.",
-        403,
-        { code: "ACCOUNT_DISABLED" },
-      );
+      throw accountDisabled();
     }
 
-    const remember = req.body?.remember !== false;
-    const session = createSession(user.id, req.headers["user-agent"] ?? null, {
-      method: "password",
-      remember,
-    });
-    setSessionCookie(req, res, session.secret, session.expiresAt, {
-      sessionOnly: !remember,
-    });
+    startSession(req, res, user, "password", req.body?.remember !== false);
     auditService.record({
       actorUserId: user.id,
       action: "auth.login.success",
@@ -418,10 +431,7 @@ router.post(
   validateBody(acceptInvitationSchema),
   asyncHandler(async (req, res) => {
     const user = await acceptInvitation(req.body, ipOf(req));
-    const session = createSession(user.id, req.headers["user-agent"] ?? null, {
-      method: "password",
-    });
-    setSessionCookie(req, res, session.secret, session.expiresAt);
+    startSession(req, res, user, "password");
     res.status(201).json({ user: publicUser(user) });
   }),
 );
@@ -550,10 +560,7 @@ router.post(
 
     const link = redeemAuthLink("reset", token);
     const user = await resetUserPasswordWithToken(link.userId, password);
-    const session = createSession(user.id, req.headers["user-agent"] ?? null, {
-      method: "email-link",
-    });
-    setSessionCookie(req, res, session.secret, session.expiresAt);
+    startSession(req, res, user, "email-link");
     auditService.record({
       actorUserId: user.id,
       action: "auth.password.reset",
@@ -605,21 +612,10 @@ router.post(
     const link = redeemAuthLink("magic", token);
     const user = getUserById(link.userId);
     if (!user || user.status === "disabled") {
-      throw new AppError(
-        "This account has been disabled. Ask an administrator to re-enable it.",
-        403,
-        { code: "ACCOUNT_DISABLED" },
-      );
+      throw accountDisabled();
     }
 
-    const remember = req.body?.remember !== false;
-    const session = createSession(user.id, req.headers["user-agent"] ?? null, {
-      method: "email-link",
-      remember,
-    });
-    setSessionCookie(req, res, session.secret, session.expiresAt, {
-      sessionOnly: !remember,
-    });
+    startSession(req, res, user, "email-link", req.body?.remember !== false);
     auditService.record({
       actorUserId: user.id,
       action: "auth.login.success",
@@ -949,21 +945,10 @@ router.post(
         details: { identifier: user.username, reason: "disabled" },
         ip: ipOf(req),
       });
-      throw new AppError(
-        "This account has been disabled. Ask an administrator to re-enable it.",
-        403,
-        { code: "ACCOUNT_DISABLED" },
-      );
+      throw accountDisabled();
     }
 
-    const remember = req.body?.remember !== false;
-    const session = createSession(user.id, req.headers["user-agent"] ?? null, {
-      method: "passkey",
-      remember,
-    });
-    setSessionCookie(req, res, session.secret, session.expiresAt, {
-      sessionOnly: !remember,
-    });
+    startSession(req, res, user, "passkey", req.body?.remember !== false);
     auditService.record({
       actorUserId: user.id,
       action: "auth.login.success",
