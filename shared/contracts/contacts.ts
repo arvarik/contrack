@@ -55,7 +55,7 @@ export const contactCreateSchema = z
       .optional(),
     isGhost: stringToBool,
     isArchived: stringToBool,
-    /** A person chose to keep up with this contact. See server/db.ts §2z-0. */
+    /** A person chose to keep up with this contact. */
     isTracked: stringToBool,
     nextFollowUpAt: dateSchema.nullable().optional(),
   })

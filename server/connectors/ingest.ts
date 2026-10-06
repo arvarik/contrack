@@ -124,7 +124,7 @@ export async function saveContactPhoto(
     (img) =>
       img
         .rotate()
-        .resize(PHOTO_SIZE, PHOTO_SIZE, { fit: "cover", position: "centre" })
+        .resize(PHOTO_SIZE, PHOTO_SIZE, { fit: "cover", position: "center" })
         .flatten({ background: "#ffffff" })
         .jpeg({ quality: PHOTO_JPEG_QUALITY, mozjpeg: true }),
     { maxBytes: PHOTO_MAX_BYTES, timeoutMs: PHOTO_TIMEOUT_MS, signal },

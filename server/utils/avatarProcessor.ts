@@ -65,7 +65,7 @@ export async function processBase64Avatar(
     const info = await sharp(inputBuffer)
       .resize(AVATAR_SIZE, AVATAR_SIZE, {
         fit: "cover",
-        position: "centre",
+        position: "center",
       })
       .jpeg({ quality: JPEG_QUALITY, mozjpeg: true })
       .toFile(outputPath);
@@ -115,7 +115,7 @@ export async function processProfilePhoto(
       .rotate()
       .resize(PROFILE_PHOTO_SIZE, PROFILE_PHOTO_SIZE, {
         fit: "cover",
-        position: "centre",
+        position: "center",
       })
       .jpeg({ quality: PROFILE_PHOTO_QUALITY, mozjpeg: true })
       .toFile(outputPath);

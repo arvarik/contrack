@@ -389,7 +389,7 @@ function png(svg: string, density = 72): Promise<Buffer> {
 async function blurOf(svg: string): Promise<number> {
   const { data } = await sharp(Buffer.from(svg), { density: 72 })
     .removeAlpha()
-    .greyscale()
+    .grayscale()
     .raw()
     .toBuffer({ resolveWithObject: true });
   let blur = 0;
