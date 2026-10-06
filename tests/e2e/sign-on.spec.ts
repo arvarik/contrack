@@ -190,6 +190,13 @@ test("passkey sign-on journey: setup, nudge, passkey sign-in, account settings, 
   await expect(
     page.getByRole("heading", { name: "Reset your password" }),
   ).toBeVisible();
+
+  // 10. A dead invitation link says so before any form shows
+  await page.goto(`${localhostBase}/join?token=not-real`);
+  await expect(
+    page.getByRole("heading", { name: "This invitation is no longer valid" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Email")).toHaveCount(0);
 });
 
 test("sign-in front door: password toggle and session-only cookie when remember is unchecked", async ({

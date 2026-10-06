@@ -1,7 +1,7 @@
 /**
  * PrivacyPage — Privacy and AI settings for this account.
  *
- * The AI switch, the search history, what stays on this machine, and what
+ * The AI switch, the search history, what stays on the server, and what
  * each AI feature uses (`FeatureMap`), with a link to AI usage.
  *
  * The switch is the account's own, "Use AI for my account", when the

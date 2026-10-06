@@ -273,7 +273,7 @@ export const SignIn = ({
               <button
                 type="button"
                 onClick={handleNotYou}
-                className="text-xs text-primary font-medium hover:underline inline-flex items-center min-h-[36px] sm:min-h-[44px] py-1"
+                className="text-xs text-primary font-medium hover:underline inline-flex items-center min-h-[44px] py-1"
               >
                 Not you?
               </button>
