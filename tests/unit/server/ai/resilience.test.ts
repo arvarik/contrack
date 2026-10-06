@@ -3,19 +3,36 @@
 //   - withRetry            → jittered exponential-backoff with abort propagation
 //   - isRetryableError     → coarse classifier for transient upstream failures
 //   - parseAIJson          → tolerant JSON parsing for model output
+//   - streamWithFallback   → streams a call, and runs `generate` when the
+//                            stream fails before its first piece
+//   - inOnePiece           → sends the text of a `generate` call as one piece
+//   - canceledError        → the error a canceled call ends with
 //
 // The production code schedules a real backoff (500ms plus jitter before the
 // one retry), so these tests use fake timers and never sleep. Every async
 // path must work with `vi.advanceTimersByTimeAsync`.
 
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  type MockInstance,
+} from "vitest";
 
 import {
+  canceledError,
+  inOnePiece,
   isRetryableError,
   parseAIJson,
+  streamWithFallback,
   withRetry,
   withTimeout,
 } from "../../../../server/ai/resilience.ts";
+import type { AIGenerateResult } from "../../../../server/ai/types.ts";
+import { log } from "../../../../server/utils/logger.ts";
 import {
   AppError,
   RateLimitedError,
@@ -394,5 +411,208 @@ describe("withRetry: a model the provider does not serve", () => {
       message: expect.stringContaining("no longer available to new users"),
     });
     expect(op).toHaveBeenCalledTimes(1);
+  });
+});
+
+// canceledError, inOnePiece, streamWithFallback
+
+const answer = (text: string) => ({ text }) as AIGenerateResult;
+
+describe("canceledError", () => {
+  it("is a 499 CANCELLED error that names the caller", () => {
+    expect(canceledError()).toMatchObject({
+      statusCode: 499,
+      code: "CANCELLED",
+      message: "AI call canceled by caller",
+    });
+  });
+});
+
+describe("inOnePiece", () => {
+  it("sends the whole text as one piece and returns the result", async () => {
+    const onDelta = vi.fn();
+    const result = await inOnePiece(async () => answer("whole"), onDelta);
+    expect(result.text).toBe("whole");
+    expect(onDelta.mock.calls).toEqual([["whole"]]);
+  });
+
+  it("sends no piece when the text is empty", async () => {
+    const onDelta = vi.fn();
+    await inOnePiece(async () => answer(""), onDelta);
+    expect(onDelta).not.toHaveBeenCalled();
+  });
+});
+
+describe("streamWithFallback", () => {
+  const options = { area: "TestAdapter", subject: "model-x stream" };
+  const warning = (error: string) =>
+    `model-x stream failed before its first piece (will run generate): ${error}`;
+  let warn: MockInstance;
+
+  beforeEach(() => {
+    warn = vi.spyOn(log, "warn").mockImplementation(() => {});
+  });
+  afterEach(() => warn.mockRestore());
+
+  it("returns the stream's result and sends each piece once", async () => {
+    const generate = vi.fn();
+    const onDelta = vi.fn();
+    const result = await streamWithFallback(
+      async (onPiece) => {
+        onPiece("a");
+        onPiece("b");
+        return answer("ab");
+      },
+      generate,
+      onDelta,
+      options,
+    );
+    expect(result.text).toBe("ab");
+    expect(onDelta.mock.calls).toEqual([["a"], ["b"]]);
+    expect(generate).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("returns the result of a stream that sent no piece", async () => {
+    const generate = vi.fn();
+    const result = await streamWithFallback(
+      async () => answer(""),
+      generate,
+      vi.fn(),
+      options,
+    );
+    expect(result.text).toBe("");
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["no final check", undefined],
+    ["a final check that says no", () => false],
+  ])(
+    "runs generate when the stream fails before its first piece (%s)",
+    async (_name, final) => {
+      const onDelta = vi.fn();
+      const result = await streamWithFallback(
+        async () => {
+          throw new Error("boom");
+        },
+        async () => answer("whole"),
+        onDelta,
+        { ...options, final },
+      );
+      expect(result.text).toBe("whole");
+      expect(onDelta.mock.calls).toEqual([["whole"]]);
+      expect(warn.mock.calls).toEqual([["TestAdapter", warning("boom")]]);
+    },
+  );
+
+  it("cuts the error text in the warning at 200 characters", async () => {
+    await streamWithFallback(
+      async () => {
+        throw new Error("x".repeat(300));
+      },
+      async () => answer("whole"),
+      vi.fn(),
+      options,
+    );
+    expect(warn.mock.calls[0][1]).toBe(warning("x".repeat(200)));
+  });
+
+  it("rejects with the stream's error when it fails after a piece", async () => {
+    const failure = new Error("cut off");
+    const generate = vi.fn();
+    const onDelta = vi.fn();
+    await expect(
+      streamWithFallback(
+        async (onPiece) => {
+          onPiece("a");
+          throw failure;
+        },
+        generate,
+        onDelta,
+        options,
+      ),
+    ).rejects.toBe(failure);
+    expect(onDelta.mock.calls).toEqual([["a"]]);
+    expect(generate).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("counts a piece as sent before the caller's handler sees it", async () => {
+    const failure = new Error("the handler failed");
+    const generate = vi.fn();
+    await expect(
+      streamWithFallback(
+        async (onPiece) => {
+          onPiece("a");
+          return answer("a");
+        },
+        generate,
+        () => {
+          throw failure;
+        },
+        options,
+      ),
+    ).rejects.toBe(failure);
+    expect(generate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["after a piece", true],
+    ["before a piece", false],
+  ])(
+    "rejects with the canceled error when the caller aborted %s",
+    async (_name, sendPiece) => {
+      const controller = new AbortController();
+      const generate = vi.fn();
+      await expect(
+        streamWithFallback(
+          async (onPiece) => {
+            if (sendPiece) onPiece("a");
+            controller.abort();
+            throw new Error("socket closed");
+          },
+          generate,
+          vi.fn(),
+          { ...options, signal: controller.signal },
+        ),
+      ).rejects.toMatchObject({ statusCode: 499, code: "CANCELLED" });
+      expect(generate).not.toHaveBeenCalled();
+      expect(warn).not.toHaveBeenCalled();
+    },
+  );
+
+  it("rejects without running generate when the final check says so", async () => {
+    const refusal = new Error("no answer");
+    const generate = vi.fn();
+    await expect(
+      streamWithFallback(
+        async () => {
+          throw refusal;
+        },
+        generate,
+        vi.fn(),
+        { ...options, final: (error) => error === refusal },
+      ),
+    ).rejects.toBe(refusal);
+    expect(generate).not.toHaveBeenCalled();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("rejects with the error of generate when the fallback fails too", async () => {
+    const second = new Error("generate failed");
+    await expect(
+      streamWithFallback(
+        async () => {
+          throw new Error("stream failed");
+        },
+        async () => {
+          throw second;
+        },
+        vi.fn(),
+        options,
+      ),
+    ).rejects.toBe(second);
+    expect(warn).toHaveBeenCalledTimes(1);
   });
 });

@@ -562,6 +562,21 @@ describe("a second round, worded another way", () => {
       "Dean's List; New Medal",
     );
   });
+
+  it("adds to a row an earlier run named Licences, and makes no second row", () => {
+    // The research prompt asks for "Licenses". Runs from before it said so
+    // named the attribute "Licences".
+    merge({ attributes: [{ name: "Licences", value: "Series 7" }] });
+    merge({
+      attributes: [{ name: "Licenses", value: "Series 7; Series 63" }],
+    });
+    const { attributes } = enrichmentContact(scope(), id);
+    expect(attributes).toHaveLength(1);
+    expect(attributes[0]).toMatchObject({
+      name: "Licences",
+      value: "Series 7; Series 63",
+    });
+  });
 });
 
 describe("Not this person", () => {

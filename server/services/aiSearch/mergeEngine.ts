@@ -243,6 +243,16 @@ function addedEntry(
  * the contact's briefing, so the new data is searchable without costing other
  * accounts a fresh search, and queue the contact for indexing.
  */
+/**
+ * The key an attribute merges under: its name in lower case. The research
+ * prompt asks for "Licenses", and a row saved as "Licences" is the same
+ * attribute, so a new run adds to it and makes no second row.
+ */
+function attributeKey(name: string): string {
+  const key = name.toLowerCase();
+  return key === "licences" ? "licenses" : key;
+}
+
 function refreshAfterResearch(scope: Scope, contactId: string): void {
   aiCache.invalidateForOwner("rerank", scope.ownerId);
   aiCache.invalidateForOwner("synthesis", scope.ownerId);
@@ -302,7 +312,7 @@ export function mergeSearchResult(
       `${orgKey(entry.company)}|${textKey(entry.role)}|${(entry.startDate ?? "").slice(0, 4)}`,
     tags: (entry: { tag: string }) => entry.tag.toLowerCase(),
     interests: (entry: { interest: string }) => entry.interest.toLowerCase(),
-    attributes: (entry: { name: string }) => entry.name.toLowerCase(),
+    attributes: (entry: { name: string }) => attributeKey(entry.name),
     addresses: (entry: { address: string }) => entry.address.toLowerCase(),
   };
   for (const field of Object.keys(keys) as (keyof typeof keys)[]) {
@@ -568,7 +578,7 @@ export function mergeSearchResult(
     Array.isArray(searchResult.attributes) &&
     searchResult.attributes.length > 0
   ) {
-    const kind = (name: string) => name.toLowerCase();
+    const kind = attributeKey;
     // Every kind research made, and the ones a run not taken back made: a
     // kind the person deleted stays deleted, and one taken back as someone
     // else's may come again with the right person's items.

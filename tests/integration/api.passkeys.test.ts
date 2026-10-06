@@ -481,6 +481,40 @@ describe("passkey login options & verify", () => {
     expect(passkey?.counter).toBe(5);
     expect(passkey?.lastUsedAt).not.toBeNull();
   });
+
+  it("keeps a passkey session for its full lifetime, unless remember is false", async () => {
+    const { user } = await setupAccount();
+    insertPasskeyRow({ id: "passkey_valid", userId: user.id });
+    const signIn = async (counter: number, extra: object) => {
+      const options = await request(app)
+        .post("/api/auth/passkeys/login/options")
+        .set("Host", "localhost:3210");
+      vi.mocked(
+        simplewebauthn.verifyAuthenticationResponse,
+      ).mockResolvedValueOnce({
+        verified: true,
+        authenticationInfo: { newCounter: counter },
+      } as never);
+      return request(app)
+        .post("/api/auth/passkeys/login/verify")
+        .set("Host", "localhost:3210")
+        .send({
+          ceremonyId: options.body.ceremonyId,
+          response: {
+            id: "passkey_valid",
+            rawId: "passkey_valid",
+            type: "public-key",
+            response: {},
+          },
+          ...extra,
+        });
+    };
+
+    expect(cookieFrom(await signIn(1, {})).join(";")).toMatch(/Max-Age=\d+/);
+    expect(
+      cookieFrom(await signIn(2, { remember: false })).join(";"),
+    ).not.toContain("Max-Age");
+  });
 });
 
 describe("passkey management: list, rename, remove, nudge", () => {
