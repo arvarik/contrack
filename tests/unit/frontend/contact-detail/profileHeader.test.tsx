@@ -23,6 +23,7 @@ const aiSetup = vi.hoisted(() => ({
 }));
 vi.mock("../../../../src/hooks/useAiSetup", () => ({
   useAiSetup: () => aiSetup.current,
+  useBlockedAi: () => aiSetup.current,
   aiSetupLine: () => "No AI model is set up. Ask an admin to set one up",
 }));
 import {
@@ -607,13 +608,13 @@ describe("the contact actions", () => {
     opts.onSuccess();
     // With Undo, as the Network list's Archive has.
     expect(toastMock.success).toHaveBeenCalledWith(
-      "Thomas Walker archived",
+      "Archived Thomas Walker",
       expect.objectContaining({
         action: expect.objectContaining({ label: "Undo" }),
       }),
     );
     opts.onError(new Error("offline"));
-    expect(toastMock.error).toHaveBeenCalledWith("Could not save: offline");
+    expect(toastMock.error).toHaveBeenCalledWith("Could not archive: offline");
   });
 
   it("unarchives an archived contact, from Unarchive in place of Archive", () => {

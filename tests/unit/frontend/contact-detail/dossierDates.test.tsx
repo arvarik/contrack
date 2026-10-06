@@ -17,6 +17,7 @@ const aiSetup = vi.hoisted(() => ({
 }));
 vi.mock("../../../../src/hooks/useAiSetup", () => ({
   useAiSetup: () => aiSetup.current,
+  useBlockedAi: () => aiSetup.current,
   aiSetupLine: () => "No AI model is set up. Ask an admin to set one up",
 }));
 import { cleanup, render, screen } from "@testing-library/react";

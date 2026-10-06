@@ -30,7 +30,6 @@
  *
  * @module views/contact-detail/components/EnrichMenu
  */
-import { Link } from "react-router-dom";
 import { ChevronDown, Sparkles } from "lucide-react";
 import type { Contact } from "../../../types";
 import {
@@ -38,11 +37,7 @@ import {
   type ActionMenuItem,
 } from "../../../components/ui/ActionMenu";
 import { useAiAllowed } from "../../../hooks/useAiAllowed";
-import {
-  aiSetupLine,
-  useAiSetup,
-  type AiSetup,
-} from "../../../hooks/useAiSetup";
+import { aiSetupLine, useBlockedAi } from "../../../hooks/useAiSetup";
 import {
   isEnriching,
   useOptionalAISearch,
@@ -73,33 +68,6 @@ export function useCanEnrich(contact: Pick<Contact, "isGhost">): boolean {
   const aiAllowed = useAiAllowed();
   return !!search && aiAllowed && !contact.isGhost;
 }
-
-/**
- * The setup an AI feature cannot run without, or null when it can run,
- * with less or in full.
- */
-export function useBlockedAi(featureId: string): AiSetup | null {
-  const setup = useAiSetup(featureId);
-  return setup && setup.state !== "limited" ? setup : null;
-}
-
-/** Why an AI button waits, and the page that fixes it, for those who can. */
-export const AiSetupNote = ({ setup }: { setup: AiSetup }) => (
-  <p className="text-xs text-on-surface-variant text-pretty">
-    {aiSetupLine(setup)}
-    {setup.fix && (
-      <>
-        {". "}
-        <Link
-          to={setup.fix.path}
-          className="font-semibold text-primary underline-offset-2 hover:underline"
-        >
-          {setup.fix.label}
-        </Link>
-      </>
-    )}
-  </p>
-);
 
 export function EnrichMenu({
   contact,

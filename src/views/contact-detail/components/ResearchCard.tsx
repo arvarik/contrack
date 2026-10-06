@@ -63,6 +63,8 @@ import {
 import { FORMER_NAME_ATTRIBUTE } from "../../../../shared/researchIdentity";
 import { DEPTH_WORDS } from "../../../lib/researchDepth";
 import { EnrichMenu, useCanEnrich } from "./EnrichMenu";
+import { AiSetupNote } from "../../../components/AiSetupNote";
+import { useBlockedAi } from "../../../hooks/useAiSetup";
 import {
   parseResearchRecord,
   sourceForSite,
@@ -581,6 +583,10 @@ export function ResearchCard({
   onAddDetail?: (anchor: ResearchAnchor) => void;
 }) {
   const headingId = useId();
+  // Enrich again waits without a model or web search, and says why here, as
+  // the empty dossier's Enrich contact does.
+  const blocked = useBlockedAi("research");
+  const canEnrich = useCanEnrich(contact);
   const findingsId = useId();
   const sourcesId = useId();
   const [allFindings, setAllFindings] = useState(false);
@@ -682,6 +688,7 @@ export function ResearchCard({
           className="shrink-0"
         />
       </div>
+      {canEnrich && blocked && <AiSetupNote setup={blocked} className="mt-2" />}
 
       {showNextSteps && (
         <ResearchNextSteps

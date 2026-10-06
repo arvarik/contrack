@@ -16,8 +16,8 @@ import React, { useEffect, useRef, useState, type RefObject } from "react";
 import { toast } from "sonner";
 import { motion } from "motion/react";
 import { FileText, Sparkles } from "lucide-react";
-import { Link } from "react-router-dom";
-import { aiSetupLine, useAiSetup } from "../../hooks/useAiSetup";
+import { useBlockedAi } from "../../hooks/useAiSetup";
+import { AiSetupNote } from "../../components/AiSetupNote";
 import { useCreateContact, useParseContactText } from "../../api";
 import type {
   ContactList as ContactListType,
@@ -114,8 +114,7 @@ export const ContactListModals = ({
   const parseContactText = useParseContactText();
   // Add from text needs a Fast model. Without one the dialog says why and
   // how to fix it, where Extract used to fail after the click.
-  const aiSetup = useAiSetup("text", isSmartPasteOpen);
-  const aiBlocked = aiSetup !== null && aiSetup.state !== "limited";
+  const aiBlocked = useBlockedAi("text", isSmartPasteOpen);
 
   // What an extraction found, shared with the New contact form: when it
   // succeeds, Add from text closes and the form opens with these fields.
@@ -373,21 +372,11 @@ export const ContactListModals = ({
               </div>
             </motion.div>
           ) : aiBlocked ? (
-            <p className="text-sm text-on-surface-variant leading-relaxed">
-              {aiSetupLine(aiSetup)}
-              {aiSetup.fix && (
-                <>
-                  {". "}
-                  <Link
-                    to={aiSetup.fix.path}
-                    onClick={onCloseSmartPaste}
-                    className="font-semibold text-primary underline underline-offset-2"
-                  >
-                    {aiSetup.fix.label}
-                  </Link>
-                </>
-              )}
-            </p>
+            <AiSetupNote
+              setup={aiBlocked}
+              onNavigate={onCloseSmartPaste}
+              className="text-sm leading-relaxed"
+            />
           ) : (
             <>
               <p className="text-sm text-on-surface-variant leading-relaxed">

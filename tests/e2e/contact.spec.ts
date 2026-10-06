@@ -597,7 +597,7 @@ test.describe("the contact header", () => {
     // Archive from the menu, and the item turns into its undo.
     await kebab.click();
     await menu.getByRole("menuitem", { name: "Archive" }).click();
-    await expect(page.getByText("Zora Kebab archived")).toBeVisible();
+    await expect(page.getByText("Archived Zora Kebab")).toBeVisible();
     await kebab.click();
     await expect(
       menu.getByRole("menuitem", { name: "Unarchive" }),

@@ -57,9 +57,8 @@ import { buildVCard, vCardFileName } from "../../../lib/contactLinks";
 import { isEnriching, useAISearch } from "../../../contexts/AISearchContext";
 import { depthTime } from "../../../lib/researchDepth";
 import { useAiAllowed } from "../../../hooks/useAiAllowed";
-import { aiSetupLine } from "../../../hooks/useAiSetup";
+import { aiSetupLine, useBlockedAi } from "../../../hooks/useAiSetup";
 import { withUndo } from "../../../lib/undoToast";
-import { useBlockedAi } from "./EnrichMenu";
 import { VibePickerPopover } from "./VibePickerPopover";
 import type { ProfileHeaderProps } from "./ProfileHeader";
 
@@ -173,11 +172,14 @@ export const ContactActionsMenu = ({
   const aiAllowed = useAiAllowed();
   const search = useAISearch();
   const enriching = isEnriching(search, contact.id);
-  // No model or no web search: the rows say so, and a press says why.
+  // No model or no web search: the rows say so, and a press says why, and
+  // where an admin fixes it, in the words of every AI button that waits.
   const blocked = useBlockedAi("research");
   const enrich = (depth: "standard" | "deep") =>
     blocked
-      ? toast.error(aiSetupLine(blocked))
+      ? toast.error(`Could not enrich. ${aiSetupLine(blocked)}`, {
+          description: blocked.fix?.label,
+        })
       : search.startSearch([contact.id], { limitAs: "toast", depth });
 
   const copy = (text: string, success: string) => {
@@ -187,23 +189,21 @@ export const ContactActionsMenu = ({
     );
   };
 
-  const failed = (err: Error) =>
-    toast.error(
-      `Could not save: ${err instanceof Error ? err.message : String(err)}`,
-    );
+  const failed = (what: string) => (err: Error) =>
+    toast.error(`Could not ${what}: ${err.message}`);
 
-  // Each way, with Undo, as the Network list's Archive has.
+  // Each way, with Undo, in the words the Network list's Archive uses.
   const archive = () =>
     archiveContact(contact.id, {
       onSuccess: () =>
-        toast.success(`${contact.name} archived`, withUndo(unarchive)),
-      onError: failed,
+        toast.success(`Archived ${contact.name}`, withUndo(unarchive)),
+      onError: failed("archive"),
     });
   const unarchive = () =>
     unarchiveContact(contact.id, {
       onSuccess: () =>
         toast.success(`${contact.name} is back in Network`, withUndo(archive)),
-      onError: failed,
+      onError: failed("unarchive"),
     });
 
   // The share row says what the browser can do: share, or only save a file.

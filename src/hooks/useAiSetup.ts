@@ -79,6 +79,19 @@ export function useAiSetup(featureId: string, enabled = true): AiSetup | null {
   }, [aiAllowed, featureId, settings, isAdmin]);
 }
 
+/**
+ * The setup an AI feature cannot run without, or null when it can run, in
+ * full or with less. An AI button waits while this is set, and says why
+ * (`AiSetupNote`).
+ */
+export function useBlockedAi(
+  featureId: string,
+  enabled = true,
+): AiSetup | null {
+  const setup = useAiSetup(featureId, enabled);
+  return setup && setup.state !== "limited" ? setup : null;
+}
+
 /** The line about AI's state: what is off, and who can turn it on. */
 const SETUP_WORDS: Record<AiSetup["why"], { state: string; ask: string }> = {
   account: { state: "AI is off for your account", ask: "" },
