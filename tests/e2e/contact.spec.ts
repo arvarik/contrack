@@ -831,6 +831,7 @@ test.describe("tracking", () => {
       // The hint is spoken too: "Quarterly, Default".
       /^Quarterly,?\s*Default$/,
       "Yearly",
+      "Custom…",
     ]);
     await expect(menu.getByRole("menuitemradio")).toHaveCount(0);
     await menu.getByRole("menuitem", { name: /^Quarterly/ }).click();
@@ -881,7 +882,10 @@ test.describe("tracking", () => {
     await expect(
       menu.getByRole("menuitemradio", { name: "Quarterly" }),
     ).toHaveAttribute("aria-checked", "true");
-    await expect(menu.getByRole("menuitem")).toHaveText(["Stop tracking"]);
+    await expect(menu.getByRole("menuitem")).toHaveText([
+      "Custom…",
+      "Stop tracking",
+    ]);
     await menu.getByRole("menuitemradio", { name: "Monthly" }).click();
     const monthly = page.getByRole("button", {
       name: "Tracking monthly, change or stop",
@@ -1121,9 +1125,7 @@ test.describe("the timeline", () => {
 
     // Edit opens the note ready to change.
     await page.keyboard.press("Enter");
-    await expect(
-      page.getByRole("textbox", { name: "Interaction title" }),
-    ).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Title" })).toBeVisible();
   });
 });
 
@@ -1160,7 +1162,7 @@ test.describe("the composer", () => {
     await editor.click();
     await page.keyboard.press("ControlOrMeta+Enter");
     await expect(
-      page.getByRole("button", { name: "Logged meeting", exact: true }),
+      page.getByRole("button", { name: "Meeting", exact: true }),
     ).toBeVisible();
     await expect(
       page.getByText("Walked through the quarterly plan"),
@@ -1181,7 +1183,7 @@ test.describe("the composer", () => {
     await page.keyboard.press("Meta+Shift+KeyI");
     const dialog = page.getByRole("dialog", { name: "Log an interaction" });
     await expect(dialog).toBeVisible();
-    const picker = dialog.getByRole("textbox", {
+    const picker = dialog.getByRole("combobox", {
       name: "Search for a contact",
     });
     await expect(picker).toBeFocused();
@@ -1287,7 +1289,7 @@ test.describe("phone", () => {
 
     // The composer is one line, above the first entry.
     const editor = page.getByRole("textbox", { name: "Note" });
-    const nextAction = page.getByRole("textbox", { name: "Next action" });
+    const nextAction = page.getByRole("textbox", { name: "Follow-up" });
     const save = page.getByRole("button", { name: "Save", exact: true });
     await expect(editor).toBeVisible();
     expect((await editor.boundingBox())!.y).toBeLessThan(
@@ -1419,18 +1421,18 @@ test.describe("phone", () => {
     }
   });
 
-  test("the narrow header keeps Track as the glyph and the chevron, with the words in the name", async ({
+  test("the narrow header shows Track as the glyph, the cadence and the chevron, with the words in the name", async ({
     page,
     seed,
   }) => {
     await page.goto(`/contact/${seed.byName("Ada Lovelace").id}`);
     await expect(contactHeading(page, "Ada Lovelace")).toBeVisible();
 
-    // The cadence is in the name and the tooltip, not in words on screen.
+    // The cadence in a word, and in full in the name and the tooltip.
     const tracked = page.getByRole("button", {
       name: "Tracking quarterly, change or stop",
     });
-    await expect(tracked).toHaveText("");
+    await expect(tracked).toHaveText("Quarterly");
     await expect(tracked).toHaveAttribute(
       "title",
       "Tracking quarterly, change or stop",

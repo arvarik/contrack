@@ -12,12 +12,21 @@
  * returned to the result that opened it when it closes. Before this it had
  * Escape and nothing else, so a keyboard user who opened a result was left
  * tabbing through the results underneath an overlay they could not reach.
+ *
+ * - An Escape a menu or a confirmation inside the card used is theirs: it
+ *   closed the whole card as well.
+ * - Android's Back closes it (`useCloseRequest`).
+ * - One way to close at each width: below `lg` the contact's own Back bar,
+ *   from `lg` the round X. Below `lg` the X sat on the Back bar's search
+ *   button, beside a second Back.
+ * - A delete closes the card and leaves the person on the page under it.
  */
 import React, { useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X } from "lucide-react";
 import { ContactProfile } from "../views/contact-detail/components/ContactProfile";
 import { useFocusTrap } from "../hooks/useFocusTrap";
+import { useCloseRequest } from "../hooks/useCloseRequest";
 import { DURATION, EASE } from "../lib/motion";
 
 interface FloatingContactCardProps {
@@ -34,7 +43,6 @@ export const FloatingContactCard: React.FC<FloatingContactCardProps> = ({
   showNetworkButton = false,
 }) => {
   const panel = useRef<HTMLDivElement>(null);
-  const closeButton = useRef<HTMLButtonElement>(null);
   // Where focus was before this opened, captured during the render that
   // opens it — the same moment the shared Modal reads it, and for the same
   // reason: after the commit, focus may already have moved.
@@ -47,7 +55,7 @@ export const FloatingContactCard: React.FC<FloatingContactCardProps> = ({
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !e.defaultPrevented) onClose();
     },
     [onClose],
   );
@@ -63,12 +71,14 @@ export const FloatingContactCard: React.FC<FloatingContactCardProps> = ({
   }, [isOpen, handleKeyDown]);
 
   useFocusTrap(panel, isOpen);
+  useCloseRequest(isOpen, onClose);
 
-  // Focus moves in on open and back out on close. `preventScroll` keeps the
-  // results list where it was, so the reader lands on the same row they left.
+  // Focus moves in on open, onto the card itself, as a dialog with no field
+  // takes it, and back out on close. `preventScroll` keeps the results list
+  // where it was, so the reader lands on the same row they left.
   useEffect(() => {
     if (isOpen) {
-      closeButton.current?.focus({ preventScroll: true });
+      panel.current?.focus({ preventScroll: true });
       return;
     }
     const previous = previousFocus.current;
@@ -94,6 +104,7 @@ export const FloatingContactCard: React.FC<FloatingContactCardProps> = ({
             role="dialog"
             aria-modal="true"
             aria-label="Contact details"
+            tabIndex={-1}
             initial={{ opacity: 0, scale: 0.92, y: 24 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 12 }}
@@ -103,14 +114,13 @@ export const FloatingContactCard: React.FC<FloatingContactCardProps> = ({
               stiffness: 380,
               mass: 0.8,
             }}
-            className="fixed inset-4 md:inset-8 lg:inset-12 xl:inset-x-[10%] xl:inset-y-8 z-[101] flex flex-col overflow-hidden rounded-3xl bg-surface shadow-2xl ring-1 ring-surface-container-highest/50"
+            className="fixed inset-4 md:inset-8 lg:inset-12 xl:inset-x-[10%] xl:inset-y-8 z-[101] flex flex-col overflow-hidden rounded-3xl bg-surface shadow-2xl ring-1 ring-surface-container-highest/50 outline-none"
           >
             <button
-              ref={closeButton}
               type="button"
               onClick={onClose}
               aria-label="Close contact details"
-              className="state-layer absolute top-4 right-4 z-50 inline-flex items-center justify-center min-w-[44px] min-h-[44px] bg-surface-container-low rounded-full text-on-surface-variant hover:text-on-surface transition-colors"
+              className="state-layer absolute top-4 right-4 z-50 hidden lg:inline-flex items-center justify-center min-w-[44px] min-h-[44px] bg-surface-container-low rounded-full text-on-surface-variant hover:text-on-surface transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -119,6 +129,7 @@ export const FloatingContactCard: React.FC<FloatingContactCardProps> = ({
               <ContactProfile
                 contactId={contactId}
                 onClose={onClose}
+                onDeleted={onClose}
                 showNetworkButton={showNetworkButton}
               />
             </div>

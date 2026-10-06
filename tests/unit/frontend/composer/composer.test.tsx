@@ -38,8 +38,12 @@ import {
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { InteractionComposer } from "../../../../src/components/InteractionComposer";
+import {
+  followUpFromText,
+  InteractionComposer,
+} from "../../../../src/components/InteractionComposer";
 import { QuickInteractionModal } from "../../../../src/components/QuickInteractionModal";
+import { mentionMatches } from "../../../../src/components/MentionSuggestion";
 import { draftKey } from "../../../../src/lib/composerDrafts";
 
 /** The signed-in account, switched per test. Null is an un-gated instance. */
@@ -151,7 +155,7 @@ const typeButton = (name: "Note" | "Call" | "Meeting" | "Email") =>
     screen.getByRole("radiogroup", { name: "Interaction type" }),
   ).getByRole("radio", { name });
 const followUpInput = () =>
-  screen.getByLabelText("Next action") as HTMLInputElement;
+  screen.getByLabelText("Follow-up") as HTMLInputElement;
 
 /**
  * jsdom lays nothing out, so a Range has no rectangles. ProseMirror asks for
@@ -197,12 +201,12 @@ describe("names", () => {
     const description = () =>
       document.getElementById(editor.getAttribute("aria-describedby") ?? "")
         ?.textContent;
-    expect(description()).toBe("Write a quick note...");
+    expect(description()).toBe("Write a quick note…");
 
     // The id is fixed when the editor is created, and the text behind it
     // follows the type.
     fireEvent.click(typeButton("Call"));
-    expect(description()).toBe("Summarize the call...");
+    expect(description()).toBe("Summarize the call…");
     expect(typeButton("Call").getAttribute("aria-checked")).toBe("true");
     expect(typeButton("Note").getAttribute("aria-checked")).toBe("false");
   });
@@ -262,7 +266,8 @@ describe("the controls", () => {
     expect(saveButton().getAttribute("aria-describedby")).toBeNull();
   });
 
-  it("saves with ⌘ Enter from the next-action line too", async () => {
+  it("saves only a follow-up, with no empty note, from ⌘ Enter on its line", async () => {
+    // An empty note counted as being in touch: "last contacted" moved.
     const saves = stubServer();
     mount();
     await editorElement();
@@ -272,13 +277,47 @@ describe("the controls", () => {
 
     fireEvent.keyDown(followUpInput(), { key: "Enter", metaKey: true });
     await waitFor(() => expect(saves).toHaveLength(1));
-    expect(saves[0].body.title).toBe("Action Scheduled");
-    expect(saves[0].body.content).toBeNull();
-    expect(saves[0].body.actionItem).toMatchObject({ title: "Call back" });
+    expect(saves[0].url).toContain("/contacts/contact-1/action-items");
+    expect(saves[0].body).toEqual({
+      title: "Call back",
+      dueAt: expect.any(String),
+    });
     await act(async () => {
       saves[0].resolve();
     });
     await waitFor(() => expect(followUpInput().value).toBe(""));
+  });
+
+  it("keeps a follow-up with no date and asks for one", async () => {
+    const saves = stubServer();
+    mount();
+    await editorElement();
+    fireEvent.change(followUpInput(), { target: { value: "Send the deck" } });
+    fireEvent.click(saveButton());
+    expect((await screen.findByRole("alert")).textContent).toMatch(
+      /^Add a date to the follow-up/,
+    );
+    expect(followUpInput().value).toBe("Send the deck");
+    expect(saves).toHaveLength(0);
+  });
+
+  it("@ finds a person by any word of the name, and by two words", () => {
+    const people = [
+      { name: "Rowan Vale" },
+      { name: "Ada Smith" },
+      { name: "Smitty O'Brien" },
+    ];
+    const names = (query: string) =>
+      mentionMatches(people, query).map((p) => p.name);
+    expect(names("smi")).toEqual(["Ada Smith", "Smitty O'Brien"]);
+    expect(names("ada s")).toEqual(["Ada Smith"]);
+    expect(names("brien")).toEqual(["Smitty O'Brien"]);
+  });
+
+  it("reads a weekday as the next one: on a Monday, Friday is this Friday", () => {
+    const monday = new Date(2026, 9, 5, 9);
+    const due = new Date(followUpFromText("Call back Friday", monday)!.dueAt);
+    expect([due.getMonth(), due.getDate()]).toEqual([9, 9]);
   });
 
   it("shows the ⌘ Enter hint at the end of the next-action line", async () => {
@@ -376,7 +415,19 @@ describe("the compact composer", () => {
     expect(saves).toHaveLength(0);
   });
 
-  it("saves for the chosen contact, reports the save, and keeps no draft", async () => {
+  it("keeps a note it did not save for the next opening", async () => {
+    // Escape or a tap outside closed the dialog, and the note was gone.
+    stubServer();
+    const first = mountCompact();
+    await type(await editorElement(), "Lunch at the usual place");
+    first.unmount();
+    mountCompact();
+    expect((await editorElement()).textContent).toBe(
+      "Lunch at the usual place",
+    );
+  });
+
+  it("saves for the chosen contact, reports the save, and keeps no draft once saved", async () => {
     account.current = { id: "user-a" };
     const saves = stubServer();
     const saved = vi.fn();
@@ -399,7 +450,7 @@ describe("the compact composer", () => {
     expect(saves[0].url).toContain("/contacts/contact-7/interactions");
     expect(saves[0].body).toMatchObject({
       type: "meeting",
-      title: "Logged meeting",
+      title: "Meeting",
     });
     await act(async () => {
       saves[0].resolve();
@@ -437,7 +488,7 @@ describe("the quick interaction dialog", () => {
       name: "Log an interaction",
     });
     expect(
-      within(dialog).queryByRole("textbox", { name: "Search for a contact" }),
+      within(dialog).queryByRole("combobox", { name: "Search for a contact" }),
     ).toBeNull();
     await waitFor(() =>
       expect(within(dialog).getByText("Katherine Johnson")).toBeTruthy(),
@@ -468,7 +519,7 @@ describe("the quick interaction dialog", () => {
     const dialog = await screen.findByRole("dialog", {
       name: "Log an interaction",
     });
-    const picker = within(dialog).getByRole("textbox", {
+    const picker = within(dialog).getByRole("combobox", {
       name: "Search for a contact",
     });
     // Wait for the names, then search. Ghosts are not offered.
@@ -491,7 +542,7 @@ describe("the quick interaction dialog", () => {
       expect(within(dialog).getByText("Grace Kelly")).toBeTruthy(),
     );
     expect(
-      within(dialog).queryByRole("textbox", { name: "Search for a contact" }),
+      within(dialog).queryByRole("combobox", { name: "Search for a contact" }),
     ).toBeNull();
     // Choosing a contact hands focus to the editor.
     const pm = await editorElement();
@@ -500,7 +551,7 @@ describe("the quick interaction dialog", () => {
     fireEvent.click(
       within(dialog).getByRole("button", { name: "Change contact" }),
     );
-    const again = within(dialog).getByRole("textbox", {
+    const again = within(dialog).getByRole("combobox", {
       name: "Search for a contact",
     });
     await waitFor(() => expect(document.activeElement).toBe(again));
@@ -565,7 +616,7 @@ describe("the quick interaction dialog", () => {
     const dialog = await screen.findByRole("dialog", {
       name: "Log an interaction",
     });
-    const picker = within(dialog).getByRole("textbox", {
+    const picker = within(dialog).getByRole("combobox", {
       name: "Search for a contact",
     });
     const pm = await editorElement();
@@ -754,7 +805,7 @@ describe("a save that succeeds", () => {
     fireEvent.keyDown(pm, { key: "Enter", ctrlKey: true });
     await waitFor(() => expect(saves).toHaveLength(1));
     expect(saves[0].body.type).toBe("call");
-    expect(saves[0].body.title).toBe("Logged call");
+    expect(saves[0].body.title).toBe("Call");
     expect(saves[0].body.actionItem).toMatchObject({ title: "Call again" });
 
     await act(async () => {

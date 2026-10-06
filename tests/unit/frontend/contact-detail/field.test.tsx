@@ -33,6 +33,16 @@ import {
   type MultiValueItem,
 } from "../../../../src/views/contact-detail/components/MultiValueField";
 
+// The next follow-up reads the contact's follow-ups.
+vi.mock("../../../../src/api/actionItems", () => ({
+  useContactActionItems: () => ({
+    data: [
+      { id: "a1", title: "Call back", dueAt: "2026-10-01", completedAt: null },
+    ],
+  }),
+  useUpdateActionItem: () => ({ mutate: vi.fn() }),
+  useCompleteActionItem: () => ({ mutateAsync: vi.fn() }),
+}));
 vi.mock("../../../../src/views/map/LocationMiniMap", () => ({
   LocationMiniMap: () => <div data-testid="mini-map" />,
 }));
@@ -213,6 +223,11 @@ describe("DetailsCard", () => {
       expect(screen.queryByText(label.toUpperCase())).toBeNull();
     }
     expect(screen.queryByText("Next Follow Up")).toBeNull();
+    // A calendar day with no time: no false "12:00 AM", and a way to fix it.
+    expect(screen.getByText(/^Call back · /).textContent).not.toMatch(/AM|PM/);
+    expect(
+      screen.getByRole("button", { name: "Change follow-up: Call back" }),
+    ).toBeTruthy();
   });
 
   it("gives each row a named label chip and a named kebab", () => {
@@ -312,11 +327,10 @@ describe("DetailsCard", () => {
     );
   });
 
-  it("gives Birthday and Industry a real button with a pencil, and puts focus back after Escape", () => {
+  it("gives an empty Birthday and Industry the card's one + Add, and puts focus back after Escape", () => {
     const { onUpdate } = drawCard();
     const birthday = screen.getByRole("button", { name: "Add birthday" });
-    expect(birthday.tagName).toBe("BUTTON");
-    expect(birthday.querySelector("[data-edit-hint]")).not.toBeNull();
+    expect(birthday.textContent).toBe("Add");
     fireEvent.click(birthday);
     const date = screen.getByLabelText("Birthday", { selector: "input" });
     fireEvent.keyDown(date, { key: "Escape" });
@@ -325,7 +339,7 @@ describe("DetailsCard", () => {
     );
 
     const industry = screen.getByRole("button", { name: "Add industry" });
-    expect(industry.querySelector("[data-edit-hint]")).not.toBeNull();
+    expect(industry.textContent).toBe("Add");
     fireEvent.click(industry);
     fireEvent.keyDown(screen.getByRole("textbox", { name: "Add industry" }), {
       key: "Escape",
@@ -334,6 +348,18 @@ describe("DetailsCard", () => {
       screen.getByRole("button", { name: "Add industry" }),
     );
     expect(onUpdate).not.toHaveBeenCalled();
+  });
+
+  it("saves a typed birthday once, on Enter, and keeps a day with no year", () => {
+    const { onUpdate } = drawCard();
+    fireEvent.click(screen.getByRole("button", { name: "Add birthday" }));
+    const field = screen.getByLabelText("Birthday", { selector: "input" });
+    // A date input saved after the first digit typed.
+    fireEvent.change(field, { target: { value: "May 1" } });
+    fireEvent.change(field, { target: { value: "May 14" } });
+    expect(onUpdate).not.toHaveBeenCalled();
+    fireEvent.keyDown(field, { key: "Enter" });
+    expect(onUpdate).toHaveBeenCalledExactlyOnceWith("birthday", "05-14");
   });
 
   it("adds preferences split on commas and names each chip's remove button", () => {

@@ -268,8 +268,9 @@ const SortableRow = ({
           inputLabel={`Edit ${noun}`}
           kind={kind && INPUT_OF[kind]}
           href={kind && HREF_OF[kind](item.value)}
-          // An email or a phone number has no spaces to wrap at.
-          className={cn(FIELD_VALUE, "max-w-full", !isAddress && "break-all")}
+          // An email has no spaces to wrap at: it breaks inside only where
+          // it would overflow, never at any letter (`break-all`).
+          className={cn(FIELD_VALUE, "max-w-full", !isAddress && "break-words")}
         />
       </div>
       <CustomSelect

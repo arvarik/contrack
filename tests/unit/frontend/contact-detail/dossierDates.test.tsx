@@ -7,6 +7,18 @@
  * and a full span keep their forms.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
+// AI is set up unless a test says otherwise.
+const aiSetup = vi.hoisted(() => ({
+  current: null as null | {
+    why: "model";
+    state: "setup";
+    fix?: { label: string; path: string };
+  },
+}));
+vi.mock("../../../../src/hooks/useAiSetup", () => ({
+  useAiSetup: () => aiSetup.current,
+  aiSetupLine: () => "No AI model is set up. Ask an admin to set one up",
+}));
 import { cleanup, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 // The Research card's writes need no server here.

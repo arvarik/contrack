@@ -127,19 +127,45 @@ export function queryInt(fallback: number, min: number, max: number) {
 // The child records of a contact body
 // =============================================================================
 
-const emailSchema = z.union([
-  z.string(),
+/**
+ * An email address in its plain shape: a name, an @, and a domain with a
+ * dot. Any text used to save, and the duplicate scan then matched people on
+ * "n/a".
+ */
+const emailText = z
+  .string()
+  .trim()
+  .regex(
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+    "Enter an email address like name@example.com",
+  );
+
+/**
+ * A phone number: three digits or more, written with the marks numbers are
+ * written with (+ ( ) - . / and spaces), and letters for a word number or an
+ * extension ("1-800-FLOWERS", "x204").
+ */
+const phoneText = z
+  .string()
+  .trim()
+  .regex(
+    /^(?=(?:\D*\d){3})[\d\s+().\/#*,;a-zA-Z-]+$/,
+    "Enter a phone number with at least three digits",
+  );
+
+export const emailSchema = z.union([
+  emailText,
   z.object({
-    email: z.string().email().or(z.string().trim().min(1)),
+    email: emailText,
     label: z.string().nullable().optional(),
     isPrimary: stringToBool,
   }),
 ]);
 
-const phoneSchema = z.union([
-  z.string(),
+export const phoneSchema = z.union([
+  phoneText,
   z.object({
-    phone: z.string().trim().min(1),
+    phone: phoneText,
     label: z.string().nullable().optional(),
     isPrimary: stringToBool,
   }),

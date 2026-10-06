@@ -24,6 +24,7 @@ import { motion } from "motion/react";
 import { VIBES, vibeTokens } from "../../../lib/theme";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { useClickOutside } from "../../../hooks/useClickOutside";
+import { useCloseRequest } from "../../../hooks/useCloseRequest";
 import { cn } from "../../../lib/utils";
 import { FIELD_LABEL } from "../../../lib/styles";
 
@@ -69,6 +70,7 @@ const VibePickerPanel = ({
 
   const close = useCallback(() => onClose(), [onClose]);
   useClickOutside(panel, close, true);
+  useCloseRequest(true, close);
 
   // Opening puts focus on the checked swatch, which is the group's Tab stop.
   useEffect(() => {

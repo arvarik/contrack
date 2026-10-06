@@ -13,6 +13,18 @@
 // =============================================================================
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+// AI is set up unless a test says otherwise.
+const aiSetup = vi.hoisted(() => ({
+  current: null as null | {
+    why: "model";
+    state: "setup";
+    fix?: { label: string; path: string };
+  },
+}));
+vi.mock("../../../../src/hooks/useAiSetup", () => ({
+  useAiSetup: () => aiSetup.current,
+  aiSetupLine: () => "No AI model is set up. Ask an admin to set one up",
+}));
 import {
   act,
   cleanup,
@@ -92,6 +104,7 @@ vi.mock("../../../../src/contexts/PreferencesContext", async (original) => {
 import { depthTime } from "../../../../src/lib/researchDepth";
 import {
   ContactIntro,
+  newInHeadline,
   ProfileHeader,
   type ProfileHeaderProps,
 } from "../../../../src/views/contact-detail/components/ProfileHeader";
@@ -311,9 +324,7 @@ describe("the contact header", () => {
       />,
     );
     expect(screen.queryByRole("button", { name: /^Track/ })).toBeNull();
-    expect(
-      screen.getByRole("button", { name: "Promote to contact" }),
-    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add to Network" })).toBeTruthy();
   });
 
   it("has no top-level colour, archive, enrichment or briefing buttons", () => {
@@ -401,8 +412,8 @@ describe("the contact header", () => {
     const pencil = screen.getByRole("button", { name: "Change avatar" });
     const chip = screen.getByText("Archived");
     // The badge holds the tooltip that names it.
-    const badge =
-      screen.getByText("Ghost profile").parentElement!.parentElement!;
+    const badge = screen.getByText("Not in your network").parentElement!
+      .parentElement!;
     // The pencil holds the lower right corner, the chip sits under the
     // avatar, and the ghost badge holds the upper right corner.
     expect(pencil.className).toContain("bottom-0");
@@ -594,9 +605,15 @@ describe("the contact actions", () => {
     expect(mutate).toHaveBeenCalledWith("c1", expect.any(Object));
     const opts = mutate.mock.calls[0][1];
     opts.onSuccess();
-    expect(toastMock.success).toHaveBeenCalledWith("Thomas Walker archived");
+    // With Undo, as the Network list's Archive has.
+    expect(toastMock.success).toHaveBeenCalledWith(
+      "Thomas Walker archived",
+      expect.objectContaining({
+        action: expect.objectContaining({ label: "Undo" }),
+      }),
+    );
     opts.onError(new Error("offline"));
-    expect(toastMock.error).toHaveBeenCalledWith("Failed: offline");
+    expect(toastMock.error).toHaveBeenCalledWith("Could not save: offline");
   });
 
   it("unarchives an archived contact, from Unarchive in place of Archive", () => {
@@ -608,7 +625,8 @@ describe("the contact actions", () => {
     const mutate = props.unarchiveContact as ReturnType<typeof vi.fn>;
     mutate.mock.calls[0][1].onSuccess();
     expect(toastMock.success).toHaveBeenCalledWith(
-      "Thomas Walker restored to network",
+      "Thomas Walker is back in Network",
+      expect.any(Object),
     );
   });
 
@@ -622,12 +640,12 @@ describe("the contact actions", () => {
   it("promotes a ghost with its own button", () => {
     const props = makeProps({ contact: makeContact({ isGhost: true }) });
     mount(<ProfileHeader {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: "Promote to contact" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add to Network" }));
     const mutate = props.promoteGhost as ReturnType<typeof vi.fn>;
     expect(mutate).toHaveBeenCalledWith("c1", expect.any(Object));
     mutate.mock.calls[0][1].onSuccess();
     expect(toastMock.success).toHaveBeenCalledWith(
-      "Thomas Walker promoted to network!",
+      "Thomas Walker added to Network",
     );
   });
 
@@ -984,7 +1002,7 @@ describe("the narrow header", () => {
         })}
       />,
     );
-    const promote = screen.getByRole("button", { name: "Promote to contact" });
+    const promote = screen.getByRole("button", { name: "Add to Network" });
     expect(promote.className).toContain("mt-3");
     // After the meta line, not in the name row above it.
     expect(
@@ -1070,5 +1088,18 @@ describe("the headline and the summary", () => {
       />,
     );
     expect(container.textContent).toBe("");
+  });
+
+  it("shows only the part of a headline the role line does not say", () => {
+    const at = { role: "Partner", company: "Northwind Partners" };
+    expect(
+      newInHeadline({
+        ...at,
+        headline: "Partner at Northwind Partners | Investor",
+      }),
+    ).toBe("Investor");
+    expect(
+      newInHeadline({ ...at, headline: "Partner, Northwind Partners" }),
+    ).toBeNull();
   });
 });

@@ -7,7 +7,8 @@
  *
  * Extracted from ContactProfile to keep each section focused and readable.
  */
-import React from "react";
+import React, { useState } from "react";
+import { CalendarCheck, CalendarClock } from "lucide-react";
 
 import type {
   Contact,
@@ -16,7 +17,17 @@ import type {
 } from "../../../types";
 import { cn } from "../../../lib/utils";
 import type { ResearchAnchor } from "../../../lib/research";
-import { formatWhen } from "../../../lib/datetime";
+import { formatDay, formatWhen } from "../../../lib/datetime";
+import {
+  startPendingDelete,
+  useHiddenPendingIds,
+} from "../../../lib/pendingDeletes";
+import {
+  useCompleteActionItem,
+  useContactActionItems,
+  useUpdateActionItem,
+} from "../../../api/actionItems";
+import { ActionMenu } from "../../../components/ui/ActionMenu";
 import { CARD, SECTION_HEADING } from "../../../lib/styles";
 
 import { LocationMiniMap } from "../../map/LocationMiniMap";
@@ -114,10 +125,8 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
     label: text,
   }));
 
-  const addPreference = (text: string) => {
-    // "Tea, Jazz" is two preferences, and a comma inside one would split it
-    // on the next read anyway.
-    const next = splitPreferences([...preferences, text].join(","));
+  const addPreferences = (texts: string[]) => {
+    const next = splitPreferences([...preferences, ...texts].join(","));
     if (next.length === preferences.length) return;
     onUpdate("preferences", next.join(", "));
   };
@@ -140,13 +149,28 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
     ai: !!interest.isAiGenerated,
   }));
 
-  const saveInterests = (next: ContactUpdateData["interests"]) =>
-    updateContact({ id: contactId, data: { interests: next } });
+  // The server reads `isAiGenerated` as a boolean, and the list comes back
+  // with 1 and 0: sent back as numbers, every interest research found lost
+  // its mark on the next edit.
+  const saveInterests = (next: NonNullable<ContactUpdateData["interests"]>) =>
+    updateContact({
+      id: contactId,
+      data: {
+        interests: next.map((item) => ({
+          ...item,
+          isAiGenerated: !!item.isAiGenerated,
+        })),
+      },
+    });
 
-  const addInterest = (text: string) =>
+  const addInterests = (texts: string[]) =>
     saveInterests([
       ...interests,
-      { id: Math.random().toString(), interest: text, isAiGenerated: false },
+      ...texts.map((interest) => ({
+        id: crypto.randomUUID(),
+        interest,
+        isAiGenerated: false,
+      })),
     ]);
 
   const removeInterest = (chip: Chip) => {
@@ -271,7 +295,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
       <Field label="Preferences">
         <ChipInput
           chips={preferenceChips}
-          onAdd={addPreference}
+          onAdd={addPreferences}
           onRemove={removePreference}
           noun="preference"
         />
@@ -280,20 +304,100 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
       <Field label="Interests">
         <ChipInput
           chips={interestChips}
-          onAdd={addInterest}
+          onAdd={addInterests}
           onRemove={removeInterest}
           noun="interest"
         />
       </Field>
 
-      {contact.nextFollowUpAt && (
-        <Field label="Next follow-up">
-          <span className={FIELD_VALUE}>
-            {formatWhen(contact.nextFollowUpAt)}
-          </span>
-        </Field>
-      )}
+      {contact.nextFollowUpAt && <NextFollowUp contactId={contactId} />}
     </div>
+  );
+};
+
+/** A follow-up's due day: with its time, unless it is a calendar day. */
+const dueWords = (dueAt: string) =>
+  /^\d{4}-\d{2}-\d{2}$/.test(dueAt) ? formatDay(dueAt) : formatWhen(dueAt);
+
+/**
+ * The next follow-up, and the way to fix it here: a new date, or done.
+ * It was read-only, so a wrong date (a weekday read as last week's) could
+ * be fixed only on Pulse. A date that only says a day showed "12:00 AM".
+ */
+const NextFollowUp = ({ contactId }: { contactId: string }) => {
+  const { data: items = [] } = useContactActionItems(contactId);
+  const done = useHiddenPendingIds();
+  const update = useUpdateActionItem();
+  const complete = useCompleteActionItem();
+  const [editing, setEditing] = useState(false);
+  const next = items.find((item) => !item.completedAt && !done.has(item.id));
+  if (!next) return null;
+
+  /** A new calendar day, from the field. Unchanged or empty saves nothing. */
+  const saveDate = (day: string) => {
+    setEditing(false);
+    if (day && day !== next.dueAt.slice(0, 10)) {
+      update.mutate({ id: next.id, data: { dueAt: day } });
+    }
+  };
+
+  return (
+    <Field label="Next follow-up">
+      {editing ? (
+        <input
+          type="date"
+          aria-label={`New date for ${next.title}`}
+          // Opened by Change date.
+          // eslint-disable-next-line jsx-a11y/no-autofocus
+          autoFocus
+          defaultValue={next.dueAt.slice(0, 10)}
+          // Saves on Enter or when focus leaves: a date field sends a change
+          // for each part typed.
+          onBlur={(e) => saveDate(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+            if (e.key === "Escape") {
+              e.preventDefault();
+              e.stopPropagation();
+              setEditing(false);
+            }
+          }}
+          className="min-h-[44px] sm:pointer-fine:min-h-0 w-fit text-base sm:text-sm font-medium bg-surface-container-high rounded-lg px-2 py-1"
+        />
+      ) : (
+        <div className="flex items-center gap-1 min-w-0">
+          <span className={cn(FIELD_VALUE, "min-w-0 break-words")}>
+            {next.title} · {dueWords(next.dueAt)}
+          </span>
+          <ActionMenu
+            label={`Change follow-up: ${next.title}`}
+            iconClassName="w-4 h-4"
+            items={[
+              {
+                id: "date",
+                label: "Change date",
+                icon: CalendarClock,
+                onSelect: () => setEditing(true),
+              },
+              {
+                id: "done",
+                label: "Mark done",
+                icon: CalendarCheck,
+                onSelect: () =>
+                  startPendingDelete({
+                    id: next.id,
+                    send: () => complete.mutateAsync(next.id),
+                    message: "Follow-up done",
+                    errorMessage: "Could not mark the follow-up done",
+                    flushUrl: `/action-items/${encodeURIComponent(next.id)}/complete`,
+                    flushMethod: "PATCH",
+                  }),
+              },
+            ]}
+          />
+        </div>
+      )}
+    </Field>
   );
 };
 

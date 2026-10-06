@@ -65,6 +65,45 @@ export const useCompleteActionItem = () => {
       // Done: the corvid on its perch nods.
       corvidReact("nod");
       void refreshContact(queryClient, item.contactId);
+      // The note it came with shows it on the timeline.
+      void queryClient.invalidateQueries({
+        queryKey: ["timeline", item.contactId],
+      });
     },
   });
 };
+
+/**
+ * A follow-up on its own, with no note. The composer sends one when only its
+ * follow-up line is filled: a reminder does not count as being in touch.
+ */
+export const useCreateActionItem = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      contactId,
+      ...body
+    }: { contactId: string } & BodyOf<
+      typeof actionItemRoutes.create
+    >): Promise<ActionItem> =>
+      apiJson(
+        actionItemRoutes.create,
+        `/contacts/${contactId}/action-items`,
+        jsonBody(body),
+      ),
+    onSuccess: (_item, { contactId }) =>
+      void refreshContact(queryClient, contactId),
+  });
+};
+
+/** One contact's follow-ups, pending first and soonest first. */
+export const useContactActionItems = (contactId: string) =>
+  useQuery({
+    queryKey: ["actionItems", "contact", contactId],
+    queryFn: ({ signal }): Promise<ActionItem[]> =>
+      apiJson(
+        actionItemRoutes.forContact,
+        `/contacts/${contactId}/action-items`,
+        { signal },
+      ),
+  });

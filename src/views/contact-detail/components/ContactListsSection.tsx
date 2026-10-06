@@ -1,4 +1,6 @@
 import { ListPlus, X, type LucideIcon } from "lucide-react";
+import { toast } from "sonner";
+import { withUndo } from "../../../lib/undoToast";
 import {
   Star,
   Heart,
@@ -99,12 +101,24 @@ export const ContactListsSection = ({
           {list.name}
           <button
             onClick={() =>
-              removeFromList.mutate({ listId: list.id, contactId })
+              removeFromList.mutate(
+                { listId: list.id, contactId },
+                {
+                  onSuccess: () =>
+                    toast.success(
+                      `Removed from ${list.name}`,
+                      withUndo(() =>
+                        addToList.mutate({ listId: list.id, contactId }),
+                      ),
+                    ),
+                },
+              )
             }
-            // A phone has no hover, so below `sm` the X shows at rest with a
-            // 44 px tap box. From `sm` it slides in on hover or focus, and
-            // its overflow clip (which would clip the tap box) comes back.
-            className="hit-area w-3 ml-0.5 opacity-100 sm:w-0 sm:ml-0 sm:overflow-hidden sm:opacity-0 sm:group-hover/listpill:w-3 sm:group-hover/listpill:ml-0.5 sm:group-hover/listpill:opacity-100 sm:focus-visible:w-3 sm:focus-visible:opacity-100 hover:text-error transition-all duration-(--dur-slow) flex items-center"
+            // A touch screen has no hover, so there the X shows at rest with
+            // a 44 px tap box, a tablet too. With a mouse, from `sm`, it
+            // slides in on hover or focus, and its overflow clip (which
+            // would clip the tap box) comes back.
+            className="hit-area w-3 ml-0.5 opacity-100 sm:pointer-fine:w-0 sm:pointer-fine:ml-0 sm:pointer-fine:overflow-hidden sm:pointer-fine:opacity-0 sm:pointer-fine:group-hover/listpill:w-3 sm:pointer-fine:group-hover/listpill:ml-0.5 sm:pointer-fine:group-hover/listpill:opacity-100 sm:pointer-fine:focus-visible:w-3 sm:pointer-fine:focus-visible:opacity-100 hover:text-error transition-all duration-(--dur-slow) flex items-center"
             title="Remove from list"
             aria-label={`Remove from ${list.name}`}
           >
