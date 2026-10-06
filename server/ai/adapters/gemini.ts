@@ -34,9 +34,10 @@ import {
   AI_DEFAULTS,
   withRetry,
   isRetryableError,
+  inOnePiece,
+  streamWithFallback,
 } from "../resilience.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
-import { AppError } from "../../utils/AppError.ts";
 import type { EmbedUse } from "../embedder.ts";
 
 /** The Gemini task type for each embedding use. */
@@ -418,35 +419,13 @@ export class GeminiAdapter implements AIProvider {
     onDelta: (text: string) => void,
   ): Promise<AIGenerateResult> {
     if (options.responseFormat !== "text" || options.enableSearchGrounding)
-      return this.generateInOnePiece(options, onDelta);
-    let sent = false;
-    try {
-      return await this.streamOnce(options, (piece) => {
-        sent = true;
-        onDelta(piece);
-      });
-    } catch (error) {
-      if (options.signal?.aborted)
-        throw new AppError("AI call canceled by caller", 499, {
-          code: "CANCELLED",
-        });
-      if (sent) throw error;
-      log.warn(
-        "GeminiAdapter",
-        `stream failed before its first piece (will run generate): ${getErrorMessage(error).slice(0, 200)}`,
-      );
-      return this.generateInOnePiece(options, onDelta);
-    }
-  }
-
-  /** Run `generate` and send its text as one piece. */
-  private async generateInOnePiece(
-    options: AIGenerateOptions,
-    onDelta: (text: string) => void,
-  ): Promise<AIGenerateResult> {
-    const result = await this.generate(options);
-    if (result.text) onDelta(result.text);
-    return result;
+      return inOnePiece(() => this.generate(options), onDelta);
+    return streamWithFallback(
+      (onPiece) => this.streamOnce(options, onPiece),
+      () => this.generate(options),
+      onDelta,
+      { signal: options.signal, area: "GeminiAdapter", subject: "stream" },
+    );
   }
 
   /** One streamed call, routed and counted like an attempt of `generate`. */

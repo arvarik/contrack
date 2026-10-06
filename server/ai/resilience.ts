@@ -12,6 +12,9 @@ import {
   ServiceUnavailableError,
   AppError,
 } from "../utils/AppError.ts";
+import { getErrorMessage } from "../utils/helpers.ts";
+import { log } from "../utils/logger.ts";
+import type { AIGenerateResult } from "./types.ts";
 
 // Defaults, favoring reliability over latency. A call can override the timeout
 // with `AIGenerateOptions.timeoutMs`.
@@ -138,6 +141,61 @@ export async function withTimeout<T>(
 
 // withRetry: exponential backoff with jitter and abort propagation
 
+/** The error a call ends with when its caller canceled it. */
+export function canceledError(): AppError {
+  return new AppError("AI call canceled by caller", 499, {
+    code: "CANCELLED",
+  });
+}
+
+/** Run `generate` and send its whole text to `onDelta` as one piece. */
+export async function inOnePiece(
+  generate: () => Promise<AIGenerateResult>,
+  onDelta: (text: string) => void,
+): Promise<AIGenerateResult> {
+  const result = await generate();
+  if (result.text) onDelta(result.text);
+  return result;
+}
+
+/**
+ * Stream a call, every adapter's way: `stream` sends each piece on through
+ * `onDelta`. A stream that fails before its first piece falls back to
+ * `generate`, sent as one piece. After the first piece, or for a failure that
+ * `final` names, the error is thrown, because a sent piece cannot be taken
+ * back. A call its caller canceled throws `canceledError()`.
+ *
+ * @param options.area - The log area of the fallback warning.
+ * @param options.subject - What failed, as the warning names it ("stream").
+ */
+export async function streamWithFallback(
+  stream: (onPiece: (text: string) => void) => Promise<AIGenerateResult>,
+  generate: () => Promise<AIGenerateResult>,
+  onDelta: (text: string) => void,
+  options: {
+    signal?: AbortSignal;
+    area: string;
+    subject: string;
+    final?: (error: unknown) => boolean;
+  },
+): Promise<AIGenerateResult> {
+  let sent = false;
+  try {
+    return await stream((piece) => {
+      sent = true;
+      onDelta(piece);
+    });
+  } catch (error) {
+    if (options.signal?.aborted) throw canceledError();
+    if (sent || options.final?.(error)) throw error;
+    log.warn(
+      options.area,
+      `${options.subject} failed before its first piece (will run generate): ${getErrorMessage(error).slice(0, 200)}`,
+    );
+    return inOnePiece(generate, onDelta);
+  }
+}
+
 export interface RetryOptions {
   baseBackoffMs?: number;
   jitterMs?: number;
@@ -161,9 +219,7 @@ export async function withRetry<T>(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     if (opts.signal?.aborted) {
-      throw new AppError("AI call canceled by caller", 499, {
-        code: "CANCELLED",
-      });
+      throw canceledError();
     }
 
     try {
@@ -173,9 +229,7 @@ export async function withRetry<T>(
 
       // Caller canceled mid-flight — never retry.
       if (opts.signal?.aborted) {
-        throw new AppError("AI call canceled by caller", 499, {
-          code: "CANCELLED",
-        });
+        throw canceledError();
       }
 
       // UpstreamTimeoutError is always retryable (it's a thrown sentinel from withTimeout).

@@ -23,6 +23,8 @@ import {
   withRetry,
   parseAIJson,
   AI_DEFAULTS,
+  inOnePiece,
+  streamWithFallback,
 } from "../resilience.ts";
 import {
   translateSchemaNode as translateSchema,
@@ -209,43 +211,26 @@ export class OpenAICompatibleAdapter implements AIProvider {
       options.responseFormat !== "text" ||
       options.enableSearchGrounding
     )
-      return this.generateInOnePiece(options, onDelta);
-    let sent = false;
-    try {
-      return await withTimeout(
-        (signal) =>
-          this.streamChat(options, model, signal, (piece) => {
-            sent = true;
-            onDelta(piece);
-          }),
-        options.timeoutMs ?? AI_DEFAULTS.perAttemptTimeoutMs,
-        options.signal,
-      );
-    } catch (error) {
-      if (options.signal?.aborted)
-        throw new AppError("AI call canceled by caller", 499, {
-          code: "CANCELLED",
-        });
-      // A piece already sent cannot be taken back. A model that spent its
-      // budget on reasoning would spend it again on a second call.
-      if (sent || (error instanceof AppError && error.code === "AI_NO_ANSWER"))
-        throw error;
-      log.warn(
-        "OpenAICompatible",
-        `${model} stream failed before its first piece (will run generate): ${getErrorMessage(error).slice(0, 200)}`,
-      );
-      return this.generateInOnePiece(options, onDelta);
-    }
-  }
-
-  /** Run `generate` and send its text as one piece. */
-  private async generateInOnePiece(
-    options: AIGenerateOptions,
-    onDelta: (text: string) => void,
-  ): Promise<AIGenerateResult> {
-    const result = await this.generate(options);
-    if (result.text) onDelta(result.text);
-    return result;
+      return inOnePiece(() => this.generate(options), onDelta);
+    return streamWithFallback(
+      (onPiece) =>
+        withTimeout(
+          (signal) => this.streamChat(options, model, signal, onPiece),
+          options.timeoutMs ?? AI_DEFAULTS.perAttemptTimeoutMs,
+          options.signal,
+        ),
+      () => this.generate(options),
+      onDelta,
+      {
+        signal: options.signal,
+        area: "OpenAICompatible",
+        subject: `${model} stream`,
+        // A model that spent its budget on reasoning would spend it again on
+        // a second call.
+        final: (error) =>
+          error instanceof AppError && error.code === "AI_NO_ANSWER",
+      },
+    );
   }
 
   private async runChat(

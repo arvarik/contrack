@@ -19,13 +19,14 @@ import {
 import { contentHash } from "../../utils/aiCache.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
-import { AppError } from "../../utils/AppError.ts";
 import { toCitations, type RawSource } from "../citations.ts";
 import {
   withTimeout,
   withRetry,
   parseAIJson,
   AI_DEFAULTS,
+  inOnePiece,
+  streamWithFallback,
 } from "../resilience.ts";
 import {
   translateSchemaNode as translateSchema,
@@ -369,41 +370,23 @@ export class AnthropicAdapter implements AIProvider {
     onDelta: (text: string) => void,
   ): Promise<AIGenerateResult> {
     if (options.responseFormat !== "text" || options.enableSearchGrounding)
-      return this.generateInOnePiece(options, onDelta);
+      return inOnePiece(() => this.generate(options), onDelta);
     const model = options.model ?? this.resolveModel(options.routing?.prefer);
-    let sent = false;
-    try {
-      return await withTimeout(
-        (signal) =>
-          this.streamMessages(options, model, signal, (piece) => {
-            sent = true;
-            onDelta(piece);
-          }),
-        options.timeoutMs ?? AI_DEFAULTS.perAttemptTimeoutMs,
-        options.signal,
-      );
-    } catch (error) {
-      if (options.signal?.aborted)
-        throw new AppError("AI call canceled by caller", 499, {
-          code: "CANCELLED",
-        });
-      if (sent) throw error;
-      log.warn(
-        "AnthropicAdapter",
-        `${model} stream failed before its first piece (will run generate): ${getErrorMessage(error).slice(0, 200)}`,
-      );
-      return this.generateInOnePiece(options, onDelta);
-    }
-  }
-
-  /** Run `generate` and send its text as one piece. */
-  private async generateInOnePiece(
-    options: AIGenerateOptions,
-    onDelta: (text: string) => void,
-  ): Promise<AIGenerateResult> {
-    const result = await this.generate(options);
-    if (result.text) onDelta(result.text);
-    return result;
+    return streamWithFallback(
+      (onPiece) =>
+        withTimeout(
+          (signal) => this.streamMessages(options, model, signal, onPiece),
+          options.timeoutMs ?? AI_DEFAULTS.perAttemptTimeoutMs,
+          options.signal,
+        ),
+      () => this.generate(options),
+      onDelta,
+      {
+        signal: options.signal,
+        area: "AnthropicAdapter",
+        subject: `${model} stream`,
+      },
+    );
   }
 
   /** The effort to send `model`, or undefined when it takes none. */
