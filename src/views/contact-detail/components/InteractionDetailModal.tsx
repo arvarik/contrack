@@ -17,7 +17,6 @@
 import React, { Suspense } from "react";
 import DOMPurify from "dompurify";
 import {
-  X,
   CalendarCheck,
   FileText,
   Calendar,
@@ -32,12 +31,18 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { type Interaction } from "../../../types";
-import { Modal } from "../../../components/ui/Modal";
+import { DialogCloseButton, Modal } from "../../../components/ui/Modal";
 import { noteEditorChunk } from "../../../components/composerChunk";
-import { BTN_QUIET, ICON_BTN, SECTION_HEADING } from "../../../lib/styles";
+import {
+  BTN_QUIET,
+  LABEL,
+  SECTION_HEADING,
+  TONE_TEXT,
+} from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { TIPTAP_SANITIZE_CONFIG } from "../../../lib/sanitize";
-import { formatDay, formatWhen } from "../../../lib/datetime";
+import { formatDue, formatWhen } from "../../../lib/datetime";
+import { isPastDay } from "../../../../shared/dates";
 import { useHiddenPendingIds } from "../../../lib/pendingDeletes";
 
 const NoteEditor = noteEditorChunk.Component;
@@ -168,14 +173,7 @@ export const InteractionDetailModal = ({
               {formatWhen(interaction.date)}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={close}
-            aria-label="Close"
-            className={cn(ICON_BTN, "-mr-2 shrink-0")}
-          >
-            <X aria-hidden="true" className="w-5 h-5" />
-          </button>
+          <DialogCloseButton onClick={close} />
         </div>
         <div className="flex flex-wrap items-center gap-2 mt-3 sm:pl-12">
           {askDiscard ? (
@@ -313,13 +311,16 @@ export const InteractionDetailModal = ({
                         >
                           {action.title}
                         </span>
+                        {/* Red only when it is late: the error tone means
+                            overdue, not due. */}
                         <span
                           className={cn(
-                            "text-[11px] uppercase font-bold tracking-[0.08em] mt-0.5",
-                            done ? "text-on-surface-variant" : "text-error",
+                            LABEL,
+                            "mt-0.5",
+                            !done && isPastDay(action.dueAt) && TONE_TEXT.error,
                           )}
                         >
-                          Due {formatDay(action.dueAt)}
+                          Due {formatDue(action.dueAt)}
                         </span>
                       </span>
                     </button>

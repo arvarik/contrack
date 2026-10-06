@@ -79,6 +79,7 @@ import {
   resetPendingDeletes,
 } from "../../../../src/lib/pendingDeletes";
 import type { Interaction } from "../../../../src/types";
+import { formatDue } from "../../../../src/lib/datetime";
 
 /** An ISO instant for a local date and hour, so no test depends on the zone. */
 const at = (year: number, month: number, day: number, hour = 12) =>
@@ -319,7 +320,7 @@ describe("an entry", () => {
     fireEvent.change(notes, { target: { value: "Agreed on dates" } });
 
     // A close with unsaved changes asks first, and keeps the edit.
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByRole("button", { name: "Close dialog" }));
     expect(screen.getByRole("alert").textContent).toBe("Discard your changes?");
     expect((notes as HTMLTextAreaElement).value).toBe("Agreed on dates");
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));
@@ -333,7 +334,8 @@ describe("an entry", () => {
   it("marks a follow-up done with Undo, and sends nothing until Undo is gone", async () => {
     await mount();
     fireEvent.click(screen.getByRole("button", { name: "Coffee in August" }));
-    expect(screen.getByText("Due Sep 20, 2026")).toBeTruthy();
+    // The weekday too, as the composer and Details say a due date.
+    expect(screen.getByText(`Due ${formatDue(at(2026, 9, 20))}`)).toBeTruthy();
     fireEvent.click(
       screen.getByRole("button", { name: "Mark done: Send deck" }),
     );

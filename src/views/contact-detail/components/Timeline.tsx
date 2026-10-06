@@ -61,7 +61,7 @@ import {
 } from "../../../lib/pendingDeletes";
 import { ActionMenu } from "../../../components/ui/ActionMenu";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
-import { useCompleteActionItem } from "../../../api";
+import { useMarkFollowUpDone } from "../../../hooks/useMarkFollowUpDone";
 import { InteractionDetailModal } from "./InteractionDetailModal";
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -573,7 +573,7 @@ export const Timeline = ({
   promoteGhost,
 }: TimelineProps) => {
   const hidden = useHiddenPendingIds();
-  const completeActionItem = useCompleteActionItem();
+  const markFollowUpDone = useMarkFollowUpDone();
   const headingPrefix = useId();
   const [confirming, setConfirming] = useState<Interaction | null>(null);
   /** The entry whose title takes focus after the next render. */
@@ -681,16 +681,7 @@ export const Timeline = ({
           null
         }
         initialEditing={opened?.editing}
-        onCompleteActionItem={(id) =>
-          startPendingDelete({
-            id,
-            send: () => completeActionItem.mutateAsync(id),
-            message: "Follow-up done",
-            errorMessage: "Could not mark the follow-up done",
-            flushUrl: `/action-items/${encodeURIComponent(id)}/complete`,
-            flushMethod: "PATCH",
-          })
-        }
+        onCompleteActionItem={markFollowUpDone}
         onUpdateInteraction={(id, data) =>
           updateInteraction({ id, contactId, data })
         }
