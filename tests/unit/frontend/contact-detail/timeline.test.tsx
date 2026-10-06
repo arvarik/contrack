@@ -159,6 +159,7 @@ function makeProps(overrides: Partial<TimelineTabProps> = {}) {
     isDragActive: false,
     getRootProps: () => ({}),
     getInputProps: () => ({}),
+    onAttach: vi.fn(),
     deleteInteraction: vi.fn(() => Promise.resolve({ success: true })),
     updateInteraction: vi.fn(() => Promise.resolve({})),
     promoteGhost: vi.fn(),
@@ -610,7 +611,7 @@ describe("the tab", () => {
 
   it("says it is loading instead of showing the empty state", async () => {
     await mount({ timeline: [], timelineLoading: true });
-    expect(screen.getByText("Loading timeline...")).toBeTruthy();
+    expect(screen.getByText("Loading timeline…")).toBeTruthy();
     expect(screen.queryByText("No interactions yet")).toBeNull();
   });
 

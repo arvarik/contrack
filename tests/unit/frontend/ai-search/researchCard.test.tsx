@@ -10,6 +10,11 @@
 // =============================================================================
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+// AI is set up: the Enrich buttons ask `useAiSetup`.
+vi.mock("../../../../src/hooks/useAiSetup", () => ({
+  useAiSetup: () => null,
+  aiSetupLine: () => "",
+}));
 import {
   cleanup,
   fireEvent,

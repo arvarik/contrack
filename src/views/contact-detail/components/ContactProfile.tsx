@@ -289,8 +289,8 @@ export const ContactProfile = ({
           const isEml = file.name.toLowerCase().endsWith(".eml");
           const toastId = toast.loading(
             isEml && aiAllowed
-              ? `Summarizing email thread with AI...`
-              : `Uploading "${file.name}"...`,
+              ? `Summarizing the email with AI…`
+              : `Uploading "${file.name}"…`,
           );
 
           addAttachment(
@@ -300,14 +300,14 @@ export const ContactProfile = ({
                 toast.dismiss(toastId);
                 toast.success(
                   isEml && interaction.content
-                    ? `Email imported & summarized!`
+                    ? `Email attached and summarized`
                     : `Attached "${file.name}"`,
                 );
               },
               onError: (err) => {
                 toast.dismiss(toastId);
                 toast.error(
-                  `Upload failed: ${err instanceof Error ? err.message : String(err)}`,
+                  `Could not attach "${file.name}": ${err instanceof Error ? err.message : String(err)}`,
                 );
               },
             },
@@ -318,7 +318,12 @@ export const ContactProfile = ({
     [id, addAttachment, aiAllowed],
   );
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const {
+    getRootProps,
+    getInputProps,
+    isDragActive,
+    open: chooseFiles,
+  } = useDropzone({
     onDrop,
     noClick: true,
     noKeyboard: true,
@@ -601,6 +606,7 @@ export const ContactProfile = ({
                       isDragActive={isDragActive}
                       getRootProps={getRootProps}
                       getInputProps={getInputProps}
+                      onAttach={chooseFiles}
                       deleteInteraction={deleteInteraction}
                       updateInteraction={updateInteraction}
                       promoteGhost={promoteGhost}

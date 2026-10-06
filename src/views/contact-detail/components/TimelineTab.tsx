@@ -11,14 +11,15 @@
 import React, { Suspense, useEffect, useState } from "react";
 import { composerChunk } from "../../../components/composerChunk";
 import { useSearchParams } from "react-router-dom";
-import { MessageSquare, UploadCloud } from "lucide-react";
+import { MessageSquare, Paperclip, UploadCloud } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 import type { Interaction } from "../../../types";
 import { ComposerPlaceholder } from "../../../components/ComposerPlaceholder";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { useHiddenPendingIds } from "../../../lib/pendingDeletes";
-import { DROPZONE_INPUT } from "../../../lib/styles";
+import { BTN_QUIET, DROPZONE_INPUT } from "../../../lib/styles";
+import { cn } from "../../../lib/utils";
 import type { DropzoneRootProps, DropzoneInputProps } from "react-dropzone";
 import {
   Timeline,
@@ -58,6 +59,11 @@ export interface TimelineTabProps {
   isDragActive: boolean;
   getRootProps: () => DropzoneRootProps;
   getInputProps: () => DropzoneInputProps;
+  /**
+   * Opens the file picker. Drop is a mouse's way, and a phone or a keyboard
+   * had no way at all to attach a file.
+   */
+  onAttach: () => void;
 
   // Mutations passed from parent
   deleteInteraction: DeleteInteraction;
@@ -77,6 +83,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
   isDragActive,
   getRootProps,
   getInputProps,
+  onAttach,
   deleteInteraction,
   updateInteraction,
   promoteGhost,
@@ -141,7 +148,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
             <div className="text-center">
               <UploadCloud className="w-20 h-20 text-primary mx-auto mb-4 animate-bounce" />
               <p className="text-2xl font-bold font-headline text-on-surface">
-                Drop file to attach...
+                Drop a file to attach it
               </p>
             </div>
           </motion.div>
@@ -156,6 +163,14 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
           collapsible={composerCollapsible}
         />
       </Suspense>
+      <button
+        type="button"
+        onClick={onAttach}
+        className={cn(BTN_QUIET, "self-start -mt-3")}
+      >
+        <Paperclip aria-hidden="true" className="w-4 h-4" />
+        Attach a file
+      </button>
 
       {/* Empty State */}
       {!timelineLoading && !hasEntries && (
@@ -168,7 +183,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
 
       {timelineLoading && (
         <div className="text-center p-4 text-on-surface-variant animate-pulse">
-          Loading timeline...
+          Loading timeline…
         </div>
       )}
 

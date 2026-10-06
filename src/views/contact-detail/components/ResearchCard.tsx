@@ -42,7 +42,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
-import { format, formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 
 import type { Contact } from "../../../types";
 import { cn, safeHref } from "../../../lib/utils";
@@ -87,10 +87,22 @@ const FINDINGS_SHOWN = 8;
 /** Sources shown before "Show all". */
 const SOURCES_SHOWN = 8;
 
-/** "Sep 26, 3:21 PM", or the raw value when it is no date. */
+/**
+ * "Sep 26, 3:21 PM" in the reader's own format, with the year when it is
+ * not this one, or the raw value when it is no date.
+ */
 function when(value: string): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : format(date, "MMM d, h:mm a");
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    ...(date.getFullYear() !== new Date().getFullYear() && {
+      year: "numeric",
+    }),
+  });
 }
 
 /** The site's icon from the logo proxy, or a globe when it has none. */

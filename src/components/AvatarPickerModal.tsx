@@ -193,7 +193,7 @@ export const AvatarPickerModal = ({
           },
           onError: (err) =>
             toast.error(
-              `Failed: ${err instanceof Error ? err.message : String(err)}`,
+              `Could not save the avatar: ${err instanceof Error ? err.message : String(err)}`,
             ),
         },
       );
