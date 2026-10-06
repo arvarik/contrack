@@ -11,7 +11,6 @@ import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Modal } from "../../../components/ui/Modal";
-import { Segmented } from "../../../components/ui/Segmented";
 import { Switch } from "../../../components/ui/Switch";
 import {
   useCreateConnector,
@@ -24,6 +23,12 @@ import type {
 } from "../../../../shared/connectors";
 import { FORM_INPUT, TONE_WASH } from "../../../lib/styles";
 import { cn, errorText } from "../../../lib/utils";
+import {
+  FIELD_HEADING,
+  FormError,
+  LookbackField,
+  SyncScheduleField,
+} from "./ConnectorFormFields";
 
 interface CalendarFormModalProps {
   isOpen: boolean;
@@ -181,22 +186,11 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           </p>
         </div>
 
-        {/* Error message */}
-        {formError && (
-          <div
-            role="alert"
-            className={cn("rounded-lg p-3 text-xs", TONE_WASH.error)}
-          >
-            {formError}
-          </div>
-        )}
+        <FormError message={formError} />
 
         {/* Name */}
         <div>
-          <label
-            htmlFor="connector-name"
-            className="block text-xs font-semibold text-on-surface mb-1"
-          >
+          <label htmlFor="connector-name" className={FIELD_HEADING}>
             Connector name
           </label>
           <input
@@ -212,10 +206,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
 
         {/* ICS URL */}
         <div>
-          <label
-            htmlFor="connector-ics-url"
-            className="block text-xs font-semibold text-on-surface mb-1"
-          >
+          <label htmlFor="connector-ics-url" className={FIELD_HEADING}>
             Private ICS calendar URL
           </label>
           <div className="relative">
@@ -247,50 +238,16 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           </p>
         </div>
 
-        {/* Schedule */}
-        <div>
-          <span className="block text-xs font-semibold text-on-surface mb-1">
-            Sync schedule
-          </span>
-          <Segmented<number>
-            label="Sync schedule"
-            className="sm:w-fit"
-            value={intervalMinutes}
-            onChange={setIntervalMinutes}
-            options={[
-              { value: 15, label: "15 min" },
-              { value: 30, label: "30 min" },
-              { value: 60, label: "Hourly" },
-              { value: 1440, label: "Daily" },
-            ]}
-          />
-        </div>
-
-        {/* How far back the first sync goes */}
-        <div>
-          <span className="block text-xs font-semibold text-on-surface mb-1">
-            First sync goes back
-          </span>
-          <Segmented<number>
-            label="First sync goes back"
-            className="sm:w-fit"
-            value={lookbackDays}
-            onChange={setLookbackDays}
-            options={[
-              { value: 30, label: "30 days" },
-              { value: 90, label: "90 days" },
-              { value: 365, label: "1 year" },
-            ]}
-          />
-        </div>
+        <SyncScheduleField
+          value={intervalMinutes}
+          onChange={setIntervalMinutes}
+        />
+        <LookbackField value={lookbackDays} onChange={setLookbackDays} />
 
         {/* Max Attendees */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label
-              htmlFor="connector-max-attendees"
-              className="block text-xs font-semibold text-on-surface mb-1"
-            >
+            <label htmlFor="connector-max-attendees" className={FIELD_HEADING}>
               Skip events with more than
             </label>
             <div className="flex items-center gap-2">
@@ -314,7 +271,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           <div>
             <label
               htmlFor="connector-ghost-threshold"
-              className="block text-xs font-semibold text-on-surface mb-1"
+              className={FIELD_HEADING}
             >
               Suggest a new person after
             </label>

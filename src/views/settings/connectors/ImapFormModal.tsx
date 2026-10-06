@@ -11,8 +11,6 @@ import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Modal } from "../../../components/ui/Modal";
-import { Segmented } from "../../../components/ui/Segmented";
-import { Switch } from "../../../components/ui/Switch";
 import {
   useCreateConnector,
   useTestConnector,
@@ -24,6 +22,14 @@ import type {
 } from "../../../../shared/connectors";
 import { FORM_INPUT, TONE_WASH } from "../../../lib/styles";
 import { cn, errorText } from "../../../lib/utils";
+import {
+  FIELD_HEADING,
+  FormError,
+  GhostThresholdField,
+  LookbackField,
+  SwitchTile,
+  SyncScheduleField,
+} from "./ConnectorFormFields";
 
 interface ImapFormModalProps {
   isOpen: boolean;
@@ -242,22 +248,11 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
           </p>
         </div>
 
-        {/* Error message */}
-        {formError && (
-          <div
-            role="alert"
-            className={cn("rounded-lg p-3 text-xs", TONE_WASH.error)}
-          >
-            {formError}
-          </div>
-        )}
+        <FormError message={formError} />
 
         {/* Name */}
         <div>
-          <label
-            htmlFor="imap-connector-name"
-            className="block text-xs font-semibold text-on-surface mb-1"
-          >
+          <label htmlFor="imap-connector-name" className={FIELD_HEADING}>
             Connector name
           </label>
           <input
@@ -273,10 +268,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
         {/* Host and Port */}
         <div className="grid grid-cols-3 gap-3">
           <div className="col-span-2">
-            <label
-              htmlFor="imap-host"
-              className="block text-xs font-semibold text-on-surface mb-1"
-            >
+            <label htmlFor="imap-host" className={FIELD_HEADING}>
               IMAP host
             </label>
             <input
@@ -289,10 +281,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
             />
           </div>
           <div>
-            <label
-              htmlFor="imap-port"
-              className="block text-xs font-semibold text-on-surface mb-1"
-            >
+            <label htmlFor="imap-port" className={FIELD_HEADING}>
               Port
             </label>
             <input
@@ -307,10 +296,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
 
         {/* Username */}
         <div>
-          <label
-            htmlFor="imap-username"
-            className="block text-xs font-semibold text-on-surface mb-1"
-          >
+          <label htmlFor="imap-username" className={FIELD_HEADING}>
             Username / email
           </label>
           <input
@@ -325,10 +311,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
 
         {/* App password */}
         <div>
-          <label
-            htmlFor="imap-password"
-            className="block text-xs font-semibold text-on-surface mb-1"
-          >
+          <label htmlFor="imap-password" className={FIELD_HEADING}>
             {isEditing
               ? "New password (leave blank to keep current)"
               : "App password"}
@@ -366,10 +349,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
 
         {/* Folders */}
         <div>
-          <label
-            htmlFor="imap-folders"
-            className="block text-xs font-semibold text-on-surface mb-1"
-          >
+          <label htmlFor="imap-folders" className={FIELD_HEADING}>
             Folders to sync
           </label>
           <input
@@ -387,10 +367,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
 
         {/* Aliases */}
         <div>
-          <label
-            htmlFor="imap-aliases"
-            className="block text-xs font-semibold text-on-surface mb-1"
-          >
+          <label htmlFor="imap-aliases" className={FIELD_HEADING}>
             Also treat these addresses as mine
           </label>
           <input
@@ -406,104 +383,34 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
           </p>
         </div>
 
-        {/* Sync schedule */}
-        <div>
-          <span className="block text-xs font-semibold text-on-surface mb-1">
-            Sync schedule
-          </span>
-          <Segmented<number>
-            label="Sync schedule"
-            className="sm:w-fit"
-            value={intervalMinutes}
-            onChange={setIntervalMinutes}
-            options={[
-              { label: "15 min", value: 15 },
-              { label: "30 min", value: 30 },
-              { label: "Hourly", value: 60 },
-              { label: "Daily", value: 1440 },
-            ]}
-          />
-        </div>
-
-        {/* Lookback period */}
-        <div>
-          <span className="block text-xs font-semibold text-on-surface mb-1">
-            First sync goes back
-          </span>
-          <Segmented<number>
-            label="First sync goes back"
-            className="sm:w-fit"
-            value={lookbackDays}
-            onChange={setLookbackDays}
-            options={[
-              { label: "30 days", value: 30 },
-              { label: "90 days", value: 90 },
-              { label: "1 year", value: 365 },
-            ]}
-          />
-        </div>
+        <SyncScheduleField
+          value={intervalMinutes}
+          onChange={setIntervalMinutes}
+        />
+        <LookbackField value={lookbackDays} onChange={setLookbackDays} />
 
         {/* Rollup toggle */}
-        <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-surface-container">
-          <div>
-            <span className="text-xs font-semibold text-on-surface block">
-              Roll up emails per contact per day
-            </span>
-            <span className="text-xs text-on-surface-variant block mt-0.5">
-              Consolidates multiple daily emails with the same person into one
-              timeline entry
-            </span>
-          </div>
-          <Switch
-            checked={rollup}
-            onChange={setRollup}
-            label="Roll up emails per contact per day"
-          />
-        </div>
+        <SwitchTile
+          title="Roll up emails per contact per day"
+          description="Consolidates multiple daily emails with the same person into one timeline entry"
+          checked={rollup}
+          onChange={setRollup}
+        />
 
         {/* AI summaries */}
-        <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-surface-container">
-          <div>
-            <span className="text-xs font-semibold text-on-surface block">
-              Generate AI summaries
-            </span>
-            <span className="text-xs text-on-surface-variant block mt-0.5">
-              Fetches email bodies for matched contacts to generate concise
-              interaction notes
-            </span>
-          </div>
-          <Switch
-            checked={summaries}
-            onChange={setSummaries}
-            label="Generate AI summaries"
-          />
-        </div>
+        <SwitchTile
+          title="Generate AI summaries"
+          description="Fetches email bodies for matched contacts to generate concise interaction notes"
+          checked={summaries}
+          onChange={setSummaries}
+        />
 
-        {/* Ghost threshold */}
-        <div>
-          <label
-            htmlFor="imap-ghost-threshold"
-            className="block text-xs font-semibold text-on-surface mb-1"
-          >
-            Suggest a new person after
-          </label>
-          <div className="flex items-center gap-3">
-            <input
-              id="imap-ghost-threshold"
-              type="number"
-              min={1}
-              max={10}
-              value={ghostThreshold}
-              onChange={(e) =>
-                setGhostThreshold(
-                  Math.max(1, Math.min(10, Number(e.target.value) || 3)),
-                )
-              }
-              className={cn(FORM_INPUT, "w-20")}
-            />
-            <span className="text-xs text-on-surface-variant">messages</span>
-          </div>
-        </div>
+        <GhostThresholdField
+          id="imap-ghost-threshold"
+          unit="messages"
+          value={ghostThreshold}
+          onChange={setGhostThreshold}
+        />
 
         {/* Test Result feedback */}
         {testResult && (

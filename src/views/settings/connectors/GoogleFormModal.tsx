@@ -12,7 +12,6 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { AlertCircle, ArrowRight, Globe, Loader2 } from "lucide-react";
 import { Modal } from "../../../components/ui/Modal";
-import { Segmented } from "../../../components/ui/Segmented";
 import { Switch } from "../../../components/ui/Switch";
 import { useAuth } from "../../../components/auth/AuthGate";
 import { useConnectorKinds, useUpdateConnector } from "../../../api/connectors";
@@ -20,8 +19,16 @@ import type {
   ConnectorDetail,
   ConnectorSummary,
 } from "../../../../shared/connectors";
-import { FORM_INPUT, TONE_WASH } from "../../../lib/styles";
-import { cn, errorText } from "../../../lib/utils";
+import { FORM_INPUT } from "../../../lib/styles";
+import { errorText } from "../../../lib/utils";
+import {
+  FIELD_HEADING,
+  FormError,
+  GhostThresholdField,
+  LookbackField,
+  SwitchTile,
+  SyncScheduleField,
+} from "./ConnectorFormFields";
 
 interface GoogleFormModalProps {
   isOpen: boolean;
@@ -153,14 +160,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
           </p>
         </div>
 
-        {formError && (
-          <div
-            role="alert"
-            className={cn("rounded-lg p-3 text-xs", TONE_WASH.error)}
-          >
-            {formError}
-          </div>
-        )}
+        <FormError message={formError} />
 
         {/* State 1: Instance OAuth not configured */}
         {!isLoadingKinds && !isConfiguredOnInstance && !isEditing && (
@@ -223,23 +223,12 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
         {/* State 3: Creating new Google connector (OAuth redirect flow) */}
         {!isEditing && isConfiguredOnInstance && (
           <div className="space-y-4">
-            <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-surface-container">
-              <div>
-                <span className="text-xs font-semibold text-on-surface block">
-                  Generate AI summaries
-                </span>
-                <span className="text-xs text-on-surface-variant block mt-0.5">
-                  Summaries require reading email message bodies (gmail.readonly
-                  scope). Without summaries, only message metadata headers are
-                  requested
-                </span>
-              </div>
-              <Switch
-                checked={summaries}
-                onChange={setSummaries}
-                label="Generate AI summaries"
-              />
-            </div>
+            <SwitchTile
+              title="Generate AI summaries"
+              description="Summaries require reading email message bodies (gmail.readonly scope). Without summaries, only message metadata headers are requested"
+              checked={summaries}
+              onChange={setSummaries}
+            />
 
             <div className="pt-2">
               <button
@@ -258,10 +247,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
         {isEditing && (
           <form onSubmit={handleSaveConfig} className="space-y-4">
             <div>
-              <label
-                htmlFor="google-conn-name"
-                className="block text-xs font-semibold text-on-surface mb-1"
-              >
+              <label htmlFor="google-conn-name" className={FIELD_HEADING}>
                 Connector name
               </label>
               <input
@@ -313,105 +299,33 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
             </div>
 
             {/* AI summaries */}
-            <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-surface-container">
-              <div>
-                <span className="text-xs font-semibold text-on-surface block">
-                  AI message summaries
-                </span>
-                <span className="text-xs text-on-surface-variant block mt-0.5">
-                  Extracts brief notes from messages exchanged with known
-                  contacts
-                </span>
-              </div>
-              <Switch
-                checked={summaries}
-                onChange={setSummaries}
-                label="AI message summaries"
-              />
-            </div>
+            <SwitchTile
+              title="AI message summaries"
+              description="Extracts brief notes from messages exchanged with known contacts"
+              checked={summaries}
+              onChange={setSummaries}
+            />
 
-            {/* Sync schedule */}
-            <div>
-              <span className="block text-xs font-semibold text-on-surface mb-1">
-                Sync schedule
-              </span>
-              <Segmented<number>
-                label="Sync schedule"
-                className="sm:w-fit"
-                value={intervalMinutes}
-                onChange={setIntervalMinutes}
-                options={[
-                  { label: "15 min", value: 15 },
-                  { label: "30 min", value: 30 },
-                  { label: "Hourly", value: 60 },
-                  { label: "Daily", value: 1440 },
-                ]}
-              />
-            </div>
-
-            {/* Lookback period */}
-            <div>
-              <span className="block text-xs font-semibold text-on-surface mb-1">
-                First sync goes back
-              </span>
-              <Segmented<number>
-                label="First sync goes back"
-                className="sm:w-fit"
-                value={lookbackDays}
-                onChange={setLookbackDays}
-                options={[
-                  { label: "30 days", value: 30 },
-                  { label: "90 days", value: 90 },
-                  { label: "1 year", value: 365 },
-                ]}
-              />
-            </div>
+            <SyncScheduleField
+              value={intervalMinutes}
+              onChange={setIntervalMinutes}
+            />
+            <LookbackField value={lookbackDays} onChange={setLookbackDays} />
 
             {/* Rollup toggle */}
-            <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-surface-container">
-              <div>
-                <span className="text-xs font-semibold text-on-surface block">
-                  Roll up emails per contact per day
-                </span>
-                <span className="text-xs text-on-surface-variant block mt-0.5">
-                  Consolidates daily emails with a contact into a single
-                  timeline row
-                </span>
-              </div>
-              <Switch
-                checked={rollup}
-                onChange={setRollup}
-                label="Roll up emails per contact per day"
-              />
-            </div>
+            <SwitchTile
+              title="Roll up emails per contact per day"
+              description="Consolidates daily emails with a contact into a single timeline row"
+              checked={rollup}
+              onChange={setRollup}
+            />
 
-            {/* Ghost threshold */}
-            <div>
-              <label
-                htmlFor="google-ghost-threshold"
-                className="block text-xs font-semibold text-on-surface mb-1"
-              >
-                Suggest a new person after
-              </label>
-              <div className="flex items-center gap-3">
-                <input
-                  id="google-ghost-threshold"
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={ghostThreshold}
-                  onChange={(e) =>
-                    setGhostThreshold(
-                      Math.max(1, Math.min(10, Number(e.target.value) || 3)),
-                    )
-                  }
-                  className={cn(FORM_INPUT, "w-20")}
-                />
-                <span className="text-xs text-on-surface-variant">
-                  messages or meetings
-                </span>
-              </div>
-            </div>
+            <GhostThresholdField
+              id="google-ghost-threshold"
+              unit="messages or meetings"
+              value={ghostThreshold}
+              onChange={setGhostThreshold}
+            />
 
             <div className="flex items-center justify-end gap-2 pt-2">
               <button type="button" onClick={onClose} className="btn-secondary">
