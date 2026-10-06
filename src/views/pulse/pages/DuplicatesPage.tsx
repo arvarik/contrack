@@ -1,21 +1,8 @@
 /**
- * Possible duplicates: the pairs waiting for a person, and the merges that
- * happened, in one place.
- *
- * ```
- * ‹ Pulse
- * Possible duplicates
- * Contacts that may be the same person. Merge them, or keep them separate
- * [ To review | Merge history ]
- * ```
- *
- * To review is the queue. Merge history is every recent merge, by a person
- * or by Contrack, each with Undo. It used to be a panel behind an
- * unlabeled button on Settings, so the Undo a merge needs was the hardest
- * thing on the screen to find. `?view=merged` opens it, from Settings and
- * from the check's "2 merged automatically".
- *
- * @module views/pulse/pages/DuplicatesPage
+ * Possible duplicates: To review is the queue of pairs, and Merge history
+ * lists every recent merge, by a person or by Contrack, each with Undo.
+ * `?view=merged` opens Merge history, from Settings and from the check's
+ * "2 merged automatically".
  */
 import { lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";

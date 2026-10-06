@@ -1,21 +1,10 @@
 /**
- * useRovingFocus: a list of results as one Tab stop.
+ * A list of results as one Tab stop. The arrows, Home and End move between
+ * results, and Tab leaves the list in one press.
  *
- * Ask Contrack's results and the Manual merge picker gave every result its
- * own Tab stop, so thirty results were thirty presses of Tab before the
- * next control. Here one result is in the Tab order, the arrows walk the
- * others, and Tab leaves the list in one press:
- *
- *   ArrowDown, ArrowUp   the next or previous result
- *   Home, End            the first or last result
- *
- * Enter and Space stay with the result itself, a button. A list that draws
- * only the rows near the screen (`VirtualRows`) works too: a step lands on
- * a drawn neighbor, and focus scrolls it into view. A row that is not
- * drawn takes no focus, and the Tab stop stays where it was: a stop on a
- * missing row took the whole list out of the Tab order.
- *
- * @module views/search/useRovingFocus
+ * In a virtualized list (`VirtualRows`), a row that is not drawn takes no
+ * focus, so the Tab stop stays where it was. A stop on a missing row takes
+ * the whole list out of the Tab order.
  */
 import type React from "react";
 import { useCallback, useRef, useState } from "react";
@@ -43,7 +32,6 @@ export function useRovingFocus(count: number) {
     [count],
   );
 
-  /** Spread on each result. */
   const itemProps = (index: number) => ({
     "data-roving": index,
     tabIndex: index === active ? 0 : -1,

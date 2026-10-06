@@ -1,21 +1,10 @@
 /**
- * MatchedFields: why a person is in the Ask results, on their card.
+ * Why a person is in the Ask results: one line per field that answers the
+ * question (`matchedOn.ts`), with the question's words marked. A field
+ * close only in meaning says so, so an unmarked line never reads as a
+ * keyword match.
  *
- * One line per field that answers the question, most telling first: the
- * field's name, then the contact's own text with the question's words
- * marked. "Interests: Machine Learning" and "Role: Machine Learning
- * Engineer" say at a glance that two people match the same question for
- * different reasons.
- *
- * The server finds these fields with no model call (`matchedOn.ts`). A field
- * the AI check cited carries the AI sparkle. A field close in meaning, with
- * none of the question's words, says so, so an unmarked line never reads as
- * a keyword match.
- *
- * The lines sit inside the card's button, so they are spans, and a screen
- * reader hears them as part of the card's name.
- *
- * @module views/search/MatchedFields
+ * The lines sit inside the card's button, so they are spans.
  */
 import {
   Briefcase,

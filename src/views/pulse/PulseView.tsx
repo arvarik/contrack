@@ -79,7 +79,6 @@ const DuplicatesPage = React.lazy(() =>
 /** The single keys that walk or act on the selected Up next row. */
 const QUEUE_KEYS = new Set(["j", "k", "d", "s", "l"]);
 
-/** Log a note on a contact from a queue row. */
 const logNote = (contactId: string) => openQuickNote(contactId);
 
 const PulseOffice = () => {
@@ -114,10 +113,9 @@ const PulseOffice = () => {
   /** Follow-ups done this session, in their undo window or after it. */
   const hiddenIds = useHiddenPendingIds();
 
-  // No route reopens a follow-up, so Undo works by waiting: the row leaves
-  // the queue at once, and the request goes when the toast's Undo is gone
-  // (`lib/pendingDeletes`). Stable, so the queue's element below survives a
-  // render that changed nothing it shows.
+  // No route reopens a follow-up, so Undo works by waiting: the request goes
+  // when the toast's Undo is gone (`lib/pendingDeletes`). Stable, so the
+  // memoized queue element survives.
   const completeAsync = completeAction.mutateAsync;
   const handleComplete = useCallback(
     (id: string) =>
@@ -133,8 +131,6 @@ const PulseOffice = () => {
     [completeAsync],
   );
 
-  // S and the Snooze menu. The toast says the new day, and Undo puts the
-  // date back, as D's Undo brings a done follow-up back.
   const handleSnooze = useCallback(
     (item: UpNextItem, days: number) => {
       const before = item.dueAt;
@@ -161,19 +157,15 @@ const PulseOffice = () => {
     [updateFollowUp],
   );
 
-  // Customize mode state
   const [isEditing, setIsEditing] = useState(false);
   const [announcement, setAnnouncement] = useState("");
-  // True while a card is in the air (set by `PulseGrid`). The letter keys
-  // wait: C would end customize mode under a keyboard drag.
+  // Set by `PulseGrid` while a card is in the air. The letter keys wait: C
+  // would end customize mode under a keyboard drag.
   const draggingRef = useRef(false);
   /** The masthead's More menu, where Customize layout lives. */
   const moreRef = useRef<HTMLButtonElement>(null);
-  /**
-   * Where focus goes after the next layout change. Hide, Show and a Move to
-   * another column each take away the button under focus, and focus fell to
-   * the page. The control that took its place takes it instead.
-   */
+  // Where focus goes after the next layout change. Hide, Show and Move
+  // remove the focused button, and focus would fall to the page.
   const refocusRef = useRef<(() => HTMLElement | null) | null>(null);
 
   const handleToggleCustomize = useCallback(
@@ -182,8 +174,8 @@ const PulseOffice = () => {
   );
   const handleDone = useCallback(() => setIsEditing(false), []);
 
-  // Say the mode's change. Ending it takes away the bar and every card's
-  // controls, so focus that was on one of them goes to the More menu.
+  // Ending the mode removes the bar and the card controls, so lost focus
+  // goes to the More menu.
   const wasEditingRef = useRef(false);
   useEffect(() => {
     if (wasEditingRef.current === isEditing) return;
@@ -194,7 +186,6 @@ const PulseOffice = () => {
     }
   }, [isEditing]);
 
-  // Layout resolution
   const resolvedLayout = useMemo(() => {
     return resolveLayout(preferences?.pulseLayout);
   }, [preferences?.pulseLayout]);
@@ -292,9 +283,7 @@ const PulseOffice = () => {
     );
   }, [preferences?.pulseLayout, setPreference]);
 
-  // A drag's drop, as the one reducer action `PulseGrid` worked out from its
-  // draft: one write per drag. The drag's own live region says where the
-  // card landed, so the page's region says nothing more.
+  // One write per drag. The drag's own live region announces the drop.
   const handleDrop = useCallback(
     (action: PulseLayoutAction) => {
       const raw = preferences?.pulseLayout ?? DEFAULT_PULSE_LAYOUT;
@@ -303,7 +292,6 @@ const PulseOffice = () => {
     [preferences?.pulseLayout, setPreference],
   );
 
-  // After the layout changed, focus goes where the handler asked.
   useEffect(() => {
     const target = refocusRef.current;
     if (!target) return;
@@ -311,7 +299,6 @@ const PulseOffice = () => {
     target()?.focus();
   }, [resolvedLayout]);
 
-  // Map of contacts for fast lookup (e.g. meeting attendee avatars)
   const contactsMap = useMemo(() => {
     const map = new Map<string, { name: string; avatarUrl?: string | null }>();
     for (const c of contacts) {
@@ -320,8 +307,7 @@ const PulseOffice = () => {
     return map;
   }, [contacts]);
 
-  // What every row's ring needs, by contact id. The slim cache carries the
-  // flag, the score and the date, and an action item carries none of them.
+  // The ring's data by contact id: an action item carries none of it.
   const contactScores = useMemo(() => {
     const map = new Map<
       string,
@@ -341,15 +327,12 @@ const PulseOffice = () => {
     return map;
   }, [contacts]);
 
-  // Compute upcoming birthdays within 14 days client-side
   const upcomingBirthdays = useMemo(() => {
     return getUpcomingBirthdays(contacts, new Date(), 14);
   }, [contacts]);
 
-  // The Inbox's tracking row: the people added in the last 30 days, and how
-  // many of them nobody tracks yet. The total is the server's count and the
-  // untracked count is read off the slim rows, with the same exclusions the
-  // server applies (a ghost is a mention, not a person to track).
+  // People added in the last 30 days, and how many are untracked. The
+  // untracked count uses the server's exclusions: a ghost is a mention.
   const newPeople = useMemo(() => {
     const since = Date.now() - 30 * 24 * 60 * 60 * 1000;
     let untracked = 0;
@@ -361,7 +344,6 @@ const PulseOffice = () => {
     return { total: dashboard?.metrics.newContacts30d ?? 0, untracked };
   }, [contacts, dashboard?.metrics.newContacts30d]);
 
-  // Build the ranked Up Next queue
   const upNext = useMemo(() => {
     if (!dashboard) {
       return buildUpNextQueue({});
@@ -379,17 +361,13 @@ const PulseOffice = () => {
     });
   }, [dashboard, upcomingBirthdays, contactScores, hiddenIds]);
 
-  // Selected index in Up Next
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
-  // Whether the selected row wears its tint: from the first queue key, or
-  // while keyboard focus is in the list, until focus leaves the list or a
-  // pointer presses outside it. See UpNextCard.
+  // Whether the selected row shows its tint. See UpNextCard.
   const [selectionShown, setSelectionShown] = useState(false);
   const selectionShownRef = useRef(selectionShown);
   selectionShownRef.current = selectionShown;
   const prevItemsRef = useRef(upNext.items);
 
-  // Maintain highlight index when items leave or change
   useEffect(() => {
     setSelectedIndex((current) =>
       computeNextHighlightIndex(current, prevItemsRef.current, upNext.items),
@@ -402,9 +380,7 @@ const PulseOffice = () => {
       ? upNext.items[selectedIndex]
       : null;
 
-  // Screen reader announcement for keyboard navigation. It speaks only once
-  // the selection shows, from the first queue key or keyboard focus in the
-  // list: "Row 1 of 8" on load was the spoken form of the stray tint.
+  // Speaks only once the selection shows, so a page load says nothing.
   const [liveStatus, setLiveStatus] = useState("");
   useEffect(() => {
     if (highlightedItem && selectionShown) {
@@ -421,29 +397,23 @@ const PulseOffice = () => {
   const itemsCountRef = useRef(upNext.items.length);
   itemsCountRef.current = upNext.items.length;
 
-  // Keyboard navigation (J / K / D / S / L / C). Enter is not here: it
-  // belongs to the control that has focus. A focused row opens its contact
-  // from its own handler (ActionRow), and a button, a link or a menu item
-  // keeps its own Enter. A window-level Enter used to open the highlighted
-  // contact from anywhere on the page, the Customize button included.
+  // J / K / D / S / L / C. Enter is not here: it belongs to the focused
+  // control, and a focused row opens its contact itself (ActionRow).
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      // A key in a field, a dialog or a menu is theirs: D on a button in the
-      // Log note dialog, or in an open Snooze menu, completed the row behind.
+      // A key in a field, a dialog or a menu is theirs, so D in the Snooze
+      // menu does not complete the row behind it.
       if (isPageKeyTaken(e)) return;
-      // A card in the air owns the keyboard until it lands.
       if (draggingRef.current) return;
 
       const item = highlightedItemRef.current;
 
-      // Single-key shortcuts respect preference
       if (!singleKey) return;
 
       const key = e.key.toLowerCase();
 
-      // J, K, D, S and L walk or act on the selected row. While no row
-      // shows it, the first of them only shows the row and does nothing
-      // else: D on a row nobody can see completed it unseen.
+      // While no row shows the selection, the first queue key only shows
+      // it, so D never completes a row nobody can see.
       if (QUEUE_KEYS.has(key) && !selectionShownRef.current) {
         e.preventDefault();
         setSelectionShown(true);
@@ -485,10 +455,8 @@ const PulseOffice = () => {
 
   const upNextCardRef = useRef<HTMLDivElement>(null);
 
-  // A count in the masthead's line jumps to its group heading inside
-  // the queue: Overdue, Today or Birthdays (`jumpToGroup`). A group that is
-  // not there falls back to its card: Up next, or Coming up for a birthday
-  // further out.
+  // A masthead count jumps to its group in the queue. A missing group falls
+  // back to its card: Up next, or Coming up for a later birthday.
   const handleJumpTo = useCallback((target: JumpTarget) => {
     if (jumpToGroup(target)) return;
     const card =
@@ -498,17 +466,13 @@ const PulseOffice = () => {
     card?.scrollIntoView?.({ behavior: scrollBehavior(), block: "start" });
   }, []);
 
-  // Stable, so the card's element below survives a render that changed
-  // nothing it shows.
   const handleOpenContact = useCallback(
     (contactId: string) => navigate(`/contact/${contactId}`),
     [navigate],
   );
 
-  // Each card's element, built once per change of the data it shows. The
-  // grid hands these to its cards as children, so opening customize mode or
-  // a step of a drag renders the grid and leaves the queue, the heatmap and
-  // the charts alone: an element React has seen before is skipped.
+  // Each card's element is memoized on its data, so customize mode or a drag
+  // step renders the grid but skips the cards: React skips a seen element.
   const upNextCard = useMemo(
     () => (
       <div ref={upNextCardRef}>
@@ -610,8 +574,7 @@ const PulseOffice = () => {
     ],
   );
 
-  // Only with nothing to show: a failed background refetch keeps the data
-  // already on screen, and React Query still reports the error beside it.
+  // A failed background refetch keeps the data on screen, with `isError` set.
   if (isError && !dashboard) {
     return (
       <div className="w-full h-full flex items-center justify-center p-8">
@@ -625,10 +588,8 @@ const PulseOffice = () => {
   }
 
   if (isDashboardLoading || !dashboard) {
-    // The insight loads beside the dashboard. The skeleton draws its card
-    // at the height of its words once they are back, and at the height of
-    // an insight of a common length before that. It draws the line only
-    // when there is no insight to draw: AI is off, or it came back empty.
+    // The skeleton sizes the insight card to its text once it is back.
+    // `null` (AI off, or an empty insight) draws the one-line shape.
     return (
       <PulseSkeleton
         insight={
@@ -642,7 +603,6 @@ const PulseOffice = () => {
 
   return (
     <div className="w-full h-full overflow-y-auto bg-surface relative">
-      {/* Screen reader live announcements */}
       <div role="status" aria-live="polite" className="sr-only">
         {liveStatus}
       </div>
@@ -657,7 +617,6 @@ const PulseOffice = () => {
           PAGE_TOP,
         )}
       >
-        {/* The masthead: the title and the day, the line of facts, the actions */}
         <Masthead
           counts={{
             overdue: upNext.counts.overdue,
@@ -673,9 +632,8 @@ const PulseOffice = () => {
           moreRef={moreRef}
         />
 
-        {/* The customize bar, under the masthead and stuck to the top while
-            the page scrolls. It used to float at the bottom, where the Undo
-            toast of a hidden card covered Reset layout and Done. */}
+        {/* Sticky at the top, not the bottom, where the Undo toast of a
+            hidden card covers Reset layout and Done. */}
         {isEditing && (
           <div
             role="region"
@@ -711,7 +669,6 @@ const PulseOffice = () => {
           </div>
         )}
 
-        {/* Hidden Cards Tray in Customize Mode, only when a card is hidden */}
         {isEditing && resolvedLayout.hidden.length > 0 && (
           <section
             aria-label="Hidden cards"
@@ -755,7 +712,6 @@ const PulseOffice = () => {
           </section>
         )}
 
-        {/* Content: Welcome Office if 0 contacts, else the three columns */}
         {isZeroContacts ? (
           <WelcomeOffice />
         ) : (
@@ -783,9 +739,8 @@ export const PulseView = () => {
 
   return (
     <Routes>
-      {/* No Suspense of its own: the app's page boundary keeps Pulse on
-          screen while this page's code arrives, where a blank fallback
-          used to flash (`App.tsx`). */}
+      {/* No Suspense here: the app's page boundary (`App.tsx`) keeps Pulse
+          on screen while the code loads, with no blank flash. */}
       <Route path="duplicates" element={<DuplicatesPage />} />
       <Route
         path="suggestions"

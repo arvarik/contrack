@@ -1,14 +1,6 @@
 /**
- * Pure function to group history entries by day and month.
- *
- * Groups in order:
- * 1. Pinned (pinned rows appear once, never duplicate into date groups)
- * 2. Today
- * 3. Yesterday
- * 4. This week (weekStartsOn: 1, Monday)
- * 5. Months ("August 2026", "July 2026", ...)
- *
- * @module views/search/historyGroups
+ * Groups history entries, in order: Pinned (only there), Today, Yesterday,
+ * This week, then months, newest first ("August 2026").
  */
 
 import { format, isSameDay, isSameWeek, subDays } from "date-fns";
@@ -21,12 +13,6 @@ interface HistoryGroup {
   entries: HistoryEntry[];
 }
 
-/**
- * Split a list of history entries into headed groups.
- *
- * @param entries The entries to group.
- * @param now Reference clock date (defaults to current instant).
- */
 export function groupHistoryEntries(
   entries: readonly HistoryEntry[],
   now: Date = new Date(),
@@ -35,7 +21,6 @@ export function groupHistoryEntries(
   const groups: HistoryGroup[] = [];
   const weekStartsOnDay = weekStart === "sunday" ? 0 : 1;
 
-  // Pinned entries appear once in the Pinned group only.
   const pinned = entries.filter((e) => e.pinned);
   if (pinned.length > 0) {
     groups.push({
@@ -103,7 +88,6 @@ export function groupHistoryEntries(
     });
   }
 
-  // Month groups ordered newest month first
   const sortedMonthKeys = Array.from(monthMap.keys()).sort((a, b) =>
     b.localeCompare(a),
   );

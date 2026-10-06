@@ -1,16 +1,8 @@
 /**
- * ComingUpCard: what is coming, in the order it arrives.
- *
- * One dated list. A birthday in days eight to fourteen and a meeting from a
- * connected calendar are both "coming up", so they sit in one list ordered
- * by date, each row with a chip that says when: "Tomorrow", "Thursday", "In
- * 10 days". A birthday in the next seven days is in Up next already, and a
- * fact appears once on this page, so the card starts where the queue ends.
- * The dashboard sends meetings for the next seven days only, so the card
- * names no window of its own.
- *
- * With nothing to show the card is one line, and the line offers the one
- * thing that would fill it: a calendar, unless one is connected already.
+ * Birthdays from day eight and calendar meetings in one list by date. Up
+ * next owns the first seven days of birthdays, and a fact appears once on
+ * the page. The server sends meetings for the next seven days only. Empty,
+ * the card is one line that offers a calendar unless one is connected.
  */
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
@@ -53,10 +45,9 @@ type Entry =
   | { kind: "meeting"; key: string; when: Date; meeting: MeetingItem };
 
 /**
- * "Thu 2 Oct, 3:00 PM" in the person's own locale, or "Thu 2 Oct, all day"
- * for an all-day event. A plain day is that day on the local calendar
- * (`parseServerTime`): read as UTC midnight it showed on the evening before
- * west of Greenwich, at "5:00 PM".
+ * "Thu 2 Oct, 3:00 PM" in the person's locale, or "Thu 2 Oct, all day". A
+ * plain day is a local calendar day (`parseServerTime`): read as UTC
+ * midnight it shows on the evening before west of Greenwich.
  */
 function formatMeetingTime(startsAt: string): string {
   const date = parseServerTime(startsAt);

@@ -1,25 +1,11 @@
 /**
- * Heatmap Quantile Scale.
- *
- * Maps activity interaction counts to 5 discrete alpha steps
- * according to quantiles over positive counts.
- *
- * Steps:
- * 0: count <= 0 (transparent / empty cell)
- * 1: 0.12 (lowest 20% quantile)
- * 2: 0.30 (20% - 40% quantile)
- * 3: 0.55 (40% - 60% quantile)
- * 4: 0.80 (60% - 80% quantile)
- * 5: 1.00 (highest 20% quantile)
+ * Maps interaction counts to alpha steps by quintiles over the positive
+ * counts. Step 0 is an empty cell.
  */
-
 export const HEATMAP_ALPHA_STEPS = [0, 0.12, 0.3, 0.55, 0.8, 1] as const;
 
 type HeatmapStep = 0 | 1 | 2 | 3 | 4 | 5;
 
-/**
- * Returns a quantile scaling function for a given array of interaction counts.
- */
 export function heatmapScale(counts: number[]): (count: number) => HeatmapStep {
   const positive = counts.filter((c) => c > 0).sort((a, b) => a - b);
 
@@ -47,7 +33,6 @@ export function heatmapScale(counts: number[]): (count: number) => HeatmapStep {
     };
   }
 
-  // Compute 4 quantile threshold percentiles (20%, 40%, 60%, 80%)
   const q = (p: number) => {
     const idx = Math.max(
       0,
@@ -75,9 +60,6 @@ export function heatmapScale(counts: number[]): (count: number) => HeatmapStep {
   };
 }
 
-/**
- * Helper to convert a step (0-5) to its corresponding alpha value.
- */
 export function getHeatmapAlpha(step: HeatmapStep): number {
   return HEATMAP_ALPHA_STEPS[step];
 }

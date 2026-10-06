@@ -1,17 +1,7 @@
 /**
- * HistoryPane — the questions asked on Ask Contrack, for the side panel and
- * the phone's sheet.
- *
- * Displays previous questions grouped by day and month, with instant filtering,
- * mode filtering, pinning, deletion with undo, and one-click re-running.
- *
- * One list, two frames. From `lg` the page's `SidePanel` is the frame: its
- * heading row names the panel, so the pane hands it the count and Clear
- * through `children` and gives it the rest to draw as its body. Below `lg`
- * the sheet has no heading of its own, so the pane draws one: the title,
- * the count, Clear and an X that calls `onClose`.
- *
- * @module views/search/HistoryPane
+ * The questions asked on Ask Contrack. From `lg` the page's `SidePanel` draws
+ * the heading row, so the pane hands its parts to `children`. Below `lg` the
+ * sheet has no heading, so the pane draws one with an X that calls `onClose`.
  */
 
 import React, { useCallback, useMemo, useRef, useState } from "react";
@@ -42,13 +32,10 @@ import { groupHistoryEntries } from "./historyGroups";
 import { NO_AUTOCORRECT } from "../../components/ui/SearchField";
 import { ClearButton } from "../../components/ui/SearchField";
 
-/** What a frame with its own heading row places. */
 interface HistoryPaneParts {
-  /** How many questions the filters leave. */
   count: number;
   /** Clear, while there is something to clear and no words in the filter. */
   actions: React.ReactNode;
-  /** The filter, the mode switch and the list. */
   body: React.ReactNode;
 }
 
@@ -56,12 +43,8 @@ interface HistoryPaneProps {
   currentQuery?: string;
   currentMode?: HistoryMode;
   onSelect: (entry: HistoryEntry) => void;
-  /** Closes the sheet, from the X at the end of the pane's heading row. */
   onClose?: () => void;
-  /**
-   * Places the parts in a frame that has its own heading row, the side
-   * panel. Given, the pane draws no heading.
-   */
+  /** For a frame with its own heading row. Given, the pane draws no heading. */
   children?: (parts: HistoryPaneParts) => React.ReactNode;
 }
 
@@ -185,8 +168,6 @@ export const HistoryPane = ({
       </button>
     ) : null;
 
-  // The filter and the mode switch stay put while the list under them
-  // scrolls, where the frame gives the pane a height (the side panel).
   const body = (
     <div className="flex flex-col h-full gap-4">
       <div className="space-y-2 shrink-0">
@@ -197,8 +178,8 @@ export const HistoryPane = ({
             type="text"
             value={filterText}
             onChange={(e) => setFilterText(e.target.value)}
-            // Escape clears the words first, and the side panel skips a
-            // key that was used, so the next Escape hides the panel.
+            // Escape clears the words first. The side panel skips a used
+            // key, so the next Escape hides the panel.
             onKeyDown={(e) => {
               if (e.key !== "Escape" || !filterText) return;
               e.preventDefault();
@@ -229,9 +210,8 @@ export const HistoryPane = ({
         />
       </div>
 
-      {/* The list scrolls under the filter. The scroller reaches the
-          frame's side edges, so its bar sits on the window's edge in the
-          side panel, and its inset keeps a row's focus ring inside it. */}
+      {/* The scroller reaches the frame's side edges, and its inset keeps a
+          row's focus ring inside it. */}
       <div className={cn(SIDE_PANEL_SCROLLER, "space-y-5")}>
         {groups.map((group) => (
           <div key={group.key} className="space-y-1.5">
@@ -242,9 +222,9 @@ export const HistoryPane = ({
               aria-labelledby={`history-group-${group.key}`}
               className="space-y-1"
             >
-              {/* Keyed by the question, not the id: a question just asked
-                  shows under a stand-in id until the server answers with
-                  its own, and a key on the id remounted the row then. */}
+              {/* Keyed by the question, not the id: a new question has a
+                  stand-in id until the server answers, and a key change
+                  remounts the row. */}
               {group.entries.map((entry) => (
                 <li key={`${entry.mode}:${entry.normalizedQuery}`}>
                   <HistoryEntryRow
@@ -298,8 +278,7 @@ export const HistoryPane = ({
         isOpen={clearDialogOpen}
         onClose={() => setClearDialogOpen(false)}
         onConfirm={handleClear}
-        // The same words as Clear history in Privacy and AI: one action,
-        // one dialog.
+        // The same words as Clear history in Privacy and AI.
         title="Clear search history?"
         description={`This deletes all ${totalCount} ${totalCount === 1 ? "question" : "questions"} you asked. It cannot be undone`}
         confirmLabel="Clear history"
@@ -311,7 +290,6 @@ export const HistoryPane = ({
     return <>{children({ count: totalCount, actions, body })}</>;
   }
 
-  // The sheet: the side panel's heading row, with an X that closes it.
   return (
     <div className="flex flex-col gap-4 p-4">
       <div className="flex items-center justify-between gap-2">

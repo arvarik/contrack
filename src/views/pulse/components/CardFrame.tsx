@@ -1,22 +1,11 @@
 /**
- * CardFrame: a title and a body, in one of two shapes.
+ * CardFrame: a title and a body, as a `card` (the framed section) or a `line`
+ * (one row on the page surface, for a card with nothing to show).
  *
- * `card` is the section every Pulse card sits in: the card surface, a header
- * row with the `h2`, the muted count after it and a header action, and the
- * body under it. There is no line between the header and the body.
- * The header used to draw a hairline and an icon, and with nine cards that
- * read as nine identical kits. A card is a title and a body.
- *
- * `line` is for a card with nothing to show: the title, the count and one
- * sentence on one row, on the page surface, with no card background. Nobody
- * reads a framed box that says nothing. The customize controls sit at the
- * end of the title's row in both shapes, in the same order with the same
- * names, so the customize journeys work on a line as on a card. Neither
- * shape changes height when they appear.
- *
- * The count is inside the `h2` after a screen-reader-only comma, so the
- * section is named "Up next, 10" and a sighted reader sees the number in
- * muted text after the title.
+ * Both shapes put the customize controls at the end of the title's row, in
+ * the same order with the same names, and neither changes height when they
+ * appear. The count sits in the `h2` after a screen-reader-only comma, so
+ * the section is named "Up next, 10".
  */
 import React from "react";
 import { cn } from "../../../lib/utils";
@@ -41,31 +30,22 @@ interface CardFrameProps {
   count?: number;
   headerAction?: React.ReactNode;
   children: React.ReactNode;
-  /** `card` (default) is the framed section. `line` is one row on the page surface. */
   variant?: CardFrameVariant;
 }
 
-/** A customize control: a flat icon button with the hover layer. */
 const CONTROL_BTN =
   "hit-area state-layer p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors";
 
 /**
- * The drag handle, at every width. A mouse picks the card up once the
- * pointer moves a few pixels. A finger holds it for a moment first (the
- * touch sensor's delay in `PulseGrid`), so a flick that starts on the handle
- * still scrolls the page: `touch-manipulation` leaves the browser its pan,
- * where `touch-none` took it away. The handle takes the primary tint while a
- * press waits to become a drag, and it never opens the text callout.
+ * The drag handle. `touch-manipulation`, not `touch-none`, leaves the browser
+ * its pan, so a flick that starts on the handle still scrolls the page.
  */
 const GRIP_BTN =
   "inline-flex items-center justify-center cursor-grab active:cursor-grabbing touch-manipulation select-none [-webkit-touch-callout:none]";
 
 /**
- * The customize controls: the drag handle, the eye and the Move menu.
- * Rendered by both variants in this order, with these names. The Move menu
- * is the way to move a card without dragging, at every width: one place up
- * or down, or to another column. The phone's up and down arrows used to do
- * the first, on phones only, and the handle was hidden there.
+ * The drag handle, the eye and the Move menu. The Move menu moves a card
+ * without a drag, at every width.
  */
 const CustomizeControls = ({
   title,
@@ -82,8 +62,6 @@ const CustomizeControls = ({
   const index = customize.index ?? 0;
   const total = customize.totalInColumn ?? 1;
   if (customize.onMoveStep) {
-    // A place that does not exist is left out, as the card's own column is
-    // below: the first card has no Move up.
     if (index > 0) {
       moveActions.push({
         id: "move-up",
@@ -100,7 +78,6 @@ const CustomizeControls = ({
     }
   }
   if (customize.column && customize.onMoveToColumn) {
-    // Each other column by the name customize mode shows over it.
     for (const column of PULSE_COLUMNS) {
       if (column === customize.column) continue;
       moveActions.push({
@@ -134,7 +111,7 @@ const CustomizeControls = ({
         <GripVertical className="w-4 h-4" aria-hidden="true" />
       </button>
 
-      {/* The eye hides the card. The tray above the grid brings it back. */}
+      {/* The tray above the grid brings a hidden card back. */}
       <button
         type="button"
         onClick={() => customize.onHide?.(cardId)}
@@ -145,7 +122,6 @@ const CustomizeControls = ({
         <EyeOff className="w-4 h-4" />
       </button>
 
-      {/* The Move menu: up, down, or to another column, without a drag. */}
       {moveActions.length > 0 && (
         <ActionMenu
           label={`Move ${title}`}
@@ -168,7 +144,6 @@ export const CardFrame = ({
   const customize = useCardCustomize();
   const headingId = cardId ? `card-heading-${cardId}` : undefined;
 
-  // Check if customize mode is active for this card
   const isCustomizing = customize.isEditing && Boolean(cardId);
 
   const heading = (
@@ -189,17 +164,14 @@ export const CardFrame = ({
         aria-labelledby={headingId}
         data-card-id={cardId}
         className={cn(
-          // The card's own side inset, so a line's title starts on the same
-          // edge as the titles of the cards above and below it.
+          // The card's side inset, so the title lines up with the cards'.
           "relative flex flex-wrap items-center gap-x-3 gap-y-1 px-4 sm:px-5 py-2 rounded-2xl transition-shadow",
           isCustomizing && "ring-1 ring-primary/20",
         )}
       >
         {heading}
-        {/* In customize mode the words after the title step aside and keep
-            their place, and the controls sit over the end of the title's
-            row, so the line keeps its height. In the flow the controls
-            took a row of their own, and every card under the line moved. */}
+        {/* In customize mode the words keep their place, invisible, and the
+            controls sit over the row's end, so the line keeps its height. */}
         <div
           className={cn(
             PULSE_TYPE.meta,
@@ -219,8 +191,7 @@ export const CardFrame = ({
             title={title}
             cardId={cardId}
             customize={customize}
-            // One line of the title, 15 px at a line height of 1.5, below
-            // the line's top inset: the controls center on the title.
+            // One title line (15 px at 1.5), so the controls center on it.
             className="absolute right-4 sm:right-5 top-2 h-[22.5px]"
           />
         )}
@@ -233,22 +204,16 @@ export const CardFrame = ({
       aria-labelledby={headingId}
       data-card-id={cardId}
       className={cn(
-        // The card surface without its own padding: the header and the body
-        // set the inset (16 px on a phone, 20 px from sm). With both, a
-        // phone card lost 80 of its 350 px to padding.
+        // No surface padding: the header and the body set the inset. With
+        // both, a phone card lost 80 of its 350 px to padding.
         CARD,
         "p-0 flex flex-col relative overflow-hidden transition-shadow",
         isCustomizing && "ring-1 ring-primary/20",
       )}
     >
-      {/* The header's 16 px under the title is the one gap between header
-          and body, the same step as the blocks inside a body. The body
-          used to add its own top inset to it, and the title sat 32 px
-          above the first row. */}
+      {/* The header's bottom inset is the one gap between header and body. */}
       <div className="flex items-center justify-between gap-3 px-4 sm:px-5 pt-4 sm:pt-5 pb-4">
-        {/* The header's row is 24 px on every card, the height of a header
-            action such as Manage, so a card with an action and a card
-            without one have the same header. */}
+        {/* 24 px, the height of a header action, so every header matches. */}
         <div className="flex items-center min-w-0 min-h-6">{heading}</div>
 
         {isCustomizing && cardId ? (
@@ -256,9 +221,7 @@ export const CardFrame = ({
             title={title}
             cardId={cardId}
             customize={customize}
-            // The buttons are 32 px. The margin fits them in the header's
-            // 24 px row, so the card keeps its height when customize mode
-            // turns on.
+            // Fits the 32 px buttons in the 24 px row, so the height holds.
             className="-my-1"
           />
         ) : (

@@ -28,10 +28,8 @@ export const MetricCard = ({
         className={cn(
           CARD_COMPACT,
           "w-full h-full flex flex-col relative text-left overflow-hidden",
-          // Reserve the tile's height up front so the row does not resize when
-          // the numbers land. Matches the skeleton's 8rem on desktop; tighter on
-          // phones, where the three tiles stack and the extra air just costs
-          // scrolling.
+          // Reserve the height so the row does not resize when the numbers
+          // land. 8rem matches the skeleton. Phones stack the tiles, so less.
           "min-h-[6rem] sm:min-h-[8rem]",
         )}
       >
@@ -69,9 +67,8 @@ export const MetricCard = ({
           )}
         </div>
 
-        {/* A highlighted tile says so in its ink and this faint wash. No
-            ring and no fill on the card: a ring utility replaces the card's
-            shadow, and a `bg-*` utility replaces its white face. */}
+        {/* An overlay wash, not a ring or a `bg-*` on the card: those
+            replace the card's shadow and its face. */}
         {highlight && (
           <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
         )}

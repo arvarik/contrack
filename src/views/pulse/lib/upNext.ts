@@ -1,16 +1,7 @@
 /**
- * Up Next Queue Ranking and Grouping.
- *
- * Ranks all pending actionable items in order:
- * 1. Overdue (oldest dueAt first)
- * 2. Due today
- * 3. This week (upcoming follow-ups within 7 days)
- * 4. Birthdays this week (pseudo-items)
- * 5. Catch up: tracked contacts past their cadence, the furthest first
- *
- * A catch-up ranks after a birthday. It is a soft reminder, and a due
- * follow-up is a promise with a date. The server sends ten at most and the
- * group takes every one; the heading says "10 of 14" when there are more.
+ * The Up next queue, in groups: overdue (oldest first), due today, this
+ * week, birthdays this week, then catch-ups. A catch-up ranks last because it
+ * is a soft reminder, and a due follow-up is a promise with a date.
  */
 import { differenceInCalendarDays } from "date-fns";
 import type { ActionItem } from "../../../types";
@@ -25,12 +16,8 @@ export type UpNextGroup =
 type UpNextItemKind = "action_item" | "birthday" | "catch-up";
 
 /**
- * What a row's ring needs, for a contact the row itself does not carry.
- *
- * An action item names a contact and holds no score, so the ring used to
- * draw an empty track for every one of them. The queue takes a lookup from
- * the slim contact cache, which the Pulse page already holds, and a row
- * whose contact is missing from it shows the picture alone.
+ * The ring's fields, from the slim contact cache, because an action item
+ * holds no score. A row whose contact is missing shows the picture alone.
  */
 interface UpNextContactScore {
   isTracked: boolean;
@@ -64,11 +51,7 @@ export interface UpNextGroupMeta {
   label: string;
   items: UpNextItem[];
   count: number;
-  /**
-   * How many there are in all, when more than the rows shown. The Catch up
-   * group carries the server's ten rows and the count past them, so the
-   * heading can read "10 of 14".
-   */
+  /** The total when it is more than the rows shown, for "10 of 14". */
   of?: number;
 }
 
@@ -94,12 +77,11 @@ interface BuildUpNextOptions {
   catchUp?: CatchUpCard[];
   /** How many catch-ups there are in all, past the ten. */
   catchUpCount?: number;
-  /** The score fields for every contact, by contact id. See the type above. */
+  /** The ring fields for every contact, by contact id. */
   contactScores?: ReadonlyMap<string, UpNextContactScore>;
   now?: Date;
 }
 
-/** The group headings, in sentence case. */
 const GROUP_LABELS: Record<UpNextGroup, string> = {
   overdue: "Overdue",
   today: "Today",
@@ -109,19 +91,10 @@ const GROUP_LABELS: Record<UpNextGroup, string> = {
 };
 
 /**
- * The words on a due chip, in sentence case.
- *
- * `daysFromNow` is the calendar-day distance to the due date: negative for
- * a past date. A past date counts its days, "1 day overdue" and "12 days
- * overdue": the row sits under the Overdue heading, so a bare "Overdue"
- * repeated the heading and hid how late it was. Today and tomorrow are
- * named. Inside the week the chip says the weekday in full ("Wednesday")
- * when it has the date, and "In 2 days" when it does not. From a week out
- * it counts days. A catch-up row does not come here: its chip is
- * `describePastDue`.
- *
- * The chips used to read "12D OVERDUE", "IN 2D" and "WED", which a person
- * has to decode. A chip is a fact, and a fact reads as words.
+ * The words on a due chip. `daysFromNow` is negative for a past date. A past
+ * date counts its days ("12 days overdue"), because a bare "Overdue" repeats
+ * the group heading and hides how late it is. Inside the week the chip names
+ * the weekday when it has the date.
  */
 export function describeDueChip(
   daysFromNow: number,
@@ -140,9 +113,6 @@ export function describeDueChip(
   return `In ${days} days`;
 }
 
-/**
- * Build the ranked Up Next queue.
- */
 export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
   const {
     overdue = [],
@@ -165,7 +135,6 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
     };
   };
 
-  /** A follow-up's row, in its group, with the words on its chip. */
   const followUpRow = (
     item: ActionItem,
     group: UpNextGroup,
@@ -189,11 +158,10 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
     (parseServerTime(a.dueAt)?.getTime() ?? 0) -
     (parseServerTime(b.dueAt)?.getTime() ?? 0);
 
-  // The server put a row in Overdue, so it is at least a day late whatever
-  // the browser's clock says. A date with no time is that day on the local
-  // calendar (`parseServerTime`), as the contact page's banner reads it:
-  // read as UTC midnight it was a day early west of Greenwich, "4 days
-  // overdue" beside the banner's "3 days".
+  // The server put the row in Overdue, so it is at least a day late whatever
+  // the browser's clock says. `parseServerTime` reads a date with no time as
+  // local midnight, as the contact page's banner does: UTC midnight counts a
+  // day too many west of Greenwich.
   const overdueItems = [...overdue].sort(byDue).map((item) => {
     const due = parseServerTime(item.dueAt);
     const daysLate = due
@@ -220,7 +188,6 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
     });
   });
 
-  // Filter birthdays to next 7 days for Up Next
   const birthdayItems: UpNextItem[] = birthdays
     .filter((b) => b.daysUntil <= 7)
     .sort((a, b) => a.daysUntil - b.daysUntil)
@@ -235,14 +202,14 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
       relationshipScore: b.relationshipScore,
       lastContactedAt: b.lastContactedAt,
       title: `Wish ${b.name} a happy birthday`,
-      hasCheckAction: false, // birthday rows have no check action
+      hasCheckAction: false,
       dueChip: {
         text: describeDueChip(b.daysUntil, b.nextDate),
         variant: b.daysUntil === 0 ? "today" : "neutral",
       },
     }));
 
-  // Every row the server sent, in its order: the furthest past due first.
+  // In the server's order, the furthest past due first.
   const catchUpItems: UpNextItem[] = catchUp.map((contact) => ({
     id: `catch-${contact.id}`,
     kind: "catch-up",
@@ -250,7 +217,7 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
     contactId: contact.id,
     contactName: contact.name,
     contactAvatarUrl: contact.avatarUrl ?? null,
-    // Every contact on this list is tracked: that is the rule that put it here.
+    // The server lists only tracked contacts.
     isTracked: true,
     relationshipScore: contact.relationshipScore,
     lastContactedAt: contact.lastContactedAt ?? null,
@@ -320,8 +287,8 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
 }
 
 /**
- * Calculates the next highlight index when items change.
- * Ensures the highlighted index survives a completed row leaving.
+ * Keeps the highlight on the same row when the items change, and clamps it
+ * when that row left, such as a completed follow-up.
  */
 export function computeNextHighlightIndex(
   prevIndex: number,
@@ -339,6 +306,5 @@ export function computeNextHighlightIndex(
     }
   }
 
-  // Clamped to valid range if the previous item was removed
   return Math.min(Math.max(0, prevIndex), nextItems.length - 1);
 }

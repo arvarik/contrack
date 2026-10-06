@@ -1,13 +1,7 @@
 /**
- * HistoryEntryRow — one question in the search history pane.
- *
- * Each row is a full-width button that re-runs the question on click.
- * Hover and focus reveal Pin and Delete, two small icon buttons with 44 px
- * tap boxes, at the end of the row's meta line ("7 people · 18 hours ago"),
- * which keeps their room free. They used to float on a card-face pill over
- * the row's middle and covered the end of the question itself.
- *
- * @module views/search/HistoryEntryRow
+ * One question in the search history pane: a full-width button that runs it
+ * again. Pin and Delete sit at the end of the meta line, so they never cover
+ * the question.
  */
 
 import React from "react";
@@ -43,9 +37,7 @@ export const HistoryEntryRow = React.memo(
     const renderMeta = () => {
       const parts: string[] = [];
       if (entry.fallback) {
-        // The model did not check this answer: AI was off, failed or ran
-        // out of time, and the local list answered. The same words as the
-        // results' question mark.
+        // AI was off, failed or timed out, and the local list answered.
         parts.push("not verified by AI");
       } else if (entry.resultCount === 0) {
         parts.push("no matches");
@@ -77,9 +69,7 @@ export const HistoryEntryRow = React.memo(
     };
 
     return (
-      // The hover layer sits on the whole row, so it holds while the pointer
-      // is over Pin or Delete. The question the page is showing is the
-      // selected row.
+      // The hover layer is on the whole row, so it holds over Pin or Delete.
       <div
         className={cn(
           "state-layer group relative flex items-center justify-between rounded-xl transition-colors",
@@ -91,16 +81,13 @@ export const HistoryEntryRow = React.memo(
           onClick={() => onSelect(entry)}
           aria-label={`Run again: ${entry.query}`}
           aria-current={isCurrent ? "true" : undefined}
-          // The question takes the row's whole width. Pin and Delete sit at
-          // the end of the meta line under it, which keeps their room.
           className="w-full text-left p-2.5 flex items-start gap-2.5 rounded-xl cursor-pointer"
         >
           <div className="p-1 rounded-lg bg-surface-container-highest shrink-0 mt-0.5">
             <Icon className="w-3.5 h-3.5 text-primary" />
           </div>
           <div className="min-w-0 flex-1">
-            {/* The current question's words take the primary ink, the
-                selected row's second cue beside the tint. */}
+            {/* A second cue for the selected row, beside the tint. */}
             <div
               className={cn(
                 "text-sm font-medium line-clamp-2 break-words leading-snug",
@@ -115,12 +102,9 @@ export const HistoryEntryRow = React.memo(
           </div>
         </button>
 
-        {/* Pin and Delete, at the end of the meta line, in the room it
-            keeps. With a pointer they show while the row is hovered or holds
-            focus, and take no pointer events while hidden: an invisible
-            Delete took the taps at a row's end. A touch screen has no hover,
-            so there they always show. Each glyph is 24 px on screen with a
-            44 px tap box. */}
+        {/* With a fine pointer they show on hover or focus, and take no
+            pointer events while hidden, so an invisible Delete takes no
+            taps. A touch screen has no hover, so there they always show. */}
         <div className="absolute right-2 bottom-1.5 flex items-center gap-0.5 transition-opacity pointer-fine:opacity-0 pointer-fine:pointer-events-none pointer-fine:group-hover:opacity-100 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-focus-within:opacity-100 pointer-fine:group-focus-within:pointer-events-auto">
           <button
             type="button"

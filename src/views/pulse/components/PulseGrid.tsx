@@ -1,59 +1,26 @@
 /**
- * PulseGrid: the three columns, and moving a card between them.
+ * PulseGrid: the three columns, and moving a card between them in customize
+ * mode.
  *
- * Outside customize mode this is the page's grid and nothing more. In
- * customize mode each card has a grip, and a card moves like this:
+ * A mouse picks a card up after a short move, a finger after a hold on the
+ * grip, and the keyboard with Space or Enter. Two sensors, because the
+ * pointer sensor would claim the finger with the mouse's rule. The grip keeps
+ * `touch-action: manipulation`, so a flick that starts on it still scrolls.
  *
- * 1. Pick up. A mouse picks the card up once the pointer has moved 4 px.
- *    A finger holds the grip for 200 ms first, and a finger that moves
- *    5 px in that time is a scroll, not a drag: the grip keeps
- *    `touch-action: manipulation`, so the page still scrolls under a flick
- *    that starts on it. Two sensors, because one sensor takes one rule:
- *    the pointer sensor would claim the finger too, with the mouse's rule.
- *    The keyboard picks up with Space or Enter on the grip.
- * 2. In the air. The card folds to a slot in its column (`DRAG_SLOT`, the
- *    height of the preview), and a preview of its face follows the pointer
- *    in dnd-kit's `DragOverlay`, with its grip under the pointer. The slot
- *    is the drop target, and it moves through the columns as the pointer
- *    does: the target column opens a gap while the card is still in the air.
- * 3. Drop. The preview flies into the slot on the app's curve, the card
- *    unfolds there, and the layout is saved once. Escape puts the card back.
+ * In the air the card folds to a slot (`DRAG_SLOT_HEIGHT`), which is the drop
+ * target, and a preview in `DragOverlay` follows the pointer. The move lives
+ * in `draft`, a copy of the visible columns, and each target change moves the
+ * card one step through `moveCard`. The drop becomes one reducer action
+ * (`dropAction`). A dropped draft stays on screen until the saved layout
+ * comes back, so the card never flashes in its old place.
  *
- * The draft. The move lives in local state, a copy of the visible columns
- * (`draft`), until the drop. Each change of the drop target moves the card
- * one step through `moveCard`. The drop turns the draft into one reducer
- * action (`dropAction`), and the page saves the reducer's result. A draft
- * that was dropped stays on screen until the saved layout comes back, so
- * the card never flashes in its old place for a frame.
+ * The pointer, not the card's box, picks the target (`lib/dropTarget.ts`).
+ * After each step the detection holds its answer until the new layout is
+ * measured, so a step never runs on old boxes and the card cannot bounce.
  *
- * The target. dnd-kit asks `collisionDetection` which droppable is under
- * the drag on every frame. The pointer decides, not the card's box: the
- * column under or nearest the pointer, then the place in it before the
- * first card whose middle is below the pointer, in reading order in the
- * Intelligence grid at `lg` (`lib/dropTarget.ts`). The answer is the id of
- * the card the moved card goes before, or the column's own droppable for
- * its end, so `onDragOver` fires exactly when the place changes. After each
- * step the detection holds its answer until the new layout is measured, so
- * a step never runs on the old boxes and the card cannot bounce between two
- * places. A step that shortens one column would lift what sits under it (the
- * Intelligence grid at `lg`, the next column on a phone), and the place under
- * the pointer with it: the page scrolls by the same amount, so the column the
- * card went into holds still on screen.
- *
- * The keyboard. Arrow Up and Arrow Down move the card one place through its
- * column and on into the next, and Arrow Left and Arrow Right move it to the
- * column beside, in reading order. The live region names the card, the
- * column and the place at each step. The Move menu does the same without a
- * drag, at every width.
- *
- * The motion. Every card that changes place slides there (FLIP on
- * `transform` alone, `lib/flip.ts`). Nothing lays the page out frame by
- * frame. The cards are memoized elements from the page, so a step of the
- * drag renders the grid, not the queue, the heatmap or the charts. The
- * preview stays inside the window, and a phone's finger still picks the
- * target past its edge. Reduced motion, from the system or the Motion row in
- * Settings, drops the slides and the flight: the cards take their places at
- * once.
+ * Cards slide by FLIP on `transform` (`lib/flip.ts`). The cards are memoized
+ * elements from the page, so a drag step renders only the grid. Reduced
+ * motion drops the slides and the flight.
  */
 import React, {
   useCallback,
@@ -133,9 +100,8 @@ import { SortableCard } from "./SortableCard";
 import { DragPreview } from "./DragPreview";
 
 /**
- * The columns in source order. The grid's `order-*` classes place them:
- * Focus, Intelligence, Network from `xl`, Focus, Network, Intelligence
- * below it. The drag reads their places from their boxes, not from this.
+ * Source order. The grid's `order-*` classes place the columns on screen,
+ * and the drag reads their places from their boxes, not from this.
  */
 const COLUMN_SOURCE_ORDER: readonly PulseColumn[] = [
   "focus",
@@ -146,35 +112,25 @@ const COLUMN_SOURCE_ORDER: readonly PulseColumn[] = [
 /** The gap between two cards in a column (`gap-6`), in px. */
 const CARD_GAP = 24;
 
-/** A mouse drags once the pointer has moved this far. */
 const MOUSE_OPTIONS = { activationConstraint: { distance: 4 } };
 
-/**
- * A finger holds the grip this long, and may drift this far, before the
- * card lifts. A move past the tolerance inside the hold is a scroll.
- */
+/** A finger that moves past the tolerance inside the hold is a scroll. */
 const TOUCH_OPTIONS = { activationConstraint: { delay: 200, tolerance: 5 } };
 
-/**
- * Droppables are measured before the drag and after every change, so the
- * first frame of a drag already knows where the columns are.
- */
+/** Measure droppables always, so a drag's first frame knows the columns. */
 const MEASURING: MeasuringConfiguration = {
   droppable: { strategy: MeasuringStrategy.Always },
 };
 
 /**
- * The page scrolls when the pointer comes within 15 percent of its top or
- * bottom edge, at up to 6 px every 5 ms: 1200 px a second at the very edge.
- * dnd-kit's own default, 10 at 20 percent, ran the page out from under a
- * card a person meant to drop near the bottom of the window.
+ * Slower and nearer the edge than dnd-kit's default, which ran the page out
+ * from under a card meant for a drop near the bottom of the window.
  */
 const AUTO_SCROLL: AutoScrollOptions = {
   threshold: { x: 0.2, y: 0.15 },
   acceleration: 6,
 };
 
-/** The arrow keys, as steps through the columns. */
 const ARROWS: Record<string, KeyStep | undefined> = {
   ArrowUp: "up",
   ArrowDown: "down",
@@ -188,11 +144,7 @@ const INSTRUCTIONS = {
     "To move this card, press Space or Enter. Arrow Up and Arrow Down move it one place at a time. Arrow Left and Arrow Right move it to the column beside it. Press Space or Enter to drop it, or Escape to put it back. The Move menu beside this handle moves a card without dragging.",
 };
 
-/**
- * The flight into the slot: the app's slow duration on its curve. The card
- * waits under the preview, hidden, and fades in once the preview lands, so
- * the face in the hand becomes the card in its place.
- */
+/** The card waits hidden under the preview and fades in once it lands. */
 const DROP_ANIMATION: DropAnimation = {
   duration: DURATION.slow * 1000,
   easing: EASE_CSS,
@@ -213,11 +165,9 @@ const DROP_ANIMATION: DropAnimation = {
 const WINDOW_MARGIN = 8;
 
 /**
- * Keeps the preview inside the window. A finger that runs to the side of a
- * phone takes the picture with it only as far as the edge. The finger, not
- * the picture, still picks the drop target, so a card can land in a column
- * the preview does not cover. dnd-kit's `restrictToWindowEdges` does the
- * same, from a package the app does not ship.
+ * Keeps the preview inside the window. The pointer, not the preview, still
+ * picks the target. dnd-kit's `restrictToWindowEdges` lives in a package the
+ * app does not ship.
  */
 const keepInWindow: Modifier = ({
   transform,
@@ -250,11 +200,9 @@ const keepInWindow: Modifier = ({
 const OVERLAY_MODIFIERS = [keepInWindow];
 
 /**
- * The preview's width: at most `DRAG_PREVIEW_MAX_WIDTH`, and never wider than
- * the stretch from the card's left edge to the grip, so a preview whose grip
- * sits under the pointer starts inside the card. On a phone the grip is the
- * first of three controls, 120 px from the card's right edge: a 320 px
- * preview there began 30 px off the screen.
+ * No wider than the card's left edge to the grip, so a preview with its grip
+ * under the pointer starts inside the card. On a phone the grip sits 120 px
+ * from the card's right edge, and a full-width preview began off screen.
  */
 function previewWidth(
   card: { left: number; width: number } | null,
@@ -289,9 +237,8 @@ function readModes(
 }
 
 /**
- * Hands the grid dnd-kit's re-measure. The public context changes on every
- * frame of a drag, so the grid does not read it: this renders nothing and
- * passes the one function up.
+ * Hands up dnd-kit's re-measure. The context changes on every drag frame, so
+ * the grid does not read it.
  */
 function MeasureBridge({
   measureRef,
@@ -308,10 +255,9 @@ function MeasureBridge({
 }
 
 /**
- * One column: a droppable that stands for its own end, so a card let go
- * under the last card, or into an empty column, lands there. Its classes are
- * `COLUMN_CLASSES`, which the skeleton and the route fallback read too, and
- * its 4 px inset leaves room for a lifted card's shadow.
+ * One column. Its droppable stands for its end, so a card let go under the
+ * last card or in an empty column lands there. The skeleton and the route
+ * fallback share `COLUMN_CLASSES`. The 4 px inset leaves room for a shadow.
  */
 const DroppableColumn = ({
   id,
@@ -335,8 +281,7 @@ const DroppableColumn = ({
       data-pulse-column={id}
       className={cn("flex flex-col gap-6 rounded-2xl p-1", COLUMN_CLASSES[id])}
     >
-      {/* In customize mode each column shows its name, the name its Move
-          menu items say. */}
+      {/* The name its Move menu items say. */}
       {isEditing && (
         <p className={cn(LABEL, "px-1 -mb-3 lg:col-span-2")}>
           {COLUMN_NAMES[id]}
@@ -353,7 +298,6 @@ const DroppableColumn = ({
 };
 
 interface PulseGridProps {
-  /** The saved layout's visible columns. */
   layout: VisibleColumns;
   isEditing: boolean;
   /** Each card's element, built by the page and memoized on its data. */
@@ -367,7 +311,7 @@ interface PulseGridProps {
   draggingRef?: React.MutableRefObject<boolean>;
 }
 
-/** The card in the air: which one, the preview's width, and where it was picked up. */
+/** The card in the air. */
 interface DragState {
   id: PulseCardId;
   width: number;
@@ -388,10 +332,8 @@ export const PulseGrid = ({
   const [draft, setDraft] = useState<VisibleColumns | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
-  // The height the picked-up card gave back, kept under the grid while it
-  // is in the air. A page scrolled to its end would otherwise lose that
-  // height at once, scroll up to its new end, and move the slot out from
-  // under the pointer.
+  // The height the lifted card gave back. Without it a page scrolled to its
+  // end shrinks, scrolls up, and moves the slot out from under the pointer.
   const [spacer, setSpacer] = useState(0);
   const visible = draft ?? layout;
 
@@ -403,13 +345,12 @@ export const PulseGrid = ({
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
 
-  // What the collision detection, the keyboard and the announcements read
-  // between renders. They run inside dnd-kit, outside React's render.
+  // Read by the collision detection, keyboard and announcements, which run
+  // inside dnd-kit, outside React's render.
   const live = useRef({
     /** The draft as of the last step, ahead of React's state by a render. */
     draft: null as VisibleColumns | null,
     modes: {} as Partial<Record<PulseColumn, ColumnMode>>,
-    /** The place the last arrow key chose. */
     keyboardPlace: null as DropPlace | null,
     /** Hold the answer until the layout after a step is measured. */
     hold: false,
@@ -426,7 +367,6 @@ export const PulseGrid = ({
     anchor: null as { column: PulseColumn; top: number } | null,
   });
 
-  /** A column's element in the grid. */
   const columnNode = useCallback(
     (column: PulseColumn) =>
       gridRef.current?.querySelector<HTMLElement>(
@@ -440,9 +380,8 @@ export const PulseGrid = ({
       const s = live.current;
       const current = s.draft;
       if (!current) return [];
-      // The pointer's place is geometry, and it waits while a step's new
-      // layout is measured. The keyboard's place comes from the draft, so
-      // it never waits: a key pressed inside that frame is not lost.
+      // Only the pointer waits for a step's layout to be measured. The
+      // keyboard's place comes from the draft, so no key press is lost.
       if (pointerCoordinates && s.hold && s.lastOverId) {
         return [{ id: s.lastOverId }];
       }
@@ -504,8 +443,8 @@ export const PulseGrid = ({
       );
       if (!place) return undefined;
       s.keyboardPlace = place;
-      // Aim the preview at the slot's next place. Any answer moves the
-      // drag, and a move is what makes dnd-kit ask for the target again.
+      // Aim at the slot's next place. Any answer moves the drag, which makes
+      // dnd-kit ask for the target again.
       const aim = slotAim(
         current,
         cardId,
@@ -600,8 +539,7 @@ export const PulseGrid = ({
       s.draft = base;
       s.modes = readModes(gridRef.current);
       s.keyboardPlace = null;
-      // The card folds to its slot in this render. Stay in its place until
-      // the folded layout is measured.
+      // The card folds in this render. Hold its place until that is measured.
       s.hold = true;
       s.lastOverId = origin
         ? overIdFor(base, cardId, {
@@ -614,9 +552,8 @@ export const PulseGrid = ({
       s.dropped = null;
       s.moved = false;
       s.held = false;
-      // The card's own box, read before it folds. dnd-kit fills
-      // `active.rect` only after this handler, and until then it holds the
-      // last drag's box, or nothing.
+      // Read the box before it folds. dnd-kit fills `active.rect` only after
+      // this handler, and until then it holds the last drag's box.
       const rect =
         gridRef.current
           ?.querySelector(`[data-flip-id="${cardId}"]`)
@@ -698,15 +635,12 @@ export const PulseGrid = ({
     setDraft(null);
   }, [endDrag, flip]);
 
-  // After each change the grid renders: hold the target still, slide the
-  // cards that moved, and after a step, measure the new layout before the
-  // next step may run.
+  // After each render: keep the target column still, slide the moved cards,
+  // and after a step, measure the new layout before the next step runs.
   useLayoutEffect(() => {
-    // A card that leaves a column shortens it, and whatever sits under that
-    // column rises by a slot: at `lg` the Intelligence grid, on a phone the
-    // next column. The place under the pointer rose with it, and the card
-    // chased it one more step. The page scrolls by the same amount instead,
-    // so the column the card went into keeps its place on screen.
+    // A card that leaves a column lifts whatever sits under it, and the place
+    // under the pointer with it, so the card would chase one more step.
+    // Scrolling by the same shift keeps the target column still on screen.
     const anchor = live.current.anchor;
     live.current.anchor = null;
     const node = anchor && columnNode(anchor.column);
@@ -736,10 +670,9 @@ export const PulseGrid = ({
   }, [layout]);
 
   const at = drag ? positionOf(visible, drag.id) : null;
-  // The preview's box. dnd-kit sizes the overlay to the card it lifted,
-  // which for Up next is 800 px: the preview sets its own width and height,
-  // and its grip goes where the pointer pressed. The keyboard has no
-  // pointer, and the preview starts at the card's top left corner.
+  // dnd-kit sizes the overlay to the lifted card (800 px for Up next), so the
+  // preview sets its own size and puts its grip where the pointer pressed.
+  // The keyboard has no pointer: the preview starts at the card's top left.
   const overlayStyle = useMemo<React.CSSProperties | undefined>(() => {
     if (!drag) return undefined;
     const size = { width: drag.width, height: "auto" };

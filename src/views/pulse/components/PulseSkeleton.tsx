@@ -37,11 +37,7 @@ const SkeletonLine = ({
   />
 );
 
-/**
- * Words drawn as bars. The words are there in a transparent ink, so the bars
- * wrap where the loaded line's words wrap, one bar for each line of text. A
- * screen reader skips them: they are a shape, not the page's words.
- */
+/** Words in transparent ink, so the bars wrap where the loaded words wrap. */
 const SkeletonWords = ({ children }: { children: string }) => (
   <span
     aria-hidden="true"
@@ -51,19 +47,13 @@ const SkeletonWords = ({ children }: { children: string }) => (
   </span>
 );
 
-/**
- * An insight of a common length, the shape of the paragraph before its words
- * arrive. The model writes one or two sentences, and they run to about 300
- * characters: this one is 307, the one it wrote on the seed data 320.
- */
+/** An insight of a typical length: the model writes about 300 characters. */
 const TYPICAL_INSIGHT =
   "Most of the people you added this month have no follow-up yet, and your time goes to the same few names while three of your strongest ties, all founders you met at the spring summit, have been quiet for more than two months. A short note to each of them this week would keep those ties warm before they fade";
 
 /**
- * The body of the insight card before its words arrive: the category and the
- * paragraph, in the loaded card's own layout and type, as bars. The skeleton
- * and the card's loading state draw it, so the card lands at about the
- * height it will have.
+ * The insight card's body as bars, in the loaded card's layout and type, so
+ * the card lands at about its final height.
  *
  * @param text the insight's words once they are back, for the exact height.
  */
@@ -83,15 +73,12 @@ export const InsightPlaceholder = ({
 );
 
 /**
- * The page's silhouette while the dashboard loads. It reads the same padding,
- * grid and column classes as the page and the route fallback, and draws the
- * route fallback's masthead, so the header and the columns land once at
- * every width.
+ * The page's silhouette while it loads. It shares the page's padding, grid
+ * and column classes, so the header and the columns land once at every width.
  *
- * @param insight what the page knows of the day's insight: its words once
- *   they are back, `null` when there is none to draw (AI is off, or it came
- *   back empty), and nothing while it is on its way. With AI on an insight
- *   is the likely answer, so only `null` draws the line.
+ * @param insight the insight's words once back, `null` when there is none
+ *   (AI off, or empty), and undefined while it loads. Only `null` draws the
+ *   line shape.
  */
 export const PulseSkeleton = ({ insight }: { insight?: string | null }) => {
   return (
@@ -106,13 +93,10 @@ export const PulseSkeleton = ({ insight }: { insight?: string | null }) => {
     >
       <PulseHeaderSkeleton />
 
-      {/* 3-Column Grid Skeleton */}
       <div className={GRID_CLASSES}>
-        {/* Column 1: Focus */}
         <div className={cn("flex flex-col gap-6 p-1", COLUMN_CLASSES.focus)}>
           <div
-            // From `lg` the loaded card is its header over a pane capped at
-            // `100dvh - 17rem` (UpNextCard), about `100dvh - 12rem` in all.
+            // From `lg` UpNextCard's pane is capped, about `100dvh - 12rem`.
             className={cn(
               CARD,
               "p-4 sm:p-5 flex flex-col gap-4 min-h-[400px] lg:min-h-[25rem] lg:h-[calc(100dvh-12rem)]",
@@ -143,13 +127,8 @@ export const PulseSkeleton = ({ insight }: { insight?: string | null }) => {
           </div>
         </div>
 
-        {/* Column 2: Intelligence */}
         <div className={cn("flex flex-col gap-6 p-1", COLUMN_CLASSES.intel)}>
-          {/* Daily insight, in the loaded shape's own layout and words, so
-              it wraps to the loaded height: the card with its paragraph,
-              or the line when there is no insight to draw. A fixed 140 px
-              card here sat over an 82 px line without a key and a 389 px
-              card with one, and the column jumped when the page loaded. */}
+          {/* The loaded shape, so the column does not jump on load. */}
           {insight === null ? (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 sm:px-5 py-2">
               <div className={cn(PULSE_TYPE.cardTitle, "min-w-0")}>
@@ -195,11 +174,8 @@ export const PulseSkeleton = ({ insight }: { insight?: string | null }) => {
           </div>
         </div>
 
-        {/* Column 3: Network (Keeping up, Activity) */}
         <div className={cn("flex flex-col gap-6 p-1", COLUMN_CLASSES.network)}>
-          {/* Keeping up, then Activity with its heatmap, at the heights
-              they load at. */}
-          {/* The heatmap grows with its column: 7 of 12 at `lg`. */}
+          {/* Keeping up, then Activity, whose heatmap grows at `lg`. */}
           {[
             "min-h-[166px]",
             "min-h-[410px] lg:min-h-[466px] xl:min-h-[410px]",

@@ -22,10 +22,9 @@ interface UpNextCardProps {
   selectedIndex: number;
   onSelectIndex: (index: number) => void;
   /**
-   * Whether the selected row wears its tint. The page turns it on when a
-   * queue key (J, K, D, S, L) acts on the selected row. The card turns it on
-   * when keyboard focus enters the list, and off when focus leaves it or a
-   * pointer presses outside it.
+   * Whether the selected row wears its tint: on after a queue key or when
+   * keyboard focus enters the list, off when focus leaves or a pointer
+   * presses outside it.
    */
   selectionShown: boolean;
   onSelectionShownChange: (shown: boolean) => void;
@@ -35,11 +34,7 @@ interface UpNextCardProps {
   onOpenContact: (contactId: string) => void;
 }
 
-/**
- * The rows a one-column page shows before "Show all". Up next came first
- * and showed every row: 38 of them ran to 4,300 px on a phone before the
- * next card.
- */
+/** Rows before "Show all" on one column. 38 rows ran 4,300 px on a phone. */
 const FIRST_ROWS = 8;
 
 /** A theme color for the confetti, read at the moment it fires. */
@@ -68,11 +63,7 @@ export const UpNextCard = ({
   onOpenContact,
 }: UpNextCardProps) => {
   const prevItemCountRef = useRef<number | null>(null);
-  /**
-   * Whether focus is inside the list. A row that becomes highlighted while
-   * this is true takes focus, so the arrows walk the rows. A bare J or K
-   * pressed with focus elsewhere only scrolls the row into view.
-   */
+  /** Focus is inside the list, so a newly highlighted row takes focus. */
   const [focusWithin, setFocusWithin] = useState(false);
   /** Below sm the rows take the phone anatomy. See `ActionRow`. */
   const compact = !useMediaQuery("(min-width: 640px)");
@@ -95,11 +86,9 @@ export const UpNextCard = ({
     if (selectedIndex >= limit) setShowAll(true);
   }, [selectedIndex, limit]);
 
-  // A pointer press outside the list takes the tint away, as focus that
-  // leaves the list does. A bare J or K shows the tint with focus anywhere
-  // on the page, and a click elsewhere used to leave it on the row. The
-  // snooze menu's panel sits inside its row in the DOM, so a press on it
-  // is inside the list.
+  // A pointer press outside the list takes the tint away, like focus that
+  // leaves it. The snooze menu's panel sits inside its row in the DOM, so a
+  // press on it is inside the list.
   useEffect(() => {
     if (!selectionShown) return;
     const onPointerDown = (e: PointerEvent) => {
@@ -117,9 +106,8 @@ export const UpNextCard = ({
       prevItemCountRef.current > 0 &&
       items.length === 0
     ) {
-      // Fire confetti when the last item is cleared, in the palette's own
-      // colors, so a rose accent gets rose confetti. Not when less motion
-      // is asked for, by the Motion setting or by the system.
+      // Confetti in the palette's colors when the last item is cleared,
+      // unless less motion is asked for.
       if (!prefersReducedMotion()) {
         confetti({
           particleCount: 120,
@@ -132,10 +120,8 @@ export const UpNextCard = ({
           ],
         });
       }
-      // And the bird takes a lap of honor across the top of the page. The
-      // overlay decides whether it actually flies: it runs the swoop only at
-      // level "full", and reduced motion, from the account or the operating
-      // system, is already "off" by the time it reads the level.
+      // The bird's lap of honor. The overlay flies it only at level "full",
+      // and reduced motion already reads as "off".
       flyWhenClear({ kind: "swoop" });
     }
     prevItemCountRef.current = items.length;
@@ -182,19 +168,11 @@ export const UpNextCard = ({
           />
         </div>
       ) : (
-        // The pane. From lg it scrolls inside the card, capped near the
-        // viewport, and the group headings stick to it in the card's own
-        // color. The gutter is reserved so the rows never shift when the
-        // pane starts to scroll. Below lg it has no cap and the headings
-        // scroll with the page. It is a named group and each section holds
-        // its own list under its heading: a list may own only list items,
-        // so a heading inside one is a structure a screen reader cannot
-        // read, and axe fails it.
-        //
-        // The first row is the current row from the start, for the keys and
-        // for a screen reader, but it wears the selected tint only while the
-        // keyboard is on the list. On load the tint read as a stray
-        // highlight on a row nobody had chosen.
+        // From lg the pane scrolls inside the card with sticky headings, and
+        // the reserved gutter keeps rows from shifting. Each section holds its
+        // own list under its heading: a heading inside a list fails axe. The
+        // first row is current from the start but wears the tint only while
+        // the keyboard is on the list: on load it read as a stray highlight.
         <div
           ref={paneRef}
           role="group"
@@ -202,17 +180,14 @@ export const UpNextCard = ({
           className="flex flex-col gap-5 lg:max-h-[calc(100dvh-17rem)] lg:min-h-[20rem] lg:overflow-y-auto lg:overflow-x-hidden lg:[scrollbar-gutter:stable] lg:-mr-2 lg:pr-2 lg:-ml-1 lg:pl-1"
           onFocus={(e) => {
             setFocusWithin(true);
-            // The row that focus enters is the current row by now (see
-            // `ActionRow`). Keyboard focus shows it, so the tint and the
-            // live status follow Tab from row to row. A click does not
-            // show it: the tint is for the keyboard.
+            // Keyboard focus shows the tint, so it follows Tab from row to
+            // row. A click does not: the tint is for the keyboard.
             if (e.target.matches(":focus-visible")) {
               onSelectionShownChange(true);
             }
           }}
           onBlur={(e) => {
-            // Focus moving from one row to another, or to a control inside
-            // a row, stays inside the list.
+            // Focus moving to another row or a control in one stays inside.
             if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
               setFocusWithin(false);
               onSelectionShownChange(false);
@@ -228,9 +203,7 @@ export const UpNextCard = ({
                   "flex items-center gap-2 py-1.5 lg:sticky lg:top-0 z-10 bg-surface-container-lowest",
                 )}
               >
-                {/* A 6 px dot in the group's tone, the same tone as its rows'
-                    leading glyphs, so the eye finds a group before it reads
-                    the word. Decoration: the word is there. */}
+                {/* The group's tone, as on its rows' glyphs. Decorative. */}
                 <span
                   aria-hidden="true"
                   className={cn(

@@ -23,10 +23,8 @@ const STEP = cn(
 /** A step's glyph, in the primary's wash: each step is an action to take. */
 const STEP_ICON = cn("p-2 rounded-lg mt-0.5 shrink-0", TONE_WASH.primary);
 
-/** A step's name. */
 const STEP_TITLE = "text-sm font-bold text-on-surface block";
 
-/** The chevron that says the step goes somewhere. */
 const STEP_CHEVRON =
   "w-5 h-5 text-on-surface-variant group-hover:text-on-surface shrink-0 transition-transform group-hover:translate-x-0.5";
 
@@ -39,8 +37,8 @@ export const WelcomeOffice = () => {
     : "/settings/privacy#ai-assist";
 
   return (
-    // The inner block sets the inset. The card's own padding came on top of
-    // it and a phone lost 96 of its 358 px to padding.
+    // The inner block sets the inset. The card's padding on top of it cost a
+    // phone 96 of its 358 px.
     <div className={cn(CARD, "p-0")}>
       <div className="p-6 sm:p-8 space-y-6">
         <div>
@@ -57,7 +55,6 @@ export const WelcomeOffice = () => {
         </div>
 
         <div className="space-y-3">
-          {/* Step 1: Import contacts */}
           <button onClick={() => navigate("/?import=1")} className={STEP}>
             <div className="flex items-start gap-3.5">
               <div className={STEP_ICON}>
@@ -73,7 +70,6 @@ export const WelcomeOffice = () => {
             <ChevronRight className={STEP_CHEVRON} />
           </button>
 
-          {/* Step 2: Log your first note */}
           <button onClick={() => openQuickNote()} className={STEP}>
             <div className="flex items-start gap-3.5">
               <div className={STEP_ICON}>
@@ -98,7 +94,6 @@ export const WelcomeOffice = () => {
             <ChevronRight className={STEP_CHEVRON} />
           </button>
 
-          {/* Step 3: Connect AI */}
           <Link to={aiSettingsPath} className={STEP}>
             <div className="flex items-start gap-3.5">
               <div className={STEP_ICON}>
@@ -114,7 +109,6 @@ export const WelcomeOffice = () => {
             <ChevronRight className={STEP_CHEVRON} />
           </Link>
 
-          {/* Step 4: Connect a calendar */}
           <Link to="/settings/connectors" className={STEP}>
             <div className="flex items-start gap-3.5">
               <div className={STEP_ICON}>

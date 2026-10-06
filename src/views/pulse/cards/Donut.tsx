@@ -1,10 +1,6 @@
 /**
- * Donut: the composition of the network as a ring, 96 px, in one hue.
- *
- * Each slice is the primary color at a step of opacity, the largest slice
- * darkest, so the ring reads as one thing shaded rather than six colors
- * fighting. "Other" is the neutral track tone. The total sits in the
- * middle. A slice carries its words in a `<title>` for a pointer.
+ * The network's composition as a ring in one hue, so it reads as one thing
+ * shaded. A slice carries its words in a `<title>` for a pointer.
  */
 import React from "react";
 
@@ -24,10 +20,8 @@ interface DonutProps {
   label?: string;
 }
 
-/** The donut's width and height, in CSS pixels. */
 const SIZE = 96;
 
-/** The ring's thickness, in CSS pixels. */
 const STROKE_WIDTH = 12;
 
 export const Donut: React.FC<DonutProps> = ({ slices, total, label }) => {

@@ -1,14 +1,7 @@
 /**
- * Sparkline: twelve weekly totals as one line, at the width it is drawn.
- *
- * The line used to be drawn in a 220-unit box and stretched to the card with
- * `preserveAspectRatio="none"`, which stretched the stroke too: a 2-unit
- * line became 4 px wide on the flat parts and 2 px on the steep ones. The
- * container is measured and the SVG is drawn at that width, so the stroke
- * is even everywhere. A dot marks the last week, this one.
- *
- * Under the line, two facts: the last four weeks against the four before,
- * and what this week holds by type. The streak is the masthead's.
+ * Twelve weekly totals as one line, drawn at the measured width: a stretched
+ * SVG (`preserveAspectRatio="none"`) stretches the stroke unevenly too. Under
+ * it, the last four weeks against the four before, and this week by type.
  */
 import { useMemo, useState } from "react";
 import { useElementWidth } from "../../../hooks/useElementWidth";
@@ -43,9 +36,8 @@ function describeWeekByType(byType: Record<string, number>): string {
 }
 
 /**
- * The last 28 days against the 28 before, as words and a tone. Days, not the
- * weekly totals: this week is not over, and a part week against four whole
- * ones read as a drop every Monday.
+ * The last 28 days against the 28 before. Days, not weekly totals: a part
+ * week against whole ones reads as a drop every Monday.
  */
 function compareFourWeeks(days: ActivityDay[]): {
   recent: number;
@@ -174,8 +166,7 @@ export const Sparkline = ({ weekTotals, days, thisWeek }: SparklineProps) => {
           {comparison.recent}
         </span>{" "}
         in the last four weeks ·{" "}
-        {/* One phrase: on a narrow card it moves to the next line whole,
-            not as "on the four" and "before". */}
+        {/* One phrase, so a narrow card wraps it whole. */}
         <span
           className={cn(
             "font-semibold whitespace-nowrap",

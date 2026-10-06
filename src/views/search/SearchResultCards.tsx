@@ -1,13 +1,9 @@
 /**
- * ResultCard — Single search result card for the AI Search view.
+ * A search result card for the People mode. The stagger is a CSS
+ * `animation-delay`, which stays on the compositor.
  *
- * Animation strategy: CSS `result-card-enter` with `animation-delay` instead of
- * Framer Motion per-card stagger. CSS opacity animations are always GPU-composited
- * and never trigger layout recalculation.
- *
- * The list is one Tab stop (`useRovingFocus`): the card takes the stop's
- * props, and so does its question mark, so Tab reaches the mark of the
- * current card only.
+ * The list is one Tab stop (`useRovingFocus`). The card and its question
+ * mark both take the stop's props, so Tab reaches only the current mark.
  */
 import React from "react";
 import {
@@ -28,10 +24,6 @@ import {
 } from "../../components/command-palette/utils";
 import { InfoTip } from "../../components/ui/InfoTip";
 import { MatchedFields } from "./MatchedFields";
-
-// =============================================================================
-// ResultCard
-// =============================================================================
 
 interface ResultCardProps {
   key?: React.Key;
@@ -57,8 +49,8 @@ export const ResultCard = ({
   const unverified = !match.approximate && isUnverified(match, isFallback);
   return (
     <div
-      // The fade-in makes each card its own layer. The card whose question
-      // mark is open rises, so its panel covers the cards after it.
+      // The fade-in makes each card its own layer, so the card with an open
+      // question mark rises to cover the cards after it.
       className="result-card-enter relative has-[[data-tip=open]]:z-10"
       style={{ animationDelay: `${index * 45}ms` }}
     >
@@ -79,8 +71,7 @@ export const ResultCard = ({
           className="w-12 h-12 rounded-full bg-surface-container-high object-cover shrink-0 mt-0.5"
         />
         <div className="flex-1 min-w-0 flex flex-col gap-1">
-          {/* Name + match badge. The row wraps, so on a phone the badge goes
-            under the name instead of cutting it short. */}
+          {/* The row wraps, so on a phone the badge does not cut the name. */}
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <span className="font-bold text-on-surface truncate">
               {match.name}
@@ -92,7 +83,6 @@ export const ResultCard = ({
             )}
           </div>
 
-          {/* Role / Company / Location / Industry */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-on-surface-variant">
             {match.role && (
               <span className="flex items-center gap-1">
@@ -120,12 +110,7 @@ export const ResultCard = ({
             )}
           </div>
 
-          {/*
-          Why this person is here: each field that answers the question,
-          named, with the question's words marked (`MatchedFields`). A
-          server without that list sends the one-line reason instead, which
-          wears the AI color.
-        */}
+          {/* Without `matchedOn`, the server sends a one-line AI reason. */}
           {match.matchedOn?.length ? (
             <MatchedFields fields={match.matchedOn} />
           ) : (
@@ -139,7 +124,6 @@ export const ResultCard = ({
             )
           )}
 
-          {/* Tags */}
           {match.tags?.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1">
               {match.tags.slice(0, 5).map((t) => (
@@ -147,8 +131,7 @@ export const ResultCard = ({
                   {t.tag}
                 </span>
               ))}
-              {/* The variant ink at full strength: at half opacity the count
-                fell to about 2 to 1 against the card. */}
+              {/* Full strength: at half opacity the contrast is about 2:1. */}
               {match.tags.length > 5 && (
                 <span className="text-[11px] text-on-surface-variant">
                   +{match.tags.length - 5}
@@ -158,24 +141,17 @@ export const ResultCard = ({
           )}
         </div>
 
-        {/* Arrow, in the middle of the right edge: the top right corner
-          belongs to the question mark. */}
+        {/* Centered: the top right corner belongs to the question mark. */}
         <ArrowRight className="w-4 h-4 text-on-surface-variant opacity-0 group-hover:opacity-60 transition-opacity shrink-0 self-center" />
       </button>
 
-      {/*
-        The question mark of a match AI did not verify. A sibling of the
-        card, laid over its corner, never inside it: a button inside a
-        button is invalid, and a press on the card must still open it. It
-        opens on a tap, a click, Enter, a focus or a hover, and it closes on
-        Escape or a press anywhere else (`InfoTip`).
-      */}
+      {/* A sibling laid over the card's corner: a button inside a button is
+          invalid HTML. */}
       {unverified && (
         <InfoTip
           label={`${match.name}: not verified by AI`}
           tone="warning"
           align="end"
-          // The question mark follows the card's Tab stop.
           tabIndex={itemProps?.tabIndex}
           className="absolute top-3 right-3"
         >
@@ -187,10 +163,6 @@ export const ResultCard = ({
     </div>
   );
 };
-
-// =============================================================================
-// ShimmerCard — Loading skeleton for search results
-// =============================================================================
 
 interface ShimmerCardProps {
   delay?: number;

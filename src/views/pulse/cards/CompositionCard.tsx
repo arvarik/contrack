@@ -1,10 +1,7 @@
 /**
- * CompositionCard: who the network is made of, by industry, role or place.
- *
- * Last in the Intelligence column and compact: a 96 px donut in one hue and
- * a text legend beside it, each entry a link to the list filtered to that
- * group. "Other" opens the full breakdown, as does See all. No other page
- * has a home for this chart yet, and customize mode can hide it.
+ * Who the network is made of, by industry, role or place: a donut and a
+ * legend of links to the filtered list. "Other" and See all open the full
+ * breakdown.
  */
 import React, { useState, useMemo, Suspense } from "react";
 import { Link } from "react-router-dom";
@@ -40,7 +37,7 @@ interface CompositionCardProps {
   dashboard?: DashboardPayload;
 }
 
-/** One legend line: a control, so the hover layer, across the card's width. */
+/** One legend line, a control across the card's width. */
 const LEGEND_ROW =
   "hit-area state-layer flex items-center gap-2 min-w-0 w-full rounded-lg px-1.5 py-1 -mx-1.5 text-left";
 
@@ -114,9 +111,8 @@ export const CompositionCard = ({ dashboard }: CompositionCardProps) => {
           {totalCount === 0 ? (
             <p className={cn(PULSE_TYPE.meta, "py-2")}>No {tab} recorded yet</p>
           ) : (
-            // The donut over the legend, not beside it: the Intelligence
-            // column is three of twelve at xl, and a legend squeezed beside
-            // a 96 px ring cut "Music Streaming" to "Music Stream…".
+            // The donut over the legend: the column is narrow at xl, and a
+            // legend beside the ring cuts "Music Streaming" to "Music Stream…".
             <div className="flex flex-col items-center gap-4 min-w-0">
               <Donut
                 slices={slices}
@@ -126,8 +122,7 @@ export const CompositionCard = ({ dashboard }: CompositionCardProps) => {
                 }`}
               />
 
-              {/* The legend: one line per group, the count at the right.
-                  A list of words wraps and never scrolls sideways. */}
+              {/* The legend wraps and never scrolls sideways. */}
               <ul
                 className={cn(PULSE_TYPE.meta, "w-full min-w-0 flex flex-col")}
               >
