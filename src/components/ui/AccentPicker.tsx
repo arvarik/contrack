@@ -171,6 +171,8 @@ export const AccentPicker = ({
           className={cn(
             "w-9 h-9 rounded-full transition-transform group-hover/well:scale-110",
             "bg-[conic-gradient(red,yellow,lime,aqua,blue,magenta,red)]",
+            // The input is invisible, so its ring is drawn on the circle.
+            "group-has-[:focus-visible]/well:outline-2 group-has-[:focus-visible]/well:outline-offset-2 group-has-[:focus-visible]/well:outline-primary",
             !isPreset && SWATCH_SELECTED,
           )}
         />
