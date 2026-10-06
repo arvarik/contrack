@@ -21,6 +21,7 @@ import { cn } from "../../../lib/utils";
 import { PULSE_TYPE } from "../lib/pulseStyles";
 import { sentenceCase } from "../lib/insight";
 import type { DailyInsight } from "../../../api";
+import { TEXT_LINK } from "../../../lib/styles";
 
 interface InsightCardProps {
   insight?: DailyInsight | null;
@@ -33,8 +34,7 @@ interface InsightCardProps {
 const INSIGHT = AI_FEATURES.find((feature) => feature.id === "briefings")!;
 
 /** A link inside a line: the one door the sentence offers. */
-const LINE_LINK =
-  "hit-area inline-flex items-center font-medium text-primary hover:underline underline-offset-4";
+const LINE_LINK = cn(TEXT_LINK, "hit-area");
 
 export const InsightCard = ({
   insight,

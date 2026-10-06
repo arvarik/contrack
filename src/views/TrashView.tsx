@@ -16,6 +16,7 @@ import { cn, errorText, plural } from "../lib/utils";
 import { fallbackAvatarUrl } from "../lib/avatar";
 import type { TrashedContact } from "../types";
 import { SETTINGS_PAGE } from "./settings/layout";
+import { formatRelative } from "../lib/datetime";
 
 // ---------------------------------------------------------------------------
 // TrashView — recently deleted contacts with restore + permanent delete
@@ -29,15 +30,6 @@ import { SETTINGS_PAGE } from "./settings/layout";
 function daysUntilPurge(deletedAt: string, retentionDays = 30): number {
   const purgeAt = new Date(deletedAt).getTime() + retentionDays * 86_400_000;
   return Math.max(0, Math.ceil((purgeAt - Date.now()) / 86_400_000));
-}
-
-function deletedLabel(deletedAt: string): string {
-  const days = Math.floor(
-    (Date.now() - new Date(deletedAt).getTime()) / 86_400_000,
-  );
-  if (days <= 0) return "Deleted today";
-  if (days === 1) return "Deleted yesterday";
-  return `Deleted ${days} days ago`;
 }
 
 const days = (count: number) => plural(count, "day", "days");
@@ -156,8 +148,8 @@ export const TrashView = () => {
                     </p>
                     <p className="text-xs text-on-surface-variant">
                       {item.company ? `${item.company} · ` : ""}
-                      {deletedLabel(item.deletedAt)} · gone for good in{" "}
-                      {days(daysLeft)}
+                      Deleted {formatRelative(item.deletedAt, "")} · gone for
+                      good in {days(daysLeft)}
                     </p>
                   </div>
                   <button

@@ -325,57 +325,63 @@ export const ListManagerView = () => {
         </div>
       </div>
 
-      {/* ── A narrow page: one pane at a time ──────────────────────────────── */}
-      <div className="@2xl:hidden h-full overflow-hidden relative">
-        <AnimatePresence initial={false}>
-          {!selectedList ? (
-            /* Mobile: List view */
-            <motion.div
-              key="mobile-list"
-              initial={{ x: "-100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "-100%" }}
-              transition={{ type: "spring", stiffness: 380, damping: 38 }}
-              className="absolute inset-0 bg-surface-container-lowest"
-            >
-              {ListPanel}
-            </motion.div>
-          ) : (
-            /* Mobile: Detail view — slides in from right */
-            <motion.div
-              key={`mobile-detail-${selectedList.id}`}
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
-              transition={{ type: "spring", stiffness: 380, damping: 38 }}
-              className="absolute inset-0 bg-surface-container-lowest"
-            >
-              {/* Mobile back button row */}
-              <div className="flex items-center gap-2 px-3 pt-3 pb-0 bg-surface-container-low shrink-0">
-                <button
-                  type="button"
-                  onClick={() => closeList(selectedList.id)}
-                  aria-label="Back to all lists"
-                  className="hit-area state-layer flex items-center gap-1.5 py-2 px-3 rounded-xl text-sm font-bold text-on-surface-variant hover:text-on-surface transition-colors"
-                >
-                  {/* The chevron of every back link, "‹ Settings" above it
+      {/* ── A narrow page: one pane at a time. On a phone the pane is the
+          page. From `sm` it is one card in the page's gutter, so it lines up
+          with the title, as the two cards do. ── */}
+      <div className="@2xl:hidden h-full sm:px-6 lg:px-10 sm:pt-4 sm:pb-10">
+        <div className="h-full overflow-hidden relative sm:rounded-2xl sm:shadow-sm">
+          <AnimatePresence initial={false}>
+            {!selectedList ? (
+              /* Mobile: List view */
+              <motion.div
+                key="mobile-list"
+                initial={{ x: "-100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "-100%" }}
+                transition={{ type: "spring", stiffness: 380, damping: 38 }}
+                className="absolute inset-0 bg-surface-container-lowest"
+              >
+                {ListPanel}
+              </motion.div>
+            ) : (
+              /* Mobile: Detail view — slides in from right */
+              <motion.div
+                key={`mobile-detail-${selectedList.id}`}
+                initial={{ x: "100%" }}
+                animate={{ x: 0 }}
+                exit={{ x: "100%" }}
+                transition={{ type: "spring", stiffness: 380, damping: 38 }}
+                className="absolute inset-0 bg-surface-container-lowest"
+              >
+                {/* Mobile back button row */}
+                <div className="flex items-center gap-2 px-3 pt-3 pb-0 bg-surface-container-low shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => closeList(selectedList.id)}
+                    aria-label="Back to all lists"
+                    className="hit-area state-layer flex items-center gap-1.5 py-2 px-3 rounded-xl text-sm font-bold text-on-surface-variant hover:text-on-surface transition-colors"
+                  >
+                    {/* The chevron of every back link, "‹ Settings" above it
                       included. */}
-                  <ChevronLeft className="w-4 h-4" aria-hidden="true" />
-                  All lists
-                </button>
-              </div>
-              <div className="h-[calc(100%-48px)] overflow-hidden">
-                <ListDetailPanel
-                  list={selectedList}
-                  onClose={() => closeList(selectedList.id)}
-                  onDeleted={() => handleListDeleted(selectedList.id)}
-                  onViewInNetwork={() => navigate(`/?list=${selectedList.id}`)}
-                  hideMobileHeader
-                />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                    <ChevronLeft className="w-4 h-4" aria-hidden="true" />
+                    All lists
+                  </button>
+                </div>
+                <div className="h-[calc(100%-48px)] overflow-hidden">
+                  <ListDetailPanel
+                    list={selectedList}
+                    onClose={() => closeList(selectedList.id)}
+                    onDeleted={() => handleListDeleted(selectedList.id)}
+                    onViewInNetwork={() =>
+                      navigate(`/?list=${selectedList.id}`)
+                    }
+                    hideMobileHeader
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </div>
 
       <CreateListModal

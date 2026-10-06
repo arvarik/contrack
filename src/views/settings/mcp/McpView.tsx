@@ -58,6 +58,7 @@ import {
   type McpClientId,
 } from "./clients";
 import { NO_AUTOCORRECT } from "../../../components/ui/SearchField";
+import { TEXT_LINK } from "../../../lib/styles";
 
 /** A value or a snippet, on the card's wash, in the code face. */
 const CODE_BOX =
@@ -227,10 +228,7 @@ const TokenStep = ({
           A {madeFor.access === "read" ? "read-only " : ""}token named “
           {madeFor.client}” is in the setup below. This page shows it once. It
           works for {TOKEN_DAYS} days, or until you revoke it in{" "}
-          <Link
-            to="/settings/account#tokens"
-            className="font-semibold text-primary hover:underline"
-          >
+          <Link to="/settings/account#tokens" className={TEXT_LINK}>
             Account
           </Link>
         </p>
@@ -330,7 +328,7 @@ const TokenStep = ({
         <button
           type="button"
           onClick={() => onDraft({ pasting: true })}
-          className="font-semibold text-primary hover:underline"
+          className={TEXT_LINK}
         >
           Use a token I have
         </button>

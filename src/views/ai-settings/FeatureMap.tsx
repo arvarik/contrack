@@ -43,6 +43,7 @@ import {
 import { TONE_WASH, type Tone } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { TOUCH_LINK } from "../settings/layout";
+import { TEXT_LINK } from "../../lib/styles";
 
 const STATE_TONE: Record<FeatureState, Tone> = {
   ready: "success",
@@ -90,13 +91,7 @@ export function FeatureMap({ scope }: { scope: "instance" | "account" }) {
           {links && (
             <>
               {" "}
-              <Link
-                to="#providers"
-                className={cn(
-                  "font-semibold text-primary hover:underline",
-                  TOUCH_LINK,
-                )}
-              >
+              <Link to="#providers" className={cn(TEXT_LINK, TOUCH_LINK)}>
                 Add a key
               </Link>
             </>
@@ -164,10 +159,7 @@ export function FeatureMap({ scope }: { scope: "instance" | "account" }) {
                       {". "}
                       <Link
                         to={`#${status.fix.anchor}`}
-                        className={cn(
-                          "font-semibold text-primary hover:underline",
-                          TOUCH_LINK,
-                        )}
+                        className={cn(TEXT_LINK, TOUCH_LINK)}
                       >
                         {status.fix.label}
                       </Link>

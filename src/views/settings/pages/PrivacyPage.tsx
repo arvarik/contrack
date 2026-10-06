@@ -39,6 +39,7 @@ import {
   SETTINGS_SECTION_HEADING,
 } from "../layout";
 import { cn, errorText } from "../../../lib/utils";
+import { TEXT_LINK } from "../../../lib/styles";
 
 /** One fact about where data lives: a static tile on the card's wash. */
 const Fact = ({
@@ -228,10 +229,7 @@ export const PrivacyPage = () => {
             {isAdmin ? (
               <>
                 The models and web search for everyone here.{" "}
-                <Link
-                  to="/settings/admin/ai"
-                  className="font-semibold text-primary hover:underline"
-                >
+                <Link to="/settings/admin/ai" className={TEXT_LINK}>
                   Change them in Settings → Administration → AI
                 </Link>
               </>

@@ -46,6 +46,7 @@ import { TONE_WASH, TONE_TEXT } from "../../../lib/styles";
 import { SETTINGS_CARD } from "../../settings/layout";
 import { CHECK_STEPS, runsAiPass, stepStatus } from "../utils/scanPhases";
 import type { DedupeScanMode, DedupeScanProgress } from "../../../types";
+import { TEXT_LINK } from "../../../lib/styles";
 
 /** The check that runs: with AI when the account and the instance allow it. */
 export function useDuplicateCheck() {
@@ -260,7 +261,7 @@ export const DuplicateCheck = ({ variant = "card" }: DuplicateCheckProps) => {
                     <>
                       <Link
                         to="/pulse/duplicates?view=merged"
-                        className="font-semibold text-primary hover:underline"
+                        className={TEXT_LINK}
                       >
                         {merged} merged automatically
                       </Link>

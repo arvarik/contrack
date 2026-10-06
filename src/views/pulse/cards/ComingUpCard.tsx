@@ -31,6 +31,7 @@ import { describeDueChip } from "../lib/upNext";
 import { isPlainDay, parseServerTime } from "../../../lib/datetime";
 import type { UpcomingBirthday } from "../lib/birthdays";
 import { useConnectors } from "../../../api/connectors";
+import { TEXT_LINK } from "../../../lib/styles";
 
 interface MeetingItem {
   title: string;
@@ -115,7 +116,7 @@ export const ComingUpCard = ({
             .{" "}
             <Link
               to="/settings/connectors"
-              className="hit-area inline-flex items-center font-medium text-primary hover:underline underline-offset-4"
+              className={cn(TEXT_LINK, "hit-area")}
             >
               Connect a calendar
             </Link>

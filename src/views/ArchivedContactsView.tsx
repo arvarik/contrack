@@ -16,7 +16,7 @@ import {
 import { ScoreRingAvatar } from "../components/ScoreRingAvatar";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
-import { formatDay } from "../lib/datetime";
+import { formatRelative } from "../lib/datetime";
 import { toastUndoableDelete } from "../lib/undoToast";
 import {
   BAR_BUTTON,
@@ -266,7 +266,7 @@ export const ArchivedContactsView = () => {
                         [contact.role, contact.company]
                           .filter(Boolean)
                           .join(" at "),
-                        `Archived ${formatDay(contact.archivedAt ?? contact.updatedAt, "")}`,
+                        `Archived ${formatRelative(contact.archivedAt ?? contact.updatedAt, "")}`,
                       ]
                         .filter(Boolean)
                         .join(" · ")}
