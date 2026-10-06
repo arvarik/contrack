@@ -244,26 +244,6 @@ export interface MergeLogEntry {
   duplicateLocation?: string | null;
 }
 
-interface MergeConflict {
-  type: "scalar_edited" | "record_edited" | "record_deleted" | "task_completed";
-  entity: string;
-  id?: string;
-  field?: string;
-  primaryValue?: unknown;
-  duplicateValue?: unknown;
-  currentValue?: unknown;
-  oldValue?: unknown;
-  message: string;
-}
-
-export interface UndoMergeResponse {
-  success: boolean;
-  restoredContactId?: string;
-  conflicts?: MergeConflict[];
-  /** The undo also marked the two as different people. */
-  keptSeparate?: boolean;
-}
-
 /** A single piece of evidence connecting two contacts within a cluster. */
 export interface ClusterPair {
   contactIdA: string;

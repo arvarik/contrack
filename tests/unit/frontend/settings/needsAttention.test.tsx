@@ -77,7 +77,7 @@ describe("NeedsAttention", () => {
     const link = screen.getByRole("link", {
       name: /Review 5 possible duplicates/i,
     });
-    expect(link.getAttribute("href")).toBe("/settings/duplicates");
+    expect(link.getAttribute("href")).toBe("/pulse/duplicates");
   });
 
   it("has no enrich link, however many contacts were never enriched", () => {

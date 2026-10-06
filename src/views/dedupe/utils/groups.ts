@@ -19,11 +19,13 @@ import type {
   SuggestedContact,
 } from "../../../types";
 import { LEVEL_ORDER, matchLevel, type MatchLevel } from "./level";
-import { pairCaveat } from "./reason";
+import { pairCaveats } from "./reason";
+import { suggestKeeper } from "./mergeOutcome";
 
 export interface DuplicateGroup {
   /** The members' ids, sorted and joined: stable while the members stay. */
   key: string;
+  /** The contact to keep first, then the rest by name, so a row reads the same each time. */
   contacts: SuggestedContact[];
   /** Every pending pair inside the group, the most sure first. */
   suggestions: PersistedDedupeSuggestion[];
@@ -88,16 +90,16 @@ export function buildGroups(
       ...new Set(pairs.flatMap((s) => [s.contactIdA, s.contactIdB])),
     ];
     const caveats = [
-      ...new Set(
-        pairs
-          .map((s) => pairCaveat(s.caveat, s.reasoning))
-          .filter((c): c is string => c !== null),
-      ),
+      ...new Set(pairs.flatMap((s) => pairCaveats(s.caveat, s.reasoning))),
     ];
     const confidence = bottleneck.get(root) ?? pairs[0].confidence;
+    const members = ids
+      .map((id) => contacts.get(id)!)
+      .sort((x, y) => x.name.localeCompare(y.name) || x.id.localeCompare(y.id));
+    const keeper = suggestKeeper(members);
     groups.push({
       key: [...ids].sort().join(","),
-      contacts: ids.map((id) => contacts.get(id)!),
+      contacts: [keeper, ...members.filter((c) => c !== keeper)],
       suggestions: pairs,
       lead: pairs[0],
       caveats,

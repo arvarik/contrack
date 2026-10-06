@@ -31,7 +31,7 @@ import { withUndo } from "../../../lib/undoToast";
 import { DuplicateComparison } from "../../dedupe/components/DuplicateComparison";
 import {
   isAiReason,
-  pairCaveat,
+  pairCaveats,
   plainReason,
   reasonIcon,
 } from "../../dedupe/utils/reason";
@@ -79,7 +79,7 @@ function Banner({
       : suggestion.contactA;
   if (!here || !other) return null;
 
-  const caveat = pairCaveat(suggestion.caveat, suggestion.reasoning);
+  const caveats = pairCaveats(suggestion.caveat, suggestion.reasoning);
   const Icon = reasonIcon(suggestion.matchType);
   const ai = isAiReason(suggestion.matchType);
   const busy = dismiss.isPending || merge.isPending;
@@ -166,17 +166,21 @@ function Banner({
                 {plainReason(suggestion.matchType, suggestion.reasoning)}
               </span>
             </p>
-            {caveat && (
-              <p
-                id={caveatId}
-                className="flex items-start gap-1.5 text-sm font-semibold text-warning"
-              >
-                <AlertTriangle
-                  aria-hidden="true"
-                  className="w-3.5 h-3.5 mt-0.5 shrink-0"
-                />
-                {caveat}
-              </p>
+            {caveats.length > 0 && (
+              <div id={caveatId} className="space-y-0.5">
+                {caveats.map((caveat) => (
+                  <p
+                    key={caveat}
+                    className="flex items-start gap-1.5 text-sm font-semibold text-warning"
+                  >
+                    <AlertTriangle
+                      aria-hidden="true"
+                      className="w-3.5 h-3.5 mt-0.5 shrink-0"
+                    />
+                    {caveat}
+                  </p>
+                ))}
+              </div>
             )}
           </div>
           <div className="flex items-center gap-2 max-sm:w-full">
@@ -208,6 +212,8 @@ function Banner({
               contacts={[here, other]}
               keeperId={keeperId}
               onKeeperChange={setKeeperId}
+              caveats={caveats}
+              caveatsAbove
             />
             <div className="flex flex-wrap justify-end gap-2">
               <button
@@ -223,7 +229,7 @@ function Banner({
                 type="button"
                 onClick={() => void handleMerge()}
                 disabled={busy}
-                aria-describedby={caveat ? caveatId : undefined}
+                aria-describedby={caveats.length > 0 ? caveatId : undefined}
                 className="btn-primary max-sm:flex-1"
               >
                 {merge.isPending ? (

@@ -25,12 +25,7 @@ import {
   useRestoreContact,
   useSetTracked,
 } from "../../../../src/api/contacts";
-import {
-  useMergeCluster,
-  useMergeClusters,
-  useMergeContacts,
-} from "../../../../src/api/dedupe";
-import { useMergeSuggestion } from "../../../../src/api/suggestions";
+import { useMergeCluster, useMergeClusters } from "../../../../src/api/dedupe";
 
 const reactions: string[] = [];
 const listen = (e: Event) => reactions.push((e as CustomEvent).detail.reaction);
@@ -116,10 +111,8 @@ describe("the moments the corvid answers", () => {
       () => { mutateAsync: (input: never) => Promise<unknown> },
       unknown,
     ][] = [
-      [useMergeContacts as never, { primaryId: "a", duplicateId: "b" }],
       [useMergeCluster as never, { primaryId: "a", duplicateIds: ["b"] }],
       [useMergeClusters as never, [{ primaryId: "a", duplicateIds: ["b"] }]],
-      [useMergeSuggestion as never, { suggestionId: "s", primaryId: "a" }],
     ];
     for (const [hook, input] of merges) {
       reactions.length = 0;

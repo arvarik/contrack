@@ -218,9 +218,12 @@ describe("the contact to keep", () => {
     const keep = await screen.findByRole("radiogroup", {
       name: "Contact to keep",
     });
-    fireEvent.click(within(keep).getByRole("radio", { name: /A\. Quill/ }));
+    const other = within(keep).getByRole("radio", { name: /A\. Quill/ });
+    fireEvent.click(other);
+    other.focus();
 
-    fireEvent.keyDown(document.body, { key: "l" });
+    // From the radio itself: a letter is not the radio group's to keep.
+    fireEvent.keyDown(other, { key: "l" });
 
     await waitFor(() => expect(merges(calls)).toHaveLength(1));
     expect(merges(calls)[0].body).toEqual({

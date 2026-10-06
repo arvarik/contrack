@@ -4,13 +4,13 @@
  *
  * The Duplicates picker and the Enrichment list drew every contact. On 5,824
  * contacts, Manual merge took 44 s to show and Enrichment 44 s to open, and
- * going back to Scan kept the merge list on screen. The lists now draw only
+ * going back to the scan kept the merge list on screen. The lists now draw only
  * the rows in view (`VirtualRows`), past 200 rows, so this spec runs its own
  * instance with 450 contacts: the shared one has a dozen, which never
  * reaches that path, and other specs count its people.
  *
  * 1. Manual merge draws a few dozen rows of 450, reaches the last by
- *    scrolling, picks two, and Scan comes back at once.
+ *    scrolling, picks two, and Check comes back at once.
  * 2. Enrichment draws a few dozen rows in its box, reaches the last, and
  *    Select all still covers all 450.
  * 3. The Tracked page's two rows of pills narrow the list, the choices stay
@@ -106,7 +106,7 @@ const drawn = (page: Page, within: string) =>
     };
   }, within);
 
-test("Manual merge draws only the rows in view of 450, reaches the last, and Scan comes back at once", async ({
+test("Manual merge draws only the rows in view of 450, reaches the last, and Check comes back at once", async ({
   browser,
 }) => {
   const page = await open(browser);
@@ -148,15 +148,15 @@ test("Manual merge draws only the rows in view of 450, reaches the last, and Sca
     page.getByRole("button", { name: /Compare 2 contacts/ }),
   ).toBeEnabled();
 
-  // Back to Scan: the three scans are here, and the merge list is gone.
+  // Back to Check: the check is here, and the merge list is gone.
   await page.evaluate(() => {
     const input = document.querySelector(
       'input[aria-label="Search contacts to merge"]',
     )!;
     input.closest(".overflow-y-auto")!.scrollTop = 0;
   });
-  await page.getByRole("radio", { name: "Scan", exact: true }).click();
-  await expect(page.getByRole("radio", { name: /^Exact scan/ })).toBeVisible();
+  await page.getByRole("radio", { name: "Check", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Check now" })).toBeVisible();
   await expect(search).toHaveCount(0);
   await expect(page.locator("[data-index]")).toHaveCount(0);
   await page.context().close();

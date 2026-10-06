@@ -247,23 +247,22 @@ export const Sidebar = () => {
           </Link>
         </RailTooltip>
 
+        {/* A picture on the Pulse link, not a link of its own: an 18 px
+            link on top of the Pulse link was a target a finger missed and
+            axe refused (target-size). The Pulse link says the count, and
+            Pulse's inbox opens Possible duplicates. */}
         {pendingSuggestions > 0 && (
-          <Link
-            to="/pulse/duplicates"
-            {...warmPulse}
-            onClick={markPendingNavOnClick("/pulse/duplicates")}
+          <span
+            aria-hidden="true"
             className={cn(
-              "absolute -top-0.5 -left-0.5 min-w-[18px] h-[18px] px-1 z-10",
+              "absolute -top-0.5 -left-0.5 min-w-[18px] h-[18px] px-1 z-10 pointer-events-none",
               "flex items-center justify-center rounded-full",
               "bg-primary text-on-primary text-[11px] font-bold leading-none",
-              // The hover layer, not a scale: the badge holds a number, and
-              // scaled text blurs.
-              "tabular-nums ring-2 ring-surface-container state-layer",
+              "tabular-nums ring-2 ring-surface-container",
             )}
-            aria-label={`${pendingSuggestions} duplicate suggestions`}
           >
             {pendingSuggestions > 99 ? "99+" : pendingSuggestions}
-          </Link>
+          </span>
         )}
       </div>
 

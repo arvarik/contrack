@@ -178,7 +178,7 @@ describe("the shortcuts for a page", () => {
     expect(groups("/map/contact/ada")).toEqual(["Contact", "Map"]);
     expect(groups("/pulse")).toEqual(["Pulse"]);
     expect(groups("/pulse/duplicates")).toEqual(["Possible duplicates"]);
-    expect(groups("/settings/duplicates")).toEqual(["Duplicates"]);
+    expect(groups("/settings/duplicates")).toEqual([]);
     expect(groups("/settings/appearance")).toEqual([]);
   });
 

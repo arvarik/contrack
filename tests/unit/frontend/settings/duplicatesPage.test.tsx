@@ -6,15 +6,10 @@ import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DuplicatesPage } from "../../../../src/views/settings/pages/DuplicatesPage";
 import * as api from "../../../../src/api";
-import * as dedupeContext from "../../../../src/contexts/DedupeContext";
 import * as prefContext from "../../../../src/contexts/PreferencesContext";
 
 vi.mock("../../../../src/api", () => ({
   useDedupeCount: vi.fn(),
-}));
-
-vi.mock("../../../../src/contexts/DedupeContext", () => ({
-  useDedupeOptional: vi.fn(),
 }));
 
 vi.mock("../../../../src/views/dedupe", () => ({
@@ -144,18 +139,10 @@ describe("DuplicatesPage, the order of the page", () => {
     ).toBeTruthy();
   });
 
-  it("opens Merge activity from one button, at every width", () => {
-    const setShowActivity = vi.fn();
-    vi.mocked(dedupeContext.useDedupeOptional).mockReturnValue({
-      setShowActivity,
-    } as unknown as ReturnType<typeof dedupeContext.useDedupeOptional>);
+  it("links Merge history from the header, with its name on the button", () => {
     renderPage();
-    expect(
-      screen.queryByRole("button", { name: "Duplicates actions" }),
-    ).toBeNull();
-    const button = screen.getByRole("button", { name: "Merge activity" });
-    expect(button.className).toContain("btn-icon");
-    fireEvent.click(button);
-    expect(setShowActivity).toHaveBeenCalledWith(true);
+    const link = screen.getByRole("link", { name: "Merge history" });
+    expect(link.getAttribute("href")).toBe("/pulse/duplicates?view=merged");
+    expect(link.textContent).toBe("Merge history");
   });
 });

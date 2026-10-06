@@ -43,15 +43,6 @@ export const CompareStage = ({
       exit={{ opacity: 0, x: -20 }}
       className="flex flex-col gap-4"
     >
-      <button
-        type="button"
-        onClick={onBack}
-        className="hit-area self-start flex items-center gap-1.5 text-sm text-on-surface-variant hover:text-on-surface transition-colors"
-      >
-        <ChevronLeft className="w-4 h-4" aria-hidden="true" />
-        Back
-      </button>
-
       {primaryId && (
         <DuplicateComparison
           contacts={contacts}

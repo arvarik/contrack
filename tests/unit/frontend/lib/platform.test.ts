@@ -161,7 +161,6 @@ describe("on Windows and Linux", () => {
       "Ctrl",
       "Enter",
     ]);
-    expect(keysOf(table, "Undo the last skip")).toEqual(["Ctrl", "Z"]);
     expect(keysOf(table, "Back")).toEqual(["Alt", "←"]);
     expect(keysOf(table, "Forward")).toEqual(["Alt", "→"]);
     // Nothing on this platform still prints a key it does not have.

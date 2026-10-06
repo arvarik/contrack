@@ -81,6 +81,18 @@ const SHARED_NOUN: Record<string, string> = {
 };
 
 /**
+ * The caveats of a pair, one a line. The server joins two with a full stop:
+ * "First names differ: Ada and Ben. 3 contacts share this phone number".
+ */
+export function pairCaveats(
+  caveat: string | null | undefined,
+  reasoning: string,
+): string[] {
+  const joined = pairCaveat(caveat, reasoning);
+  return joined ? joined.split(/\.\s+(?=[A-Z0-9])/) : [];
+}
+
+/**
  * The caveat of a pair: the server's own, or for a pair stored before the
  * caveat had its own field, the one its old line ended with, in the same
  * words the server writes now.

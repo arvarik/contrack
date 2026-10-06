@@ -395,11 +395,12 @@ export const DuplicateQueue = () => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (isTypingTarget(e)) return;
       const target = e.target instanceof Element ? e.target : null;
-      if (
-        target?.closest(
-          '[role="dialog"], [role="radiogroup"], [role="menu"], [role="listbox"], aside, details',
-        )
-      ) {
+      if (target?.closest('[role="dialog"], [role="menu"], [role="listbox"]')) {
+        return;
+      }
+      // The arrows move the contact to keep. The letters still decide, so a
+      // person who just chose the contact presses L from where they are.
+      if (target?.closest('[role="radiogroup"]') && e.key.startsWith("Arrow")) {
         return;
       }
       if (!singleKeys && /^[hjklz]$/.test(e.key)) return;

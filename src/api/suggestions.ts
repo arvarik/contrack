@@ -22,11 +22,12 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
-import type {
-  PersistedDedupeSuggestion,
-  MergeLogEntry,
-  UndoMergeResponse,
-} from "../types";
+import type { PersistedDedupeSuggestion, MergeLogEntry } from "../types";
+import { dedupeRoutes } from "../../shared/contracts/dedupe";
+import type { ResponseOf } from "../../shared/contracts/route";
+
+/** What one undo answers: the contact it restored, and what changed since. */
+export type UndoMergeResponse = ResponseOf<typeof dedupeRoutes.undo>;
 
 // =============================================================================
 // Query Keys
@@ -110,7 +111,7 @@ export const useSuggestionForContact = (contactId: string | undefined) =>
 const mergeLogQuery = queryOptions({
   queryKey: suggestionKeys.mergeLog,
   queryFn: async ({ signal }) => {
-    const res = await apiFetch(`/dedupe/merge-log?limit=100`, { signal });
+    const res = await apiFetch(`/dedupe/merge-log?limit=50`, { signal });
     if (!res.ok) throw new Error("Failed to fetch merge log");
     const data = await res.json();
     return data.entries as MergeLogEntry[];
@@ -146,9 +147,9 @@ export const useRestoreSuggestion = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (suggestionId: string) =>
-      apiJson<{ success: true }>(
-        `/dedupe/suggestions/${suggestionId}/restore`,
-        { method: "POST" },
+      apiJson(
+        dedupeRoutes.restore,
+        `/dedupe/suggestions/${encodeURIComponent(suggestionId)}/restore`,
       ),
     onSuccess: () => refreshDuplicates(qc),
   });
@@ -167,10 +168,11 @@ function undoMerge(
   mergeLogId: string,
   keepSeparate: boolean,
 ): Promise<UndoMergeResponse> {
-  return apiJson<UndoMergeResponse>(`/dedupe/merge-log/${mergeLogId}/undo`, {
-    method: "POST",
-    ...jsonBody({ keepSeparate }),
-  });
+  return apiJson(
+    dedupeRoutes.undo,
+    `/dedupe/merge-log/${encodeURIComponent(mergeLogId)}/undo`,
+    jsonBody({ keepSeparate }),
+  );
 }
 
 /**
@@ -209,19 +211,16 @@ export const useUndoMerge = () => {
 };
 
 /** One merge, as `GET /api/dedupe/merged-into/:contactId` answers it. */
-export interface MergedInto {
-  mergeLogId: string | null;
-  primaryId: string;
-  primaryName: string;
-  mergedBy: "auto" | "user";
-  mergedAt: string;
-}
+export type MergedInto = NonNullable<
+  ResponseOf<typeof dedupeRoutes.mergedInto>["merge"]
+>;
 
 /** Where a contact went when it was merged, or null for a live contact. */
 export const fetchMergedInto = async (
   contactId: string,
 ): Promise<MergedInto | null> => {
-  const data = await apiJson<{ merge: MergedInto | null }>(
+  const data = await apiJson(
+    dedupeRoutes.mergedInto,
     `/dedupe/merged-into/${encodeURIComponent(contactId)}`,
   );
   return data.merge;

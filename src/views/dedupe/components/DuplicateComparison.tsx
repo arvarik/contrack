@@ -80,6 +80,11 @@ interface DuplicateComparisonProps {
   caveats?: string[];
   /** Ids for the caveats, so the Merge button can point at them. */
   caveatIdPrefix?: string;
+  /**
+   * The caveats are in words just above, on the contact page's banner, so
+   * the rows only carry their mark.
+   */
+  caveatsAbove?: boolean;
 }
 
 /** A row of the comparison: its name, and what each contact shows in it. */
@@ -399,6 +404,7 @@ export const DuplicateComparison = ({
   onRemove,
   caveats = [],
   caveatIdPrefix,
+  caveatsAbove = false,
 }: DuplicateComparisonProps) => {
   const labelId = useId();
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
@@ -469,7 +475,7 @@ export const DuplicateComparison = ({
     caveatIdPrefix ? `${caveatIdPrefix}-${caveats.indexOf(caveat)}` : undefined;
   // A caveat with no row, such as a shared inbox seen only by the engine,
   // goes above the comparison. So do all of them when the contacts stack.
-  const loose = asTable ? (flags.get("") ?? []) : caveats;
+  const loose = caveatsAbove ? [] : asTable ? (flags.get("") ?? []) : caveats;
 
   const sameLine = sameRows.length > 0 && (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-1 text-sm">
@@ -541,14 +547,16 @@ export const DuplicateComparison = ({
                   <Value dropped={dropped(c, row.field)}>{row.render(c)}</Value>
                 </div>
               ))}
-              {(flags.get(row.key) ?? []).map((caveat) => (
-                <div
-                  key={caveat}
-                  className="col-start-2 col-span-full px-3 pb-1"
-                >
-                  <Caveat id={caveatId(caveat)}>{caveat}</Caveat>
-                </div>
-              ))}
+              {(caveatsAbove ? [] : (flags.get(row.key) ?? [])).map(
+                (caveat) => (
+                  <div
+                    key={caveat}
+                    className="col-start-2 col-span-full px-3 pb-1"
+                  >
+                    <Caveat id={caveatId(caveat)}>{caveat}</Caveat>
+                  </div>
+                ),
+              )}
             </Fragment>
           ))}
         </div>
