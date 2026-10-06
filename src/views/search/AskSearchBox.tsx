@@ -112,6 +112,10 @@ export const AskSearchBox = ({
       }}
       placeholder={placeholder}
       aria-label={label}
+      // Names and places are not words a phone should correct.
+      spellCheck={false}
+      autoCorrect="off"
+      autoCapitalize="off"
       // 44 px tall on a phone, the touch floor, and the button's 40 px from
       // `sm`. 16 px type on a phone keeps iOS from zooming in on focus.
       className="flex-1 min-w-0 h-11 sm:h-10 bg-transparent border-none text-on-surface placeholder:text-on-surface-variant text-base sm:text-lg"

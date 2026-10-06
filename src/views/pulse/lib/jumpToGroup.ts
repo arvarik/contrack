@@ -8,12 +8,20 @@
  * Below `lg` the heading is in the page's own flow and scrolls into view
  * itself.
  *
+ * Below `lg` the queue shows its first rows and a "Show all" button. A
+ * group further down is not on the page, so the jump asks the queue to show
+ * every row first (`SHOW_ALL_UP_NEXT`).
+ *
  * Returns false when the heading is not on the page (the group is empty or
  * the card is hidden), so the caller can fall back to a card.
  *
  * @module views/pulse/lib/jumpToGroup
  */
+import { scrollBehavior } from "../../../lib/a11y";
 import type { UpNextGroup } from "./upNext";
+
+/** The event that makes the Up next card show every row, at once. */
+export const SHOW_ALL_UP_NEXT = "pulse:show-all-up-next";
 
 /** The id of a group's heading. The masthead's counts jump to these. */
 export const groupHeadingId = (group: UpNextGroup) => `up-next-${group}`;
@@ -23,10 +31,15 @@ const UP_NEXT_PANE_SELECTOR = '[aria-label="Up next items"]';
 
 export function jumpToGroup(group: UpNextGroup): boolean {
   if (typeof document === "undefined") return false;
-  const heading = document.getElementById(groupHeadingId(group));
+  const find = () => document.getElementById(groupHeadingId(group));
+  let heading = find();
+  if (!heading) {
+    window.dispatchEvent(new Event(SHOW_ALL_UP_NEXT));
+    heading = find();
+  }
   if (!heading) return false;
 
-  const behavior: ScrollBehavior = "smooth";
+  const behavior = scrollBehavior();
   const pane = heading.closest<HTMLElement>(UP_NEXT_PANE_SELECTOR);
   const paneScrolls =
     pane && /auto|scroll/.test(getComputedStyle(pane).overflowY);

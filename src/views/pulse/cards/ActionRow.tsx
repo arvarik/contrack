@@ -8,14 +8,12 @@ import {
   CalendarDays,
   Calendar,
 } from "lucide-react";
-import { addDays } from "date-fns";
 import { cn } from "../../../lib/utils";
 import { ScoreRingAvatar } from "../../../components/ScoreRingAvatar";
 import {
   ActionMenu,
   type ActionMenuItem,
 } from "../../../components/ui/ActionMenu";
-import { useUpdateActionItem } from "../../../api";
 import { formatRelative } from "../../../lib/datetime";
 import { SELECTED_ROW, TONE_TEXT, TONE_WASH } from "../../../lib/styles";
 import {
@@ -38,6 +36,8 @@ interface ActionRowProps {
   looksSelected?: boolean;
   onSelect?: () => void;
   onComplete?: (id: string) => void;
+  /** Move a follow-up's due date out by some days. The page says so, with Undo. */
+  onSnooze?: (item: UpNextItem, days: number) => void;
   onLog?: (contactId: string) => void;
   onOpenContact?: (contactId: string) => void;
   /**
@@ -99,10 +99,13 @@ const onControl = (target: EventTarget | null) =>
  * catch-up row has no snooze: there is no date to move.
  *
  * The row is the one roving tab stop of the list: `tabIndex` is 0 on the
- * highlighted row and -1 elsewhere. Enter opens the contact, Space does the
- * row's primary action, ArrowDown and ArrowUp move the highlight. Each key
- * is claimed only when the event target is the row itself, so a button
- * inside the row keeps its own Enter and Space. The row keeps
+ * highlighted row and -1 elsewhere, and so are the controls inside it. Tab
+ * goes from the current row to its check, its name and its snooze, then out
+ * of the list: 38 rows used to be about 100 Tab stops. Enter opens the
+ * contact, Space does the row's primary action, ArrowDown and ArrowUp move
+ * the highlight. Each key is claimed only when the event target is the row
+ * itself, so a button inside the row keeps its own Enter and Space. The row
+ * keeps
  * `role="listitem"`: it is a clickable element with a keyboard equivalent,
  * not a button. Focus that enters the row, on the row or on a control in
  * it, makes it the current row. Being current and looking selected are two
@@ -115,6 +118,7 @@ export const ActionRow = memo(
     looksSelected = false,
     onSelect,
     onComplete,
+    onSnooze,
     onLog,
     onOpenContact,
     onMove,
@@ -125,7 +129,8 @@ export const ActionRow = memo(
     const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const rowRef = useRef<HTMLDivElement>(null);
     const wasSelectedRef = useRef(isSelected);
-    const updateAction = useUpdateActionItem();
+    /** The controls inside the row are Tab stops only on the current row. */
+    const tabIndex = isSelected ? 0 : -1;
 
     useEffect(() => {
       return () => {
@@ -214,11 +219,7 @@ export const ActionRow = memo(
       id: preset.id,
       label: preset.label,
       icon: preset.icon,
-      onSelect: () =>
-        updateAction.mutate({
-          id: item.id,
-          data: { dueAt: addDays(new Date(), preset.days).toISOString() },
-        }),
+      onSelect: () => onSnooze?.(item, preset.days),
     }));
 
     // A catch-up's chip already says how long it has been, so the row does
@@ -254,6 +255,11 @@ export const ActionRow = memo(
         icon={Clock}
         iconClassName="w-4 h-4"
         items={snoozeItems}
+        // The menu's own button takes no tabIndex prop, so the roving stop
+        // is set on the element.
+        triggerRef={(el) => {
+          if (el) el.tabIndex = tabIndex;
+        }}
         className={cn(
           "shrink-0",
           compact
@@ -280,9 +286,8 @@ export const ActionRow = memo(
         aria-current={isSelected ? "true" : undefined}
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={isSelected ? 0 : -1}
-        // Focus on the row, or on a control inside it, makes the row the
-        // current one, the row J and K move. Tab walks the controls of
-        // every row, and the tint used to stay behind on the first.
+        // Focus on the row, or on a control inside it (a click on another
+        // row's snooze), makes the row the current one, the row J and K move.
         onFocus={() => {
           if (!isSelected) onSelect?.();
         }}
@@ -306,6 +311,7 @@ export const ActionRow = memo(
             type="button"
             onClick={handleComplete}
             disabled={isCompleting}
+            tabIndex={tabIndex}
             aria-label={`Mark "${item.title}" done`}
             className={cn(
               GLYPH,
@@ -330,6 +336,7 @@ export const ActionRow = memo(
           <button
             type="button"
             onClick={handleLog}
+            tabIndex={tabIndex}
             title="Log a birthday note"
             aria-label={`Wish ${item.contactName} a happy birthday`}
             className={cn(GLYPH, TONE_WASH[tone])}
@@ -340,6 +347,7 @@ export const ActionRow = memo(
           <button
             type="button"
             onClick={handleLog}
+            tabIndex={tabIndex}
             title="Log an interaction"
             aria-label={`Log note for ${item.contactName}`}
             className={cn(GLYPH, TONE_WASH[tone])}
@@ -373,6 +381,7 @@ export const ActionRow = memo(
             <Link
               to={`/contact/${item.contactId}`}
               onClick={(e) => e.stopPropagation()}
+              tabIndex={tabIndex}
               className={cn(
                 PULSE_TYPE.name,
                 "hit-area inline-flex hover:text-primary transition-colors",

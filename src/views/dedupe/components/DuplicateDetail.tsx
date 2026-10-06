@@ -22,7 +22,7 @@ import { cn } from "../../../lib/utils";
 import type { DuplicateGroup } from "../utils/groups";
 import { isAiReason, plainReason, reasonIcon } from "../utils/reason";
 import type { ReviewContact } from "../utils/mergeOutcome";
-import { DuplicateComparison } from "./DuplicateComparison";
+import { breakable, DuplicateComparison } from "./DuplicateComparison";
 
 /** More than this many in one group, and the group asks for a careful look. */
 const LARGE_GROUP = 5;
@@ -60,6 +60,8 @@ interface DuplicateDetailProps {
    * opens. The phone's sheet puts them at its bottom, under the thumb.
    */
   actionsAt?: "top" | "bottom";
+  /** The first L opened this Check carefully group: say what the next does. */
+  confirming?: boolean;
 }
 
 export const DuplicateDetail = ({
@@ -73,6 +75,7 @@ export const DuplicateDetail = ({
   heading = true,
   showKeys = false,
   actionsAt = "bottom",
+  confirming = false,
 }: DuplicateDetailProps) => {
   const { lead, contacts, caveats } = group;
   const isPair = contacts.length === 2;
@@ -80,11 +83,14 @@ export const DuplicateDetail = ({
   const ai = isAiReason(lead.matchType);
   const reason = plainReason(lead.matchType, lead.reasoning);
   const showValue =
-    isPair &&
-    (lead.matchType === "email" || lead.matchType === "phone") &&
-    lead.matchedField;
+    isPair && (lead.matchType === "email" || lead.matchType === "phone")
+      ? lead.matchedField
+      : null;
   const caveatPrefix = `caveat-${group.key.replace(/[^a-z0-9]/gi, "").slice(0, 16)}`;
   const caveatIds = caveats.map((_, i) => `${caveatPrefix}-${i}`).join(" ");
+  // A group to check carefully: its Merge is not the page's blue call to
+  // action, and the keys take two steps to reach it (`DuplicateQueue`).
+  const careful = group.level === "check";
 
   const actions = (
     <>
@@ -102,12 +108,22 @@ export const DuplicateDetail = ({
           </span>
         )}
       </button>
+      {confirming && (
+        <p className="basis-full text-sm text-on-surface">
+          Check the differences, then press{" "}
+          {showKeys ? "L again or Enter" : "Merge"}
+        </p>
+      )}
       <button
         type="button"
         onClick={onMerge}
         disabled={isBusy}
         aria-describedby={caveatIds || undefined}
-        className="btn-primary max-sm:flex-1"
+        data-merge=""
+        className={cn(
+          careful ? "btn-secondary" : "btn-primary",
+          "max-sm:flex-1",
+        )}
       >
         {isBusy ? (
           <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
@@ -144,8 +160,8 @@ export const DuplicateDetail = ({
                 <Icon aria-hidden="true" className="w-4 h-4 shrink-0" />
                 {reason}
                 {showValue && (
-                  <span className="break-all text-on-surface">
-                    {lead.matchedField}
+                  <span className="break-words min-w-0 text-on-surface">
+                    {breakable(showValue)}
                   </span>
                 )}
               </p>

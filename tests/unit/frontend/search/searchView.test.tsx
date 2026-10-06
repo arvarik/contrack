@@ -308,7 +308,7 @@ function leavablePage(path = "/search") {
 }
 
 const input = () =>
-  screen.getByLabelText("Ask anything about your network") as HTMLInputElement;
+  screen.getByLabelText("Ask about your network") as HTMLInputElement;
 
 function ask(question: string) {
   fireEvent.change(input(), { target: { value: question } });

@@ -14,6 +14,8 @@ interface ContactMiniCardProps {
   selected: boolean;
   onToggle: () => void;
   disabled?: boolean;
+  /** The list's roving Tab stop (`useRovingFocus`). */
+  itemProps?: React.ButtonHTMLAttributes<HTMLButtonElement>;
 }
 
 export const ContactMiniCard = ({
@@ -21,10 +23,16 @@ export const ContactMiniCard = ({
   selected,
   onToggle,
   disabled,
+  itemProps,
 }: ContactMiniCardProps) => (
   <button
+    type="button"
+    {...itemProps}
+    aria-pressed={selected}
     onClick={onToggle}
-    disabled={disabled && !selected}
+    // Not `disabled`: a disabled button takes no focus, and the arrows must
+    // still walk past it. The picker adds no one past its limit.
+    aria-disabled={(disabled && !selected) || undefined}
     className={cn(
       "state-layer w-full flex items-center gap-3 p-3 rounded-xl transition-colors text-left",
       selected && SELECTED_ROW,
@@ -57,7 +65,7 @@ export const ContactMiniCard = ({
     </div>
     <img
       src={contact.avatarUrl || fallbackAvatarUrl(contact.name)}
-      alt={contact.name}
+      alt=""
       loading="lazy"
       decoding="async"
       className="w-10 h-10 rounded-full object-cover bg-surface-container-high shrink-0"

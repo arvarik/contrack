@@ -9,6 +9,7 @@ import { cn } from "../../../lib/utils";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
 import { VirtualRows } from "../../../components/ui/VirtualRows";
 import { roomAtTop } from "../utils/stickyRoom";
+import { useRovingFocus } from "../../search/useRovingFocus";
 
 // =============================================================================
 // ContactPicker — Searchable multi-select contact selector
@@ -17,6 +18,11 @@ import { roomAtTop } from "../utils/stickyRoom";
 // page's one scroller. It drew every contact before, and 5,824 of them took
 // 44 s to show. The search filters on a deferred copy of the query, so a
 // letter shows in the box before the list catches up.
+//
+// The list is one Tab stop (`useRovingFocus`): ↓ in the search box goes to
+// the first contact, the arrows walk the rest, and Space or Enter picks.
+// The search box does not take focus by itself: the tab that shows it is
+// chosen with the arrows, and the box took the next arrow as a caret move.
 // =============================================================================
 
 interface ContactPickerProps {
@@ -54,6 +60,7 @@ export const ContactPicker = ({
     [selected],
   );
   const atMax = selected.length >= maxSelection;
+  const roving = useRovingFocus(filteredContacts.length);
 
   const toggleContact = (contact: Contact) => {
     if (selectedIds.has(contact.id)) {
@@ -99,7 +106,7 @@ export const ContactPicker = ({
                 >
                   <img
                     src={c.avatarUrl || fallbackAvatarUrl(c.name)}
-                    alt={c.name}
+                    alt=""
                     className="w-5 h-5 rounded-full object-cover"
                   />
                   <span className="text-xs font-bold">{c.name}</span>
@@ -123,11 +130,16 @@ export const ContactPicker = ({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search contacts by name, email, company..."
+            onKeyDown={(e) => {
+              if (e.key !== "ArrowDown") return;
+              e.preventDefault();
+              roving.focusAt(0);
+            }}
+            placeholder="Search contacts by name, email, company…"
             className={SEARCH_INPUT}
-            // Search field in a picker the user just opened.
-            // eslint-disable-next-line jsx-a11y/no-autofocus
-            autoFocus
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
           />
           {query && (
             <button
@@ -163,20 +175,23 @@ export const ContactPicker = ({
           {query ? "No contacts match your search" : "No contacts available"}
         </div>
       ) : (
-        <VirtualRows
-          items={filteredContacts}
-          getKey={(contact) => contact.id}
-          estimateSize={64}
-          gap={4}
-          renderRow={(contact) => (
-            <ContactMiniCard
-              contact={contact}
-              selected={selectedIds.has(contact.id)}
-              onToggle={() => toggleContact(contact)}
-              disabled={atMax}
-            />
-          )}
-        />
+        <div ref={roving.listRef}>
+          <VirtualRows
+            items={filteredContacts}
+            getKey={(contact) => contact.id}
+            estimateSize={64}
+            gap={4}
+            renderRow={(contact, index) => (
+              <ContactMiniCard
+                contact={contact}
+                selected={selectedIds.has(contact.id)}
+                onToggle={() => toggleContact(contact)}
+                disabled={atMax}
+                itemProps={roving.itemProps(index)}
+              />
+            )}
+          />
+        </div>
       )}
     </div>
   );

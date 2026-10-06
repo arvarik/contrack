@@ -52,7 +52,7 @@ const tipOf = (page: Page, name: string) =>
 async function ask(page: Page, question = QUESTION) {
   await page.goto("/search");
   const input = page.getByRole("textbox", {
-    name: "Ask anything about your network",
+    name: "Ask about your network",
   });
   await input.fill(question);
   await input.press("Enter");

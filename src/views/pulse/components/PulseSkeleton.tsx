@@ -157,7 +157,7 @@ export const PulseSkeleton = ({ insight }: { insight?: string | null }) => {
               </div>
               <div className={cn(PULSE_TYPE.meta, "min-w-0")}>
                 <SkeletonWords>
-                  Add an AI key to get one. Open AI settings
+                  Set up a Fast model to get one. Open AI settings
                 </SkeletonWords>
               </div>
             </div>
