@@ -1,20 +1,5 @@
+/** Hooks for Possible duplicates, Keep separate, Merge history and Undo. */
 import { apiFetch, apiJson, jsonBody } from "./client";
-/**
- * Suggestions API Hooks — React Query hooks for the persistent dedupe suggestions system.
- *
- * Provides:
- * - `useDedupeCount`          — Possible duplicates, counted in groups (the badges)
- * - `usePendingSuggestions`   — Hydrated suggestion list (the review list)
- * - `useSuggestionForContact` — Single-contact lookup (detail page banner)
- * - `useDismissSuggestion`    — Keep a pair separate: dismiss + add exclusion
- * - `useRestoreSuggestion`    — Undo of Keep separate
- * - `useMergeLog`             — Recent merges, for Merge history
- * - `useUndoMerge`            — Undo one merge
- * - `undoMerges`              — Undo several merges, the last first
- * - `useMergedInto`           — Where a merged contact went
- *
- * @module api/suggestions
- */
 import {
   queryOptions,
   useQuery,
@@ -29,10 +14,6 @@ import type { ResponseOf } from "../../shared/contracts/route";
 /** What one undo answers: the contact it restored, and what changed since. */
 export type UndoMergeResponse = ResponseOf<typeof dedupeRoutes.undo>;
 
-// =============================================================================
-// Query Keys
-// =============================================================================
-
 const suggestionKeys = {
   count: ["dedupe-suggestions-count"] as const,
   pending: ["dedupe-suggestions"] as const,
@@ -44,9 +25,8 @@ const suggestionKeys = {
 };
 
 /**
- * After anything that changes which pairs wait: the list, its count, every
- * contact page's banner and Merge history read the server again, and the
- * contacts too when a merge or an undo changed them.
+ * After a change to which pairs wait: the list, its count, the contact
+ * banners and Merge history refetch, and the contacts too when asked.
  */
 export function refreshDuplicates(
   qc: QueryClient,
@@ -60,17 +40,12 @@ export function refreshDuplicates(
   if (contacts) void qc.invalidateQueries({ queryKey: ["contacts"] });
 }
 
-// =============================================================================
-// Queries
-// =============================================================================
-
 /** Pending suggestion count — powers the sidebar badge. Polls every 60s. */
 export const useDedupeCount = () =>
   useQuery({
     queryKey: suggestionKeys.count,
     queryFn: async ({ signal }) => {
       const res = await apiFetch(`/dedupe/suggestions/count`, { signal });
-      if (!res.ok) return { count: 0 };
       return res.json() as Promise<{ count: number }>;
     },
     refetchInterval: 60_000,
@@ -83,7 +58,6 @@ export const usePendingSuggestions = () =>
     queryKey: suggestionKeys.pending,
     queryFn: async ({ signal }) => {
       const res = await apiFetch(`/dedupe/suggestions?limit=200`, { signal });
-      if (!res.ok) throw new Error("Failed to fetch suggestions");
       const data = await res.json();
       return data.suggestions as PersistedDedupeSuggestion[];
     },
@@ -98,7 +72,6 @@ export const suggestionQuery = (contactId: string) =>
       const res = await apiFetch(`/dedupe/suggestion-for/${contactId}`, {
         signal,
       });
-      if (!res.ok) return null;
       const data = await res.json();
       return data.suggestion ?? null;
     },
@@ -112,7 +85,6 @@ const mergeLogQuery = queryOptions({
   queryKey: suggestionKeys.mergeLog,
   queryFn: async ({ signal }) => {
     const res = await apiFetch(`/dedupe/merge-log?limit=50`, { signal });
-    if (!res.ok) throw new Error("Failed to fetch merge log");
     const data = await res.json();
     return data.entries as MergeLogEntry[];
   },
@@ -121,10 +93,6 @@ const mergeLogQuery = queryOptions({
 
 /** Recent merge audit log. */
 export const useMergeLog = () => useQuery(mergeLogQuery);
-
-// =============================================================================
-// Mutations
-// =============================================================================
 
 /** Dismiss a suggestion — adds to exclusions, never re-suggested. */
 export const useDismissSuggestion = () => {
@@ -140,8 +108,8 @@ export const useDismissSuggestion = () => {
 };
 
 /**
- * Undo of Keep separate: the pair waits in Possible duplicates again, and
- * the two are no longer marked as different people.
+ * Undo of Keep separate: the pair waits in Possible duplicates again, not
+ * marked as different people.
  */
 export const useRestoreSuggestion = () => {
   const qc = useQueryClient();
@@ -156,13 +124,9 @@ export const useRestoreSuggestion = () => {
 };
 
 /**
- * Undo one merge.
- *
- * `keepSeparate` says what the undo means. From Merge history, or after a
- * merge Contrack made by itself, it means the two are different people, so
- * nothing merges or suggests them again: the default, and the server's.
- * The Undo in the message right after a person's own merge sends `false`:
- * that undo takes back a key pressed by mistake, and the pair waits again.
+ * Undoes one merge. `keepSeparate` (the default) marks the two as different
+ * people, as from Merge history or after an automatic merge. The Undo right
+ * after a person's own merge sends `false`, and the pair waits again.
  */
 function undoMerge(
   mergeLogId: string,
@@ -227,9 +191,8 @@ export const fetchMergedInto = async (
 };
 
 /**
- * The contact page asks once it sees the contact was merged away. Always
- * fresh: an undo changes the answer, and a cached one sent the page back to
- * the contact it had just left.
+ * Where a merged-away contact went. Never cached: an undo changes the
+ * answer.
  */
 export const useMergedInto = (contactId: string, enabled: boolean) =>
   useQuery({

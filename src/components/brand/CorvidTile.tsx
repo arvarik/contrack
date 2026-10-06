@@ -1,16 +1,13 @@
 /**
- * CorvidTile: the app icon, inline.
+ * The app icon, inline: the gradient square with the white corvid, in fixed
+ * brand colors, for the places that show the app's icon and not its mark (an
+ * "installed" card, an about row, a list of instances). It does not follow
+ * the accent, because the tab strip and a home screen cannot either.
  *
- * The gradient rounded square with the white corvid on it, in fixed brand
- * colours, for the places in the app that show the app's icon rather than
- * its mark: an "installed" card, an about row, a list of instances. It does
- * not follow the accent, on purpose. The tab strip and a home screen cannot
- * follow it either, and this is their picture.
- *
- * The bird is the optical size for the tile's size (`opticalSize`), the
- * master the favicon or the launcher icon of that size draws. The geometry
- * is `TILE`, `CORVID_OPTICAL` and `fitMark` from `src/assets/corvidPaths.ts`,
- * which `scripts/brand/build-icons.ts` also reads to write `public/`.
+ * The bird is the optical size for the tile's size (`opticalSize`). The
+ * geometry is `TILE`, `CORVID_OPTICAL` and `fitMark` from
+ * `src/assets/corvidPaths.ts`, which `scripts/brand/build-icons.ts` also
+ * reads to write `public/`.
  */
 import { useId } from "react";
 import {

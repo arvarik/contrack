@@ -14,17 +14,13 @@ import { isLocalUploadUrl } from "../lib/localImage";
 
 const LinkPreviewComponent = ({ node, updateAttributes }: NodeViewProps) => {
   const { url, title, description, image, loading } = node.attrs;
-  // Only the server's own copy is drawn. A note saved before the server kept
-  // copies can hold the linked site's image URL, and that one shows the
-  // placeholder instead of loading a third-party image.
+  // Only the server's own copy is drawn. An older note may hold the linked
+  // site's image URL, which shows the placeholder, not a third-party image.
   const localImage = isLocalUploadUrl(image) ? image : null;
 
   useEffect(() => {
     if (loading && url) {
-      // `apiJson` throws for every non-2xx, so the rate-limited and refused
-      // cases land in the same `catch` as a dead server. A preview that does
-      // not arrive shows its error state; there is nothing else to say about
-      // one link inside a note.
+      // Any failure, a refusal or a dead server, shows the error state.
       apiJson<{
         title?: string;
         description?: string;

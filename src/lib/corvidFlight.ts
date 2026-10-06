@@ -1,40 +1,23 @@
 /**
- * corvidFlight — where the corvid goes when it leaves the ring, and how it
- * moves on the way.
+ * Where the corvid goes when it leaves the ring, and how it moves.
  *
- * `planFlight` draws a new route every time: a lap of the window in either
- * direction, a figure of eight, a short outing near the perch, or the
- * celebration's pass along the top. The route is a spline through random
- * waypoints inside the part of the window the bird may cross, and the plan
- * then answers one question, `frame(t)`: where the bird is `t` ms in, how
- * big, at what angle, and in what pose.
+ * `planFlight` draws a new route each time: a lap of the window, a figure
+ * of eight, a short outing near the perch, the celebration's pass along the
+ * top, or a search's hunt. The route is a spline through random waypoints
+ * in the space the bird may cross, and `frame(t)` says where the bird is
+ * `t` ms in, how big, at what angle and in what pose.
  *
- * Why a flight looks alive and not looped:
+ * A flight looks alive and not looped: the route and the pace are random
+ * (slower in a climb, faster in a dive), the wings beat in bursts with
+ * glides between, the bird turns round instead of flying upside down, and
+ * now and then it rolls or drifts nearer and farther.
  *
- * - **The route is random**, and so is the pace: a cruising speed per
- *   flight, slower in a climb and faster in a dive, a push off the perch and
- *   a braking flare at the end.
- * - **The wings work in bursts.** Three to six beats at five to seven beats a
- *   second, then a glide of a third of a second to a second, and more beats
- *   when the route climbs. The first beats off the perch are the strongest.
- * - **The bird turns round rather than flying upside down.** Its body faces
- *   the way it goes, and when the route doubles back it turns, narrowing
- *   through the turn the way a bird seen side on does. It pitches with the
- *   climb and leans into the curve, a little.
- * - **Now and then it plays.** A barrel roll on a celebration and on the odd
- *   lap, because ravens do that, and a slow drift nearer and farther away.
- *
- * It takes off from the ring and lands back in it. Off the ring it crouches,
- * turns its body under its head to face the way it will go, draws its nape
- * in and leaps. Coming home it flares, touches down, folds its wing, looks
- * back over its shoulder and lets the ring have its nape again. The first
- * and last frames are the logo at the perch's size and place, so the swap
- * between the perch and the flying bird cannot be seen.
+ * It takes off from the ring and lands back in it. The first and last
+ * frames are the logo at the perch's size and place, so the swap between
+ * the perch and the flying bird cannot be seen.
  *
  * Everything is a pure function of the request and the random source, so a
- * seeded test can fly the same route twice and measure it.
- *
- * @module lib/corvidFlight
+ * seeded test can fly the same route twice.
  */
 import { HOME_POSE, bodyCentre, type CorvidPose } from "../assets/corvidRig.ts";
 import {
@@ -49,9 +32,7 @@ import {
   type Rng,
 } from "./corvidMotion.ts";
 
-// ---------------------------------------------------------------------------
 // Where a flight may go
-// ---------------------------------------------------------------------------
 
 /** How far the flight stays inside the left, right and bottom edges. */
 export const FLIGHT_EDGE = 24;
@@ -103,9 +84,7 @@ const clampTo = (box: FlightBox, [x, y]: Point): Point => [
   Math.min(Math.max(y, box.top), box.bottom),
 ];
 
-// ---------------------------------------------------------------------------
 // The request and the plan
-// ---------------------------------------------------------------------------
 
 /**
  * `loop` is the perch's click: a lap of the window. `swoop` is the
@@ -186,9 +165,7 @@ export interface FlightPlan {
 export const flightSize = (viewport: FlightViewport): number =>
   viewport.width < FLIGHT_MD ? 52 : 64;
 
-// ---------------------------------------------------------------------------
 // Timing
-// ---------------------------------------------------------------------------
 
 /** Off the perch: crouch, turn, leap. The route starts partway in. */
 const LAUNCH_MS = 480;
@@ -210,9 +187,7 @@ const GROW_TO = 720;
 /** It starts shrinking back this long before the flare. */
 const SHRINK_LEAD = 320;
 
-// ---------------------------------------------------------------------------
 // Routes
-// ---------------------------------------------------------------------------
 
 /** The waypoints of one flight, the perch first and last when it lands. */
 function waypoints(
@@ -224,7 +199,7 @@ function waypoints(
   const { rng, kind, viewport } = req;
   const width = box.right - box.left;
   const height = box.bottom - box.top;
-  const centre: Point = [box.left + width / 2, box.top + height / 2];
+  const center: Point = [box.left + width / 2, box.top + height / 2];
   const at = (fx: number, fy: number): Point =>
     clampTo(box, [box.left + width * fx, box.top + height * fy]);
 
@@ -247,7 +222,7 @@ function waypoints(
   // Off the perch: up and away into the room, then the route, then an
   // approach from the ring's open side, so the bird comes in flying toward
   // its own ring and lands facing the way the logo's body does.
-  const side = start[0] < centre[0] ? 1 : -1;
+  const side = start[0] < center[0] ? 1 : -1;
   const launch = clampTo(box, [
     start[0] + side * between(rng, 80, 120),
     start[1] + between(rng, 26, 60),
@@ -295,7 +270,7 @@ function waypoints(
     // crosses itself into a figure of eight.
     const n = count(rng, 3, 5);
     const direction = sign(rng);
-    const startAngle = Math.atan2(start[1] - centre[1], start[0] - centre[0]);
+    const startAngle = Math.atan2(start[1] - center[1], start[0] - center[0]);
     middle = [];
     for (let i = 1; i <= n; i++) {
       const angle =
@@ -304,8 +279,8 @@ function waypoints(
       const reach = between(rng, 0.5, 0.85);
       middle.push(
         clampTo(box, [
-          centre[0] + Math.cos(angle) * (width / 2) * reach,
-          centre[1] + Math.sin(angle) * (height / 2) * reach,
+          center[0] + Math.cos(angle) * (width / 2) * reach,
+          center[1] + Math.sin(angle) * (height / 2) * reach,
         ]),
       );
     }
@@ -548,22 +523,19 @@ function flyTo(
 
 /**
  * Patrol a band too thin to circle in smoothly, such as the band over the
- * search box on a tablet: about 40 px tall. Circling there needs steps of
- * a few px and a turn that flips nearly every step, which draws a jittery
- * sawtooth, not a bird. A patrol instead:
+ * search box on a tablet (about 40 px tall), where circling draws a jittery
+ * sawtooth. A patrol:
  *
- * 1. Flies along the band in long steps, 50 to 90 px, each to a random
- *    height inside it, and never climbing or falling more than a gentle
- *    slope, so the bird rises and falls as it goes.
- * 2. Turns round at each end in a narrow hairpin: out a little past its
- *    last step, and back at the other half of the band's height. `relax`
- *    and the spline round the hairpin off, and the rig turns the bird round.
- * 3. Now and then turns round before the end, so no two patrols match.
- * 4. At the end of the hunt, turns round once more if it is flying away
- *    from `homeX`, so the way home is ahead of it.
+ * 1. Flies along the band in steps of 50 to 90 px, each to a random height
+ *    at no more than a gentle slope.
+ * 2. Turns round at each end in a narrow hairpin, back at the other half of
+ *    the band's height. `relax`, the spline and the rig round it off.
+ * 3. Now and then turns round early, so no two patrols match.
+ * 4. At the end, turns round once more if it flies away from `homeX`, so
+ *    the way home is ahead of it.
  *
- * The band is horizontal: only the band over the column is ever this thin
- * and hunted in.
+ * Only the band over the column is ever this thin and hunted in, so the
+ * band is horizontal.
  */
 function patrol(
   hunter: Hunter,
@@ -736,9 +708,7 @@ function huntLength(viewport: FlightViewport): number {
   return SEARCH_HUNT_MS * speed;
 }
 
-// ---------------------------------------------------------------------------
 // The ground round a search
-// ---------------------------------------------------------------------------
 
 /**
  * How far the body's middle keeps from the column's sides, and from its
@@ -849,13 +819,13 @@ export function searchGround(
     )
     .map(([side, rect]) => ({ side, rect, hunts: false }));
   const band = zones.find((zone) => zone.side === "top");
-  const centre = perch ? perchPoint(perch) : null;
+  const center = perch ? perchPoint(perch) : null;
   const reachable = (zone: HuntZone) =>
     !!band ||
-    !centre ||
+    !center ||
     (zone.side === "left"
-      ? centre[0] - zone.rect.right <= SIDE_REACH
-      : zone.rect.left - centre[0] <= SIDE_REACH);
+      ? center[0] - zone.rect.right <= SIDE_REACH
+      : zone.rect.left - center[0] <= SIDE_REACH);
   for (const zone of zones) {
     const { rect } = zone;
     zone.hunts =
@@ -965,21 +935,18 @@ function spotIn(rng: Rng, zone: HuntZone): Point {
 /**
  * A search flight's whole route when the page has a column to keep out of.
  *
- * 1. Up out of the search box into the band over it, toward the side the
- *    first zone is on. Never down, where the results will be.
- * 2. The first zone is drawn at random, in proportion to its area. The
- *    bird flies in and wanders there (`wander`) for a random part of the
- *    hunt.
- * 3. Then it may cross to another zone, over the top of the column through
- *    the band's corners, and wander there. It may also stay. The draw is
- *    fresh each time, so no two hunts visit the zones in the same order.
- * 4. Once the route is about {@link SEARCH_HUNT_MS} long, it comes home: up
- *    its side to the band, along the band to a spot over the perch, and
- *    down into the search box.
+ * 1. Up out of the search box into the band over it, toward the first
+ *    zone's side. Never down, where the results will be.
+ * 2. Into a zone drawn at random by area, to wander for a random part of
+ *    the hunt.
+ * 3. Then perhaps across to another zone, over the column through the
+ *    band's corners. The draw is fresh each time, so no two hunts match.
+ * 4. After about {@link SEARCH_HUNT_MS}, home: up its side to the band,
+ *    along it to a spot over the perch, and down into the search box.
  *
- * With no band, the bird flies straight out sideways to the one zone the
- * perch can reach, and back the same way. With nowhere to hunt, it hops up
- * and back: the page's hook does not ask for a flight like that.
+ * With no band, the bird flies straight out to the one zone the perch can
+ * reach, and back the same way. With nowhere to hunt it hops up and back,
+ * a flight the page's hook does not ask for.
  */
 function searchRoute(
   req: FlightRequest,
@@ -1147,7 +1114,7 @@ const MAX_TURN = 100;
 /**
  * Soften any waypoint the route would turn too sharply at. A bird at speed
  * cannot turn on a point, and a random route will now and then ask it to:
- * such a waypoint is drawn toward the middle of its two neighbours until the
+ * such a waypoint is drawn toward the middle of its two neighbors until the
  * turn is one a bird could make. The ends stay where they are.
  */
 function relax(points: Point[]): Point[] {
@@ -1244,9 +1211,7 @@ function barryGoldman(
   return l(b1, b2, t1, t2);
 }
 
-// ---------------------------------------------------------------------------
 // The wings
-// ---------------------------------------------------------------------------
 
 interface WingPose {
   wingAngle: number;
@@ -1350,9 +1315,7 @@ function wingSchedule(
   return bursts;
 }
 
-// ---------------------------------------------------------------------------
 // Planning
-// ---------------------------------------------------------------------------
 
 interface Track {
   points: Point[];
@@ -1543,23 +1506,23 @@ export function planFlight(req: FlightRequest): FlightPlan {
 
   // The perch's bird sits in the logo pose, so its body's middle is the
   // logo's, at the perch's scale.
-  const perchCentre: Point | null = perch ? perchPoint(perch) : null;
+  const perchCenter: Point | null = perch ? perchPoint(perch) : null;
   const perchSize = perch?.size ?? size;
   const nearPerch = (p: Point) =>
-    !!perchCentre &&
-    Math.hypot(p[0] - perchCentre[0], p[1] - perchCentre[1]) < PERCH_REACH;
+    !!perchCenter &&
+    Math.hypot(p[0] - perchCenter[0], p[1] - perchCenter[1]) < PERCH_REACH;
 
   const wp =
-    airborne && perchCentre
+    airborne && perchCenter
       ? ground
         ? searchHomeWaypoints(
             req,
             ground,
             [airborne.x, airborne.y],
-            perchCentre,
+            perchCenter,
           )
-        : homeWaypoints(req, [airborne.x, airborne.y], perchCentre, box)
-      : waypoints(req, perchCentre ?? [box.left, box.top], box, ground);
+        : homeWaypoints(req, [airborne.x, airborne.y], perchCenter, box)
+      : waypoints(req, perchCenter ?? [box.left, box.top], box, ground);
   const raw = spline(wp);
   // Keep the route in the room, except where it has to reach the perch, and
   // except a flypast's way in and out, which is off screen on purpose.
@@ -1570,7 +1533,7 @@ export function planFlight(req: FlightRequest): FlightPlan {
         Math.min(Math.max(p[1], 4), viewport.height - 4),
       ];
     }
-    if (!perchCentre)
+    if (!perchCenter)
       return [p[0], Math.min(Math.max(p[1], box.top), box.bottom)];
     return clampTo(box, p);
   });
@@ -1794,8 +1757,8 @@ export function planFlight(req: FlightRequest): FlightPlan {
         const headU = easeInOut((after - 200) / 110);
         pose.bodyFacing = arrival.body > 0 ? 1 : notFlat(-1 + 2 * bodyU);
         pose.headFacing = arrival.head > 0 ? 1 : notFlat(-1 + 2 * headU);
-        x = perchCentre![0];
-        y = perchCentre![1];
+        x = perchCenter![0];
+        y = perchCenter![1];
       }
       pose.nape = 1 - easeInOut((after - 170) / 260);
       lift *= 1 - flare;

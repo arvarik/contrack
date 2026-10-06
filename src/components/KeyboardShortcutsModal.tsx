@@ -1,13 +1,6 @@
 /**
- * KeyboardShortcutsModal: the shortcuts for the page it opens on.
- *
- * Mounted once in App.tsx, which opens it on `?` (outside a field) and from
- * the sidebar's keyboard button. The shortcuts come from `lib/shortcuts`,
- * the one table every plan registers its keys in.
- *
- * It used to list every group in the app in one long column, so on the map
- * the map's five keys sat below forty that did nothing there. It is two
- * columns now:
+ * The shortcuts for the page it opens on, from `lib/shortcuts`. App.tsx opens
+ * it on `?` (outside a field) and from the sidebar's keyboard button.
  *
  * ```
  * ┌ Keyboard shortcuts ─────────────────────────────────────── ✕ ┐
@@ -26,16 +19,11 @@
  * 2. The right column is the page's own (`pageShortcutGroups`): Pulse's
  *    queue keys on Pulse, the contact's and the list's on a contact. A page
  *    with none says so in one line.
- * 3. With single-key shortcuts off, the letters that switch turns off are
- *    dimmed, and the footer says so with the way to turn them back on.
+ * 3. With single-key shortcuts off, those letters are dimmed, and the footer
+ *    says how to turn them back on.
  * 4. The line above the columns links to Settings → Keyboard, which lists
- *    every shortcut in the app. It used to be a footer, below the fold on a
- *    contact page in a short window. Below `sm` the columns stack.
- * 5. The keys are the platform's: ⌘ ⇧ H on a Mac, Ctrl Alt H on Windows and
- *    Linux. `lib/shortcuts` builds them from `lib/platform`.
- *
- * Built on the shared `Modal`: `role="dialog"`, the focus trap, Escape, and
- * focus back where it was when it closes.
+ *    every shortcut. Below `sm` the columns stack.
+ * 5. The keys are the platform's: ⌘ ⇧ H on a Mac, Ctrl Alt H elsewhere.
  */
 import { Link, useLocation } from "react-router-dom";
 import { ArrowRight } from "lucide-react";
@@ -139,10 +127,8 @@ export const KeyboardShortcutsModal = ({ isOpen, onClose }: Props) => {
         </Link>
       </div>
       {/*
-        A tab stop of its own. The list can be longer than a short viewport
-        and holds nothing interactive, so without one the scrolling region
-        would be reachable by pointer only (WCAG 2.1.1). Focus here, and the
-        arrow keys scroll it. The base layer draws its focus ring.
+        A Tab stop, so the keyboard can scroll a list that holds nothing
+        interactive (WCAG 2.1.1).
       */}
       <div
         role="region"

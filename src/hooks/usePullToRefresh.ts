@@ -3,7 +3,7 @@ import { useRef, useState, useEffect } from "react";
 const THRESHOLD = 80;
 
 /**
- * Read one touch gesture and refresh once. Cancelled gestures preserve
+ * Read one touch gesture and refresh once. Canceled gestures preserve
  * normal scrolling. It listens for touches only, so a mouse never pulls,
  * and it works at every width: a tablet or a phone on its side pulls too.
  */

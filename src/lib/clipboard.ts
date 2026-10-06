@@ -1,16 +1,8 @@
 /**
- * Copy text to the clipboard, in every browser this app runs in.
- *
- * The async Clipboard API is the right one and is not always available: it
- * needs a secure context, which a self-hosted Contrack reached over plain HTTP
- * on a local network does not have. The `execCommand` fallback is deprecated
- * and still works everywhere, which is the whole reason it is here.
- *
- * This matters more in 2.0 than it did: an invitation link, a temporary
- * password and an API token are each shown once and never again. A copy
- * button that silently does nothing loses the value for good.
- *
- * @module lib/clipboard
+ * Copy text to the clipboard in every browser. The async Clipboard API needs
+ * a secure context, which a self-hosted Contrack on plain HTTP lacks, so the
+ * deprecated `execCommand` is the fallback. A secret shown once must not be
+ * lost to a copy button that silently does nothing.
  */
 
 /** Resolves when the text is on the clipboard, rejects when it is not. */

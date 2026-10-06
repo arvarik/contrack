@@ -1,11 +1,7 @@
 /**
- * shared/mcpTools.ts — Canonical list of MCP tools: name, title, description,
- * and what each one may change.
- *
- * Shared across the server MCP registry, Settings page tools table,
- * and documentation so tool names and descriptions never drift.
- *
- * @module shared/mcpTools
+ * The one list of MCP tools: name, title, description and what each may
+ * change. The server's registry, the Settings tools table and the docs read
+ * it, so they cannot drift.
  */
 
 /**

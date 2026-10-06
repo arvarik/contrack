@@ -1,9 +1,4 @@
-/**
- * main.tsx — React DOM entry point.
- *
- * Bootstraps the application by mounting the React tree into #root with
- * StrictMode, an ErrorBoundary, and the TanStack React Query provider.
- */
+/** The entry point: mounts the app into #root with its providers. */
 // First, before any module builds a zod schema. See zodConfig.ts.
 import "./lib/zodConfig";
 import { MotionConfig } from "motion/react";
@@ -17,19 +12,9 @@ import App from "./App.tsx";
 import "./index.css";
 
 /**
- * Global React Query configuration.
- *
- * Defaults are tuned for a local-first app where data only changes via
- * the app's own mutations (which do targeted invalidation):
- *
- * - staleTime: 30s   → navigating away and back is instant (no refetch)
- * - gcTime: 10min    → cache survives longer navigations in-memory
- * - retry: 1         → local server failure = server down; don't hammer it
- * - refetchOnWindowFocus: false → alt-tab should not trigger background fetches
- *
- * NOTE: Per React Query rules, query-level staleTime overrides this global
- * (e.g. dashboard uses 2min, map uses 5min, lists use 60s).
- * See src/lib/queryConfig.ts for the full staleTime reference.
+ * Data changes only through the app's own mutations, which invalidate what
+ * they touch, so there is no refetch on window focus. A query's own
+ * staleTime overrides this one (src/lib/queryConfig.ts).
  */
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -42,18 +27,8 @@ const queryClient = new QueryClient({
   },
 });
 
-// =============================================================================
-// The contacts prefetch used to run here, at module load.
-// =============================================================================
-// It warms the ['contacts'] cache that useInstantSearch reads, so the first
-// Cmd+K after a page load has no blank gap. It ran before React rendered a
-// single element, which on a gated instance meant the first request of every
-// page load was a 401 — announced on the window to a listener that had not
-// mounted yet, and answered by the gate a moment later with the same question
-// asked properly.
-//
-// It now lives in AuthGate and runs the moment the gate opens. Same warm
-// cache, one round trip later, and no request is made as nobody.
+// The contacts prefetch runs in AuthGate once the gate opens, not here: at
+// module load a gated instance answers 401 before anything listens.
 import { usePreferences } from "./contexts/PreferencesContext";
 
 function MotionPreference({ children }: { children: React.ReactNode }) {

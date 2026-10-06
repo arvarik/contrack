@@ -1,22 +1,10 @@
 /**
- * RouteFallback — what a lazily-loaded route shows while its chunk downloads.
+ * What a lazy route shows while its chunk downloads. Each variant mirrors the
+ * page's own skeleton, so the chunk load and the data load look like one
+ * wait and the layout lands once. Every variant draws `PageHeaderSkeleton`.
  *
- * This used to be one centred "Loading…" string for every route. Because the
- * views themselves have real skeletons that only appear *after* their chunk
- * has arrived, a cold navigation to Pulse ran through four states —
- * blank → "Loading..." → skeleton → content — two of which were placeholders
- * for each other, each with a different silhouette, so the page visibly
- * reshuffled twice before settling.
- *
- * Each variant here mirrors the destination's real skeleton, so the chunk load
- * and the data load look like one continuous wait and the layout lands once.
- * Every page's top is `PageHeader`, so every variant draws the same header
- * silhouette (`PageHeaderSkeleton`) in the page's own padding, and Pulse's
- * own skeleton borrows it.
- *
- * These are deliberately dependency-free: they are imported eagerly by App, so
- * anything they touch is pulled into the entry bundle. Approximating a shape
- * in a few divs is worth more than sharing code with the lazy chunk.
+ * App imports these eagerly, so they stay free of dependencies that would
+ * join the entry bundle.
  */
 import React from "react";
 import { cn } from "../../lib/utils";
@@ -34,9 +22,8 @@ import {
   TITLE_GRID_SUFFIX,
   TITLE_GRID_TITLE,
 } from "../../lib/styles";
-// A file of class strings and type imports, so it adds no code the entry
-// bundle does not already have. The page and its skeleton read the same
-// constants, which is what keeps the three silhouettes one.
+// Class strings and types only, so the entry bundle gains no code. The page
+// and its skeletons read the same constants.
 import {
   COLUMN_CLASSES,
   GRID_CLASSES,
@@ -82,12 +69,9 @@ const TextBar = ({
 );
 
 /**
- * `PageHeader` as bars: the title and its suffix, and the description in
- * their slots, gaps and line heights, the controls at the right and whatever
- * sits under them. Each text prop is the width of its bar, and a slot
- * without one is left out. No skeleton draws a back link: the one page that
- * has one, a settings page below `lg`, cannot be told from the settings
- * list while the chunk loads, and the list has none.
+ * `PageHeader` as bars, in its slots, gaps and line heights. Each text prop
+ * is its bar's width, and a slot without one is left out. No back link:
+ * while the chunk loads a settings page cannot be told from the list.
  */
 const PageHeaderSkeleton = ({
   title,
@@ -185,9 +169,7 @@ export const PulseHeaderSkeleton = () => (
 
 export type RouteFallbackVariant = "pulse" | "search" | "settings" | "map";
 
-/**
- * @param variant which destination is loading — picks the matching silhouette
- */
+/** @param variant - The destination that is loading. */
 export const RouteFallback = ({
   variant,
 }: {
@@ -223,9 +205,8 @@ export const RouteFallback = ({
             <div
               className={cn("flex flex-col gap-6 p-1", COLUMN_CLASSES.intel)}
             >
-              {/* Daily insight at the height PulseSkeleton gives a typical
-                  insight in this column at each width: a card with a key,
-                  the common case. A fixed 140 px block jumped to the card. */}
+              {/* The daily insight, at PulseSkeleton's height for a typical
+                  card at each width. */}
               <Block className="h-[293px] lg:h-[252px] xl:h-[349px]" />
               <Block className="h-[160px]" />
               <Block className="h-[140px]" />
@@ -244,11 +225,8 @@ export const RouteFallback = ({
   }
 
   if (variant === "search") {
-    // Ask Contrack: the title with the mode switch, and History below `lg`
-    // (the pair fills its own row on a phone), the search box, then "Try
-    // asking" and its chips, in the page's column and with the scroller's
-    // bar lane. From `lg` the History button is in the top-right corner. Its
-    // panel opens over the page, so the column is where it lands either way.
+    // Ask Contrack: the title with the mode switch, and History below `lg`,
+    // the search box, then "Try asking" and its chips, in the page's column.
     return (
       <div className="relative h-full flex overflow-hidden bg-surface">
         <div className="flex-1 min-w-0 overflow-hidden [scrollbar-gutter:stable]">
@@ -292,7 +270,7 @@ export const RouteFallback = ({
   }
 
   // settings: the rail from lg, then the header and the page in the page's
-  // centred box. The list has no back link, and from lg no page has one.
+  // centered box. The list has no back link, and from lg no page has one.
   return (
     <div className="h-full flex overflow-hidden bg-surface">
       <div

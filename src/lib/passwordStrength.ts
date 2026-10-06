@@ -1,12 +1,4 @@
-/**
- * passwordStrength — evaluates password strength on a 0 to 4 scale.
- *
- * Checks password length and character classes against a list of common
- * weak passwords. Returns an integer from 0 (empty) to 4 (strong).
- * Also exports PasswordStrengthMeter, a 4-segment visual indicator.
- *
- * @module lib/passwordStrength
- */
+/** Password strength on a 0 to 4 scale, and the meter that shows it. */
 
 import React from "react";
 import { cn } from "./utils";
@@ -60,10 +52,8 @@ const WORST_PASSWORDS_SET = new Set<string>(WORST_PASSWORDS);
 const STRENGTH_WORDS = ["", "Short", "OK", "Good", "Strong"] as const;
 
 /**
- * Score password strength from 0 (empty) to 4 (strong).
- *
- * Evaluates length and variety of character classes (lowercase, uppercase,
- * numbers, symbols). Checks against a list of 40 common worst passwords.
+ * Password strength from 0 (empty) to 4 (strong), from the length and the
+ * kinds of character, with a list of the worst common passwords.
  */
 export function passwordStrength(password: string): number {
   if (!password) return 0;
@@ -110,10 +100,7 @@ function getWordColor(strength: number): string {
   return TONE_TEXT[STRENGTH_TONES[strength] ?? "neutral"];
 }
 
-/**
- * Four-segment visual password strength meter with the words Short, OK, Good, Strong.
- * Does not block form submission.
- */
+/** A four-segment strength meter with its word. It does not block a submit. */
 export const PasswordStrengthMeter = ({ password }: { password?: string }) => {
   if (!password) return null;
 

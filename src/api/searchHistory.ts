@@ -1,15 +1,11 @@
-/**
- * Search History API Client — hooks for recording, listing, pinning,
- * and deleting questions asked on the Ask Contrack page and command palette.
- *
- * @module api/searchHistory
- */
+/** Hooks for the history of questions asked on Ask and in the palette. */
 
 import {
   useInfiniteQuery,
   useMutation,
   useQueryClient,
   type InfiniteData,
+  type QueryClient,
 } from "@tanstack/react-query";
 import { apiJson, jsonBody } from "./client";
 import type {
@@ -38,9 +34,7 @@ function searchHistoryListKey(filters?: HistoryListFilters) {
   return [...SEARCH_HISTORY_KEY, "list", filters ?? {}] as const;
 }
 
-/**
- * List search history entries with infinite cursor pagination.
- */
+/** Search history, a cursor page at a time. */
 export function useSearchHistoryList(filters?: HistoryListFilters) {
   return useInfiniteQuery<HistoryListResponse, Error>({
     queryKey: searchHistoryListKey(filters),
@@ -63,9 +57,44 @@ export function useSearchHistoryList(filters?: HistoryListFilters) {
   });
 }
 
+type HistoryPages = InfiniteData<HistoryListResponse>;
+
 /**
- * Tracking the last recorded search to avoid double recording within 2 seconds.
+ * Edits every cached history list before the server answers, and returns
+ * what they held, for `restoreHistory`.
  */
+async function editHistory(
+  queryClient: QueryClient,
+  edit: (old: HistoryPages) => HistoryPages,
+) {
+  await queryClient.cancelQueries({ queryKey: SEARCH_HISTORY_KEY });
+  const previous = queryClient.getQueriesData({ queryKey: SEARCH_HISTORY_KEY });
+  queryClient.setQueriesData<HistoryPages>(
+    { queryKey: SEARCH_HISTORY_KEY },
+    (old) => old && edit(old),
+  );
+  return { previous };
+}
+
+/** A failed write puts the cached lists back. Every write refetches them. */
+function restoreHistory(queryClient: QueryClient) {
+  return {
+    onError: (
+      _err: unknown,
+      _vars: unknown,
+      context: Awaited<ReturnType<typeof editHistory>> | void,
+    ) => {
+      for (const [key, data] of context?.previous ?? []) {
+        queryClient.setQueryData(key, data);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: SEARCH_HISTORY_KEY });
+    },
+  };
+}
+
+/** The last recorded search, so a repeat within 2 seconds is not recorded. */
 let lastRecorded: {
   mode: HistoryMode;
   normalizedQuery: string;
@@ -88,10 +117,8 @@ function shouldIgnoreRecord(mode: HistoryMode, query: string): boolean {
 }
 
 /**
- * Record a completed search question.
- *
- * Optimistically inserts at the top of the search history infinite query cache,
- * and ignores records whose normalised query and mode equal the last one within 2 seconds.
+ * Records a finished question at the top of the cached history. A repeat of
+ * the last normalized query and mode within 2 seconds is ignored.
  */
 export function useRecordSearch() {
   const queryClient = useQueryClient();
@@ -117,11 +144,6 @@ export function useRecordSearch() {
         return;
       }
 
-      await queryClient.cancelQueries({ queryKey: SEARCH_HISTORY_KEY });
-      const previous = queryClient.getQueriesData({
-        queryKey: SEARCH_HISTORY_KEY,
-      });
-
       const optimisticEntry: HistoryEntry = {
         id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         ownerId: "",
@@ -137,49 +159,33 @@ export function useRecordSearch() {
         lastRunAt: new Date().toISOString(),
       };
 
-      queryClient.setQueriesData<InfiniteData<HistoryListResponse>>(
-        { queryKey: SEARCH_HISTORY_KEY },
-        (old) => {
-          if (!old || !old.pages.length) return old;
-          const firstPage = old.pages[0];
-          const filteredEntries = firstPage.entries.filter(
-            (e) =>
-              !(
-                e.mode === optimisticEntry.mode &&
-                e.normalizedQuery === optimisticEntry.normalizedQuery
-              ),
-          );
-          const exists = filteredEntries.length < firstPage.entries.length;
-          const newFirstPage: HistoryListResponse = {
-            ...firstPage,
-            entries: [optimisticEntry, ...filteredEntries],
-            total: exists ? firstPage.total : firstPage.total + 1,
-          };
-          return {
-            ...old,
-            pages: [newFirstPage, ...old.pages.slice(1)],
-          };
-        },
-      );
-
-      return { previous };
+      return editHistory(queryClient, (old) => {
+        if (!old.pages.length) return old;
+        const firstPage = old.pages[0];
+        const filteredEntries = firstPage.entries.filter(
+          (e) =>
+            !(
+              e.mode === optimisticEntry.mode &&
+              e.normalizedQuery === optimisticEntry.normalizedQuery
+            ),
+        );
+        const exists = filteredEntries.length < firstPage.entries.length;
+        const newFirstPage: HistoryListResponse = {
+          ...firstPage,
+          entries: [optimisticEntry, ...filteredEntries],
+          total: exists ? firstPage.total : firstPage.total + 1,
+        };
+        return {
+          ...old,
+          pages: [newFirstPage, ...old.pages.slice(1)],
+        };
+      });
     },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) {
-        for (const [key, data] of context.previous) {
-          queryClient.setQueryData(key, data);
-        }
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: SEARCH_HISTORY_KEY });
-    },
+    ...restoreHistory(queryClient),
   });
 }
 
-/**
- * Toggle or set pinned state on a search history entry.
- */
+/** Pins or unpins a history entry. */
 export function useSetPinned() {
   const queryClient = useQueryClient();
 
@@ -193,46 +199,20 @@ export function useSetPinned() {
         },
       );
     },
-    onMutate: async ({ id, pinned }) => {
-      await queryClient.cancelQueries({ queryKey: SEARCH_HISTORY_KEY });
-      const previous = queryClient.getQueriesData({
-        queryKey: SEARCH_HISTORY_KEY,
-      });
-
-      queryClient.setQueriesData<InfiniteData<HistoryListResponse>>(
-        { queryKey: SEARCH_HISTORY_KEY },
-        (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              entries: page.entries.map((e) =>
-                e.id === id ? { ...e, pinned } : e,
-              ),
-            })),
-          };
-        },
-      );
-
-      return { previous };
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) {
-        for (const [key, data] of context.previous) {
-          queryClient.setQueryData(key, data);
-        }
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: SEARCH_HISTORY_KEY });
-    },
+    onMutate: ({ id, pinned }) =>
+      editHistory(queryClient, (old) => ({
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          entries: page.entries.map((e) =>
+            e.id === id ? { ...e, pinned } : e,
+          ),
+        })),
+      })),
+    ...restoreHistory(queryClient),
   });
 }
 
-/**
- * Delete a single search history entry.
- */
 export function useDeleteHistoryEntry() {
   const queryClient = useQueryClient();
 
@@ -245,45 +225,20 @@ export function useDeleteHistoryEntry() {
         },
       );
     },
-    onMutate: async (id: string) => {
-      await queryClient.cancelQueries({ queryKey: SEARCH_HISTORY_KEY });
-      const previous = queryClient.getQueriesData({
-        queryKey: SEARCH_HISTORY_KEY,
-      });
-
-      queryClient.setQueriesData<InfiniteData<HistoryListResponse>>(
-        { queryKey: SEARCH_HISTORY_KEY },
-        (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              entries: page.entries.filter((e) => e.id !== id),
-              total: Math.max(0, page.total - 1),
-            })),
-          };
-        },
-      );
-
-      return { previous };
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) {
-        for (const [key, data] of context.previous) {
-          queryClient.setQueryData(key, data);
-        }
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: SEARCH_HISTORY_KEY });
-    },
+    onMutate: (id: string) =>
+      editHistory(queryClient, (old) => ({
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          entries: page.entries.filter((e) => e.id !== id),
+          total: Math.max(0, page.total - 1),
+        })),
+      })),
+    ...restoreHistory(queryClient),
   });
 }
 
-/**
- * Clear search history, optionally filtered by mode.
- */
+/** Clears the history, or one mode's. */
 export function useClearHistory() {
   const queryClient = useQueryClient();
 

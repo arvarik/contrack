@@ -1,10 +1,7 @@
-// =============================================================================
 // Contracts: duplicates
-// =============================================================================
 // The duplicate routes under /api/dedupe that undo and redo a decision, and
 // the one that says where a merged-away contact lives now. The scan, the
 // suggestion list and the merge log have no contract yet (`UNCONTRACTED`).
-// =============================================================================
 
 import { z } from "zod";
 import { route } from "./route.ts";

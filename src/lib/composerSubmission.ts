@@ -1,20 +1,13 @@
 /**
- * Which part of the editor a save sent, so only that part is cleared.
+ * Which part of the editor a save sent, so only that part is cleared. The
+ * editor stays editable while a save is out, so the composer marks where the
+ * submitted content ends, follows the mark through every edit, and on
+ * success removes only the range before it. A failed save clears nothing.
  *
- * A save is asynchronous and the editor stays editable while it is out. The
- * composer used to clear everything the moment the request started, which
- * lost the note when the request failed and lost anything typed meanwhile
- * when it succeeded. Now the composer marks where the submitted content ends,
- * follows that mark through every edit made while the request is out, and on
- * success removes exactly the range in front of it.
- *
- * The mark is the last cursor position of the submitted document, not the
- * document size. A paragraph's closing token sits after any text typed into
- * that paragraph, so a mark on the size would move past the new text and the
- * clear would take it. Insertions exactly at the mark stay after it, which is
- * what `-1` asks the mapping for.
- *
- * @module lib/composerSubmission
+ * The mark is the last cursor position, not the document size: a
+ * paragraph's closing token sits after text typed into it, so a mark on the
+ * size would take the new text. An insertion at the mark stays after it
+ * (the `-1` in the mapping).
  */
 import type { Editor } from "@tiptap/core";
 import { Selection, type Transaction } from "@tiptap/pm/state";

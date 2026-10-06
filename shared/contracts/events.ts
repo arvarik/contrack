@@ -1,16 +1,10 @@
-// =============================================================================
-// Domain events: one payload schema per event type
-// =============================================================================
-// A write records an event in its own transaction (server/events/record.ts),
-// and `recordEvent` parses the payload with the schema of its type before the
-// row is written. The same schemas will describe outbound webhooks, and the
-// table keeps a row for 30 days, so a payload carries ids, field names and
-// facts about the write. It never carries a name, an email, an address or any
-// other contact data: a subscriber that needs a value reads the row.
+// Domain events: one payload schema per event type. A write records its event
+// in its own transaction (server/events/record.ts), parsed with its type's
+// schema. The table keeps a row for 30 days and the schemas will describe
+// webhooks, so a payload carries ids, field names and facts about the write,
+// never contact data such as a name or an email.
 //
-// Every schema is strict, so a key that is not listed here fails the write in
-// tests rather than reaching the table.
-// =============================================================================
+// Every schema is strict, so an unlisted key fails the write in tests.
 
 import { z } from "zod";
 
@@ -41,15 +35,11 @@ export type EventSubjectType = (typeof EVENT_SUBJECT_TYPES)[number];
 
 export const EVENT_SCHEMAS = {
   /**
-   * A contact was added.
-   *
-   * `origin` says how. `manual` is one contact added in the app, through the
-   * API or by an MCP client. `connector` is one added by a sync. `import` is
-   * one row of a file import, which runs its own duplicate pass for the
-   * whole file. `mention` is a ghost made from a name in a note.
-   *
-   * `autoEnrich` is true only when a person added the contact and the
-   * caller allowed "Enrich new contacts automatically" to research it.
+   * A contact was added. `origin`: `manual` (the app, the API or an MCP
+   * client), `connector` (a sync), `import` (a file row; the import runs its
+   * own duplicate pass) or `mention` (a ghost from a name in a note).
+   * `autoEnrich` is true only when a person added it and the caller allowed
+   * "Enrich new contacts automatically".
    */
   "contact.created": z.strictObject({
     origin: z.enum(["manual", "connector", "import", "mention"]),

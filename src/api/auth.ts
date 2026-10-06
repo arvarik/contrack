@@ -1,24 +1,13 @@
 /**
- * Auth API client.
+ * The auth API, called two ways.
  *
- * Two kinds of endpoint live here and they are called two different ways.
+ * The screens outside the gate (status, setup, sign-in, register, accept an
+ * invitation) use `authFetch`, not the shared client: a signed-out browser
+ * must not announce its own 401 to the gate that is asking. They show the
+ * server's message, because a person reads it while typing.
  *
- * The screens outside the gate — status, setup, sign-in, register, accept an
- * invitation — use `fetch` directly through `authFetch`. The whole point of
- * `/api/auth/status` is that it answers before we know whether we may ask
- * anything else, and routing it through the shared client would mean a
- * signed-out browser announcing its own 401 to the gate that is asking the
- * question. They also surface the server's message rather than a status code,
- * because these are the errors a person reads while typing.
- *
- * Everything the signed-in account manages — the profile, the password, the
- * session list, the personal tokens — goes through `apiJson` like the rest of
- * the app. Those calls sit behind the gate, so a `401` on one of them means
- * the same thing it means anywhere else and has to reach `AuthGate`. Using
- * `authFetch` for them would leave someone whose session expired staring at a
- * token list that failed to load, with no way back to sign-in.
- *
- * @module api/auth
+ * What a signed-in account manages (profile, password, sessions, tokens) goes
+ * through `apiJson`, so a `401` there reaches `AuthGate` as it does anywhere.
  */
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -50,8 +39,7 @@ export interface AccountUser {
   status: string;
   /**
    * 'password' for a real account, 'none' for the local owner an auth-off
-   * instance runs as. Phase 4 uses this to tell "not signed in" apart from
-   * "this instance has no accounts yet".
+   * instance runs as.
    */
   credentialState: string;
   mustChangePassword: boolean;
@@ -67,16 +55,13 @@ interface AuthStatus {
   setupRequired: boolean;
   hasAccounts: boolean;
   user: AccountUser | null;
-  /**
-   * Contacts this device already holds. Only meaningful during setup, where it
-   * is what securing the instance will carry over.
-   */
+  /** Contacts this device holds. During setup, what securing carries over. */
   deviceContacts: number;
   /** An admin has opened this instance to anyone who reaches the sign-in page. */
   registrationOpen: boolean;
   /**
-   * This instance has never been secured, so everything in it belongs to an
-   * account nobody can sign in to. The setup screen says so in as many words.
+   * The instance was never secured, so its data belongs to an account nobody
+   * can sign in to. The setup screen says so.
    */
   localOwnerPresent: boolean;
   /** PUBLIC_URL's origin, or null when the operator has not set it. */
@@ -84,17 +69,11 @@ interface AuthStatus {
   /** An MCP client can sign in with OAuth here. */
   mcpOAuth?: boolean;
   /**
-   * What this instance calls itself, or "" when nobody has named it.
-   *
-   * Unauthenticated, because the sign-in and join screens are where it
-   * matters most and neither has a credential yet. An operator who names
-   * their instance is choosing to show that name to anybody who can reach it.
+   * The instance's name, or "". Sent unauthenticated, for the sign-in and
+   * join screens, so anybody who can reach the instance sees it.
    */
   instanceName: string;
-  /**
-   * The basemap style URL for each palette. Absent on a server older than
-   * this client, where the map uses its built-in defaults.
-   */
+  /** The basemap style URL per palette. Absent: the map's built-in defaults. */
   map?: MapStyleUrls;
   /** True when outgoing mail is configured (via SMTP_URL or settings). */
   mailConfigured?: boolean;
@@ -119,16 +98,10 @@ export interface SessionSummary {
 }
 
 /**
- * Call an ungated auth endpoint, surfacing the server's own error text.
- *
- * A transport failure throws {@link NetworkError} so the sign-in screen can
- * distinguish "wrong password" from "the server is not there", which are very
- * different things to tell someone staring at a login form.
- *
- * `fallback` names what failed, for the case where the server answers with
- * something that is not JSON. It used to be the fixed string "Sign-in failed",
- * which was right while this file only signed people in and would have told
- * somebody redeeming a dead invitation that their password was wrong.
+ * Calls an ungated auth endpoint and throws the server's own error text. A
+ * transport failure throws {@link NetworkError}, so the sign-in screen can
+ * tell "wrong password" from "the server is not there". `fallback` names what
+ * failed when the answer is not JSON.
  */
 export async function authFetch<T>(
   path: string,
@@ -153,12 +126,10 @@ export async function authFetch<T>(
   }
 
   if (!res.ok) {
-    // An `ApiError`, not a plain `Error`, so a caller can act on the status
-    // and the code. The accept-invitation screen has to tell a link the
-    // server does not recognise (404) or one it used to (410) apart from a
-    // typed field it can fix, and it cannot do that from a message string.
-    // Nothing here announces on the window: these are the screens outside the
-    // gate, and a 401 on one of them is the expected answer, not news.
+    // An `ApiError`, so a caller can act on the status: accepting an
+    // invitation tells an unknown link (404) or a spent one (410) from a
+    // field to fix. Nothing announces on the window: outside the gate a 401
+    // is an expected answer.
     const envelope = (
       body as {
         error?: { message?: string; code?: string; requestId?: string };
@@ -210,10 +181,8 @@ export function signOut(): Promise<{ success: boolean }> {
 }
 
 /**
- * Create an account on an instance that has opened registration.
- *
- * Always creates a member. There is no role field to send: an instance that
- * let a stranger pick their own role would not be gated at all.
+ * Creates an account on an instance open to registration. Always a member:
+ * there is no role field to send.
  */
 export function registerAccount(input: {
   email: string;
@@ -229,11 +198,8 @@ export function registerAccount(input: {
 }
 
 /**
- * Redeem an invitation and create the account it was issued for.
- *
- * The secret is single-use. A `404` means the server does not recognise it,
- * and a `410` means it did once — used, revoked, or expired. Both arrive here
- * as the server's own sentence.
+ * Redeems a single-use invitation and creates its account. A `404` is an
+ * unknown secret, a `410` a used, revoked or expired one.
  */
 export function acceptInvitation(input: {
   token: string;
@@ -262,9 +228,7 @@ export function checkInvitation(token: string): Promise<{ ok: true }> {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Behind the gate — routed through the shared client
-// ---------------------------------------------------------------------------
+// Behind the gate, through the shared client
 
 export function updateProfile(input: {
   email?: string;
@@ -293,9 +257,7 @@ export function revokeOtherSessions(): Promise<{ revoked: number }> {
   return apiJson("/auth/sessions", { method: "DELETE" });
 }
 
-// ---------------------------------------------------------------------------
 // Personal API tokens
-// ---------------------------------------------------------------------------
 
 /** The account's tokens, newest first, revoked and expired ones included. */
 export function fetchApiTokens(): Promise<{ tokens: ApiTokenSummary[] }> {
@@ -303,10 +265,8 @@ export function fetchApiTokens(): Promise<{ tokens: ApiTokenSummary[] }> {
 }
 
 /**
- * Mint a token.
- *
- * The plaintext comes back once, in this response. Nothing can read it again,
- * which is why the UI that calls this has to show it before it navigates.
+ * Mints a token. The plaintext comes back once, in this response, so the UI
+ * must show it before it navigates.
  */
 export function createApiToken(input: {
   name: string;
@@ -321,15 +281,11 @@ export function revokeApiToken(id: string): Promise<{ revoked: true }> {
   return apiJson(tokenRoutes.revoke, `/auth/tokens/${encodeURIComponent(id)}`);
 }
 
-// ---------------------------------------------------------------------------
 // Account profile pictures
-// ---------------------------------------------------------------------------
 
 /**
- * Upload and set a new profile picture for the signed-in account.
- *
- * Normalised by the server to a 512 px square JPEG with EXIF orientation
- * applied and metadata stripped.
+ * Sets the account's picture. The server makes it a 512 px square JPEG,
+ * with EXIF orientation applied and metadata stripped.
  */
 export async function uploadAccountAvatar(
   file: File,
@@ -343,12 +299,7 @@ export async function uploadAccountAvatar(
   return res.json();
 }
 
-/**
- * Remove the signed-in account's profile photo.
- *
- * Idempotent. Unlinks the uploaded file on the server and clears the account's
- * avatarUrl, falling back to initials.
- */
+/** Removes the account's picture, back to initials. Idempotent. */
 async function removeAccountAvatar(): Promise<{ user: AccountUser }> {
   const res = await apiFetch("/auth/me/avatar", {
     method: "DELETE",

@@ -1,35 +1,18 @@
 /**
- * fonts.css — self-hosted Manrope + Inter.
+ * Self-hosted Manrope and Inter. A Google Fonts import would send each
+ * reader's IP to Google on every load, fail offline, and block first paint
+ * on a cross-origin round trip.
  *
- * These used to arrive via `@import url(fonts.googleapis.com/...)` at the top
- * of index.css, which was three problems in one:
+ * Both are variable fonts, so one file per subset covers every weight
+ * (Manrope 200–800, Inter 100–900). Every Google subset is declared:
+ * `unicode-range` fetches a subset only when one of its glyphs is painted,
+ * so an English UI downloads only the two latin files (about 71 KB), and a
+ * name in Cyrillic or Greek still renders.
  *
- *   1. Privacy. A self-hosted, local-first CRM sent the user's IP and
- *      User-Agent to Google on every single page load.
- *   2. Offline. The app is explicitly built to work without a network; the
- *      font request is not, so every heading fell back to system sans with
- *      different metrics exactly when the user was relying on it most.
- *   3. Speed. An @import at the top of the CSS graph is render-blocking, so
- *      first paint waited on a cross-origin round trip.
- *
- * Contact avatars were the app's other third-party request, and a worse one —
- * they sent every contact's *name* to api.dicebear.com. They are now generated
- * in-process; see server/services/avatarService. With both changes the app
- * makes no third-party requests at all.
- *
- * Both families are VARIABLE fonts, so one file per subset covers every weight
- * the app uses (Manrope 200–800, Inter 100–900) — no separate file per weight.
- *
- * Every Google subset is declared, not just latin. `unicode-range` makes the
- * browser fetch a subset only when a glyph in that range is actually painted,
- * so an English UI downloads just manrope-latin + inter-latin (~71 KB) while a
- * contact named in Cyrillic or Greek still renders correctly instead of
- * silently falling back.
- *
- * To update: re-fetch
+ * To update: fetch
  *   https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&family=Inter:wght@100..900&display=swap
- * with a Chrome User-Agent (that is what makes Google serve woff2), download
- * each url into public/fonts/, and rewrite the urls to /fonts/<family>-<subset>.woff2.
+ * with a Chrome User-Agent (Google then serves woff2), download each url
+ * into public/fonts/, and rewrite the urls to /fonts/<family>-<subset>.woff2.
  */
 
 /* cyrillic-ext */

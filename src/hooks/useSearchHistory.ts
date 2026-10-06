@@ -1,22 +1,15 @@
 /**
- * useSearchHistory — the account's recent searches, for the palette.
+ * The account's recent searches, for the palette.
  *
- * Design decisions:
- * - Stored on the account, not in the browser. A search history is a list of
- *   the things somebody looked for, and `localStorage` is keyed by origin: two
- *   people using one browser shared the list, and clearing it cleared both.
- *   It also now follows the person to another device, which is what makes
- *   "that query I ran yesterday" work at all.
- * - Case-insensitive deduplication: "VCs in SF" and "vcs in sf" are the same.
- * - Max 20 stored, max 5 displayed in the zero state. The extra headroom keeps
- *   the display list from feeling stale after a few evictions.
- * - No ↑/↓ recall. ↑ on an empty palette used to fill the input with the
- *   last query, and took the key from the list under it. The recent searches
- *   are rows in the empty palette instead.
- * - No restore when the palette opens again. It opens with an empty box each
- *   time. A 30-second restore used to be here, and nothing called it.
- *
- * @module src/hooks/useSearchHistory
+ * - Stored on the account, not in `localStorage`, which is per origin: two
+ *   people on one browser would share it. It follows the person to another
+ *   device.
+ * - Deduplicated without case: "VCs in SF" and "vcs in sf" are one search.
+ * - 20 stored and 5 shown in the zero state, so a few evictions do not leave
+ *   the shown list stale.
+ * - No ↑/↓ recall, which would take the key from the list under it. The
+ *   recent searches are rows in the empty palette instead.
+ * - The palette opens with an empty box each time.
  */
 import { useCallback, useMemo } from "react";
 import { useSearchHistoryList, useRecordSearch } from "../api/searchHistory";
@@ -67,9 +60,8 @@ export const useSearchHistory = () => {
   }, [data, hiddenIds]);
 
   /**
-   * Record a successful search. Calls useRecordSearch with:
-   * - normal and action as palette
-   * - ? q as people with the prefix stripped
+   * Record a search: normal and action modes as `palette`, an AI or `?`
+   * query as `people`, without the `?`.
    */
   const addEntry = useCallback(
     (

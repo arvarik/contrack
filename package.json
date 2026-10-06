@@ -152,7 +152,6 @@
     "@vitest/coverage-v8": "^5.0.2",
     "canvas-confetti": "^1.9.4",
     "chrono-node": "^2.10.1",
-    "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "dompurify": "^3.4.16",
     "fontkit": "^2.0.4",

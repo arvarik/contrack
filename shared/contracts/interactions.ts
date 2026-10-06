@@ -1,12 +1,7 @@
-// =============================================================================
-// Contracts: interactions
-// =============================================================================
-// A contact's timeline and the notes on it: logging one, editing and
-// deleting one, attachments, the briefing, promoting a ghost, and the people
-// a contact shares notes with. The note search's query lives here too: the
-// MCP route `GET /api/interactions/search` and the app's
-// `GET /api/search/interactions` read the same one.
-// =============================================================================
+// Contracts: a contact's timeline and its notes, attachments, the briefing,
+// promoting a ghost, and the people a contact shares notes with. Also the
+// note search's query, which `GET /api/interactions/search` (MCP) and
+// `GET /api/search/interactions` (the app) both read.
 
 import { z } from "zod";
 import { route } from "./route.ts";
@@ -19,9 +14,7 @@ import {
 } from "./common.ts";
 import { contactSchema } from "./contacts.ts";
 
-// =============================================================================
 // Request bodies and queries
-// =============================================================================
 
 /** Payload for POST /interactions. Type is open string. */
 export const interactionCreateSchema = z.object({
@@ -60,13 +53,9 @@ const dayOrInstantSchema = z.union(
 );
 
 /**
- * The query string of a note search.
- *
- * Every field is optional: a question alone, a period alone, or one contact's
- * notes of one kind are all valid searches. `tz` is the caller's IANA zone,
- * which is what makes "last month" the caller's month. `limit` and `offset`
- * arrive as strings and are coerced; a repeated key arrives as an array and is
- * refused.
+ * The query string of a note search. Every field is optional. `tz` is the
+ * caller's IANA zone, so "last month" is the caller's month. `limit` and
+ * `offset` are coerced from strings. A repeated key is refused.
  */
 export const interactionSearchQuerySchema = z.object({
   q: z.string().max(500).optional(),
@@ -105,9 +94,7 @@ const relationshipsQuerySchema = z.object({
     .describe("1 to 200, 50 when absent"),
 });
 
-// =============================================================================
 // Answers
-// =============================================================================
 
 /** An `interactions` row. */
 const interactionColumns = {
@@ -194,9 +181,7 @@ export const globalTimelineEntrySchema = z.strictObject({
   contactThemeColor: z.string().nullable(),
 });
 
-// =============================================================================
 // Routes
-// =============================================================================
 
 export const interactionRoutes = {
   timeline: route({

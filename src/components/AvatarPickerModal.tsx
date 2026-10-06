@@ -24,9 +24,7 @@ import {
 import { Segmented } from "./ui/Segmented";
 import { usePreferences } from "../contexts/PreferencesContext";
 
-// ---------------------------------------------------------------------------
-// Dicebear cartoon presets — a curated set of fun seeds across 3 styles
-// ---------------------------------------------------------------------------
+// Dicebear cartoon presets: chosen seeds across 3 styles
 
 const STYLES = [
   {
@@ -72,47 +70,30 @@ const SEEDS = [
 ];
 
 /**
- * Point at the app's own avatar route rather than `api.dicebear.com`.
- *
- * Every per-style parameter this function used to assemble — friendly mouths,
- * skin tone, the pastel backgrounds — now lives server-side in
- * avatarService, applied per style at render time. That removes the failure
- * mode the old comment warned about (passing a parameter a style does not
- * support produced a broken SVG), because the caller no longer chooses
- * parameters at all.
- *
- * `bg=1` asks for the pastel wash, which suits this picker grid; avatars in
- * the contact list stay transparent.
+ * The app's own avatar route, not `api.dicebear.com`. avatarService applies
+ * each style's parameters, so a caller cannot pass one a style does not
+ * support. `bg=1` asks for the pastel wash, for this grid only.
  */
 function avatarUrl(style: AvatarStyle, seed: string) {
   return `/api/avatar/${style}?seed=${encodeURIComponent(seed)}&bg=1`;
 }
 
 /**
- * The same avatar, drawn for the palette on screen.
- *
- * Kept separate from {@link avatarUrl} on purpose. The URL this picker SAVES
- * must not name a theme: it is stored on the contact and read back for ever,
- * so a `theme=dark` in it would pin that person's avatar to the dark palette
- * for every viewer on every device. The theme belongs to the preview only.
+ * The same avatar, for the palette on screen. Apart from {@link avatarUrl}
+ * because the saved URL must not name a theme: it would pin the avatar to
+ * that palette for every viewer.
  */
 function previewUrl(url: string, theme?: "light" | "dark") {
   return theme ? `${url}&theme=${theme}` : url;
 }
-
-// ---------------------------------------------------------------------------
-// AvatarPickerModal
-// ---------------------------------------------------------------------------
 
 interface Props {
   isOpen: boolean;
   onClose: () => void;
   contactId: string;
   /**
-   * The control that opened the picker: the pencil on the contact's avatar.
-   * Focus goes back to it when the picker closes, however it closes. Without
-   * it, `Modal` returns focus to wherever it was on open, and Safari does not
-   * focus a button it clicks, so that could be the page.
+   * The pencil that opened the picker. Focus goes back to it on close:
+   * Safari does not focus a clicked button.
    */
   returnFocusRef?: RefObject<HTMLElement | null>;
 }
@@ -123,9 +104,8 @@ export const AvatarPickerModal = ({
   contactId,
   returnFocusRef,
 }: Props) => {
-  // The grid draws its wash for the palette on screen. `undefined` under the
-  // default `system` theme, where the image answers `prefers-color-scheme`
-  // itself and needs no parameter.
+  // The grid's wash follows the palette on screen. Under `system` the image
+  // answers `prefers-color-scheme` itself.
   const { preferences, mode } = usePreferences();
   const pinnedTheme = preferences.theme === "system" ? undefined : mode;
   const [tab, setTab] = useState<"avatar" | "upload">("avatar");
@@ -154,8 +134,8 @@ export const AvatarPickerModal = ({
     accept: { "image/*": [] },
     maxFiles: 1,
     maxSize: 10 * 1024 * 1024,
-    // Paste-to-upload is on by default since react-dropzone 19.2. Off, as
-    // before, until it is a decision rather than a side effect.
+    // react-dropzone turns paste-to-upload on by default. Off until it is a
+    // decision.
     noPaste: true,
   });
 

@@ -1,11 +1,4 @@
-/**
- * Connector Management API Hooks — React Query hooks for sync connectors.
- *
- * Provides hooks to list supported kinds, list configured connectors, create/test/update/delete
- * connectors, trigger manual sync runs, and inspect run histories.
- *
- * @module api/connectors
- */
+/** Hooks for sync connectors: setup, tests, manual runs and run history. */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, apiJson, jsonBody } from "./client";

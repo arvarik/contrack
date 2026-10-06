@@ -1,32 +1,15 @@
 /**
- * ScoreRingAvatar: a contact's picture, with a ring when there is a score to
- * show.
+ * A contact's picture, with a ring for the relationship score. Three states,
+ * from `scoreView` in `shared/scoreBand.ts`:
  *
- * The ring says one thing, and it is the relationship score. A score belongs
- * only to a contact somebody tracks, so the ring has three states. They come
- * from `scoreView` in `shared/scoreBand.ts`, which every surface reads:
+ * 1. `untracked`: no ring. The picture fills the box.
+ * 2. `unscored`: tracked, nothing logged. The faint track with no arc.
+ * 3. `scored`: an arc of the score's percent, clockwise from the top, in the
+ *    band's tone.
  *
- * 1. `untracked`: nobody chose to keep up with this contact. No ring and no
- *    track. The picture fills the whole box, so a list of untracked people
- *    reads as a list of faces and not as a wall of empty circles.
- * 2. `unscored`: tracked, with nothing logged yet. The faint track shows with
- *    no arc, and the words say "No interactions yet".
- * 3. `scored`: the arc length is the score. A score of 72 draws 72 percent of
- *    the circle, clockwise from the top, over the track. The arc colour is
- *    the band: Strong in the success colour, Fading in warning, At risk in
- *    error.
- *
- * Colour is never the only sign. The ring is an image named by the score in
- * words ("Score 72, strong"), and the same words are its tooltip.
- *
- * The ring is 2 px in a list and 3.5 px in the contact header. A photo shows
- * on no tint: the grey disc behind the picture is only for the drawn
- * fallback, which has transparent corners.
- *
- * The contact's colour stays on the contact page as its accent, and nowhere
- * else.
- *
- * @module components/ScoreRingAvatar
+ * The ring is an image named in words ("Score 72, strong"), also its
+ * tooltip. It is 2 px in a list and 3.5 px in the contact header. The gray
+ * disc behind the picture is for the drawn fallback only.
  */
 import React, { useState } from "react";
 
@@ -43,9 +26,7 @@ export interface ScoreRingAvatarProps {
     name: string;
     avatarUrl?: string | null;
     /**
-     * A person chose to keep up with this contact. False draws the picture
-     * alone. The field is required, so the compiler names every caller that
-     * has to pass the flag.
+     * False draws the picture alone. Required, so every caller must pass it.
      */
     isTracked: boolean;
     relationshipScore?: number | null;
@@ -56,9 +37,8 @@ export interface ScoreRingAvatarProps {
   /** `list` draws a 2 px ring and `header` a 3.5 px ring. */
   ring?: keyof typeof RING_WIDTH;
   /**
-   * True when something beside the avatar already says the score, such as a
-   * list row whose own name carries it. The ring is then hidden from a screen
-   * reader and has no tooltip, so the score is not said twice.
+   * True when something beside the avatar already says the score. The ring
+   * is then hidden from a screen reader and has no tooltip.
    */
   decorative?: boolean;
 }
@@ -104,8 +84,7 @@ export const ScoreRingAvatar: React.FC<ScoreRingAvatarProps> = ({
           aria-hidden="true"
           className="absolute inset-0 -rotate-90 pointer-events-none"
         >
-          {/* The track: the whole circle, so an empty or short arc still reads
-              as a ring with room left in it. */}
+          {/* The track: the whole circle, so a short arc reads as a ring. */}
           <circle
             cx={size / 2}
             cy={size / 2}
@@ -140,9 +119,9 @@ export const ScoreRingAvatar: React.FC<ScoreRingAvatarProps> = ({
         )}
         style={{ width: picture, height: picture }}
       >
-        {/* The name is always printed beside the picture, so the picture
-            itself says nothing more. A loaded picture is held in memory, so
-            a list built again paints it with its row (`keptImages`). */}
+        {/* The name is printed beside it, so the picture says nothing more.
+            A loaded picture is kept, so a rebuilt list paints it at once
+            (`keptImages`). */}
         {broken ? (
           <span
             aria-hidden="true"

@@ -1,19 +1,10 @@
 /**
- * The left pane's width, from `lg` up: the Network list beside the open
- * contact, and the Settings list beside a settings page.
+ * The left pane's width from `lg`, shared by the Network list and the
+ * Settings list: one width, one handle, one stored value.
  *
- * The two panes share one width, one handle and one stored value, so moving
- * between Network and Settings leaves the page beside the pane where it was.
- * A person drags the pane's edge (`ResizeHandle`) between 300 and 480 px,
- * around the 350 px it opens at. At 300 the Network header still holds the
- * title and its three actions, the search box holds the sort menu, and a row
- * holds a name, a company and the follow-up glyph. Past 480 a row gains only
- * empty space, and every pixel comes out of the page beside it.
- *
- * The page keeps 560 px, so on a 1024 px window the pane stops at 400 and
- * the page stays the wider of the two. From 1104 px the pane reaches 480.
- *
- * @module components/layout/paneWidth
+ * 300 to 480 px, opening at 350. At 300 the Network header and a row still
+ * fit. Past 480 a row gains only empty space. The page keeps 560 px, so on a
+ * 1024 px window the pane stops at 400.
  */
 import { readPaneWidth, type PaneWidthBounds } from "../../hooks/usePaneWidth";
 
@@ -26,9 +17,8 @@ export const LEFT_PANE_WIDTH: PaneWidthBounds = {
 };
 
 /**
- * Everything `ResizeHandle` needs, spread onto it. The key keeps its old
- * name, from when only the Network list could be resized, so a width a
- * person chose then is still theirs.
+ * Everything `ResizeHandle` needs, spread onto it. The storage key names
+ * the Network list, so widths already stored under it stay valid.
  */
 export const LEFT_PANE = {
   ...LEFT_PANE_WIDTH,

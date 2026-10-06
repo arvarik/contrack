@@ -1,24 +1,17 @@
 /**
- * useCorvidLife — a perched corvid that lives.
+ * A perched corvid that lives. Give a mark `alive` and this runs a
+ * `CorvidBrain` for it: blinks, looks about, preens, stretches, caws without
+ * a sound, and falls asleep when nobody has touched the app for a while.
+ * Only the bird's own paths are repainted. The ring never moves.
  *
- * Give a mark `alive` and this runs a `CorvidBrain` for it: blinks, looks
- * about, preens, shakes its feathers, stretches, caws without a sound, and
- * falls asleep when nobody has touched the app for a while. The ring never
- * moves. Only the bird's own paths are repainted.
+ * Between acts it sleeps on one timer, and it draws frames only while
+ * something moves. It stops while the tab is hidden, while the mark is out of
+ * view, while the bird is out flying, and at motion level "off".
  *
- * It costs nothing while the bird is still. Between acts it sleeps on one
- * timer until the next thing is due, and it draws frames only while
- * something is actually moving. It stops altogether while the tab is hidden,
- * while the mark is out of view, while the bird is away flying, and at
- * motion level "off".
- *
- * One bird is the app's own: the sidebar perch passes `primary`. That one
- * listens to the whole app. It answers `corvidReact()`, notices
- * `noteCorvidActivity()`, watches the pointer when it comes near, and
- * notices when the person has gone quiet. Any other living mark answers
- * only a reaction addressed to it, and its own controls.
- *
- * @module hooks/useCorvidLife
+ * The sidebar perch passes `primary`: that bird answers `corvidReact()`,
+ * notices `noteCorvidActivity()`, watches a near pointer and notices when
+ * the person goes quiet. Any other living mark answers only a reaction
+ * addressed to it, and its own controls.
  */
 import { useEffect, useMemo, type RefObject } from "react";
 import { CORVID_EYE } from "../assets/corvidPaths";

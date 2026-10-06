@@ -1,32 +1,20 @@
 /**
- * useLongPress — Cross-platform long-press gesture for mobile context menus.
- *
- * Fires `callback` after the user holds a touch for `delay` ms without moving.
- * Motion cancels the timer to prevent accidental triggers during scroll.
- * Also triggers optional haptic feedback on Android via Vibration API.
- *
- * Returns event handlers to spread onto any touchable element:
- *   const longPress = useLongPress(() => openContextMenu(), 500);
- *   <div {...longPress}>...</div>
- *
- * Notes:
- * - Uses passive touch listeners for scroll performance
- * - preventDefault() is NOT called (would break scrolling)
- * - The callback receives the touch coordinates for positioning a context menu
- * - Cleans up timer on unmount via empty-dep useEffect
+ * A long press on a touch screen, for a context menu. Fires `callback` with
+ * the touch's coordinates after a touch held `delay` ms without moving. A
+ * move cancels it, so a scroll never fires it. The touch handlers never call
+ * `preventDefault()`, which would break scrolling. Android also vibrates.
  *
  * What the finger does after the press belongs to the press:
  *
- * 1. The lift sends a click. It goes to whatever is under the finger then,
- *    which is not always the element pressed: a press that starts select
- *    mode can move the rows. So the next click anywhere in the page is
- *    swallowed (`swallowNextClick`). A new touch, or a short wait after the
- *    lift, ends the wait, so a later tap is never lost.
- * 2. Android answers a long press with `contextmenu`, and iOS with its own
- *    link preview. The press is the touch's menu, so a `contextmenu` from a
- *    touch is refused here (`onContextMenuCapture`): the desktop menu and
- *    the browser's menu stay shut. A right click and the menu key still
- *    open it. The element sets `-webkit-touch-callout: none` for iOS.
+ * 1. The lift sends a click to whatever is under the finger then, and a
+ *    press that starts select mode can move the rows. So the next click in
+ *    the page is swallowed (`swallowNextClick`). A new touch, or a short wait
+ *    after the lift, ends the wait, so a later tap is never lost.
+ * 2. Android answers a long press with `contextmenu`, and iOS with its link
+ *    preview. A `contextmenu` from a touch is refused here
+ *    (`onContextMenuCapture`), so the desktop menu and the browser's stay
+ *    shut. A right click and the menu key still open it. The element sets
+ *    `-webkit-touch-callout: none` for iOS.
  */
 import React, { useRef, useCallback, useEffect } from "react";
 

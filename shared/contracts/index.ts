@@ -1,6 +1,4 @@
-// =============================================================================
 // Contracts: the registry
-// =============================================================================
 // One contract for each route that has one, looked up by the key the route
 // manifest uses: `"GET /api/contacts/:id"`. The response check in
 // `tests/integration/helpers.ts` and `scripts/openapi.ts` read it.
@@ -9,7 +7,6 @@
 // has no contract yet. `tests/integration/contracts.test.ts` holds the two
 // lists to the manifest and holds this one's length to
 // `UNCONTRACTED_CEILING`, so a new route gets a contract.
-// =============================================================================
 
 import { actionItemRoutes } from "./actionItems.ts";
 import { authRoutes } from "./auth.ts";
@@ -214,8 +211,6 @@ export const UNCONTRACTED: readonly string[] = [
 
 /**
  * How many entries `UNCONTRACTED` holds. The test fails when the two differ,
- * so lower it when you contract a route. A new route gets a contract: listing
- * it here instead means raising this number, which is a decision for the
- * review.
+ * so lower it when you contract a route. Raising it is a review decision.
  */
 export const UNCONTRACTED_CEILING = 141;

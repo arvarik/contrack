@@ -1,10 +1,4 @@
-/**
- * ImportModal — Dialog wrapper for ImportPanel.
- *
- * Opened from the contact list. Renders ImportPanel inside a standard Modal.
- *
- * @module components/ImportModal
- */
+/** ImportPanel in a dialog, opened from the contact list. */
 import { Modal } from "./ui/Modal";
 import { ImportPanel } from "./ImportPanel";
 import type { ImportSummary } from "../api/imports";

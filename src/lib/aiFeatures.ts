@@ -1,20 +1,10 @@
 /**
- * aiFeatures: what each AI feature uses, in one table.
- *
- * Models are chosen by role on Settings → Administration → AI (the Fast model, the
- * Strong model, the embedding model), but people think by feature: "why
- * did research find nothing", "what reads my notes". This table maps one to
- * the other, and every place that says which model does what reads it:
- *
- *   - the "What each feature uses" list on Settings → Administration → AI, with a link
- *     from each part to its control
- *   - the same list, read-only, on Privacy and AI
- *   - the "Used by" line under each model on Settings → Administration → AI
- *
- * `featureStatus` says whether a feature works now, and if not, why, from
- * the same settings view the pages read.
- *
- * @module lib/aiFeatures
+ * What each AI feature uses, in one table. Models are chosen by role (Fast,
+ * Strong, embedding), but people think by feature, so this maps one to the
+ * other for every place that says which model does what: the "What each
+ * feature uses" list on the AI page and on Privacy and AI, and the "Used by"
+ * line under each model. `featureStatus` says whether a feature works now,
+ * and why not.
  */
 import type { AISettings } from "../api/aiSettings";
 import {

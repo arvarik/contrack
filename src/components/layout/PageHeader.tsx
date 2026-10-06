@@ -1,35 +1,20 @@
 /**
- * PageHeader: the top of every page, in one layout.
- *
- * Six pages drew six headers: a title beside icon buttons, a 13 px label
- * over a 32 px date, an icon tile with a title on a grey band, the same on a
- * band with a bottom border, a title over an intro, and a back link over an
- * icon tile. The titles sat at different heights and sizes, so moving between
- * pages moved the eye.
- *
- * One layout now:
+ * The top of every page, in one layout:
  *
  *   back link
  *   Title  suffix                                        actions
  *   One line of description
  *   children (a search box, filters, a form)
  *
- * The title is the page's name and its `h1`, the same size and ink on every
- * page. A suffix continues the title line in the variant ink, at the same
- * size, for the one fact a page leads with: on Pulse, the day. In a narrow
- * header the suffix takes its own line under the title and the actions
- * (`TITLE_GRID`). The Network list uses an `h2` when an open contact's name
- * is the page's `h1`.
+ * The title is the page's `h1`, the same on every page (an `h2` in the
+ * Network list when an open contact's name is the `h1`). A suffix is the one
+ * fact a page leads with, such as the day on Pulse. In a narrow header it
+ * takes its own line (`TITLE_GRID`).
  *
- * No band, no icon tile and no border: the header sits on the page's own
- * surface. The page owns the padding (`PAGE_X`, `PAGE_TOP` in
- * `src/lib/styles.ts`), so every title starts the same distance from the top.
- *
- * The title is 24 px on a phone and 30 px from `md` on every page, the
- * narrow Network pane too. The header is a size container (`@container`)
- * for the rest: the description grows a step, and a suffix moves up onto the
- * title's line, when the header, not the window, is wide. A header sits in
- * a column, full width, so the inline-size containment costs nothing.
+ * No band, tile or border. The page owns the padding (`PAGE_X`, `PAGE_TOP`).
+ * The title is 24 px on a phone and 30 px from `md`. The header is a size
+ * container, so the description and suffix follow the header's width, not
+ * the window's.
  */
 import React from "react";
 import { Link } from "react-router-dom";
@@ -131,12 +116,9 @@ export const PageHeader = ({
       {suffix === undefined ? (
         <div className="flex flex-col gap-1">
           {backLink}
-          {/* The row aligns to the top, so every page's title starts at the
-              same height whatever sits beside it. The title grows into the
-              row and shrinks to its longest word (no `min-w-0` on its box,
-              on purpose), so the actions stay at the right. They drop under
-              it only when that word and the actions do not fit one row: a
-              phone. */}
+          {/* Top-aligned, so every title starts at the same height. The
+              title shrinks to its longest word (no `min-w-0`, on purpose),
+              so the actions drop under it only when both do not fit. */}
           <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
             <div className="flex-1">
               <Title className={TITLE}>{title}</Title>
@@ -147,16 +129,13 @@ export const PageHeader = ({
               </div>
             )}
           </div>
-          {/* Under the row, the page's width: beside a header button it was
-              squeezed into half of a phone's. */}
+          {/* Under the row, at the page's width. */}
           {description && <p className={PAGE_DESCRIPTION}>{description}</p>}
         </div>
       ) : (
         <div className="flex flex-col gap-1">
           {backLink}
-          {/* The source order stays title, suffix, description, actions,
-              the same as the row above: the grid moves the cells, not the
-              reading order. */}
+          {/* The grid moves the cells, not the reading order. */}
           <div className={TITLE_GRID}>
             <Title className={cn(TITLE, TITLE_GRID_TITLE)}>{title}</Title>
             <p className={cn(PAGE_TITLE_SUFFIX, TITLE_GRID_SUFFIX)}>{suffix}</p>

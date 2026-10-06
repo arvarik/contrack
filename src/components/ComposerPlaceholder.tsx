@@ -1,22 +1,10 @@
 /**
- * ComposerPlaceholder — what stands in while the composer's chunk loads.
+ * What stands in while the composer's chunk (TipTap and ProseMirror) loads.
+ * It has the composer's shape in both its forms, so the timeline below does
+ * not jump when the editor mounts.
  *
- * The composer pulls in TipTap and ProseMirror, which together dominate the
- * contact detail bundle. Loading it lazily takes that weight off the critical
- * path for the app's most-visited screen, but a lazy boundary is only an
- * improvement if the placeholder is the *same shape* as what replaces it.
- * A spinner, or nothing, would make the timeline below jump the moment the
- * editor mounted, which trades a slow screen for a janky one.
- *
- * So this mirrors the composer's real geometry, in both its forms: the same
- * editor area height, the same next-action row, the same action bar with the
- * type control on the left and Save on the right. The swap is invisible apart
- * from the text becoming typeable.
- *
- * It is also deliberately inert rather than a fake input. Focusing a textarea
- * that is about to be replaced would steal the caret and then lose it mid
- * keystroke. A placeholder that quietly cannot be typed into for ~100ms is
- * better than one that accepts a keystroke and drops it.
+ * Inert, not a fake input: a field about to be replaced would drop a
+ * keystroke typed into it.
  */
 import { CalendarClock } from "lucide-react";
 import { COMPOSER } from "../lib/styles";
@@ -28,11 +16,7 @@ export const ComposerPlaceholder = ({
 }: {
   /** The quick interaction dialog's form, with no card around it. */
   compact?: boolean;
-  /**
-   * The narrow contact layout's composer, which opens as one line. Drawn
-   * full height, the placeholder pushed the timeline down by 200 px and the
-   * real composer then pulled it back up.
-   */
+  /** The narrow contact layout's composer, which opens as one line. */
   collapsed?: boolean;
 }) =>
   collapsed ? (
@@ -41,11 +25,9 @@ export const ComposerPlaceholder = ({
       aria-busy="true"
       aria-label="Loading the note composer"
     >
-      {/* The editor's own type and paragraph margins, so the line is as tall
-          as the loaded composer's (`composer-line`: 16 px on a touch screen,
-          as index.css makes the editor). The variant ink and no fade: text
-          on screen must pass contrast, unlike the editor's own placeholder,
-          which is a decoration. */}
+      {/* The editor's own type and margins, so the line is as tall as the
+          loaded composer's (`composer-line`). The variant ink, not faded:
+          text on screen must pass contrast. */}
       <div className="composer-line px-5 py-3 prose prose-sm max-w-none text-base sm:text-sm prose-p:my-1">
         <p className="text-on-surface-variant">Write a quick note…</p>
       </div>
@@ -62,8 +44,7 @@ export const ComposerPlaceholder = ({
     >
       {/* Editor area: the composer's padding and typing height. */}
       <div className={cn("flex-1", compact ? "px-5 pt-2" : "p-5")}>
-        {/* 80px matches the editor's own `min-h-[80px]` prose class exactly,
-          so the swap is a pixel-for-pixel replacement. */}
+        {/* 80px matches the editor's own `min-h-[80px]`. */}
         <div
           className={cn(
             "min-h-[80px] flex items-start pt-1",

@@ -1,10 +1,4 @@
-/**
- * SignIn — username-or-email + password.
- *
- * One identifier field rather than a choice between two, because making
- * someone decide which of their own identifiers to type is a question with no
- * useful answer; the server accepts either.
- */
+/** Sign-in: one field for a username or an email (the server takes either), and a password. */
 import React, { useEffect, useRef, useState } from "react";
 import { LogIn, Loader2, Mail, ArrowLeft } from "lucide-react";
 import { signIn } from "../../api/auth";
@@ -193,10 +187,8 @@ export const SignIn = ({
       } catch {}
       onSignedIn();
     } catch (err) {
-      // Sign-in shares one per-address budget with register, accept-
-      // invitation and change-password. A refusal for that reason is not a
-      // wrong password, and saying "incorrect" would send somebody hunting
-      // for a password that was right.
+      // A rate limit (shared with register, join and change-password) is not
+      // a wrong password, so it says so.
       setError(authErrorText(err, "Could not sign in"));
       // Clear only the password. Retyping a username you already got right is
       // busywork, and the failure is almost always the other field.
@@ -283,9 +275,8 @@ export const SignIn = ({
           autoComplete={isPasskeySupported ? "username webauthn" : "username"}
           {...NO_AUTOCORRECT}
           required
-          // The sign-in screen is the whole page and has one starting point.
-          // Focus password if prefilled; otherwise start on identifier. Not
-          // on a touch screen, where focus opens the keyboard.
+          // The identifier takes the focus unless it is prefilled (then the
+          // password does). Not on a touch screen, where focus opens the keyboard.
           // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus={!savedIdentifier && !touchFirst()}
         />

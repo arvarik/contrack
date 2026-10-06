@@ -1,32 +1,20 @@
 /**
- * corvidMotion — how the corvid moves when it is not flying.
+ * How the corvid moves when it is not flying.
  *
- * A motion is a short piece of choreography: a few keyframed tracks on the
- * numbers in `CorvidPose`, with a length. `sampleMotion` plays one at a time
- * `t` on top of a pose. Motions are made fresh each time by a maker that
- * takes a random source, so no two blinks, preens or head turns are quite
- * the same length, reach or rhythm. That is most of what makes the bird look
- * alive rather than looped:
+ * A motion is a few keyframed tracks on the numbers in `CorvidPose`, with a
+ * length. `sampleMotion` plays one at a time `t` on top of a pose. A maker
+ * draws each motion fresh from a random source, so no two blinks, preens or
+ * head turns match: the head moves in quick turns with still holds between,
+ * and some motions repeat a random number of times. The brain
+ * (`corvidBrain.ts`) decides what plays and when.
  *
- * - The head moves the way a bird's does, in quick turns with still holds
- *   between them, not in smooth sweeps.
- * - Timings are drawn from ranges, and some motions repeat a random number of
- *   times: two to four nibbles in a preen, one to three bobs in a caw.
- * - Nothing here keeps time or state. The brain (`corvidBrain.ts`) decides
- *   what to play and when; this file only says what each motion looks like.
- *
- * Tracks add to the pose, except the four fields that are proportions, which
- * multiply: the eye's openness, the two facings and the wing's turn. A blink
- * therefore closes whatever eye the bird has, and a head turn turns whatever
- * way the head was facing.
- *
- * @module lib/corvidMotion
+ * Tracks add to the pose, except the four proportions, which multiply: the
+ * eye's openness, the two facings and the wing's turn. So a blink closes
+ * whatever eye the bird has, and a head turn turns whichever way it faced.
  */
 import type { CorvidPose } from "../assets/corvidRig";
 
-// ---------------------------------------------------------------------------
 // Randomness
-// ---------------------------------------------------------------------------
 
 /** A source of numbers in [0, 1). `Math.random` is one. */
 export type Rng = () => number;
@@ -73,9 +61,7 @@ export function pickWeighted<T>(
   return items[items.length - 1]![0];
 }
 
-// ---------------------------------------------------------------------------
 // Easing
-// ---------------------------------------------------------------------------
 
 type Easing = (t: number) => number;
 
@@ -91,9 +77,7 @@ export const easeOutBack: Easing = (t) => {
   return 1 + 2.2 * x * x * x + 1.2 * x * x;
 };
 
-// ---------------------------------------------------------------------------
 // Tracks and motions
-// ---------------------------------------------------------------------------
 
 /** One keyframe: the track reaches `value` at `at` ms, arriving by `ease`. */
 interface Key {
@@ -162,13 +146,11 @@ export function sampleMotion(
 
 /**
  * Tracks written as a list of moments, each setting some fields, so a
- * choreography reads like the stage directions it is.
+ * choreography reads like stage directions.
  *
- * A moment with nothing to set, `set: {}`, is a hold: every field keeps the
- * value it has until that moment, and only then moves on to the next one.
- * Tracks ease from key to key, so a hold needs a key of its own. Without one,
- * a head turned at 100 ms and turned back at 900 ms swept across the whole
- * 800 ms, and the snap and the hold of a glance became one slow turn.
+ * A moment with `set: {}` is a hold: every field keeps its value until that
+ * moment. Tracks ease from key to key, so a hold needs a key of its own, or
+ * a head turned at 100 ms and back at 900 ms sweeps across all 800 ms.
  */
 export function choreograph(
   moments: readonly { at: number; ease?: Easing; set: Partial<CorvidPose> }[],
@@ -211,9 +193,7 @@ const motion = (
   tracks,
 });
 
-// ---------------------------------------------------------------------------
 // The repertoire
-// ---------------------------------------------------------------------------
 
 export type MotionName =
   | "blink"

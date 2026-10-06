@@ -1,6 +1,4 @@
-// =============================================================================
 // Contracts: one route's contract, and the types read from it
-// =============================================================================
 // A contract names a route the way the route manifest does, and holds Zod
 // schemas for what the route reads and what it answers. The server validates
 // requests with them, the client takes its types from them, the MCP tools
@@ -8,7 +6,6 @@
 //
 // Kept apart from `index.ts`, which imports every area file for the
 // registry, so an area file can use `route()` without importing the others.
-// =============================================================================
 
 import type { z } from "zod";
 

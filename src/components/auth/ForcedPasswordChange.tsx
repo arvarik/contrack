@@ -1,13 +1,7 @@
 /**
- * ForcedPasswordChange — the screen an administrator's password reset leads to.
- *
- * An admin who creates an account, or resets one, hands over a password they
- * chose and can still read. Until it is replaced, the server refuses every
- * data route with `403 PASSWORD_CHANGE_REQUIRED`, so there is nothing useful
- * behind this screen and no reason to let anyone past it.
- *
- * It is a full-page screen rather than a modal for that reason: a modal
- * implies the page behind it still works, and it does not.
+ * The screen after an admin creates or resets an account's password. Until
+ * it is replaced, every data route answers `403 PASSWORD_CHANGE_REQUIRED`,
+ * so this is a full page, not a modal over a page that cannot work.
  */
 import React, { useState } from "react";
 import { KeyRound, Loader2, LogOut } from "lucide-react";
@@ -59,10 +53,8 @@ export const ForcedPasswordChange = ({
       await changePassword({ currentPassword: current, newPassword: next });
       await onChanged();
     } catch (err) {
-      // Sign-in, register, accept-invitation and this screen share one
-      // per-address budget on the server, so a few wrong attempts can
-      // produce a rate limit rather than a rejection. Saying which it is
-      // stops somebody retrying into a wall.
+      // A rate limit (shared with sign-in, register and join) says so, so
+      // nobody retries into it.
       setFormError(authErrorText(err, "Could not change the password"));
       setCurrent("");
       setBusy(false);
@@ -115,8 +107,7 @@ export const ForcedPasswordChange = ({
           required
           revealable
           capsLockHint
-          // The whole page has one thing to do on it. Not on a touch screen,
-          // where focus opens the keyboard over the form.
+          // Not on a touch screen, where focus opens the keyboard.
           // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus={!touchFirst()}
         />

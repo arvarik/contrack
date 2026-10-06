@@ -1,96 +1,35 @@
 /**
- * queryConfig.ts — Centralized React Query cache configuration.
- *
- * WHY THIS FILE EXISTS:
- * Caching bugs are notoriously hard to debug because stale data looks correct
- * until it doesn't. This module centralizes all staleTime values in one place
- * so they can be audited at a glance, and provides a diagnostic logger that
- * reports the contacts prefetch to the browser console.
- *
- * HOW TO USE:
- * 1. Import `STALE_TIMES` and apply to `useQuery({ staleTime: STALE_TIMES.contactDetail })`
- * 2. Import `logCacheEvent` for manual diagnostics in development
- *
- * RULES:
- * - The global default (30s) is set in `main.tsx`. Only ADD overrides here
- *   for queries that need longer freshness windows.
- * - All mutations already call `invalidateQueries()` which bypasses staleTime.
- *   staleTime only controls *passive* refetches (component mounts, focus, etc).
- * - If you add a new query hook, check if it needs a custom staleTime here.
- *
- * @module lib/queryConfig
+ * React Query stale times in one place, and an opt-in cache logger. The
+ * global default (30 s) is in `main.tsx`, and only longer windows belong
+ * here. A mutation invalidates its queries, which ignores staleTime, so these
+ * only govern passive refetches: a mount, a window focus.
  */
 
-// =============================================================================
-// Stale Time Constants
-// =============================================================================
-// Each value is in milliseconds. The comment explains *why* that specific
-// duration was chosen — not just what it does. This makes it auditable.
-//
-// Global default (from main.tsx):  30_000 (30 seconds)
-// =============================================================================
-
 export const STALE_TIMES = {
-  /**
-   * Individual contact detail page.
-   * WHY 60s: Once viewing a contact, the data only changes when the user
-   * themselves edits it (single-user app). 60s prevents refetching when
-   * toggling between list ↔ detail ↔ list. Mutations invalidate immediately.
-   */
+  /** A contact's page. 60 s stops a refetch on every list and detail switch. */
   contactDetail: 60_000,
 
-  /**
-   * Saved map views.
-   * WHY 60s: Views change only on explicit save/rename/delete.
-   */
+  /** Saved map views, which change only on a save, a rename or a delete. */
   mapViews: 60_000,
 
-  /**
-   * Contact lists (sidebar list panel).
-   * WHY 60s: Lists change only on explicit create/reorder/delete, which
-   * all fire invalidateQueries. 60s prevents list refetch on sidebar toggle.
-   */
+  /** Contact lists, which change only through mutations that invalidate them. */
   lists: 60_000,
 
-  /**
-   * List member contacts (contacts within a specific list).
-   * WHY 60s: Same rationale as lists — membership changes via explicit
-   * add/remove mutations that invalidate immediately.
-   */
+  /** A list's members, for the same reason as `lists`. */
   listContacts: 60_000,
 
-  /**
-   * Dashboard aggregate data (relationship pulse metrics).
-   * WHY 2min: The dashboard aggregates 10+ SQL queries across all contacts.
-   * These metrics (at-risk count, industry composition) change slowly.
-   * 2 minutes prevents re-querying when navigating away and back.
-   */
+  /** Pulse's aggregates: many queries over every contact, and slow to change. */
   dashboard: 2 * 60_000,
 
-  /**
-   * Timeline interactions for a specific contact.
-   * WHY 30s: Timeline data changes when the user logs an interaction,
-   * which triggers explicit invalidation. Between logs, 30s is safe.
-   * Uses global default — listed here for documentation completeness.
-   */
+  /** A contact's timeline, at the global default. Logging invalidates it. */
   timeline: 30_000,
 
-  /**
-   * Archived contacts list.
-   * WHY 2min: Rarely accessed, changes only on explicit archive/unarchive.
-   */
+  /** Archived contacts: rarely read, and changed only by an archive or a restore. */
   archived: 2 * 60_000,
 } as const;
 
-// =============================================================================
-// Cache Diagnostic Logger
-// =============================================================================
-// Opt-in logging for debugging cache behavior in development. When enabled,
-// logs the contacts prefetch to the browser console with structured
-// metadata.
-//
-// Enable in browser console: window.__CONTRACK_CACHE_DEBUG = true
-// =============================================================================
+// The cache logger. Turn it on in the browser console with
+// `window.__CONTRACK_CACHE_DEBUG = true`.
 
 type CacheEventType = "prefetch";
 
@@ -100,18 +39,11 @@ interface CacheEvent {
   meta?: Record<string, unknown>;
 }
 
-// Color coding for each event type — makes console output scannable
 const EVENT_COLORS: Record<CacheEventType, string> = {
   prefetch: "color: #3b82f6; font-weight: bold", // blue
 };
 
-/**
- * Log a cache diagnostic event to the browser console.
- * Only fires when `window.__CONTRACK_CACHE_DEBUG` is truthy.
- *
- * @example
- * logCacheEvent({ type: 'prefetch', queryKey: "['contacts']", meta: { count: 12 } });
- */
+/** Log a cache event to the console when `window.__CONTRACK_CACHE_DEBUG` is set. */
 export function logCacheEvent(event: CacheEvent): void {
   if (typeof window === "undefined") return;
   if (!(window as unknown as Record<string, unknown>).__CONTRACK_CACHE_DEBUG)
@@ -125,10 +57,6 @@ export function logCacheEvent(event: CacheEvent): void {
     "color: inherit",
   );
 }
-
-// =============================================================================
-// Type augmentation: allow the debug flag on window
-// =============================================================================
 
 declare global {
   interface Window {

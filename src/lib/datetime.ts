@@ -1,17 +1,9 @@
 /**
- * Reading the two timestamp formats this database writes.
- *
- * SQLite's `CURRENT_TIMESTAMP` produces `2026-09-10 05:33:50` — UTC, with a
- * space and no zone marker. Everything written from JavaScript produces
- * `2026-09-10T05:33:50.000Z`. Both land in the same columns, and `new Date()`
- * reads the first as *local* time, which puts every such value hours out.
- *
- * That mismatch has already caused real bugs on the server side, where SQLite
- * compares the two as raw text. On the client it is quieter and just as
- * wrong: a session last used a minute ago reads as seven hours ago in
- * California, or an hour in the future in Berlin.
- *
- * @module lib/datetime
+ * Dates for display. The database holds two timestamp forms: SQLite's
+ * `CURRENT_TIMESTAMP` writes `2026-09-10 05:33:50`, UTC with no zone marker,
+ * and JavaScript writes `2026-09-10T05:33:50.000Z`. `new Date()` reads the
+ * first as local time, hours out, so every reader here parses through
+ * `parseServerTime`.
  */
 
 import { isPlainDay, parseServerTime } from "../../shared/dates";
@@ -86,11 +78,8 @@ export function formatShortDay(
 }
 
 /**
- * "3 days ago", "in 2 hours", "just now".
- *
- * Used where the exact instant matters less than the distance from now: when
- * an account last signed in, when a token was last used. The absolute value
- * goes in the `title` at the call site, for the reader who wants it.
+ * "3 days ago", "in 2 hours", "just now": for when an account last signed
+ * in or a token was last used. The call site puts the exact time in `title`.
  */
 export function formatRelative(
   value: string | null | undefined,

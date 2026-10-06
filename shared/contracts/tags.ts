@@ -1,10 +1,7 @@
-// =============================================================================
 // Contracts: tags
-// =============================================================================
 // The tag vocabulary of an account's contacts: the counts, a rename (which
 // merges into a tag that already exists) and a delete everywhere. A contact's
 // own tags are written through the contact.
-// =============================================================================
 
 import { z } from "zod";
 import { route } from "./route.ts";

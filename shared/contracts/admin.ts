@@ -1,14 +1,6 @@
-// =============================================================================
-// Contracts: instance administration (request schemas only)
-// =============================================================================
-// The bodies and the query of the /api/admin routes. These routes have no
-// contract yet: they are in `UNCONTRACTED` in `index.ts`, and the schemas
-// wait here for one.
-//
-// Shape only. The semantic rules — is this username reserved, is this email
-// already taken, is this password long enough — stay in authService, which is
-// the one place that knows them and the one place the self-service paths use.
-// =============================================================================
+// The request bodies and query of the /api/admin routes, which have no
+// contract yet (`UNCONTRACTED` in `index.ts`). Shape only: rules such as a
+// reserved username or a taken email stay in authService.
 
 import { z } from "zod";
 
@@ -36,12 +28,8 @@ export const adminUpdateUserSchema = z
   });
 
 /** Body for DELETE /api/admin/users/:id. Without the decision the endpoint
- *  answers 409 with the counts and changes nothing.
- *
- *  A DELETE usually carries no body at all, and Express leaves `req.body`
- *  undefined when there is nothing to parse. Accepting that and reading it as
- *  an empty object is what makes the no-decision case reach the handler and
- *  answer 409 rather than 400. */
+ *  answers 409 with the counts and changes nothing. An absent body (Express
+ *  leaves `req.body` undefined) reads as empty, so it answers 409, not 400. */
 export const adminDeleteUserSchema = z
   .object({ decision: z.literal("purge").optional() })
   .nullish()
@@ -71,9 +59,7 @@ export const adminSettingsSchema = z
   .object({
     registrationOpen: z.boolean().optional(),
     sessionTtlDays: z.number().int().optional(),
-    // An empty string is a real value here: it is how a name is cleared.
-    // `setInstanceName` trims, strips control characters, and enforces the
-    // length, so this only has to say what kind of thing it is.
+    // An empty string clears the name. `setInstanceName` trims and checks it.
     instanceName: z.string().max(200).optional(),
     magicLinkSignIn: z.boolean().optional(),
     trashRetentionDays: z.number().int().min(1).max(365).optional(),

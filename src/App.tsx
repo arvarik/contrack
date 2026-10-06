@@ -33,17 +33,13 @@ import { usePreferences } from "./contexts/PreferencesContext";
 import { useMediaQuery, WIDE_QUERY } from "./hooks/useMediaQuery";
 import { useDialogOpen } from "./components/ui/Modal";
 
-// Route-level code splitting: secondary views load on demand so the initial
-// bundle only carries the ContactList/ContactDetail critical path. Each lazy
-// page renders at once when its code is here, and the app warms that code in
-// idle moments and when a link to it is pointed at (`views/pages.ts`).
+// Secondary pages load on demand, so the first bundle carries only the list
+// and the contact. The app warms their code in idle moments and when a link
+// is pointed at (`views/pages.ts`).
 const MapView = mapPage.Component;
 const PulseView = pulsePage.Component;
 const SearchView = askPage.Component;
-/**
- * Settings renders at once when its code is here (`settingsShell` in
- * `views/settings/warm.ts`), and the app warms that code in idle moments.
- */
+/** Warmed in idle moments too (`views/settings/warm.ts`). */
 const SettingsShell = settingsShell.Component;
 
 import { Sidebar } from "./components/layout/Sidebar";
@@ -72,15 +68,11 @@ const CONTROL =
   'a[href], button, input, textarea, select, [contenteditable="true"]';
 
 /**
- * A click on blank space focuses the scroller under it.
- *
- * The page's landmarks take focus by script, for the skip link, so a click
- * on blank space inside one gave it focus. A landmark does not scroll: the
- * scroller inside it does. So Space, PageDown and the arrows scrolled
- * nothing on a contact, Settings, Pulse or Ask, and on a contact ↑ and ↓
- * opened other contacts instead. Such a click now moves focus on to the
- * scroller between the click and the landmark, and the keys scroll what the
- * person clicked. The scroller takes no ring: a pointer put it there.
+ * A click on blank space focuses the scroller under it. The landmarks take
+ * focus by script, for the skip link, but a landmark does not scroll, so
+ * Space, PageDown and the arrows would scroll nothing (and on a contact ↑ and
+ * ↓ would open other contacts). The scroller takes no ring: a pointer put
+ * it there.
  */
 function useClickFocusesScroller() {
   useEffect(() => {
@@ -101,8 +93,8 @@ function useClickFocusesScroller() {
       ) {
         if (!el) return;
         if (isScroller(el)) {
-          // Taken back on blur: a scroller with a tabindex of -1 is one
-          // Chrome's Tab no longer reaches.
+          // Taken back on blur: Chrome's Tab skips a scroller with a
+          // tabindex of -1.
           const scroller = el;
           scroller.tabIndex = -1;
           scroller.style.outline = "none";
@@ -131,8 +123,8 @@ function useClickFocusesScroller() {
 const ResponsiveLayout = () => {
   const location = useLocation();
   useClickFocusesScroller();
-  // Narrow context read — see SessionContext for the split rationale. This
-  // component no longer re-renders on every AI-search keystroke.
+  // A narrow context, so an AI-search keystroke does not redraw the app
+  // (see SessionContext).
   const { setLastContactId } = useRecent();
   useGlobalNavShortcuts();
   const matchContact = useMatch("/contact/:id");
@@ -157,19 +149,11 @@ const ResponsiveLayout = () => {
   const isMapActive = location.pathname.startsWith("/map");
   const isCleanup = location.pathname.startsWith("/settings");
 
-  /**
-   * Warm the lazy pages' code while the reader is elsewhere: the map first,
-   * the largest chunk in the build, then Pulse and Ask Contrack. The first
-   * visit to each then draws at once instead of starting with a download
-   * and a skeleton. A browser told to save data is left alone (see
-   * `lib/idle.ts`).
-   */
+  // Warms the lazy pages' code in idle time, the map (the largest chunk)
+  // first. A browser told to save data is left alone (`lib/idle.ts`).
   useWarmPages();
 
-  /**
-   * Fetch Ask's "Try asking" questions the same way, so the page opens with
-   * them. The server keeps them ready, so this is one small read.
-   */
+  // Fetches Ask's "Try asking" questions the same way: one small read.
   const queryClient = useQueryClient();
   useEffect(
     () =>
@@ -182,27 +166,22 @@ const ResponsiveLayout = () => {
   const isSearch = location.pathname.startsWith("/search");
   const isPulse = location.pathname.startsWith("/pulse");
 
-  // The sidebar and the tab bar mark the page a person pressed at once,
-  // before it can draw. This clears the mark once it is on screen
-  // (`lib/pendingNav`).
+  // Clears the pressed-page mark in the sidebar and tab bar once the page
+  // is on screen (`lib/pendingNav`).
   useSettlePendingNav();
 
   /**
-   * Whether the contact list and the open contact sit side by side.
-   *
-   * Landmarks are the map a screen reader user navigates by, and on this
-   * layout the map changes with the width. Side by side, the list is a
-   * complementary "Contacts" landmark beside the contact's main. Below `lg`
-   * the two take turns on screen, so whichever is showing is the page's main.
+   * Whether the list and the open contact sit side by side. Then the list is
+   * a complementary "Contacts" landmark beside the contact's main. Below `lg`
+   * they take turns, so whichever shows is the main.
    */
   const isWide = useMediaQuery(WIDE_QUERY);
 
   // Full-page views (cleanup, search, pulse) take the full main area
   const isFullPage = isCleanup || isSearch || isPulse;
   /**
-   * An address that names no page. The list is the catch-all, so it used to
-   * show with an empty pane beside it. The pane says "Page not found", and
-   * on a phone it shows in place of the list, as a contact does.
+   * An address that names no page. The pane says "Page not found", and on a
+   * phone it shows in place of the list, as a contact does.
    */
   const isUnknown =
     !isFullPage && !isMapActive && !isHome && !isContactSelected;
@@ -251,9 +230,8 @@ const ResponsiveLayout = () => {
   );
 
   /**
-   * What the page area shows while the first page's code downloads: the
-   * skeleton of the page the address names. After that first load it is
-   * not shown again (see the boundary below).
+   * The skeleton of the addressed page, shown only while the first page's
+   * code downloads (see the boundary below).
    */
   const fallbackVariant: RouteFallbackVariant | null = isCleanup
     ? "settings"
@@ -266,39 +244,23 @@ const ResponsiveLayout = () => {
           : null;
 
   return (
-    // The safe areas: the status bar and the camera's cutout, when the page
-    // fills the screen (`viewport-fit=cover`). On its side, a phone's cutout
-    // is at the left or the right, and the sidebar sat under it.
+    // The safe areas, when the page fills the screen (`viewport-fit=cover`).
+    // On its side, a phone's cutout is at the left or the right.
     <div className="h-dvh w-full flex flex-col overflow-hidden bg-surface text-on-surface font-body font-medium pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       <ConnectionBanner />
       <div className="flex-1 min-h-0 flex">
-        {/*
-        The sidebar used to be suppressed (`hidden lg:flex`) whenever a contact
-        was open, which meant that between 768 and 1023 px — an iPad in
-        portrait — opening a contact left the screen with no global navigation
-        at all: no sidebar, and no tab bar either, since that is `md:hidden`.
-        The only way out was the in-page Back link. Navigation chrome is not
-        something to reclaim space from; it stays mounted at every width.
-      */}
+        {/* The navigation stays mounted at every width, a contact open or not. */}
         <SkipLink />
         <div className="hidden md:flex shrink-0">
           <Sidebar />
         </div>
 
         {/*
-        One page boundary for every route, and it stays mounted.
-
-        Each lazy page used to sit in a Suspense of its own, new on each
-        switch. React shows a new boundary's fallback even inside a
-        transition, and then holds it for 300 ms, so the first visit to
-        Pulse, Ask Contrack or the map flashed a skeleton even when the code
-        took 5 ms. Navigations are transitions (React Router starts one for
-        each), and a transition keeps a boundary's content on screen while
-        the next page suspends. So with one boundary here, the page on screen
-        stays until the next one can draw, and they swap in one frame. The
-        fallback shows only on the first load, when there is no page yet.
-        The sidebar and the tab bar are outside it, and mark the page a
-        person pressed at once (`lib/pendingNav`).
+        One page boundary for every route, and it stays mounted. React shows a
+        new boundary's fallback even in a transition and holds it 300 ms, so a
+        boundary per page flashed a skeleton. With one, a navigation (a
+        transition) keeps the current page until the next can draw. The
+        fallback shows only on the first load.
       */}
         <Suspense
           fallback={
@@ -310,21 +272,14 @@ const ResponsiveLayout = () => {
           {fullPage || (
             <>
               {/*
-        Dynamic Middle/Main Panel mapping to either the List or the Map.
+        The middle pane: the list or the map. Its landmark role changes, not
+        the element, because swapping <main> for <aside> would remount the
+        list and lose its search, scroll and selection.
 
-        On the map this pane is the main landmark. On the list it is the main
-        landmark below `lg`, where it has the screen to itself, and a
-        "Contacts" complementary landmark beside the open contact above it.
-        The role changes rather than the element, because swapping <main> for
-        <aside> would remount the list and lose its search, scroll and
-        selection. The skip link picks its own target per route (SkipLink).
-
-        Below `lg` the list fills the row beside the sidebar rail (`flex-1`).
-        It was `w-full`, the whole row, so from 768 px it ran 64 px past the
-        window and cut off Import, New and the sort menu. From `lg` its width
-        is `--pane-width`, which the handle after it sets before the first
-        paint and on each frame of a drag (`LEFT_PANE` has the bounds, and
-        the Settings list shares them).
+        Below `lg` the list fills the row beside the rail (`flex-1`, not
+        `w-full`, which overflows by the rail's width). From `lg` its width is
+        `--pane-width`, set by the handle after it (`LEFT_PANE` has the
+        bounds).
       */}
               <section
                 id={
@@ -375,12 +330,9 @@ const ResponsiveLayout = () => {
                   />
                 </Routes>
 
-                {/* The list's right edge, from `lg`, where the list and the contact
-            sit side by side. Below it the list fills the row. Inside the
-            list's landmark, on its edge. From `lg` the list sits a layer
-            over the contact (15 over 10), so the grip past the seam paints
-            and takes the pointer, and under the sidebar (20), whose Account
-            menu opens across the list. */}
+                {/* The list's right edge, from `lg`. The list sits over the
+            contact (15 over 10), so the grip past the seam takes the pointer,
+            and under the sidebar (20), whose Account menu opens across it. */}
                 {!isMapActive && (
                   <ResizeHandle
                     {...LEFT_PANE}
@@ -424,7 +376,7 @@ const ResponsiveLayout = () => {
                     // stays the page's main content while a contact is open over it.
                     <motion.section
                       aria-label="Contact"
-                      // The map reads this to centre a pin beside the contact, not
+                      // The map reads this to center a pin beside the contact, not
                       // under it (`insets.ts`). The panel sits flush with the map's
                       // right edge, so its width is what it covers.
                       data-covers-map="right"
@@ -432,10 +384,7 @@ const ResponsiveLayout = () => {
                       animate={{ x: 0, opacity: 1 }}
                       exit={{ x: "100%", opacity: 0 }}
                       transition={{ type: "spring", bounce: 0, duration: 0.4 }}
-                      // z 40 on a phone, under the tab bar's 50, so the bar stays on
-                      // top and tappable over the contact, as it does over
-                      // /contact/:id. The map page is z 0, so 40 still covers every
-                      // pin and bar on it. From md there is no tab bar.
+                      // z 40 on a phone: under the tab bar's 50, over the map's 0.
                       className="absolute right-0 top-0 bottom-0 w-full md:w-[760px] lg:w-[860px] md:max-w-[calc(100vw-64px)] z-40 md:z-[100] shadow-2xl bg-surface overflow-hidden flex flex-col h-full"
                     >
                       <Routes location={location}>
@@ -456,12 +405,7 @@ const ResponsiveLayout = () => {
           )}
         </Suspense>
 
-        {/*
-        Mobile Nav — always mounted. It used to unmount on the detail view, so
-        on a phone the screen users spend the most time on was also the one
-        with no way to reach Pulse, Map, Ask Contrack, or Settings. The detail view
-        already reserves `pb-32` at this width, so the bar has room to sit.
-      */}
+        {/* Always mounted, the contact page included, which reserves `pb-32` for it. */}
         <MobileNav />
       </div>
     </div>
@@ -476,17 +420,15 @@ const AppToaster = () => {
   const { mode } = usePreferences();
   // A phone's dialog is a sheet from the bottom, with Save at its foot.
   const dialogOpen = useDialogOpen();
-  const centredDialogs = useMediaQuery("(min-width: 640px)");
-  const sheetOpen = dialogOpen && !centredDialogs;
+  const centeredDialogs = useMediaQuery("(min-width: 640px)");
+  const sheetOpen = dialogOpen && !centeredDialogs;
   return (
     <Toaster
-      // The app's own palette, not the system's: a dark page drew dark
-      // grey descriptions on the dark glass of a light-theme toast.
+      // The app's palette, not the system's, or a dark page draws dark text
+      // on a light-theme toast.
       theme={mode}
       position={sheetOpen ? "top-center" : "bottom-right"}
-      // The mobile tab bar is fixed to the bottom of the viewport, so a
-      // default-offset toast lands underneath it and the user never sees
-      // the confirmation they just triggered.
+      // Clear of the mobile tab bar at the bottom of the viewport.
       mobileOffset={{
         top: "calc(env(safe-area-inset-top) + 12px)",
         bottom: "calc(var(--tabbar-space) + var(--keyboard-inset) + 12px)",
@@ -566,13 +508,8 @@ export default function App() {
     <Router>
       <SessionProvider>
         {/*
-          No app-wide <LayoutGroup>. It used to wrap this entire tree, which
-          put every `layout` motion component in the app — the trash list, the
-          list-detail panel, the dedupe picker, the pulse swimlanes — into one
-          shared projection group. Any of them changing forced a measure/
-          project pass across all of them, in views that were not even mounted
-          together. Each of those four keeps its own local `layout` behavior;
-          none of them ever needed to be coordinated with the others.
+          No app-wide <LayoutGroup>: one shared group makes any `layout`
+          change measure every `layout` component in the app.
         */}
         <AISearchProvider>
           <DedupeProvider>
@@ -592,12 +529,8 @@ export default function App() {
             setQuickNoteContactId(undefined);
           }}
         />
-        {/*
-          The corvid's flight layer. One overlay for the whole app, beside the
-          toasts for the same reason they are here: both are owned by nobody
-          in particular and both have to outlive whatever route asked for
-          them. It renders nothing until somebody calls `flyCorvid()`.
-        */}
+        {/* The corvid's flight layer. Like the toasts, it outlives the route
+          that asked for it. It renders nothing until `flyCorvid()`. */}
         <CorvidFlight />
         <AppToaster />
       </SessionProvider>

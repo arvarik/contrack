@@ -1,7 +1,4 @@
-/**
- * API Barrel Export — Re-exports all React Query hooks from domain-specific modules.
- * Import from `@/api` instead of individual files for cleaner imports.
- */
+/** Re-exports the hooks of the modules below. */
 export * from "./contacts";
 export * from "./interactions";
 export * from "./dedupe";

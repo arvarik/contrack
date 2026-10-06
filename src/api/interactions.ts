@@ -1,16 +1,8 @@
+/** Hooks for a contact's timeline and its notes, with optimistic updates. */
 import { refreshContact } from "./contactCache";
 import { apiJson, jsonBody } from "./client";
 import { INTERACTION_SEARCH_KEY } from "./search";
 import { interactionRoutes } from "../../shared/contracts/interactions";
-/**
- * Interaction API Hooks — React Query hooks for timeline and interaction operations.
- *
- * Provides `useTimeline`, `useAddInteraction`, `useDeleteInteraction`,
- * `useAddAttachment`, `useGenerateBriefing`, and `usePromoteGhost` with
- * optimistic updates for a responsive timeline UI.
- *
- * @module api/interactions
- */
 import {
   queryOptions,
   useQuery,
@@ -23,11 +15,8 @@ import { corvidReact } from "../lib/corvid";
 import { type Interaction, type Contact } from "../types";
 
 /**
- * Refresh the note search after a note changes.
- *
- * The server index is updated in the same transaction as the note, so the
- * only stale copy is the one React Query holds. Called from every mutation
- * below that adds, edits or removes a note.
+ * Refreshes the note search after a note changes. The server's index changes
+ * in the note's transaction, so only the cached copy is stale.
  */
 function invalidateInteractionSearch(client: QueryClient): void {
   void client.invalidateQueries({ queryKey: [...INTERACTION_SEARCH_KEY] });

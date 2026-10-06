@@ -1,3 +1,4 @@
+/** Hooks for contact lists and their members, with optimistic updates. */
 import {
   invalidateContactViews,
   patchContactCaches,
@@ -5,15 +6,6 @@ import {
 } from "./contactCache";
 import { apiJson, jsonBody } from "./client";
 import { listRoutes, type ListMember } from "../../shared/contracts/lists";
-/**
- * List Management API Hooks — React Query hooks for contact lists.
- *
- * Provides `useLists`, `useCreateList`, `useDeleteList`, `useReorderLists`,
- * `useAddToList`, `useRemoveFromList`, and `useBulkAddToList` with optimistic
- * cache updates for instant UI feedback when managing list memberships.
- *
- * @module api/lists
- */
 import {
   useQuery,
   useMutation,

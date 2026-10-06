@@ -1,30 +1,11 @@
 /**
- * motion.ts — the app's timing, in one place.
- *
- * One curve and three durations, the same numbers `src/index.css` holds as
- * `--ease`, `--dur-fast`, `--dur-base` and `--dur-slow`. CSS transitions read
- * the custom properties. `motion/react` takes numbers, so it reads these:
+ * The app's timing: one curve and three durations, the numbers index.css
+ * holds as `--ease` and `--dur-*`, for `motion/react`, which takes numbers.
+ * Fast is a press or a menu opening, base is a hover or a color change, slow
+ * is something arriving. A spring or a deliberate long animation keeps its
+ * own numbers.
  *
  *   <motion.div transition={{ duration: DURATION.base, ease: EASE }} />
- *
- * Fast is a press or a menu opening, base is a hover or a colour change, slow
- * is something arriving on the page. A spring or a deliberate long animation
- * (a toast that waits, the corvid's flight) keeps its own numbers.
- *
- * Views used to hand-pick per-tile `delay` values (0.1, 0.2, … 0.7). Over a
- * seven-tile dashboard that is 700ms of the page sitting half-empty while
- * elements arrive one at a time, which reads as flicker rather than polish —
- * especially when a query resolving mid-sequence re-mounts the subtree and
- * restarts the whole chain.
- *
- * `tileDelay` caps the ramp: tiles still arrive in reading order, but the last
- * one is never more than MAX_STAGGER_MS behind the first.
- *
- * Pair with the `.tile-enter` class from index.css:
- *
- *   <div className="tile-enter" style={{ animationDelay: tileDelay(i) }} />
- *
- * @module lib/motion
  */
 
 /** The three durations, in seconds for `motion/react`. */
@@ -44,21 +25,20 @@ const STEP_MS = 35;
 const MAX_STAGGER_MS = 200;
 
 /**
- * Entrance delay for the tile at `index`, as a CSS time string.
+ * The entrance delay of the tile at `index`, for `.tile-enter`. Tiles arrive
+ * in reading order, but the last is never more than MAX_STAGGER_MS behind
+ * the first, so a page does not sit half-empty.
  *
- * @example tileDelay(0) // "0ms"
- * @example tileDelay(9) // "200ms" — clamped
+ * @example tileDelay(9) // "200ms", clamped
  */
 export const tileDelay = (index: number): string =>
   `${Math.min(index * STEP_MS, MAX_STAGGER_MS)}ms`;
 
 /**
  * Whether motion is off: Reduced in the Motion setting (`data-motion` on the
- * root, from PreferencesContext) or "reduce motion" in the system. CSS
- * transitions already stop under both, but a script animation does not, so
- * a script asks here at the moment it would start one.
- *
- * @returns False without a window, so a test of a move runs the move.
+ * root) or in the system. CSS transitions stop on their own, so a script
+ * animation asks here before it starts. False without a window, so a test
+ * runs the move.
  */
 export function prefersReducedMotion(): boolean {
   if (typeof window === "undefined") return false;

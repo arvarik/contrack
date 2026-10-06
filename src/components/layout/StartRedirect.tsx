@@ -6,10 +6,8 @@ import { StartPanel } from "./StartPanel";
 export const START_PAGE_SESSION_KEY = "contrack.started";
 
 /**
- * StartRedirect — Handles the startPage preference on first navigation.
- *
- * Runs once per browser session. If startPage is set to "pulse", redirects
- * from "/" to "/pulse". Only applies to exact "/" navigations.
+ * The `startPage` preference: once per browser session, "pulse" redirects
+ * an exact "/" to "/pulse".
  */
 export function StartRedirect() {
   const { preferences, isLoaded } = usePreferences();

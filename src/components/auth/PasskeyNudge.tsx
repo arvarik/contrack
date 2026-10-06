@@ -1,10 +1,6 @@
 /**
- * PasskeyNudge — post-creation interstitial offering to register a passkey.
- *
- * Appears after first-run setup, registration, or accepting an invitation,
- * when the browser supports passkeys and the account has not registered one yet.
- *
- * @module components/auth/PasskeyNudge
+ * Offers a passkey after an account is created, when the browser supports
+ * passkeys and the account has none.
  */
 import { useState } from "react";
 import { KeyRound, Loader2 } from "lucide-react";

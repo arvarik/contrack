@@ -1,14 +1,7 @@
 /**
- * LoadFailed — what a place shows when its data did not load.
- *
- * Never an empty state: "No tokens yet" over a failed read tells a person
- * something false about their account. One look and one set of words
- * everywhere: the `EmptyState` with the error tile, "Could not load
- * <what>", a sentence that says nothing was lost, and Try again. Settings
- * said it one way and the pages another ("Tags did not load", "System
- * disconnected"), and the button said Retry or Try again.
- *
- * @module components/ui/LoadFailed
+ * What a place shows when its data did not load, never its empty state: the
+ * `EmptyState` with the error tile, "Could not load <what>", a sentence that
+ * says nothing was lost, and Try again.
  */
 import type { ReactNode } from "react";
 import { AlertCircle } from "lucide-react";

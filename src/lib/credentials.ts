@@ -1,13 +1,7 @@
 /**
- * One-time secrets, and how they are read.
- *
- * Three things in 2.0 exist exactly once: the invitation link an admin sends,
- * the temporary password they hand over, and a personal API token. Each is
- * shown on one screen, is never readable again, and travels from that screen
- * to a person by being copied, typed, or read aloud. The functions here are
- * the parts of that journey that are worth testing on their own.
- *
- * @module lib/credentials
+ * One-time secrets: an invitation link, a temporary password, a personal API
+ * token, and the secrets in a reset or sign-in link. Each is shown once and
+ * reaches a person by being copied, typed or read aloud.
  */
 
 /** Where the accept-invitation screen lives, in the link the server builds. */
@@ -62,16 +56,10 @@ export function urlWithoutSecret(
 }
 
 /**
- * Break a secret into groups a person can read without losing their place.
- *
- * A 20-character mixed-case password read down a phone line is where
- * transcription errors come from. Five groups of four is the same string with
- * somewhere for the eye to rest.
- *
- * The caller renders each group in its own element with a CSS gap, never a
- * space character: a space typed into a password field is a different
- * password, and a person who selects the text by hand must get the same
- * characters the copy button gives them.
+ * Break a secret into groups of four, so a person reading it aloud does not
+ * lose their place. The caller renders each group in its own element with a
+ * CSS gap, never a space: text selected by hand must match what the copy
+ * button gives.
  */
 export function groupSecret(secret: string, size = 4): string[] {
   if (size < 1) return [secret];
@@ -82,19 +70,12 @@ export function groupSecret(secret: string, size = 4): string[] {
   return groups;
 }
 
-// ---------------------------------------------------------------------------
-// Reading secrets out of the address bar
-// ---------------------------------------------------------------------------
-
-/** Memoised by path + param so StrictMode remount gets the same answer. */
+/** By path and param, so a StrictMode remount gets the same answer. */
 const takenSecrets = new Map<string, string | null>();
 
 /**
- * Take a secret token out of the address bar, once.
- *
- * Memoised deliberately. React StrictMode mounts, unmounts and remounts every
- * component in development, and a second read would run after the first has
- * already stripped the URL.
+ * Take a secret out of the address bar, once. Memoized, because StrictMode
+ * remounts in development, and a second read would find the URL stripped.
  */
 export function takeUrlSecret(path: string, param = "token"): string | null {
   const key = `${path}:${param}`;
@@ -111,9 +92,7 @@ export function takeUrlSecret(path: string, param = "token"): string | null {
   return secret;
 }
 
-/**
- * Take the invitation secret out of the address bar, once.
- */
+/** Take the invitation secret out of the address bar, once. */
 export function takeInvitationToken(): string | null {
   return takeUrlSecret(JOIN_PATH, JOIN_TOKEN_PARAM);
 }

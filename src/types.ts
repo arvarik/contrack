@@ -1,12 +1,7 @@
 /**
- * Shared Frontend Type Definitions.
- *
- * The JSON shapes React components and React Query hooks read. A resource
- * with a contract in `shared/contracts/` takes its type from there, under the
- * name the app has always used, so the server's answer and the app's type
- * cannot drift apart. The rest are written here by hand.
- *
- * @see {@link file://shared/contracts/index.ts} — the contracts
+ * The JSON shapes the app reads. A resource with a contract in
+ * `shared/contracts/` takes its type from there, so the server's answer and
+ * the app's type cannot drift apart. The rest are written here by hand.
  */
 
 import type { MatchedOn } from "../shared/matchedOn";
@@ -38,22 +33,14 @@ export type {
 };
 export type { ContactList } from "../shared/contracts/lists";
 
-// =============================================================================
-// Primary Entity Types
-// =============================================================================
-
 /**
- * A contact as the app holds it: the whole contact that
- * `GET /api/contacts/:id` sends (`Contact` in shared/contracts/contacts.ts),
- * and the fields that only the list view and the search answers add.
+ * A contact as the app holds it: the contract's `Contact`, plus the fields
+ * only the list view and search answers add.
  *
- * Two fields keep the type the views have always read. The server sends
- * `cadenceDays: null` and `themeColor: null` after a write that sent null,
- * and the views read a number and a string, so the hooks in `src/api/` cast
- * the contract's contact to this one at the fetch.
- *
- * The app keeps the list view's rows as Contacts too, although the server
- * sends them with fewer fields (`SlimContact`): see `fetchContactsSlim`.
+ * `cadenceDays` and `themeColor` are a number and a string here, though the
+ * server sends null after a write that sent null, so the hooks in `src/api/`
+ * cast at the fetch. The list's slim rows are held as Contacts too (see
+ * `fetchContactsSlim`).
  */
 export type Contact = Omit<
   ContactContract,
@@ -73,11 +60,8 @@ export type Contact = Omit<
 };
 
 /**
- * Mutation payload type for contact updates.
- *
- * Intentionally looser than `Partial<Contact>` because the server accepts
- * partial child entities (e.g., emails without `id`, addresses without
- * `source`), which TypeScript's strict Partial<ContactEmail>[] rejects.
+ * A contact update. Looser than `Partial<Contact>`, because the server takes
+ * partial child entries (an email without `id`, an address without `source`).
  */
 export type ContactUpdateData = Partial<
   Omit<
@@ -99,10 +83,7 @@ export type ContactUpdateData = Partial<
   phones?: Partial<ContactPhone>[];
   addresses?: Partial<ContactAddress>[];
   socialLinks?: Partial<ContactSocialLink>[];
-  /**
-   * The contact page sends its interests back as it got them, with the flag
-   * as the server sends it: 0 or 1.
-   */
+  /** Sent back as received, the flag as 0 or 1. */
   interests?: {
     id?: string;
     interest: string;
@@ -115,8 +96,8 @@ export type ContactUpdateData = Partial<
 };
 
 /**
- * AI-parsed contact fields returned by POST /api/parse-contact (Magic Paste).
- * Child entries are partial — the parser omits ids and unknown fields.
+ * The fields `POST /api/parse-contact` (Magic Paste) returns. Child entries
+ * are partial: the parser omits ids and unknown fields.
  */
 export interface ParsedContactData extends Partial<
   Omit<
@@ -145,32 +126,21 @@ export interface ParsedContactData extends Partial<
 }
 
 /**
- * An interaction as the app holds it: the row every interaction route sends
- * (`Interaction` in shared/contracts/interactions.ts), with what the
- * timeline adds to each entry.
- *
- * `type` is a free-form string. Well-known values the UI renders: `note`,
- * `call`, `meeting`, `email`, `message`, `sms`, `import`, `linkedin`,
- * `facebook`.
+ * An interaction: the contract's row plus what the timeline adds. `type` is
+ * free-form. The UI knows `note`, `call`, `meeting`, `email`, `message`,
+ * `sms`, `import`, `linkedin` and `facebook`.
  */
 export type Interaction = InteractionContract &
   Partial<Pick<TimelineEntry, "isViaName" | "isViaId" | "actionItems">> & {
-    /**
-     * Write-only: `POST /api/contacts/:id/interactions` makes this follow-up
-     * in the same write as the note.
-     */
+    /** Write-only: the follow-up made in the same write as the note. */
     actionItem?: { title: string; dueAt: string };
   };
 
 /**
- * A follow-up task linked to a contact (`ActionItem` in
- * shared/contracts/actionItems.ts).
- *
- * The `contact*` fields come only with the account's queue
- * (`GET /api/action-items` and `/completed`). One contact's own items are the
- * bare row. `interactionId` and `ownerId` stay optional because the Pulse
- * payload of `GET /api/dashboard`, which has no contract yet, types its items
- * by this one too.
+ * A follow-up on a contact. The `contact*` fields come only with the
+ * account's queue (`GET /api/action-items`). `interactionId` and `ownerId`
+ * are optional because `GET /api/dashboard`, which has no contract, types
+ * its items by this one too.
  */
 export type ActionItem = Omit<ActionItemContract, "interactionId" | "ownerId"> &
   Partial<Pick<ActionItemContract, "interactionId" | "ownerId">> &
@@ -184,14 +154,9 @@ export type ActionItem = Omit<ActionItemContract, "interactionId" | "ownerId"> &
     >
   >;
 
-// =============================================================================
-// Dedupe Engine Types
-// =============================================================================
+// Dedupe
 
-/**
- * A persisted dedupe suggestion row from /api/dedupe/suggestions.
- * Mirrors the server's DedupeSuggestion (server/services/dedupe/suggestions.ts).
- */
+/** A dedupe suggestion row. Mirrors `DedupeSuggestion` on the server. */
 export interface PersistedDedupeSuggestion {
   id: string;
   contactIdA: string;
@@ -202,7 +167,7 @@ export interface PersistedDedupeSuggestion {
   reasoning: string;
   /**
    * Why a person should look twice, or null: "First names differ: Ada and
-   * Ben". Older rows kept it at the end of `reasoning`.
+   * Ben". Some rows keep it at the end of `reasoning` instead.
    */
   caveat?: string | null;
   matchedField: string | null;
@@ -283,14 +248,11 @@ export interface DedupeScanProgress {
   completedAt?: string;
 }
 
-// =============================================================================
-// Semantic RAG Search Types
-// =============================================================================
+// Semantic search
 
 /**
- * A contact returned from a semantic AI search, augmented with the AI provider's
- * reasoning for why this contact matches the query.
- * `aiReason` is null when the FTS5 fallback path fires instead of the AI provider.
+ * A contact from a semantic search, with the model's reason it matches.
+ * `aiReason` is null when the FTS5 fallback answers instead.
  */
 export interface SemanticMatch extends Contact {
   /** Exact evidence for a passage match. The server checks the contact and source revision. */
@@ -322,12 +284,9 @@ export interface SemanticMatch extends Contact {
  */
 export interface SemanticSearchResult {
   /**
-   * The question these matches answer, exactly as it was sent.
-   *
-   * Written by the client, not the server: `useSemanticSearch` stamps it on
-   * every chunk it stores. It lives on the result rather than beside it so a
-   * result set can never be shown under a question it did not answer. The
-   * synthesis brief reads this, never the editable input.
+   * The question these matches answer, as sent. `useSemanticSearch` stamps
+   * it on each chunk, so a result never shows under a question it did not
+   * answer. The synthesis brief reads this, never the editable input.
    */
   query: string;
   matches: SemanticMatch[];
@@ -344,15 +303,9 @@ export interface SemanticSearchResult {
   refine?: RefineOption[];
 }
 
-// =============================================================================
-// AI Search Types
-// =============================================================================
-
 export type { AISearchBatch, AISearchJob } from "../shared/aiSearchContract";
 
-// =============================================================================
-// Command Palette Zero-State Types
-// =============================================================================
+// Command palette zero state
 
 /** A single CRM intelligence signal for the Cmd+K zero-state. */
 export interface ZeroStateInsight {
@@ -375,9 +328,7 @@ export interface ZeroStatePayload {
   insights: ZeroStateInsight[];
 }
 
-// =============================================================================
-// Interaction Search Types — GET /api/search/interactions
-// =============================================================================
+// Note search: GET /api/search/interactions
 
 /** Start and end offsets of a matched term, in UTF-16 code units. */
 export type HighlightRange = [number, number];

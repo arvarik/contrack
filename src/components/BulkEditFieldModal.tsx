@@ -1,21 +1,12 @@
+/**
+ * Pick a field and a value to apply to many selected contacts. The field
+ * picker is the shared `Select`, and every control meets the 44 px tap floor.
+ */
 import { useState, type RefObject } from "react";
 import { Pencil } from "lucide-react";
 import { Modal } from "./ui/Modal";
 import { Select } from "./ui/Select";
 import { FORM_INPUT, FORM_LABEL } from "../lib/styles";
-
-// ---------------------------------------------------------------------------
-// BulkEditFieldModal — pick a field + value to apply to many selected contacts.
-//
-//   1. The field picker is the shared `Select`, so it opens the same solid
-//      panel as every other dropdown in the app and carries the keys, the
-//      outside click and the focus return once. It used to be a hand-written
-//      listbox with its own click-outside listener.
-//   2. Every interactive control meets the 44-px touch-target minimum
-//      (Apple HIG / WCAG 2.5.5 AAA), preventing tap-target misses on phones.
-//   3. The input uses `text-base` on mobile to suppress iOS Safari's
-//      auto-zoom-on-focus behaviour that would jolt the modal layout.
-// ---------------------------------------------------------------------------
 
 interface Field {
   key: string;
@@ -146,8 +137,7 @@ export const BulkEditFieldModal = ({
               if (e.key === "Enter" && value.trim()) handleApply();
             }}
             placeholder={selectedField.placeholder}
-            // The shared field is text-base on mobile, which suppresses iOS
-            // auto-zoom on focus.
+            // text-base on a phone, or iOS zooms on focus.
             className={FORM_INPUT}
           />
         </div>

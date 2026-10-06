@@ -1,15 +1,6 @@
 /**
- * Contact Import Parsers — Converts platform-specific data exports into
- * normalized Contrack `Contact` objects.
- *
- * Supported formats:
- * - Apple Contacts (vCard / .vcf)
- * - LinkedIn Connections (CSV)
- * - Facebook Friends (JSON)
- * - Google Contacts (CSV)
- * - Generic CSV (fallback)
- *
- * @module lib/importers
+ * The import parsers: a vCard, a LinkedIn or Google CSV, a Facebook JSON
+ * export, or a generic CSV, turned into contacts for `/api/contacts/bulk`.
  */
 import Papa from "papaparse";
 import {
@@ -25,9 +16,7 @@ import {
   type VCardProperty,
 } from "../../shared/vcard";
 
-// ===========================================================================
-// Parser output types — the wire shape POSTed to /api/contacts/bulk
-// ===========================================================================
+// The parsers' output: the shape POSTed to /api/contacts/bulk
 
 interface ImportedEmail {
   email: string;
@@ -78,15 +67,7 @@ export interface ImportedContact {
   _sourcePlatform?: string;
 }
 
-// ===========================================================================
-// Social Profile Helpers
-// ===========================================================================
-
-/**
- * Known social platform URL templates. Used to:
- * 1. Resolve incomplete URLs (e.g., GitHub "x-apple:arvarik" → "https://github.com/arvarik")
- * 2. Extract handles from full URLs for display
- */
+/** Profile URL templates, for a handle stored without its URL. */
 const SOCIAL_PLATFORM_URLS: Record<string, string> = {
   linkedin: "https://www.linkedin.com/in/{handle}",
   twitter: "https://twitter.com/{handle}",
@@ -100,11 +81,8 @@ const SOCIAL_PLATFORM_URLS: Record<string, string> = {
 };
 
 /**
- * Resolve a social profile entry into a proper URL and handle.
- * Apple Contacts sometimes stores profiles as:
- * - Full URL: "http://www.linkedin.com/in/arvarik"
- * - Apple-prefixed handle: "x-apple:arvarik"
- * - Just a handle: "arvarik"
+ * A social profile's URL and handle. Apple Contacts stores a profile as a
+ * full URL, as "x-apple:rowanvale", or as a bare handle.
  */
 function resolveSocialProfile(
   platform: string,
@@ -114,16 +92,14 @@ function resolveSocialProfile(
   let url = rawUrl.trim();
   let handle: string | null = null;
 
-  // Strip "x-apple:" prefix (Apple Contacts uses this for non-URL social handles)
   if (url.startsWith("x-apple:")) {
     url = url.replace("x-apple:", "");
   }
 
-  // If it's already a valid URL, extract the handle from it
   if (url.startsWith("http://") || url.startsWith("https://")) {
     try {
       const parsed = new URL(url);
-      // Extract handle from path (e.g., /in/arvarik → arvarik)
+      // The last path part: /in/rowanvale is rowanvale.
       const pathParts = parsed.pathname.split("/").filter(Boolean);
       handle = pathParts[pathParts.length - 1] || null;
     } catch {
@@ -132,48 +108,32 @@ function resolveSocialProfile(
     return { url, handle };
   }
 
-  // It's a bare handle — construct the full URL from our templates
   handle = url;
   const template = SOCIAL_PLATFORM_URLS[platformKey];
   if (template) {
     url = template.replace("{handle}", handle);
   } else {
-    // Unknown platform, keep as-is but note it's not a URL
+    // An unknown platform keeps the bare handle.
     url = handle;
   }
 
   return { url, handle };
 }
 
-// ===========================================================================
-// vCard (.vcf)
-// ===========================================================================
-// Apple Contacts, Google Contacts, Outlook, Android, and Contrack's own
-// export. One parser, because they all write vCard and the differences between
-// them are parameters rather than formats.
-//
-// The reading is done by `shared/vcard.ts`, which the server also uses to
-// WRITE the export. That is deliberate and it is what makes the round trip a
-// promise rather than a hope: a file this app produces is parsed back by the
-// same code that produced it, and `tests/unit/shared/vcard.test.ts` walks a
-// contact out and back in and compares the fields.
-//
-// This layer is the mapping from vCard properties onto Contrack's shape, and
-// it is where the Apple-specific conventions live: `item1.`-grouped properties
-// with an `X-ABLabel`, `X-SOCIALPROFILE` with an `x-apple:` handle instead of
-// a URL, and a `PHOTO` folded across a dozen lines.
-// ===========================================================================
+// vCard (.vcf): Apple Contacts, Google Contacts, Outlook, Android and
+// Contrack's own export, which differ in parameters, not in format.
+// `shared/vcard.ts` reads the file, and the server writes the export with the
+// same module, so an exported file round-trips (`vcard.test.ts`). This layer
+// maps vCard properties onto Contrack's shape, Apple's conventions included:
+// `item1.` groups with an `X-ABLabel`, and `X-SOCIALPROFILE` with an
+// `x-apple:` handle instead of a URL.
 
 /** Parameters that describe the transport rather than the label. */
 const NOISE_TYPES = new Set(["internet", "pref", "voice", "other", "x-apple"]);
 
 /**
- * Names for the same label, folded onto one.
- *
- * Every exporter has its own word for a mobile number — Apple writes IPHONE
- * and CELL, Android writes CELL, Outlook writes MOBILE — and keeping all three
- * meant one person's phone was labelled three ways depending on which address
- * book the file came out of. The app's own vocabulary is "mobile".
+ * Names for the same label, folded onto one. Apple writes IPHONE and CELL,
+ * Android CELL and Outlook MOBILE, and the app says "mobile" for all of them.
  */
 const TYPE_ALIASES: Record<string, string> = {
   cell: "mobile",
@@ -183,11 +143,9 @@ const TYPE_ALIASES: Record<string, string> = {
 };
 
 /**
- * The label to show for one property.
- *
- * Apple's grouped `X-ABLabel` wins when there is one — it is the label the
- * person typed. Otherwise the first TYPE that means something: `TYPE=WORK`
- * is a label, `TYPE=INTERNET` and `TYPE=PREF` are plumbing.
+ * The label to show for one property. Apple's grouped `X-ABLabel` wins,
+ * because the person typed it. Otherwise the first TYPE that is a label, such
+ * as `WORK`, and not plumbing, such as `INTERNET` or `PREF`.
  */
 function labelFor(
   card: ParsedVCard,
@@ -209,11 +167,9 @@ function isPreferred(property: VCardProperty): boolean {
 }
 
 /**
- * A readable one-line address from the seven ADR components.
- *
- * ADR is `PO Box;Extended;Street;City;Region;Postal;Country`. Contrack keeps
- * one free-text address, so the components are joined; an address this app
- * exported put everything in the street slot and comes back unchanged.
+ * A one-line address from the seven ADR components
+ * (`PO Box;Extended;Street;City;Region;Postal;Country`). Contrack keeps one
+ * free-text address, and its own export puts it all in the street slot.
  */
 function joinAddress(value: string): string {
   const [, , street, city, region, postal, country] = splitComponents(value);
@@ -247,7 +203,6 @@ export const parseVCard = (
       [firstName, lastName].filter(Boolean).join(" ").trim();
     if (!name) continue;
 
-    // ── Emails ────────────────────────────────────────────────────────────
     const emails: ImportedEmail[] = [];
     for (const property of valuesOf(card, "EMAIL")) {
       const email = unescapeValue(property.value).trim();
@@ -262,7 +217,6 @@ export const parseVCard = (
       });
     }
 
-    // ── Phones ────────────────────────────────────────────────────────────
     const phones: ImportedPhone[] = [];
     for (const property of valuesOf(card, "TEL")) {
       const phone = unescapeValue(property.value).trim();
@@ -274,7 +228,6 @@ export const parseVCard = (
       });
     }
 
-    // ── Addresses ─────────────────────────────────────────────────────────
     const addresses: ImportedAddress[] = [];
     for (const property of valuesOf(card, "ADR")) {
       const address = joinAddress(property.value);
@@ -286,7 +239,6 @@ export const parseVCard = (
       });
     }
 
-    // ── Social profiles and URLs ──────────────────────────────────────────
     const socialLinks: ImportedSocialLink[] = [];
     for (const property of valuesOf(card, "X-SOCIALPROFILE")) {
       const raw = unescapeValue(property.value).trim();
@@ -313,7 +265,6 @@ export const parseVCard = (
       });
     }
 
-    // ── Photo ─────────────────────────────────────────────────────────────
     // Base64 in 3.0 (`PHOTO;ENCODING=b;TYPE=JPEG:`), a data URI or a plain URL
     // in 4.0. Folding is already undone, so the value is whole either way.
     let avatarUrl: string | null = null;
@@ -328,7 +279,6 @@ export const parseVCard = (
       }
     }
 
-    // ── The rest ──────────────────────────────────────────────────────────
     const org = splitComponents(firstRaw(card, "ORG") ?? "");
     const website =
       socialLinks.find(
@@ -370,9 +320,7 @@ export const parseVCard = (
   return contacts;
 };
 
-// ===========================================================================
 // CSV helpers
-// ===========================================================================
 
 type CsvRow = Record<string, string | undefined>;
 
@@ -420,10 +368,8 @@ function collect<T>(
   return contacts;
 }
 
-// ===========================================================================
-// LinkedIn CSV Parser
-// Columns: First Name, Last Name, URL, Email Address, Company, Position, Connected On
-// ===========================================================================
+// LinkedIn CSV: First Name, Last Name, URL, Email Address, Company,
+// Position, Connected On
 export const parseLinkedInCSV = async (
   csvData: string,
   tally?: ImportTally,
@@ -472,10 +418,7 @@ export const parseLinkedInCSV = async (
   );
 };
 
-// ===========================================================================
-// Facebook JSON Parser
-// Input: friends_v2 JSON array with [{ name, timestamp }] structure
-// ===========================================================================
+// Facebook JSON: the friends_v2 array of `{ name, timestamp }`
 interface FacebookFriend {
   name?: string;
   timestamp?: number;
@@ -549,16 +492,11 @@ export const parseFacebookJSON = (
   );
 };
 
-// ===========================================================================
-// Google Contacts CSV Parser
-// ===========================================================================
-// Google has written two sets of column names. The current export (2024 on)
-// has "First Name", "Last Name", "Organization Name" and "E-mail 1 - Label".
-// The older one has "Name", "Given Name", "Family Name", "Organization 1 -
-// Name" and "E-mail 1 - Type". Both are read, so a file from either works.
-// A cell can hold two values of one label joined by " ::: ", and a label
-// that starts with "* " marks the primary value.
-// ===========================================================================
+// Google Contacts CSV, in both sets of column names: the current export
+// ("First Name", "Organization Name", "E-mail 1 - Label") and the older one
+// ("Given Name", "Organization 1 - Name", "E-mail 1 - Type"). A cell can hold
+// two values joined by " ::: ", and a label that starts with "* " marks the
+// primary value.
 
 /** "* Home" → "home". The star is Google's mark for the primary value. */
 function googleLabel(raw: string, fallback: string): string {
@@ -703,9 +641,7 @@ export const parseGoogleCSV = async (
   );
 };
 
-// ===========================================================================
-// Generic CSV Parser (fallback)
-// ===========================================================================
+// Generic CSV, the fallback
 export const parseGenericCSV = async (
   csvData: string,
   sourceName: string,
@@ -733,9 +669,7 @@ export const parseGenericCSV = async (
   );
 };
 
-// ===========================================================================
 // One file in, contacts out
-// ===========================================================================
 
 /** The sources the Import tabs offer. */
 export type ImportSource = "apple" | "linkedin" | "google" | "facebook";

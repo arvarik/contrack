@@ -1,10 +1,6 @@
 /**
- * FacetAutocomplete — Dropdown autocomplete for facet prefix values.
- *
- * Shown when user types a prefix like `role:` (no value yet) or `role:eng` (partial value).
- * Sources values from the slim contact cache — no API calls needed.
- *
- * @module components/command-palette/FacetAutocomplete
+ * The values for a typed facet such as `role:` or `role:eng`, from the slim
+ * contact cache.
  */
 import React, { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
@@ -19,8 +15,6 @@ import {
 import { cn } from "../../lib/utils";
 import { DURATION, EASE } from "../../lib/motion";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 interface FacetAutocompleteProps {
   /** Currently active prefix field (e.g., 'role') */
   field: FacetField;
@@ -32,7 +26,7 @@ interface FacetAutocompleteProps {
   onDismiss: () => void;
 }
 
-// ─── Preset suggestions for non-text fields ───────────────────────────────────
+// Preset suggestions for non-text fields
 
 const SCORE_PRESETS = [
   { label: "High (≥80)", value: "80", operator: ">" as const },
@@ -71,8 +65,6 @@ const TRACKED_PRESETS = [
   { label: "No", value: "no" },
 ];
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
 export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
   field,
   partial,
@@ -83,7 +75,7 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listboxId = useId();
 
-  // ── Build suggestions from slim cache ───────────────────────────────────
+  // Build suggestions from slim cache
   const suggestions = useMemo(() => {
     if (field === "score") {
       return SCORE_PRESETS.filter(
@@ -215,12 +207,12 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
     }));
   }, [field, partial, slimContacts]);
 
-  // ── Reset selection on suggestions change ───────────────────────────────
+  // Reset selection on suggestions change
   useEffect(() => {
     setSelectedIndex(0);
   }, [suggestions.length, partial]);
 
-  // ── Keyboard navigation ─────────────────────────────────────────────────
+  // Keyboard navigation
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (suggestions.length === 0) return;
@@ -270,9 +262,8 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
         <div className={MENU_HEADING} aria-hidden="true">
           {field} values
         </div>
-        {/* A listbox the palette's input names the current value of
-            (`aria-activedescendant`, synced in CommandPalette): a screen
-            reader heard nothing while a value was picked. */}
+        {/* A listbox whose current value the palette's input names
+            (`aria-activedescendant`, synced in CommandPalette). */}
         <div
           role="listbox"
           id={listboxId}

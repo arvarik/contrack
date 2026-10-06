@@ -1,53 +1,40 @@
 /**
  * The corvid's rig: the bird in `corvidPaths.ts`, able to move.
  *
- * The mark is a ring and a bird. The ring is the C, and it never moves. The
- * bird is five strokes and an eye, and this file poses them. Every pose is a
- * set of numbers (how far into flight, which way the head faces, how high
- * the wing is), and `drawCorvid` turns one set into the same strokes the
- * mark is drawn with. There is no second drawing of the bird anywhere:
+ * The mark is a ring and a bird. The ring is the C and never moves. The bird
+ * is five strokes and an eye. A pose is a set of numbers, and `drawCorvid`
+ * turns it into the same strokes the mark is drawn with, so there is no
+ * second drawing of the bird:
  *
- * - The sitting bird is read from `CORVID_PATHS` at load, so `HOME_POSE`
- *   draws the logo point for point. `corvidRig.test.ts` holds that.
- * - The flying bird is the same five strokes in other places. The head is
- *   the logo's head, turned, and never redrawn. The wing is the logo's wing
- *   in its own frame, hinged at the shoulder. The tail keeps its hairpin.
- * - One line is new: the nape. Sitting in the ring, the bird borrows the
- *   ring for the back of its head. A bird out of the ring needs its own, so
- *   the nape draws itself in as the bird leaves and back out as it lands.
+ * - `HOME_POSE` draws the logo point for point, read from `CORVID_PATHS` at
+ *   load. `corvidRig.test.ts` holds that.
+ * - The flying bird moves the same strokes. The head is the logo's head,
+ *   turned. The wing is the logo's wing, hinged at the shoulder.
+ * - The nape is the one new line. In the ring the bird borrows the ring for
+ *   the back of its head, so the nape draws itself in as the bird leaves.
  *
- * How a pose is built, in order:
+ * A pose is built in order:
  *
- * 1. The body blends between two shapes, `PERCH` (the logo) and `FLIGHT`
- *    (level, tail behind), by `flight`. `crouch` squats the sitting bird on
- *    its feet and leans it forward.
- * 2. The body turns under the head about the neck's x by `bodyFacing`: 1 is
- *    the logo's body, -1 the mirror. The head keeps its own `headFacing`, so
- *    a bird can turn round on its perch with its head held still, which is
- *    what a real one does.
- * 3. The head is rigid. It turns about `NECK`, faces by `headFacing` and
- *    tilts by `headAngle` (positive lifts the beak whichever way it faces).
- *    The throat hangs between the head and the body: each of its points
- *    follows the head by a weight that falls to nothing at the shoulder, so
- *    the neck bends instead of breaking.
- * 4. The wing is the logo's wing in its own frame, the hinge at the origin
- *    and the tip along +x. `wingSpread` opens it, `wingCurl` bends the tip,
- *    `wingTurn` narrows it through the middle of a stroke so the leading
- *    edge stays in front, and `wingAngle` swings it about the shoulder.
+ * 1. The body blends from `PERCH` (the logo) to `FLIGHT` by `flight`.
+ *    `crouch` squats the sitting bird on its feet and leans it forward.
+ * 2. The body turns under the head about the neck by `bodyFacing`. The head
+ *    keeps its own `headFacing`, so a bird can turn round on its perch with
+ *    its head still, as a real one does.
+ * 3. The rigid head turns about `NECK` and tilts by `headAngle` (positive
+ *    lifts the beak). Each throat point follows the head by a weight that
+ *    falls to nothing at the shoulder, so the neck bends instead of breaking.
+ * 4. The wing, in its own frame (hinge at the origin, tip along +x), opens
+ *    by `wingSpread`, bends at the tip by `wingCurl`, narrows by `wingTurn`
+ *    so the leading edge stays in front, and swings by `wingAngle`.
  *
- * Everything here is pure arithmetic on a 100-unit box, y down, the same
- * box as the mark, so the flight overlay, the perch, the brand script and
- * the tests all draw the one bird the same way.
- *
- * @module assets/corvidRig
+ * All of it is arithmetic on the mark's 100-unit box, y down, so the flight
+ * overlay, the perch, the brand script and the tests draw one bird.
  */
 import { CORVID_EYE, CORVID_PATHS, parsePath } from "./corvidPaths.ts";
 
 export type Vec = readonly [number, number];
 
-// ---------------------------------------------------------------------------
 // The logo, as points
-// ---------------------------------------------------------------------------
 
 /**
  * The points a path passes through. Every stroke in `corvidPaths.ts` is a
@@ -85,9 +72,7 @@ const SHOULDER: Vec = [38.6, 47.4];
 /** Where the sitting bird's weight is: a crouch squats onto this point. */
 const FEET: Vec = [44, 84];
 
-// ---------------------------------------------------------------------------
 // Small vector helpers
-// ---------------------------------------------------------------------------
 
 const RAD = Math.PI / 180;
 const rotate = ([x, y]: Vec, deg: number): Vec => {
@@ -105,9 +90,7 @@ const mixAll = (a: readonly Vec[], b: readonly Vec[], t: number): Vec[] =>
   t === 0 ? a.slice() : a.map((p, i) => mix(p, b[i]!, t));
 const clamp01 = (n: number) => Math.min(Math.max(n, 0), 1);
 
-// ---------------------------------------------------------------------------
 // The wing, in its own frame
-// ---------------------------------------------------------------------------
 
 /** The logo wing's resting angle about the shoulder, in degrees. */
 const LOGO_WING_ANGLE =
@@ -129,9 +112,7 @@ const WING_OPEN: readonly Vec[] = WING_FOLDED.map(([x, y], i) => [
   y * 1.2,
 ]);
 
-// ---------------------------------------------------------------------------
 // The two body shapes
-// ---------------------------------------------------------------------------
 
 interface BodyShape {
   chest: readonly Vec[];
@@ -264,9 +245,7 @@ const PERCH_NAPE_AHEAD: readonly Vec[] = [
 /** How much of the head each throat point follows. The rest follows the body. */
 const THROAT_FOLLOWS_HEAD = [0.9, 0.75, 0.55, 0.35, 0.15, 0] as const;
 
-// ---------------------------------------------------------------------------
 // The pose
-// ---------------------------------------------------------------------------
 
 /**
  * Everything the bird can do, as numbers. Angles are degrees. Distances are
@@ -338,12 +317,10 @@ export const corvidPose = (changes: Partial<CorvidPose> = {}): CorvidPose => ({
   ...changes,
 });
 
-/** The fields a pose adds up from, so behaviours can be layered. */
+/** The fields a pose adds up from, so behaviors can be layered. */
 export const POSE_KEYS = Object.keys(HOME_POSE) as (keyof CorvidPose)[];
 
-// ---------------------------------------------------------------------------
 // Drawing
-// ---------------------------------------------------------------------------
 
 /** One posed bird, as the points each stroke passes through. */
 export interface CorvidDrawing {
@@ -496,9 +473,7 @@ export function drawCorvid(pose: CorvidPose): CorvidDrawing {
   };
 }
 
-// ---------------------------------------------------------------------------
 // Path data
-// ---------------------------------------------------------------------------
 
 /** One decimal, written short, the way `corvidPaths.ts` writes its numbers. */
 const num = (n: number): string => String(Math.round(n * 10) / 10 || 0);
@@ -547,11 +522,10 @@ export function corvidPathData(drawing: CorvidDrawing): CorvidPathData {
 }
 
 /**
- * A drawing turned about its long axis, the line `y = about`, as in a barrel
- * roll: `roll` 1 is upright, -1 upside down and 0 edge on. It moves the
- * points and not the pen, so every stroke keeps its width. A squash in CSS
- * thins the strokes with the bird, and the edge-on bird goes to a broken
- * hairline. This one stays a line as thick as the rest of the drawing.
+ * A drawing turned about the line `y = about`, as in a barrel roll: `roll` 1
+ * is upright, -1 upside down and 0 edge on. It moves the points and not the
+ * pen, so every stroke keeps its width. A CSS squash would thin the strokes
+ * and break the edge-on bird into a hairline.
  */
 export function rollDrawing(
   drawing: CorvidDrawing,
@@ -576,20 +550,14 @@ export function rollDrawing(
   };
 }
 
-// ---------------------------------------------------------------------------
 // Placing a flying bird
-// ---------------------------------------------------------------------------
 
 /**
- * The point a flight path carries: the middle of the body, in rig units. A
- * flying bird's is the middle of its back, mirrored with the body, so the
- * path holds the bird by its body and not by a corner of the box while it
- * turns and flaps.
- *
- * A sitting bird's is the middle of the mark, and it does not move when the
- * body turns: a bird turning round on its perch turns about its neck, with
- * its head held still, so the point it is held by must hold still too. The
- * mirror comes in with flight.
+ * The point a flight path carries, in rig units. A flying bird's is the
+ * middle of its back, mirrored with the body, so the path holds the bird by
+ * its body while it turns and flaps. A sitting bird's is the middle of the
+ * mark and holds still when the body turns, because a bird turns round on
+ * its perch about its neck. The mirror comes in with flight.
  */
 export function bodyCentre(
   pose: Pick<CorvidPose, "flight" | "bodyFacing" | "x" | "y">,

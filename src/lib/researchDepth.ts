@@ -1,18 +1,10 @@
 /**
- * researchDepth: the words for the two research depths, for every control
- * that starts research. The contact's actions menu, the dossier's enrich
- * buttons, the Enrichment page and its confirmation, the progress panel and
- * the Research card's history all say them the same way.
- *
- * One name for each depth: Standard and Deep. Standard is the default, and
- * its name says nothing about quality: it is one plain search ask, and it
- * found something for 17 of 20 contacts. Deep asks the long prompt beside
- * it, which reads further: facts for 19 of 20, and about two fifths more of
- * them, at about one and a half times the cost (2026-10-05).
- *
- * The times and costs are the measured figures in `shared/researchDepth.ts`.
- *
- * @module lib/researchDepth
+ * The words for the two research depths, the same in every control that
+ * starts research. Standard, the default, is one plain search ask, and it
+ * found something for 17 of 20 contacts. Deep adds the long prompt, which
+ * reads further: facts for 19 of 20, and about two fifths more of them, at
+ * about one and a half times the cost. The times and costs are the measured
+ * figures in `shared/researchDepth.ts`.
  */
 import {
   RESEARCH_DEPTH_FIGURES,

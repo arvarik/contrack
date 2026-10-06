@@ -1,16 +1,9 @@
-// =============================================================================
-// Contracts: contacts
-// =============================================================================
-// Every route under /api/contacts except the interaction and action-item
-// routes nested under a contact (interactions.ts, actionItems.ts): the
-// contact itself, the list views, bulk writes, the pin, the photo, the
-// research run and the merges.
+// Contracts: every route under /api/contacts except the nested interaction
+// and action-item routes (interactions.ts, actionItems.ts).
 //
-// The answers describe the rows as the server sends them, internal columns
-// included (`ownerId`, `phoneticHash`, `scoreDirty`, `searchExpansion`,
-// `canonicalId`, `deletedAt`). Those are marked `INTERNAL`, so the OpenAPI
-// file tells a client not to rely on them.
-// =============================================================================
+// The answers describe rows as the server sends them, internal columns
+// included. Those are marked `INTERNAL`, so the OpenAPI file tells a client
+// not to rely on them.
 
 import { z } from "zod";
 import { researchDepthSchema } from "../researchDepth.ts";
@@ -27,9 +20,7 @@ import {
   stringToBool,
 } from "./common.ts";
 
-// =============================================================================
 // Request bodies
-// =============================================================================
 
 /** Payload for POST /contacts (Contact creation) */
 export const contactCreateSchema = z
@@ -77,10 +68,9 @@ const contactUpdateSchema = contactCreateSchema
   });
 
 /**
- * The body of `PATCH /api/contacts/:id/location`: a pin a person dropped, or
- * a request to hand the pin back to the geocoder. One or the other, with
- * nothing else beside it, so a body that carries both, or a coordinate the
- * map cannot draw, is refused whole.
+ * The body of `PATCH /api/contacts/:id/location`: a dropped pin, or a request
+ * to hand the pin back to the geocoder. Never both, and never a coordinate
+ * the map cannot draw.
  */
 const contactLocationSchema = z.union([
   z.strictObject({
@@ -153,12 +143,10 @@ const mergeClusterBodySchema = z
   });
 
 /**
- * A batch of cluster merges. A cluster whose primary or duplicates are absent
- * or empty is not refused: the answer lists it with nothing merged and each
- * of its duplicates counted as failed, beside the clusters that merged. A
- * value of the wrong type, such as a null primary or duplicates given as a
- * string, refuses the whole batch with 400, and so does a cluster whose
- * primary is one of its own duplicates.
+ * A batch of cluster merges. A cluster with an absent or empty primary or
+ * duplicates is answered with nothing merged and its duplicates failed. A
+ * wrong type, or a primary among its own duplicates, refuses the whole batch
+ * with 400.
  */
 const mergeClustersBodySchema = z
   .object({
@@ -190,9 +178,7 @@ const mergeClustersBodySchema = z
     { message: "primaryId cannot appear in duplicateIds" },
   );
 
-// =============================================================================
 // Answers
-// =============================================================================
 
 const contactEmailSchema = z.strictObject({
   id: z.string(),
@@ -471,9 +457,7 @@ const scoreBreakdownSchema = z
 
 const IMPORT_STATUSES = ["running", "imported", "complete", "failed"] as const;
 
-// =============================================================================
 // Routes
-// =============================================================================
 
 export const contactRoutes = {
   map: route({

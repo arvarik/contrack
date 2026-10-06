@@ -75,11 +75,9 @@ function fieldLabel(field: string): string {
 }
 
 /**
- * One line for one run: what it did, in the reader's words.
- *
- * "Added 11: Roles ×4, Education ×2, Location…", "Read 6 pages, nothing
- * new", or "No page about this person". A run from before runs were
- * recorded says only that it happened.
+ * One line for one run: "Added 11 from 6 pages: Roles ×4, Education ×2",
+ * "Read 6 pages, nothing new", or "No web page about this person". A run
+ * from before runs were recorded says only that it happened.
  */
 export function runSummary(run: ResearchRun): string {
   if (run.models.length === 0) return "Enriched before details were recorded";
@@ -108,11 +106,9 @@ function titleIsDomain(title: string): boolean {
 }
 
 /**
- * The words a source link shows.
- *
- * `title` is the page's title when the provider gave one, and otherwise the
- * address as a trail: "brokercheck.finra.org › individual › summary". `site`
- * is the host, for the icon and the second line.
+ * The words a source link shows: the page's title when the provider gave
+ * one, else the address as a trail ("example.com › people › rowan-vale").
+ * `site` is the host, for the icon and the second line.
  */
 export function sourceDisplay(source: ResearchSource): {
   title: string;
@@ -229,11 +225,8 @@ function linkWords(
 
 /**
  * The kinds of detail research searched with, beside the name: "company",
- * "role", "LinkedIn profile". Empty when it had the name alone.
- *
- * Kinds, not values. The values are on the page already, and a role such as
- * "Associate, Restructuring Group" or a city such as "Austin, TX" has a
- * comma of its own, which a list of values in a sentence cannot show.
+ * "role", "LinkedIn profile". Kinds, not values: a value such as "Austin,
+ * TX" has a comma of its own, which a list in a sentence cannot show.
  */
 export function researchedWith(contact: IdentityContact): string[] {
   const details: string[] = [];
@@ -257,10 +250,9 @@ export function researchedWith(contact: IdentityContact): string[] {
 /**
  * The details the person could add that would help research, in the order
  * they help most. A school and a city tell two people with one name apart,
- * and a former name finds the pages from before a change of name: the
- * owner knew all three for contacts research found little about
- * (2026-10-05). A LinkedIn profile does not count as a link here: the
- * search research runs does not return LinkedIn pages (2026-09-26).
+ * and a former name finds the pages from before a change of name. A
+ * LinkedIn profile does not count as a link: research's search returns no
+ * LinkedIn pages.
  */
 export function missingAnchors(contact: IdentityContact): ResearchAnchor[] {
   const missing: ResearchAnchor[] = [];

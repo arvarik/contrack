@@ -1,25 +1,11 @@
 /**
- * pendingNav: the page a person has asked for, before it is on screen.
- *
- * A navigation is a transition (React Router's `BrowserRouter` starts one
- * for each location change), and the app has one page boundary above every
- * route. So while a page's code is still on its way, the page on screen
- * stays, and `useLocation` keeps the old path. That is right for the page,
- * and wrong for the navigation itself: the sidebar went on marking the old
- * page, and a press on a link that had to wait looked like a press that did
- * nothing.
- *
- * A link marks its path here when it is pressed, outside the transition, so
- * the sidebar and the tab bar mark the new page in the same frame. The app
- * clears the mark once a new location is on screen (`useSettlePendingNav`),
- * and Back or Forward clears it too. A press on the page already on screen
- * marks nothing: no new location would come to clear it, and the next
- * navigation that sets no mark would paint the old mark for a frame.
- *
- * Only the sidebar and the tab bar read the mark, so a press re-renders the
- * navigation and not the page under it.
- *
- * @module lib/pendingNav
+ * The page a person has asked for, before it is on screen. A navigation is a
+ * transition, so while a page's code loads, `useLocation` keeps the old path.
+ * A link marks its path here when pressed, outside the transition, so the
+ * sidebar and the tab bar mark the new page in the same frame. A new
+ * location (`useSettlePendingNav`) or Back and Forward clear the mark. A
+ * press on the page already on screen marks nothing, because no new
+ * location would come to clear it.
  */
 import { useEffect, useSyncExternalStore, type MouseEvent } from "react";
 import { useLocation } from "react-router-dom";

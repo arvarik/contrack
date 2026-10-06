@@ -85,10 +85,8 @@ interface ModalProps {
   onClose: () => void;
   title?: string;
   /**
-   * Accessible name for dialogs that render their own header. Such a dialog
-   * draws its own close control (an X, a Cancel button): the dialog has none
-   * to add. A hidden one used to take focus on open and appear as a box over
-   * the header's corner.
+   * The accessible name of a dialog that renders its own header, and with it
+   * its own close control.
    */
   ariaLabel?: string;
   children: ReactNode;
@@ -102,16 +100,13 @@ interface ModalProps {
 }
 
 /**
- * Responsive dialog with nested focus, scroll locking, and keyboard dismissal.
- *
- * Below `sm` it is a sheet from the bottom of the screen, as phones draw
- * one:
- * - it slides up and back down (`.sheet` in index.css);
- * - its grab handle, and its title bar, drag down to close it;
- * - Android's Back closes it, rather than leaving the page under it
- *   (`useCloseRequest`);
- * - it stands on top of the on-screen keyboard (`--keyboard-inset`, from
- *   `useSoftKeyboard`), so its last field and its buttons stay in view.
+ * A dialog with nested focus, scroll locking and keyboard dismissal. Below
+ * `sm` it is a bottom sheet:
+ * - it slides up and back down (`.sheet` in index.css)
+ * - its grab handle and title bar drag down to close it
+ * - Android's Back closes it, not the page under it (`useCloseRequest`)
+ * - it stands on the on-screen keyboard (`--keyboard-inset`), so its last
+ *   field and buttons stay in view
  */
 export function Modal({
   isOpen,
@@ -133,27 +128,17 @@ export function Modal({
     return () => countDialogs(-1);
   }, [isOpen]);
 
-  // Where focus was before this opened, captured during the render that opens
-  // it rather than in `onOpenAutoFocus`.
-  //
-  // Radix only fires that event when nothing inside the dialog already holds
-  // focus, and React applies a child's `autoFocus` during commit — before
-  // Radix's effect runs. So every dialog with an autofocused field skipped
-  // the capture entirely, `previousFocus` stayed null, and closing dropped
-  // focus onto <body>: the keyboard user's place in the page was gone.
-  // Reading `document.activeElement` here happens before the commit that
-  // moves focus, which is the only moment the answer is still correct.
+  // Where focus was before this opened, read during the render that opens
+  // it, not in `onOpenAutoFocus`: a child's `autoFocus` moves focus in the
+  // commit, before Radix's effect, and Radix then skips that event.
   const wasOpen = useRef(false);
   if (isOpen && !wasOpen.current) {
     previousFocus.current = document.activeElement as HTMLElement | null;
   }
   wasOpen.current = isOpen;
 
-  // What the open dialog showed, kept through its exit animation. A caller
-  // clears the thing a dialog names as it closes, and the title read
-  // "Disable undefined?" while the dialog faded out. Every dialog, and every
-  // `ConfirmDialog` in it, keeps its words this way, so no caller needs a
-  // fallback for them.
+  // What the open dialog showed, kept through its exit animation, so a
+  // caller may clear what the dialog names as it closes.
   const shown = useRef({ title: openTitle, children: openChildren });
   if (isOpen) shown.current = { title: openTitle, children: openChildren };
   const { title, children } = shown.current;
@@ -163,7 +148,7 @@ export function Modal({
   // or springs it back.
   const startDrag = (event: ReactPointerEvent<HTMLElement>) => {
     if (event.pointerType === "mouse" || !content.current) return;
-    // From `sm` it is a centred dialog, not a sheet, and does not drag.
+    // From `sm` it is a centered dialog, not a sheet, and does not drag.
     if (window.matchMedia?.("(min-width: 640px)").matches) return;
     if ((event.target as HTMLElement).closest("button, a, input")) return;
     drag.current = { y: event.clientY, at: event.timeStamp, dy: 0 };
@@ -209,7 +194,7 @@ export function Modal({
   };
 
   const position =
-    // Centred from `sm`, it rises by half the keyboard, so a tablet's dialog
+    // Centered from `sm`, it rises by half the keyboard, so a tablet's dialog
     // keeps its buttons above the keyboard too.
     "inset-x-0 bottom-[var(--keyboard-inset,0px)] rounded-t-3xl sm:rounded-3xl sm:inset-auto sm:left-1/2 sm:top-[calc(50%-var(--keyboard-inset,0px)/2)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:w-[calc(100%-2rem)]";
   return (
@@ -227,16 +212,13 @@ export function Modal({
           // reader hears its name and the first Tab reaches its first control.
           tabIndex={-1}
           aria-describedby={undefined}
-          // `outline-none`: the dialog itself takes focus when it has no
-          // title, and a ring around the whole panel would say nothing.
-          // The height leaves out the status bar's inset, so a tall sheet's
-          // title stays clear of it.
+          // `outline-none`: a ring around the whole panel would say nothing.
+          // The height leaves out the status bar's inset.
           className={`sheet fixed ${position} ${SIZE_MAP[size]} glass-panel shadow-2xl z-[201] flex flex-col max-h-[calc(100dvh-max(2rem,env(safe-area-inset-top)+0.5rem)-var(--keyboard-inset,0px)-var(--viewport-offset,0px))] overflow-hidden outline-none modal-fade`}
           onOpenAutoFocus={(event) => {
-            // Never the X: a space typed into what looked like the first
-            // field pressed it and closed the dialog. With a keyboard the
-            // first text field takes focus. On a touch screen the dialog
-            // itself does, so the on-screen keyboard does not cover it.
+            // Never the X, which a typed space would press. With a keyboard
+            // the first text field takes focus. On a touch screen the dialog
+            // does, so the on-screen keyboard does not cover it.
             event.preventDefault();
             const field = window.matchMedia?.("(pointer: fine)").matches
               ? content.current?.querySelector<HTMLElement>(FIRST_FIELD)
@@ -244,18 +226,15 @@ export function Modal({
             (field ?? content.current)?.focus({ preventScroll: true });
           }}
           onCloseAutoFocus={(event) => {
-            // Only take over when there is somewhere to put focus. Preventing
-            // the default and then restoring nothing leaves it on <body>,
-            // which is worse than whatever Radix would have done.
+            // Only take over when there is somewhere to put focus.
             const target = returnFocusRef?.current ?? previousFocus.current;
             if (!target?.isConnected) return;
             event.preventDefault();
             target.focus({ preventScroll: true });
           }}
         >
-          {/* The grab handle: a phone's sign that the sheet drags. The
-              title bar drags too. The X and Escape stay the ways a keyboard
-              or a screen reader closes it. */}
+          {/* The grab handle. The title bar drags too. A keyboard closes
+              with the X or Escape. */}
           <div
             aria-hidden="true"
             className={`sm:hidden shrink-0 flex justify-center pt-2 pb-1 touch-none ${title ? "bg-surface-container-low" : ""}`}

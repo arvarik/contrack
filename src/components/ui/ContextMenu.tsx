@@ -1,17 +1,13 @@
 /**
- * ContextMenu — Portal-based right-click context menu.
+ * A right-click menu in a portal:
  *
- * Usage:
  *   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
  *
  *   <div onContextMenu={(e) => handleContextMenu(e, myItems)}>...</div>
  *   <ContextMenu {...contextMenu} onClose={closeContextMenu} />
  *
- * Items follow the ContextMenuItem interface. Separator items have `separator: true`.
- *
- * It is a menu like `ActionMenu`: focus moves to the first item when it
- * opens, the arrows, Home, End and letters move (`moveInMenu`), Escape,
- * Tab or Android's Back close it, and focus goes back to the row.
+ * It keys like `ActionMenu` (`moveInMenu`). Escape, Tab or Android's Back
+ * close it, and focus goes back to the row.
  */
 import React, {
   useCallback,
@@ -55,10 +51,6 @@ interface ContextMenuState {
 interface ContextMenuProps extends ContextMenuState {
   onClose: () => void;
 }
-
-// ---------------------------------------------------------------------------
-// ContextMenu component
-// ---------------------------------------------------------------------------
 
 export const ContextMenu = ({
   x,
@@ -157,9 +149,8 @@ export const ContextMenu = ({
                   closeToOpener();
                   item.onClick?.();
                 }}
-                // A long press opens this on a phone, so rows are 44 px
-                // tall there and 36 px under a pointer. The row, its glyph
-                // and its disabled look are `ActionMenu`'s (MENU_ITEM).
+                // `ActionMenu`'s row: 44 px tall on a phone, where a long
+                // press opens this, and 36 px under a pointer.
                 className={MENU_ITEM}
               >
                 {item.icon && (
@@ -177,9 +168,7 @@ export const ContextMenu = ({
   return createPortal(content, document.body);
 };
 
-// ---------------------------------------------------------------------------
-// useContextMenu hook — manages ContextMenu open/close + items state
-// ---------------------------------------------------------------------------
+// useContextMenu: the menu's open state and items
 
 export const useContextMenu = () => {
   const [state, setState] = useState<ContextMenuState>({

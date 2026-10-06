@@ -1,8 +1,6 @@
 /**
- * Shared Pulse Types and Utilities.
- *
- * Days and streaks are days on the reader's calendar: the zone Pulse sends
- * with `?tz=`, or the runtime's own without one.
+ * Pulse types and helpers. Days and streaks are days on the reader's
+ * calendar: the zone Pulse sends with `?tz=`, or the runtime's own.
  */
 import { addCalendarDays, dayInZone } from "./dates.ts";
 
@@ -91,9 +89,7 @@ export interface StreakResult {
   lastDay: string | null;
 }
 
-/**
- * Format a Date or date string to local YYYY-MM-DD.
- */
+/** A Date or date string as local YYYY-MM-DD. */
 export function toLocalDay(date: Date | string): string {
   if (typeof date === "string") {
     const match = date.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -109,9 +105,7 @@ export function toLocalDay(date: Date | string): string {
 }
 
 /**
- * Compute the streak of logged interactions.
- *
- * Rules:
+ * The streak of logged interactions:
  * - Counts days with at least one interaction whose `type` is not "import"
  *   and whose `source` is null (or undefined).
  * - Consecutive days ending today or yesterday keep the streak active.

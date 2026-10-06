@@ -3,13 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <!--
-      viewport-fit=cover lets the app paint into the display cutout area; the
-      mobile tab bar pads itself with env(safe-area-inset-bottom) so it still
-      clears the iOS home indicator, and the shell pads itself for the status
-      bar and a side cutout.
+      viewport-fit=cover paints into the cutout area. The tab bar and the shell
+      pad themselves with the safe-area insets.
       interactive-widget=resizes-content makes Android shrink the page for the
-      keyboard, so a field and its Save button stay above it. iOS ignores it,
-      and useSoftKeyboard covers iOS.
+      keyboard. iOS ignores it, and useSoftKeyboard covers iOS.
     -->
     <meta
       name="viewport"
@@ -20,9 +17,8 @@
       content="Contrack — A self-hosted People CRM for managing your personal and professional network. Keyboard-first, privacy-focused."
     />
     <!--
-      One per palette. The browser picks the matching one, so the phone's
-      status bar and the desktop title bar follow the page rather than sitting
-      in a colour the app stopped using several versions ago.
+      One per palette, so the phone's status bar and the desktop title bar
+      follow the page.
     -->
     <meta
       name="theme-color"
@@ -36,22 +32,16 @@
     />
 
     <!--
-      Paints the chosen theme before the first frame. A file rather than an
-      inline script because the production CSP is `script-src 'self'`, and one
-      flash of the wrong palette is not worth loosening it. See
-      public/theme-boot.js.
+      Paints the chosen theme before the first frame. A file, not an inline
+      script, because the production CSP is `script-src 'self'`.
     -->
     <script src="/theme-boot.js"></script>
 
     <!--
-      Preload the two Latin faces. They are self-hosted (see src/fonts.css) and
-      always needed, but the browser only discovers them after it has parsed
-      the CSS — which is a whole round trip late. `crossorigin` is required
-      even same-origin, because font fetches are CORS-mode and a preload
-      without it is a second, unused fetch.
-
-      Only the `latin` subsets are preloaded; every other subset stays lazy
-      behind its unicode-range, which is the point of shipping them separately.
+      Preloads the two Latin faces (src/fonts.css), which the browser finds
+      only after it parses the CSS. `crossorigin` is required even on the same
+      origin: font fetches are CORS-mode, and without it the preload is wasted.
+      Other subsets stay lazy behind their unicode-range.
     -->
     <link
       rel="preload"
@@ -69,18 +59,13 @@
     />
 
     <!--
-      The brand mark: the corvid on the gradient tile. Every icon is generated
-      from src/assets/corvidPaths.ts by `npm run brand:icons`, so do not edit
-      the files in public/ by hand. See docs/brand/README.md.
+      The brand mark. `npm run brand:icons` generates every icon from
+      src/assets/corvidPaths.ts, so do not edit them in public/ by hand.
 
-      One picture per size, not one SVG for every size. Each favicon is drawn
-      for its pixels: 16 is the tab at 1x, 32 the tab at 2x, 48 the tab at 3x
-      and search results. The browser takes the one that fits the screen. An
-      SVG favicon would win over all three and scale one weight to every size,
-      which is what made the tab's bird hard to read. The .ico holds the same
-      three frames for everything that asks for /favicon.ico.
-
-      Browsers pin a favicon hard; the `?v=` query makes them fetch these.
+      One picture per size, each drawn for its pixels (16, 32 and 48). No SVG
+      favicon: it would win over all three and scale one weight to every size.
+      The .ico holds the same three frames. The `?v=` query defeats the
+      browser's favicon cache.
     -->
     <link
       rel="icon"
@@ -109,10 +94,8 @@
     <link rel="manifest" href="/site.webmanifest?v=corvid-2" />
 
     <!--
-      Link previews. The image is the app icon, the name and the first line of
-      the description above, rendered by the same script in the app's own
-      faces. A relative path is the most a self-hosted app can promise: its
-      origin is whatever the instance is served from.
+      Link previews. The path is relative: a self-hosted app cannot know its
+      origin.
     -->
     <meta property="og:type" content="website" />
     <meta property="og:title" content="Contrack" />
@@ -129,10 +112,7 @@
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
 
-    <!--
-      Base title only. Every route sets its own via usePageTitle(), which
-      renders "Contrack - <Page>"; this is what shows before React mounts.
-    -->
+    <!-- Shown before React mounts. Each route sets its own (usePageTitle). -->
     <title>Contrack</title>
   </head>
   <body>

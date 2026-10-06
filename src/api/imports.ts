@@ -1,27 +1,15 @@
 /**
- * Imports API client.
- *
- * An import has an account-scoped id that the browser makes when a file is
- * chosen, and the server keeps a durable record under it. These three calls
- * are how the browser finds that record again after the connection that
- * started the import is gone: the status to poll, the rows that failed, and
- * the retry that re-runs them.
- *
- * Through `apiJson` like the rest of the app, so a `401` here reaches
- * AuthGate and a `404` is an `ApiError` the modal can read the status off.
- *
- * @module api/imports
+ * An import's durable record, under the id the browser made when the file
+ * was chosen. These calls find it again after the starting connection is
+ * gone: the status to poll, the rows that failed, and the retry.
  */
 import { apiJson } from "./client";
 import { useQuery } from "@tanstack/react-query";
 
 /**
- * Where an import is.
- *
- * `running` is before anything is committed. `imported` is after the
- * contacts are committed and while the duplicate check runs. `complete` is
- * the end, with a summary. `failed` means nothing was imported and the same
- * request is safe to send again under the same id.
+ * `running`: nothing committed yet. `imported`: committed, the duplicate
+ * check runs. `complete`: done, with a summary. `failed`: nothing imported,
+ * and the same request is safe to resend under the same id.
  */
 export type ImportStatus = "running" | "imported" | "complete" | "failed";
 

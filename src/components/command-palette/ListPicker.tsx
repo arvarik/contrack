@@ -1,10 +1,6 @@
 /**
- * ListPicker — Inline list membership picker for the action sub-menu.
- *
- * Shows all available lists with checkmarks for current memberships.
- * Enter on a list toggles membership. Escape returns to action menu.
- *
- * @module components/command-palette/ListPicker
+ * The actions menu's list picker: every list, checked where the contact is
+ * on it. Enter toggles. Escape returns to the menu.
  */
 import React, { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { motion } from "motion/react";
@@ -21,15 +17,11 @@ import { DURATION, EASE } from "../../lib/motion";
 import { cn, errorText } from "../../lib/utils";
 import { ListIcon } from "../../views/contact-list/CreateListModal";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 interface ListPickerProps {
   contactId: string;
   contactName: string;
   onBack: () => void;
 }
-
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export const ListPicker: React.FC<ListPickerProps> = ({
   contactId,
@@ -44,14 +36,14 @@ export const ListPicker: React.FC<ListPickerProps> = ({
   const listboxId = useId();
   const [pendingListId, setPendingListId] = useState<string | null>(null);
 
-  // ── Get current list memberships for this contact ───────────────────────
+  // Get current list memberships for this contact
   const memberListIds = useMemo(() => {
     const contact = contacts.find((c) => c.id === contactId);
     if (!contact?.lists) return new Set<string>();
     return new Set(contact.lists.map((l) => l.id));
   }, [contacts, contactId]);
 
-  // ── Toggle membership ──────────────────────────────────────────────────
+  // Toggle membership
   const handleToggle = useCallback(
     async (listId: string) => {
       const listName = lists.find((l) => l.id === listId)?.name ?? "list";
@@ -74,12 +66,12 @@ export const ListPicker: React.FC<ListPickerProps> = ({
     [lists, memberListIds, contactId, contactName, addToList, removeFromList],
   );
 
-  // ── Keyboard navigation ─────────────────────────────────────────────────
+  // Keyboard navigation
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       // The palette's search box keeps the focus while the picker shows, so
-      // its keys are the picker's. The picker skipped every input, so it took
-      // no key at all. Another field, or a focused button, keeps its own.
+      // its keys are the picker's. Another field, or a focused button, keeps
+      // its own.
       const target = e.target instanceof Element ? e.target : null;
       if (
         target &&
@@ -191,8 +183,7 @@ export const ListPicker: React.FC<ListPickerProps> = ({
                   isPending && "opacity-50",
                 )}
               >
-                {/* The list's icon, drawn as the lists page draws it. Its
-                    name, such as "star", used to show as text. */}
+                {/* The list's icon, drawn as the lists page draws it. */}
                 <ListIcon
                   icon={list.icon}
                   className="w-4 h-4 shrink-0 text-on-surface-variant"

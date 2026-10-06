@@ -1,15 +1,7 @@
 /**
- * The next follow-up, said as a fact: how late it is, or when it is due.
- *
- * "Follow-up 3 days overdue", "Follow-up due today", "Follow-up due Friday",
- * "Follow-up due in 9 days". The contact page's banner says it, and a
- * Network row carries it in its name and in the calendar glyph's tooltip.
- * The words are Pulse's due chip (`describeDueChip`) and the tones are its
- * `DUE_TONE`, so a follow-up reads the same on Pulse, on the contact and in
- * the list. The days are counted by `calendarDaysBetween`, which the map's
- * overdue count uses too.
- *
- * @module lib/followUp
+ * The next follow-up as a fact: "Follow-up 3 days overdue", "Follow-up due
+ * Friday". The contact page's banner and a Network row say it, in the words
+ * and tones of Pulse's due chip, so a follow-up reads the same everywhere.
  */
 import { calendarDaysBetween } from "../../shared/dates";
 import { describeDueChip } from "../views/pulse/lib/upNext";
@@ -32,12 +24,9 @@ interface FollowUpDue {
 }
 
 /**
- * Describe `nextFollowUpAt` against `now`. Null when there is no follow-up,
- * or when the value is not a date.
- *
+ * Describe `nextFollowUpAt` against `now`, or null when it is no date.
  * Counted in calendar days, so a follow-up due at 9 AM is "due today" all
- * day and "1 day overdue" from midnight. A date with no time, which is what
- * the follow-up dialog writes, is that day on the reader's calendar.
+ * day. A date with no time is that day on the reader's calendar.
  */
 export function describeFollowUp(
   value: string | null | undefined,

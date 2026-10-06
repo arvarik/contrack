@@ -1,18 +1,13 @@
 /**
- * The questions under "Try asking", drawn once from the account's pool.
+ * The questions under "Try asking", drawn once from the account's pool. The
+ * Ask page draws six and the palette's AI mode four, both through here. The
+ * pool is the server's (`GET /api/search/starters`), fetched in an idle
+ * moment, so the questions are there when a list opens.
  *
- * The Ask page draws six and the palette's AI mode draws four, and both come
- * through here, so the two can never disagree about where their questions come
- * from. The pool is the server's (`GET /api/search/starters`), which the app
- * fetches in an idle moment, so the questions are there when a list opens.
- *
- * A draw is made when the list first has a pool, and it stays put while the
- * pool refreshes behind it, so no chip moves under a pointer. A new `draw`
- * number draws again: the Ask page's Clear bumps it. A pool that is empty, or
- * that failed to load, draws nothing: a question that finds nobody is worse
- * than no question.
- *
- * @module hooks/useStarterDraw
+ * A draw is made when the list first has a pool, and stays put while the
+ * pool refreshes, so no chip moves under a pointer. A new `draw` number (the
+ * Ask page's Clear) draws again. An empty or failed pool draws nothing,
+ * because a question that finds nobody is worse than none.
  */
 import { useEffect, useState } from "react";
 import { useStarterQuestions } from "../api";

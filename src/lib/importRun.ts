@@ -1,26 +1,14 @@
 /**
- * The parts of an import the browser has to get right without React.
- *
- * Two things went wrong before this file existed. The import stream was read
- * to its end and whatever had arrived by then was shown as the result, so a
- * connection that dropped mid-way showed "Import Complete" over an import the
- * server was still writing, or had never received. And every request made
- * fresh contacts, so the natural response to that uncertainty, trying again,
- * imported the address book twice.
- *
- * The stream reader here says which of two things happened: a `done` frame
- * arrived, or the stream ended without one. Only the first is a result. The
- * storage helpers keep the import id the browser made, per account, so a
- * reload can find the import the server is still running. Both are plain
- * functions with plain tests.
- *
- * @module lib/importRun
+ * The parts of an import the browser must get right without React. The
+ * stream reader tells a `done` frame from a stream that ended without one,
+ * because only the first is a result: a dropped connection says nothing
+ * about the import. The storage helpers keep the import id per account, so
+ * a reload finds the import the server is still running instead of
+ * importing the address book twice.
  */
 import type { ImportPhase, ImportStatus, ImportSummary } from "../api/imports";
 
-// ---------------------------------------------------------------------------
 // The stream
-// ---------------------------------------------------------------------------
 
 /** One progress frame from the import stream. */
 export interface ImportProgress {
@@ -33,12 +21,9 @@ export interface ImportProgress {
 }
 
 /**
- * How the stream ended.
- *
- * `done` is the server's word that it finished, with what it found.
- * `interrupted` is the connection ending before that word, which says
- * nothing about the import: it may be running, finished, or never received.
- * The caller polls the record to find out.
+ * How the stream ended. `done` is the server's word that it finished.
+ * `interrupted` is the connection ending first: the import may be running,
+ * finished or never received, so the caller polls the record.
  */
 export type ImportStreamResult =
   | { kind: "done"; status: ImportStatus; summary: ImportSummary | null }
@@ -68,13 +53,10 @@ function summaryOf(value: unknown): ImportSummary | null {
 }
 
 /**
- * Read an import stream to its `done` frame, or to its end.
- *
- * Frames are `data: <json>` lines. A line that is not JSON is skipped, as it
- * always was. Bytes are decoded as a stream, so a multi-byte character split
- * across two chunks is still one character. Reading stops at the `done`
- * frame rather than at the end of the body, so a server that leaves the
- * connection open after finishing does not hold the modal open with it.
+ * Read an import stream of `data: <json>` lines to its `done` frame, or to
+ * its end. A line that is not JSON is skipped. The decoder streams, so a
+ * character split across two chunks stays whole. Reading stops at `done`, so
+ * a connection left open does not hold the modal open.
  */
 export async function readImportStream(
   response: Response,
@@ -134,9 +116,7 @@ export async function readImportStream(
   return { kind: "interrupted" };
 }
 
-// ---------------------------------------------------------------------------
 // Remembering the import across a reload
-// ---------------------------------------------------------------------------
 
 /** What the browser keeps about the import it started. */
 interface RememberedImport {
@@ -150,13 +130,10 @@ export const IMPORT_KEY_PREFIX = "contrack:import:";
 const LOCAL_ACCOUNT = "local";
 
 /**
- * The storage key for one account's import.
- *
- * `localStorage` is keyed by origin, not by account, so without the account
- * in the key one person signing in after another would be offered a
- * reconnect to an import that is not theirs and that the server would
- * answer 404 for. The id is encoded so a colon in it cannot read as a
- * different account.
+ * The storage key for one account's import. `localStorage` is per origin, so
+ * the account is in the key, or the next person to sign in would be offered
+ * someone else's import. The id is encoded, so a colon cannot read as
+ * another account.
  */
 export function importKey(accountId: string | null | undefined): string {
   const account = accountId && accountId.trim() ? accountId : LOCAL_ACCOUNT;
@@ -216,17 +193,11 @@ export function forgetImport(accountId: string | null | undefined): void {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Polling
-// ---------------------------------------------------------------------------
-
 /**
- * How the modal follows an import it is no longer streaming.
- *
- * A record is asked for every `intervalMs` until its status settles. A poll
- * that cannot reach the server at all counts as a miss rather than an
- * answer, because the server may be restarting, and after `maxMisses` in a
- * row the modal stops and says so. Mutable so a test can shorten the wait.
+ * How the modal polls an import it is no longer streaming: every
+ * `intervalMs` until the status settles. A poll that cannot reach the server
+ * is a miss, since it may be restarting, and after `maxMisses` in a row the
+ * modal stops and says so. Mutable, so a test can shorten the wait.
  */
 export const POLLING = {
   intervalMs: 1500,

@@ -1,9 +1,4 @@
-/**
- * How a device is described in the Devices list: what it runs, and how it
- * signed in.
- *
- * @module shared/devices
- */
+/** How the Devices list describes a device: what it runs, how it signed in. */
 
 /**
  * The ways a session can begin. The server writes one of these to
@@ -19,8 +14,8 @@ const SESSION_METHOD_LABELS: Record<SessionMethod, string> = {
 };
 
 /**
- * The Devices list's words for how a session signed in. A session from before
- * the method was recorded has none, and reads as a password.
+ * The Devices list's words for how a session signed in. A session with no
+ * recorded method reads as a password.
  */
 export function describeSessionMethod(method?: string | null): string {
   return method && Object.hasOwn(SESSION_METHOD_LABELS, method)
@@ -28,7 +23,7 @@ export function describeSessionMethod(method?: string | null): string {
     : SESSION_METHOD_LABELS.password;
 }
 
-/** Turn a User-Agent into something a person can recognise their laptop in. */
+/** Turn a User-Agent into something a person can recognize their laptop in. */
 export function describeDevice(userAgent: string | null): string {
   if (!userAgent) return "Unknown device";
   const browser = /Firefox\//.test(userAgent)

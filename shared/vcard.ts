@@ -1,40 +1,23 @@
-// =============================================================================
-// vCard 3.0 — reading and writing
-// =============================================================================
-// One module, shared by the server's export and the browser's import, because
-// the promise being made is a round trip: a .vcf this app writes has to be a
-// .vcf this app reads back with nothing lost. Two implementations could not
-// hold that promise, and the round-trip test would be testing a coincidence.
+// vCard 3.0, reading and writing. One module for the server's export and the
+// browser's import, so a .vcf this app writes reads back with nothing lost.
 //
-// ── Why 3.0 and not 4.0 ────────────────────────────────────────────────────
-// RFC 6350 (vCard 4.0) is the current standard and almost nothing imports it.
-// Apple Contacts, Google Contacts and Outlook all export 3.0 and all read 3.0.
-// An export nobody can open is not an escape hatch, so the version here is the
-// one the destinations accept.
+// 3.0, not 4.0: Apple Contacts, Google Contacts and Outlook all export and
+// read 3.0, and almost nothing imports 4.0.
 //
-// ── What makes a vCard parser hard ─────────────────────────────────────────
-// The format looks like key-value pairs and is not. Four things bite, and each
-// was a real failure of the regular expressions this replaces:
-//
-//   1. FOLDING. A line longer than 75 octets is continued on the next line,
-//      which begins with one space or tab. `^FN:(.*)$` reads half a name.
-//   2. ESCAPING. A comma, a semicolon, a backslash or a newline inside a value
-//      is backslash-escaped. Splitting on a raw `;` cuts "Smith\; Jr." in two.
-//   3. PARAMETERS. `TEL;TYPE=WORK,VOICE:...`, `TEL;WORK;VOICE:...` (the 2.1
-//      shorthand, still emitted by phones), and `TEL;TYPE="WORK,VOICE":...`
-//      are the same property written three ways.
-//   4. ENCODING. `ENCODING=QUOTED-PRINTABLE` appears throughout exports from
-//      older Android and Outlook builds, and reads as mojibake without it.
-//
-// So this parses properly: unfold, split the content line, decode, and hand
-// back a structure. Nothing above the parser has to know about any of it.
-// =============================================================================
+// The format is not plain key-value pairs. The parser handles four things:
+//   1. Folding: a line over 75 octets continues on the next, which begins
+//      with one space or tab.
+//   2. Escaping: a comma, semicolon, backslash or newline in a value is
+//      backslash-escaped, so "Smith\; Jr." is one value.
+//   3. Parameters: `TEL;TYPE=WORK,VOICE:`, `TEL;WORK;VOICE:` (the 2.1
+//      shorthand phones still write) and `TEL;TYPE="WORK,VOICE":` are one
+//      property written three ways.
+//   4. Encoding: `ENCODING=QUOTED-PRINTABLE`, common in older Android and
+//      Outlook exports.
 
 import { vcardBirthdayLine } from "./birthday.ts";
 
-// ---------------------------------------------------------------------------
 // The shape a parsed card takes
-// ---------------------------------------------------------------------------
 
 /** One property line, after unfolding, parameter parsing and decoding. */
 export interface VCardProperty {
@@ -43,12 +26,9 @@ export interface VCardProperty {
   /** Upper-cased: `FN`, `TEL`, `X-SOCIALPROFILE`. */
   name: string;
   /**
-   * Parameters, upper-cased keys, values as given.
-   *
-   * A parameter can repeat (`TYPE=WORK;TYPE=VOICE`) and can carry a
-   * comma-separated list (`TYPE=WORK,VOICE`). Both flatten into one array, so
-   * a caller asking "is this a work number" never has to care which form the
-   * exporter chose.
+   * Parameters, upper-cased keys, values as given. A repeated parameter
+   * (`TYPE=WORK;TYPE=VOICE`) and a list (`TYPE=WORK,VOICE`) both flatten into
+   * one array.
    */
   params: Record<string, string[]>;
   /** The value, unescaped and decoded. Structured values keep their `;`. */
@@ -60,9 +40,7 @@ export interface ParsedVCard {
   properties: VCardProperty[];
 }
 
-// ---------------------------------------------------------------------------
 // Escaping
-// ---------------------------------------------------------------------------
 
 /** Escape one component of a value: `\`, `;`, `,` and newlines. */
 export function escapeValue(value: string): string {
@@ -97,11 +75,8 @@ export function unescapeValue(value: string): string {
 }
 
 /**
- * Split a structured value (`N`, `ADR`, `ORG`) on unescaped semicolons.
- *
- * Splitting on `/;/` instead cuts inside any component that contains one, and
- * a surname of "Smith; Jr." is exactly the kind of value that is escaped for a
- * reason.
+ * Splits a structured value (`N`, `ADR`, `ORG`) on unescaped semicolons, so
+ * an escaped one inside a component stays.
  */
 export function splitComponents(value: string): string[] {
   const parts: string[] = [];
@@ -121,20 +96,15 @@ export function splitComponents(value: string): string[] {
   return parts.map(unescapeValue);
 }
 
-// ---------------------------------------------------------------------------
 // Folding
-// ---------------------------------------------------------------------------
 
 /** The line length RFC 2426 asks for, not counting the CRLF. */
 const FOLD_AT = 75;
 
 /**
- * Fold one content line.
- *
- * Counted in UTF-16 code units rather than octets, and never inside a
- * surrogate pair. The specification counts octets, but every reader in
- * practice accepts a shorter line, and splitting an emoji in half produces a
- * file that is not valid UTF-8 at all.
+ * Folds one content line. Counted in UTF-16 code units, not the spec's
+ * octets, and never inside a surrogate pair: readers accept a shorter line,
+ * and a split emoji is not valid UTF-8.
  */
 export function foldLine(line: string): string {
   if (line.length <= FOLD_AT) return line;
@@ -169,17 +139,12 @@ function unfold(text: string): string[] {
   return lines;
 }
 
-// ---------------------------------------------------------------------------
 // Quoted-printable
-// ---------------------------------------------------------------------------
 
 /**
- * Decode `ENCODING=QUOTED-PRINTABLE`, UTF-8 aware.
- *
- * `=C3=A9` is two octets of one character, so the bytes are gathered and
- * decoded together rather than one at a time — decoding each `=XX` on its own
- * turns "José" into "JosÃ©", which is the classic symptom of an address book
- * imported from an older phone.
+ * Decodes `ENCODING=QUOTED-PRINTABLE` as UTF-8. The bytes are decoded
+ * together: `=C3=A9` is one character, and decoding each `=XX` alone turns
+ * "José" into "JosÃ©".
  */
 function decodeQuotedPrintable(value: string): string {
   const bytes: number[] = [];
@@ -202,9 +167,7 @@ function decodeQuotedPrintable(value: string): string {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Parsing
-// ---------------------------------------------------------------------------
 
 /** Split a content line into its name, its parameters and its value. */
 function parseContentLine(line: string): VCardProperty | null {
@@ -280,13 +243,8 @@ function parseContentLine(line: string): VCardProperty | null {
 }
 
 /**
- * Every card in a file.
- *
- * A `.vcf` holding a thousand contacts is one file of a thousand cards, which
- * is how every address book exports. Anything outside a BEGIN/END pair is
- * ignored rather than treated as an error: files gain stray blank lines and
- * byte-order marks in transit, and refusing a whole import over one is not a
- * migration path.
+ * Every card in a file. Anything outside a BEGIN/END pair is ignored, not an
+ * error: files gain stray blank lines and byte-order marks in transit.
  */
 export function parseVCards(text: string): ParsedVCard[] {
   const cards: ParsedVCard[] = [];
@@ -318,17 +276,11 @@ export function valuesOf(card: ParsedVCard, name: string): VCardProperty[] {
 }
 
 /**
- * The first value of one property, unescaped. Null when there is none.
- *
- * For SIMPLE values only — `FN`, `TITLE`, `NOTE`, `BDAY`. A structured value
- * (`N`, `ORG`, `ADR`) or a list (`CATEGORIES`) must be split BEFORE it is
- * unescaped, or an escaped separator inside a component becomes a real one and
- * the value is cut in two. Use {@link firstRaw} with {@link splitComponents}
- * or {@link splitList} for those.
- *
- * That ordering is not a style preference. `N:Smith\; Jr.;Robert;;;` is one
- * surname and one given name; unescaping first turns it into a surname of
- * "Smith" and a given name of " Jr.".
+ * The first value of one property, unescaped, or null. For simple values
+ * only (`FN`, `TITLE`, `NOTE`, `BDAY`). A structured value or a list must be
+ * split before it is unescaped, or `N:Smith\; Jr.;Robert;;;` loses its
+ * surname. Use {@link firstRaw} with {@link splitComponents} or
+ * {@link splitList} for those.
  */
 export function firstValue(card: ParsedVCard, name: string): string | null {
   const raw = firstRaw(card, name);
@@ -342,10 +294,8 @@ export function firstRaw(card: ParsedVCard, name: string): string | null {
 }
 
 /**
- * Split a comma-separated list (`CATEGORIES`, `NICKNAME`) and unescape each.
- *
- * Same rule as {@link splitComponents}, one separator along: a tag containing
- * a comma was escaped for a reason.
+ * Splits a comma-separated list (`CATEGORIES`, `NICKNAME`) on unescaped
+ * commas and unescapes each item.
  */
 export function splitList(value: string): string[] {
   const parts: string[] = [];
@@ -386,9 +336,7 @@ export function groupLabel(
   return label || null;
 }
 
-// ---------------------------------------------------------------------------
 // Writing
-// ---------------------------------------------------------------------------
 
 /** What a card is built from. Every field is optional except the name. */
 export interface VCardInput {
@@ -409,10 +357,8 @@ export interface VCardInput {
 }
 
 /**
- * Generational and honorific suffixes that belong in N's fifth component.
- *
- * Without this "Martin Luther King Jr." exports with a family name of "Jr.",
- * which is how a contact ends up filed under J in a phone.
+ * Suffixes that belong in N's fifth component, so "Rowan Vale Jr." is not
+ * filed under J.
  */
 const NAME_SUFFIXES = new Set([
   "jr",
@@ -439,18 +385,12 @@ interface SplitName {
 }
 
 /**
- * Guess `N` from a display name.
+ * Guesses `N` from a display name, for a contact with no first or last name.
+ * `N` is required, and address books sort by it.
  *
- * Only used when the contact has neither a first nor a last name of its own,
- * which is the common case for somebody added by hand: the app asks for one
- * name field. `N` is required by vCard 3.0 and many address books sort and
- * group by it, so exporting `N:;;;;` files every contact under nothing.
- *
- * Deliberately conservative. Two shapes are recognised — "Family, Given" and
- * "Given … Family" — and anything with a semicolon in it is left alone,
- * because a name that already contains the format's own separator is one this
- * cannot be confident about. A wrong guess is worse than an empty N: an empty
- * one falls back to FN, a wrong one files somebody under the wrong letter.
+ * Conservative: only "Family, Given" and "Given … Family", and nothing with a
+ * semicolon. A wrong guess files somebody under the wrong letter, and an
+ * empty N falls back to FN.
  */
 export function splitDisplayName(name: string): SplitName {
   const empty = { given: "", family: "", suffix: "" };
@@ -482,11 +422,8 @@ export function splitDisplayName(name: string): SplitName {
 }
 
 /**
- * A timestamp `REV` can carry.
- *
- * SQLite writes `2026-09-11 19:35:49` and the app writes ISO, so the column
- * holds both. RFC 2426 wants ISO 8601, and a space where the `T` belongs is
- * not a date-time any reader has to accept.
+ * A timestamp `REV` can carry. The column holds SQLite's
+ * `2026-09-11 19:35:49` and ISO, and RFC 2426 wants ISO 8601.
  */
 function isoTimestamp(value: string): string | null {
   const parsed = new Date(
@@ -504,30 +441,20 @@ function typeParam(label: string | null | undefined): string {
   return cleaned ? `;TYPE=${cleaned}` : "";
 }
 
-/**
- * `PREF` marks the primary value.
- *
- * vCard 3.0 spells it as another TYPE rather than as 4.0's `PREF=1`, and
- * readers that ignore it lose only the ordering.
- */
+/** `PREF` marks the primary value: in 3.0 another TYPE, not 4.0's `PREF=1`. */
 function prefParam(isPrimary: boolean | undefined): string {
   return isPrimary ? ";TYPE=PREF" : "";
 }
 
 /**
- * One contact as one vCard.
- *
- * The property set is chosen for what survives a round trip through other
- * address books, not for completeness. Interactions, relationship scores and
- * AI briefings are not contact-card fields and belong in the JSON export,
- * which is the one that loses nothing.
+ * One contact as one vCard, with the properties other address books keep.
+ * Interactions, scores and briefings belong in the JSON export.
  */
 export function serializeVCard(contact: VCardInput): string {
   const lines: string[] = ["BEGIN:VCARD", "VERSION:3.0"];
   const push = (line: string) => lines.push(foldLine(line));
 
-  // N is structured: family;given;additional;prefix;suffix. Required by 3.0,
-  // and a reader that only understands N shows nothing without it.
+  // N is family;given;additional;prefix;suffix, and required by 3.0.
   const guessed =
     contact.firstName || contact.lastName
       ? {
@@ -565,9 +492,8 @@ export function serializeVCard(contact: VCardInput): string {
 
   for (const address of contact.addresses ?? []) {
     if (!address.address) continue;
-    // Contrack keeps one free-text address rather than seven components, so it
-    // goes in the street slot. Every reader shows the joined value, and a
-    // round trip through this module gets the same string back.
+    // One free-text address goes in the street slot. Readers show the joined
+    // value, and a round trip returns the same string.
     push(
       `ADR${typeParam(address.label)}${prefParam(address.isPrimary)}:;;${escapeValue(address.address)};;;;`,
     );

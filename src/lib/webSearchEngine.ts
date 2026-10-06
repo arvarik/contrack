@@ -1,16 +1,9 @@
 /**
- * webSearchEngine: the words for what contact research searches the web
- * with, wherever an engine is named: Settings → Administration → AI → Web search, the
- * Contact enrichment page, its confirmation, and a contact's Enrich menu.
- *
- * Three engines (`shared/webSearchEngine`): the web search model's own
- * search, named by its provider ("Google Gemini"), a self-hosted SearXNG,
- * or both at once. Each tile says what the engine does and what it costs,
- * because the choice changes the bill: the provider bills its searches,
- * and SearXNG's searches are free while the Strong model that reads the
- * pages is not.
- *
- * @module lib/webSearchEngine
+ * The words for what contact research searches the web with, wherever an
+ * engine is named: the web search model's own search, named by its provider,
+ * a self-hosted SearXNG, or both. Each tile says what it costs, because the
+ * provider bills its searches, and SearXNG's are free while the Strong model
+ * that reads the pages is not.
  */
 import type {
   EngineChoice,
@@ -22,11 +15,8 @@ import type {
 const NO_PROVIDER = "Web search model";
 
 /**
- * An engine's name: the provider for its own search, "SearXNG", or both
- * named, "Google Gemini and SearXNG".
- *
- * @param provider - The web search model's provider, such as "Google
- *   Gemini", or null when none is connected.
+ * An engine's name: the provider (null when none is connected), "SearXNG",
+ * or both, "Google Gemini and SearXNG".
  */
 export function engineName(
   engine: WebSearchEngine,

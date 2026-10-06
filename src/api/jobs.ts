@@ -1,13 +1,6 @@
 /**
- * Background jobs API hook.
- *
- * Backs the Background jobs card on Settings → Administration → Instance
- * health: every recurring job with its last run and its next, and the jobs
- * that failed in the last 24 hours. The route is class `admin` and answers a
- * member with `403 ADMIN_REQUIRED`. The types come from its contract in
- * `shared/contracts/jobs.ts`.
- *
- * @module api/jobs
+ * The Background jobs card on Instance health: each recurring job's last and
+ * next run, and the jobs that failed in the last 24 hours. Admins only.
  */
 import { useQuery } from "@tanstack/react-query";
 import { apiJson } from "./client";

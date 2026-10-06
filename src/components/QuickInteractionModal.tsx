@@ -1,26 +1,14 @@
 /**
- * QuickInteractionModal: log an interaction without leaving the page.
+ * Log an interaction without leaving the page. ⌘⇧I opens it (Ctrl+Alt+I on
+ * Windows and Linux), Escape closes it, ⌘ Enter saves.
  *
- * Keyboard: ⌘⇧I opens it (Ctrl+Alt+I on Windows and Linux), Escape closes
- * it, ⌘ Enter saves (Ctrl+Enter on Windows and Linux).
+ * A header and a "Who?" picker around the compact {@link InteractionComposer},
+ * the contact page's composer. Its draft survives a close.
+ * `initialContactId` opens it for one person, with no picker and focus in the
+ * editor.
  *
- * A thin wrapper. The dialog adds two things to the compact
- * {@link InteractionComposer}: a header, and the "Who?" picker that chooses
- * the contact. Everything a person writes in, the editor with @mentions, the
- * type control, the follow-up line and Save, is the composer the contact
- * page uses. A note typed here is kept as a draft, so a close by Escape, a
- * tap outside or Back loses nothing: it is there on the next open. The dialog used to have its own textarea with no mentions and
- * no follow-up, so the same act behaved two ways.
- *
- * `initialContactId` opens the dialog for one person: the contact is chosen
- * already, the picker is not shown, and focus starts in the editor. The Pulse
- * queue and the map's hover card open it that way.
- *
- * The picker keeps its own keyboard handling because it has product-specific
- * behaviour (ghosts left out, the top six only) that the generic Combobox
- * does not model.
- *
- * @module components/QuickInteractionModal
+ * The picker has its own keys, because it leaves out ghosts and shows the
+ * top six, which the generic Combobox does not model.
  */
 import React, {
   useState,
@@ -54,20 +42,15 @@ import {
 import { NO_AUTOCORRECT } from "./ui/SearchField";
 
 /**
- * The composer carries tiptap and ProseMirror, so it arrives in its own
- * chunk, the same chunk the contact page loads. The dialog is mounted on
- * every page and closed almost all the time, and a closed dialog loads none
- * of it. Once the chunk is here, the dialog draws the editor at once
- * (`composerChunk`).
+ * The composer carries tiptap and ProseMirror, so it is its own chunk
+ * (`composerChunk`), the contact page's. A closed dialog loads none of it.
  */
 const InteractionComposer = composerChunk.Component;
 
 interface QuickInteractionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  /**
-   * Open for this contact: it is chosen already and the picker is not shown.
-   */
+  /** Open for this contact: chosen already, with no picker. */
   initialContactId?: string;
 }
 
@@ -124,9 +107,8 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
     }
   }, [isOpen]);
 
-  // Focus on open: the picker, or the editor when the contact is chosen
-  // already. Deferred past the Modal's own first focus (the dialog itself,
-  // as this dialog has no title), so this one wins.
+  // Focus on open: the picker, or the editor when the contact is chosen.
+  // Deferred past the Modal's own first focus, so this one wins.
   useEffect(() => {
     if (!isOpen) return;
     const t = setTimeout(() => {
@@ -288,8 +270,7 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
                     onChange={(e) => setContactQuery(e.target.value)}
                     onKeyDown={handleContactKeyDown}
                     placeholder="Search for a contact…"
-                    // text-base on mobile prevents iOS Safari's auto-zoom on
-                    // focus (which would otherwise rescale the bottom sheet).
+                    // text-base on a phone, or iOS Safari zooms on focus.
                     className="flex-1 bg-transparent border-none text-base sm:text-sm text-on-surface placeholder:text-on-surface-variant"
                     autoComplete="off"
                     {...NO_AUTOCORRECT}

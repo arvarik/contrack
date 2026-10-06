@@ -1,14 +1,8 @@
 /**
- * Why a person is in the Ask Contrack results: the fields of their profile
- * that answer the question, as the server finds them with no model call.
- *
- * "Who is interested in machine learning?" finds one person through their
- * interests and another through their role. Each result carries the fields
- * that matched, with the question's words marked in the contact's own text,
- * so the card can say "Interests: Machine Learning" for one and "Role:
- * Machine Learning Engineer" for the other.
- *
- * @module shared/matchedOn
+ * Why a person is in the Ask results: the profile fields that answer the
+ * question, found with no model call, with the question's words marked. So
+ * a card can say "Interests: Machine Learning" for one person and "Role:
+ * Machine Learning Engineer" for another.
  */
 
 /** A contact field that can answer a question. */

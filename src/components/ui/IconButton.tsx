@@ -1,16 +1,6 @@
 /**
- * IconButton — touch-safe icon-only button.
- *
- * Why this primitive exists:
- *   The codebase had repeated patterns like `<button class="p-1.5">…</button>`
- *   that produced 28–32 px hit targets — below both Apple HIG (44 px) and
- *   Material (48 px) accessibility minimums. On phones these are missable.
- *   This component guarantees a 44 px square minimum regardless of the icon
- *   size, while keeping the *visible* icon size tunable independently.
- *
- * The visible padding only grows the centered icon's halo; the real touch
- * area is the full square. We do NOT inflate the visual chrome — `tone` and
- * `size` only affect color and icon dimensions, never the hit area.
+ * An icon-only button with at least a 44 px square tap area, whatever the
+ * icon's size. `tone` and `size` change only the color and the padding.
  *
  *   <IconButton aria-label="Close" onClick={…}><X className="w-5 h-5" /></IconButton>
  */
@@ -38,8 +28,7 @@ const toneClasses: Record<Tone, string> = {
   danger: "text-error",
 };
 
-// Visible "padding-bubble" sizes. Each is paired with a guaranteed minimum
-// hit-area via `min-w/h-[44px]` so even the `sm` variant remains touch-safe.
+// The visible padding. `min-w/h-[44px]` keeps even `sm` at the tap floor.
 const sizeClasses: Record<Size, string> = {
   sm: "p-1.5",
   md: "p-2",
@@ -54,9 +43,8 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         type="button"
         {...rest}
         className={cn(
-          // Touch-safe baseline: 44px minimum hit area on every device.
-          // The CSS variable -webkit-tap-highlight-color is killed because we
-          // render our own active state.
+          // A 44px minimum tap area on every device. No tap highlight: the
+          // state layer draws the press.
           "state-layer inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-xl transition-colors",
           "disabled:opacity-40 disabled:pointer-events-none",
           "[-webkit-tap-highlight-color:transparent]",

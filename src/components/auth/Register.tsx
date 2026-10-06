@@ -1,13 +1,6 @@
 /**
- * Register — create an account on an instance that takes new ones.
- *
- * Reached from a link on the sign-in screen, and only while the server says
- * `registrationOpen`. The link is hidden otherwise, and the server refuses
- * with `403 REGISTRATION_CLOSED` regardless, because a hidden link is not a
- * gate.
- *
- * The account is always a member. There is no role to choose: an instance
- * that let a stranger pick their own role would not be gated at all.
+ * Creates a member account while `registrationOpen`. The server refuses
+ * with `403 REGISTRATION_CLOSED` otherwise: a hidden link is not a gate.
  */
 import React, { useState } from "react";
 import { Loader2, UserPlus } from "lucide-react";

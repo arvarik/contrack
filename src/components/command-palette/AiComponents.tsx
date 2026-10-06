@@ -34,7 +34,7 @@ interface AIResultCardProps {
   isFallback: boolean;
   /**
    * AI is set up. Without it the reason under the name comes from rules
-   * only, and it takes the plain ink, not the AI colour and its sparkle.
+   * only, and it takes the plain ink, not the AI color and its sparkle.
    */
   ai?: boolean;
 }
@@ -65,9 +65,8 @@ export const AIResultCard = ({
       }}
       className="contents"
     >
-      {/* The avatar wears no ring: a coloured ring around an avatar is the
-          relationship's health everywhere else, and the dot after the name
-          says it here. */}
+      {/* No ring: a ring around an avatar means the relationship's health,
+          and the dot after the name says it here. */}
       <img
         src={match.avatarUrl || fallbackAvatarUrl(match.name)}
         alt=""
@@ -75,7 +74,7 @@ export const AIResultCard = ({
       />
 
       <ContactRowBody contact={match}>
-        {/* The reason: the AI colour while AI answers, plain without it. */}
+        {/* The reason: the AI color while AI answers, plain without it. */}
         {match.aiReason && (
           <motion.span
             initial={{ opacity: 0, y: 2 }}
@@ -97,11 +96,8 @@ export const AIResultCard = ({
       </ContactRowBody>
 
       {/*
-        The question mark of a match AI did not verify, in the top right
-        corner as on the Ask page. A row is an option, and an option holds
-        no second control, so this mark is a picture with a name, not a
-        button: the name joins the option's name, the pointer shows the
-        title, and the group heading above says it for every row.
+        The mark of a match AI did not verify, top right as on Ask. An option
+        holds no second control, so it is a named picture, not a button.
       */}
       {!match.approximate && isUnverified(match, isFallback) && (
         <span

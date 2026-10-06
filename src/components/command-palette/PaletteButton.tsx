@@ -1,14 +1,7 @@
 /**
- * The command palette's button, for a touch screen, which has no ⌘K.
- *
- * Every page header has it (`PageHeader`, the contact's back bar), so a
- * phone opens the palette from any page. Only the Network list had one,
- * so Pulse, Ask, Settings and a contact had no way in. A mouse has the
- * sidebar's button instead. The glyph is the palette's own, not a
- * magnifier: the Network header showed two magnifiers side by side, the
- * palette's and the search field's.
- *
- * @module components/command-palette/PaletteButton
+ * The palette's button for a touch screen, which has no ⌘K, in every page
+ * header. A mouse has the sidebar's button. The glyph is the palette's own,
+ * not a magnifier, which a search field beside it already shows.
  */
 import { Command } from "lucide-react";
 import { openCommandPalette } from "../../lib/appEvents";
