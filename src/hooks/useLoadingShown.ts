@@ -1,18 +1,10 @@
 /**
- * useLoadingShown: whether a loading state should be on screen now.
+ * Whether a loading state should be on screen now. A local search answers
+ * in a few milliseconds most of the time and in a few hundred on a large
+ * network, and a loading state that flashes for a frame reads as a glitch:
  *
- * A search over local notes answers in a few milliseconds most of the time,
- * and in a few hundred on a large network or a slow disk. A loading state
- * drawn for every answer flashes for one frame on the fast ones, which
- * reads as a glitch, and one that vanishes the instant it appears reads as
- * a glitch too. So:
- *
- * 1. The state shows only once the load has lasted `DELAY_MS`. A fast
- *    answer never shows it.
- * 2. Once shown, it stays at least `MINIMUM_MS`, so a slow answer shows it
- *    for long enough to be read, and never blinks.
- *
- * @module hooks/useLoadingShown
+ * 1. The state shows only once the load has lasted `DELAY_MS`.
+ * 2. Once shown, it stays at least `MINIMUM_MS`, so it never blinks.
  */
 import { useEffect, useRef, useState } from "react";
 

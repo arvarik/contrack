@@ -1,17 +1,9 @@
 /**
- * userInteraction.ts — has the person done anything on this page yet?
- *
- * Moving focus is right when a person caused the change and wrong when they
- * did not. Opening a contact from the list should put focus on its name, but
- * loading a contact's address fresh should not: a focused element becomes the
- * point the next Tab starts from, so the first Tab on a freshly loaded page
- * would skip the skip link, the sidebar and the list, and land somewhere in the
- * middle of the page.
- *
- * The first pointer press or key press on the page flips this for good. Both
- * listeners capture, so they run before any handler that navigates.
- *
- * @module lib/userInteraction
+ * Whether the person has done anything on this page yet. Code moves focus
+ * only after a person caused the change: on a freshly loaded page, a moved
+ * focus would make the first Tab skip the skip link and the sidebar. The
+ * first pointer or key press flips it for good. Both listeners capture, so
+ * they run before any handler that navigates.
  */
 
 let interacted = false;

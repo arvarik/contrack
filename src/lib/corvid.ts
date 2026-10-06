@@ -1,28 +1,20 @@
 /**
- * corvid.ts — the seam between whatever wants the bird to move and the birds
- * that move.
- *
- * Nothing here imports React. A view that wants something from the corvid
- * calls one of three functions and forgets about it:
+ * The seam between whatever wants the bird to move and the birds that move.
+ * Nothing here imports React. A view calls one function and forgets it:
  *
  * - `flyCorvid()` asks for a flight. `CorvidFlight`, mounted once in `App`,
  *   is the only listener, so two birds are never in the air at once.
- *   `recallCorvid()` calls a bird that is out home by the short way: the
- *   Ask page's search flight ends that way when the answer arrives.
- * - `corvidReact()` asks the perched bird for one small act: a nod when a
- *   follow-up is done, a hop for a new contact. The bird on the sidebar
- *   perch, the one that is always there, is the listener.
+ *   `recallCorvid()` calls a bird home the short way, as the Ask page does
+ *   when the answer arrives.
+ * - `corvidReact()` asks the sidebar's perched bird for one small act: a nod
+ *   when a follow-up is done, a hop for a new contact.
  * - `noteCorvidActivity()` counts a finished API request. About once a
- *   hundred requests, or once every six to twelve AI answers, the bird
- *   notices the work going on and does something of its own: a preen, a
- *   stretch, now and then a short flight near home. `apiFetch` calls it, so
- *   no view has to.
+ *   hundred requests, or every six to twelve AI answers, the bird does
+ *   something of its own: a preen, a stretch, now and then a short flight.
+ *   `apiFetch` calls it, so no view has to.
  *
- * Every one of these is silent when the account, the Motion row or the
- * operating system asked for no motion: the listeners read the level, and
- * the level is `motionLevel()` below and nothing else.
- *
- * @module lib/corvid
+ * All of them are silent when the account, the Motion row or the operating
+ * system asks for no motion: the listeners read `motionLevel()` below.
  */
 import type { MascotMotion, MotionPreference } from "../api/preferences";
 import type { CorvidReaction } from "./corvidBrain";
@@ -30,9 +22,7 @@ import { between, type Rng } from "./corvidMotion";
 import { overlayIsOpen } from "./keyboard";
 import type { FlightBox, FlightKind } from "./corvidFlight";
 
-// ---------------------------------------------------------------------------
 // Events
-// ---------------------------------------------------------------------------
 
 /** Someone asked the corvid to fly. Owned by `CorvidFlight`. */
 export const CORVID_FLY_EVENT = "contrack:corvid-fly";
@@ -135,9 +125,7 @@ export function corvidReact(
   emit<CorvidReactDetail>(CORVID_REACT_EVENT, { reaction, target });
 }
 
-// ---------------------------------------------------------------------------
 // Activity
-// ---------------------------------------------------------------------------
 
 /**
  * Requests that mean a model did some work. The client side of
@@ -278,9 +266,7 @@ export function flyWhenClear(detail: Partial<CorvidFlyDetail> = {}): void {
   setTimeout(check, 400);
 }
 
-// ---------------------------------------------------------------------------
 // The level
-// ---------------------------------------------------------------------------
 
 /** How much the corvid is allowed to move, once every input has had its say. */
 export type MotionLevel = MascotMotion;

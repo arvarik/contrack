@@ -18,10 +18,9 @@ interface ScrollAnchor {
 
 /**
  * The position saved for the view `key`, or 0. A virtual list passes it to
- * its virtualizer as the first offset: the hook below restores the scroller
- * before paint, but a virtualizer that starts at 0 drew the rows at the top
- * while the scroller showed the saved place, and the first frame of the
- * Network page was an empty list.
+ * its virtualizer as the first offset. The hook below restores the scroller
+ * before paint, but a virtualizer that starts at 0 draws its rows at the top
+ * while the scroller shows the saved place, so the first frame is empty.
  */
 export function savedScroll(key: string): number {
   try {
@@ -70,13 +69,11 @@ function readAnchor(key: string): ScrollAnchor | null {
 
 /**
  * Puts the row saved for `key` back where it was in the view: the same row,
- * the same distance from the top.
- *
- * A pixel offset is not enough on its own. The Recent strip above the rows
- * grows when a contact opens, and a virtual list places its rows from
- * estimates until it has measured them, so the same pixel showed other
- * people: Back from a contact on a phone landed about 230 px away. Returns
- * false when nothing was saved, or the row is not drawn.
+ * the same distance from the top. A pixel offset is not enough: the Recent
+ * strip above the rows grows when a contact opens, and a virtual list places
+ * its rows from estimates until it measures them, so the same pixel can show
+ * other people. Returns false when nothing was saved, or the row is not
+ * drawn.
  */
 export function restoreScrollAnchor(scroller: HTMLElement, key: string) {
   const anchor = readAnchor(key);

@@ -7,55 +7,29 @@
   --font-headline: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-body: "Inter", ui-sans-serif, system-ui, sans-serif;
 
-  /* ===================================================================
-   * THE CONTRACK DESIGN SYSTEM
-   * ===================================================================
-   * Primary Blue: #006A91 — the interactive anchor.
-   * Surface Hierarchy: physical stack of warm paper.
-   * No‑Line Rule: boundaries through bg‑color shifts, never 1px borders.
-   *   A pressable button's edge is part of the control, not a boundary.
-   * Glass Rule: glassmorphism for floating UI only.
-   * Depth Rule: only a button that does something has an edge under it.
+  /* The design system: one primary blue for actions, surfaces stacked like
+   * warm paper, sections told apart by a surface step and never a line, glass
+   * for floating UI only, and an edge only under a button that does something.
    *
-   * ── Contrast contract ──────────────────────────────────────────────
-   * Every color below that is ever used as TEXT or as an ICON clears
-   * WCAG AA (4.5:1) against every surface it actually lands on in this
-   * app — measured, not assumed. The binding cases are not white cards;
-   * they are the pale tints (`bg-primary/15`, `bg-success/10`, …)
-   * that badges and pills are built from, where a color sits on a wash
-   * of itself.
-   *
-   * The previous primary, #009EDB, measured 2.39:1 at its worst and
-   * 3.04:1 on a white card — so 254 `text-primary` call sites, every
-   * filled CTA's white label, and every status pill failed. The palette
-   * is the right place to fix that: one token change repairs every call
-   * site at once and cannot regress the way per-component patches do.
-   *
-   * Verify with scripts/contrast-audit (see docs/ui-ux-review.md) after
-   * touching anything here.
-   * =================================================================== */
+   * Every color used as text or as an icon clears WCAG AA (4.5:1) on every
+   * surface it lands on, the pale washes of badges and pills included. Fix
+   * contrast here, not per component: one token repairs every call site.
+   * themeContrast.test.ts measures it. Run scripts/contrast-audit after a
+   * change. */
 
-  /* ── Primary Palette ────────────────────────────────────────────── */
-  /* 6.05:1 on white · 5.60:1 on surface · 4.68:1 on surface-container-high.
-     Also the fill behind white button labels: contrast is symmetric, so one
-     value satisfies both directions.
-     This used to claim 4.89:1 on an active filter pill as well. It does not:
-     the real number is 4.21:1 on a primary/15 wash over a sectional
-     background and 3.92:1 on primary/20, both short of 4.5. The claim was
-     written before anything measured it. `--color-on-primary-wash` below is
-     what carries text on a wash now, and
-     tests/unit/frontend/style/themeContrast.test.ts measures both. */
+  /* The primary: 6.05:1 on white, 5.60:1 on surface, 4.68:1 on
+     surface-container-high. Also the fill behind white button labels, since
+     contrast is symmetric. Text on a primary wash takes
+     `--color-on-primary-wash`. */
   --color-primary: #006a91;
   --color-primary-dim: #00628a;
   /* Light end of the branding gradient and pale fills only — never text. */
   --color-primary-container: #47befd;
   --color-on-primary: #ffffff;
-  /* Text and icons drawn ON a bg-primary/10, /15 or /20 wash: the active
-     filter pill, the selected row in the list manager, the audit range chips
-     and about twenty hover states. Four lightness steps below the primary,
-     which is the least that clears 4.5:1 on all three washes over all four
-     surfaces a pill sits on. Worst case 4.66:1. Use `text-on-primary-wash`
-     there and `text-primary` everywhere else. */
+  /* Text and icons on a bg-primary/10, /15 or /20 wash. Four lightness steps
+     below the primary, the least that clears 4.5:1 on all three washes over
+     all four surfaces a pill sits on (worst 4.66:1). Use
+     `text-on-primary-wash` there and `text-primary` everywhere else. */
   --color-on-primary-wash: #005e81;
 
   /* The corvid's eye. The mark itself strokes with currentColor and follows
@@ -63,59 +37,36 @@
      a rose eye is a different bird. See src/components/brand/CorvidMark.tsx. */
   --color-corvid-eye: #47befd;
 
-  /* ── AI-derived data ────────────────────────────────────────────────
-   * The second accent, and the only one that means something. A chip, a
-   * glyph or a label in this color says "a model wrote this, not you":
-   * the interests and tags an enrichment run added, the note glyph on the
-   * timeline. Nothing else wears it. A selected option is a selection, so
-   * it takes the primary.
-   *
-   * Not part of an accent or a contact color: a violet contact must not
-   * make every one of its own notes read as AI. Worst measured 4.92:1 as
-   * text on a surface, 4.75:1 on its own 10 percent wash.
-   * `--color-on-ai-wash` carries text on a 10, 15 or 20 percent wash, the
-   * way `--color-on-primary-wash` does for the primary. */
+  /* AI-derived data: the one accent that means something, "a model wrote
+   * this, not you" (enriched interests and tags, the timeline's note glyph).
+   * A selection takes the primary. Not part of an accent or a contact color,
+   * so a violet contact does not make its own notes read as AI. Worst 4.92:1
+   * as text, 4.75:1 on its own 10 percent wash. `--color-on-ai-wash` carries
+   * text on a 10, 15 or 20 percent wash. */
   --color-ai: #6f3fd0;
   --color-on-ai-wash: #6734c6;
 
-  /* ── The highlighter ────────────────────────────────────────────────
-   * The words a search matched, painted the way a person marks a page: a
-   * warm wash behind the text, never a second blue. Only `mark` wears it
-   * (see the base layer). The text on it is always `on-surface`, which
-   * reads at 10.4:1 here and 7.4:1 on the dark value, where the variant
-   * text color would sit near the AA line. */
+  /* The highlighter: a warm wash behind the words a search matched, worn by
+   * `mark` only. Text on it is `on-surface`, 10.4:1 here and 7.4:1 in dark,
+   * where the variant ink would sit near the AA line. */
   --color-highlight: #fce7a6;
 
-  /* ── Secondary / Neutral ────────────────────────────────────────── */
   --color-secondary: #4d626c;
 
-  /* ── Status ─────────────────────────────────────────────────────────
-   * Text and icons only. The pale `bg-*-500/10` washes these sit on stay
-   * on Tailwind's raw palette — a background carries no contrast duty,
-   * and the light tint is what makes the chip read as its color.
-   *
-   * Each value is the lightest one in its hue that still clears 4.5:1 on
-   * all ten surfaces measured in the app. Amber is unavoidably brown at
-   * that threshold; that is what an accessible amber looks like on white.
-   * ------------------------------------------------------------------ */
+  /* Status, for text and icons only. Their pale `bg-*-500/10` washes stay on
+   * Tailwind's palette, because a background carries no contrast duty. Each
+   * value is the lightest in its hue that clears 4.5:1 on all ten surfaces
+   * measured. An accessible amber on white is brown. */
   --color-success: #046b4e; /* worst measured 5.13:1 */
   --color-warning: #9a4c08; /* worst measured 4.84:1 */
   --color-info: #036796; /* worst measured 4.88:1 */
 
-  /* ── Error / Destructive ────────────────────────────────────────── */
-  /* Was #ef4444 — 2.96:1 at worst, and only 3.76:1 under the white label
-     on a filled `bg-error` badge. */
   --color-error: #bf1b1b; /* worst measured 4.87:1 */
   --color-on-error: #ffffff;
 
-  /* ── Surface Hierarchy (paper-stack) ────────────────────────────────
-   * Warm paper. The grays used to lean blue (hue 250 in OKLCH), which read
-   * as a screen rather than a stack of paper. They now lean warm (hue 85)
-   * at a chroma of 0.005 to 0.010, with every lightness kept where it was
-   * measured, so each text color clears AA on each surface by the same
-   * margin as before: the worst pair is still the primary on `highest`,
-   * 4.68:1. The ink (`on-surface`, `on-surface-variant`) stays a cool
-   * slate, the way ink sits on paper. The dark palette is unchanged. */
+  /* Surfaces: warm paper (hue 85 in OKLCH, chroma 0.005 to 0.010). The
+   * worst text pair is the primary on `highest`, 4.68:1. The ink stays a
+   * cool slate, the way ink sits on paper. */
   --color-surface: #f8f6f2; /* Base layer */
   --color-on-surface: #2a3437;
   --color-surface-variant: #e5e2db;
@@ -127,24 +78,14 @@
   --color-surface-container-high: #e7e5e1; /* Elevated/emphasis */
   --color-surface-container-highest: #e5e2db;
 
-  /*
-    Hairline separator. Two files already reached for `outline-variant` — the
-    Material 3 name for exactly this — but it was never defined, so Tailwind
-    dropped `divide-outline-variant/10` entirely and `divide-y` fell back to
-    its v4 default of `currentColor`. That rendered the AI-usage feed's row
-    separators in near-black text color, which is what made them look wrong.
-    Defining the token makes the intent land.
-  */
+  /* The hairline separator, Material 3's `outline-variant`. Without it,
+     `divide-y` falls back to `currentColor`, a near-black line. */
   --color-outline-variant: #d4d1cb;
 
-  /* ── Radii ───────────────────────────────────────────────────────
-   * One tight scale, and every `rounded-*` utility in the app reads it.
-   * The old values (`lg` 24 px, `xl` 32 px) made a 36 px button a pill
-   * and a list row a capsule, and nothing on screen said which surface
-   * was a control and which was a card. The scale below is what a
-   * professional tool draws: a control is 6 px, a card is 8 px, a dialog
-   * is 12 px, and a chip is 4 px. Circles (`rounded-full`) stay for
-   * avatars, dots, rings and switches, and for nothing with a label in it.
+  /* Radii: one tight scale that every `rounded-*` utility reads, so a
+   * control, a card and a dialog each look like what they are.
+   * `rounded-full` is for avatars, dots, rings and switches, never for
+   * something with a label in it.
    *
    *   sm   3 px  keyboard chips, the smallest badges
    *   md   4 px  chips, badges, filter pills, menu items
@@ -163,35 +104,25 @@
   --radius-3xl: 0.75rem;
   --radius-4xl: 1rem;
 
-  /* ── Motion ─────────────────────────────────────────────────────────
-   * One curve and three durations for the whole app. The durations are
-   * `--dur-fast`, `--dur-base` and `--dur-slow` on `:root` below. Every
-   * `transition-*` utility without a `duration-*` class runs at the base
-   * duration on the one curve, so a call site writes `transition-colors`
-   * and nothing else. `ease-out` is the same curve, for the few places that
-   * name one. Tailwind's own default was 150 ms on a symmetric curve; four
-   * easings and five durations had grown around it. */
+  /* Motion: one curve and three durations (`--dur-*` on `:root` below). A
+   * `transition-*` utility with no `duration-*` class runs at the base
+   * duration on the curve, so a call site writes `transition-colors` and
+   * nothing else. `ease-out` is the same curve, for places that name one. */
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --default-transition-duration: 160ms;
   --default-transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* =====================================================================
- * COLOR SCHEME
- * =====================================================================
- * Declared outside `@theme`, which only takes custom properties. Without
- * it the browser paints form controls, scrollbars and the canvas behind
- * the page from its own default — so on a dark machine the light palette
- * shipped with dark scrollbars and dark select popups.
- * ===================================================================== */
+/* `color-scheme` sits outside `@theme`, which takes only custom properties.
+ * Without it the browser draws form controls, scrollbars and the canvas from
+ * its own default, and a dark machine shows dark scrollbars on the light
+ * palette. */
 
 :root {
   color-scheme: light;
 
-  /* The three durations (see "Motion" in the theme). Fast is a press or a
-     menu opening, base is a hover or a color change, slow is something
-     arriving on the page. `src/lib/motion.ts` holds the same numbers for
-     `motion/react`. */
+  /* The three durations (see Motion in the theme). `src/lib/motion.ts`
+     holds the same numbers for `motion/react`. */
   --dur-fast: 120ms;
   --dur-base: 160ms;
   --dur-slow: 240ms;
@@ -207,35 +138,23 @@
   );
 }
 
-/* =====================================================================
- * THE DARK PALETTE
- * =====================================================================
- * Three selectors, because a theme has three states and only two of them
- * need to be written down:
+/* The dark palette, written twice with the same values:
  *
- *   :root                               the light palette, above.
  *   @media (prefers-color-scheme: dark)
- *     :root:not([data-theme="light"])   the machine asked for dark and
- *                                       nobody overruled it.
+ *     :root:not([data-theme="light"])   the machine asks for dark and
+ *                                       nobody chose light.
  *   :root[data-theme="dark"]            somebody chose dark.
  *
- * The middle one is what makes "system" free: with no attribute on <html>
- * at all, the app already follows the machine, so the default costs no
- * JavaScript and cannot flash. The attribute is written only when a person
- * picks light or dark explicitly, and the `:not()` is what lets a chosen
- * light palette win on a dark machine.
+ * With no attribute on <html>, "system" follows the machine with no
+ * JavaScript and no flash. The attribute is written only for a chosen light
+ * or dark.
  *
- * DO NOT EDIT THESE VALUES ALONE. They are duplicated in `src/lib/theme.ts`,
- * which is where the accent derivation reads the surfaces it has to be
- * readable on, and `tests/unit/frontend/style/themeContrast.test.ts` asserts
- * that the two files agree token for token and that every text color here
- * clears WCAG AA on every surface it lands on.
+ * Do not edit these values alone. `src/lib/theme.ts` holds them too, for the
+ * accent derivation, and themeContrast.test.ts checks that the two files
+ * agree and that every text color clears WCAG AA.
  *
- * Not an inversion of the light palette. Inverting it puts a card below the
- * page it sits on, and every shadow in this app says the card is above it —
- * so the stack is reversed on purpose: the page is the darkest thing on
- * screen and a card is lighter than the page.
- * ===================================================================== */
+ * Not an inversion: the page is the darkest thing on screen and a card is
+ * lighter, so a card's shadow still says it is above the page. */
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -244,11 +163,11 @@
     --color-primary-dim: #8ed4f4;
     --color-primary-container: #00506f;
     --color-on-primary: #00242f;
-    /* The primary unchanged: it reads at 5.38:1 on its own heaviest wash. */
+    /* The primary itself: 5.38:1 on its own heaviest wash. */
     --color-on-primary-wash: #6ec6ee;
     --color-corvid-eye: #7fd6ff;
     --color-ai: #bfa3f9;
-    /* The AI color unchanged: it reads at 6.16:1 on its own wash. */
+    /* The AI color itself: 6.16:1 on its own wash. */
     --color-on-ai-wash: #bfa3f9;
     --color-highlight: #5a4116;
     --color-secondary: #b0c2ca;
@@ -277,11 +196,11 @@
   --color-primary-dim: #8ed4f4;
   --color-primary-container: #00506f;
   --color-on-primary: #00242f;
-  /* The primary unchanged: it reads at 5.38:1 on its own heaviest wash. */
+  /* The primary itself: 5.38:1 on its own heaviest wash. */
   --color-on-primary-wash: #6ec6ee;
   --color-corvid-eye: #7fd6ff;
   --color-ai: #bfa3f9;
-  /* The AI color unchanged: it reads at 6.16:1 on its own wash. */
+  /* The AI color itself: 6.16:1 on its own wash. */
   --color-on-ai-wash: #bfa3f9;
   --color-highlight: #5a4116;
   --color-secondary: #b0c2ca;
@@ -308,30 +227,19 @@
   color-scheme: light;
 }
 
-/* =====================================================================
- * SURFACES THAT ARE NOT TOKENS
- * =====================================================================
- * One thing paints a color no `--color-*` token describes: the frosted
- * panel, written as a literal. (The map is the second. Its basemap is a
- * style URL, so ContactMap swaps the style instead.) The swipe overlays
- * were two more. They are the success and error tokens now, which change
- * with the palette.
- * ===================================================================== */
+/* The frosted panel is the one surface painted with a literal and not a
+ * token. (The map's basemap is a style URL, so ContactMap swaps the style.) */
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     .glass-panel {
-      /* 80% white over a light page; the same idea over a dark one. The
-         color alone, not the shorthand: the shorthand would reset the
-         hover layer's background image on a glass control. */
+      /* Not the shorthand, which would reset the hover layer's background
+         image on a glass control. */
       background-color: rgba(25, 30, 33, 0.82);
     }
 
-    /*
-     * MapLibre draws its zoom and attribution icons as dark SVG backgrounds,
-     * which no color token reaches. On the dark surfaces below they vanish,
-     * so they are inverted. See MAP CHROME for the rest of the map's chrome.
-     */
+    /* MapLibre's zoom and attribution icons are dark SVG backgrounds that no
+       token reaches, so they are inverted to show on a dark surface. */
     .contact-map .maplibregl-ctrl-icon,
     .contact-map .maplibregl-ctrl-attrib-button {
       filter: invert(1);
@@ -341,26 +249,20 @@
 
 :root[data-theme="dark"] {
   .glass-panel {
-    /* 80% white over a light page; the same idea over a dark one. The
-       color alone, not the shorthand: the shorthand would reset the hover
-       layer's background image on a glass control. */
+    /* Not the shorthand, which would reset the hover layer's background
+       image on a glass control. */
     background-color: rgba(25, 30, 33, 0.82);
   }
 
-  /*
-   * MapLibre draws its zoom and attribution icons as dark SVG backgrounds,
-   * which no color token reaches. On the dark surfaces below they vanish,
-   * so they are inverted. See MAP CHROME for the rest of the map's chrome.
-   */
+  /* MapLibre's zoom and attribution icons are dark SVG backgrounds that no
+     token reaches, so they are inverted to show on a dark surface. */
   .contact-map .maplibregl-ctrl-icon,
   .contact-map .maplibregl-ctrl-attrib-button {
     filter: invert(1);
   }
 }
 
-/* =====================================================================
- * BASE LAYER
- * ===================================================================== */
+/* Base layer */
 
 @layer base {
   body {
@@ -373,14 +275,11 @@
     touch-action: manipulation;
   }
 
-  /* ── Scrollbars: one bar everywhere ─────────────────────────────────
-   * The Network list's bar, on every scroller: thin, the hairline token for
-   * the thumb, no track, so it reads on the page and on a card in both
-   * palettes. It was a class (`nice-scrollbar`) that a dozen scrollers
-   * carried and the rest did not, so the app drew two bars. Firefox and
-   * Chrome read the two standard properties. Safari reads the pseudo
-   * elements, where the 2 px transparent border keeps the thumb inside its
-   * 8 px lane. `scrollbar-hide` still hides a bar on a row of chips. */
+  /* One scrollbar on every scroller: thin, a hairline thumb and no track, so
+   * it reads on the page and on a card in both palettes. Firefox and Chrome
+   * read the two standard properties. Safari reads the pseudo-elements, where
+   * the 2 px transparent border keeps the thumb inside its 8 px lane.
+   * `scrollbar-hide` still hides a bar on a row of chips. */
   * {
     scrollbar-width: thin;
     scrollbar-color: var(--color-outline-variant) transparent;
@@ -408,26 +307,11 @@
     @apply font-headline tracking-tight;
   }
 
-  /* ── Keyboard focus ───────────────────────────────────────────────────
-   * This used to be a blanket `outline: none` on every input, textarea,
-   * select and button, justified by "we use ring instead". In practice the
-   * app has ~253 buttons and ~52 focus rings: the shared classes in
-   * lib/styles.ts (ICON_BTN, navLink, tabItem, filterPill, listRow) all
-   * define hover and active states but no focus state. So most controls had
-   * no visible focus indicator at all — a WCAG 2.4.7 failure, and an odd one
-   * in an app whose pitch is "keyboard-first".
-   *
-   * `:focus-visible` means pointer users never see this; it appears only for
-   * keyboard (and other non-pointer) interaction, so it costs the mouse
-   * experience nothing.
-   *
-   * `:where()` holds specificity at zero, so any component that already
-   * defines its own ring still wins without needing !important.
-   *
-   * `outline-offset` draws the ring OUTSIDE the control, which is what keeps
-   * it visible on a filled `bg-primary` button — an inset primary ring on a
-   * primary fill would be invisible.
-   * ------------------------------------------------------------------- */
+  /* Keyboard focus: a visible ring on every control (WCAG 2.4.7).
+   * `:focus-visible` keeps it off pointer focus. `:where()` holds the
+   * specificity at zero, so a component's own ring wins without !important.
+   * The offset draws the ring outside the control, where a filled
+   * `bg-primary` button cannot hide it. */
   :where(
     button,
     [role="button"],
@@ -444,24 +328,20 @@
     border-radius: inherit;
   }
 
-  /* Pointer interaction keeps the old behavior: no outline. */
+  /* Pointer focus draws no outline. */
   :where(button, [role="button"], a, input, select, textarea):focus:not(
       :focus-visible
     ) {
     outline: none;
   }
 
-  /* ── One focus ring ───────────────────────────────────────────────────
-   * The ring above is the only focus indicator in the app: 2 px of the
-   * primary. It used to share the job with ten `focus:ring-*` variants at
-   * four strengths, so a person tabbing through a form saw a different ring
-   * on each field. There are two placements and one look:
+  /* The ring above is the only focus indicator: 2 px of the primary, in two
+   * placements:
    *
    *   - A control draws it 2 px outside, where a filled button cannot hide
    *     it.
    *   - A text field draws it on its own edge, inset, where it reads as the
-   *     field's border. A field has no fill that could hide a ring, and an
-   *     outside ring doubled the box.
+   *     field's border. An outside ring would double the box.
    *
    * A composite field (an icon, an input and its buttons in one box, such
    * as the Ask search box, or the note composer's editor in its card) puts
@@ -490,10 +370,9 @@
     outline: none;
   }
 
-  /* ── The highlighter ──────────────────────────────────────────────────
-   * Every `mark` in the app: the words a search matched. A warm wash, the
-   * ink color on it whatever the text around it is, and a tight box that
-   * follows a match across a line break. */
+  /* Every `mark`: the words a search matched. A warm wash, the ink color
+   * whatever the text around it, and a tight box that follows a match
+   * across a line break. */
   mark {
     background-color: var(--color-highlight);
     color: var(--color-on-surface);
@@ -504,35 +383,27 @@
   }
 }
 
-/* =====================================================================
- * COMPONENT TOKENS — re‑usable atomic classes
- * ===================================================================== */
+/* Components */
 
 @layer components {
-  /* ── Glass Panel (modals, dropdowns, floating nav) ──────────────── */
+  /* Glass, for floating UI only. */
   .glass-panel {
     background-color: rgba(255, 255, 255, 0.8);
-    /* Unprefixed only. With the -webkit- line after it, the minifier kept
-       the prefixed one and dropped this, and Chromium ignores the prefix,
-       so no glass panel blurred. The minifier writes the prefix itself. */
+    /* Unprefixed only. With a -webkit- line after it, the minifier keeps the
+       prefixed one and drops this, and Chromium ignores the prefix. The
+       minifier adds the prefix itself. */
     backdrop-filter: blur(20px);
   }
 
-  /* ── Menu panel (dropdown menus, context menus, comboboxes) ────────
-   * Solid, not glass. A menu opens over the thing it acts on, and the
-   * sort menu opened over the contact list read as transparent: rows,
-   * avatars and the letter rail showed through the items. A menu has to
-   * be the one opaque thing on screen, so it paints the card surface with
-   * a hairline ring and a soft shadow. The ring is a 1 px line, which the
-   * no-line rule otherwise forbids: a floating panel has no neighboring
-   * surface to shift against, so the line is what marks its edge in both
-   * palettes.
+  /* Menu panel, for menus and comboboxes. Solid, not glass: a menu opens
+   * over the thing it acts on and must be the one opaque thing on screen. A
+   * floating panel has no surface beside it to shift against, so a 1 px ring
+   * marks its edge, the one line the no-line rule allows here.
    *
-   * `.menu-enter` is the entrance, 120 ms of opacity and a 2 percent scale
-   * from the anchoring edge (`--menu-origin`), and the reduced-motion block
-   * below collapses it. It is a second class because a panel that Motion
-   * already animates (the context menu) must not run a CSS animation on the
-   * same properties at the same time. */
+   * `.menu-enter` is the entrance: 120 ms of opacity and a 2 percent scale
+   * from the anchoring edge (`--menu-origin`). It is a separate class
+   * because a panel that Motion animates (the context menu) must not also
+   * run a CSS animation on the same properties. */
   .menu-panel {
     background-color: var(--color-surface-container-lowest);
     color: var(--color-on-surface);
@@ -573,49 +444,40 @@
     }
   }
 
-  /* ── Card — the static surface ──────────────────────────────────────
-   * The white card on the page, with the soft shadow that says it is above
-   * it. A card is not a control, so it has no hover. `CARD` in
-   * `src/lib/styles.ts` is this class. */
+  /* The static card: a white surface with a soft shadow that says it is
+   * above the page. Not a control, so no hover. `CARD` in `src/lib/styles.ts`
+   * is this class. */
   .card {
-    /* The same utilities `CARD` used to spell out, so a `ring-*` on a card
-       still adds to its shadow instead of replacing it. `--row-face` tells
-       `row-selected` what the card is made of (see there). */
+    /* Utilities, so a `ring-*` on a card adds to its shadow instead of
+       replacing it. `--row-face` tells `row-selected` what the card is made
+       of. */
     @apply bg-surface-container-lowest rounded-2xl p-6 shadow-sm;
     --row-face: var(--color-surface-container-lowest);
   }
 
-  /* ── Input — unified input styling ─────────────────────────────── */
   .input {
     @apply w-full bg-surface-container-low rounded-xl px-4 py-2.5 text-sm
            text-on-surface placeholder:text-on-surface-variant/50 transition-colors;
   }
 
-  /* ── Buttons — pressable, with an edge ──────────────────────────────
-   * One family for every call to action: `.btn-primary`, `.btn-secondary`
-   * and `.btn-danger`, with `.btn-sm` for a toolbar. A rounded rectangle,
-   * bold 14 px, 44 px tall on a phone and 40 px from `sm`.
+  /* Buttons: `.btn-primary`, `.btn-secondary` and `.btn-danger`, with
+   * `.btn-sm` for a toolbar. A rounded rectangle, bold 14 px, 44 px tall on
+   * a phone and 40 px from `sm`.
    *
-   * The depth is a darker edge under the face, the way a key sits on its
-   * base. The face is the button's own box. The edge is its 1 px border
-   * and a solid shadow drawn `--btn-lift` below it. On hover the face
-   * rises 1 px and the edge grows by 1 px. On press the face sinks until
-   * 1 px of edge is left. The edge's bottom line never moves, so the button
-   * reads as one object going up and down, and nothing around it shifts:
-   * a transform and a shadow take no layout space.
+   * The face sits on a darker edge, as a key sits on its base: a 1 px border
+   * and a solid shadow `--btn-lift` below. Hover raises the face 1 px and
+   * grows the edge 1 px. Press sinks the face until 1 px of edge is left.
+   * The edge's bottom never moves, and a transform and a shadow take no
+   * layout space, so nothing around the button shifts.
    *
-   * Depth means "this does something". Chips, rows, tabs, menus and icon
-   * buttons stay flat, and a disabled button loses its edge, so a button a
-   * person cannot press no longer looks pressable. That also ends the old
-   * confusion where a disabled primary looked like a secondary.
+   * Depth means "this does something": chips, rows, tabs, menus and icon
+   * buttons stay flat, and a disabled button loses its edge. The edge color
+   * is mixed from the face, so it follows an accent, a contact's vibe and
+   * the dark palette. The border is part of the edge, not a sectioning line.
    *
-   * The edge color is mixed from the face, so it follows a picked accent,
-   * a contact's vibe and the dark palette with no extra token. The border
-   * is part of the edge, not a sectioning line (see `.agent/STYLE.md`).
-   *
-   * Written as plain CSS so a call site can still add `w-full`, `flex-1` or
-   * a margin: utilities sit in a later layer and win over these. A call site
-   * never sets the fill, the shadow, the size or the disabled look. */
+   * Plain CSS, so a call site can add `w-full`, `flex-1` or a margin from
+   * the later utilities layer. A call site never sets the fill, the shadow,
+   * the size or the disabled look. */
   .btn-primary,
   .btn-secondary,
   .btn-danger {
@@ -684,14 +546,11 @@
     box-shadow: 0 1px 0 0 var(--btn-edge);
   }
 
-  /* The one disabled look, for all three. Flat, with no edge, and not
-     opacity: fading a filled button fades its label into its own fill. The
-     border keeps its width in transparent so nothing moves.
-
-     The ink is `!important` for one reason: a destructive secondary is
-     `btn-secondary text-error`, and the `text-error` utility sits in a later
-     layer than this rule, so a disabled "Remove" stayed red. Nothing else
-     on a `.btn-*` may come from the call site, so nothing else needs it. */
+  /* The one disabled look: flat, no edge, and not opacity, which would fade
+     a filled button's label into its fill. The border keeps its width in
+     transparent, so nothing moves. The ink is `!important` because a
+     destructive secondary is `btn-secondary text-error`, and that utility's
+     later layer would keep a disabled "Remove" red. */
   .btn-primary:disabled,
   .btn-secondary:disabled,
   .btn-danger:disabled {
@@ -739,11 +598,10 @@
     transform: translate(-50%, -50%);
   }
 
-  /* A button that opens a panel stays pressed in while the panel is open,
-     like a key that latches: the face sits on its last pixel of edge, as
-     on press, and takes the selected tint and its ink. A pointer over it
-     raises it one pixel, to say it can be released. `SidePanel`'s button
-     is the one that uses it. */
+  /* A button that opens a panel stays pressed while the panel is open, like
+     a latching key: the face sits on its last pixel of edge and takes the
+     selected tint. Hover raises it a pixel, to say it can be released.
+     `SidePanel`'s button uses it. */
   .btn-latch[aria-expanded="true"] {
     --btn-face: color-mix(
       in oklab,
@@ -766,14 +624,11 @@
     }
   }
 
-  /* ── Hover: one layer for every flat control ────────────────────────
-   * A row in a list, a ghost button, a filter pill, a nav item. On hover a
-   * 6 percent layer of the ink color covers the element's own background,
-   * and on press a 10 percent one. A layer and not a second background
-   * color, because the same row sits on a white card, on the page and on
-   * a wash, in two palettes, and "one surface step up" meant a different
-   * token in each of those. The layer is a background image, so a resting
-   * wash or a selected tint stays underneath it. No shadow, no motion. */
+  /* Hover for every flat control (a row, a ghost button, a filter pill, a
+   * nav item): a 6 percent layer of the ink, 10 percent on press. A layer
+   * and not a background color, because the same row sits on a card, the
+   * page and a wash, in two palettes. As a background image it keeps a
+   * resting wash or a selected tint underneath. No shadow, no motion. */
   .state-layer {
     --state-hover: color-mix(in srgb, var(--color-on-surface) 6%, transparent);
     --state-press: color-mix(in srgb, var(--color-on-surface) 10%, transparent);
@@ -787,11 +642,10 @@
     background-image: linear-gradient(var(--state-press), var(--state-press));
   }
 
-  /* ── A card that is a control ───────────────────────────────────────
-   * A search result, a suggestion tile: the whole card is the button. On
-   * hover it rises 2 px, its shadow grows one step and its edge takes a
-   * light primary tint. On press it sets back down. No scale: scaling a
-   * card blurs its text. Put it beside the card's own surface classes. */
+  /* A card that is a control (a search result, a suggestion tile). Hover
+   * raises it 2 px, grows its shadow a step and tints its edge. Press sets
+   * it down. No scale, which blurs text. Use it beside the card's own
+   * surface classes. */
   .card-interactive {
     cursor: pointer;
     transition:
@@ -812,14 +666,11 @@
     transition-duration: var(--dur-fast);
   }
 
-  /* ── Lift: a tile that is a control ─────────────────────────────────
-   * The small sibling of `card-interactive`, for a tile that opens
-   * something as a whole but is not a card: a chip on the page, a row on a
-   * wash inside a card (an Inbox row, a Coming up row), a settings tile. On
-   * hover it rises 1 px and takes a soft shadow, and on press it sets back
-   * down. "Elevation" in STYLE.md says when anything lifts at all: a row in
-   * a list of rows never does. It carries its own color transition, so an
-   * element with `lift` takes no `transition-*` class. */
+  /* Lift: a tile that opens something as a whole but is not a card (a chip
+   * on the page, an Inbox or Coming up row on a wash, a settings tile). Hover
+   * raises it 1 px with a soft shadow. "Elevation" in STYLE.md says what may
+   * lift. It carries its own color transition, so it takes no
+   * `transition-*` class. */
   .lift {
     transition:
       transform var(--dur-fast) var(--ease),
@@ -840,24 +691,18 @@
     box-shadow: none;
   }
 
-  /* ── The right-hand panel's open edge ───────────────────────────────
-   * `SidePanel` slides in from the window's edge, over the page. This
-   * shadow on its left edge is what sets it above the page, with no
-   * hairline between the two surfaces. */
+  /* `SidePanel`'s left-edge shadow sets it above the page, with no hairline
+     between the two. */
   .side-panel {
     box-shadow: -18px 0 36px -28px rgb(0 0 0 / 0.4);
   }
 
-  /* ── Proximity lift: rows that rise toward the pointer ──────────────
-   * The Network list's rows (`useProximityLift`). The hook writes `--p`,
-   * from 0 to 1, on the row under the pointer and on the neighbor it is
-   * nearing, and this turns it into a rise of up to 2 px and a soft shadow.
-   * The rise is `translate`, which adds to the virtual list's own
-   * `transform` on the row's wrapper instead of replacing it. The shadow is
-   * a pseudo-element whose opacity follows `--p`, so the browser fades one
-   * layer and never repaints a shadow per frame. The row names `translate`
-   * in its transition classes. The one exception to "a row in a list never
-   * lifts" (STYLE.md, "Elevation"). */
+  /* The Network list's rows rise toward the pointer (`useProximityLift`),
+   * the one list whose rows lift. The hook writes `--p` (0 to 1) on the row
+   * under the pointer and the neighbor it nears. `translate` adds to the
+   * virtual list's `transform` instead of replacing it, and the row names
+   * `translate` in its transition classes. The shadow is a pseudo-element
+   * whose opacity follows `--p`, so no shadow repaints per frame. */
   .proximity-row {
     translate: 0 calc(var(--p) * -2px);
     /* Its own layer, so the pseudo-element below sits between the row's
@@ -913,27 +758,16 @@
   translate: none;
 }
 
-/* =====================================================================
- * UTILITIES
- * ===================================================================== */
+/* Utilities */
 
 @layer utilities {
-  /**
-   * hit-area: a 44 by 44 px tap box around a control that looks smaller.
-   *
-   * `.agent/STYLE.md` requires a 44 px hit box on every control. A 24 px
-   * chip remove button or a 28 px color swatch can keep its size on
-   * screen and still take a thumb: the `::after` box is centered on the
-   * control, at least 44 px on each side, and a tap on it is a tap on the
-   * control. It draws nothing.
-   *
-   * `position: relative` sits inside `:where()`, so its specificity is zero
-   * and a control that is already `absolute` or `sticky` keeps that. Three
-   * limits: an ancestor with `overflow: hidden` clips the box; two controls
-   * closer than 44 px apart share the gap, where the later one in the
-   * document wins the tap; and a `<select>`, `<input>` or `<textarea>` draws
-   * no `::after` at all, so give the control itself a 44 px height.
-   */
+  /* hit-area: a 44 px tap box (`.agent/STYLE.md`) around a smaller control.
+   * The `::after` box is centered on the control and draws nothing.
+   * `position: relative` sits in `:where()`, at zero specificity, so an
+   * `absolute` or `sticky` control keeps its position. Limits: an
+   * `overflow: hidden` ancestor clips the box, two controls closer than
+   * 44 px share the gap (the later one wins the tap), and an input, select
+   * or textarea draws no `::after`, so give it a 44 px height itself. */
   :where(.hit-area) {
     position: relative;
   }
@@ -974,17 +808,10 @@
     }
   }
 
-  /**
-   * result-card-enter — GPU-composited opacity-only entrance for search result cards.
-   *
-   * Intentionally uses ONLY opacity (not translateY) so the browser keeps
-   * all cards in a composited layer and never triggers layout recalculation
-   * between frames. This eliminates the subpixel reflow jitter caused by the
-   * old approach (motion.button with staggered y: 16 → 0 transforms).
-   *
-   * animation-delay is set inline via style={{ animationDelay }} per card index.
-   * fill-mode: both ensures the card starts fully transparent before its delay fires.
-   */
+  /* Search result cards fade in on opacity only, so they stay on the
+   * compositor and no frame reflows. A moving entrance jitters by a
+   * subpixel. The delay is set inline per card, and `both` keeps a card
+   * transparent until its delay ends. */
   @keyframes resultCardIn {
     from {
       opacity: 0;
@@ -997,14 +824,11 @@
     animation: resultCardIn var(--dur-slow) var(--ease) both;
   }
 
-  /**
-   * timeline-entry — an entry that arrives after the timeline has drawn (a
-   * note just logged, or a timeline that has just loaded) slides in, with
-   * a short stagger. Entries already there when it draws carry no class
-   * (`Timeline.tsx`), so a return to the contact draws it in one frame.
-   *
-   * A CSS animation, not motion.div, so it runs once, when the entry mounts.
-   */
+  /* An entry that arrives after the timeline has drawn (a note just logged,
+   * or a timeline that just loaded) slides in with a short stagger. Entries
+   * there when it draws carry no class (`Timeline.tsx`), so a return to the
+   * contact draws in one frame. CSS, not motion.div, so it runs once, when
+   * the entry mounts. */
   @keyframes timelineEntryIn {
     from {
       opacity: 0;
@@ -1019,21 +843,12 @@
     animation: timelineEntryIn var(--dur-slow) var(--ease) both;
   }
 
-  /**
-   * tile-enter — the ONE entrance animation for dashboard/settings tiles.
-   *
-   * Why CSS and not motion.div: a motion component holds the element at
-   * `initial` (opacity 0) until its effect starts the animation, so any
-   * re-mount — a tab switch, a query resolving, a parent branch swap —
-   * replays the whole thing and the tile visibly blinks. A CSS animation
-   * runs exactly once, when the node is inserted, and is driven entirely
-   * off the compositor.
-   *
-   * Stagger via `style={{ animationDelay: tileDelay(i) }}` — see
-   * lib/motion.ts, which caps the ramp so the last tile is never more than
-   * ~200ms behind the first. Long stagger chains are what read as "flicker":
-   * the page looks broken while it waits its turn.
-   */
+  /* The one entrance for dashboard and settings tiles. CSS, not motion.div:
+   * a motion component holds the element at opacity 0 until its effect
+   * runs, so every re-mount (a tab switch, a query resolving) replays it and
+   * the tile blinks. A CSS animation runs once, on insert, on the
+   * compositor. Stagger with `tileDelay(i)` from lib/motion.ts, which caps
+   * the ramp near 200 ms, because a long stagger reads as flicker. */
   @keyframes tileIn {
     from {
       opacity: 0;
@@ -1053,32 +868,25 @@
     animation: resultCardIn var(--dur-base) var(--ease) both;
   }
 
-  /* ── The corvid ───────────────────────────────────────────────────────
-   * Almost all of the corvid's motion is drawn by its rig, frame by frame,
-   * in `src/assets/corvidRig.ts`: a living mark and the flying bird repaint
-   * their own paths. What is left here is the flying bird's layer and the
-   * thinking bird, which is small, can be many on one screen, and so runs on
-   * the compositor instead.
+  /* The corvid. Its rig (`src/assets/corvidRig.ts`) draws most of its
+   * motion frame by frame. Here are the flying bird's layer and the thinking
+   * bird, which is small, can be many on one screen, and so runs on the
+   * compositor.
    *
-   * Nothing here moves the ring. The keyframes reach the bird's head through
-   * `data-part`, not an id: `CorvidMark` gives every instance its own id
-   * prefix, so `#corvid-head` is one specific bird. `transform-box: view-box`
-   * reads `transform-origin` in the mark's own 100-unit box, so the head
-   * turns about the rig's neck, the point `NECK` in `corvidRig.ts`.
-   * ------------------------------------------------------------------- */
+   * Nothing here moves the ring. The keyframes reach the head through
+   * `data-part`, not an id, because each `CorvidMark` has its own id prefix.
+   * `transform-box: view-box` reads `transform-origin` in the mark's 100-unit
+   * box, so the head turns about the rig's `NECK`. */
 
   /** The flying bird owns its own layer. */
   .corvid-flying {
     will-change: transform;
   }
 
-  /*
-   * Thinking: the head cocks, looks up as if at the answer, and dips once as
-   * if at something, then waits. Slower and smaller than any act on the
-   * perch, so it reads as attention rather than as a spinner in a bird
-   * suit. Only the head and its eye move; the ring and the wing hold still.
-   * Each bird sets its own period and starting point on the svg.
-   */
+  /* Thinking: the head cocks, looks up, dips once, then waits. Slower and
+     smaller than any act on the perch, so it reads as attention and not as
+     a spinner. Only the head and its eye move. Each bird sets its own period
+     and offset on the svg. */
   @keyframes corvid-thinking {
     0%,
     12%,
@@ -1109,18 +917,12 @@
   }
 }
 
-/* ── Selected: the row that is current ────────────────────────────────
- * A 10 percent tint of the primary, the same tint a selected pill wears, and
- * nothing else: no ring, which read as keyboard focus on every visit, and no
- * bar down the leading edge, the stock accent of generated interfaces. The
- * row's own text says the rest: its name takes `text-on-primary-wash`, and
- * the page beside a list shows what is open. A selected pill or nav item
- * takes the same tint (`SELECTED_TINT` in `src/lib/styles.ts`).
- *
- * A utility rather than a component class, so it takes a variant: the
- * command palette's rows are current by `aria-selected`, which cmdk sets,
- * and write `aria-selected:row-selected`. It sets no shadow, so a selected
- * card keeps its own. */
+/* The current row: a 10 percent primary tint, as on a selected pill
+ * (`SELECTED_TINT`), and nothing else. A ring reads as keyboard focus, and a
+ * bar down the edge is a stock accent. The row's name takes
+ * `text-on-primary-wash`. A utility, so it takes a variant: the command
+ * palette writes `aria-selected:row-selected`. It sets no shadow, so a
+ * selected card keeps its own. */
 @utility row-selected {
   background-color: color-mix(
     in oklab,
@@ -1139,14 +941,8 @@
   inherits: false;
 }
 
-/* =====================================================================
- * REDUCED MOTION
- * =====================================================================
- * A global opt-out, not a per-component one. Anything that animates —
- * CSS keyframes, transitions, smooth scrolling — collapses to an instant
- * state change. Motion One reads the same media query internally, so
- * `motion.*` components are covered by their own reduced-motion handling.
- * ===================================================================== */
+/* Reduced motion is global: keyframes, transitions and smooth scrolling
+ * become instant. `motion` components follow the same query on their own. */
 
 html[data-text-scale="large"] {
   font-size: 17px;
@@ -1166,14 +962,9 @@ html[data-text-scale="large"] {
   }
 }
 
-/*
- * The corvid, twice over.
- *
- * The rules above already collapse its one keyframe, and the rig draws
- * nothing at all when `motionLevel()` in `lib/corvid.ts` answers "off", which
- * it does for both of the inputs below. These rules are the belt to that
- * pair of braces, for a mark rendered before the preferences arrive.
- */
+/* The rules above collapse the corvid's keyframe, and the rig draws nothing
+ * when `motionLevel()` (`lib/corvid.ts`) says "off". These cover a mark drawn
+ * before the preferences arrive. */
 @media (prefers-reduced-motion: reduce) {
   .corvid-thinking [data-part="head"],
   .corvid-thinking [data-part="eye"] {
@@ -1198,35 +989,17 @@ html[data-text-scale="large"] {
   scroll-behavior: auto !important;
 }
 
-/* =====================================================================
- * MAP CHROME
- * =====================================================================
- * MapLibre paints its own chrome from its stylesheet: the attribution, the
- * zoom buttons and the popup frame, in white with a thin gray ring and a
- * blue focus glow. These rules put that chrome on the surface tokens, so it
- * follows the palette like the rest of the app.
- *
- * Every rule is scoped under `.contact-map`, the map's wrapper. That scope is
- * not decoration. `maplibre-gl.css` loads later, with the map's chunk, and at
- * equal specificity the later stylesheet wins. Unlayered for the same reason:
- * a Tailwind layer loses to any unlayered rule.
- * ===================================================================== */
+/* Map chrome. MapLibre draws its attribution, zoom buttons and popup frame
+ * in white with a gray ring and a blue focus glow. These rules put them on
+ * the surface tokens. Each rule is scoped under `.contact-map` and
+ * unlayered, because `maplibre-gl.css` loads later, with the map's chunk,
+ * and a later stylesheet wins at equal specificity. */
 
-/*
- * Nothing of MapLibre's own chrome is drawn until the map has loaded.
- *
- * The attribution control is born expanded: as soon as the style's
- * attributions arrive, MapLibre lays the full credit strip across the map,
- * and it stays until something collapses it. `ContactMap` collapses it, but
- * only once the map has loaded, so the strip flashed over the picture on
- * every map that opened. The class it carries cannot tell that state from
- * the one a reader opens, so it is CSS, not JavaScript, that covers the one
- * moment the chrome is wrong. `visibility` and not `display`: the control
- * keeps its box, so nothing moves when it appears.
- *
- * By the time this lifts, the collapse has run and the credit sits behind
- * the "i" button, which is where MapLibre itself leaves it after a drag.
- */
+/* MapLibre's chrome stays hidden until the map has loaded. The attribution
+ * starts expanded across the map, and `ContactMap` collapses it only on
+ * load, so without this the strip flashes on every map. Its class cannot
+ * tell that state from one a reader opened, so CSS covers the moment.
+ * `visibility`, not `display`, keeps the box, so nothing moves. */
 .contact-map[data-map-ready="false"] .maplibregl-control-container {
   visibility: hidden;
 }
@@ -1245,15 +1018,11 @@ html[data-text-scale="large"] {
 .contact-map .maplibregl-ctrl-group button:not(:disabled):hover {
   background-color: var(--color-surface-container-high);
 }
-/*
- * MapLibre's own focus glow, a blue shadow, showed after a pointer click on
- * the zoom buttons and on the credit's "i", and the dark palette's filter
- * turned the "i"'s orange. Focus from a pointer draws nothing. The keyboard
- * gets the app's ring: inset on a zoom button, because the group clips
- * anything outside, and on the credit's pill around the "i", 2 px outside
- * like every other control, because the dark palette draws the "i" through
- * a filter that would recolor a ring on the button itself.
- */
+/* MapLibre's blue focus glow shows on a pointer click, and the dark
+ * palette's filter turns it orange on the "i". Pointer focus draws nothing.
+ * The keyboard gets the app's ring: inset on a zoom button, because the
+ * group clips anything outside, and 2 px outside the credit's pill, because
+ * the filter on the "i" would recolor a ring on the button itself. */
 .contact-map .maplibregl-ctrl-group button:focus,
 .contact-map .maplibregl-ctrl-attrib-button:focus {
   box-shadow: none;
@@ -1261,11 +1030,8 @@ html[data-text-scale="large"] {
 .contact-map .maplibregl-ctrl-group button:focus:focus-visible {
   box-shadow: inset 0 0 0 2px var(--color-primary);
 }
-/*
- * The canvas takes the focus for the arrow keys and + and −. The base ring
- * sits 2 px outside it, where the map's wrapper clips it, so it is drawn
- * inside.
- */
+/* The canvas takes focus for the arrow keys and + and −. The wrapper would
+   clip the base ring outside it, so it is drawn inside. */
 .contact-map .maplibregl-canvas:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: -2px;
@@ -1281,18 +1047,14 @@ html[data-text-scale="large"] {
   background-color: var(--color-surface-container-lowest);
   color: var(--color-on-surface-variant);
 }
-/*
- * MapLibre tells the attribution links apart from the text beside them by
- * color alone, and only underlines them on hover. WCAG 1.4.1 asks for a
- * distinction that does not depend on color, and an underline holds in both
- * palettes.
- */
+/* MapLibre marks the attribution links by color alone. WCAG 1.4.1 asks for
+   more, and an underline holds in both palettes. */
 .contact-map .maplibregl-ctrl-attrib a {
   color: var(--color-primary);
   text-decoration: underline;
 }
-/* A finger gets the 44 px tap floor on every map: the page's and the pin
-   dialog's zoom buttons were 29 px. */
+/* A finger gets the 44 px tap floor on every map's zoom buttons, which
+   MapLibre draws at 29 px. */
 @media (pointer: coarse) {
   .contact-map .maplibregl-ctrl-group button {
     width: 44px;
@@ -1309,11 +1071,9 @@ html[data-text-scale="large"] {
   transform: translate(-50%, -50%);
 }
 
-/*
- * A card opens above the pins. Every pin carries a z-index, so the open
- * contact's pin stands above its neighbors, and MapLibre gives its popup
- * none, so without this line a card opened under the next pin over.
- */
+/* A card opens above the pins. Every pin has a z-index, so the open
+   contact's pin stands above its neighbors, and MapLibre gives its popup
+   none. */
 .contact-map .maplibregl-popup {
   z-index: 3;
 }
@@ -1358,22 +1118,15 @@ html[data-text-scale="large"] {
   opacity: 0.45;
 }
 
-/*
- * The credit sits on top of the zoom buttons, and opens there as a card no
- * wider than 13rem, which wraps its words onto a second line. At the foot
- * of the column it opened across the bottom of the map, over the bottom
- * line at 800 and 1024 px. On top of the zoom buttons it opens above the
- * line at every width.
+/* The credit sits above the zoom buttons, where its open card (at most
+ * 13rem wide) clears the map's bottom line at every width.
  *
- * With a contact open, both keep to the map the contact leaves: MapView sets
- * `--map-open`, the open width, and the corner's right edge is where the
- * contact starts. The contact used to cover them, and the license needs the
- * credit on screen. When the open map is under MIN_OPEN_PX, MapView sets
- * `data-cramped`: the zoom buttons step aside like the toolbar, and the
- * credit stays. The open credit keeps inside the open map too: its width
- * leaves MapLibre's 36 px of padding, its 10 px margin and 10 px on the
- * left, and a long word breaks rather than run under the contact.
- */
+ * With a contact open, both keep to the map the contact leaves, because the
+ * license needs the credit on screen: MapView sets `--map-open`, the open
+ * width. Under MIN_OPEN_PX MapView sets `data-cramped`, and the zoom buttons
+ * step aside like the toolbar while the credit stays. The open credit's
+ * width leaves MapLibre's 36 px padding, its 10 px margin and 10 px on the
+ * left, and a long word breaks rather than run under the contact. */
 .map-page .maplibregl-ctrl-bottom-right {
   display: flex;
   flex-direction: column-reverse;
@@ -1388,11 +1141,8 @@ html[data-text-scale="large"] {
   display: none;
 }
 
-/*
- * On a phone the tab bar is fixed over the bottom of the map page. The zoom
- * buttons and the attribution sit above it, and the zoom buttons grow to the
- * 44 px tap floor.
- */
+/* On a phone the tab bar is fixed over the bottom of the map page. The zoom
+   buttons and the attribution sit above it, at the 44 px tap floor. */
 @media (width < 48rem) {
   .map-page .maplibregl-ctrl-bottom-left,
   .map-page .maplibregl-ctrl-bottom-right {
@@ -1409,11 +1159,9 @@ html[data-text-scale="large"] {
   }
 }
 
-/*
- * From `lg` the insights panel slides over the map's right edge, and it
- * carries `data-covers-map` only while it is open. The zoom buttons and the
- * credit move clear of it, with its slide, and back.
- */
+/* From `lg` the insights panel slides over the map's right edge and carries
+   `data-covers-map` while open. The zoom buttons and the credit slide clear
+   of it. */
 @media (min-width: 1024px) {
   .map-page .maplibregl-ctrl-bottom-right {
     transition: right var(--dur-slow) var(--ease);
@@ -1501,13 +1249,10 @@ html[data-text-scale="large"] {
   transition: none !important;
 }
 
-/* =====================================================================
- * PHONE: THE KEYBOARD, THE SAFE AREAS, AND THE PAGE'S EDGES
- * =====================================================================
+/* Phone: the keyboard, the safe areas and the page's edges.
  * `useSoftKeyboard` sets `data-typing` on the root while a field that opens
  * the keyboard has focus on a touch screen, and `--keyboard-inset` to the
- * height the keyboard covers where the page does not resize for it (iOS).
- */
+ * height the keyboard covers where the page does not resize for it (iOS). */
 :root {
   --keyboard-inset: 0px;
   /* The phone tab bar's height: 3 rem of tab, 0.375 rem above it, and the
@@ -1568,27 +1313,16 @@ input[type="search"]::-webkit-search-cancel-button {
   }
 }
 
-/* =====================================================================
- * SETTINGS: THE SLIDE BETWEEN THE LIST AND A PAGE (below lg)
- * =====================================================================
- * Below `lg` the settings list and a settings page take the same screen.
- * Opening a page slides it in from the right over the list, which drifts a
- * quarter of the way left. The back link slides the page out to the right
- * over the list coming back. The View Transitions API takes the pictures:
- * `useSlideNavigate` (`src/views/settings/slide.tsx`) starts it and sets
- * `data-settings-slide` on the root to "forward" or "back". Only the
- * stage moves (`.settings-stage`, the header and the page), on the app's
- * curve at the slow duration. From `lg` the rail is on screen, the stage
- * has no name, and a page swaps in place.
+/* Settings below `lg`, where the list and a page share the screen. Opening
+ * a page slides it in from the right while the list drifts a quarter left,
+ * and Back reverses it. `useSlideNavigate` (`src/views/settings/slide.tsx`)
+ * starts a view transition and sets `data-settings-slide` to "forward" or
+ * "back". Only `.settings-stage` (the header and the page) moves. From `lg`
+ * the rail is on screen and a page swaps in place.
  *
- * The phone's tab bar is fixed over the stage. It gets its own name for
- * the length of a slide, so it stays on top of the moving picture and does
- * not move.
- *
- * Reduced motion, from the system or the Motion row, starts no transition
- * (the hook checks both), and the last rules below stop the animation if
- * one starts anyway. A browser without the API navigates as before.
- * ===================================================================== */
+ * The phone's tab bar gets its own name during a slide, so it stays on top
+ * and still. Reduced motion starts no transition (the hook checks), and the
+ * last rules stop one anyway. A browser without the API navigates plainly. */
 @media (width < 64rem) {
   .settings-stage {
     view-transition-name: settings-stage;
@@ -1671,4 +1405,3 @@ input[type="search"]::-webkit-search-cancel-button {
 :root[data-motion="reduced"]::view-transition-new(settings-stage) {
   animation: none;
 }
-/* ============ END SETTINGS: THE SLIDE BETWEEN THE LIST AND A PAGE ============ */

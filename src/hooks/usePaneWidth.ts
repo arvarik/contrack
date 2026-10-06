@@ -1,24 +1,17 @@
 /**
- * usePaneWidth: the width of a pane a person can resize, kept per device.
+ * The width of a pane a person can resize, kept per device in
+ * `localStorage`. The width lives in `--pane-width` on the pane, which its
+ * class reads, so a drag writes one style and re-renders nothing. React sees
+ * one state update when the drag ends.
  *
- * The width lives in a CSS custom property on the pane (`--pane-width`), and
- * the pane's own class reads it. So a new width is one style write: nothing
- * in the pane re-renders while a drag runs, and React sees one state update
- * when the drag ends.
+ * The stored width is the person's choice, between `min` and `max`. The room
+ * is the widest the pane can be and still leave `keep` px beside it (the
+ * open contact). The pane shows the stored width held inside the room, so a
+ * narrow window holds it in and a wider one gives it back, and a window
+ * resize never overwrites the choice.
  *
- * Three widths are in play:
- *
- *   - the stored width: what the person chose, between `min` and `max`, in
- *     `localStorage` for this device;
- *   - the room: the widest the pane can be on this window and still leave
- *     `keep` px beside it (the open contact);
- *   - the width: the stored width, held inside the room.
- *
- * A narrow window holds the pane in, and a wider one gives the stored width
- * back, so a resize of the window never overwrites the choice.
- *
- * Every storage read and write is in `try`: a private window or a blocked
- * site can throw, and the pane then keeps `initial`.
+ * Storage can throw in a private window, so every read and write is in
+ * `try`, and the pane then keeps `initial`.
  */
 import {
   useCallback,
@@ -63,12 +56,8 @@ const clamp = (value: number, low: number, high: number) =>
   Math.min(Math.max(Math.round(value), low), high);
 
 /**
- * The width stored under `key`, held inside the bounds, or `initial` when
- * nothing usable is stored or storage throws.
- *
- * @param key - The `localStorage` key.
- * @param bounds - The pane's bounds.
- * @returns A width in px.
+ * The width in px stored under `key`, held inside the bounds, or `initial`
+ * when nothing usable is stored or storage throws.
  */
 export function readPaneWidth(key: string, bounds: PaneWidthBounds): number {
   try {

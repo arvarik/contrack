@@ -1,13 +1,7 @@
 /**
- * The nearest ancestor of an element that scrolls vertically.
- *
- * A settings page scrolls in the shell's one scroller, and a few lists
- * scroll in a box of their own. Code that sticks a block to a scroller's
- * edge, or draws only the rows of a long list that are on screen, reads the
- * scroller from here. It returns null when no ancestor scrolls, as in a unit
- * test, where the caller does nothing.
- *
- * @module lib/scrollParent
+ * The nearest ancestor of an element that scrolls vertically, for code that
+ * sticks a block to a scroller's edge or draws only the visible rows. Null
+ * when none scrolls, as in a unit test.
  */
 export function scrollParent(element: HTMLElement): HTMLElement | null {
   for (let node = element.parentElement; node; node = node.parentElement) {

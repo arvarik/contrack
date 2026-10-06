@@ -1,23 +1,10 @@
 /**
- * shortcuts.ts: every keyboard shortcut in the app, in one table.
- *
- * The shortcuts dialog used to keep its own private list, and the list had
- * already drifted from the app: it still said "Go to AI Search" after the
- * page was renamed. A key that is bound in one file and described in another
- * goes stale the first time somebody changes only one of them.
- *
- * So every plan that binds a key registers it here. The `?` dialog renders
- * from this table: the shortcuts that work everywhere on its left, and the
- * ones for the page it opened on at its right (`pageShortcutGroups`). The
- * Keyboard settings page lists the whole table. The unit test reads it too,
- * and it fails when two shortcuts in one group claim the same keys, which is
- * the collision a person would otherwise find by pressing a key and getting
- * the wrong action.
- *
- * Destination names come from `lib/names`, so the dialog calls a page what
- * the sidebar calls it.
- *
- * @module lib/shortcuts
+ * Every keyboard shortcut in the app, in one table, so a key and its
+ * description cannot drift apart. The `?` dialog shows the shortcuts that
+ * work everywhere at its left and the page's own at its right
+ * (`pageShortcutGroups`). The Keyboard settings page lists the whole table,
+ * and the unit test fails when two shortcuts in one group claim the same
+ * keys. Page names come from `lib/names`, as in the sidebar.
  */
 import { NAMES } from "./names";
 import { IS_APPLE, MOD_KEY, NAV_MODIFIERS } from "./platform";
@@ -42,27 +29,20 @@ export interface Shortcut {
   /** The heading the shortcut sits under. Must be in `SHORTCUT_GROUP_ORDER`. */
   group: string;
   /**
-   * The keys as they are printed on the keyboard.
-   *
-   * With a modifier (⌘, ⇧, ⌥, ⌃, Ctrl, Alt) the keys are one combination,
-   * pressed together. With no modifier they are alternatives, and any one of
-   * them does the same thing: `["↓", "J"]` is the arrow or the letter.
+   * The keys as they are printed on the keyboard. With a modifier (⌘, ⇧, ⌥,
+   * ⌃, Ctrl, Alt) they are pressed together. With none they are
+   * alternatives: `["↓", "J"]` is the arrow or the letter.
    */
   keys: string[];
   /** What the shortcut does, in a few plain words. */
   description: string;
   /**
-   * True when a printable key with no modifier fires the shortcut.
-   *
-   * These are the shortcuts a person can set off by typing in the wrong
-   * place. The settings revamp adds a `singleKeyShortcuts` switch that turns
-   * off exactly these, so every entry says which kind it is.
+   * True when a printable key with no modifier fires the shortcut: one a
+   * person can set off by typing in the wrong place. The
+   * `singleKeyShortcuts` setting turns off exactly these.
    */
   bareLetter: boolean;
-  /**
-   * When true, this shortcut stays active even when singleKeyShortcuts is off.
-   * Only bare-letter shortcuts can be alwaysOn.
-   */
+  /** Stays on when `singleKeyShortcuts` is off. Only for a bare letter. */
   alwaysOn?: boolean;
   /** The route where the shortcut works. Absent means everywhere. */
   page?: string;
@@ -99,7 +79,6 @@ const inGroup = (
   rows.map((row) => (page ? { group, ...row, page } : { group, ...row }));
 
 export const SHORTCUTS: readonly Shortcut[] = [
-  // Pulse office
   ...inGroup(NAMES.pulse.label, "/pulse", [
     { keys: ["J"], description: "Next item in Up next", bareLetter: true },
     { keys: ["K"], description: "Previous item in Up next", bareLetter: true },
@@ -158,7 +137,6 @@ export const SHORTCUTS: readonly Shortcut[] = [
     { keys: FORWARD_KEYS, description: "Forward", bareLetter: false },
   ]),
 
-  // Global
   ...inGroup("Global", undefined, [
     {
       keys: ["?"],
@@ -200,10 +178,9 @@ export const SHORTCUTS: readonly Shortcut[] = [
       description: "Move through the contact list",
       bareLetter: false,
     },
-    // J and K answer on the page, not in the list: in the list a letter is
-    // type-ahead. They open the next or the previous contact, as the arrows do
-    // from outside the list (`useContactListKeyboard`), and they obey the
-    // single-key switch.
+    // J and K answer on the page, not in the list, where a letter is
+    // type-ahead. They open the next or the previous contact
+    // (`useContactListKeyboard`).
     { keys: ["J"], description: "Open the next contact", bareLetter: true },
     { keys: ["K"], description: "Open the previous contact", bareLetter: true },
     { keys: ["Home"], description: "First contact", bareLetter: false },
@@ -271,16 +248,15 @@ export const SHORTCUTS: readonly Shortcut[] = [
       description: "Track this contact, or stop tracking it",
       bareLetter: true,
     },
-    // A contact's details. Every value edits in place: it is a button at rest
-    // and a field once opened. The pencil after a value is the visible sign.
-    // Outside a control, Enter starts a note (`useContactListKeyboard`).
+    // Every value in a contact's details edits in place. Outside a control,
+    // Enter starts a note (`useContactListKeyboard`).
     {
       keys: ["Enter"],
       description: "Edit the value that has focus, or start a note",
       bareLetter: false,
     },
     { keys: ["Esc"], description: "Cancel the edit", bareLetter: false },
-    // An address, an email or a phone. The first one is the primary one.
+    // An address, an email or a phone. The first one is the primary.
     {
       keys: [ALT, "↑"],
       description: "Move the value up one place",
@@ -306,9 +282,8 @@ export const SHORTCUTS: readonly Shortcut[] = [
     },
   ]),
 
-  // Possible duplicates, one group at a time. The arrow and the letter do
-  // the same thing in one handler, so an entry with a letter in it is a bare
-  // letter.
+  // Possible duplicates. The arrow and the letter share one handler, so an
+  // entry with a letter in it is a bare letter.
   ...inGroup(NAMES.possibleDuplicates.label, "/pulse/duplicates", [
     { keys: ["↓", "J"], description: "Next group", bareLetter: true },
     { keys: ["↑", "K"], description: "Previous group", bareLetter: true },
@@ -340,15 +315,9 @@ export function groupedShortcuts(
 }
 
 /**
- * Whether the page a shortcut belongs to is on screen at `pathname`.
- *
- * Three pages are on screen at more than their own path: the Network list
- * stays beside an open contact, a contact also opens over the map, and the
- * map keeps its keys while it does.
- *
- * @param page - A shortcut's `page`, for example `/` or `/contact/:id`.
- * @param pathname - The location's path, with no query or hash.
- * @returns True when the shortcut's keys work at that path.
+ * Whether a shortcut's `page` is on screen at `pathname` (no query or hash).
+ * The Network list stays beside an open contact, and a contact also opens
+ * over the map, which keeps its keys.
  */
 export function isOnPage(page: string, pathname: string): boolean {
   switch (page) {
@@ -364,14 +333,9 @@ export function isOnPage(page: string, pathname: string): boolean {
 }
 
 /**
- * The shortcuts of the page at `pathname`, for the dialog's right column.
- *
- * Every group whose shortcuts work at that path, in `SHORTCUT_GROUP_ORDER`,
- * except that an open contact's group comes first: the contact is what the
- * person is looking at, and the list or the map is beside or behind it.
- *
- * @param pathname - The location's path, with no query or hash.
- * @returns The groups, empty on a page with no keys of its own.
+ * The groups that work at `pathname`, for the dialog's right column, in
+ * `SHORTCUT_GROUP_ORDER`. An open contact's group comes first, because the
+ * list or the map is only beside or behind it.
  */
 export function pageShortcutGroups(pathname: string): ShortcutGroup[] {
   const groups = groupedShortcuts(

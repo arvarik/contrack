@@ -1,6 +1,6 @@
 /**
- * trackedFilters: the Tracked contacts page's two rows of filters and its
- * order, as rules a test can read.
+ * The Tracked contacts page's two rows of filters and its order, as rules a
+ * test can read.
  *
  * ```
  *   Tracking     All · Tracked · Not tracked
@@ -8,18 +8,10 @@
  *   Order        Name · Last spoke · Recently tracked
  * ```
  *
- * One choice in each row, and a contact shows when it matches both: the
- * people not tracked yet whom you spoke to this month are the ones most
- * worth tracking, and the tracked people you have not spoken to in a year
- * are the ones slipping. Each pill counts what it would show beside the
- * other row's choice, as on the Enrichment page (`enrichmentFilters`). The
- * page keeps the three choices in its address (`trackedViewFromParams`), so
- * Back from a contact opened from the list returns to the same list.
- *
- * "Last spoke" reads `lastContactedAt`, the date of the last logged
- * interaction, the same date Pulse writes as "Last spoke 12 days ago".
- *
- * @module lib/trackedFilters
+ * A contact shows when it matches both rows' choices. Each pill counts what
+ * it would show beside the other row's choice. The choices live in the page
+ * address, so Back from a contact returns to the same list. "Last spoke"
+ * reads `lastContactedAt`, the last logged interaction.
  */
 import { parseServerTime } from "./datetime";
 import type { Contact } from "../types";

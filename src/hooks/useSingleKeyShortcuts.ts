@@ -1,10 +1,7 @@
 /**
- * useSingleKeyShortcuts — whether single-key (bare-letter) shortcuts are active.
- *
- * Controlled by the account's `singleKeyShortcuts` preference. When false,
- * window-level single-key shortcuts like `/`, `n`, `v`, `j`, `k` return early.
- *
- * @module hooks/useSingleKeyShortcuts
+ * Whether single-key shortcuts (`/`, `n`, `v`, `j`, `k`) are on, from the
+ * account's `singleKeyShortcuts` preference. When false, their window-level
+ * handlers return early.
  */
 import { usePreferences } from "../contexts/PreferencesContext";
 

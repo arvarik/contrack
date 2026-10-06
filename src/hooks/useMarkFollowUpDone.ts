@@ -1,12 +1,8 @@
 /**
- * useMarkFollowUpDone: marks a follow-up done, with Undo.
- *
- * No route reopens a follow-up, so it reads as done at once and the request
+ * Marks a follow-up done, with Undo. No route reopens a follow-up, so it reads as done at once and the request
  * goes when the toast's Undo is gone (`startPendingDelete`). The Details
  * card and the note's dialog share it, so the toast and its Undo are the
  * same wherever a follow-up is done.
- *
- * @module hooks/useMarkFollowUpDone
  */
 import { useCallback } from "react";
 import { useCompleteActionItem } from "../api";

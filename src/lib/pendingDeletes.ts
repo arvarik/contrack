@@ -1,32 +1,13 @@
 /**
- * Pending deletes: an undo window in front of a delete the server cannot undo.
+ * An undo window in front of a write the server cannot undo: deleting an
+ * interaction (a hard delete, attachment included) or completing a follow-up
+ * on Pulse. `startPendingDelete` hides the entry and shows a toast with Undo.
+ * Undo sends nothing. When the toast closes, or a fallback timer runs out,
+ * the request goes out once, and a failure shows the entry again.
  *
- * `DELETE /api/interactions/:id` is a hard delete. The server removes the row
- * and unlinks the attachment file, and it has no restore route. So Undo
- * cannot put an interaction back after the request. The request waits
- * instead:
- *
- * 1. `startPendingDelete` hides the entry at once and shows a toast with
- *    Undo.
- * 2. Undo ends the wait. Nothing goes to the server.
- * 3. The window ends when the toast closes by itself, when somebody dismisses
- *    it, or when a fallback timer runs out, whichever comes first. Then the
- *    request goes out, once.
- * 4. A failed request shows the entry again and says so.
- *
- * The ids live in this module and not in component state. A refetch during
- * the window returns the entry from the server, and the timeline reads this
- * store to keep it hidden. The toast is global, so leaving the contact page
- * does not cancel the delete either.
- *
- * A page that closes during the window sends every waiting delete on
- * `pagehide`. Those requests use `keepalive`, so the browser finishes them
- * after the page is gone.
- *
- * Completing a follow-up on Pulse waits the same way. No route reopens a
- * follow-up, so its `PATCH .../complete` is the write the window holds.
- *
- * @module lib/pendingDeletes
+ * The ids live in this module, not in component state, so a refetch during
+ * the window stays hidden and leaving the page does not cancel the delete.
+ * A closing page sends every waiting delete on `pagehide`, with `keepalive`.
  */
 import { useSyncExternalStore } from "react";
 import { toast } from "sonner";
@@ -36,12 +17,9 @@ import { apiFetch } from "../api/client";
 const UNDO_WINDOW_MS = 10_000;
 
 /**
- * The latest end of the window, if the toast never reports its close.
- *
- * Sonner pauses a toast while the pointer is over it and while the tab is
- * hidden, so the toast can stay longer than its duration. Twice the window
- * gives a person who hovers time to reach Undo. It still sends the delete
- * when no toast is mounted to close.
+ * The latest end of the window, if the toast never reports its close. Sonner
+ * pauses a toast under the pointer and in a hidden tab, so twice the window
+ * gives a person who hovers time to reach Undo.
  */
 export const FALLBACK_MS = UNDO_WINDOW_MS * 2;
 
@@ -58,11 +36,8 @@ interface PendingDelete {
 }
 
 /**
- * Every delete of this session, by interaction id.
- *
- * A finished delete stays in the map. The row is gone on the server and its
- * id never comes back, and keeping it hidden stops a flash of the entry
- * before the timeline refetch lands.
+ * Every delete of this session, by id. A finished delete stays, so the entry
+ * does not flash back before the timeline refetch lands.
  */
 const entries = new Map<string, PendingDelete>();
 const listeners = new Set<() => void>();

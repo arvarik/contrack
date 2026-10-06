@@ -1,23 +1,17 @@
 /**
- * useTrackToggle: track or untrack one contact, with the toast and the Undo.
+ * Track or untrack one contact, with the toast and the Undo. Four controls
+ * flip the flag (the Track button's menu, the `t` key on a contact, the
+ * palette's action row and each row of the Tracked contacts page), so the
+ * words live here once. `trackAt` tracks at a picked cadence in one press,
+ * from a cadence row in the Track button's menu.
  *
- * Four controls flip the flag: Stop tracking in the Track button's menu in
- * the contact header, the `t` key on the contact page, the palette's action
- * row and the toggle on each row of the Tracked contacts page. They say the
- * same things, so the words live here once. `trackAt` is the fifth door: a
- * cadence row in the Track button's menu while the contact is untracked,
- * which tracks and sets the cadence in one press.
+ *   off to on   "Tracking Rowan Vale, quarterly"   Undo untracks
+ *   on to off   "Stopped tracking Rowan Vale"      Undo tracks again, at the
+ *                                                  cadence the contact had
  *
- *   off to on   "Tracking Ada Lovelace, quarterly"         Undo untracks
- *   on to off   "Stopped tracking Ada Lovelace"            Undo tracks again,
- *                                                          with the cadence
- *                                                          the contact had
- *
- * The cadence in the first toast is the one the server chose, which the
- * answer carries, so the toast waits for the answer. The ring does not: the
- * mutation writes the flag into the caches as the button is pressed.
- *
- * @module hooks/useTrackToggle
+ * The first toast names the cadence the server chose, so it waits for the
+ * answer. The ring does not: the mutation writes the flag into the caches
+ * at once.
  */
 import { useCallback } from "react";
 import { toast } from "sonner";

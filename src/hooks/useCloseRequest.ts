@@ -1,18 +1,13 @@
 /**
- * useCloseRequest — close an open sheet or menu on the platform's close
- * request: the Back gesture or button on Android.
+ * Closes an open sheet or menu on the platform's close request: the Back
+ * gesture or button on Android. Without it, Back leaves the page behind an
+ * open sheet, and a typed note with it. While a `CloseWatcher` is active,
+ * Back closes it instead, and it adds no history entry, so it cannot race
+ * the router.
  *
- * Without it, Back on a phone left the page behind an open sheet, and a
- * typed note went with it. `CloseWatcher` is the browser's own answer: while
- * one is active, Back closes it instead of leaving the page, and it adds no
- * history entry, so it cannot race the router.
- *
- * It is created only on a touch screen. There the platform's Back is the way
- * out. With a keyboard, Escape already closes every overlay, and a second
- * listener would close it twice. A browser without `CloseWatcher`, such as
- * Safari, keeps today's behavior.
- *
- * @module hooks/useCloseRequest
+ * Only on a touch screen: with a keyboard, Escape already closes every
+ * overlay, and a second listener would close it twice. A browser without
+ * `CloseWatcher`, such as Safari, keeps its own Back.
  */
 
 import { useEffect, useRef, useState } from "react";

@@ -1,11 +1,6 @@
 import { useEffect, type RefObject } from "react";
 
-/**
- * Focus-trapping selector — matches all natively focusable, non-disabled elements.
- *
- * Covers: links with href, buttons, textareas, inputs (non-hidden), selects,
- * and anything with an explicit non-negative tabindex.
- */
+/** Every focusable, enabled element. */
 const FOCUSABLE_SELECTOR = [
   "a[href]",
   "button:not(:disabled)",
@@ -16,13 +11,8 @@ const FOCUSABLE_SELECTOR = [
 ].join(", ");
 
 /**
- * useFocusTrap — Traps Tab/Shift+Tab cycling within a container.
- *
- * When `enabled` is true, pressing Tab on the last focusable element wraps to
- * the first, and Shift+Tab on the first wraps to the last. This keeps keyboard
- * focus inside modal dialogs per WAI-ARIA best practices.
- *
- * Zero dependencies — avoids adding `focus-trap-react` for ~25 lines of logic.
+ * Keeps Tab inside a container while `enabled`: Tab on the last focusable
+ * element wraps to the first, and Shift+Tab on the first to the last.
  */
 export function useFocusTrap(
   containerRef: RefObject<HTMLElement | null>,

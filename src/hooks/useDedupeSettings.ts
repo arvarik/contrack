@@ -1,19 +1,13 @@
 /**
- * useDedupeSettings — the sensitivity preset this account has chosen.
+ * The duplicate sensitivity preset this account has chosen:
  *
- * Presets:
  *   - "aggressive"   → more auto-merges, fewer manual reviews
  *   - "default"      → balanced (high confidence only)
  *   - "conservative" → only near-certain matches auto-merge
  *
- * Stored on the account. The number each preset stands for lives on the
- * server, in `server/services/dedupe/policy.ts`, and the server reads it
- * for every scan, every import and every single-contact check. This hook
- * used to carry a copy of that table and send the number with each scan
- * request, which meant the import path and the scan could disagree about
- * what the preset meant. The browser now names the preset and nothing else.
- *
- * @module hooks/useDedupeSettings
+ * The browser names the preset and nothing else. The number each preset
+ * stands for lives in `server/services/dedupe/policy.ts`, so a scan, an
+ * import and a single-contact check always agree on it.
  */
 import { useCallback } from "react";
 import { usePreferences } from "../contexts/PreferencesContext";

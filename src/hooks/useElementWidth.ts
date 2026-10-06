@@ -1,11 +1,8 @@
 /**
- * useElementWidth: an element's width in px, kept in step with it.
- *
- * A media query reads the window. The contact page needs the width of its
+ * An element's width in px, kept in step with it. A media query reads the window. The contact page needs the width of its
  * own pane, which the window does not give: at 1024 px the sidebar and the
  * 350 px contact list sit beside the contact, so its pane is about 600 px
- * wide on a window that `lg` calls wide. Two columns there left the timeline
- * about 160 px wide.
+ * wide on a window that `lg` calls wide.
  *
  * Pass the element from a callback ref (`ref={setElement}`), so the hook sees
  * it on the render that mounts it. The first width is read in a layout
@@ -51,8 +48,7 @@ export function useElementWidth(element: HTMLElement | null): number | null {
  * Whether the element is at least `min` px wide, or null before it is
  * measured. It keeps the answer and not the width, so the component renders
  * again only when the width crosses `min`. Dragging the Network list's edge
- * resizes the contact's pane on every frame, and a kept width rendered the
- * whole contact page again each time.
+ * resizes the contact's pane on every frame.
  */
 export function useElementWidthAtLeast(
   element: HTMLElement | null,

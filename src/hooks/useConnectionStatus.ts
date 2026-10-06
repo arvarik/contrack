@@ -1,21 +1,11 @@
 /**
- * useConnectionStatus — one answer to "is Contrack reachable?".
+ * One answer to "is Contrack reachable?" for the whole app, so no view
+ * guesses from its own failed query. Derived, not stored, from two sources:
  *
- * Before this existed, losing the server produced three different stories at
- * once: Pulse said "System Disconnected", the contact list rendered its
- * onboarding empty state ("Your network is empty" — alarming and false in a
- * CRM), and the detail view showed an error boundary. Each view was guessing
- * locally from its own failed query.
- *
- * The state is derived rather than stored, from two sources:
- *
- *   - `navigator.onLine`, which catches the browser knowing it is offline.
- *     It is famously unreliable in the positive direction (it reports true for
- *     a captive portal) so it is only ever trusted when it says *false*.
- *   - Any query in the cache currently failing with {@link NetworkError},
- *     which is the honest signal: we tried, and the transport failed.
- *
- * @module hooks/useConnectionStatus
+ *   - `navigator.onLine`, trusted only when it says false, because it says
+ *     true behind a captive portal.
+ *   - Any cached query failing with {@link NetworkError}: the transport
+ *     failed.
  */
 import { useCallback, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";

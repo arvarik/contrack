@@ -1,8 +1,6 @@
 /**
- * useSoftKeyboard — tell the page's CSS when a phone's keyboard is up, and
- * how much of the screen it covers.
- *
- * Two things change while a person types on a phone:
+ * Tells the page's CSS when a phone's keyboard is up, and how much of the
+ * screen it covers:
  * - `data-typing` on `<html>`, while a field that opens the keyboard has
  *   focus on a touch screen and the keyboard is up. The tab bar hides then
  *   (index.css), so the field and its Save button get the room.
@@ -12,8 +10,6 @@
  *   composer's Save bar lift themselves by this much.
  *
  * Mounted once, in App.
- *
- * @module hooks/useSoftKeyboard
  */
 
 import { useEffect } from "react";

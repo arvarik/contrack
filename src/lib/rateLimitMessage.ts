@@ -1,22 +1,14 @@
 /**
- * The sentence to show when the server answers `429`.
+ * The sentence to show when the server answers `429`. The accounts on an
+ * instance share one provider key, one dedupe worker and one enrichment
+ * lock, so a refusal is not always about the reader:
  *
- * One instance now has several accounts sharing one provider key, one dedupe
- * worker, and one enrichment lock, so a refusal is no longer always about the
- * reader. Three cases, and they need different words:
+ *   1. Somebody else holds the lock, and this work starts on its own after.
+ *   2. Somebody else holds the lock. Try later.
+ *   3. The reader hit their own limit. Wait the stated seconds.
  *
- *   1. Somebody else holds the lock, and the server will start this work on
- *      its own when they are done. Nothing to do but wait.
- *   2. Somebody else holds the lock and will not hand it over. Try later.
- *   3. The reader hit their own limit. Wait the stated number of seconds.
- *
- * Saying "too many requests" for the first two blames the reader for a queue
- * they did not create, which is both wrong and unhelpful: it invites them to
- * retry, and retrying is exactly what will not work.
- *
- * Pure, so `tests/unit/frontend/api/client.test.ts` can pin every branch.
- *
- * @module lib/rateLimitMessage
+ * "Too many requests" for the first two would blame the reader for a queue
+ * they did not make.
  */
 
 import { ApiError, rateLimitFacts } from "../api/client";
@@ -30,11 +22,8 @@ const OTHERS_WORK: Record<LimitedWork, string> = {
 };
 
 /**
- * The message for a failed request, or `null` when it was not a `429`.
- *
- * `null` rather than a fallback, so a caller can tell "this is a rate limit
- * and here is what to say" from "this is something else, use the server's own
- * message" without inspecting the error twice.
+ * The message for a failed request, or null when it is not a rate limit, so
+ * the caller shows the server's own message.
  */
 export function rateLimitMessage(
   error: unknown,
@@ -43,11 +32,9 @@ export function rateLimitMessage(
   const facts = rateLimitFacts(error);
   if (!facts) return null;
 
-  // Not every 429 is a rate limit in this sense. The AI layer answers
-  // `AI_BUSY` with sentences of its own — "Grounding quota exhausted for
-  // today" is one — and replacing that with "try again shortly" tells
-  // somebody to retry into a wall that stands until tomorrow. Only the
-  // limiters send `RATE_LIMITED`; anything else keeps its own words.
+  // Only the limiters send `RATE_LIMITED`. Another 429, such as the AI
+  // layer's `AI_BUSY` ("Grounding quota exhausted for today"), keeps its own
+  // words, since "try again shortly" would be wrong until tomorrow.
   if (error instanceof ApiError && error.code && error.code !== "RATE_LIMITED")
     return null;
 

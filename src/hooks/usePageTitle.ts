@@ -1,16 +1,10 @@
 /**
- * usePageTitle — Declarative document.title management.
- *
- * Sets `document.title` on mount and restores it on unmount.
- * Multiple components can call this; the most recently mounted wins
- * (standard Last-Writer-Wins for sibling views).
- *
- * Brand first: with a dozen tabs open the title is truncated to its first
- * couple of words, so the app name has to lead or every Contrack tab is
- * indistinguishable from every other one.
+ * Sets `document.title` on mount and restores it on unmount. The most
+ * recently mounted caller wins. The brand leads, because a browser truncates
+ * a title to its first couple of words.
  *
  * @example
- *   usePageTitle(contact?.name)        // → "Contrack - Alex Chen"
+ *   usePageTitle(contact?.name)        // → "Contrack - Rowan Vale"
  *   usePageTitle('Settings')           // → "Contrack - Settings"
  *   usePageTitle(null)                 // → "Contrack" (fallback)
  */

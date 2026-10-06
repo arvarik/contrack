@@ -21,8 +21,7 @@ function dayOf(parsed: { year: number | null; month: number; day: number }) {
 
 /**
  * Format a birthday for display: "May 14, 1990", or "May 14" with no year.
- * A day with no year used to gain one that nobody gave. Text that is no
- * date shows as it was stored.
+ * Text that is no date shows as it was stored.
  */
 export function formatBirthdayDisplay(
   v: string | null | undefined,
@@ -53,11 +52,8 @@ export function birthdayText(v: string | null | undefined): string {
 }
 
 /**
- * Calculate the next birthday, days until it, and turning age if year is known.
- *
- * Special rules:
- * - 29 February on a non-leap year is treated as 1 March.
- * - "turning N" is only returned when a year is known.
+ * The next birthday, the days until it, and the age it turns when the year
+ * is known. 29 February is 1 March in a year that is not a leap year.
  */
 export function getUpcomingBirthdayInfo(
   raw: string | null | undefined,
@@ -69,12 +65,10 @@ export function getUpcomingBirthdayInfo(
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const thisYear = today.getFullYear();
 
-  // Helper to build birthday Date for a given calendar year
   const makeBirthdayDate = (year: number): Date => {
     if (parsed.month === 2 && parsed.day === 29) {
       const isLeap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
       if (!isLeap) {
-        // Non-leap year: 29 February treated as 1 March
         return new Date(year, 2, 1);
       }
     }
@@ -84,7 +78,6 @@ export function getUpcomingBirthdayInfo(
   let bday = makeBirthdayDate(thisYear);
   let bdayYear = thisYear;
 
-  // If already passed this year, take next year's birthday
   if (bday < today) {
     bdayYear = thisYear + 1;
     bday = makeBirthdayDate(bdayYear);
@@ -105,10 +98,7 @@ export function getUpcomingBirthdayInfo(
 /** How many days ahead the birthday badge looks. */
 const BADGE_WINDOW_DAYS = 30;
 
-/**
- * Returns days until upcoming birthday if within 30 days, or null.
- * Used by BirthdayField badge.
- */
+/** The days until the birthday when it is within the badge window, or null. */
 export function getUpcomingBirthdayDays(
   raw: string | null | undefined,
   now: Date = new Date(),

@@ -1,35 +1,25 @@
 /**
- * corvidBrain — what a perched corvid does next, and when.
- *
- * The motions in `corvidMotion.ts` say what a preen or a blink looks like.
- * This decides which one plays: a small state machine with a clock, a random
- * source and a few inputs. It keeps no timers of its own. The component that
- * owns the bird asks `sample(now)` for a pose on each frame it draws, and
- * `nextChange(now)` for how long it may sleep between frames. A sitting bird
- * that is only waiting for its next blink asks for no frames at all.
+ * What a perched corvid does next, and when: a small state machine with a
+ * clock, a random source and a few inputs. It keeps no timers. The bird's
+ * component asks `sample(now)` for a pose on each frame and
+ * `nextChange(now)` for how long it may sleep, so a bird only waiting to
+ * blink draws no frames.
  *
  * What it plays, in three layers:
  *
- * 1. **Blinks**, on their own clock, every three to seven seconds, one in
- *    five doubled. They never wait for anything else.
- * 2. **One act at a time.** Small acts, a look about or a cock of the head,
- *    come every six to fourteen seconds. Big ones, a preen, a feather shake,
- *    a wing stretch, a silent caw or a hop, every twenty to fifty. A big act
- *    waits while the person is typing or clicking, because a bird that
- *    preens while you type is a bird you stop wanting on the screen. The
- *    same big act never plays twice in a row.
- * 3. **Held postures**, faded in and out: ready while the perch is hovered or
- *    focused, asleep after two and a half minutes with no input at all.
- *    Any input wakes it, with a start.
+ * 1. Blinks, on their own clock, every three to seven seconds, one in five
+ *    doubled.
+ * 2. One act at a time. Small acts (a look about, a cock of the head) come
+ *    every six to fourteen seconds, big ones (a preen, a feather shake, a
+ *    wing stretch, a silent caw, a hop) every twenty to fifty. A big act
+ *    waits while the person types or clicks, and never plays twice in a row.
+ * 3. Held postures, faded in and out: ready while the perch is hovered or
+ *    focused, asleep after two and a half minutes with no input. Any input
+ *    wakes it, with a start.
  *
- * And one continuous thing: when the pointer comes near, the head follows it,
- * in the quick turns and still holds a bird's head moves in.
- *
- * Everything that happens to the bird from outside arrives through `send`:
- * a hover, the pointer, a key, or a reaction the app asked for, such as the
- * nod when a follow-up is done. `sample` then answers with the pose.
- *
- * @module lib/corvidBrain
+ * When the pointer comes near, the head follows it. Everything from outside
+ * arrives through `send`: a hover, the pointer, a key, or a reaction the app
+ * asked for. `sample` answers with the pose.
  */
 import { HOME_POSE, type CorvidPose } from "../assets/corvidRig";
 import {
@@ -58,9 +48,7 @@ import {
   type Rng,
 } from "./corvidMotion";
 
-// ---------------------------------------------------------------------------
 // The schedule
-// ---------------------------------------------------------------------------
 
 /** Between blinks, in ms. */
 export const BLINK_EVERY: readonly [number, number] = [2_800, 7_200];
@@ -140,9 +128,7 @@ export function makeCorvidMotion(name: MotionName, rng: Rng): Motion {
   }
 }
 
-// ---------------------------------------------------------------------------
 // The brain
-// ---------------------------------------------------------------------------
 
 interface CorvidBrainOptions {
   rng: Rng;

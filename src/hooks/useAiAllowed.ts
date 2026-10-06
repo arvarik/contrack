@@ -1,11 +1,7 @@
 /**
- * useAiAllowed — whether AI assistance is enabled for this account.
- *
- * When false, the account has opted out of third-party model calls. AI
- * features (synthesis, enrichment, smart paste, briefings, insights)
- * are suppressed or replaced with static explanations.
- *
- * @module hooks/useAiAllowed
+ * Whether AI assistance is on for this account. When false, the account has
+ * opted out of third-party model calls, and AI features (synthesis,
+ * enrichment, smart paste, briefings, insights) are hidden or explain why.
  */
 import { usePreferences } from "../contexts/PreferencesContext";
 

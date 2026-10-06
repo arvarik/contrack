@@ -1,11 +1,6 @@
 /**
- * Shared avatar URL builders for the frontend.
- *
- * They point at the app's own avatar route, which generates the SVG
- * in-process (see server/services/avatarService). The one exception is
- * `signedOutAccountAvatarUrl`, which draws the monogram in the browser. So
- * drawing a list of contacts sends no name to a third party, and works
- * offline.
+ * Avatar URLs. They point at the app's own avatar route, which draws the SVG
+ * in-process, so a list of contacts sends no name to a third party.
  */
 import { monogramSvg } from "../../shared/monogram";
 
@@ -13,22 +8,15 @@ import { monogramSvg } from "../../shared/monogram";
 type AvatarStyle = "avataaars" | "bottts" | "lorelei" | "initials";
 
 /**
- * Which palette an avatar with a background of its own should be drawn for.
- *
- * Omitted means "let the image decide": the monogram carries its own
- * `prefers-color-scheme` rule, which is right for the default `system` theme
- * and needs no parameter. Pass a value only where the app knows the theme was
- * chosen explicitly, so an `<img>` cannot be left in the other palette.
+ * The palette an avatar with its own background is drawn for. Omitted, the
+ * monogram follows `prefers-color-scheme`, which suits the `system` theme.
+ * Pass one only when the theme was chosen explicitly.
  */
 type AvatarTheme = "light" | "dark";
 
 /**
- * The seed the route will accept.
- *
- * An empty or whitespace seed is a `400 VALIDATION_ERROR`, which renders as a
- * broken image with no fallback. Callers pass a username or a display name and
- * either can be missing, so the substitution happens here rather than at six
- * call sites.
+ * A seed the route accepts. An empty seed is a 400, which renders as a
+ * broken image, and a username or display name can be missing.
  */
 function seedOf(value: string | null | undefined): string {
   const seed = (value ?? "").trim();
@@ -58,13 +46,9 @@ export function isGeneratedAvatar(url: string | null | undefined): boolean {
 }
 
 /**
- * The signed-in account's mark, in the sidebar and at the top of Settings.
- *
- * `initials` rather than the illustrated style contacts use, and seeded on the
- * username rather than the display name. Both are deliberate: the account is
- * not one of the contacts and should not look like one, and a username is the
- * stable identifier — a display name changes, and an avatar that changes with
- * it stops being recognizable.
+ * The signed-in account's mark. `initials`, so the account does not look
+ * like a contact, and seeded on the username, which does not change as a
+ * display name can.
  */
 export function accountAvatarUrl(
   username: string | null | undefined,
@@ -74,14 +58,9 @@ export function accountAvatarUrl(
 }
 
 /**
- * The account's mark before the account exists: on the screens that create
- * one (first-run setup, register, join an invitation).
- *
- * `accountAvatarUrl` points at `/api/avatar/initials`, and that route sits
- * behind the sign-in gate. With no session yet, the `<img>` got a 401 and
- * showed a broken image in the photo circle. This is the same monogram, drawn
- * here by `shared/monogram.ts` as a `data:` URL, which the CSP allows for
- * images, so the circle needs no request at all.
+ * The account's mark on the screens that create an account, before any
+ * session exists. The avatar route sits behind the sign-in gate, so this
+ * draws the same monogram as a `data:` URL, which the CSP allows.
  */
 export function signedOutAccountAvatarUrl(
   username: string | null | undefined,

@@ -1,10 +1,6 @@
 /**
- * useClickOutside — Generic "click outside" dismiss hook.
+ * Calls `onOutsideClick` on a pointerdown outside `ref` while `enabled`.
  *
- * Replaces the copy-pasted `useEffect(() => { document.addEventListener('mousedown', ...`
- * pattern that was duplicated across ContactList and other dropdown components.
- *
- * Usage:
  *   const ref = useRef<HTMLDivElement>(null);
  *   useClickOutside(ref, () => setOpen(false), isOpen);
  */

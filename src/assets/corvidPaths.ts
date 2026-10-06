@@ -1,27 +1,22 @@
 /**
- * The corvid: Contrack's mark, as geometry.
+ * The corvid: Contrack's mark, as geometry, in a 100 by 100 box.
  *
- * One drawing, in parts, in a 100 by 100 box. The React components stroke
- * these paths with `currentColor`, and `scripts/brand/build-icons.ts`
- * rasterises the same paths into the favicon, the PWA icons and the README
- * picture. Because both read this file, the bird in the tab strip and the
- * bird in the sidebar cannot drift apart. After an edit here, run
- * `npm run brand:icons` and commit what it writes: a unit test compares the
- * committed favicon with what the script renders.
+ * The React components stroke these paths with `currentColor`, and
+ * `scripts/brand/build-icons.ts` rasterizes the same paths into the favicon,
+ * the PWA icons and the README picture, so the two cannot drift apart. After
+ * an edit, run `npm run brand:icons` and commit what it writes: a unit test
+ * compares the committed favicon with what the script renders.
  *
- * Where the numbers come from. The reference is `docs/brand/corvid-source.jpg`,
- * a 1024 px mono-line raven facing right. Each part's centerline was measured
- * from that image (the midpoint of the dark run on every 16th column and row),
- * joined with a Catmull-Rom spline, checked against the source at 60 percent
- * opacity, then thinned while the curve stayed within one source pixel of the
- * dense trace. The box maps source pixels x 300.5 to 750 and y 305 to 694 at
- * 0.17887 units per pixel, so the ink, stroke included, keeps 8 units clear of
- * the left and right edges and sits centered top to bottom.
+ * The source is `docs/brand/corvid-source.jpg`, a 1024 px mono-line raven.
+ * Each part's centerline was traced from it, joined with a Catmull-Rom
+ * spline and thinned while it stayed within one source pixel of the trace.
+ * Source pixels x 300.5 to 750 and y 305 to 694 map into the box at 0.17887
+ * units per pixel, so the ink, stroke included, keeps 8 units clear of the
+ * left and right edges and sits centered top to bottom.
  *
- * The mark is two things. The ring is the C the bird sits in, and it never
- * moves. Everything else is the bird, and only the bird is ever animated:
- * `src/assets/corvidRig.ts` reads the bird's parts from this file and poses
- * them, so the bird that leaves the ring is this drawing and no other.
+ * The ring is the C the bird sits in, and it never moves. Only the bird is
+ * animated: `src/assets/corvidRig.ts` reads its parts from here and poses
+ * them.
  *
  * The parts, as the pen draws them:
  *
@@ -36,10 +31,9 @@
  *          along the lower feather to the knot
  *   tail2  the short inner feather from the knot
  *
- * The mark has four optical sizes, `CORVID_OPTICAL`: the same paths, with a
- * stroke, an eye and a margin for the size a person sees it at, and at the
- * smallest size a subset of the parts. They are weights of this drawing,
- * not second drawings.
+ * `CORVID_OPTICAL` holds four optical sizes: the same paths with a stroke,
+ * an eye and a margin for the size a person sees, and a subset of the parts
+ * at the smallest. They are weights of this drawing, not second drawings.
  */
 
 export const CORVID_VIEWBOX = "0 0 100 100";
@@ -84,18 +78,14 @@ export const CORVID_EYE = { cx: 34.2, cy: 27.7, r: 3 } as const;
 /** The logo's own stroke width: the weight it was traced at. */
 export const MARK_STROKE = 3.6;
 
-// ---------------------------------------------------------------------------
 // Optical sizes
-// ---------------------------------------------------------------------------
 
 /**
- * The mark, drawn for the size a person sees it at.
- *
- * One weight cannot serve every size. The logo's own 3.6 is a hairline in a
- * 16 px tab. The one heavy stroke the favicon used to carry everywhere
- * filled in at 32 px, where the ring, the head and the wing ran together
- * into a wave. It also looked like a slab on a home screen. So each range
- * of sizes has its own master, and every master draws these paths:
+ * The mark, drawn for the size a person sees it at. One weight cannot serve
+ * every size: the logo's 3.6 stroke is a hairline in a 16 px tab, and one
+ * heavy stroke fills in at 32 px, where the ring, the head and the wing run
+ * together. So each range of sizes has its own master, and every master
+ * draws these paths:
  *
  *   size    seen at                                  parts          stroke  eye
  *   tiny    16 px on a 1x screen                     ring, head,     7.5    none
@@ -105,17 +95,14 @@ export const MARK_STROKE = 3.6;
  *           link preview icons
  *   large   96 pt and up: the logo as drawn          all six         3.6    3
  *
- * The size a person sees picks the master, not the file's pixels. A 512 px
- * launcher icon shows at about 48 dp, so it takes `medium`.
+ * The size a person sees picks the master, not the file's pixels: a 512 px
+ * launcher icon shows at about 48 dp, so it takes `medium`. `tiny` keeps the
+ * four strokes of the silhouette, because in a 16 px tab the chest and the
+ * inner feather merge with their neighbors and the eye is under a pixel.
  *
- * `tiny` keeps the four strokes that make the silhouette: the C, the head
- * with its beak, the wing and the long outer tail. A 16 px tab has room for
- * no more. The chest and the inner feather merge with their neighbors, and
- * the eye is less than a pixel.
- *
- * The in-app `<CorvidMark>` keeps the logo's own stroke wherever it lives,
- * because the rig moves those strokes. Its `glyph` variant, the thinking
- * bird at 16 to 20 px, is `small`.
+ * The in-app `<CorvidMark>` keeps the logo's own stroke, because the rig
+ * moves those strokes. Its `glyph` variant, the thinking bird at 16 to
+ * 20 px, is `small`.
  */
 export type OpticalSize = "tiny" | "small" | "medium" | "large";
 
@@ -161,9 +148,7 @@ export function opticalSize(points: number, density = 2): OpticalSize {
   return "large";
 }
 
-// ---------------------------------------------------------------------------
 // Brand colors
-// ---------------------------------------------------------------------------
 
 /**
  * Brand colors for renders outside the app, where no token applies. Each is
@@ -200,12 +185,11 @@ export const BRAND = {
  * screen and in the link preview. Literal colors, because a favicon cannot
  * read CSS tokens and librsvg does not resolve them either.
  *
- * The branding gradient runs from `primary-dim` to `primary-container`. The
- * tile shows its first 55 percent, from `#00628a` to `#2795c9`. White on
- * `#47befd`, the gradient's end, is 2.1:1, and the tail, the part that says
- * "bird", sat in that corner. WCAG 1.4.11 asks 3:1 of a graphic a person
- * must make out. White on `#2795c9` is 3.37:1, with room for the soft edge
- * of a thin stroke.
+ * It shows the first 55 percent of the branding gradient (`primary-dim` to
+ * `primary-container`), from `#00628a` to `#2795c9`. WCAG 1.4.11 asks 3:1 of
+ * a graphic a person must make out. White on the gradient's end, `#47befd`,
+ * is 2.1:1 where the tail sits. White on `#2795c9` is 3.37:1, with room for
+ * the soft edge of a thin stroke.
  */
 export const TILE = {
   box: 64,
@@ -218,10 +202,8 @@ export const TILE = {
   eye: BRAND.eyeLight,
 } as const;
 
-// ---------------------------------------------------------------------------
 // Geometry helpers. Pure, so the build script, the components and the tests
 // all measure the drawing the same way.
-// ---------------------------------------------------------------------------
 
 type Point = readonly [number, number];
 

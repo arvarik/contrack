@@ -1,24 +1,8 @@
 /**
- * color.ts — the color maths the theme is built on.
- *
- * Pure functions, no DOM. Everything here is measured rather than asserted:
- * the accent picker has to guarantee that whatever color somebody chooses,
- * the text painted in it still clears WCAG AA on every surface it lands on.
- * That guarantee is only worth something if the same numbers the browser will
- * compute are computed here first.
- *
- * Two color spaces are used and they do different jobs.
- *
- * sRGB, and the WCAG relative-luminance formula over it, is what "contrast"
- * means. It is not perceptually uniform, so it is a poor space to move a
- * color around in.
- *
- * OKLCH is perceptually uniform, so lowering L darkens a color without
- * swinging its hue — which is exactly what deriving a readable primary from
- * somebody's favorite blue requires. Every derivation happens in OKLCH and
- * every check happens in sRGB.
- *
- * @module lib/color
+ * The color math the theme is built on: pure functions, no DOM. Every
+ * derivation happens in OKLCH, which is perceptually uniform, so lowering L
+ * darkens a color without swinging its hue. Every check happens in sRGB,
+ * where the WCAG contrast formula is defined.
  */
 
 interface Rgb {
@@ -37,9 +21,7 @@ export interface Oklch {
   h: number;
 }
 
-// ---------------------------------------------------------------------------
 // Hex
-// ---------------------------------------------------------------------------
 
 /** `#rrggbb` or `#rgb` to channel values. Throws on anything else. */
 export function hexToRgb(hex: string): Rgb {
@@ -70,9 +52,7 @@ export function rgbToHex({ r, g, b }: Rgb): string {
   return `#${channel(r)}${channel(g)}${channel(b)}`;
 }
 
-// ---------------------------------------------------------------------------
 // Contrast
-// ---------------------------------------------------------------------------
 
 function toLinear(value: number): number {
   const v = value / 255;
@@ -106,11 +86,8 @@ export function contrast(a: Rgb, b: Rgb): number {
 }
 
 /**
- * Composite a translucent color over an opaque one.
- *
- * This is what makes the check honest. The binding contrast case in this app
- * is not text on a card; it is a pill where `text-primary` sits on a
- * `bg-primary/15` wash of itself, over whatever is behind that.
+ * Composite a translucent color over an opaque one, for the worst contrast
+ * case: `text-primary` on a `bg-primary/15` wash of itself.
  */
 export function over(top: Rgb, alpha: number, bottom: Rgb): Rgb {
   return {
@@ -120,10 +97,7 @@ export function over(top: Rgb, alpha: number, bottom: Rgb): Rgb {
   };
 }
 
-// ---------------------------------------------------------------------------
-// OKLab / OKLCH
-// ---------------------------------------------------------------------------
-// Björn Ottosson's matrices, https://bottosson.github.io/posts/oklab/.
+// OKLab and OKLCH, with Björn Ottosson's matrices, https://bottosson.github.io/posts/oklab/.
 
 export function rgbToOklch(color: Rgb): Oklch {
   const r = toLinear(color.r);
@@ -167,13 +141,9 @@ const inGamut = ({ r, g, b }: Rgb) =>
   r >= -0.5 && r <= 255.5 && g >= -0.5 && g <= 255.5 && b >= -0.5 && b <= 255.5;
 
 /**
- * OKLCH to sRGB, reducing chroma until the color fits.
- *
- * A hue and lightness pair can name a color no monitor can show. Clipping the
- * channels instead would shift the hue, which is what makes a "red" accent at
- * high lightness come back orange. Binary search on chroma keeps the hue and
- * the lightness and gives up only saturation, which is the one of the three
- * nobody notices losing.
+ * OKLCH to sRGB, reducing chroma until the color fits the gamut. Clipping the
+ * channels would shift the hue: a light "red" comes back orange. A binary
+ * search on chroma gives up only saturation.
  */
 export function oklchToRgb(color: Oklch): Rgb {
   const direct = oklchToRgbRaw(color);

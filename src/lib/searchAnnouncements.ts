@@ -1,20 +1,8 @@
 /**
- * searchAnnouncements.ts — the sentences a search says to a screen reader.
- *
- * The search page shows its state in three places at once: a bird in the
- * input, a "Searching your network…" stage, and a count pill over the
- * results. None of those is announced, because none of them is a status
- * message: they mount with their text, they are pictures, or they are the
- * fiftieth element on the page. These builders turn the same state into one
- * sentence for the page's {@link LiveStatus} region.
- *
- * Pure functions, so the wording is tested without a DOM. The rule for each:
- * say what the reader would otherwise have to find, and no more. A search
- * speaks twice, that it started and what it found, and never on every
- * keystroke. The page keeps back the list AI has not checked yet, so there
- * is no third sentence for it.
- *
- * @module lib/searchAnnouncements
+ * The sentences a search says to a screen reader, through the page's
+ * {@link LiveStatus} region. The visible state (a bird, a stage, a count
+ * pill) is not announced on its own. A search speaks twice, when it starts
+ * and when it finds, and never on every keystroke.
  */
 import { plural } from "./utils";
 

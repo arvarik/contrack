@@ -1,16 +1,7 @@
 /**
- * Shared contact matching and scoring logic.
- *
- * Extracted from useContactListFilters so both the Network list and the Map
- * use the same ranking algorithm for free-text search.
- *
- * Scoring priority:
- * - Exact name: +100
- * - Prefix name: +50
- * - Substring name: +30
- * - Company, Role, Location, Industry, Tag, Email, Phone: +10 each
- *
- * @module lib/contactMatch
+ * The free-text match score the Network list and the map both rank by: an
+ * exact name 100, a name prefix 50, a name substring 30, and 10 for each of
+ * company, role, location, industry, tag, email and phone.
  */
 
 export interface MatchableContact {
@@ -26,11 +17,7 @@ export interface MatchableContact {
 
 const normalizePhone = (p: string) => p.replace(/\D/g, "");
 
-/**
- * Score how well a contact matches a free-text search query.
- *
- * @returns 0 if no match, or a positive score where higher means a closer match.
- */
+/** How well a contact matches a query: 0 for no match, higher for closer. */
 export function scoreContactMatch(
   contact: MatchableContact,
   rawQuery: string,
@@ -41,7 +28,6 @@ export function scoreContactMatch(
   const cleanPhoneQuery = normalizePhone(q);
   let score = 0;
 
-  // --- High Priority (Name) ---
   const nameMatch = contact.name.toLowerCase();
   if (nameMatch === q) {
     score += 100;
@@ -51,7 +37,6 @@ export function scoreContactMatch(
     score += 30;
   }
 
-  // --- Medium Priority (Company, Role, Location, Industry) ---
   if (contact.company && contact.company.toLowerCase().includes(q)) {
     score += 10;
   }
@@ -65,7 +50,6 @@ export function scoreContactMatch(
     score += 10;
   }
 
-  // --- Details match (Tags, Emails, Phones) ---
   if (contact.tags) {
     const tagMatch = contact.tags.some((t) =>
       (typeof t === "string" ? t : t.tag).toLowerCase().includes(q),
@@ -80,9 +64,8 @@ export function scoreContactMatch(
     if (emailMatch) score += 10;
   }
 
-  // Phone numbers — normalize both the query and stored numbers to digits only,
-  // then check in both directions to handle country code mismatches
-  // (e.g. query "+15551234567" should match stored "(555) 123-4567")
+  // Digits only, compared both ways, so "+15551234567" finds "(555) 123-4567"
+  // despite the country code.
   if (cleanPhoneQuery && contact.phones) {
     const phoneMatch = contact.phones.some((p) => {
       const normalized = normalizePhone(p.phone);

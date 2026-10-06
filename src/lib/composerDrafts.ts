@@ -1,24 +1,10 @@
 /**
- * Where an unsaved note lives between keystrokes and the save that keeps it.
- *
- * A note is the hardest thing in the app to reconstruct. The composer used
- * to clear itself the moment a save started, so a request that failed, or a
- * session that expired while the request was out, took the note with it. The
- * draft here is the other half of the fix: what is in the composer is on disk
- * within a moment of being typed, and it is read back when the composer next
- * opens for the same contact under the same account.
- *
- * The key names both. `localStorage` is keyed by origin, not by account, so
- * two people signing in and out of one browser would otherwise open each
- * other's half-written notes. A draft written under one account is not read
- * under another, and the contact id keeps one person's notes from appearing
- * on another person's page.
- *
- * Every read and write is wrapped. A private window, a full quota, or blocked
- * site data throws from `localStorage`, and a note must not be lost because
- * the place it was going to be kept refused it.
- *
- * @module lib/composerDrafts
+ * Where an unsaved note lives until a save keeps it. A note is the hardest
+ * thing in the app to rebuild, so the composer's text is in `localStorage` a
+ * moment after it is typed, and a failed save or an expired session does not
+ * lose it. The key names the account and the contact, because storage is per
+ * origin and two people may share a browser. Every read and write is
+ * wrapped: a private window or a full quota throws.
  */
 
 /** The four interaction kinds the composer offers. */
@@ -53,10 +39,8 @@ const KINDS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * The storage key for one account's draft on one contact.
- *
- * Both ids are encoded, so an id carrying a colon cannot read as a different
- * account and contact pair.
+ * The storage key for one account's draft on one contact. Both ids are
+ * encoded, so a colon in one cannot read as another pair.
  */
 export function draftKey(
   accountId: string | null | undefined,
@@ -98,12 +82,8 @@ function parseDraft(raw: string): ComposerDraft | null {
 }
 
 /**
- * The draft stored under `key`, or null.
- *
- * Null for a missing key, for a value that is not the shape written here, and
- * for a draft older than {@link MAX_DRAFT_AGE_MS}. The stale one is removed
- * on the way out, so it does not sit in storage until somebody opens that
- * contact again a year later.
+ * The draft stored under `key`, or null when it is missing, malformed or
+ * older than {@link MAX_DRAFT_AGE_MS}. A malformed or stale draft is removed.
  */
 export function readDraft(key: string, now = Date.now()): ComposerDraft | null {
   let raw: string | null;
@@ -126,11 +106,8 @@ export function readDraft(key: string, now = Date.now()): ComposerDraft | null {
 }
 
 /**
- * Write a draft, or remove the key when the draft is empty.
- *
- * Returns false when nothing was written: the draft was over the size cap or
- * storage refused it. The caller cannot do anything about either, and it is
- * returned so a test can see it rather than so a screen can act on it.
+ * Write a draft, or remove the key when the draft is empty. False when
+ * nothing was written: the draft was over the size cap or storage refused it.
  */
 export function writeDraft(
   key: string,
@@ -161,10 +138,9 @@ export function clearDraft(key: string): void {
 }
 
 /**
- * Remove every draft one account wrote in this browser, at sign-out. Never
- * throws. A session that expires keeps its drafts: that is the loss they
- * exist to prevent. A person who signs out on a shared browser leaves no
- * half-written note behind.
+ * Remove every draft one account wrote in this browser, at sign-out, so a
+ * shared browser keeps no half-written note. An expired session keeps its
+ * drafts: that is the loss they exist to prevent. Never throws.
  */
 export function clearAccountDrafts(accountId: string | null | undefined): void {
   const prefix = draftKey(accountId, "");

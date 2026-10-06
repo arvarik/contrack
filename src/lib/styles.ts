@@ -1,42 +1,19 @@
 /**
- * ═══════════════════════════════════════════════════════════════════════════
- * CONTRACK DESIGN SYSTEM — Centralized Style Dictionary
- * ═══════════════════════════════════════════════════════════════════════════
- *
- * This file is the SINGLE SOURCE OF TRUTH for all repeated Tailwind class
- * patterns used throughout the app. Every component imports from here
- * instead of hardcoding class strings.
- *
- * RULES:
- *   1. If a pattern is used 2+ times across components, extract it here.
- *   2. Compose via `cn()` from lib/utils when overrides are needed.
- *   3. CSS-level reusable classes live in index.css (@layer components).
- *      This file handles patterns that TAILWIND expresses well but need
- *      to be DRY and overridable at the call-site.
- *
- * ═══════════════════════════════════════════════════════════════════════════
+ * The repeated Tailwind class patterns, in one place. A pattern used twice
+ * goes here, and a call site overrides it through `cn()`. Reusable CSS
+ * classes live in index.css (`@layer components`).
  */
 
 import { cn } from "./utils";
 
-// ─── Typography ──────────────────────────────────────────────────────────────
-
-/*
- * The type floor is 11 px. Nothing a person reads is smaller, and
- * tests/unit/frontend/style/stylesFloor.test.ts fails on `text-[11px]` and
- * `text-[11px]` anywhere in src/. Uppercase labels keep their tracking at 0.08em, a
- * little tighter than Tailwind's widest, so the larger size does not widen
- * every chip. Every uppercase label in the app uses this one tracking.
- */
+// Typography. The type floor is 11 px (`stylesFloor.test.ts`). Every
+// uppercase label tracks at 0.08em, a little tighter than Tailwind's widest,
+// so the size does not widen every chip.
 
 /**
- * A dropzone's hidden file input, out of the layout.
- *
- * react-dropzone 19 renders the input as an in-flow block of zero size, so a
- * flex container with a gap still gives it a gap: the account photo's button
- * moved 16 px right and the timeline 24 px down. `sr-only` positions it
- * absolutely, as react-dropzone 15 did. The inline style it keeps sets no
- * position, so the class decides that one.
+ * A dropzone's hidden file input, out of the layout. react-dropzone renders
+ * it as an in-flow block of zero size, so a flex gap still spaces it.
+ * `sr-only` positions it absolutely. Its inline style sets no position.
  */
 export const DROPZONE_INPUT = "sr-only";
 
@@ -69,17 +46,13 @@ export const SECTION_HEADING_SPACED = cn(
   "mb-3 flex items-center gap-2",
 );
 
-// ─── Page header ─────────────────────────────────────────────────────────────
-//
-// Every page's top is `PageHeader` (src/components/layout/PageHeader.tsx): an
-// optional small line above, the title, one line under it, and the actions
-// at the right. These are its parts, and the page's own padding.
+// Page header: the parts of `PageHeader` (components/layout/PageHeader.tsx)
+// and the page's own padding.
 
 /**
- * The page title, the page's name and its h1: 24 px on a phone and 30 px
- * from `md`, on every page. The size follows the window, not the header, so
- * the narrow Network pane beside a contact has the same title as Pulse, Ask
- * Contrack and Settings, and moving between pages does not move the eye.
+ * The page's h1: 24 px on a phone and 30 px from `md`. The size follows the
+ * window, not the header, so the narrow Network pane beside a contact has the
+ * same title as every other page.
  */
 export const PAGE_TITLE =
   "text-2xl md:text-3xl leading-tight font-headline font-bold tracking-tight text-on-surface";
@@ -94,14 +67,12 @@ export const PAGE_TITLE_SUFFIX =
 
 /**
  * A header with a suffix is a grid in the header's size container, so a
- * phone never squeezes the suffix into a column beside the actions. In a
- * narrow header the title and the actions share the first row, and the
- * suffix and the description each take a full row under them. From `@2xl`
- * the suffix continues the title's line on its baseline, the description
- * sits under both, and the actions span the two rows at the right edge.
- * The row aligns to the top, like the header without a suffix, so Pulse's
- * title starts at the height of every other page's. The cells place
- * themselves, so the page header and its skeleton agree.
+ * phone never squeezes the suffix beside the actions. Narrow, the title and
+ * the actions share the first row, and the suffix and the description take a
+ * row each. From `@2xl` the suffix follows the title on its baseline and the
+ * actions span both rows. Rows align to the top, so Pulse's title starts at
+ * the height of every other page's. The cells place themselves, so the
+ * header and its skeleton agree.
  */
 export const TITLE_GRID =
   "grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1 @2xl:grid-cols-[auto_minmax(0,1fr)_auto] @2xl:items-baseline @2xl:gap-x-3";
@@ -127,12 +98,9 @@ export const PAGE_X = "px-4 sm:px-6 lg:px-10";
 /** The space above a page's header. The same on every page, so the titles line up. */
 export const PAGE_TOP = "pt-6 lg:pt-8";
 
-// ─── Layout ──────────────────────────────────────────────────────────────────
+// Layout
 
-/**
- * Card — the static white surface (`.card` in index.css). Not a control, so
- * no hover. A card that is a control is `CARD_INTERACTIVE`.
- */
+/** The static card (`.card`), with no hover. A card that is a control is `CARD_INTERACTIVE`. */
 export const CARD = "card";
 
 /** Card compact — slightly tighter padding */
@@ -146,22 +114,19 @@ export const CARD_COMPACT = "card p-5";
 export const CARD_INTERACTIVE = "card card-interactive";
 
 /**
- * A suggested question on Ask Contrack, in both modes: a flat chip on the
- * card face, so the search box above stays the one raised surface on the
- * page at rest. A click fills the box and runs the search, so the chip is a
- * control as a whole and lifts on hover (`lift`, "Elevation" in STYLE.md).
+ * A suggested question on Ask Contrack: a flat chip, so the search box stays
+ * the one raised surface at rest. A click runs the search, so the chip is a
+ * control as a whole and lifts on hover.
  */
 export const SUGGESTION_CHIP =
   "hit-area state-layer lift rounded-md bg-surface-container-lowest px-3 py-2 text-left text-sm text-on-surface-variant hover:text-on-surface";
 
 /**
- * Ask Contrack's column. The history panel opens over the page, so opening
- * it moves nothing, and the column sits where the open panel never covers
- * it. From `lg` it is `clamp(34rem, 100% - 40rem, 48rem)` wide, and centered
- * when that leaves the panel's 20rem free on its right. On a narrower window
- * (below about 1360 px) it sits only as far left as it must to leave them,
- * so at 1024 px the search box ends 32 px short of the open panel instead of
- * under it. The place depends on the window alone, never on the panel. The
+ * Ask Contrack's column. The history panel opens over the page, so the
+ * column sits where the open panel never covers it. From `lg` it is
+ * `clamp(34rem, 100% - 40rem, 48rem)` wide and centered when that leaves the
+ * panel's 20rem free on its right. Below about 1360 px it sits only as far
+ * left as it must. It depends on the window alone, never on the panel. The
  * page and its route fallback read it.
  */
 export const ASK_COLUMN =
@@ -173,46 +138,32 @@ export const SECTION_BG = "bg-surface-container-low";
 /** Tinted card — a card on a subtle primary wash, such as the AI usage summary. */
 export const CARD_TINTED = "card bg-primary/5 relative overflow-hidden";
 
-// ─── Hover and selection ─────────────────────────────────────────────────────
-//
-// Three kinds of surface, three hovers (`.agent/STYLE.md`, "Hover"):
-//
-//   - A flat control (a row, a ghost button, a pill, a nav item) takes
-//     `state-layer`: a 6 percent ink layer on hover, 10 on press.
-//   - A card that is a control takes `CARD_INTERACTIVE`: it rises 2 px.
-//   - A static card has no hover.
-//
-// And one selected look: the primary tint, on a row (`row-selected`), a
-// pill or a nav item alike. No ring and no bar down the leading edge.
+// Hover and selection (`.agent/STYLE.md`, "Hover"). A flat control takes
+// `state-layer`, a card that is a control rises (`CARD_INTERACTIVE`), and a
+// static card has no hover. A selection is the primary tint, never a ring or
+// a bar down the leading edge.
 
 /** A selected pill, chip, nav item or menu option: the tint and its ink. */
 export const SELECTED_TINT = "bg-primary/10 text-on-primary-wash";
 
 /**
- * The selected row in a list: the tint (`row-selected`), mixed onto a card's
- * face when the row is a card. Put `text-on-primary-wash` on the text that
- * was `text-primary`.
+ * The selected row in a list: the tint, mixed onto a card's face when the
+ * row is a card. Its name takes `text-on-primary-wash`, not `text-primary`.
  */
 export const SELECTED_ROW = "row-selected";
 
 /**
- * The chosen swatch in a picker of colors, icons or avatars: a 2 px ring in
- * the ink color, 2 px off the swatch. A swatch has no room for a bar or a
- * dot, and its fill is its content, so it cannot take the tint either. The
- * ring is the ink, not the primary, so it never reads as the focus ring,
- * which is the primary with no gap on a swatch like this.
+ * The chosen swatch in a picker of colors, icons or avatars: a 2 px ink ring,
+ * 2 px off the swatch. Its fill is its content, so it cannot take the tint.
+ * The ring is the ink, so it never reads as the primary focus ring.
  */
 export const SWATCH_SELECTED =
   "ring-2 ring-offset-2 ring-on-surface ring-offset-surface-container-lowest";
 
-// ─── Tones ───────────────────────────────────────────────────────────────────
-//
-// A color that means something, in one place. Overdue is the error red,
-// today is the primary, a birthday is the warning amber, new people are the
-// success green, and everything else is neutral. A group's dot, its rows'
-// leading glyph and its chips read from the same tone, so the eye can follow
-// a color down a card. The AI color is not a tone: it marks what a model
-// wrote, and a category is not that.
+// Tones: a color that means something, in one place. Overdue is error, today
+// is primary, a birthday is warning, new people are success, and the rest is
+// neutral. A group's dot, glyphs and chips share one tone. The AI color is
+// not a tone: it marks what a model wrote.
 
 export type Tone = "error" | "primary" | "warning" | "success" | "neutral";
 
@@ -247,9 +198,7 @@ export const TONE_TEXT: Record<Tone, string> = {
   neutral: "text-on-surface-variant",
 };
 
-// ─── Navigation ──────────────────────────────────────────────────────────────
-
-/** Sidebar nav link — returns full className given active state */
+/** A sidebar nav link's classes. */
 export const navLink = (active: boolean, extra?: string) =>
   cn(
     "p-3 rounded-xl transition-colors",
@@ -259,16 +208,11 @@ export const navLink = (active: boolean, extra?: string) =>
     extra,
   );
 
-// ─── Buttons ─────────────────────────────────────────────────────────────────
+// Buttons
 
 /**
- * Icon button — small clickable icon (toolbar, header actions). Flat, with
- * the one hover layer. Use `.btn-primary` / `.btn-secondary` for a call to
- * action, which is the only kind of button with depth.
- *
- * About 32 px on screen with a 16 px icon, and a 44 px tap box from
- * `hit-area` (see index.css). Give neighbors 12 px of gap so the boxes do
- * not overlap.
+ * A flat icon button in a toolbar or a header. About 32 px on screen with a
+ * 44 px tap box (`hit-area`), so give neighbors 12 px of gap.
  */
 export const ICON_BTN =
   "hit-area state-layer p-2 rounded-xl text-on-surface-variant hover:text-on-surface transition-colors";
@@ -290,21 +234,13 @@ export const TEXT_LINK =
   "font-semibold text-primary underline underline-offset-2";
 
 /**
- * The mark on a setting that is not at its default: a 6 px accent dot after
- * the title. `SettingRow` draws it with a name for a screen reader and a
- * tooltip, and the page ends with one "Reset to defaults" button while any
- * of its settings wears it (`ResetToDefaults`).
+ * The 6 px accent dot after a setting that is off its default. `SettingRow`
+ * draws it, and the page ends with one "Reset to defaults" button.
  */
 export const CHANGED_MARK =
   "inline-block w-1.5 h-1.5 rounded-full bg-primary shrink-0";
 
-/**
- * "+ Add": the control under a field or after a row of chips.
- *
- * A real button in primary text with a 44 px tap box. It replaced three
- * looks for one act: an italic "Add another" that read as a placeholder, an
- * underlined bare input, and nothing at all for tags.
- */
+/** "+ Add" under a field or after a row of chips: a button in primary text with a 44 px tap box. */
 export const ADD_BUTTON =
   "hit-area state-layer inline-flex items-center gap-1 w-fit rounded-lg px-1.5 -mx-1.5 py-0.5 text-sm font-bold text-primary transition-colors";
 
@@ -319,7 +255,7 @@ export const BAR_BUTTON =
 /** The word under a bar button's glyph. */
 export const BAR_LABEL = cn(LABEL, "text-inherit whitespace-nowrap");
 
-// ─── Badges & Pills ─────────────────────────────────────────────────────────
+// Badges and pills
 
 /** Tag pill — used in contact tags, filter indicators */
 export const TAG_PILL =
@@ -329,7 +265,7 @@ export const TAG_PILL =
 export const STATUS_BADGE_SUCCESS =
   "text-[11px] uppercase tracking-[0.08em] bg-success/10 text-success px-1.5 py-0.5 rounded font-bold";
 
-// ─── Inputs ──────────────────────────────────────────────────────────────────
+// Inputs
 
 /**
  * Search input — the list-header search box. 44 px tall on a phone, 40 from
@@ -350,7 +286,7 @@ export const EDITABLE_INPUT =
 export const INLINE_INPUT =
   "min-h-[44px] sm:pointer-fine:min-h-0 rounded-md bg-surface-container-high px-2 py-1 text-base sm:text-sm font-medium text-on-surface border-none";
 
-// ─── Keyboard shortcut hints ─────────────────────────────────────────────────
+// Keyboard shortcut hints
 
 /** Keyboard shortcut badge */
 export const KBD =
@@ -360,13 +296,11 @@ export const KBD =
 export const KBD_SM =
   "bg-surface-container-high px-1.5 rounded font-mono text-[11px] shadow-sm";
 
-// ─── Filter Tabs ─────────────────────────────────────────────────────────────
-
-/** Tab container — the trough behind a row of tab items */
+/** The trough behind a row of tab items. */
 export const TAB_CONTAINER =
   "flex gap-1 bg-surface-container-low p-1 rounded-xl";
 
-/** Tab item — returns className based on active state */
+/** A tab item's classes. */
 export const tabItem = (active: boolean) =>
   cn(
     "px-4 py-2 text-sm font-bold rounded-lg transition-colors",
@@ -375,13 +309,7 @@ export const tabItem = (active: boolean) =>
       : "text-on-surface-variant hover:text-on-surface",
   );
 
-// ─── Filter pills ────────────────────────────────────────────────────────────
-
-/**
- * Filter pill button — returns className based on active state. The active
- * pill is the selected tint and nothing else: the ring it used to wear read
- * as a pressed button.
- */
+/** A filter pill's classes. The active pill is the tint alone: a ring reads as a pressed button. */
 export const filterPill = (active: boolean) =>
   cn(
     "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-colors",
@@ -390,15 +318,9 @@ export const filterPill = (active: boolean) =>
       : "state-layer text-on-surface-variant hover:text-on-surface",
   );
 
-// ─── List Items ──────────────────────────────────────────────────────────────
-
 /**
- * Contact list row — returns className based on active state.
- *
- * The current row is the selected row: the tint. It was a ring, first 2 px
- * solid and then 1 px inset, and either way it read as a focus ring on every
- * visit, with two rings when the row also had focus. The hover layer sits
- * over the tint as well as over the plain row.
+ * A contact list row's classes. The current row takes the tint, not a ring,
+ * which reads as a focus ring. The hover layer sits over the tint too.
  */
 export const listRow = (active: boolean) =>
   cn(
@@ -406,50 +328,32 @@ export const listRow = (active: boolean) =>
     active && SELECTED_ROW,
   );
 
-// ─── Timeline ────────────────────────────────────────────────────────────────
-
 /**
- * Timeline entry card: the full-width card right of the date column. No
- * hover shadow, because the card itself is not a control. Its title button
- * and its kebab are.
+ * A timeline entry's card, right of the date column. No hover: the card is
+ * not a control, its title button and its kebab are.
  */
 export const TIMELINE_CARD = "card p-4 sm:p-5";
 
-// ─── Composer ────────────────────────────────────────────────────────────────
-
 /**
- * Rich text composer container. No outer margin: the timeline puts its own
- * gap between the composer and the first group. A composite field, so the
- * card draws the focus ring while its editor has focus (`.focus-frame`).
+ * The rich text composer's card. No outer margin: the timeline sets the gap.
+ * A composite field, so the card draws the focus ring (`.focus-frame`).
  */
 export const COMPOSER = "card focus-frame p-4 z-20";
 
-// ─── Empty States ────────────────────────────────────────────────────────────
+// Menus: one look for everything that opens under a control (`ActionMenu`,
+// `Select`, `ContextMenu`, the combobox, the mention list). The rows below
+// are the only row styles a menu may use.
 
-// ─── Menus and dropdowns ─────────────────────────────────────────────────────
-//
-// One look for everything that opens under a control: `ActionMenu`, `Select`,
-// `ContextMenu`, the combobox, the snooze menus, the mention list. The panel
-// is `.menu-panel` (index.css): solid, a hairline ring, a soft shadow, and
-// `.menu-enter` for the 120 ms entrance. The rows below are the only row
-// styles a menu may use, so every menu in the app reads the same.
-
-/**
- * The floating panel. Scrolls past about ten rows, and never runs wider
- * than the window.
- */
+/** The floating panel. It scrolls past about ten rows and never runs wider than the window. */
 export const MENU_PANEL =
   "menu-panel menu-enter p-1 min-w-[13rem] max-w-[min(20rem,calc(100vw-2rem))] max-h-[min(24rem,calc(100vh-4rem))] overflow-y-auto";
 
 /**
- * One row. 44 px tall on a touch screen, a phone on its side too, and 36 px
- * for a mouse. The keyboard ring is
- * drawn inside the row, because the rows touch and an outside ring would be
- * cut off by the panel's edge. With a mouse the tint on `:focus` (not only
- * `:focus-visible`) shows where the arrow keys start after a click opened
- * the menu. After a tap it would gray the first row beside the checked one,
- * so a touch screen tints only for a keyboard. A row that waits is half
- * opacity, in every menu.
+ * One row: 44 px tall on a touch screen and 36 px for a mouse. The keyboard
+ * ring is inside the row, because the rows touch and the panel's edge would
+ * cut an outer ring. With a mouse `:focus` tints too, to show where the
+ * arrow keys start after a click. A touch screen tints only for a keyboard,
+ * or a tap would gray the first row beside the checked one.
  */
 export const MENU_ITEM =
   "w-full min-h-[44px] pointer-fine:min-h-[36px] flex items-center gap-2.5 px-2.5 rounded-md text-sm font-medium text-left text-on-surface transition-colors hover:bg-surface-container-high pointer-fine:focus:bg-surface-container-high focus-visible:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary disabled:opacity-50 disabled:cursor-not-allowed aria-disabled:opacity-50 aria-disabled:cursor-not-allowed";
@@ -485,20 +389,16 @@ export const DROPDOWN_MENU = cn(
   "min-w-full",
 );
 
-/** Dropdown standard item: the menu row. */
+/** A dropdown's row. */
 export const DROPDOWN_ITEM = cn(MENU_ITEM, "cursor-pointer");
 
-// ─── Form Inputs ─────────────────────────────────────────────────────────────
-
-/** Standard modal form label */
+/** A modal form's label. */
 export const FORM_LABEL = cn(LABEL, "block mb-1.5");
 
-/** Standard modal form input */
 /**
- * 16px on a phone, 14px from `sm`. iOS Safari zooms the whole viewport when
- * a field under 16px takes focus, which on a bottom-sheet form means the
- * submit button leaves the screen mid-entry. The auth fields already follow
- * this rule; the app's other forms now do too.
+ * A modal form's input: 16 px on a phone, 14 px from `sm`. iOS Safari zooms
+ * when a field under 16 px takes focus, which pushes a bottom sheet's submit
+ * button off the screen.
  */
 export const FORM_INPUT =
   "w-full rounded-xl px-3.5 py-2.5 text-base sm:text-sm bg-surface-container text-on-surface transition-colors";
@@ -510,24 +410,13 @@ export const FORM_INPUT =
 export const DIALOG_ACTIONS =
   "flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2";
 
-/**
- * A field a model filled in — returns additional classes when a field was
- * auto-populated. AI-derived data, so the AI color: its wash and a 1 px
- * inset edge, still. It used to be a pulsing primary glow, which said
- * "focus" and "loading" at once and never stopped.
- */
+/** A field a model filled in: AI-derived data, so the AI color's wash and a 1 px inset edge. */
 export const formInputHighlight = (hasValue: boolean) =>
   hasValue ? "bg-ai/10 ring-1 ring-inset ring-ai/40" : "";
 
-// ─── Contact header ──────────────────────────────────────────────────────────
-//
-// The small "+ Add" and its field, shared by "+ tag" (`ChipInput`, in the
-// header and in the Details card) and "+ link" (`AddLink`, at the end of the
-// header's meta line), so the two look and behave as one control.
-
 /**
- * The small "+ Add" after a row of chips or links: "+ tag", "+ link". The
- * "+ Add" look (`ADD_BUTTON`) at 12 px, with its own sides.
+ * The small "+ Add" after a row of chips or links, shared by "+ tag"
+ * (`ChipInput`) and "+ link" (`AddLink`): `ADD_BUTTON` at 12 px.
  */
 export const ADD_BUTTON_SMALL = cn(ADD_BUTTON, "text-xs px-2 mx-0 py-1");
 
