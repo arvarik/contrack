@@ -1131,7 +1131,8 @@ export const SETTINGS_PAGES: SettingsPage[] = [
         ],
       },
     ],
-    load: () => import("./admin/AiView"),
+    load: () =>
+      import("../ai-settings").then((m) => ({ default: m.AISettingsView })),
   },
   {
     id: "admin-ai-usage",

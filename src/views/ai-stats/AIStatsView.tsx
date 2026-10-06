@@ -246,12 +246,7 @@ export const AIStatsView = () => {
                 <FeedItem key={item.id} item={item} index={i} />
               ))}
 
-              {/*
-                Appends. Pressing this used to raise an offset and replace
-                everything above it with the next twenty rows, so reading the
-                feed meant losing what you had just read and there was no way
-                back. Known issue B-02.
-              */}
+              {/* Appends, so the rows already read stay above. */}
               {hasNextPage && (
                 <div className="pt-3 flex justify-center">
                   <button
