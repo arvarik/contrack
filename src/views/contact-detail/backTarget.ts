@@ -1,29 +1,20 @@
-/**
- * Where the contact page's Back goes, and the words on it.
- *
- * @module views/contact-detail/backTarget
- */
+/** Where the contact page's Back goes, and the words on it. */
 import { NAMES } from "../../lib/names";
 
 /** The title of the archived contacts page in Settings. */
 const ARCHIVED_LABEL = "Archived contacts";
 
-/** Where Back goes, and the words on it. */
 interface BackTarget {
   to: string;
   label: string;
 }
 
 /**
- * Where Back goes, and the name the button says. The two stay together so
- * the button never names one page and opens another.
- *
- * A page that opens a contact from a list of its own names itself in the
- * link's state, `{ back: { to, label } }`, so Back returns to that list: the
- * Enrichment page does, with its filters. Only a path inside the app is
- * taken: "//" and "/\" start another site's address in a browser.
- * Otherwise the route decides: the archived list, or the map or the
- * network with its search and its list filter (`search`).
+ * Where Back goes and its words stay together, so the button never names
+ * one page and opens another. A page that opens a contact from its own list
+ * (Enrichment, with its filters) passes `{ back: { to, label } }` in the
+ * link state. Only a path inside the app counts: "//" and "/\" start
+ * another site's address. Otherwise the route decides.
  */
 export function backTarget(
   pathname: string,

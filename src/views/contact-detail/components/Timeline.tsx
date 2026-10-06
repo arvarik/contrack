@@ -1,20 +1,10 @@
 /**
- * Timeline: the interactions of one contact, in one column, newest first.
+ * The interactions of one contact, in one column, newest first: a date
+ * column, the type glyph, and a full-width card per entry.
  *
- * It replaces a zigzag. Cards alternated sides at half the pane width, so at
- * 1440 px a title wrapped to three lines and 40 percent of the pane was gap.
- * Now each entry is one row: a 64 px date column, the type glyph, and a card
- * that takes the rest of the width.
- *
- * Entries sit under group headings. "This week" holds the current week. Every
- * older or later entry goes under its month, with the year added for a year
- * that is not the current one. The heading carries the relative part of the
- * date and the entry's tooltip carries the absolute date.
- *
- * Delete is in a kebab with Edit, and not a red trash on every card. The
- * kebab shows on hover, on focus in the entry, and always on a touch screen.
- * Delete asks first, then hides the entry and offers Undo in a toast. The
- * server delete waits until the undo window ends (see `lib/pendingDeletes`).
+ * Entries group under "This week" or their month (with the year when it is
+ * not this one). Delete asks first, then hides the entry and offers Undo.
+ * The server delete waits until the undo window ends (`lib/pendingDeletes`).
  */
 import React, {
   useCallback,
@@ -64,18 +54,13 @@ import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { useMarkFollowUpDone } from "../../../hooks/useMarkFollowUpDone";
 import { InteractionDetailModal } from "./InteractionDetailModal";
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Props
-// ═══════════════════════════════════════════════════════════════════════════
-
-// The parent's mutations, as their `mutate` or `mutateAsync`: those keep one
-// identity, so the memoized tab and entries skip the parent's renders.
+// The parent's mutations are passed as `mutate` or `mutateAsync`, which keep
+// one identity, so the memoized tab and entries skip the parent's renders.
 
 /**
- * The delete's `mutateAsync`, and not `mutate`, on purpose. The undo window
- * can end after the contact page has closed, or while a second delete is
- * out. React Query drops the callbacks of a `mutate` call in both cases. The
- * promise settles in both.
+ * `mutateAsync`, not `mutate`: the undo window can end after the page has
+ * closed or while a second delete is out. React Query then drops a `mutate`
+ * call's callbacks, but the promise still settles.
  */
 export type DeleteInteraction = (args: {
   id: string;
@@ -112,20 +97,12 @@ interface TimelineProps {
   promoteGhost: PromoteGhost;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Helpers
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * The info color on its own 10 percent wash: a call or a social message.
- * Info is not one of the shared tones, so it keeps this pair.
- */
+/** Info is not one of the shared tones, so it keeps its own wash. */
 const INFO_WASH = "bg-info/10 text-info";
 
 /**
- * The glyph for an interaction type, on its color's wash. Every other type
- * reads from the shared tones (`TONE_WASH`), which
- * `tests/unit/frontend/style/themeContrast.test.ts` measures.
+ * The glyph for an interaction type, on its color's wash. The shared tones
+ * (`TONE_WASH`) are measured by `tests/unit/frontend/style/themeContrast.test.ts`.
  */
 function getInteractionStyle(type: string): { Icon: LucideIcon; tone: string } {
   switch (type) {
@@ -136,7 +113,6 @@ function getInteractionStyle(type: string): { Icon: LucideIcon; tone: string } {
     case "email":
       return { Icon: Mail, tone: TONE_WASH.success };
     case "note":
-      // The AI color, as a glyph on its own 10 percent wash.
       return { Icon: FileText, tone: "bg-ai/10 text-ai" };
     case "message":
     case "sms":
@@ -158,7 +134,7 @@ interface ParsedMention {
   isGhost?: boolean;
 }
 
-/** Safely parse the JSON mentions string. Returns null if empty/invalid. */
+/** Null when the mentions JSON is empty or invalid. */
 function parseMentions(raw: string | null | undefined): ParsedMention[] | null {
   if (!raw) return null;
   try {
@@ -198,12 +174,9 @@ function startOfWeek(now: Date, weekStartDay: 0 | 1 = 1): Date {
 }
 
 /**
- * Sort the entries newest first and split them into headed groups.
- *
- * A group is a run of neighbors with the same heading. An entry in a future
- * week goes under its month, so a later September entry can stand above
- * "This week" with an earlier September group below it. The two groups are
- * not merged, because that would break the date order.
+ * Sort newest first and split into runs of neighbors with the same heading.
+ * A future entry goes under its month, so one month can have a group on
+ * each side of "This week". They are not merged: that breaks date order.
  */
 function groupEntries(
   items: Interaction[],
@@ -217,8 +190,7 @@ function groupEntries(
 
   const time = (entry: DatedEntry) =>
     entry.date ? entry.date.getTime() : Number.NEGATIVE_INFINITY;
-  // The server sends newest first already. The sort is a guard: an entry
-  // with no readable date goes last, and equal dates keep the server order.
+  // A guard on the server order: undated entries go last, ties keep order.
   const dated = items
     .map((item) => ({ item, date: parseServerTime(item.date) }))
     .sort((a, b) => time(b) - time(a) || 0);
@@ -258,14 +230,7 @@ const titleButton = (id: string) =>
     .getElementById(`interaction-${id}`)
     ?.querySelector<HTMLButtonElement>("h3 button") ?? null;
 
-// ═══════════════════════════════════════════════════════════════════════════
-// InteractionContent: memoized, sanitized rich-text preview for one entry
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Memoized so DOMPurify.sanitize doesn't re-run for every timeline entry on
- * each parent render. It only runs when the entry's HTML actually changes.
- */
+/** Memoized so DOMPurify runs only when the entry's HTML changes. */
 const InteractionContent = React.memo(({ html }: { html: string }) => {
   const sanitized = useMemo(
     () => DOMPurify.sanitize(html, TIPTAP_SANITIZE_CONFIG),
@@ -279,14 +244,9 @@ const InteractionContent = React.memo(({ html }: { html: string }) => {
   );
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// TimelineEntry: one row
-// ═══════════════════════════════════════════════════════════════════════════
-
 /**
- * The kebab is hidden with opacity, not `display`, so Tab still reaches it.
- * It shows on hover of the entry, on focus anywhere in the entry, while its
- * menu is open, and always on a touch screen, which has no hover.
+ * Hidden with opacity, not `display`, so Tab still reaches it. Always shown
+ * on a touch screen, which has no hover.
  */
 const KEBAB_TRIGGER =
   "transition pointer-fine:opacity-0 pointer-fine:group-hover/entry:opacity-100 pointer-fine:group-focus-within/entry:opacity-100 pointer-fine:aria-expanded:opacity-100";
@@ -296,7 +256,7 @@ const SOURCE_BADGE =
 
 interface TimelineEntryProps {
   entry: DatedEntry;
-  /** The position on the whole timeline, for the entrance stagger. */
+  /** For the entrance stagger. */
   index: number;
   /** Slide in: the entry arrived after the timeline had drawn. */
   arrived: boolean;
@@ -318,8 +278,8 @@ const TimelineEntry = React.memo(
     pending,
   }: TimelineEntryProps) => {
     const navigate = useNavigate();
-    // Each entry animates in with a transform, which makes it a stacking
-    // context. An open menu lifts its entry above the next one.
+    // The entrance transform makes each entry a stacking context, so an
+    // open menu lifts its entry above the next one.
     const [menuOpen, setMenuOpen] = useState(false);
     const { item, date } = entry;
     const { Icon, tone } = getInteractionStyle(item.type);
@@ -343,7 +303,6 @@ const TimelineEntry = React.memo(
             : undefined
         }
       >
-        {/* Date column */}
         <div className="w-16 shrink-0 pt-4">
           {date && (
             <time
@@ -361,7 +320,6 @@ const TimelineEntry = React.memo(
         </div>
 
         <div className={cn(TIMELINE_CARD, "flex min-w-0 flex-1 gap-3")}>
-          {/* Type glyph */}
           <div
             className={cn(
               "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
@@ -413,7 +371,6 @@ const TimelineEntry = React.memo(
               />
             </div>
 
-            {/* Via mention badge */}
             {item.isViaName && (
               <button
                 type="button"
@@ -435,7 +392,6 @@ const TimelineEntry = React.memo(
               </div>
             ) : null}
 
-            {/* Ghost Mentions */}
             {mentions && (
               <div className="mt-4 pt-3 flex flex-wrap gap-2 items-center">
                 <span className={cn(LABEL, "mr-2 flex items-center gap-1")}>
@@ -484,7 +440,6 @@ const TimelineEntry = React.memo(
               </div>
             )}
 
-            {/* File Attachment */}
             {item.fileUrl && (
               <div className="mt-3">
                 {item.fileType?.startsWith("image/") ? (
@@ -516,7 +471,6 @@ const TimelineEntry = React.memo(
               </div>
             )}
 
-            {/* Follow-up */}
             {item.actionItems && item.actionItems.length > 0 && (
               <div className="mt-4 pt-3 flex flex-wrap gap-2 items-center border-t border-surface-container/50">
                 <span className={cn(LABEL, "mr-2 flex items-center gap-1")}>
@@ -547,7 +501,6 @@ const TimelineEntry = React.memo(
               </div>
             )}
 
-            {/* Duration */}
             {item.duration && (
               <p className="text-xs text-on-surface-variant mt-3 font-medium flex items-center gap-1 opacity-70">
                 Duration: {item.duration}
@@ -559,10 +512,6 @@ const TimelineEntry = React.memo(
     );
   },
 );
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Timeline
-// ═══════════════════════════════════════════════════════════════════════════
 
 export const Timeline = ({
   contactId,
@@ -582,11 +531,9 @@ export const Timeline = ({
   const { preferences } = usePreferences();
   const weekStartDay = weekStartsOn(preferences.weekStart);
   /**
-   * The entries on the timeline when it first drew. They draw with the
-   * page: the contact page is built anew on each return to the Network page,
-   * and a slide-in on each of those kept the page moving for 400 ms after it
-   * had drawn. An entry that arrives later still slides in, which is how a
-   * note just logged, or a timeline that has just loaded, shows itself.
+   * Entries present at first draw do not slide in: the page mounts anew on
+   * each visit, and a slide-in each time kept it moving for 400 ms. Later
+   * arrivals, such as a note just logged, still slide in.
    */
   const [firstDrawn] = useState(() => new Set(timeline.map((item) => item.id)));
 
@@ -600,9 +547,9 @@ export const Timeline = ({
     [timeline, hidden, weekStartDay],
   );
 
-  // After a delete, the kebab that opened the dialog is gone. Focus goes to
-  // a neighbor's title in the render that hides the entry. The dialog's
-  // own return runs later, finds its target gone, and changes nothing.
+  // The kebab that opened the dialog is gone after a delete, so focus goes
+  // to a neighbor's title. The dialog's own focus return then finds no
+  // target and does nothing.
   useEffect(() => {
     const id = focusAfterDelete.current;
     if (!id) return;
@@ -674,8 +621,7 @@ export const Timeline = ({
       <InteractionDetailModal
         isOpen={!!opened}
         onClose={() => onOpenedChange(null)}
-        // The note as the timeline has it now: a Save or a done follow-up
-        // shows here as soon as the timeline refetches.
+        // The latest copy, so a Save or a done follow-up shows after refetch.
         interaction={
           (opened &&
             timeline.find((item) => item.id === opened.interaction.id)) ??

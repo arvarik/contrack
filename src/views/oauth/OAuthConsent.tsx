@@ -1,18 +1,10 @@
 /**
- * OAuthConsent — where a person approves an app that asked to use their
- * Contrack, such as Claude on the web or an editor.
- *
- * The app sent the browser to `/oauth/authorize`, and the server sent it
- * here with a request id (server/services/oauthService.ts). AuthGate shows
- * the sign-in screen first when nobody is signed in, at this same address,
- * so the request is still here after sign-in.
- *
- * The page says who is asking and where the browser goes after, then offers
- * Read and write or Read only. The answer goes by `fetch`, and the page then
- * moves the browser itself. A form posted to the server would be stopped by
- * the CSP's `form-action 'self'`, which Chrome applies to the redirect too.
- *
- * @module views/oauth/OAuthConsent
+ * Where a person approves an app that asked to use their Contrack. The
+ * server sends the browser here with a request id (oauthService.ts), and
+ * AuthGate signs in at this same address, so the request survives sign-in.
+ * The answer goes by `fetch`, and the page moves the browser itself: the
+ * CSP's `form-action 'self'` stops a form post, and Chrome applies it to the
+ * redirect too.
  */
 
 import { useMemo, useState } from "react";
@@ -123,9 +115,8 @@ export default function OAuthConsent() {
     },
   });
 
-  // A request that is gone is a 404, on load or on the answer (it expired
-  // while the page was open, or another tab answered it). Anything else is a
-  // failure to load, which a reload may fix, and says so.
+  // A gone request is a 404: it expired, or another tab answered it. Any
+  // other failure says that a reload may fix it.
   const isGone = (error: unknown) =>
     error instanceof ApiError && error.status === 404;
   const gone =

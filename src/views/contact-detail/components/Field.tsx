@@ -1,27 +1,14 @@
 /**
  * Field: one labeled value, or one labeled list of values, in the Details
- * card.
+ * card. Every value sits in the same frame:
  *
- * The card had three ways to add a value, and each looked different (finding
- * A3 of the UI review). Emails and phones had an italic "Add another" that
- * read as a placeholder. Preferences and interests had an underlined bare
- * input that looked like a line under the card. The labels were uppercase
- * under an uppercase heading, so the heading did not stand out (D9). Every
- * value now sits in the same frame:
+ * 1. A sentence-case label (`FIELD_LABEL`) that also names the group, so a
+ *    screen reader says "Email" before the rows.
+ * 2. The value, edited in place (`EditableField`).
+ * 3. One "+ Add" button with a 44 px tap box (`ADD_BUTTON`).
  *
- * 1. A label in sentence case at 12 px (`FIELD_LABEL`). It also names the
- *    group, so a screen reader says "Email" before the rows.
- * 2. The value. A click or Enter edits it in place, and a pencil marks it on
- *    touch and on keyboard focus (`EditableField`, `EditHint`). An email or
- *    a phone is a link that writes or calls, and its pencil is the button
- *    that edits it.
- * 3. One "+ Add" button. It is a real button in primary text with a 44 px
- *    tap box (`ADD_BUTTON`).
- *
- * The label is a `span` and not a `<label>`. The value is a button, and a
- * `<label>` names a form field, not a button.
- *
- * @module views/contact-detail/components/Field
+ * The label is a `span`: the value is a button, and a `<label>` names a
+ * form field, not a button.
  */
 import React, { useId } from "react";
 import { Plus } from "lucide-react";
@@ -42,10 +29,7 @@ interface AddButtonProps {
   ref?: React.Ref<HTMLButtonElement>;
 }
 
-/**
- * "+ Add" under a field. A caller that moves focus back to it after a form
- * closes passes a `ref`.
- */
+/** "+ Add" under a field. Pass a `ref` to focus it again after a form. */
 export const AddButton = ({ label, onClick, ref }: AddButtonProps) => (
   <button
     ref={ref}
@@ -78,12 +62,8 @@ export const Field = ({ label, children }: FieldProps) => {
 };
 
 /**
- * Offers "Undo" after a value is removed, for as long as every Undo in the
- * app (`withUndo`).
- *
- * A remove saves at once and asks nothing first, so a slip of the thumb needs
- * a way back. Every remove on the contact page uses this one toast: a value
- * in the card, a tag, a link, a list chip.
+ * Offers Undo after a value is removed. A remove saves at once and asks
+ * nothing, so every remove on the contact page offers this way back.
  */
 export const showUndoToast = (label: string, onUndo: () => void) => {
   toast(label, withUndo(onUndo));

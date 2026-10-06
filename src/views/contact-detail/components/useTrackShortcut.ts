@@ -1,14 +1,8 @@
 /**
- * useTrackShortcut: `t` tracks or untracks the open contact.
- *
- * The same flip as the header's Track button, toast and Undo included. It
- * listens only on the contact's own page (`/contact/:id`, and the contact
- * over the map), never inside the floating card on the Archived page. It
- * steps aside when focus is in a field, when a dialog or a menu is open,
- * when the single-key shortcuts are off, and for a ghost, which cannot be
- * tracked. Caps Lock does not stop it.
- *
- * Registered in `src/lib/shortcuts.ts` under Contact.
+ * `t` tracks or untracks the open contact, like the header's Track button.
+ * Only on the contact's own page (not the Archived page's floating card). It
+ * steps aside for a field, an open dialog or menu, single-key shortcuts off,
+ * and a ghost. Registered in `src/lib/shortcuts.ts` under Contact.
  */
 import { useEffect } from "react";
 import { useMatch } from "react-router-dom";

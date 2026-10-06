@@ -80,8 +80,7 @@ export const ContactListsSection = ({
   const memberOfIds = new Set(contactLists.map((l) => l.id));
   const availableLists = allLists.filter((l) => !memberOfIds.has(l.id));
 
-  // One row per list the contact is not on yet. `ActionMenu` draws the
-  // panel, closes it, and returns focus to the button before the mutation.
+  // `ActionMenu` returns focus to its button before the mutation runs.
   const addItems: ActionMenuItem[] = availableLists.map((list) => ({
     id: list.id,
     label: list.name,
@@ -110,10 +109,9 @@ export const ContactListsSection = ({
                 },
               )
             }
-            // A touch screen has no hover, so there the X shows at rest with
-            // a 44 px tap box, a tablet too. With a mouse, from `sm`, it
-            // slides in on hover or focus, and its overflow clip (which
-            // would clip the tap box) comes back.
+            // Touch has no hover, so the X shows at rest with a 44 px tap box
+            // and no overflow clip, which would cut the box. With a fine
+            // pointer from `sm`, it slides in on hover or focus.
             className="hit-area w-3 ml-0.5 opacity-100 sm:pointer-fine:w-0 sm:pointer-fine:ml-0 sm:pointer-fine:overflow-hidden sm:pointer-fine:opacity-0 sm:pointer-fine:group-hover/listpill:w-3 sm:pointer-fine:group-hover/listpill:ml-0.5 sm:pointer-fine:group-hover/listpill:opacity-100 sm:pointer-fine:focus-visible:w-3 sm:pointer-fine:focus-visible:opacity-100 hover:text-error transition-all duration-(--dur-slow) flex items-center"
             title="Remove from list"
             aria-label={`Remove from ${list.name}`}
@@ -123,7 +121,6 @@ export const ContactListsSection = ({
         </span>
       ))}
 
-      {/* Add to list menu */}
       {availableLists.length > 0 && (
         <ActionMenu
           label="Add to a list"

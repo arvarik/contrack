@@ -1,17 +1,8 @@
 /**
- * DupeBanner — a possible duplicate of the contact on this page.
- *
- * ```
- * ⧉ Ada Quill may be the same person as A. Quill     [ Compare ] [ Keep separate ]
- *   ✉ Same email address
- *   ⚠ First names differ: Ada and Ben
- * ```
- *
- * The same words as Possible duplicates: the reason, and the caveat on the
- * banner itself. Compare opens the review list's comparison, where the
- * contact to keep is chosen, with this page's contact chosen first. A merge
- * that keeps the other contact goes to its page, because this one is gone.
- * Each decision says what it did, with Undo.
+ * A possible duplicate of the contact on this page, with the same reason
+ * and caveat words as Possible duplicates. Compare picks this page's
+ * contact as the keeper first. A merge that keeps the other contact goes to
+ * its page, because this one is gone. Each decision offers Undo.
  */
 import { useState } from "react";
 import { toast } from "sonner";
@@ -83,7 +74,7 @@ function Banner({
   const busy = dismiss.isPending || merge.isPending;
   const caveatId = `dupe-caveat-${suggestion.id}`;
 
-  /** A contact's page, on the map or in the network, as this page is. */
+  /** A contact's page, on the map or in the network, like this page. */
   const pageOf = (id: string) =>
     location.pathname.startsWith("/map/contact/")
       ? `/map/contact/${id}`
@@ -131,7 +122,6 @@ function Banner({
             .catch((err) => toast.error(`Could not undo: ${errorText(err)}`));
         }),
       );
-      // This page's contact merged into the other: its page is the other's now.
       if (gone.id === contactId) navigate(pageOf(keeper.id), { replace: true });
     } catch (err) {
       toast.error(`Could not merge: ${errorText(err)}`);
@@ -141,8 +131,7 @@ function Banner({
   return (
     <div className="max-w-6xl mx-auto w-full px-4 sm:px-6 md:px-8 lg:px-10 mt-2 mb-4">
       <div className="rounded-2xl bg-surface-container-low p-3 sm:p-4 space-y-3">
-        {/* Wraps on a phone: two buttons beside the sentence would leave it
-            a word per line, so they drop under it. */}
+        {/* Wraps on a phone, so the buttons do not squeeze the sentence. */}
         <div className="flex flex-wrap items-start gap-3">
           <span className={cn("p-2 rounded-lg shrink-0", TONE_WASH.warning)}>
             <Copy aria-hidden="true" className="w-4 h-4" />

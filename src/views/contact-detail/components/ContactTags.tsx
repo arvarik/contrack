@@ -1,11 +1,7 @@
 /**
- * ContactTags: a contact's tags, with "+ tag", and the lists the contact is
- * in.
- *
- * In the wide layout the row sits in the header, under the meta line. In the
- * narrow layout the header is one short block, so the row moves to the top
- * of the Details tab. One component, so both places add and remove a tag the
- * same way, with the same undo.
+ * A contact's tags, with "+ tag", and its lists. Wide, the row sits in the
+ * header. Narrow, it tops the Details tab. One component, so both places add
+ * and remove a tag the same way, with the same undo.
  */
 import { showUndoToast } from "./Field";
 

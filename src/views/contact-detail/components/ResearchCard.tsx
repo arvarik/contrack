@@ -1,26 +1,11 @@
 /**
- * ResearchCard — what enrichment read about a contact, and what it added.
+ * The last dossier card: each enrichment run (when, depth, model, what it
+ * added), the facts it reported beside their pages, and every cited page.
  *
- * The last card of the dossier. The research used to sit in the middle of
- * the tab as "Research notes and sources": a closed disclosure with its own
- * 320 px scroll, holding a copy of the about, career and education cards and
- * its sources as "Source 1" links to Google redirects. Here the fields stay
- * in their own cards above, and this card holds what only it can say:
- *
- *   - each enrichment, when, at which depth, with which model, and what it
- *     added
- *   - the facts the latest one reported, each beside the page it came from
- *   - every page the research cited, by site and address
- *
- * Enrich again opens the two research depths (`EnrichMenu`). Each run in
- * the history has a menu with "Not {name}", for a search that found
- * someone else with the same name: it takes back what the run added and
- * leaves its pages out of later runs (`rejectResearchRun`). When the latest
- * research found no page, found little, or was taken back, the card says
- * what it searched with and offers the details that would help it, a
- * school and a former name typed right here (`ResearchNextSteps`).
- * It reads `contact.aiResearch` (shared/researchRecord.ts), which only the
- * enrichment merge and "Not this person" write.
+ * "Not {name}" on a run takes back what it added and leaves its pages out of
+ * later runs (`rejectResearchRun`). When the latest research found nothing,
+ * found little, or was taken back, `ResearchNextSteps` asks for a detail.
+ * It reads `contact.aiResearch` (shared/researchRecord.ts).
  */
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
@@ -84,9 +69,8 @@ import {
   type ResearchAnchor,
 } from "../../../lib/research";
 
-/** Findings shown before "Show all". */
+/** Rows shown before "Show all". */
 const FINDINGS_SHOWN = 8;
-/** Sources shown before "Show all". */
 const SOURCES_SHOWN = 8;
 
 /**
@@ -131,11 +115,8 @@ function SiteIcon({ site }: { site: string }) {
 }
 
 /**
- * One cited page: its icon, its title or address, and where it lives.
- *
- * The record only keeps http and https addresses (shared/researchRecord.ts),
- * and `safeHref` checks again here, like every other external link in the
- * app: the address came from a provider, not from the person.
+ * One cited page. The record keeps only http and https addresses, and
+ * `safeHref` checks again: the address came from a provider.
  */
 function SourceLink({ source }: { source: ResearchSource }) {
   const { title, site, trail } = sourceDisplay(source);
@@ -166,7 +147,6 @@ function SourceLink({ source }: { source: ResearchSource }) {
   );
 }
 
-/** "Show all 23" and back, for a list cut to its first entries. */
 function ShowAll({
   expanded,
   total,
@@ -191,7 +171,6 @@ function ShowAll({
   );
 }
 
-/** Each detail's button: its words and its glyph. */
 const ANCHOR_BUTTONS: Record<
   ResearchAnchor,
   { label: string; another?: string; icon: LucideIcon }
@@ -203,10 +182,7 @@ const ANCHOR_BUTTONS: Record<
   link: { label: "Add a link", another: "Add another link", icon: LinkIcon },
 };
 
-/**
- * The details the card takes itself, because the page has no field for
- * them, and their field's words. The rest open their field on the page.
- */
+/** Details the page has no field for, so the card takes them itself. */
 const INLINE_FIELDS = {
   school: {
     label: "School",
@@ -225,13 +201,9 @@ type InlineAnchor = keyof typeof INLINE_FIELDS;
 const isInline = (anchor: ResearchAnchor): anchor is InlineAnchor =>
   anchor in INLINE_FIELDS;
 
-/**
- * Detail buttons shown at once: one row in the dossier's column. The next
- * one shows as one is filled.
- */
+/** Detail buttons shown at once: one row in the dossier's column. */
 const ANCHORS_SHOWN = 3;
 
-/** Each reason's heading and glyph. */
 const REASONS: Record<
   NextStepReason,
   { title: (first: string) => string; icon: LucideIcon }
@@ -250,10 +222,7 @@ const REASONS: Record<
   },
 };
 
-/**
- * One detail, typed in the card: a school or a former name. Enter saves,
- * and Escape closes the field and gives focus back to its button.
- */
+/** A school or a former name, typed in the card. Escape cancels. */
 function DetailForm({
   anchor,
   busy,
@@ -336,19 +305,12 @@ function DetailForm({
 }
 
 /**
- * What to do when the latest research came back empty, came back thin, or
- * found someone else (`nextStepReason`): what it searched with, and the
- * details that would help it, each a button.
- *
- * A page counts only when it names the person with a detail the records
- * have, so one more detail is what a retry needs. A school and a former
- * name are typed here, and saving one searches again at once, at the depth
- * the last search ran. A city, a work email and a link open their field on
- * the page (`onAddDetail`), and once one is added, Search again appears
- * here. After "Not this person", Search again is offered at once: later
- * searches leave out the pages it took back.
- *
- * While research runs for the contact, the panel says so instead.
+ * Shown when the latest research found nothing, found little, or was taken
+ * back (`nextStepReason`). A page counts only when it names the person with
+ * a known detail, so a retry needs one more detail. A school or a former
+ * name saved here searches again at once, at the last depth. A city, a work
+ * email and a link open their field on the page (`onAddDetail`), and Search
+ * again appears once one is added.
  */
 function ResearchNextSteps({
   contact,
@@ -372,9 +334,8 @@ function ResearchNextSteps({
   const missing = missingAnchors(contact).filter(
     (anchor) => isInline(anchor) || !!onAddDetail,
   );
-  // What was missing when this run's panel first showed: a detail added
-  // since is one the next search has and this one did not. The card keys
-  // the panel by run, so a new run starts over.
+  // Missing at first render: a detail added since makes a retry worth it.
+  // The card keys the panel by run, so a new run starts over.
   const [missingAtFirst] = useState(missing);
   const added = missingAtFirst.some((anchor) => !missing.includes(anchor));
   const search = useOptionalAISearch();
@@ -397,7 +358,7 @@ function ResearchNextSteps({
     });
   const closeForm = (anchor: InlineAnchor) => {
     setForm(null);
-    // Back to the button that opened the field, after it renders again.
+    // Focus the opening button after it renders again.
     requestAnimationFrame(() => chips.current[anchor]?.focus());
   };
   const save = (anchor: InlineAnchor, text: string) =>
@@ -579,12 +540,11 @@ export function ResearchCard({
   onAddDetail,
 }: {
   contact: Contact;
-  /** Opens the field for a detail that helps research: see `NoPageNextSteps`. */
+  /** Opens the field for a detail that helps research: see `ResearchNextSteps`. */
   onAddDetail?: (anchor: ResearchAnchor) => void;
 }) {
   const headingId = useId();
-  // Enrich again waits without a model or web search, and says why here, as
-  // the empty dossier's Enrich contact does.
+  // Without a model or web search, Enrich again is blocked and says why.
   const blocked = useBlockedAi("research");
   const canEnrich = useCanEnrich(contact);
   const findingsId = useId();
@@ -602,14 +562,12 @@ export function ResearchCard({
     () => parseResearchRecord(contact.aiResearch),
     [contact.aiResearch],
   );
-  // Notes that came from somewhere other than an enrichment: an import, or
-  // the API. They are the reader's own, so they are shown as written.
+  // Notes from an import or the API, shown as written.
   const notes = contact.aiBackground || null;
   const runs = record?.runs ?? [];
   const sources = record?.sources ?? [];
   // The facts of every run that kept them (the latest two), newest first,
-  // each once. A second run that found one new fact still shows the first
-  // run's facts under it.
+  // each once.
   const findings = useMemo(() => {
     const seen = new Set<string>();
     return [...(record?.runs ?? [])].reverse().flatMap((run) =>
@@ -622,14 +580,13 @@ export function ResearchCard({
     );
   }, [record]);
   const researched = runs.length > 0 || !!contact.aiHydratedAt;
-  /** What a run added that the record ties to it, and the pages it found. */
   const addedBy = (run: ResearchRun) =>
     (record?.addedEntries ?? []).filter((entry) => entry.at === run.at).length;
   const pagesOf = (run: ResearchRun) =>
     sources.filter((source) => source.firstSeenAt === run.at).length;
-  // A run from before research tied what it added to the run cannot take
-  // it back, so it is not offered. A run that added nothing can still have
-  // its pages left out. Archived contacts and ghosts are not researched.
+  // A run whose additions are not tied to it cannot take them back. A run
+  // that added nothing can still have its pages left out. Archived contacts
+  // and ghosts are not researched.
   const canReject = (run: ResearchRun) =>
     !run.rejected &&
     run.models.length > 0 &&
@@ -651,7 +608,7 @@ export function ResearchCard({
 
   const last = runs[runs.length - 1]?.at ?? contact.aiHydratedAt ?? null;
   const count = Math.max(runs.length, researched ? 1 : 0);
-  // "Enriched 2 times · last 7 minutes ago · 6 web pages", as a meta line.
+  // "Enriched 2 times · last 7 minutes ago · 6 web pages".
   const summary = [
     researched ? `Enriched ${count === 1 ? "once" : `${count} times`}` : null,
     researched && last
@@ -674,7 +631,6 @@ export function ResearchCard({
           {summary && (
             <p className="text-sm text-on-surface text-pretty">{summary}</p>
           )}
-          {/* Only when there is a page to check a detail against. */}
           {(findings.length > 0 || sources.length > 0) && (
             <p className="mt-1 text-sm text-on-surface-variant text-pretty">
               Check a detail against its page before you rely on it
@@ -713,8 +669,6 @@ export function ResearchCard({
                 className="flex items-start gap-2 text-sm"
               >
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5 sm:flex-row sm:gap-4">
-                  {/* When, how deep and with what, in one column; what it
-                    did beside. */}
                   <span className="shrink-0 sm:w-48">
                     <time
                       dateTime={run.at}
@@ -781,8 +735,7 @@ export function ResearchCard({
           >
             {(allFindings ? findings : findings.slice(0, FINDINGS_SHOWN)).map(
               (finding, index) => {
-                // The page the provider matched to the fact, else the site
-                // the fact names.
+                // The page matched to the fact, else the site it names.
                 const source =
                   (finding.url &&
                     (sources.find((entry) => entry.url === finding.url) ?? {
@@ -887,8 +840,8 @@ export function ResearchCard({
               onSuccess: ({ removed }) => {
                 setRejecting(null);
                 setTakenBack(rejecting.at);
-                // The latest run's panel takes focus. An earlier run's menu
-                // is gone, so focus goes to the history it was in.
+                // The latest run's panel takes focus. For an earlier run,
+                // focus goes to the history heading, since its menu is gone.
                 if (rejecting.at !== lastRun?.at)
                   requestAnimationFrame(() => historyHeading.current?.focus());
                 toast.success(

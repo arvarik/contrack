@@ -6,18 +6,10 @@ import { useMediaQuery } from "../../../hooks/useMediaQuery";
 import { TOUCH_QUERY } from "../../../lib/platform";
 
 /**
- * The pencil after an editable value.
- *
- * A pointer shows a gray wash on hover, and that was the only sign a value
- * could be edited. A phone has no hover, so nothing said it. The pencil shows
- * at 40 percent on a coarse pointer (touch) and whenever the value has
- * keyboard focus. It is sized in `em`, so it follows the text it sits beside,
- * from a 14 px phone number to the name. It is decoration: the value is the
- * button's name, and the pencil is hidden from assistive tech.
- *
- * Where it is not shown it is not drawn at all, rather than drawn clear. A
- * clear pencil still took its width, and left a gap after every name, role
- * and company on a desktop.
+ * The pencil after an editable value. A phone has no hover, so the pencil
+ * shows at 40 percent on a coarse pointer and on keyboard focus. Elsewhere
+ * it is not drawn at all, because a clear pencil still takes its width.
+ * It is sized in `em` to follow the text, and hidden from assistive tech.
  */
 export const EditHint = () => (
   <Pencil
@@ -31,9 +23,8 @@ export const EditHint = () => (
 );
 
 /**
- * What an email or a phone input tells the browser: the keyboard a phone
- * opens (`@` and `.com`, or the digits). Autofill is off: these are another
- * person's details, and autofill would offer the owner's own.
+ * The keyboard a phone opens for an email or a phone. Autofill is off: these
+ * are another person's details, and autofill offers the owner's own.
  */
 export const INPUT_KIND = {
   email: { type: "email", inputMode: "email", autoComplete: "off" },
@@ -41,16 +32,12 @@ export const INPUT_KIND = {
 } as const;
 
 /**
- * Inline editor that retains rejected drafts and confirms completed
- * asynchronous saves.
+ * Inline editor that keeps a rejected draft and confirms an async save.
  *
- * At rest the value is a button: a click, Enter or Space opens the input.
- * In the input, Enter saves and Escape cancels. These two keys are in the
- * "Contact" group of `lib/shortcuts`, so the shortcuts dialog lists them.
- *
- * With an `href` the value is a link and the pencil after it is the button.
- * A phone number calls and an email writes on a tap, and the pencil opens
- * the input. A tap on a number used to open "Edit phone".
+ * At rest the value is a button. In the input, Enter saves and Escape
+ * cancels (listed in the "Contact" group of `lib/shortcuts`). With an `href`
+ * on a touch screen, the value is a link that calls or writes, and the
+ * pencil after it opens the input.
  */
 export function EditableField({
   value,
@@ -65,17 +52,11 @@ export function EditableField({
   value: string | null;
   /** What shows at rest, when it is not the value: a headline's new part. */
   display?: string;
-  /**
-   * Saves the value. A promise that resolves to `false` or to an `Error`
-   * means the save failed, and the field shows the error's message.
-   */
+  /** Resolves to `false` or an `Error` when the save failed. */
   onSave: (value: string) => unknown;
   placeholder: string;
   className?: string;
-  /**
-   * The input's accessible name while editing. Defaults to the placeholder,
-   * which is right for a single field and too vague for one row of several.
-   */
+  /** The input's accessible name. Defaults to the placeholder. */
   inputLabel?: string;
   /** An email or a phone: the input's type, keyboard and autofill. */
   kind?: keyof typeof INPUT_KIND;
@@ -83,9 +64,8 @@ export function EditableField({
   href?: string | null;
 }) {
   const [editing, setEditing] = useState(false);
-  // A link only on a touch screen. With a mouse a click on the value edits
-  // it, as it always has: a desktop's handler for `tel:` can be a softphone
-  // prompt, or nothing at all.
+  // A link only on a touch screen: a desktop's `tel:` handler can be a
+  // softphone prompt, or nothing at all.
   const touch = useMediaQuery(TOUCH_QUERY);
   const [draft, setDraft] = useState(value ?? "");
   const [saving, setSaving] = useState(false);
@@ -97,11 +77,9 @@ export function EditableField({
   const mounted = useRef(true);
   const button = useRef<HTMLButtonElement>(null);
   /**
-   * True when a key closed the editor. The input leaves the page when the
-   * editor closes, and focus would fall to the document, so a keyboard user
-   * who pressed Escape lost their place. Focus goes back to the value. A
-   * blur closes the editor too, and then focus is already somewhere else
-   * and stays there.
+   * True when a key closed the editor. Focus then goes back to the value,
+   * since the input leaves the page and focus would fall to the document.
+   * After a blur, focus is already elsewhere and stays there.
    */
   const refocus = useRef(false);
   useEffect(() => {
@@ -170,7 +148,6 @@ export function EditableField({
             readOnly={saving}
             onChange={(event) => setDraft(event.target.value)}
             onBlur={() => {
-              // Focus has moved on, so nothing is handed back to the value.
               refocus.current = false;
               void commit();
             }}
@@ -211,7 +188,6 @@ export function EditableField({
   if (href && value && touch)
     return (
       <span className="inline-flex items-center gap-2 min-w-0 max-w-full">
-        {/* A link looks like a link: the primary ink, underlined on hover. */}
         <a
           href={href}
           // What the tap does, not only the number.
@@ -224,9 +200,7 @@ export function EditableField({
         >
           {value}
         </a>
-        {/* The pencil at rest at every width: on a link it is the one way
-            to the input, so it cannot wait for a hover. Escape and Enter
-            give focus back to it. */}
+        {/* Always shown: on a link the pencil is the one way to the input. */}
         <button
           ref={button}
           type="button"
@@ -249,9 +223,8 @@ export function EditableField({
       type="button"
       onClick={begin}
       onKeyDown={(event) => {
-        // Enter opens the editor on keydown, as a native button would, and
-        // the default is prevented so the click that follows does not run
-        // `begin` a second time.
+        // Enter opens on keydown, as a native button does. The default is
+        // prevented so the click that follows does not run `begin` twice.
         if (event.key === "Enter" && !event.nativeEvent.isComposing) {
           event.preventDefault();
           begin();

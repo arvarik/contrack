@@ -1,36 +1,15 @@
 /**
  * ContactActionsMenu: the kebab at the end of the name row in the contact
- * header.
- *
- * The header had a palette button and an archive button at the same rank as
- * the name, and delete in a kebab. None of them is something a person does
- * every visit, so they all live here now, in one menu built on `ActionMenu`:
- *
- * 1. Change color, which opens the color picker under this button.
- * 2. Enrich contact and Enrich deeply, which research this one contact on
- *    the web at the Standard or the Deep depth. Each row's hint is the time
- *    a contact takes.
- * 3. Copy basic details and Copy full details.
- * 4. Share contact, which hands the contact's card (a vCard) to the phone's
- *    share sheet, so it goes to Messages, Mail or the address book. A
- *    browser with no share sheet calls it Save contact card and downloads
- *    the card (`shareContactCard`).
- * 5. Archive or Unarchive.
- * 6. Delete, last and on its own surface tone.
+ * header. It holds what a person does not do every visit: Change color,
+ * Enrich contact and Enrich deeply, the two copies, Share contact, Archive,
+ * and Delete last.
  *
  * The enrich rows start the same background run as the Enrichment settings
- * page, for one contact (`startSearch` in `AISearchContext`). They ask for
- * no confirmation, because one contact is one request: the progress panel
- * opens at the bottom right, and the person keeps working. They are not
- * there when AI assistance is off or for a ghost, which has nothing yet to
- * search from. While a start is on its way, or while the running batch
- * still has a job for this contact, they read "Enriching…" and are
- * disabled, so a second press cannot queue the same contact twice. The lock
- * another account holds comes back as a toast, since the menu has closed
- * and has no page to say it on.
- *
- * Change avatar was here. It is the pencil on the avatar now, beside the
- * thing it changes (`ProfileHeader`).
+ * page (`startSearch`), with no confirmation: one contact is one request.
+ * They are hidden when AI assistance is off and for a ghost, which has
+ * nothing to search from. While this contact is enriching they are disabled,
+ * so a second press cannot queue it twice. A lock that another account holds
+ * comes back as a toast, since the menu has closed.
  *
  * The color picker renders in the same positioned wrapper as the button, so
  * it opens under it and Escape can hand focus back to it.
@@ -108,18 +87,13 @@ function cardText(contact: Contact): string {
 }
 
 /**
- * Shares the contact, or saves its card.
+ * Shares the contact's vCard, or downloads it.
  *
- * 1. The share sheet takes the vCard file where the browser says it can
- *    (`navigator.canShare` with `files`), as Safari on an iPhone does.
- * 2. Chrome on Android has a share sheet, but its list of file types has
- *    no `.vcf`, so the sheet gets the card as text (`cardText`).
- * 3. With no share sheet the menu item says Save contact card, and the
- *    file downloads.
- *
- * The menu runs this in the tap's own handler, so the browser still counts
- * the tap as the reason for the sheet. A closed sheet is a choice and does
- * nothing more. Another refusal downloads the file.
+ * The share sheet takes the file where `navigator.canShare` allows it
+ * (Safari on an iPhone). Chrome on Android lists no `.vcf` type, so its
+ * sheet gets the card as text. With no sheet, or on a refusal other than a
+ * closed sheet, the file downloads. The menu calls this in the tap's own
+ * handler, so the browser counts the tap as the reason for the sheet.
  */
 async function shareContactCard(contact: Contact): Promise<void> {
   const file = new File([buildVCard(contact)], vCardFileName(contact.name), {
@@ -173,8 +147,7 @@ export const ContactActionsMenu = ({
   const aiAllowed = useAiAllowed();
   const search = useAISearch();
   const enriching = isEnriching(search, contact.id);
-  // No model or no web search: the rows say so, and a press says why, and
-  // where an admin fixes it, in the words of every AI button that waits.
+  // No model or no web search: a press says why and where an admin fixes it.
   const blocked = useBlockedAi("research");
   const enrich = (depth: "standard" | "deep") =>
     blocked
@@ -216,8 +189,6 @@ export const ContactActionsMenu = ({
       icon: Palette,
       onSelect: () => setPickerOpen(true),
     },
-    // An AI action about this contact, so it follows the contact's own look
-    // and comes before the copies.
     ...(aiAllowed && !contact.isGhost
       ? [
           {

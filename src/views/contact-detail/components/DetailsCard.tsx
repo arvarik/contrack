@@ -1,11 +1,7 @@
 /**
- * DetailsCard: the left-column card with a contact's facts. Location, email,
- * phone, birthday, industry, preferences, interests and the next follow-up.
- *
- * Every fact is a `Field`: a sentence case label, the value, and at most one
- * way to add another. The heading stays uppercase, one step above the labels.
- *
- * Extracted from ContactProfile to keep each section focused and readable.
+ * DetailsCard: the left-column card with a contact's facts. Each fact is a
+ * `Field`: a sentence-case label, the value, and at most one way to add
+ * another.
  */
 import React, { useState } from "react";
 import { CalendarCheck, CalendarClock } from "lucide-react";
@@ -41,19 +37,14 @@ import {
   ADDR_LABELS,
 } from "./MultiValueField";
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Props
-// ═══════════════════════════════════════════════════════════════════════════
-
 interface DetailsCardProps {
   contact: Contact;
   contactId: string;
   onUpdate: (field: string, val: string) => void;
   updateContact: (args: { id: string; data: ContactUpdateData }) => void;
   /**
-   * The Research card asked for a detail: "city" opens Location's add form
-   * and "workEmail" opens Email's, labeled work. `onDetailRequestDone`
-   * spends the request once the field has opened.
+   * A detail the Research card asked for: "city" or "workEmail" opens that
+   * field's add form. `onDetailRequestDone` spends the request.
    */
   detailRequest?: DetailRequest | null;
   onDetailRequestDone?: () => void;
@@ -66,9 +57,8 @@ export interface DetailRequest {
 }
 
 /**
- * The parts of the comma-joined preferences string: trimmed, with no blanks
- * and no repeats. A repeat that differs only in case is a repeat, because
- * each part is also a chip id, and two chips must not share one.
+ * The trimmed, unique parts of the preferences string. Repeats are found
+ * without case, because each part is also a chip id.
  */
 const splitPreferences = (text: string | null | undefined): string[] => {
   const seen = new Set<string>();
@@ -83,10 +73,6 @@ const splitPreferences = (text: string | null | undefined): string[] => {
   return parts;
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Component
-// ═══════════════════════════════════════════════════════════════════════════
-
 const DetailsCardInner: React.FC<DetailsCardProps> = ({
   contact,
   contactId,
@@ -95,15 +81,11 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
   detailRequest,
   onDetailRequestDone,
 }) => {
-  // The Research card's "Add a city" and "Add a work email" open these
-  // fields labeled "work": research looks for the person at their job.
+  // Opened as "work": research looks for the person at their job.
   const requestFor = (anchor: ResearchAnchor) =>
     detailRequest?.anchor === anchor ? detailRequest.key : undefined;
-  /**
-   * The addresses, from the address list or from the single legacy
-   * `location` field. The mini map under the rows reads the same list, so a
-   * contact with no address at all gets no map block and no caption.
-   */
+  // The address list, or the single legacy `location`. The mini map reads it
+  // too, so no address means no map block.
   const addressItems =
     contact.addresses && contact.addresses.length > 0
       ? contact.addresses.map((a: ContactAddress) => ({
@@ -174,10 +156,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
       {/* h2: the first section under the contact's name, which is the h1. */}
       <h2 className={cn(SECTION_HEADING, "pb-2 mb-4")}>Details</h2>
 
-      {/* The list fields draw their own "+ Add" under their rows, so the
-          Field gets no `onAdd`. Location puts the mini map and its caption
-          between the rows and "+ Add": the rows, then the pin they place,
-          then the way to add another. */}
+      {/* The list fields draw their own "+ Add", so Field gets no `onAdd`. */}
       <Field label="Location">
         <MultiValueField
           items={addressItems}
@@ -305,11 +284,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
   );
 };
 
-/**
- * The next follow-up, and the way to fix it here: a new date, or done.
- * It was read-only, so a wrong date (a weekday read as last week's) could
- * be fixed only on Pulse. A date that only says a day showed "12:00 AM".
- */
+/** The next follow-up, with a menu to change its date or mark it done. */
 const NextFollowUp = ({ contactId }: { contactId: string }) => {
   const { data: items = [] } = useContactActionItems(contactId);
   const done = useHiddenPendingIds();
