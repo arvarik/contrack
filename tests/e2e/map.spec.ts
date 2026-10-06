@@ -121,6 +121,8 @@ test.describe("map", () => {
     await expect(
       overlay.getByRole("heading", { level: 1, name: /Ada Lovelace/ }),
     ).toBeVisible();
+    // The open contact is the page's one h1: the map's own steps down.
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     // The map page owns the key, and it arrives with the map's own chunk, so
     // a pin is the proof that the page behind the contact is running.
     await expect(
