@@ -23,6 +23,7 @@ import type { RouteContract } from "./route.ts";
 import { tagRoutes } from "./tags.ts";
 import { tokenRoutes } from "./tokens.ts";
 import { oauthRoutes } from "./oauth.ts";
+import { trashRoutes } from "./trash.ts";
 
 export {
   route,
@@ -45,6 +46,7 @@ export const CONTRACTS: readonly RouteContract[] = [
   ...Object.values(tagRoutes),
   ...Object.values(tokenRoutes),
   ...Object.values(oauthRoutes),
+  ...Object.values(trashRoutes),
 ];
 
 /** The key the route manifest and `UNCONTRACTED` use for a route. */

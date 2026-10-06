@@ -27,6 +27,7 @@ import {
 } from "../types";
 import { isValidLatLng, type MapContact } from "../../shared/geo";
 import { contactRoutes } from "../../shared/contracts/contacts";
+import { trashRoutes } from "../../shared/contracts/trash";
 import type { BodyOf } from "../../shared/contracts/route";
 import { apiFetch, apiJson, jsonBody } from "./client";
 import { GEO_STATUS_KEY } from "./geo";
@@ -473,6 +474,17 @@ export const usePurgeTrashedContact = () => {
       const res = await apiFetch(`/trash/${id}`, { method: "DELETE" });
       return res.json();
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trash"] });
+    },
+  });
+};
+
+/** Delete every contact in the Trash forever ("Empty trash"). */
+export const useEmptyTrash = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiJson(trashRoutes.empty, "/trash"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trash"] });
     },

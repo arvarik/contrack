@@ -1083,6 +1083,7 @@ must list it.
 | `POST /api/trash/:id/restore`  | Restore a trashed contact. Answers the contact. `404` when it is not in the trash.                            | your data |
 | `POST /api/trash/bulk-restore` | Restore many: `{ ids }`. Skips ids that are not in the trash. Answers `{ success, count }`.                   | your data |
 | `DELETE /api/trash/:id`        | Delete a trashed contact and its history now.                                                                 | your data |
+| `DELETE /api/trash`            | Empty the trash: delete every trashed contact and its history now. Answers `{ count }`.                       | your data |
 | `GET /api/backups`             | Every database snapshot, with its `verification`: `{ backups }`.                                              | admin     |
 | `POST /api/backups`            | Take a snapshot now. `201` with its details.                                                                  | admin     |
 | `GET /api/export/json`         | Your data as one JSON file: `contacts`, `interactions`, `lists`, `listMembers`, `actionItems` and `mergeLog`. | your data |

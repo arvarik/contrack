@@ -1160,6 +1160,7 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
   { method: "DELETE", path: "/api/tags/:tag", class: "scoped", isolated: true },
   { method: "GET", path: "/api/timeline", class: "scoped", isolated: true },
   { method: "GET", path: "/api/trash", class: "scoped", isolated: true },
+  { method: "DELETE", path: "/api/trash", class: "scoped", isolated: true },
   {
     method: "DELETE",
     path: "/api/trash/:id",

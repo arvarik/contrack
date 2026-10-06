@@ -140,6 +140,7 @@ const COVERED = [
   "DELETE /api/search/history",
   "DELETE /api/search/history/:id",
   "DELETE /api/tags/:tag",
+  "DELETE /api/trash",
   "DELETE /api/trash/:id",
   "GET /api/action-items",
   "GET /api/action-items/completed",
@@ -3109,6 +3110,19 @@ describe("the trash holds one account's deleted contacts", () => {
     for (const id of trashedB) {
       expect(snapshotRow("contacts", id)?.deletedAt).toBeNull();
     }
+  });
+
+  // Last in this block: it empties B's Trash, which the cases above use.
+  it("DELETE /api/trash: empties only the caller's Trash", async () => {
+    const before = snapshotRow("contacts", trashedA);
+    const doomed = await discard(B, "Bob Discarded 3");
+
+    const res = await asUser(B)(request(app).delete("/api/trash"));
+
+    expect(res.status).toBe(200);
+    expect(res.body.count).toBeGreaterThanOrEqual(1);
+    expect(snapshotRow("contacts", doomed)).toBeUndefined();
+    expect(snapshotRow("contacts", trashedA)).toEqual(before);
   });
 
   it("still restores the caller's own trashed contact", async () => {

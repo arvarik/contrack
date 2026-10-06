@@ -4450,6 +4450,26 @@
         }
       }
     },
+    "/api/trash": {
+      "delete": {
+        "summary": "Delete every contact in the Trash forever, with their notes and files",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "count": { "type": "integer" } },
+                  "required": ["count"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/oauth/authorize": {
       "get": {
         "summary": "Start a sign-in. Answers 303 to the consent page, or to the client with an error",
