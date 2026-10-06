@@ -28,7 +28,7 @@ import {
   PULSE_TYPE,
 } from "../lib/pulseStyles";
 import { describeDueChip } from "../lib/upNext";
-import { parseServerTime } from "../../../lib/datetime";
+import { isPlainDay, parseServerTime } from "../../../lib/datetime";
 import type { UpcomingBirthday } from "../lib/birthdays";
 import { useConnectors } from "../../../api/connectors";
 
@@ -51,9 +51,6 @@ type Entry =
   | { kind: "birthday"; key: string; when: Date; birthday: UpcomingBirthday }
   | { kind: "meeting"; key: string; when: Date; meeting: MeetingItem };
 
-/** An all-day event's start is a plain day ("2026-10-09"), with no time. */
-const isAllDay = (startsAt: string) => /^\d{4}-\d{2}-\d{2}$/.test(startsAt);
-
 /**
  * "Thu 2 Oct, 3:00 PM" in the person's own locale, or "Thu 2 Oct, all day"
  * for an all-day event. A plain day is that day on the local calendar
@@ -64,7 +61,8 @@ function formatMeetingTime(startsAt: string): string {
   const date = parseServerTime(startsAt);
   if (!date) return startsAt;
   const day = { weekday: "short", day: "numeric", month: "short" } as const;
-  return isAllDay(startsAt)
+  // An all-day event starts on a plain day ("2026-10-09"), with no time.
+  return isPlainDay(startsAt)
     ? `${date.toLocaleDateString(undefined, day)}, all day`
     : date.toLocaleString(undefined, {
         ...day,
