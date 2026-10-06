@@ -33,6 +33,16 @@ import {
   type MultiValueItem,
 } from "../../../../src/views/contact-detail/components/MultiValueField";
 
+// The next follow-up reads the contact's follow-ups.
+vi.mock("../../../../src/api/actionItems", () => ({
+  useContactActionItems: () => ({
+    data: [
+      { id: "a1", title: "Call back", dueAt: "2026-10-01", completedAt: null },
+    ],
+  }),
+  useUpdateActionItem: () => ({ mutate: vi.fn() }),
+  useCompleteActionItem: () => ({ mutateAsync: vi.fn() }),
+}));
 vi.mock("../../../../src/views/map/LocationMiniMap", () => ({
   LocationMiniMap: () => <div data-testid="mini-map" />,
 }));
@@ -213,6 +223,11 @@ describe("DetailsCard", () => {
       expect(screen.queryByText(label.toUpperCase())).toBeNull();
     }
     expect(screen.queryByText("Next Follow Up")).toBeNull();
+    // A calendar day with no time: no false "12:00 AM", and a way to fix it.
+    expect(screen.getByText(/^Call back · /).textContent).not.toMatch(/AM|PM/);
+    expect(
+      screen.getByRole("button", { name: "Change follow-up: Call back" }),
+    ).toBeTruthy();
   });
 
   it("gives each row a named label chip and a named kebab", () => {

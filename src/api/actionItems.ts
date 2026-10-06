@@ -95,3 +95,15 @@ export const useCreateActionItem = () => {
       void refreshContact(queryClient, contactId),
   });
 };
+
+/** One contact's follow-ups, pending first and soonest first. */
+export const useContactActionItems = (contactId: string) =>
+  useQuery({
+    queryKey: ["actionItems", "contact", contactId],
+    queryFn: ({ signal }): Promise<ActionItem[]> =>
+      apiJson(
+        actionItemRoutes.forContact,
+        `/contacts/${contactId}/action-items`,
+        { signal },
+      ),
+  });
