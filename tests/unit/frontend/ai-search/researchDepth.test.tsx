@@ -759,7 +759,7 @@ describe("the progress panel", () => {
         batch={batch}
         onDismiss={vi.fn()}
         onCancel={vi.fn()}
-        isCancelling={false}
+        isCanceling={false}
         connectionError={false}
       />,
     );

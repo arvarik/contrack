@@ -202,12 +202,12 @@ export const MARK_VARIANTS = {
   "corvid-mark-black": {
     ink: "#000000",
     eye: "#000000",
-    use: "One colour, for print and for a surface that takes one ink.",
+    use: "One color, for print and for a surface that takes one ink.",
   },
   "corvid-mark-white": {
     ink: "#ffffff",
     eye: "#ffffff",
-    use: "One colour, reversed out of a photograph or a brand colour.",
+    use: "One color, reversed out of a photograph or a brand color.",
   },
 } as const;
 export type MarkVariant = keyof typeof MARK_VARIANTS;
@@ -518,14 +518,14 @@ async function description(): Promise<string> {
 async function caption(
   content: string,
   px: number,
-  colour: string,
+  color: string,
   faceName: FaceName = "body",
 ): Promise<Buffer> {
   const line = outline(await face(faceName), content, px);
   const width = Math.ceil(line.advance + 4);
   const height = Math.ceil(px * 1.4);
   return png(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${textPath(line, 0, px * 1.05, colour)}</svg>`,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${textPath(line, 0, px * 1.05, color)}</svg>`,
   );
 }
 
@@ -613,7 +613,7 @@ async function variantSheet(): Promise<Buffer> {
   const grounds: [MarkVariant, string, string][] = [
     ["corvid-mark", BRAND.surface, "light ground"],
     ["corvid-mark-dark", BRAND.surfaceDark, "dark ground"],
-    ["corvid-mark-black", "#ffffff", "one colour"],
+    ["corvid-mark-black", "#ffffff", "one color"],
     ["corvid-mark-white", BRAND.mark, "reversed"],
   ];
   const width = pad + grounds.length * (cell + pad);

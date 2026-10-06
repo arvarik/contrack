@@ -10,13 +10,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const idle = vi.hoisted(() => ({
   tasks: [] as Array<() => void>,
-  cancelled: 0,
+  canceled: 0,
 }));
 vi.mock("../../../../src/lib/idle", () => ({
   whenIdle: (task: () => void) => {
     idle.tasks.push(task);
     return () => {
-      idle.cancelled += 1;
+      idle.canceled += 1;
       const index = idle.tasks.indexOf(task);
       if (index >= 0) idle.tasks.splice(index, 1);
     };
@@ -67,7 +67,7 @@ function fakePage(name: string, order: string[]) {
 
 beforeEach(() => {
   idle.tasks.length = 0;
-  idle.cancelled = 0;
+  idle.canceled = 0;
   prefetchPulse.mockClear();
 });
 
@@ -133,7 +133,7 @@ describe("warmPages", () => {
     stop();
     await nextIdle();
     expect(order).toEqual(["map"]);
-    expect(idle.cancelled).toBe(1);
+    expect(idle.canceled).toBe(1);
   });
 
   it("goes on to the next page when a download fails", async () => {

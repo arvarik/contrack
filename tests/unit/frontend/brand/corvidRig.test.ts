@@ -17,7 +17,7 @@ import {
   HOME_POSE,
   NECK,
   POSE_KEYS,
-  bodyCentre,
+  bodyCenter,
   corvidPathData,
   corvidPose,
   drawCorvid,
@@ -175,19 +175,19 @@ describe("turning round", () => {
   it("holds a sitting bird still by its middle while it turns, and mirrors a flying one", () => {
     // On the perch the body turns about the neck under a still head, so the
     // point the bird is held by does not move.
-    expect(bodyCentre({ ...HOME_POSE, bodyFacing: -1 })).toEqual(
-      bodyCentre(HOME_POSE),
+    expect(bodyCenter({ ...HOME_POSE, bodyFacing: -1 })).toEqual(
+      bodyCenter(HOME_POSE),
     );
     // In the air the body's middle goes where the body goes.
-    const [x] = bodyCentre({ ...HOME_POSE, flight: 1 });
-    const [turnedX] = bodyCentre({ ...HOME_POSE, flight: 1, bodyFacing: -1 });
+    const [x] = bodyCenter({ ...HOME_POSE, flight: 1 });
+    const [turnedX] = bodyCenter({ ...HOME_POSE, flight: 1, bodyFacing: -1 });
     expect(turnedX).toBeCloseTo(2 * NECK[0] - x, 9);
   });
 });
 
 describe("a barrel roll", () => {
   const flying = drawCorvid(corvidPose({ flight: 1, nape: 1 }));
-  const about = bodyCentre(corvidPose({ flight: 1 }))[1];
+  const about = bodyCenter(corvidPose({ flight: 1 }))[1];
   const strokes = (d: CorvidDrawing): Vec[][] => [
     d.head[0],
     d.head[1],

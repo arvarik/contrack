@@ -11,7 +11,7 @@ import { CORVID_EYE, CORVID_PATHS } from "../../assets/corvidPaths";
 import {
   HOME_POSE,
   POSE_KEYS,
-  bodyCentre,
+  bodyCenter,
   corvidPathData,
   drawCorvid,
   rollDrawing,
@@ -68,7 +68,7 @@ export function paintPose(
   pose: CorvidPose,
   roll: number = 1,
 ): void {
-  const drawing = rollDrawing(drawCorvid(pose), roll, bodyCentre(pose)[1]);
+  const drawing = rollDrawing(drawCorvid(pose), roll, bodyCenter(pose)[1]);
   const paths = corvidPathData(drawing);
   for (const stroke of BIRD_STROKES) setD(bird.strokes[stroke], paths[stroke]);
   if (bird.eye) {

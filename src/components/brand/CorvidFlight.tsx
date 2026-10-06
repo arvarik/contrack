@@ -34,7 +34,7 @@ import {
 } from "react";
 import { useLocation } from "react-router-dom";
 import { useCorvidLevel } from "../../hooks/useCorvidLevel";
-import { bodyCentre } from "../../assets/corvidRig";
+import { bodyCenter } from "../../assets/corvidRig";
 import {
   BIRD_PART_ORDER,
   CORVID_EYE,
@@ -184,7 +184,7 @@ export const CorvidFlight = () => {
     if (!el || !canvas) return;
     if (!bird.current) bird.current = birdElements(canvas);
     const k = frame.size / 100;
-    const [cx, cy] = bodyCentre(frame.pose);
+    const [cx, cy] = bodyCenter(frame.pose);
     // The roll is not a transform: a squash here would thin the strokes
     // with the bird. The rig turns the points and the pen keeps its width.
     el.style.transform =

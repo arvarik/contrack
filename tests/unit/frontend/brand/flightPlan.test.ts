@@ -31,7 +31,7 @@ import {
 import {
   HOME_POSE,
   POSE_KEYS,
-  bodyCentre,
+  bodyCenter,
   drawCorvid,
 } from "../../../../src/assets/corvidRig";
 import { createRng } from "../../../../src/lib/corvidMotion";
@@ -56,7 +56,7 @@ function fly(plan: FlightPlan, step = 1000 / 60): FlightFrame[] {
 }
 
 const perchCenter = (perch: FlightPerch) => {
-  const [x, y] = bodyCentre(HOME_POSE);
+  const [x, y] = bodyCenter(HOME_POSE);
   return [
     perch.left + (x / 100) * perch.size,
     perch.top + (y / 100) * perch.size,
@@ -370,7 +370,7 @@ describe("smoothness", () => {
       });
       const eyeAt = (t: number) => {
         const f = plan.frame(t);
-        const [cx] = bodyCentre(f.pose);
+        const [cx] = bodyCenter(f.pose);
         const eye = drawCorvid(f.pose).eye;
         return f.x + ((eye.cx - cx) * f.size) / 100;
       };

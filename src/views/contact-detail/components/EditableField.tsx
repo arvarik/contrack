@@ -72,7 +72,7 @@ export function EditableField({
   const [saved, setSaved] = useState(false);
   /** Why the last save failed, from the server when it said: "Name is required". */
   const [error, setError] = useState<string | null>(null);
-  const cancelled = useRef(false);
+  const canceled = useRef(false);
   const pending = useRef(false);
   const mounted = useRef(true);
   const button = useRef<HTMLButtonElement>(null);
@@ -99,14 +99,14 @@ export function EditableField({
     return () => clearTimeout(timer);
   }, [saved]);
   const begin = () => {
-    cancelled.current = false;
+    canceled.current = false;
     setDraft(value ?? "");
     setSaved(false);
     setError(null);
     setEditing(true);
   };
   const commit = async () => {
-    if (cancelled.current || pending.current) return;
+    if (canceled.current || pending.current) return;
     const next = draft.trim();
     if (next === (value ?? "")) {
       setEditing(false);
@@ -162,7 +162,7 @@ export function EditableField({
                 event.preventDefault();
                 event.stopPropagation();
                 refocus.current = true;
-                cancelled.current = true;
+                canceled.current = true;
                 setEditing(false);
                 setError(null);
               }

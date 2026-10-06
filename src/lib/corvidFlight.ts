@@ -19,7 +19,7 @@
  * Everything is a pure function of the request and the random source, so a
  * seeded test can fly the same route twice.
  */
-import { HOME_POSE, bodyCentre, type CorvidPose } from "../assets/corvidRig.ts";
+import { HOME_POSE, bodyCenter, type CorvidPose } from "../assets/corvidRig.ts";
 import {
   between,
   chance,
@@ -853,7 +853,7 @@ export function canHunt(ground: SearchGround): boolean {
 
 /** The middle of a perch's bird, where its flights start and end. */
 function perchPoint(perch: FlightPerch): Point {
-  const home = bodyCentre(HOME_POSE);
+  const home = bodyCenter(HOME_POSE);
   return [
     perch.left + (home[0] / 100) * perch.size,
     perch.top + (home[1] / 100) * perch.size,

@@ -270,7 +270,7 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
           batch={batch}
           onDismiss={dismiss}
           onCancel={cancel}
-          isCancelling={cancelMutation.isPending}
+          isCanceling={cancelMutation.isPending}
           connectionError={!!stream.error}
         />
       )}

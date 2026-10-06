@@ -70,10 +70,10 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
 
   // On mount, recover a scan the server is still running.
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     fetchActiveScan()
       .then((active) => {
-        if (cancelled) return;
+        if (canceled) return;
         // Only recover if we don't already have a scan in progress
         if (liveScanId.current) return;
         if (active.queued) {
@@ -92,7 +92,7 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
         // Nothing to recover, or a refusal the shared client announced.
       });
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, []); // Run once on mount only
 
@@ -106,7 +106,7 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
    */
   useEffect(() => {
     if (!queued) return;
-    let cancelled = false;
+    let canceled = false;
     let failures = 0;
     // Consecutive ticks that found nothing at all.
     let misses = 0;
@@ -120,7 +120,7 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
     const tick = async () => {
       try {
         const active = await fetchActiveScan();
-        if (cancelled) return;
+        if (canceled) return;
         failures = 0;
         if (active.queued) {
           // The 429 that started the wait carries no scan id. This does.
@@ -136,7 +136,7 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
         const finishedId = queuedScanId.current;
         if (finishedId) {
           const finished = await fetchScan(finishedId);
-          if (cancelled) return;
+          if (canceled) return;
           if (finished) {
             adopt(finished);
             return;
@@ -146,7 +146,7 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
         // the first tick can beat the server's booking.
         if (++misses >= 2) setQueued(false);
       } catch {
-        if (cancelled) return;
+        if (canceled) return;
         // Only the connection fails, and the server still holds the place.
         if (++failures >= QUEUE_POLL_MAX_FAILURES) setQueued(false);
       }
@@ -155,7 +155,7 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
     void tick();
     const timer = window.setInterval(() => void tick(), 3000);
     return () => {
-      cancelled = true;
+      canceled = true;
       window.clearInterval(timer);
     };
   }, [queued]);

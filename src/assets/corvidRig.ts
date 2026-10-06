@@ -559,7 +559,7 @@ export function rollDrawing(
  * mark and holds still when the body turns, because a bird turns round on
  * its perch about its neck. The mirror comes in with flight.
  */
-export function bodyCentre(
+export function bodyCenter(
   pose: Pick<CorvidPose, "flight" | "bodyFacing" | "x" | "y">,
 ): Vec {
   const f = clamp01(pose.flight);

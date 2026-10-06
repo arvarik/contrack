@@ -311,10 +311,10 @@ describe("batch research lifecycle", () => {
     );
     const running = jobQueue.processBatch(batch.id);
     await vi.waitFor(() => expect(generateFor).toHaveBeenCalledTimes(1));
-    const cancelled = await request(app).post(
+    const canceled = await request(app).post(
       `/api/ai-search/${batch.id}/cancel`,
     );
-    expect(cancelled.status).toBe(200);
+    expect(canceled.status).toBe(200);
     await running;
     finish(reply("Late result"));
     await Promise.resolve();

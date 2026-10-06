@@ -24,7 +24,7 @@ interface Props {
   batch: AISearchBatch;
   onDismiss: () => void;
   onCancel: () => void;
-  isCancelling?: boolean;
+  isCanceling?: boolean;
   connectionError?: boolean;
 }
 
@@ -41,7 +41,7 @@ export function AISearchProgressOverlay({
   batch,
   onDismiss,
   onCancel,
-  isCancelling,
+  isCanceling,
   connectionError,
 }: Props) {
   const [isMinimized, setIsMinimized] = useState(false);
@@ -176,10 +176,10 @@ export function AISearchProgressOverlay({
             </span>
             <button
               onClick={onCancel}
-              disabled={isCancelling}
+              disabled={isCanceling}
               className="hit-area state-layer shrink-0 px-2 py-1 rounded text-error disabled:opacity-50"
             >
-              {isCancelling ? "Stopping…" : "Stop research"}
+              {isCanceling ? "Stopping…" : "Stop research"}
             </button>
           </div>
         )}
