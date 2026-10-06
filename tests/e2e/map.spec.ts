@@ -146,6 +146,10 @@ test.describe("map", () => {
     await page.keyboard.press("Escape");
     await expect(page).toHaveURL(/\/map$/);
     await expect(overlay).toHaveCount(0);
+    // The focus comes back to her pin, not to the page.
+    await expect(
+      page.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
+    ).toBeFocused();
   });
 
   test("zooms into a cluster until it splits", async ({ page }) => {
@@ -159,7 +163,9 @@ test.describe("map", () => {
       name: "3 contacts, zoom in",
     });
     await expect(cluster).toBeVisible();
-    await cluster.click();
+    // From the keyboard: the cluster's button goes with the zoom.
+    await cluster.focus();
+    await page.keyboard.press("Enter");
 
     // The cluster is gone and at least one more person has a pin of their own.
     await expect(cluster).toHaveCount(0);
@@ -168,6 +174,8 @@ test.describe("map", () => {
         message: "the cluster did not split into pins",
       })
       .toBe(true);
+    // The focus moves on to a pin near it, not to the page.
+    await expect(page.locator(".map-pin:focus")).toHaveCount(1);
   });
 
   // An insight bar writes a value with a space in quotes, such as
