@@ -1,6 +1,4 @@
-// =============================================================================
 // Unit: Node runs the server and the scripts without a TypeScript loader
-// =============================================================================
 // Node 26 strips TypeScript's types and runs the file, with no tsx or
 // esbuild. The compiler catches most of what that needs (tsconfig's
 // verbatimModuleSyntax and erasableSyntaxOnly). It does not catch the rest,
@@ -15,7 +13,6 @@
 // It also runs Node's own type stripper on every file it reaches, so an enum,
 // a namespace or a parameter property fails here whatever tsconfig says.
 // verbatimModuleSyntax has no such check, so the last test reads the flag.
-// =============================================================================
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { stripTypeScriptTypes } from "node:module";

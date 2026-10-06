@@ -1,15 +1,10 @@
-// =============================================================================
-// Anthropic adapter — structured output
-// =============================================================================
-// Two things the live API taught us:
-//   1. `output_config.format` takes the schema DIRECTLY. OpenAI's nested
-//      `json_schema: { name, schema }` wrapper is rejected with a 400, which
-//      broke every JSON operation on Anthropic.
-//   2. Claude refuses to compile a schema with more than 24 optional
-//      parameters, or more than 16 union-typed ones. Contrack's research
-//      schema has 32 optional fields, so the adapter drops to prompt-guided
-//      JSON rather than failing the enrichment, and now counts first.
-// =============================================================================
+// Unit: the Anthropic adapter's structured output.
+//   1. `output_config.format` takes the schema directly. OpenAI's nested
+//      `json_schema: { name, schema }` wrapper is a 400.
+//   2. Claude refuses a schema with more than 24 optional parameters, or more
+//      than 16 union-typed ones. Contrack's research schema has 32 optional
+//      fields, so the adapter counts first and drops to prompt-guided JSON
+//      rather than failing the enrichment.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 

@@ -1,9 +1,8 @@
 /**
  * Assertions the accessibility journeys share.
  *
- * Each one turns a question a manual audit asks — "does this scan clean",
- * "can I see where focus is", "what has focus now" — into one call, so a
- * spec reads as the journey and not as the mechanics.
+ * Each turns a manual check ("does this scan clean", "can I see where focus
+ * is", "what has focus now") into one call, so a spec reads as the journey.
  */
 import {
   expect,
@@ -31,12 +30,10 @@ export const WCAG_TAGS = [
 /**
  * A scan builder with the suite's rule set applied.
  *
- * One best-practice rule joins the tags: aria-dialog-name. A dialog with no
- * name is announced as only "dialog", and the journeys scan every dialog
- * they open. The linter used to check hand-written dialogs for a label,
- * with an option Oxlint does not have. This rule reads the name the browser
- * computes instead. It is set before the tags, because `options()` replaces
- * the whole option object.
+ * One best-practice rule joins the tags: aria-dialog-name, because a dialog
+ * with no name is announced only as "dialog". It reads the name the browser
+ * computes. It is set before the tags, because `options()` replaces the
+ * whole option object.
  */
 export function axeFor(page: Page): AxeBuilder {
   return new AxeBuilder({ page })
@@ -82,20 +79,13 @@ export async function expectNoViolations(
  * Wait for every finite animation on the page to finish.
  *
  * axe measures contrast through ancestor opacity, so an entrance animation
- * caught mid-fade reads as a color that exists for one frame and fails a
- * rule the settled page passes. Spinners and pulses run forever and are
- * left alone. Bounded, because a page is not held hostage by an animation
- * that never resolves.
+ * caught mid-fade fails a rule the settled page passes. Spinners and pulses
+ * run forever and are left alone, and the wait is bounded.
  *
- * It looks again after each wait rather than taking one snapshot. A page
- * that is still arriving starts animations in waves: the Duplicates page
- * fades its pane in, then its scan card, then the card's contents, and the
- * whole run lasts about a second. One snapshot catches the first wave,
- * returns, and hands axe a page that is still moving. That was a rare
- * failure on a fast machine and a regular one under load.
- *
- * Two quiet frames end it, because an animation that a commit is about to
- * start does not exist yet on the frame that commit happened.
+ * It looks again after each wait, because a page that is still arriving
+ * starts animations in waves (the Duplicates page fades its pane, then its
+ * scan card, then the card's contents). Two quiet frames end it, because an
+ * animation a commit is about to start does not exist yet on that frame.
  */
 export async function settleAnimations(page: Page): Promise<void> {
   const settled = page.evaluate(async (budgetMs: number) => {

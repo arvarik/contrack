@@ -1,6 +1,4 @@
-// =============================================================================
 // Unit tests: the fields that answer an Ask question (matchedOn.ts)
-// =============================================================================
 
 import { describe, expect, it } from "vitest";
 import {

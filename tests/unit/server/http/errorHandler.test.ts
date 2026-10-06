@@ -1,19 +1,15 @@
-// =============================================================================
-// Unit Tests — Central Express Error Middleware
-// =============================================================================
-// Verifies the contract every API client depends on:
+// Unit: the central Express error middleware, the contract every API client
+// depends on:
 //   - canonical { error: { code, message, requestId, details?, stack? } } shape
 //   - status code mapping for AppError subclasses, ZodError, and SQLite
 //     constraint errors
 //   - stack stripped in production, included in dev
 //   - non-/api/ paths passed on to the SPA fallback
-//   - graceful no-op when headers were already sent (streaming routes)
+//   - a no-op when headers were already sent (streaming routes)
 //
-// These tests use plain mock objects for req/res instead of supertest because
-// we want to assert the middleware behavior in isolation — no Express plumbing,
-// no real network. The cases that need the real app live in tests/integration:
-// malformed JSON and the /api/ 404 in api.contacts, SQLITE_BUSY in wal.health.
-// =============================================================================
+// Plain mock req/res objects test the middleware alone. The cases that need
+// the real app live in tests/integration: malformed JSON and the /api/ 404 in
+// api.contacts, SQLITE_BUSY in wal.health.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ZodError, z } from "zod";
@@ -30,9 +26,7 @@ import {
   RateLimitedError,
 } from "../../../../server/utils/AppError.ts";
 
-// ---------------------------------------------------------------------------
 // Test fixtures
-// ---------------------------------------------------------------------------
 
 function mockRequest(overrides: Partial<Request> = {}): Request {
   return {
@@ -75,9 +69,7 @@ function mockResponse() {
   return res;
 }
 
-// ---------------------------------------------------------------------------
 // AppError translation
-// ---------------------------------------------------------------------------
 
 describe("errorHandler — AppError translation", () => {
   let prevEnv: string | undefined;
@@ -190,9 +182,7 @@ describe("errorHandler — AppError translation", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // ZodError translation
-// ---------------------------------------------------------------------------
 
 describe("errorHandler — ZodError translation", () => {
   it("maps ZodError to a 400 with issue list", () => {
@@ -214,9 +204,7 @@ describe("errorHandler — ZodError translation", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // SQLite errors
-// ---------------------------------------------------------------------------
 
 describe("errorHandler — sqlite errors", () => {
   it("maps SQLITE_CONSTRAINT to 400 DB_CONSTRAINT", () => {
@@ -240,9 +228,7 @@ describe("errorHandler — sqlite errors", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Unknown errors → 500 with stack stripping
-// ---------------------------------------------------------------------------
 
 describe("errorHandler — unknown errors", () => {
   it("maps a bare Error to 500 INTERNAL", () => {
@@ -275,9 +261,7 @@ describe("errorHandler — unknown errors", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // Streaming-route safety: response already started
-// ---------------------------------------------------------------------------
 
 describe("errorHandler — already-sent headers", () => {
   it("ends the connection without writing JSON if headers were already sent", () => {
@@ -298,9 +282,7 @@ describe("errorHandler — already-sent headers", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // notFoundHandler
-// ---------------------------------------------------------------------------
 
 describe("notFoundHandler", () => {
   it("passes through (no error) for non-/api/ paths", () => {

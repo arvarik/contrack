@@ -1,9 +1,6 @@
-// =============================================================================
-// Unit Tests — Tag vocabulary, rename, merge, and delete
-// =============================================================================
+// Unit: tag vocabulary, rename, merge, and delete.
 // Tags are scoped through contacts.ownerId. When two owners use the same tag
 // name, mutating operations by one owner must never affect the other.
-// =============================================================================
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import crypto from "crypto";

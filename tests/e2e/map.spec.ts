@@ -609,9 +609,8 @@ test.describe("map", () => {
     // The style never answers, so the map never loads. That holds open the
     // one moment the chrome is wrong: MapLibre lays the full credit strip
     // across the map as soon as a style's attributions arrive, and the
-    // collapse runs on load. The strip used to flash over the picture every
-    // time a map opened, which on the contact page is every person a reader
-    // steps to. The rule that covers it is CSS, keyed on the wrapper.
+    // collapse runs on load, so the strip would flash over the picture each
+    // time a map opens. The rule that covers it is CSS, keyed on the wrapper.
     let answer: (() => void) | null = null;
     const stalled = new Promise<void>((resolve) => {
       answer = resolve;

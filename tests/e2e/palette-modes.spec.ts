@@ -1,11 +1,9 @@
 /**
  * What the palette offers a person who does not know its syntax yet.
  *
- * - Typing a page's name finds the page. "pulse" used to offer only to
- *   create a contact named "pulse", and every Settings page sat in the
- *   empty palette, 24 rows of them.
- * - `>` leads from the kind to the contact to the text. It showed one block
- *   of syntax help for every partial input.
+ * - Typing a page's name finds the page ("pulse" opens Pulse), and the empty
+ *   palette does not list every Settings page.
+ * - `>` leads from the kind to the contact to the text.
  * - The mode chips switch modes, so a touch screen can reach `?` and `>`.
  * - The create row comes last, and only when nobody has the name.
  * - A screen reader hears how many people the list holds.
@@ -183,10 +181,9 @@ test("a screen reader hears how many people the list holds", async ({
 test("pills alone list people, with the top row and its heading in view", async ({
   page,
 }) => {
-  // While a facet was half typed, the five destinations were the only rows
-  // and one was highlighted. Once the pill locked they stayed under the
-  // people, and cmdk scrolled to the destination it had chosen, past the
-  // top row it no longer highlighted.
+  // While a facet is half typed, the five destinations are the only rows.
+  // Once the pill locks they must go, or cmdk scrolls to the destination it
+  // chose, past the top row.
   const palette = await openPalette(page);
   await page.keyboard.type("location:London ");
   await expect(

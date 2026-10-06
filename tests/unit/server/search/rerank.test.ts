@@ -1,12 +1,9 @@
-// =============================================================================
 // The rerank stage and the cross-encoder
-// =============================================================================
 // `rerankLocal` reorders the top of the local list by reranker score, inside
 // a time budget. Past the budget the list keeps its fused order and the late
 // scores are dropped. The worker is replaced here: scores come from a
 // reranker the test controls, through the same seam the search gate uses to
 // replay recorded scores, or from a mocked worker host.
-// =============================================================================
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

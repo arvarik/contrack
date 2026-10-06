@@ -1,17 +1,11 @@
-// =============================================================================
-// AI Answer Pipeline Evaluation Harness
-// =============================================================================
-// Shared harness used by:
-//   - tests/eval/answer.eval.test.ts (the CI quality gate with recorded replay)
-//   - scripts/record-answer-eval.ts  (the recorder and live-provider evaluator)
-//
-// Measures the full end-to-end user-visible answer pipeline:
+// AI answer pipeline evaluation harness, shared by answer.eval.test.ts (the
+// CI gate with recorded replay) and scripts/record-answer-eval.ts (the
+// recorder and live evaluator). It measures the answer a person sees:
 //   1. Filter interpretation (QueryPlan accuracy, confidence, disambiguation)
-//   2. Final results precision & recall (post-retrieval, post-hard-filter, post-rerank)
-//   3. Correct empty answers / refusal on non-matching queries
-//   4. Adversarial prompt injection resistance in candidate contact fields
-//   5. Grounded synthesis summaries & unsupported claim / hallucination detection
-// =============================================================================
+//   2. Final results precision and recall (after retrieval, hard filters and rerank)
+//   3. Correct empty answers on non-matching queries
+//   4. Resistance to prompt injection in contact fields
+//   5. Grounded synthesis and unsupported-claim detection
 
 import { validateAnswerFixture } from "../../scripts/answer-eval/fixtureValidation.ts";
 import fs from "fs";
@@ -49,9 +43,7 @@ export const BASELINE_PATH = path.resolve(HERE, "answer.baseline.json");
 export const EVAL_DIMENSION = 384;
 export const ANSWER_SCORING_VERSION = 3;
 
-// ---------------------------------------------------------------------------
 // Score Types
-// ---------------------------------------------------------------------------
 
 export interface FilterScore {
   precision: number;
@@ -157,9 +149,7 @@ export interface AnswerFixture {
   recordedResponses: RecordedResponses;
 }
 
-// ---------------------------------------------------------------------------
 // Seeding Helper
-// ---------------------------------------------------------------------------
 
 /**
  * Write the corpus into a real database under one owner, with the ids the
@@ -184,9 +174,7 @@ export function seedAnswerCorpus(
   }));
 }
 
-// ---------------------------------------------------------------------------
 // Evaluation Assertions & Metric Calculators
-// ---------------------------------------------------------------------------
 
 function round(n: number): number {
   if (Number.isNaN(n)) return 0;
@@ -554,9 +542,7 @@ export function evaluateSynthesisClaims(
   };
 }
 
-// ---------------------------------------------------------------------------
 // Main Pipeline Measurement Function
-// ---------------------------------------------------------------------------
 
 export async function measureAnswerPipeline(
   scope: Scope,
@@ -705,7 +691,7 @@ export async function measureAnswerPipeline(
       summaryText = "Could not create a summary.";
     }
 
-    // ── Evaluate Filter Interpretation ──────────────────────────────────────
+    // Evaluate Filter Interpretation
     const filterEval = evaluateFilterInterpretation(plan, query.expectedFilter);
     if (query.expectedFilter) {
       filterQueriesCount++;
@@ -718,7 +704,7 @@ export async function measureAnswerPipeline(
       categoryTotals[query.category].filterCount++;
     }
 
-    // ── Evaluate Final Results ──────────────────────────────────────────────
+    // Evaluate Final Results
     const resultEval = evaluateFinalResults(
       returnedKeys,
       query.expectedMatches,
@@ -734,7 +720,7 @@ export async function measureAnswerPipeline(
       categoryTotals[query.category].resultCount++;
     }
 
-    // ── Evaluate Empty Answers ──────────────────────────────────────────────
+    // Evaluate Empty Answers
     let emptyOk = true;
     if (query.expectEmpty) {
       totalEmptyCount++;
@@ -746,7 +732,7 @@ export async function measureAnswerPipeline(
       categoryTotals[query.category].emptyCount++;
     }
 
-    // ── Evaluate Adversarial Injections ─────────────────────────────────────
+    // Evaluate Adversarial Injections
     let injectionDefended = true;
     if (query.adversarialTargetKeys?.length) {
       totalInjections += query.adversarialTargetKeys.length;
@@ -775,7 +761,7 @@ export async function measureAnswerPipeline(
         query.adversarialTargetKeys.length;
     }
 
-    // ── Evaluate Synthesis Grounding & Claims ───────────────────────────────
+    // Evaluate Synthesis Grounding & Claims
     const matchedContacts = returnedKeys
       .map((k) => allContactsByKey.get(k))
       .filter((c): c is AnswerEvalContact => c !== undefined);
@@ -909,9 +895,7 @@ export async function measureAnswerPipeline(
   };
 }
 
-// ---------------------------------------------------------------------------
 // Fixture & Baseline File Helpers
-// ---------------------------------------------------------------------------
 
 export function loadAnswerBaseline(): AnswerBaseline {
   return JSON.parse(fs.readFileSync(BASELINE_PATH, "utf8")) as AnswerBaseline;

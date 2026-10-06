@@ -197,8 +197,8 @@ test.describe("phone", () => {
 
 /**
  * The dark palette is held to the same contract as the light one. A token
- * that clears AA in one and not the other is the regression the theme work
- * made possible, so the screens with the most text are scanned twice.
+ * can clear AA in one and not the other, so the screens with the most text
+ * are scanned twice.
  */
 test.describe("dark theme", () => {
   test.use({ colorScheme: "dark" });

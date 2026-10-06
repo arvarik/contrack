@@ -1,17 +1,12 @@
-// =============================================================================
-// pastDateSchema — an interaction is something that happened
-// =============================================================================
-// `contacts.lastContactedAt` is the newest interaction date, and the relationship
-// score reads it. `recencyScore` returns 100 for a date at or ahead of now and
-// 91.68 one millisecond later, so a single future interaction pins a contact's
-// recency signal, which carries 40 percent of the composite, at full marks
-// until a real interaction replaces it. Recorded as A-05 in `.agent/STATUS.md`.
+// Unit: pastDateSchema. An interaction is something that happened.
+// `contacts.lastContactedAt` is the newest interaction date. `recencyScore`
+// returns 100 for a date at or ahead of now and 91.68 one millisecond later,
+// so one future interaction pins 40 percent of the composite at full marks.
+// `.agent/STATUS.md` keeps the discontinuity as an open issue.
 //
-// This schema is the first of two guards. It refuses the write and says why,
-// which is the answer somebody can act on. The second is the `MIN` in
-// `interactionService`, which closes the clock slack this one allows and the
-// rows an older version already wrote.
-// =============================================================================
+// This schema is the first of two guards: it refuses the write and says why.
+// The second is the `MIN` in `interactionService`, which closes the clock
+// slack this one allows and rows already written ahead of now.
 
 import { describe, it, expect } from "vitest";
 import {

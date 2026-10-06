@@ -1,24 +1,20 @@
-// =============================================================================
-// Provider contract tests
-// =============================================================================
-// One block per provider, each asserting the things a mocked test cannot:
+// Provider contract tests. One block per provider, each asserting what a
+// mocked test cannot:
 //
 //   1. listModels() speaks the shape we parse
-//   2. structured output actually returns parseable JSON matching the schema
+//   2. structured output returns parseable JSON matching the schema
 //   3. embed() returns one vector per input, at a stable dimension
 //   4. an array schema, a small budget and a grounded call each work
 //   5. every chat model the catalog offers answers a request
 //
-// (2) is the important one. Both real provider bugs found in v1.4.0 were wire
-// format mismatches — Anthropic's schema wrapper and Gemini's batch embedding
-// shape — and both were invisible to mocked tests. (4) and (5) are the bugs
-// found on 2026-09-26: OpenAI refused an array at the schema root, reasoning
-// ate a small budget, research sent the wrong format to the Responses API,
-// and the OpenAI catalog offered sixteen models that could not answer.
+// Wire format mismatches (Anthropic's schema wrapper, Gemini's batch
+// embedding shape) are invisible to mocked tests, so (2) matters most. (4)
+// and (5) cover an array at the schema root, reasoning that eats a small
+// budget, research's format for the Responses API, and catalog models that
+// cannot answer.
 //
 // Run with: npm run test:contract
 // Providers without credentials skip themselves.
-// =============================================================================
 
 import { describe, it, expect } from "vitest";
 import {
@@ -122,7 +118,7 @@ function expectUsableExtraction(text: string) {
   expect(String(parsed.name)).toMatch(/jane/i);
 }
 
-// ─── Gemini ──────────────────────────────────────────────────────────────────
+// Gemini
 
 describe.skipIf(!gemini.usable)("Gemini", () => {
   it(
@@ -187,9 +183,8 @@ describe.skipIf(!gemini.usable)("Gemini", () => {
   it(
     "embeds one vector per input, not one per batch",
     async () => {
-      // The v1.4.0 bug: `contents: string[]` reads as ONE Content with many
-      // parts, so a batch collapsed to a single vector and the rest were
-      // dropped. A batch of 3 is enough to catch a regression.
+      // `contents: string[]` reads as ONE Content with many parts, which
+      // collapses a batch to a single vector. A batch of 3 catches it.
       const vectors = await new GeminiAdapter(geminiKey()!).embed(
         ["alpha one", "beta two", "gamma three"],
         embedModelFor("gemini", "gemini-embedding-2"),
@@ -200,7 +195,7 @@ describe.skipIf(!gemini.usable)("Gemini", () => {
   );
 });
 
-// ─── OpenAI ──────────────────────────────────────────────────────────────────
+// OpenAI
 
 describe.skipIf(!openai.usable)("OpenAI", () => {
   it(
@@ -224,8 +219,8 @@ describe.skipIf(!openai.usable)("OpenAI", () => {
   it(
     "returns schema-conformant JSON",
     async () => {
-      // The Anthropic-class bug: the response_format wrapper differs per
-      // vendor, and getting it wrong fails only against the real API.
+      // The response_format wrapper differs per vendor, and getting it wrong
+      // fails only against the real API.
       const result = await new OpenAIAdapter(openaiKey()!).generate({
         prompt: EXTRACTION_PROMPT,
         responseFormat: "json",
@@ -308,7 +303,7 @@ describe.skipIf(!openai.usable)("OpenAI", () => {
   );
 });
 
-// ─── Anthropic ───────────────────────────────────────────────────────────────
+// Anthropic
 
 describe.skipIf(!anthropic.usable)("Anthropic", () => {
   it(
@@ -330,9 +325,8 @@ describe.skipIf(!anthropic.usable)("Anthropic", () => {
   it(
     "returns schema-conformant JSON via output_config.format",
     async () => {
-      // Regression guard for the v1.4.0 bug: Contrack sent OpenAI's nested
-      // `json_schema: { name, schema }` wrapper, which Anthropic rejects with a
-      // 400. Every JSON operation failed while the mocked test stayed green.
+      // Anthropic rejects OpenAI's nested `json_schema: { name, schema }`
+      // wrapper with a 400, which a mocked test cannot see.
       const result = await new AnthropicAdapter(anthropicKey()!).generate({
         prompt: EXTRACTION_PROMPT,
         responseFormat: "json",
@@ -397,7 +391,7 @@ describe.skipIf(!anthropic.usable)("Anthropic", () => {
   }, 180_000);
 });
 
-// ─── OpenAI-compatible (Ollama / vLLM / LM Studio / llama.cpp) ────────────────
+// OpenAI-compatible (Ollama / vLLM / LM Studio / llama.cpp)
 
 describe.skipIf(!compatUrl())("OpenAI-compatible endpoint", () => {
   if (!compatUrl())

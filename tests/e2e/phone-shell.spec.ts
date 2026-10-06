@@ -1,5 +1,5 @@
 /**
- * tests/e2e/phone-shell.spec.ts — The app's frame on a phone.
+ * The app's frame on a phone.
  *
  * Covers:
  * - While a note is typed, the tab bar steps aside and Save stays in view in

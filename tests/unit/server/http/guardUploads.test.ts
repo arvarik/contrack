@@ -1,7 +1,4 @@
-// =============================================================================
-// Unit Tests — Uploads Guard Middleware
-// =============================================================================
-// Tests guardUploads in isolation:
+// Unit: the guardUploads middleware.
 // - Instance-visible profile pictures: /u/<uuid>/profile/<file> allowed for
 //   any authenticated principal, rejected with NotFoundError without one.
 // - Owner-only isolation: /u/<uuid>/avatars/, /u/<uuid>/files/ and
@@ -9,7 +6,6 @@
 //   anyone else.
 // - Shared logos: allowed without ownership restrictions.
 // - Path traversal: rejected with NotFoundError.
-// =============================================================================
 
 import { describe, it, expect, vi } from "vitest";
 import type { Request, Response, NextFunction } from "express";

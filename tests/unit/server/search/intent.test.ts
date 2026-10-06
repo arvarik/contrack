@@ -1,11 +1,8 @@
-// =============================================================================
 // Unit tests: Ask Contrack query intent (classifyQuery, nameSignals)
-// =============================================================================
 // The kind decides whether a model runs at all. Names, emails, phone numbers
 // and quoted phrases are answered locally. The traps are the ones that cost
 // an answer: a company that reads like a name, and a question that contains
 // one.
-// =============================================================================
 
 import { describe, expect, it } from "vitest";
 import {

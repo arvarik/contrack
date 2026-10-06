@@ -1,5 +1,5 @@
 /**
- * End-to-end tests for map features (Prompt 1: Filters and place search).
+ * The map's filters and place search.
  *
  * Exercises the filter toolbar, facet filtering, place search navigation,
  * and accessibility on desktop and mobile.

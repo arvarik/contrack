@@ -1,18 +1,13 @@
-// =============================================================================
-// Dedupe evaluation harness — shared by the gate and by the recorder
-// =============================================================================
-// `tests/eval/dedupe.eval.test.ts` asserts against a committed baseline and
-// `scripts/record-dedupe-eval.ts` writes that baseline. Both call `measure()`
-// here, so the numbers in the file and the numbers the gate computes come out
-// of one piece of code.
+// Dedupe evaluation harness, shared by the gate and the recorder.
+// `dedupe.eval.test.ts` and `scripts/record-dedupe-eval.ts` both call
+// `measure()`, so the baseline and the gate's numbers come from one piece of
+// code.
 //
-// What it measures is the engine, not a matcher. The corpus goes into a real
-// database through the real create path, and the passes run against it the
-// way a scan runs them. The only thing held back is the two non-deterministic
-// inputs: the AI verification step and the provider embeddings. Both are off,
-// and `assertDeterministicEnvironment` fails the run rather than quietly
-// measuring something else if either turns up configured.
-// =============================================================================
+// It measures the engine, not a matcher: the corpus goes into a real database
+// through the real create path, and the passes run as a scan runs them. The
+// two non-deterministic inputs, AI verification and provider embeddings, are
+// off, and `assertDeterministicEnvironment` fails the run if either is
+// configured.
 
 import path from "path";
 import { fileURLToPath } from "url";
@@ -56,11 +51,9 @@ export const BASELINE_PATH = path.resolve(HERE, "dedupe.baseline.json");
 /**
  * The three numbers that decide what happens to a scored pair.
  *
- * Read from the engine rather than restated here, which was the first
- * version and did not work: a harness with its own copy of 0.93 measures
- * "pairs above 0.93" whether or not the engine still uses that number, so
- * lowering `THRESHOLD_AUTO` to 0.90 moved no metric and the gate passed. The
- * fixture is supposed to be the regression suite for exactly that change.
+ * Read from the engine, not restated: a harness with its own copy of 0.93
+ * measures "pairs above 0.93" whether or not the engine still uses it, so a
+ * change to `THRESHOLD_AUTO` would move no metric.
  *
  * They are recorded in the baseline as well as used, so moving one fails by
  * name instead of showing up as an unexplained shift in precision.
@@ -92,9 +85,7 @@ export const PASSES: PassName[] = [
   "incremental",
 ];
 
-// ---------------------------------------------------------------------------
 // Environment
-// ---------------------------------------------------------------------------
 
 /**
  * Refuse to measure when the run would not be reproducible.
@@ -120,9 +111,7 @@ export function assertDeterministicEnvironment(): void {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Seeding
-// ---------------------------------------------------------------------------
 
 export interface SeededCorpus extends SeededIds {
   corpus: Corpus;
@@ -160,9 +149,7 @@ export async function seedCorpus(
   return { corpus, ...ids };
 }
 
-// ---------------------------------------------------------------------------
 // Reachability
-// ---------------------------------------------------------------------------
 
 /** A fixture contact in the shape the normalizer takes. No tags, no interests. */
 export function normalizeEvalContact(contact: EvalContact) {
@@ -213,9 +200,7 @@ export function reachRoutes(a: EvalContact, b: EvalContact): string[] {
   return [...new Set(routes)];
 }
 
-// ---------------------------------------------------------------------------
 // Running the passes
-// ---------------------------------------------------------------------------
 
 /**
  * Run one pass over the seeded corpus and return the pairs it produced.
@@ -255,9 +240,7 @@ export async function runPass(
   return [...deterministic, ...funnel];
 }
 
-// ---------------------------------------------------------------------------
 // Metrics
-// ---------------------------------------------------------------------------
 
 export interface PassScore {
   /** Pairs the pass produced at any confidence. */
@@ -276,12 +259,10 @@ export interface PassScore {
   /**
    * Mean confidence of the pairs the pass produced.
    *
-   * Here because precision and recall are both computed over the SET of pairs
-   * and a threshold change can move every confidence without adding or
-   * removing one pair. Lowering `THRESHOLD_AUTO` from 0.93 to 0.90 does
-   * exactly that: pairs that used to be emitted at `score * 0.7` are emitted
-   * at `score`. The set is identical, so precision and recall did not move,
-   * and the gate passed a change it exists to catch.
+   * Precision and recall are computed over the set of pairs, and a threshold
+   * change can move every confidence without changing the set. Lowering
+   * `THRESHOLD_AUTO` from 0.93 to 0.90 emits pairs at `score` instead of
+   * `score * 0.7`, and only this number moves.
    */
   meanConfidence: number;
 }
@@ -439,9 +420,7 @@ export async function measure(
   return out;
 }
 
-// ---------------------------------------------------------------------------
 // The baseline file
-// ---------------------------------------------------------------------------
 
 export interface Baseline {
   recordedAt: string;

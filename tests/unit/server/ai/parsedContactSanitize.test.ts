@@ -1,11 +1,8 @@
-// =============================================================================
 // Magic Paste output sanitization
-// =============================================================================
 // Model output is untrusted input. A bad generation can spill reasoning text
 // into a field (observed live: a `website` containing a paragraph of the
 // model's own instructions), and a prompt-injected source can echo commands
 // back. Neither may reach a contact record.
-// =============================================================================
 
 import { describe, it, expect, vi } from "vitest";
 

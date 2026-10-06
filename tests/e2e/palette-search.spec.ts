@@ -2,11 +2,10 @@
  * The palette's people search: what the server finds, the palette shows.
  *
  * The server's keyword search matches a company, a nickname, a misspelled
- * name and the digits of a phone number. The palette used to run cmdk's own
- * fuzzy filter over the rows it got back. That filter reads only a row's id
- * and name, so it hid all four. Facets are the other half: `list:` and
- * `contacted:` narrow the people in the palette, and on the server once
- * there is text as well.
+ * name and the digits of a phone number, and the palette shows all four
+ * (cmdk's own filter reads only a row's id and name, and would hide them).
+ * Facets are the other half: `list:` and `contacted:` narrow the people in
+ * the palette, and on the server once there is text as well.
  *
  * The contacts and the list this spec writes start with Z, so they sort
  * after the seeded people, and each is deleted after its test, as in
@@ -223,9 +222,9 @@ test("offers the contacted: presets and narrows to recent contacts", async ({
   await expect(person(palette, "Edsger Dijkstra")).toHaveCount(0);
 });
 
-// Palette B, "Catch me up", opened the contact with `?brief=1`, and nothing
-// read the flag: the contact opened on its Timeline. The page now opens the
-// Dossier with focus on the Briefing card, and the flag leaves the address.
+// Palette B, "Catch me up", opens the contact with `?brief=1`. The page opens
+// the Dossier with focus on the Briefing card, and the flag leaves the
+// address.
 test("B on a result opens the contact on its Briefing card", async ({
   page,
   seed,

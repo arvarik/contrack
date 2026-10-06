@@ -1,5 +1,5 @@
 /**
- * tests/unit/server/connectors/ingest.test.ts — Unit tests for the connector ingestion engine.
+ * Unit: the connector ingestion engine.
  *
  * Covers:
  * - Idempotency (same event twice writes once, increments seenCount)

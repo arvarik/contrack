@@ -1,13 +1,10 @@
-// =============================================================================
-// Unit Tests — Scope and the FTS5 owner and contact tokens
-// =============================================================================
+// Unit: Scope and the FTS5 owner and contact tokens.
 // The tokens are generated in two places that must never drift: TypeScript,
 // in server/tenancy/scope.ts, and the SQL the FTS triggers write
 // (OWNER_TOKEN_SQL in server/services/search/). This file pins the TypeScript
 // side to the documented SQL form. It does not read the SQL side: the scoped
 // searches in tests/integration hold that, because a token that differs from
 // the stored one finds nothing and splits a user's search index in half.
-// =============================================================================
 
 import { describe, it, expect } from "vitest";
 import Database from "better-sqlite3";
@@ -33,8 +30,8 @@ describe("Scope", () => {
     expect(Object.isFrozen(fromId)).toBe(true);
   });
 
-  // Phase 1 made every principal a user, so `via` is what separates them and
-  // all three carry an owner.
+  // Every principal is a user, so `via` is what separates them and all three
+  // carry an owner.
   it.each([
     ["session", { via: "session", sessionId: "s" }],
     ["token", { via: "token", tokenId: "t" }],

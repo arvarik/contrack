@@ -190,7 +190,7 @@ test.describe("Pulse Office", () => {
     await addActionItem(instance, ada.id, "Enter guard item", daysFromNow(-2));
 
     await page.goto("/pulse");
-    // A highlighted row exists, so the old window handler would have fired.
+    // A highlighted row exists, so a window-level handler would fire.
     await expect(page.getByRole("listitem").first()).toHaveAttribute(
       "aria-current",
       "true",
@@ -332,7 +332,7 @@ test.describe("Pulse Office", () => {
     // keyboard reaches the list.
     await expect(rows.first()).not.toHaveClass(/row-selected/);
     // The first Tab on a fresh page reaches the skip link. A scroll to the
-    // first row on load used to move the Tab start into the queue.
+    // first row on load would move the Tab start into the queue.
     await page.keyboard.press("Tab");
     await expect(
       page.getByRole("link", { name: "Skip to main content" }),

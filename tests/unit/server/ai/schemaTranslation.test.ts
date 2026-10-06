@@ -1,10 +1,7 @@
-// =============================================================================
 // Shared schema translator — the one source the three adapters dial into
-// =============================================================================
 // Three per-adapter copies drifted; the OpenAI/compat copy returned early on
 // `nullable` and dropped a nullable object's properties. One translator, two
 // documented dialect switches, and the trap is tested shut.
-// =============================================================================
 
 import { describe, it, expect } from "vitest";
 import {
@@ -38,8 +35,7 @@ describe("nullable handling", () => {
   });
 
   it("a nullable OBJECT keeps its properties in the anyOf dialect", () => {
-    // The bug the shared translator exists to keep fixed: the per-adapter
-    // copy returned early on nullable and emitted anyOf branches with no
+    // Returning early on nullable would emit anyOf branches with no
     // properties at all.
     const node: JsonSchemaNode = {
       type: "object",

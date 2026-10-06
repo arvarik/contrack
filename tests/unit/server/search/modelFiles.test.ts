@@ -1,13 +1,8 @@
-// =============================================================================
-// Unit: the local model files, where the server reads them, and downloads
-// =============================================================================
-// The search models used to download from huggingface.co at first boot, and
-// nothing could turn that off. modelFiles.ts points Transformers.js at a model
-// folder first and lets MODEL_DOWNLOADS=false refuse the network. These tests
-// pin that configuration, and check that the pinned list covers the models
-// the server loads by default, so a model swap cannot leave the Docker image
-// shipping the wrong files.
-// =============================================================================
+// Unit: the local model files, where the server reads them, and downloads.
+// modelFiles.ts points Transformers.js at a model folder first and lets
+// MODEL_DOWNLOADS=false refuse the network. These tests pin that, and check
+// that the pinned list covers the models the server loads by default, so a
+// model swap cannot leave the Docker image shipping the wrong files.
 
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";

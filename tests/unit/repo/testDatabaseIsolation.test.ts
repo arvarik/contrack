@@ -1,12 +1,9 @@
-// =============================================================================
 // Unit: the unit project never opens the checkout's own curator.db
-// =============================================================================
 // Four unit test files unmock server/db.ts. With DATA_DIR unset, the real module
 // opened ./curator.db, which is the developer's own data, and every
 // `npm test` added test accounts, contacts and links to it. tests/setup.ts
 // now gives each unit test file a temp DATA_DIR, and server/db.ts refuses to
 // open the fallback under Vitest.
-// =============================================================================
 
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";

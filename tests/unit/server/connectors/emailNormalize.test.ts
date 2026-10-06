@@ -1,5 +1,5 @@
 /**
- * tests/unit/server/connectors/emailNormalize.test.ts — Unit tests for email normalization.
+ * Unit: email normalization.
  */
 
 import { describe, expect, it } from "vitest";

@@ -1,20 +1,17 @@
 /**
- * The living corvid, in a real browser with motion allowed.
+ * The living corvid, in a real browser with motion allowed. The rest of the
+ * suite forces reduced motion, and `brand.spec.ts` proves a still bird
+ * leaves the page as it was. Here:
  *
- * The rest of the suite forces reduced motion, so the bird holds still and
- * `brand.spec.ts` proves that holding still leaves the page exactly as it
- * was. This file turns motion back on and follows the bird through what a
- * person sees:
- *
- * - A press sends it out of its ring and it comes back to it by itself, and
- *   the ring never leaves the sidebar while it is gone.
+ * - A press sends it out of its ring and it comes back by itself, and the
+ *   ring never leaves the sidebar while it is gone.
  * - The flying bird takes no click: whatever is under it answers.
  * - Escape brings it home at once.
  * - At Subtle it stays in its ring and flutters.
  * - The Appearance row's own bird flies from its own ring and lands in it.
  *
  * Every flight is random, so every assertion is about where the bird starts
- * and ends and what it never does, not about the route it takes.
+ * and ends and what it never does, not the route it takes.
  */
 import type { Page } from "@playwright/test";
 import { test, expect } from "./fixtures/test";

@@ -1,13 +1,10 @@
-// =============================================================================
 // Unit: the environment variables agree everywhere they are written down
-// =============================================================================
 // A variable lives in four places: the code that reads it, the table in
 // docs/configuration.md, .env.example and docker-compose.yml. They drifted
 // apart. MAIL_REPLY_TO and the Google OAuth pair were read and never
 // documented. Compose did not pass PUBLIC_URL, SMTP_URL or
 // CONTRACK_SECRET_KEY, so a value in .env did nothing in Docker. This test
 // reads all four and fails at the next disagreement.
-// =============================================================================
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";

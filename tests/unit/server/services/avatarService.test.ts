@@ -1,16 +1,9 @@
-// =============================================================================
-// Unit: avatar generation
-// =============================================================================
-// The two things worth guarding here are the two that fail silently:
+// Unit: avatar generation. Two failures here are silent:
 //
-//   1. An option value DiceBear does not recognize is ignored, not rejected.
-//      So a typo in an allow-list would quietly restore the full expression
-//      pool — angry eyebrows and all — with nothing observable at runtime.
-//      Hence the schema-conformance tests below.
-//   2. Avatars must be deterministic. If they were not, every contact's face
-//      would change on every render, which no one would file as a bug but
-//      everyone would find unsettling.
-// =============================================================================
+//   1. DiceBear ignores an option value it does not recognize, so a typo in
+//      an allow-list would restore the full expression pool, angry eyebrows
+//      and all. Hence the schema-conformance tests.
+//   2. Avatars must be deterministic, or every face changes on every render.
 
 import { describe, it, expect } from "vitest";
 import { schema as avataaarsSchema } from "@dicebear/avataaars";

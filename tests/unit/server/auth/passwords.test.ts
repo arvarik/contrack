@@ -1,11 +1,8 @@
-// =============================================================================
 // Unit: password hashing
-// =============================================================================
 // scrypt at the shipping cost parameters takes ~100ms per call, so these tests
 // are deliberately not exhaustive about round-tripping — the interesting cases
 // are the ones that must NOT throw, must NOT match, and must not depend on how
 // a password was typed.
-// =============================================================================
 
 import { describe, it, expect } from "vitest";
 import {

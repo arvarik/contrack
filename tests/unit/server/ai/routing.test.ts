@@ -1,11 +1,7 @@
-// =============================================================================
-// Unit Tests — AI Routing Layer (Smart Mesh v1.2)
-// =============================================================================
-// Pure-logic tests for all 4 routing modules. Zero I/O — no network calls,
-// no database, no mocks of external services. A settings mock holds the
-// models discovery found, and fake timers pin the clock for the usage
-// windows and the daily reset.
-// =============================================================================
+// Unit: the AI routing layer. Pure-logic tests for the four routing modules,
+// with no network, database or external service. A settings mock holds the
+// models discovery found, and fake timers pin the clock for the usage windows
+// and the daily reset.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -17,7 +13,7 @@ vi.mock("../../../../server/services/settingsService.ts", () => ({
   SETTING_KEYS: { aiModelCache: "ai.modelCache" },
 }));
 
-// ── Module imports ───────────────────────────────────────────────────────────
+// Module imports
 import {
   compareForClass,
   previewModelForClass,
@@ -27,9 +23,7 @@ import {
 import { QuotaTracker } from "../../../../server/ai/routing/QuotaTracker.ts";
 import { SmartRouter } from "../../../../server/ai/routing/SmartRouter.ts";
 
-// =============================================================================
 // 1. Registry
-// =============================================================================
 
 describe("Registry", () => {
   it("lists each model once", () => {
@@ -113,9 +107,7 @@ describe("Registry", () => {
   });
 });
 
-// =============================================================================
 // 2. QuotaTracker — a usage meter now, with no limits to enforce
-// =============================================================================
 
 describe("QuotaTracker", () => {
   let tracker: QuotaTracker;
@@ -268,9 +260,7 @@ describe("concurrent quota reservations", () => {
   });
 });
 
-// =============================================================================
 // 3. SmartRouter
-// =============================================================================
 
 describe("SmartRouter", () => {
   const router = new SmartRouter(GEMINI_REGISTRY);

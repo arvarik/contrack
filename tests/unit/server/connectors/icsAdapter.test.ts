@@ -1,5 +1,5 @@
 /**
- * tests/unit/server/connectors/icsAdapter.test.ts — Unit tests for the ICS Calendar adapter.
+ * Unit: the ICS Calendar adapter.
  *
  * Verifies recurring event expansion, cancellation handling, all-day event support,
  * large attendee cap skipping, and externalId stability across multiple runs.

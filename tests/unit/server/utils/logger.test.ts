@@ -1,10 +1,7 @@
-// =============================================================================
 // Unit: the server log's level, its details and its colors
-// =============================================================================
 // DEBUG lines printed in production: one import wrote 12,000 of them. An
 // Error in the details printed as {}, so a failed connector lost its cause.
 // And `docker logs` held ANSI color codes.
-// =============================================================================
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { log } from "../../../../server/utils/logger.ts";

@@ -1,7 +1,5 @@
 /**
- * Ask Contrack history pane — Prompt 2 of 3 (the pane).
- *
- * Exercises the history pane journeys:
+ * The Ask Contrack history pane:
  * - Asking questions records history entries in Today with newest first.
  * - Clicking an entry re-runs the search with that query.
  * - Pinning keeps entries in Pinned across reloads.

@@ -1,33 +1,20 @@
-// =============================================================================
-// The dedupe precision and recall gate
-// =============================================================================
-// `tests/unit/server/nlp/*.test.ts` check the matchers one at a time.
-// Nothing checked the engine, so a change to blocking, to a threshold, or to
-// the order the passes run in could move which pairs come out and no test
-// would notice.
+// The dedupe precision and recall gate.
+// Unit tests check each matcher alone, so a change to blocking, a threshold
+// or the pass order could move which pairs come out unseen. This runs the
+// passes over a corpus with the answers written down and compares precision
+// and recall with a committed baseline. It fails in both directions, because
+// a change meant to change nothing that moves a number up is worth a look too.
 //
-// This runs the passes over a corpus whose answers are written down and
-// compares precision and recall with a committed baseline. It fails in both
-// directions. A number that goes up is as much a reason to look as a number
-// that goes down, because a rearrangement that was supposed to change nothing
-// and changed something is the case this exists to catch.
-//
-// Two things to know before reading a number here:
-//
-// 1. AI IS OFF. A third of what the funnel produces normally goes to a model
-//    for verification, and a model is not reproducible. So these are the
-//    deterministic numbers. With a provider configured, recall is higher than
-//    anything in this file.
+// 1. AI IS OFF. A model is not reproducible, so these are the deterministic
+//    numbers. With a provider, recall is higher than anything here.
 //
 // 2. THE CORPUS IS ADVERSARIAL. A third of the labeled pairs are hard
-//    negatives written to be as confusing as they can be: a father and a son
-//    at one firm, a couple on one phone line, two people on a team alias.
-//    Precision here is precision against that, not precision on somebody's
-//    real address book.
+//    negatives: a father and a son at one firm, a couple on one phone line,
+//    two people on a team alias. Precision here is against that, not against
+//    a real address book.
 //
-// Re-record with `npm run eval:record:dedupe` when a change to the matchers is
+// Re-record with `npm run eval:record:dedupe` when a matcher change is
 // intended, and put the baseline diff in the pull request.
-// =============================================================================
 
 import fs from "fs";
 import { describe, it, expect, beforeAll } from "vitest";
@@ -48,11 +35,8 @@ import {
 } from "./dedupe-harness.ts";
 
 /**
- * How far a number may move before the gate fails.
- *
- * 0.01 on 221 duplicate pairs is about two pairs. Smaller than that and the
- * gate would fail on nothing; larger and a real regression could hide inside
- * the tolerance.
+ * How far a number may move before the gate fails: 0.01 on 221 duplicate
+ * pairs is about two pairs.
  */
 const TOLERANCE = 0.01;
 
@@ -68,12 +52,8 @@ beforeAll(async () => {
   measurement = await measure(scope, seeded);
 }, 120_000);
 
-// ---------------------------------------------------------------------------
-// The corpus is really there
-// ---------------------------------------------------------------------------
-// Four assertions that would catch an empty or truncated corpus. Without
-// them, a seeding failure reports perfect precision over nothing, which is
-// the trap an earlier audit script in this repository fell into.
+// The corpus is really there. Without these, a seeding failure would report
+// perfect precision over nothing.
 
 describe("the corpus", () => {
   it("holds the number of contacts the baseline was recorded against", () => {
@@ -134,9 +114,7 @@ describe("the corpus", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // The gate
-// ---------------------------------------------------------------------------
 
 describe("precision and recall per pass", () => {
   for (const pass of PASSES) {
@@ -156,10 +134,9 @@ describe("precision and recall per pass", () => {
       const now = measurement[pass].score.meanConfidence;
       const then = baseline.passes[pass].score.meanConfidence;
 
-      // Precision and recall are both computed over the set of pairs, so a
-      // change that rescores every pair without adding or removing one moves
-      // neither. That is not hypothetical: it is what lowering
-      // `THRESHOLD_AUTO` does, and the first version of this file passed it.
+      // Precision and recall are computed over the set of pairs, so a change
+      // that rescores every pair without adding or removing one, such as
+      // lowering `THRESHOLD_AUTO`, moves neither.
       expect(
         Math.abs(now - then),
         `${pass} mean confidence moved from ${then} to ${now}`,
@@ -192,24 +169,19 @@ describe("precision and recall per pass", () => {
       const now = measurement[pass].autoNegativesByKind;
       const then = baseline.passes[pass].autoNegativesByKind;
 
-      // The subset of the line above that loses data. A matched negative is
-      // a wrong suggestion, and one of these is a wrong merge with nobody
-      // asked. Exact, per kind, so a regression names the household it
-      // would have merged.
+      // The subset above that loses data: a wrong merge with nobody asked.
+      // Exact, per kind, so a failure names the household it would merge.
       expect(now).toEqual(then);
     });
   }
 });
 
-// ---------------------------------------------------------------------------
 // The auto-merge threshold
-// ---------------------------------------------------------------------------
 
 describe("what would merge with nobody asked", () => {
   it("holds the three thresholds the baseline was recorded at", () => {
-    // The whole "at auto-merge" half of the baseline is meaningless if these
-    // moved, so a preset change fails here by name rather than showing up as
-    // an unexplained shift in precision somewhere else.
+    // The "at auto-merge" half of the baseline depends on these, so a preset
+    // change fails here by name.
     expect(THRESHOLDS).toEqual(baseline.thresholds);
   });
 
@@ -233,9 +205,7 @@ describe("what would merge with nobody asked", () => {
   }
 });
 
-// ---------------------------------------------------------------------------
 // Floors
-// ---------------------------------------------------------------------------
 // The baseline comparisons above pin the numbers to what they were. These pin
 // them to what they have to be, so that re-recording a baseline cannot quietly
 // accept a collapse.
@@ -304,8 +274,8 @@ describe("floors that a re-recorded baseline cannot lower", () => {
 
   it("never merges a father and a son with nobody asked", () => {
     // "Sr." beside "Jr." is two people by definition. The scan's exact-name
-    // rule keys on the raw name and never claimed them, and the import path
-    // now reads the suffix rather than the stripped tokens.
+    // rule keys on the raw name, and the import path reads the suffix rather
+    // than the stripped tokens.
     for (const pass of PASSES) {
       expect(
         measurement[pass].autoNegativesByKind["father-and-son"],

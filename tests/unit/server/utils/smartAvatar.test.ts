@@ -1,12 +1,9 @@
-// =============================================================================
 // Unit: which look a contact's default avatar draws
-// =============================================================================
 // The cost of an error is lopsided, and these tests are written around that.
 // A neutral face for a name we could have called is a small miss. A beard on
 // a woman, or a bow on a man, is the error people notice. So the unisex and
 // family-name-first cases below assert "neutral", and the gendered cases
 // assert only names that nine in ten carriers share.
-// =============================================================================
 
 import { gunzipSync } from "node:zlib";
 import { readFileSync } from "node:fs";

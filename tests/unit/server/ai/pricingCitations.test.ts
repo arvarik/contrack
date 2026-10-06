@@ -1,6 +1,4 @@
-// =============================================================================
 // Unit: model prices and research sources
-// =============================================================================
 
 import { describe, it, expect } from "vitest";
 import { blendedCostPerM, priceOf } from "../../../../server/ai/pricing.ts";
