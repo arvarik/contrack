@@ -2,7 +2,12 @@ import { useState } from "react";
 import { ArchiveRestore, Loader2, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
-import { useTrash, useRestoreContact, usePurgeTrashedContact } from "../api";
+import {
+  useEmptyTrash,
+  usePurgeTrashedContact,
+  useRestoreContact,
+  useTrash,
+} from "../api";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { CARD, ICON_BTN, SECTION_HEADING } from "../lib/styles";
 import { EmptyState } from "../components/ui/EmptyState";
@@ -16,8 +21,9 @@ import { SETTINGS_PAGE } from "./settings/layout";
 // TrashView — recently deleted contacts with restore + permanent delete
 //
 // The same shape as Archived contacts: one card, a strip that counts what is
-// in it, and a row for each contact with Restore and Delete forever. Delete
-// forever asks first, with the red button and the verb repeated.
+// in it and offers Empty trash, and a row for each contact with Restore and
+// Delete forever. Both deletes ask first, with the red button and the verb
+// repeated, because nothing brings the contacts back.
 // ---------------------------------------------------------------------------
 
 function daysUntilPurge(deletedAt: string, retentionDays = 30): number {
@@ -42,15 +48,30 @@ export const TrashView = () => {
   const retentionDays = data?.retentionDays ?? 30;
   const restore = useRestoreContact();
   const purge = usePurgeTrashedContact();
+  const empty = useEmptyTrash();
   const [purgeTarget, setPurgeTarget] = useState<TrashedContact | null>(null);
+  const [confirmEmpty, setConfirmEmpty] = useState(false);
+  const errorText = (err: unknown) =>
+    err instanceof Error ? err.message : String(err);
 
   const handleRestore = (item: TrashedContact) => {
     restore.mutate(item.id, {
       onSuccess: () => toast.success(`Restored ${item.name}`),
       onError: (err) =>
-        toast.error(
-          `Restore failed: ${err instanceof Error ? err.message : String(err)}`,
-        ),
+        toast.error(`Could not restore ${item.name}: ${errorText(err)}`),
+    });
+  };
+
+  const handleEmpty = () => {
+    empty.mutate(undefined, {
+      onSuccess: ({ count }) => {
+        setConfirmEmpty(false);
+        toast.success(
+          `Deleted ${count} ${count === 1 ? "contact" : "contacts"} forever`,
+        );
+      },
+      onError: (err) =>
+        toast.error(`Could not empty the Trash: ${errorText(err)}`),
     });
   };
 
@@ -63,9 +84,7 @@ export const TrashView = () => {
         toast.success(`Deleted ${name} forever`);
       },
       onError: (err) =>
-        toast.error(
-          `Delete failed: ${err instanceof Error ? err.message : String(err)}`,
-        ),
+        toast.error(`Could not delete ${name}: ${errorText(err)}`),
     });
   };
 
@@ -98,15 +117,21 @@ export const TrashView = () => {
   return (
     <div className={SETTINGS_PAGE}>
       <div className={cn(CARD, "p-0")}>
-        <p
-          className={cn(
-            SECTION_HEADING,
-            "px-4 sm:px-6 py-3 bg-surface-container-low rounded-t-2xl",
-          )}
-        >
-          {items.length} {items.length === 1 ? "contact" : "contacts"} · removed
-          for good {days(retentionDays)} after deletion
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 sm:px-6 py-3 bg-surface-container-low rounded-t-2xl">
+          <p className={SECTION_HEADING}>
+            {items.length} {items.length === 1 ? "contact" : "contacts"} ·
+            removed for good {days(retentionDays)} after deletion
+          </p>
+          <button
+            type="button"
+            onClick={() => setConfirmEmpty(true)}
+            disabled={empty.isPending}
+            className="btn-danger btn-sm"
+          >
+            <Trash2 aria-hidden="true" className="w-3.5 h-3.5" />
+            Empty trash
+          </button>
+        </div>
         <div className="py-2">
           <AnimatePresence initial={false}>
             {items.map((item) => {
@@ -125,11 +150,13 @@ export const TrashView = () => {
                     alt=""
                     className="w-10 h-10 rounded-full object-cover bg-surface-container-high grayscale opacity-70 shrink-0"
                   />
+                  {/* The words wrap rather than cut: on a phone the row
+                      is narrow, and the days left are the point of it. */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-on-surface truncate">
+                    <p className="text-sm font-semibold text-on-surface break-words">
                       {item.name}
                     </p>
-                    <p className="text-xs text-on-surface-variant truncate">
+                    <p className="text-xs text-on-surface-variant">
                       {item.company ? `${item.company} · ` : ""}
                       {deletedLabel(item.deletedAt)} · gone for good in{" "}
                       {days(daysLeft)}
@@ -173,13 +200,30 @@ export const TrashView = () => {
         description={
           <p>
             <strong className="text-on-surface">{purgeTarget?.name}</strong> and
-            their whole history, with every interaction, note, and action item,
-            are deleted. This cannot be undone
+            their whole history, with every interaction, note and follow-up, are
+            deleted. This cannot be undone
           </p>
         }
         confirmLabel="Delete forever"
         tone="danger"
         busy={purge.isPending}
+      />
+
+      <ConfirmDialog
+        isOpen={confirmEmpty}
+        onClose={() => setConfirmEmpty(false)}
+        onConfirm={handleEmpty}
+        title="Empty the Trash?"
+        description={
+          <p>
+            {items.length} {items.length === 1 ? "contact" : "contacts"} and
+            their whole history, with every interaction, note and follow-up, are
+            deleted. This cannot be undone
+          </p>
+        }
+        confirmLabel="Empty trash"
+        tone="danger"
+        busy={empty.isPending}
       />
     </div>
   );

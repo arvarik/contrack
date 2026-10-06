@@ -55,9 +55,14 @@ export type { ContactList } from "../shared/contracts/lists";
  * The app keeps the list view's rows as Contacts too, although the server
  * sends them with fewer fields (`SlimContact`): see `fetchContactsSlim`.
  */
-export type Contact = Omit<ContactContract, "cadenceDays" | "themeColor"> & {
+export type Contact = Omit<
+  ContactContract,
+  "cadenceDays" | "themeColor" | "archivedAt"
+> & {
   cadenceDays: number;
   themeColor: string;
+  /** When it was archived. The full contact has it, a list row does not. */
+  archivedAt?: string | null;
   /** The list view: how many social links the contact has. */
   socialLinkCount?: number;
   /** The list view: the last research run's outcome, or null before any run. */

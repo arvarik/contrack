@@ -1,8 +1,10 @@
 /**
  * Shared Pulse Types and Utilities.
  *
- * Days and streaks are computed in the server's local time.
+ * Days and streaks are days on the reader's calendar: the zone Pulse sends
+ * with `?tz=`, or the runtime's own without one.
  */
+import { addCalendarDays, dayInZone } from "./dates.ts";
 
 export interface ActivityDay {
   day: string; // YYYY-MM-DD
@@ -11,9 +13,9 @@ export interface ActivityDay {
 }
 
 export interface DashboardActivityResponse {
-  days: ActivityDay[]; // 84 days, oldest first
-  weekTotals: number[]; // 12 numbers
-  prevWeekTotals: number[]; // 12 numbers
+  days: ActivityDay[]; // 84 days, oldest first, the last one today
+  /** Twelve weeks from the account's week start, this week last. */
+  weekTotals: number[];
   streak: {
     current: number;
     best: number;
@@ -107,40 +109,26 @@ export function toLocalDay(date: Date | string): string {
 }
 
 /**
- * Check if dayB is immediately the day after dayA (consecutive local calendar days).
- */
-function isConsecutiveDay(dayA: string, dayB: string): boolean {
-  const [y, m, d] = dayA.split("-").map(Number);
-  const next = new Date(y, m - 1, d + 1);
-  const yyyy = next.getFullYear();
-  const mm = String(next.getMonth() + 1).padStart(2, "0");
-  const dd = String(next.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}` === dayB;
-}
-
-/**
  * Compute the streak of logged interactions.
  *
  * Rules:
- * - Counts local days with at least one interaction whose `type` is not "import"
+ * - Counts days with at least one interaction whose `type` is not "import"
  *   and whose `source` is null (or undefined).
  * - Consecutive days ending today or yesterday keep the streak active.
  * - A gap (missing day before yesterday) resets the current streak.
  * - Best streak across all history is preserved.
- * - Timezone of the day boundary is the server's local day.
+ * - A day is a day in `timeZone`, the reader's, or the runtime's own.
  */
 export function computeStreak(
   interactions: StreakInteraction[],
   now: Date | string = new Date(),
+  timeZone?: string,
 ): StreakResult {
-  const todayStr = toLocalDay(now);
-  const nowDate = typeof now === "string" ? new Date(now) : now;
-  const yesterday = new Date(
-    nowDate.getFullYear(),
-    nowDate.getMonth(),
-    nowDate.getDate() - 1,
-  );
-  const yesterdayStr = toLocalDay(yesterday);
+  const dayOf = (value: Date | string) => dayInZone(value, timeZone);
+  const todayStr = dayOf(now)!;
+  const yesterdayStr = addCalendarDays(todayStr, -1);
+  const isConsecutiveDay = (dayA: string, dayB: string) =>
+    addCalendarDays(dayA, 1) === dayB;
 
   // 1. Filter qualifying interactions and extract unique local days
   const qualifyingDays = new Set<string>();
@@ -151,7 +139,8 @@ export function computeStreak(
     if (item.source !== null && item.source !== undefined && item.source !== "")
       continue;
 
-    qualifyingDays.add(toLocalDay(item.date));
+    const day = dayOf(item.date);
+    if (day) qualifyingDays.add(day);
   }
 
   if (qualifyingDays.size === 0) {

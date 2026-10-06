@@ -896,6 +896,34 @@ export const contactService = {
   },
 
   /**
+   * Permanently delete every contact in the account's Trash ("Empty trash"),
+   * in one transaction, and then their files.
+   *
+   * @returns how many contacts were deleted.
+   */
+  emptyTrash(scope: Scope): number {
+    const trashed = sqlite
+      .prepare(
+        "SELECT id FROM contacts WHERE ownerId = ? AND deletedAt IS NOT NULL",
+      )
+      .all(scope.ownerId) as { id: string }[];
+    const uploads: string[] = [];
+    let count = 0;
+    sqlite.transaction(() => {
+      for (const { id } of trashed) {
+        const removed = hardDeleteContact(scope, id);
+        if (!removed) continue;
+        count += 1;
+        uploads.push(...removed);
+        recordEvent(scope, "contact.deleted", id, { permanent: true });
+      }
+    })();
+    dispatchEvents();
+    if (uploads.length > 0) removeUploads(scope.ownerId, uploads);
+    return count;
+  },
+
+  /**
    * Delete the merged-away contacts whose merge can no longer be undone,
    * with their files, and the merge log entries older than the undo window
    * (MERGE_UNDO_DAYS). The surviving contact keeps what the merge gave it.
@@ -1106,7 +1134,7 @@ export const contactService = {
       .prepare(
         `SELECT * FROM contacts
           WHERE ownerId = ? AND isArchived = 1 AND deletedAt IS NULL
-          ORDER BY updatedAt DESC`,
+          ORDER BY COALESCE(archivedAt, updatedAt) DESC`,
       )
       .all(scope.ownerId);
     return contactRepo.hydrateMany(all);

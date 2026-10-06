@@ -60,7 +60,7 @@ export function webSearchCode(webSearch: WebSearch, what: string): string {
 /** The refusal while a web search is not set up. */
 export function webSearchUnset(webSearch: WebSearch): AppError {
   return new AppError(
-    `${webSearch.label} is not set up. An admin adds its address in Settings → Administration → AI → Web search.`,
+    `${webSearch.label} is not set up. An admin adds its address in Settings → AI → Web search.`,
     503,
     { code: webSearchCode(webSearch, "NOT_CONFIGURED") },
   );

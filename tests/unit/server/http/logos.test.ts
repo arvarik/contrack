@@ -123,12 +123,12 @@ describe("GET /api/logos/:domain", () => {
     safeFetchMock.mockImplementation(async () => served("nope", 404));
 
     const res = await request(app).get(`/api/logos/${domain}`);
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(204);
     expect(fs.existsSync(missPath(domain))).toBe(true);
     expect(fs.existsSync(logoPath(domain))).toBe(false);
 
     const again = await request(app).get(`/api/logos/${domain}`);
-    expect(again.status).toBe(404);
+    expect(again.status).toBe(204);
     expect(safeFetchMock).toHaveBeenCalledTimes(1);
   });
 

@@ -140,6 +140,7 @@ const COVERED = [
   "DELETE /api/search/history",
   "DELETE /api/search/history/:id",
   "DELETE /api/tags/:tag",
+  "DELETE /api/trash",
   "DELETE /api/trash/:id",
   "GET /api/action-items",
   "GET /api/action-items/completed",
@@ -1666,8 +1667,6 @@ describe("GET /api/dashboard/activity", () => {
     expect(forB.body.days).toHaveLength(84);
     expect(forA.body.weekTotals).toHaveLength(12);
     expect(forB.body.weekTotals).toHaveLength(12);
-    expect(forA.body.prevWeekTotals).toHaveLength(12);
-    expect(forB.body.prevWeekTotals).toHaveLength(12);
 
     // Every note in this file is dated in the last few days, so each account's
     // twelve weeks hold exactly its own notes. A leak would add the other's.
@@ -1686,7 +1685,6 @@ describe("GET /api/dashboard/activity", () => {
     expect(res.status).toBe(200);
     expect(res.body.days).toHaveLength(84);
     expect(res.body.weekTotals).toEqual(new Array(12).fill(0));
-    expect(res.body.prevWeekTotals).toEqual(new Array(12).fill(0));
     expect(res.body.streak).toEqual({ current: 0, best: 0, lastDay: null });
     expect(res.body.today).toEqual({ logged: 0, completed: 0, due: 0 });
     expect(res.body.thisWeek).toEqual({ logged: 0, byType: {} });
@@ -3114,6 +3112,19 @@ describe("the trash holds one account's deleted contacts", () => {
     }
   });
 
+  // Last in this block: it empties B's Trash, which the cases above use.
+  it("DELETE /api/trash: empties only the caller's Trash", async () => {
+    const before = snapshotRow("contacts", trashedA);
+    const doomed = await discard(B, "Bob Discarded 3");
+
+    const res = await asUser(B)(request(app).delete("/api/trash"));
+
+    expect(res.status).toBe(200);
+    expect(res.body.count).toBeGreaterThanOrEqual(1);
+    expect(snapshotRow("contacts", doomed)).toBeUndefined();
+    expect(snapshotRow("contacts", trashedA)).toEqual(before);
+  });
+
   it("still restores the caller's own trashed contact", async () => {
     const res = await asUser(A)(
       request(app).post(`/api/trash/${trashedA}/restore`),
@@ -3609,6 +3620,21 @@ describe("connectors isolate by account", () => {
     const resC = await asUser(C)(request(app).get("/api/connectors"));
     expect(resC.status).toBe(200);
     expect(resC.body.connectors).toEqual([]);
+  });
+
+  it("POST /api/connectors/test: tests with the caller's saved secret, never another account's", async () => {
+    const send = (actor: Actor) =>
+      asUser(actor)(
+        request(app)
+          .post("/api/connectors/test")
+          .send({
+            kind: "ics",
+            config: { url: "https://example.com/test.ics" },
+            connectorId: idA,
+          }),
+      );
+    expect((await send(B)).status).toBe(404);
+    expect((await send(A)).status).toBe(200);
   });
 
   it("GET /api/connectors/:id: actor B cannot read actor A's connector", async () => {

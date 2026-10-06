@@ -4227,6 +4227,7 @@
                       },
                       "isTracked": { "type": "integer" },
                       "trackedAt": { "type": ["string", "null"] },
+                      "archivedAt": { "type": ["string", "null"] },
                       "aiResearch": { "type": ["string", "null"] },
                       "ownerId": {
                         "type": "string",
@@ -4348,9 +4349,10 @@
                         "type": "object",
                         "properties": {
                           "tag": { "type": "string" },
-                          "count": { "type": "integer" }
+                          "count": { "type": "integer" },
+                          "total": { "type": "integer" }
                         },
-                        "required": ["tag", "count"],
+                        "required": ["tag", "count", "total"],
                         "additionalProperties": false
                       }
                     }
@@ -4443,6 +4445,26 @@
                     ],
                     "additionalProperties": false
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/trash": {
+      "delete": {
+        "summary": "Delete every contact in the Trash forever, with their notes and files",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "count": { "type": "integer" } },
+                  "required": ["count"],
+                  "additionalProperties": false
                 }
               }
             }
@@ -4691,6 +4713,7 @@
           },
           "isTracked": { "type": "boolean" },
           "trackedAt": { "type": ["string", "null"] },
+          "archivedAt": { "type": ["string", "null"] },
           "aiResearch": { "type": ["string", "null"] },
           "ownerId": {
             "type": "string",
@@ -4951,6 +4974,7 @@
           "geoSource",
           "isTracked",
           "trackedAt",
+          "archivedAt",
           "aiResearch",
           "ownerId",
           "scoreDirty",

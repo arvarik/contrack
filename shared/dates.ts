@@ -1,7 +1,9 @@
 /**
  * Shared Date Utilities.
  *
- * Days and weeks are calculated in local server time.
+ * A day is a day on someone's calendar. Code that has the reader's zone
+ * (`dayInZone`) uses it, because the server's own zone is UTC in Docker.
+ * The older helpers below use the runtime's local zone.
  */
 
 /**
@@ -75,21 +77,51 @@ export function dayInZone(
   }
   const date = typeof value === "string" ? parseServerTime(value) : value;
   if (!date || Number.isNaN(date.getTime())) return null;
-  const parts = (zone?: string) =>
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: zone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(date);
-  let found: Intl.DateTimeFormatPart[];
-  try {
-    found = parts(timeZone);
-  } catch {
-    found = parts();
-  }
+  const found = dayFormatter(timeZone).formatToParts(date);
   const part = (type: string) => found.find((p) => p.type === type)?.value;
   return `${part("year")}-${part("month")}-${part("day")}`;
+}
+
+/**
+ * One formatter per zone, made once. A dashboard reads hundreds of dates
+ * per request, and making a formatter costs more than using one. The zone
+ * comes from a request, and Intl reads "UTC" and "utc" as one zone, so the
+ * cache is capped: many spellings cannot grow it without end.
+ */
+const dayFormatters = new Map<string, Intl.DateTimeFormat>();
+const MAX_DAY_FORMATTERS = 32;
+
+function dayFormatter(timeZone?: string): Intl.DateTimeFormat {
+  const key = timeZone ?? "";
+  let formatter = dayFormatters.get(key);
+  if (!formatter) {
+    const make = (zone?: string) =>
+      new Intl.DateTimeFormat("en-US", {
+        timeZone: zone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      });
+    try {
+      formatter = make(timeZone);
+    } catch {
+      formatter = make();
+    }
+    if (dayFormatters.size >= MAX_DAY_FORMATTERS) dayFormatters.clear();
+    dayFormatters.set(key, formatter);
+  }
+  return formatter;
+}
+
+/** The weekday of a `YYYY-MM-DD` day: 0 for Sunday to 6 for Saturday. */
+export function weekdayOf(day: string): number {
+  const [y, m, d] = day.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+}
+
+/** The first day of the week that holds `day`, for a week start. */
+export function weekStartOf(day: string, pref: WeekStartPref): string {
+  return addCalendarDays(day, -((weekdayOf(day) - weekStartsOn(pref) + 7) % 7));
 }
 
 /** The day `days` after a `YYYY-MM-DD` day, on the same calendar. */

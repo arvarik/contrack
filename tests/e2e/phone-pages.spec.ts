@@ -242,7 +242,7 @@ test.describe("phone pages (390 px)", () => {
     ).toBeVisible();
 
     // Check that drop zone appears before the disclosure
-    const dropZone = page.getByLabel(/Upload .* file/);
+    const dropZone = page.getByLabel(/Choose a .* file/);
     const disclosure = page.locator("details", {
       hasText: "How to export from",
     });
@@ -251,7 +251,9 @@ test.describe("phone pages (390 px)", () => {
     await expect(disclosure).toBeVisible();
 
     const isPreceding = await page.evaluate(() => {
-      const zone = document.querySelector('[aria-label^="Upload "]');
+      const zone = document.querySelector(
+        '[role="button"][aria-label^="Choose a "]',
+      );
       const det = document.querySelector("details");
       return Boolean(
         zone &&
@@ -267,9 +269,23 @@ test.describe("phone pages (390 px)", () => {
     expect(disclosureBox).not.toBeNull();
     expect(dropZoneBox!.y).toBeLessThan(disclosureBox!.y);
 
+    // The four tabs fit their strip at 390 px: they make a 2 by 2 grid.
+    const strip = await page
+      .getByRole("tablist", { name: "Import sources" })
+      .boundingBox();
+    for (const tab of await page.getByRole("tab").all()) {
+      const box = (await tab.boundingBox())!;
+      expect(box.x + box.width).toBeLessThanOrEqual(strip!.x + strip!.width);
+    }
+
     // Switch to LinkedIn. The reload below proves the choice is kept.
     const linkedinTab = page.getByRole("tab", { name: "LinkedIn" });
     await linkedinTab.click();
+    await expect(linkedinTab).toHaveAttribute("aria-selected", "true");
+    // The arrow keys move along the tabs, as the tabs pattern says.
+    await linkedinTab.press("ArrowRight");
+    await expect(page.getByRole("tab", { name: "Google" })).toBeFocused();
+    await page.keyboard.press("ArrowLeft");
     await expect(linkedinTab).toHaveAttribute("aria-selected", "true");
 
     // Reload page and verify that LinkedIn remains selected

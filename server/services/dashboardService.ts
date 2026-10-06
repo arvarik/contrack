@@ -14,9 +14,11 @@ import {
   addCalendarDays,
   dayInZone,
   isoWeekStart,
+  parseServerTime,
+  weekStartOf,
 } from "../../shared/dates.ts";
+import { getPreferences } from "./userPreferencesService.ts";
 import {
-  toLocalDay,
   computeStreak,
   type ActivityDay,
   type CatchUpCard,
@@ -332,7 +334,11 @@ export const dashboardService = {
       stale,
     };
 
-    // 12. Meetings (from upcoming_events when that table exists)
+    // 12. Meetings (from upcoming_events when that table exists): the ones
+    // not over yet, through the seventh day from today on the reader's
+    // calendar. An all-day event is a day (`2026-10-09`), shown from its day
+    // on. The text compare with `datetime('now')` showed this morning's
+    // meetings and hid the seventh day's.
     let meetings: {
       title: string;
       startsAt: string;
@@ -341,18 +347,32 @@ export const dashboardService = {
     }[] = [];
     if (tableExists("upcoming_events")) {
       try {
-        const rows = sqlite
-          .prepare(
-            `SELECT title, startsAt, endsAt, contactIds FROM upcoming_events
-              WHERE ownerId = ? AND startsAt >= datetime('now') AND startsAt <= datetime('now', '+7 days')
+        const now = new Date();
+        const lastDay = addCalendarDays(today, 7);
+        const rows = (
+          sqlite
+            .prepare(
+              `SELECT title, startsAt, endsAt, contactIds FROM upcoming_events
+              WHERE ownerId = ? AND startsAt >= ? AND startsAt < ?
               ORDER BY startsAt ASC`,
-          )
-          .all(scope.ownerId) as {
-          title: string;
-          startsAt: string;
-          endsAt: string;
-          contactIds: string;
-        }[];
+            )
+            .all(
+              scope.ownerId,
+              addCalendarDays(today, -1),
+              addCalendarDays(lastDay, 2),
+            ) as {
+            title: string;
+            startsAt: string;
+            endsAt: string;
+            contactIds: string;
+          }[]
+        ).filter((r) => {
+          const day = dayInZone(r.startsAt, timeZone);
+          if (!day || day > lastDay) return false;
+          if (/^\d{4}-\d{2}-\d{2}$/.test(r.startsAt)) return day >= today;
+          const end = parseServerTime(r.endsAt) ?? parseServerTime(r.startsAt);
+          return end !== null && end > now;
+        });
         meetings = rows.map((r) => {
           let ids: string[] = [];
           if (typeof r.contactIds === "string") {
@@ -559,144 +579,95 @@ export const dashboardService = {
 
   /**
    * Deterministic activity aggregates for one owner: 84 days, week totals,
-   * streaks, and today/this-week counts.
+   * the streak, and today's and this week's counts. Every day is a day on
+   * the reader's calendar (`timeZone`), and every week starts on the
+   * account's week start, as the heatmap draws them. The server's own day
+   * is UTC in Docker, which put an evening's notes on tomorrow.
    */
-  getActivity(scope: Scope): DashboardActivityResponse {
+  getActivity(scope: Scope, timeZone?: string): DashboardActivityResponse {
     const startMs = Date.now();
     const now = new Date();
-    // 84 days ending today (day 83 is today, day 0 is 83 days ago)
-    const days: ActivityDay[] = [];
-    const dayMap = new Map<
-      string,
-      { count: number; byType: Record<string, number> }
-    >();
-
-    for (let i = 83; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-      const dayStr = toLocalDay(d);
-      const entry = { count: 0, byType: {} };
-      days.push({ day: dayStr, ...entry });
-      dayMap.set(dayStr, entry);
-    }
-
-    // Previous 84 days for prevWeekTotals (167 days ago to 84 days ago)
-    const prevDayMap = new Map<string, number>();
-    for (let i = 167; i >= 84; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
-      const dayStr = toLocalDay(d);
-      prevDayMap.set(dayStr, 0);
-    }
-
-    const oldestDay = toLocalDay(
-      new Date(now.getFullYear(), now.getMonth(), now.getDate() - 167),
+    const today = dayInZone(now, timeZone)!;
+    const weekStart = weekStartOf(
+      today,
+      getPreferences(scope.ownerId).weekStart,
     );
 
-    // Index seek on idx_interactions_owner_date
+    // 84 days ending today, the heatmap's twelve columns.
+    const firstDay = addCalendarDays(today, -83);
+    const days: ActivityDay[] = [];
+    const byDay = new Map<string, ActivityDay>();
+    for (let i = 0; i < 84; i++) {
+      const day: ActivityDay = {
+        day: addCalendarDays(firstDay, i),
+        count: 0,
+        byType: {},
+      };
+      days.push(day);
+      byDay.set(day.day, day);
+    }
+
+    // Index seek on idx_interactions_owner_date. A day early, because the
+    // reader's first day can start before UTC's.
     const rows = sqlite
       .prepare(
-        `SELECT date, type, source FROM interactions
-          WHERE ownerId = ? AND date >= ?
-          ORDER BY date ASC`,
+        `SELECT date, type FROM interactions WHERE ownerId = ? AND date >= ?`,
       )
-      .all(scope.ownerId, oldestDay) as {
+      .all(scope.ownerId, addCalendarDays(firstDay, -1)) as {
       date: string;
       type: string | null;
-      source: string | null;
     }[];
-
     for (const row of rows) {
-      const dayStr = toLocalDay(row.date);
-      const currentEntry = dayMap.get(dayStr);
-      if (currentEntry) {
-        currentEntry.count++;
-        const type = row.type || "note";
-        currentEntry.byType[type] = (currentEntry.byType[type] || 0) + 1;
-      }
-      if (prevDayMap.has(dayStr)) {
-        prevDayMap.set(dayStr, (prevDayMap.get(dayStr) || 0) + 1);
-      }
+      const day = byDay.get(dayInZone(row.date, timeZone) ?? "");
+      if (!day) continue;
+      day.count++;
+      const type = row.type || "note";
+      day.byType[type] = (day.byType[type] || 0) + 1;
     }
 
-    for (const d of days) {
-      const entry = dayMap.get(d.day);
-      if (entry) {
-        d.count = entry.count;
-        d.byType = entry.byType;
-      }
-    }
-
-    const weekTotals: number[] = [];
-    for (let w = 0; w < 12; w++) {
-      const slice = days.slice(w * 7, (w + 1) * 7);
-      const sum = slice.reduce((acc, curr) => acc + curr.count, 0);
-      weekTotals.push(sum);
-    }
-
-    const prevWeekTotals: number[] = [];
-    const prevDaysList = Array.from(prevDayMap.keys());
-    for (let w = 0; w < 12; w++) {
-      const slice = prevDaysList.slice(w * 7, (w + 1) * 7);
-      const sum = slice.reduce(
-        (acc, day) => acc + (prevDayMap.get(day) || 0),
+    // Twelve weeks from the week start, this one last.
+    const weekTotals = Array.from({ length: 12 }, (_, w) => {
+      const from = addCalendarDays(weekStart, (w - 11) * 7);
+      const to = addCalendarDays(from, 6);
+      return days.reduce(
+        (sum, d) => (d.day >= from && d.day <= to ? sum + d.count : sum),
         0,
       );
-      prevWeekTotals.push(sum);
+    });
+
+    let thisWeekLogged = 0;
+    const thisWeekByType: Record<string, number> = {};
+    for (const d of days) {
+      if (d.day < weekStart) continue;
+      thisWeekLogged += d.count;
+      for (const [t, cnt] of Object.entries(d.byType)) {
+        thisWeekByType[t] = (thisWeekByType[t] || 0) + cnt;
+      }
     }
 
-    // Streak: all interactions with type != 'import' and source IS NULL
+    // Streak: every day with a note a person logged (no imports, no syncs).
     const streakRows = sqlite
       .prepare(
-        `SELECT DISTINCT date(date, 'localtime') as date FROM interactions
-          WHERE ownerId = ? AND (type != 'import' OR type IS NULL) AND source IS NULL
-          ORDER BY date ASC`,
+        `SELECT date FROM interactions
+          WHERE ownerId = ? AND (type != 'import' OR type IS NULL) AND source IS NULL`,
       )
       .all(scope.ownerId) as StreakInteraction[];
-    const streak = computeStreak(streakRows, now);
+    const streak = computeStreak(streakRows, now, timeZone);
 
-    // Today's counts
-    const todayStr = toLocalDay(now);
-    const todayEntry = dayMap.get(todayStr);
-    const loggedToday = todayEntry ? todayEntry.count : 0;
-
-    // The server's local day, as for the rest of this payload. An instant is
-    // moved to that day with 'localtime'. A due date with no time is a day
-    // already, and 'localtime' would move it to the day before west of UTC.
-    // Each count used to OR the UTC day in as well, so a task due tomorrow
-    // here could count as today.
+    // Follow-ups done today and due today, on the same calendar.
     const completedToday = (
       sqlite
         .prepare(
-          `SELECT COUNT(*) as count FROM action_items
-            WHERE ownerId = ? AND completedAt IS NOT NULL
-              AND date(completedAt, 'localtime') = ?`,
+          `SELECT completedAt FROM action_items
+            WHERE ownerId = ? AND completedAt >= ?`,
         )
-        .get(scope.ownerId, todayStr) as { count: number }
-    ).count;
-
+        .all(scope.ownerId, addCalendarDays(today, -1)) as {
+        completedAt: string;
+      }[]
+    ).filter((r) => dayInZone(r.completedAt, timeZone) === today).length;
     const dueToday = (
-      sqlite
-        .prepare(
-          `SELECT COUNT(*) as count FROM action_items
-            WHERE ownerId = ? AND completedAt IS NULL
-              AND (CASE WHEN length(dueAt) = 10 THEN dueAt
-                        ELSE date(dueAt, 'localtime') END) = ?`,
-        )
-        .get(scope.ownerId, todayStr) as { count: number }
-    ).count;
-
-    // thisWeek: logged, byType (starts on ISO week Monday)
-    const currentWeekStart = isoWeekStart(now);
-    let thisWeekLogged = 0;
-    const thisWeekByType: Record<string, number> = {};
-
-    for (const d of days) {
-      if (d.day >= currentWeekStart && d.day <= todayStr) {
-        thisWeekLogged += d.count;
-        for (const [t, cnt] of Object.entries(d.byType)) {
-          thisWeekByType[t] = (thisWeekByType[t] || 0) + cnt;
-        }
-      }
-    }
+      actionItemService.getAllPending(scope) as { dueAt: string | null }[]
+    ).filter((r) => r.dueAt && dayInZone(r.dueAt, timeZone) === today).length;
 
     const elapsed = Date.now() - startMs;
     log.info("Dashboard", `Assembled dashboard activity in ${elapsed}ms`);
@@ -704,10 +675,9 @@ export const dashboardService = {
     return {
       days,
       weekTotals,
-      prevWeekTotals,
       streak,
       today: {
-        logged: loggedToday,
+        logged: byDay.get(today)?.count ?? 0,
         completed: completedToday,
         due: dueToday,
       },

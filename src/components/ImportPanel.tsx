@@ -26,11 +26,9 @@ import {
   ChevronDown,
 } from "lucide-react";
 import {
-  parseVCard,
-  parseLinkedInCSV,
-  parseGoogleCSV,
-  parseFacebookJSON,
-  parseGenericCSV,
+  SOURCE_FILES,
+  parseImportFile,
+  type ImportSource,
   type ImportedContact,
 } from "../lib/importers";
 import { useQueryClient } from "@tanstack/react-query";
@@ -65,7 +63,7 @@ interface ImportPanelProps {
   onClose?: () => void;
 }
 
-type ImportTab = "apple" | "linkedin" | "facebook" | "google";
+type ImportTab = ImportSource;
 
 type ImportPhaseState =
   | "idle"
@@ -102,17 +100,12 @@ const ERROR_BANNER = cn(
 );
 
 const IMPORT_LAST_SOURCE_KEY = "contrack.import.lastSource";
-const VALID_SOURCES: readonly ImportTab[] = [
-  "apple",
-  "linkedin",
-  "google",
-  "facebook",
-];
+const SOURCES = Object.keys(SOURCE_LABELS) as ImportTab[];
 
 function readInitialSource(): ImportTab {
   try {
     const saved = localStorage.getItem(IMPORT_LAST_SOURCE_KEY);
-    if (saved && (VALID_SOURCES as readonly string[]).includes(saved)) {
+    if (saved && (SOURCES as string[]).includes(saved)) {
       return saved as ImportTab;
     }
   } catch {
@@ -145,6 +138,10 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
   const [phase, setPhase] = useState<ImportPhaseState>("idle");
   const [progress, setProgress] = useState<ImportProgress | null>(null);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
+  /** Entries of the chosen file that had no name, so were not sent. */
+  const [skipped, setSkipped] = useState(0);
+  /** Set when the contacts were saved but the duplicate check failed. */
+  const [checkError, setCheckError] = useState<string | null>(null);
   const [failedRows, setFailedRows] = useState<ImportRow[]>([]);
   const [importId, setImportId] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -168,8 +165,9 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
   }, [queryClient]);
 
   const finish = useCallback(
-    async (id: string, done: ImportSummary) => {
+    async (id: string, done: ImportSummary, failedCheck: string | null) => {
       setSummary(done);
+      setCheckError(failedCheck);
       setPhase("complete");
       setProgress(null);
       setError(null);
@@ -206,7 +204,7 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
           if (!live()) return;
           misses = 0;
           if (record.status === "complete" && record.summary) {
-            await finish(id, record.summary);
+            await finish(id, record.summary, record.error);
             return;
           }
           if (record.status === "failed") {
@@ -216,13 +214,17 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
             return;
           }
           if (record.status === "complete") {
-            await finish(id, {
-              imported: record.imported,
-              autoMerged: 0,
-              needsReview: 0,
-              newUnique: record.imported,
-              failed: record.failed,
-            });
+            await finish(
+              id,
+              {
+                imported: record.imported,
+                autoMerged: 0,
+                needsReview: 0,
+                newUnique: record.imported,
+                failed: record.failed,
+              },
+              record.error,
+            );
             return;
           }
           setProgress({
@@ -271,6 +273,7 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
     async (id: string, contacts: ImportedContact[]) => {
       pollGeneration.current += 1;
       setError(null);
+      setCheckError(null);
       setSummary(null);
       setFailedRows([]);
       setPhase("importing");
@@ -307,7 +310,7 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
         }
         setError(
           (err instanceof Error ? err.message : String(err)) ||
-            "Failed to process file",
+            "Could not import the file",
         );
         setPhase("idle");
         setProgress(null);
@@ -329,7 +332,10 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
         result.status === "complete" &&
         result.summary
       ) {
-        await finish(id, result.summary);
+        // The stream's last frame has the counts but not the error of a
+        // duplicate check that failed. The record has it.
+        const record = await fetchImport(id).catch(() => null);
+        await finish(id, result.summary, record?.error ?? null);
         return;
       }
       await poll(id);
@@ -339,6 +345,7 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
 
   const processFile = async (file: File) => {
     setError(null);
+    setSkipped(0);
     setSummary(null);
     setFailedRows([]);
     setPhase("importing");
@@ -351,37 +358,17 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
 
     let newContacts: ImportedContact[] = [];
     try {
-      const text = await file.text();
-
-      if (file.name.endsWith(".vcf")) {
-        newContacts = parseVCard(text, "apple");
-      } else if (file.name.endsWith(".csv")) {
-        if (activeTab === "linkedin") {
-          newContacts = await parseLinkedInCSV(text);
-        } else if (activeTab === "google") {
-          newContacts = await parseGoogleCSV(text);
-        } else {
-          newContacts = await parseGenericCSV(text, activeTab);
-        }
-      } else if (file.name.endsWith(".json")) {
-        if (activeTab === "facebook") {
-          newContacts = parseFacebookJSON(text);
-        } else {
-          throw new Error(
-            "JSON import is only supported for Facebook data exports",
-          );
-        }
-      } else {
-        throw new Error("Choose a .vcf, .csv or .json file");
-      }
-
-      if (newContacts.length === 0) {
-        throw new Error("No valid contacts found in the file");
-      }
+      const parsed = await parseImportFile(
+        file.name,
+        await file.text(),
+        activeTab,
+      );
+      newContacts = parsed.contacts;
+      setSkipped(parsed.skipped);
     } catch (err: unknown) {
       setError(
         (err instanceof Error ? err.message : String(err)) ||
-          "Failed to process file",
+          "Could not read the file",
       );
       setPhase("idle");
       setProgress(null);
@@ -459,6 +446,8 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
     setPhase("idle");
     setProgress(null);
     setSummary(null);
+    setSkipped(0);
+    setCheckError(null);
     setFailedRows([]);
     setError(null);
     setImportId(null);
@@ -501,34 +490,25 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
     [],
   );
 
-  const getAcceptedFormats = () => {
-    switch (activeTab) {
-      case "apple":
-        return ".vcf";
-      case "linkedin":
-        return ".csv";
-      case "facebook":
-        return ".json";
-      case "google":
-        return ".csv";
-      default:
-        return ".csv,.vcf,.json";
-    }
-  };
+  const formats = SOURCE_FILES[activeTab];
 
-  const getFormatLabel = () => {
-    switch (activeTab) {
-      case "apple":
-        return "vCard (.vcf)";
-      case "linkedin":
-        return "CSV (.csv)";
-      case "facebook":
-        return "JSON (.json)";
-      case "google":
-        return "CSV (.csv)";
-      default:
-        return ".csv, .vcf, .json";
-    }
+  /** The tabs pattern: ← and → move and choose, Home and End jump. */
+  const handleTabKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>) => {
+    const at = SOURCES.indexOf(activeTab);
+    const next =
+      e.key === "ArrowRight"
+        ? SOURCES[(at + 1) % SOURCES.length]
+        : e.key === "ArrowLeft"
+          ? SOURCES[(at - 1 + SOURCES.length) % SOURCES.length]
+          : e.key === "Home"
+            ? SOURCES[0]
+            : e.key === "End"
+              ? SOURCES[SOURCES.length - 1]
+              : null;
+    if (!next) return;
+    e.preventDefault();
+    handleTabChange(next);
+    document.getElementById(`import-tab-${next}`)?.focus();
   };
 
   const progressPct =
@@ -541,7 +521,7 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
       case "importing":
         return progress?.message || "Importing contacts…";
       case "embedding":
-        return "Generating contact fingerprints…";
+        return "Preparing the contacts for search…";
       case "scanning":
         return progress?.message || "Looking for duplicates…";
       default:
@@ -562,26 +542,31 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
         ref={fileInputRef}
         className="sr-only"
         tabIndex={-1}
-        accept={getAcceptedFormats()}
+        accept={formats.accept}
         onChange={handleFileChange}
       />
       {/* Tab bar */}
+      {/* Four sources: a 2 by 2 grid on a phone, where one row does not fit */}
       {showUploadChrome && (
         <div
-          className={cn(TAB_CONTAINER, "mb-4")}
+          className={cn(TAB_CONTAINER, "mb-4 grid grid-cols-2 sm:flex")}
           role="tablist"
           aria-label="Import sources"
         >
-          {(["apple", "linkedin", "google", "facebook"] as const).map((tab) => (
+          {SOURCES.map((tab) => (
             <button
               key={tab}
+              id={`import-tab-${tab}`}
               type="button"
               role="tab"
               aria-selected={activeTab === tab}
+              aria-controls="import-source-panel"
+              tabIndex={activeTab === tab ? 0 : -1}
               onClick={() => handleTabChange(tab)}
+              onKeyDown={handleTabKeyDown}
               className={cn(
                 tabItem(activeTab === tab),
-                "min-h-[44px] sm:min-h-0",
+                "min-h-[44px] sm:pointer-fine:min-h-0",
               )}
             >
               {SOURCE_LABELS[tab]}
@@ -591,367 +576,424 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
       )}
 
       {/* Main content area */}
-      <AnimatePresence mode="wait" initial={false}>
-        {phase === "complete" && summary ? (
-          <motion.div key="summary" {...PHASE_MOTION} className="space-y-5">
-            <div className="flex flex-col items-center text-center">
-              <div className={cn("p-3 rounded-full mb-3", TONE_WASH.success)}>
-                <CheckCircle2 className="w-8 h-8" />
+      <div
+        id="import-source-panel"
+        role={showUploadChrome ? "tabpanel" : undefined}
+        aria-labelledby={
+          showUploadChrome ? `import-tab-${activeTab}` : undefined
+        }
+      >
+        <AnimatePresence mode="wait" initial={false}>
+          {phase === "complete" && summary ? (
+            <motion.div key="summary" {...PHASE_MOTION} className="space-y-5">
+              <div className="flex flex-col items-center text-center">
+                <div className={cn("p-3 rounded-full mb-3", TONE_WASH.success)}>
+                  <CheckCircle2 className="w-8 h-8" />
+                </div>
+                <h3 className="font-headline font-bold text-lg text-on-surface">
+                  Import complete
+                </h3>
+                <p className="text-sm text-on-surface-variant mt-1">
+                  {summary.imported}{" "}
+                  {summary.imported === 1 ? "contact" : "contacts"} imported
+                </p>
               </div>
-              <h3 className="font-headline font-bold text-lg text-on-surface">
-                Import complete
-              </h3>
-              <p className="text-sm text-on-surface-variant mt-1">
-                {summary.imported} contacts processed
-              </p>
-            </div>
 
-            <div className="bg-surface-container-low rounded-2xl divide-y divide-surface-container-high">
-              {summary.autoMerged > 0 && (
+              <div className="bg-surface-container-low rounded-2xl divide-y divide-surface-container-high">
+                {summary.autoMerged > 0 && (
+                  <div className="flex items-center gap-3 px-5 py-3.5">
+                    <div className={cn("p-2 rounded-lg", TONE_WASH.success)}>
+                      <GitMerge className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-on-surface">
+                        Merged {summary.autoMerged}{" "}
+                        {summary.autoMerged === 1 ? "duplicate" : "duplicates"}{" "}
+                        automatically
+                      </p>
+                      <p className="text-xs text-on-surface-variant">
+                        Each can be undone in Merge history
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {summary.needsReview > 0 && (
+                  <div className="flex items-center gap-3 px-5 py-3.5">
+                    <div className={cn("p-2 rounded-lg", TONE_WASH.warning)}>
+                      <Search className="w-4 h-4" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-on-surface">
+                        {summary.needsReview} possible{" "}
+                        {summary.needsReview === 1 ? "duplicate" : "duplicates"}{" "}
+                        to review
+                      </p>
+                      <p className="text-xs text-on-surface-variant">
+                        Contacts that may be the same person
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center gap-3 px-5 py-3.5">
-                  <div className={cn("p-2 rounded-lg", TONE_WASH.success)}>
-                    <GitMerge className="w-4 h-4" />
+                  <div className={cn("p-2 rounded-lg", TONE_WASH.primary)}>
+                    <UserPlus className="w-4 h-4" />
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-bold text-on-surface">
-                      Merged {summary.autoMerged}{" "}
-                      {summary.autoMerged === 1 ? "duplicate" : "duplicates"}{" "}
-                      automatically
+                      {summary.newUnique} new{" "}
+                      {summary.newUnique === 1 ? "contact" : "contacts"}
                     </p>
                     <p className="text-xs text-on-surface-variant">
-                      Each can be undone in Merge history
+                      Added to Network
                     </p>
                   </div>
                 </div>
-              )}
 
-              {summary.needsReview > 0 && (
-                <div className="flex items-center gap-3 px-5 py-3.5">
-                  <div className={cn("p-2 rounded-lg", TONE_WASH.warning)}>
-                    <Search className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-bold text-on-surface">
-                      {summary.needsReview} possible{" "}
-                      {summary.needsReview === 1 ? "duplicate" : "duplicates"}{" "}
-                      to review
-                    </p>
-                    <p className="text-xs text-on-surface-variant">
-                      Contacts that may be the same person
+                {skipped > 0 && (
+                  <div className="flex items-center gap-3 px-5 py-3.5">
+                    <div className={cn("p-2 rounded-lg", TONE_WASH.warning)}>
+                      <AlertCircle className="w-4 h-4" />
+                    </div>
+                    <p className="flex-1 text-sm font-bold text-on-surface">
+                      {skipped} {skipped === 1 ? "entry has" : "entries have"}{" "}
+                      no name and {skipped === 1 ? "was" : "were"} not imported
                     </p>
                   </div>
-                </div>
-              )}
+                )}
 
-              <div className="flex items-center gap-3 px-5 py-3.5">
-                <div className={cn("p-2 rounded-lg", TONE_WASH.primary)}>
-                  <UserPlus className="w-4 h-4" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-on-surface">
-                    {summary.newUnique} new unique contacts
-                  </p>
-                  <p className="text-xs text-on-surface-variant">
-                    Added to your network
-                  </p>
-                </div>
-              </div>
-
-              {summary.failed > 0 && (
-                <div className="px-5 py-3.5">
-                  <div className="flex items-center gap-3">
+                {checkError && (
+                  <div className="flex items-center gap-3 px-5 py-3.5">
                     <div className={cn("p-2 rounded-lg", TONE_WASH.warning)}>
                       <AlertCircle className="w-4 h-4" />
                     </div>
                     <div className="flex-1">
                       <p className="text-sm font-bold text-on-surface">
-                        {summary.failed} row{summary.failed === 1 ? "" : "s"}{" "}
-                        could not be imported
+                        The duplicate check did not finish
                       </p>
                       <p className="text-xs text-on-surface-variant">
-                        Kept on the server with the reason. Retry them below
+                        The contacts are saved. Choose Check now in Settings →
+                        Duplicates to look for duplicates
                       </p>
                     </div>
                   </div>
-                  {failedRows.length > 0 && (
-                    <ul
-                      aria-label="Rows that could not be imported"
-                      className="mt-3 space-y-1.5 text-xs max-h-40 overflow-y-auto"
-                    >
-                      {failedRows.map((row) => (
-                        <li
-                          key={row.index}
-                          className="flex flex-wrap gap-x-2 gap-y-0.5 rounded-lg bg-surface-container-lowest px-3 py-2"
-                        >
-                          <span className="font-bold text-on-surface">
-                            {row.name || `Row ${row.index + 1}`}
-                          </span>
-                          <span className="text-on-surface-variant">
-                            {row.error ?? "Could not be saved"}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                )}
+
+                {summary.failed > 0 && (
+                  <div className="px-5 py-3.5">
+                    <div className="flex items-center gap-3">
+                      <div className={cn("p-2 rounded-lg", TONE_WASH.warning)}>
+                        <AlertCircle className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-on-surface">
+                          {summary.failed} row{summary.failed === 1 ? "" : "s"}{" "}
+                          could not be imported
+                        </p>
+                        <p className="text-xs text-on-surface-variant">
+                          Kept on the server with the reason. Retry them below
+                        </p>
+                      </div>
+                    </div>
+                    {failedRows.length > 0 && (
+                      <ul
+                        aria-label="Rows that could not be imported"
+                        className="mt-3 space-y-1.5 text-xs max-h-40 overflow-y-auto"
+                      >
+                        {failedRows.map((row) => (
+                          <li
+                            key={row.index}
+                            className="flex flex-wrap gap-x-2 gap-y-0.5 rounded-lg bg-surface-container-lowest px-3 py-2"
+                          >
+                            <span className="font-bold text-on-surface">
+                              {row.name || `Row ${row.index + 1}`}
+                            </span>
+                            <span className="text-on-surface-variant">
+                              {row.error ?? "Could not be saved"}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {error && (
+                <div className={ERROR_BANNER}>
+                  <AlertCircle className="w-5 h-5 shrink-0" />
+                  {error}
                 </div>
               )}
-            </div>
 
-            {error && (
-              <div className={ERROR_BANNER}>
-                <AlertCircle className="w-5 h-5 shrink-0" />
-                {error}
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-center gap-3 pt-1">
-              {summary.failed > 0 && (
-                <button
-                  type="button"
-                  onClick={handleRetryFailedRows}
-                  disabled={isRetrying}
-                  className="btn-primary flex-1"
-                >
-                  <RotateCw
-                    className={cn("w-4 h-4", isRetrying && "animate-spin")}
-                  />
-                  Retry failed rows
-                </button>
-              )}
-              {summary.needsReview > 0 && (
-                <button
-                  type="button"
-                  onClick={handleReviewSuggestions}
-                  className={cn(
-                    "flex-1",
-                    summary.failed > 0 ? "btn-secondary" : "btn-primary",
-                  )}
-                >
-                  Review {summary.needsReview} possible{" "}
-                  {summary.needsReview === 1 ? "duplicate" : "duplicates"}
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={handleDone}
-                className={
-                  summary.needsReview > 0 || summary.failed > 0
-                    ? "btn-secondary"
-                    : "btn-primary flex-1"
-                }
-              >
-                Done
-              </button>
-            </div>
-          </motion.div>
-        ) : isProcessing ? (
-          <motion.div
-            key="processing"
-            {...PHASE_MOTION}
-            className="bg-surface-container-low rounded-2xl p-8 flex flex-col items-center justify-center text-center"
-          >
-            <div className="flex items-center gap-2 mb-6">
-              {STREAM_PHASES.map((p, i) => (
-                <div key={p} className="flex items-center gap-2">
-                  <div
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                {summary.failed > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleRetryFailedRows}
+                    disabled={isRetrying}
+                    className="btn-primary flex-1"
+                  >
+                    <RotateCw
+                      className={cn("w-4 h-4", isRetrying && "animate-spin")}
+                    />
+                    Retry failed rows
+                  </button>
+                )}
+                {summary.needsReview > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleReviewSuggestions}
                     className={cn(
-                      "w-2 h-2 rounded-full transition-colors duration-(--dur-slow)",
-                      phase === p
-                        ? "bg-primary scale-125"
-                        : STREAM_PHASES.indexOf(
-                              phase as (typeof STREAM_PHASES)[number],
-                            ) > i
-                          ? "bg-success"
-                          : "bg-surface-container-high",
+                      "flex-1",
+                      summary.failed > 0 ? "btn-secondary" : "btn-primary",
                     )}
-                  />
-                  {i < 2 && (
+                  >
+                    Review {summary.needsReview} possible{" "}
+                    {summary.needsReview === 1 ? "duplicate" : "duplicates"}
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleDone}
+                  className={
+                    summary.needsReview > 0 || summary.failed > 0
+                      ? "btn-secondary"
+                      : "btn-primary flex-1"
+                  }
+                >
+                  Done
+                </button>
+              </div>
+            </motion.div>
+          ) : isProcessing ? (
+            <motion.div
+              key="processing"
+              {...PHASE_MOTION}
+              className="bg-surface-container-low rounded-2xl p-8 flex flex-col items-center justify-center text-center"
+            >
+              <div className="flex items-center gap-2 mb-6">
+                {STREAM_PHASES.map((p, i) => (
+                  <div key={p} className="flex items-center gap-2">
                     <div
                       className={cn(
-                        "w-8 h-0.5 rounded-full transition-colors duration-(--dur-slow)",
-                        STREAM_PHASES.indexOf(
-                          phase as (typeof STREAM_PHASES)[number],
-                        ) > i
-                          ? "bg-success"
-                          : "bg-surface-container-high",
+                        "w-2 h-2 rounded-full transition-colors duration-(--dur-slow)",
+                        phase === p
+                          ? "bg-primary scale-125"
+                          : STREAM_PHASES.indexOf(
+                                phase as (typeof STREAM_PHASES)[number],
+                              ) > i
+                            ? "bg-success"
+                            : "bg-surface-container-high",
                       )}
                     />
+                    {i < 2 && (
+                      <div
+                        className={cn(
+                          "w-8 h-0.5 rounded-full transition-colors duration-(--dur-slow)",
+                          STREAM_PHASES.indexOf(
+                            phase as (typeof STREAM_PHASES)[number],
+                          ) > i
+                            ? "bg-success"
+                            : "bg-surface-container-high",
+                        )}
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="relative mb-4">
+                <Loader2 className="w-10 h-10 text-primary animate-spin" />
+              </div>
+
+              <p className="font-bold text-on-surface mb-1">
+                {getPhaseLabel()}
+              </p>
+
+              {phase === "importing" && progress?.total ? (
+                <div className="w-full max-w-xs space-y-2 mt-3">
+                  <div className="flex justify-between text-xs font-bold">
+                    <span className="text-on-surface-variant">Importing</span>
+                    <span className="text-primary tabular-nums">
+                      {progress.processed ?? 0}/{progress.total}
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-surface-container-high rounded-full overflow-hidden">
+                    <motion.div
+                      className="h-full bg-primary rounded-full"
+                      animate={{ width: `${progressPct}%` }}
+                      transition={{ duration: DURATION.slow, ease: EASE }}
+                    />
+                  </div>
+                </div>
+              ) : phase === "scanning" && progress?.autoMerged !== undefined ? (
+                <p className="text-xs text-on-surface-variant mt-2">
+                  {progress.autoMerged > 0 && (
+                    <span className="text-success font-bold">
+                      {progress.autoMerged} merged
+                    </span>
                   )}
-                </div>
-              ))}
-            </div>
-
-            <div className="relative mb-4">
-              <Loader2 className="w-10 h-10 text-primary animate-spin" />
-            </div>
-
-            <p className="font-bold text-on-surface mb-1">{getPhaseLabel()}</p>
-
-            {phase === "importing" && progress?.total ? (
-              <div className="w-full max-w-xs space-y-2 mt-3">
-                <div className="flex justify-between text-xs font-bold">
-                  <span className="text-on-surface-variant">Importing</span>
-                  <span className="text-primary tabular-nums">
-                    {progress.processed ?? 0}/{progress.total}
-                  </span>
-                </div>
-                <div className="h-1.5 bg-surface-container-high rounded-full overflow-hidden">
-                  <motion.div
-                    className="h-full bg-primary rounded-full"
-                    animate={{ width: `${progressPct}%` }}
-                    transition={{ duration: DURATION.slow, ease: EASE }}
-                  />
-                </div>
+                  {progress.autoMerged > 0 &&
+                    progress.needsReview! > 0 &&
+                    " · "}
+                  {progress.needsReview! > 0 && (
+                    <span className="text-warning font-bold">
+                      {progress.needsReview} to review
+                    </span>
+                  )}
+                </p>
+              ) : (
+                <p className="text-xs text-on-surface-variant mt-1">
+                  This may take a moment
+                </p>
+              )}
+            </motion.div>
+          ) : phase === "reconnecting" ? (
+            <motion.div
+              key="reconnecting"
+              {...PHASE_MOTION}
+              className="bg-surface-container-low rounded-2xl p-8 flex flex-col items-center justify-center text-center"
+            >
+              <div className="relative mb-4">
+                <Loader2 className="w-10 h-10 text-primary animate-spin" />
               </div>
-            ) : phase === "scanning" && progress?.autoMerged !== undefined ? (
-              <p className="text-xs text-on-surface-variant mt-2">
-                {progress.autoMerged > 0 && (
-                  <span className="text-success font-bold">
-                    {progress.autoMerged} merged
-                  </span>
-                )}
-                {progress.autoMerged > 0 && progress.needsReview! > 0 && " · "}
-                {progress.needsReview! > 0 && (
-                  <span className="text-warning font-bold">
-                    {progress.needsReview} to review
-                  </span>
-                )}
+              <p className="font-bold text-on-surface mb-1">
+                Reconnecting to your import
               </p>
-            ) : (
               <p className="text-xs text-on-surface-variant mt-1">
-                This may take a moment
+                {fileName
+                  ? `Checking on ${fileName} with the server…`
+                  : "Checking with the server…"}
               </p>
-            )}
-          </motion.div>
-        ) : phase === "reconnecting" ? (
-          <motion.div
-            key="reconnecting"
-            {...PHASE_MOTION}
-            className="bg-surface-container-low rounded-2xl p-8 flex flex-col items-center justify-center text-center"
-          >
-            <div className="relative mb-4">
-              <Loader2 className="w-10 h-10 text-primary animate-spin" />
-            </div>
-            <p className="font-bold text-on-surface mb-1">
-              Reconnecting to your import
-            </p>
-            <p className="text-xs text-on-surface-variant mt-1">
-              {fileName
-                ? `Checking on ${fileName} with the server…`
-                : "Checking with the server…"}
-            </p>
-            {progress?.message && (
-              <p className="text-xs text-on-surface-variant mt-2">
-                {progress.message}
-                {progress.total
-                  ? ` (${progress.processed ?? 0}/${progress.total})`
-                  : ""}
-              </p>
-            )}
-          </motion.div>
-        ) : phase === "failed" ? (
-          <motion.div key="failed" {...PHASE_MOTION} className="space-y-5">
-            <div className="flex flex-col items-center text-center">
-              <div className={cn("p-3 rounded-full mb-3", TONE_WASH.error)}>
-                <AlertCircle className="w-8 h-8" />
+              {progress?.message && (
+                <p className="text-xs text-on-surface-variant mt-2">
+                  {progress.message}
+                  {progress.total
+                    ? ` (${progress.processed ?? 0}/${progress.total})`
+                    : ""}
+                </p>
+              )}
+            </motion.div>
+          ) : phase === "failed" ? (
+            <motion.div key="failed" {...PHASE_MOTION} className="space-y-5">
+              <div className="flex flex-col items-center text-center">
+                <div className={cn("p-3 rounded-full mb-3", TONE_WASH.error)}>
+                  <AlertCircle className="w-8 h-8" />
+                </div>
+                <h3 className="font-headline font-bold text-lg text-on-surface">
+                  Import did not finish
+                </h3>
+                <p className="text-sm text-on-surface-variant mt-1">
+                  {fileName ? `Nothing from ${fileName} was saved` : ""}
+                </p>
               </div>
-              <h3 className="font-headline font-bold text-lg text-on-surface">
-                Import did not finish
-              </h3>
-              <p className="text-sm text-on-surface-variant mt-1">
-                {fileName ? `Nothing from ${fileName} was saved` : ""}
-              </p>
-            </div>
-            <div className={ERROR_BANNER}>
-              <AlertCircle className="w-5 h-5 shrink-0" />
-              {error ?? "The import did not finish"}
-            </div>
-            <div className="flex flex-wrap items-center gap-3 pt-1">
-              {canTryAgain ? (
+              <div className={ERROR_BANNER}>
+                <AlertCircle className="w-5 h-5 shrink-0" />
+                {error ?? "The import did not finish"}
+              </div>
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                {canTryAgain ? (
+                  <button
+                    type="button"
+                    onClick={handleTryAgain}
+                    className="btn-primary flex-1"
+                  >
+                    <RotateCw className="w-4 h-4" />
+                    Try again
+                  </button>
+                ) : (
+                  <p className="flex-1 text-xs text-on-surface-variant">
+                    The file is no longer in memory. Choose it again to import
+                  </p>
+                )}
                 <button
                   type="button"
-                  onClick={handleTryAgain}
+                  onClick={dismiss}
+                  className="btn-secondary"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </motion.div>
+          ) : phase === "lost" ? (
+            <motion.div key="lost" {...PHASE_MOTION} className="space-y-5">
+              <div className="flex flex-col items-center text-center">
+                <div className={cn("p-3 rounded-full mb-3", TONE_WASH.warning)}>
+                  <WifiOff className="w-8 h-8" />
+                </div>
+                <h3 className="font-headline font-bold text-lg text-on-surface">
+                  Lost contact with the server
+                </h3>
+                <p className="text-sm text-on-surface-variant mt-1">
+                  Your import may still be running. Check again when you are
+                  back online. Nothing is imported twice
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={handleCheckAgain}
                   className="btn-primary flex-1"
                 >
                   <RotateCw className="w-4 h-4" />
-                  Try again
+                  Check again
                 </button>
-              ) : (
-                <p className="flex-1 text-xs text-on-surface-variant">
-                  The file is no longer in memory. Choose it again to import
-                </p>
-              )}
-              <button type="button" onClick={dismiss} className="btn-secondary">
-                Dismiss
-              </button>
-            </div>
-          </motion.div>
-        ) : phase === "lost" ? (
-          <motion.div key="lost" {...PHASE_MOTION} className="space-y-5">
-            <div className="flex flex-col items-center text-center">
-              <div className={cn("p-3 rounded-full mb-3", TONE_WASH.warning)}>
-                <WifiOff className="w-8 h-8" />
+                <button
+                  type="button"
+                  onClick={dismiss}
+                  className="btn-secondary"
+                >
+                  Dismiss
+                </button>
               </div>
-              <h3 className="font-headline font-bold text-lg text-on-surface">
-                Lost contact with the server
-              </h3>
-              <p className="text-sm text-on-surface-variant mt-1">
-                Your import may still be running. Check again when you are back
-                online. Nothing is imported twice
+            </motion.div>
+          ) : (
+            <motion.div
+              key="upload"
+              initial={false}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              role="button"
+              tabIndex={0}
+              aria-label={`Choose a ${formats.label} file`}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  fileInputRef.current?.click();
+                }
+              }}
+              className={cn(
+                "state-layer bg-surface-container-low rounded-2xl p-8 flex flex-col items-center justify-center text-center transition-colors",
+                "cursor-pointer border-2 border-dashed",
+                isDragging
+                  ? "border-primary bg-primary/5"
+                  : "border-transparent",
+              )}
+              onClick={() => fileInputRef.current?.click()}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
+              <div className="bg-surface-container-high p-4 rounded-full mb-4">
+                <UploadCloud className="w-8 h-8 text-primary" />
+              </div>
+              <p className="font-bold text-on-surface mb-1">
+                Choose a file
+                <span className="hidden pointer-fine:inline">
+                  {" "}
+                  or drop it here
+                </span>
               </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3 pt-1">
-              <button
-                type="button"
-                onClick={handleCheckAgain}
-                className="btn-primary flex-1"
-              >
-                <RotateCw className="w-4 h-4" />
-                Check again
-              </button>
-              <button type="button" onClick={dismiss} className="btn-secondary">
-                Dismiss
-              </button>
-            </div>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="upload"
-            initial={false}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            role="button"
-            tabIndex={0}
-            aria-label={`Upload ${getFormatLabel()} file`}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                fileInputRef.current?.click();
-              }
-            }}
-            className={cn(
-              "state-layer bg-surface-container-low rounded-2xl p-8 flex flex-col items-center justify-center text-center transition-colors",
-              "cursor-pointer border-2 border-dashed",
-              isDragging ? "border-primary bg-primary/5" : "border-transparent",
-            )}
-            onClick={() => fileInputRef.current?.click()}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-          >
-            <div className="bg-surface-container-high p-4 rounded-full mb-4">
-              <UploadCloud className="w-8 h-8 text-primary" />
-            </div>
-            <p className="font-bold text-on-surface mb-1">
-              Click to upload or drag and drop
-            </p>
-            <p className="text-xs text-on-surface-variant">
-              {getFormatLabel()} files only
-            </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
+              <p className="text-xs text-on-surface-variant">
+                {formats.label} files only
+              </p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
 
       {/* Instructions disclosure under the drop zone */}
       {showUploadChrome && (
@@ -976,11 +1018,9 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
                 <li>
                   Open the <strong>Contacts</strong> app on your Mac
                 </li>
+                <li>Select the contacts you want to export (or ⌘A for all)</li>
                 <li>
-                  Select the contacts you want to export (or Cmd+A for all)
-                </li>
-                <li>
-                  Go to <strong>File &gt; Export &gt; Export vCard...</strong>
+                  Go to <strong>File &gt; Export &gt; Export vCard…</strong>
                 </li>
                 <li>
                   Save the <strong>.vcf</strong> file and upload it above
@@ -993,7 +1033,7 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
                   Go to LinkedIn <strong>Settings & Privacy</strong>
                 </li>
                 <li>
-                  Select <strong>Data Privacy</strong> &gt;{" "}
+                  Select <strong>Data privacy</strong> &gt;{" "}
                   <strong>Get a copy of your data</strong>
                 </li>
                 <li>
@@ -1015,18 +1055,18 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
                   Go to <strong>contacts.google.com</strong>
                 </li>
                 <li>
-                  Click <strong>Export</strong> in the left sidebar
+                  Choose <strong>Export</strong> in the menu
                 </li>
                 <li>
-                  Select <strong>Google CSV</strong> format and click{" "}
+                  Select <strong>Google CSV</strong> and choose{" "}
                   <strong>Export</strong>
                 </li>
                 <li>
                   Upload the downloaded <strong>.csv</strong> file above
                 </li>
                 <li className="text-xs text-on-surface-variant mt-1">
-                  Fields imported: name, multiple emails & phones, company,
-                  role, address, birthday, notes, website
+                  Fields imported: name, emails, phones, company, role,
+                  addresses, birthday, notes, website, labels as tags
                 </li>
               </ol>
             )}
@@ -1052,8 +1092,8 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
                   <strong>friends.json</strong> file above
                 </li>
                 <li className="text-xs text-on-surface-variant mt-1">
-                  Note: Facebook only exports friend names and connection dates
-                  — no emails or phone numbers
+                  Facebook exports only friend names and connection dates, with
+                  no emails or phone numbers
                 </li>
               </ol>
             )}

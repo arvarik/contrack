@@ -824,220 +824,208 @@ export function undoSoftMerge(
 
   const conflicts: MergeConflict[] = [];
 
+  // The saved copy is read before anything changes. An undo that cannot read
+  // it says so: undoing without it would show the contact again with
+  // nothing on it.
+  let snapshot: MergeSnapshotData | null = null;
+  if (entry.duplicateSnapshot) {
+    try {
+      snapshot = JSON.parse(entry.duplicateSnapshot) as MergeSnapshotData;
+    } catch {
+      throw new AppError(
+        "This merge cannot be undone: its saved copy of the contact cannot be read",
+        409,
+        { code: "SNAPSHOT_UNREADABLE" },
+      );
+    }
+  }
+
+  // All or nothing. A step that throws rolls every step back, and the merge
+  // stays as it was, not undone. A catch here once kept the steps done
+  // before the error and marked the merge undone all the same.
   const txn = sqlite.transaction(() => {
-    if (entry.duplicateSnapshot) {
-      try {
-        const snapshot = JSON.parse(
-          entry.duplicateSnapshot,
-        ) as MergeSnapshotData;
+    if (snapshot) {
+      // 1. Reverse child tables
+      const childTableMapping: Record<
+        keyof MergeSnapshotData["changes"]["movedRecords"],
+        { table: string; snapshotKey: keyof MergeSnapshotData["duplicate"] }
+      > = {
+        emails: { table: "contact_emails", snapshotKey: "emails" },
+        phones: { table: "contact_phones", snapshotKey: "phones" },
+        addresses: { table: "contact_addresses", snapshotKey: "addresses" },
+        socialLinks: {
+          table: "contact_social_links",
+          snapshotKey: "socialLinks",
+        },
+        education: { table: "contact_education", snapshotKey: "education" },
+        experience: {
+          table: "contact_experience",
+          snapshotKey: "experience",
+        },
+        sources: { table: "contact_sources", snapshotKey: "sources" },
+        tags: { table: "contact_tags", snapshotKey: "tags" },
+        interests: { table: "contact_interests", snapshotKey: "interests" },
+        attributes: {
+          table: "contact_attributes",
+          snapshotKey: "attributes",
+        },
+        interactions: { table: "interactions", snapshotKey: "interactions" },
+        actionItems: { table: "action_items", snapshotKey: "actionItems" },
+      };
 
-        // 1. Reverse child tables
-        const childTableMapping: Record<
-          keyof MergeSnapshotData["changes"]["movedRecords"],
-          { table: string; snapshotKey: keyof MergeSnapshotData["duplicate"] }
-        > = {
-          emails: { table: "contact_emails", snapshotKey: "emails" },
-          phones: { table: "contact_phones", snapshotKey: "phones" },
-          addresses: { table: "contact_addresses", snapshotKey: "addresses" },
-          socialLinks: {
-            table: "contact_social_links",
-            snapshotKey: "socialLinks",
-          },
-          education: { table: "contact_education", snapshotKey: "education" },
-          experience: {
-            table: "contact_experience",
-            snapshotKey: "experience",
-          },
-          sources: { table: "contact_sources", snapshotKey: "sources" },
-          tags: { table: "contact_tags", snapshotKey: "tags" },
-          interests: { table: "contact_interests", snapshotKey: "interests" },
-          attributes: {
-            table: "contact_attributes",
-            snapshotKey: "attributes",
-          },
-          interactions: { table: "interactions", snapshotKey: "interactions" },
-          actionItems: { table: "action_items", snapshotKey: "actionItems" },
-        };
-
-        for (const [key, mapping] of Object.entries(childTableMapping) as [
-          keyof MergeSnapshotData["changes"]["movedRecords"],
-          { table: string; snapshotKey: keyof MergeSnapshotData["duplicate"] },
-        ][]) {
-          if (key === "actionItems") {
-            // Action items handled separately below for follow-up date calculation
-            continue;
-          }
-          const movedIds = snapshot.changes?.movedRecords?.[key] ?? [];
-          const originalList = (snapshot.duplicate[mapping.snapshotKey] ??
-            []) as Record<string, unknown>[];
-          const originalMap = new Map<string, Record<string, unknown>>(
-            originalList.map((r) => [r.id as string, r]),
-          );
-
-          for (const recId of movedIds) {
-            const originalRow = originalMap.get(recId);
-            const currentRow = (
-              mapping.table === "interactions"
-                ? sqlite
-                    .prepare(
-                      // tenant-lint: allow owner-checked by caller
-                      "SELECT * FROM interactions WHERE id = ? AND ownerId = ?",
-                    )
-                    .get(recId, scope.ownerId)
-                : sqlite
-                    .prepare(`SELECT * FROM ${mapping.table} WHERE id = ?`)
-                    .get(recId)
-            ) as Record<string, unknown> | undefined;
-
-            if (!currentRow) {
-              // Deleted from survivor
-              if (originalRow) {
-                restoreChildRow(
-                  mapping.table,
-                  originalRow,
-                  entry.duplicateId,
-                  scope,
-                );
-                conflicts.push({
-                  type: "record_deleted",
-                  entity: mapping.table,
-                  id: recId,
-                  message: `${mapping.table} record was deleted from survivor after merge. Restored original to duplicate.`,
-                });
-              }
-            } else if (currentRow.contactId !== entry.primaryId) {
-              // Moved elsewhere
-              if (originalRow) {
-                const freshId = crypto.randomUUID();
-                restoreChildRow(
-                  mapping.table,
-                  originalRow,
-                  entry.duplicateId,
-                  scope,
-                  freshId,
-                );
-                conflicts.push({
-                  type: "record_edited",
-                  entity: mapping.table,
-                  id: recId,
-                  message: `${mapping.table} record was moved away from survivor. Restored copy to duplicate.`,
-                });
-              }
-            } else {
-              // Record is still on primary: check if modified
-              if (
-                originalRow &&
-                isChildRowModified(mapping.table, currentRow, originalRow)
-              ) {
-                // Keep edited row on primary, restore original copy to duplicate with fresh UUID
-                const freshId = crypto.randomUUID();
-                restoreChildRow(
-                  mapping.table,
-                  originalRow,
-                  entry.duplicateId,
-                  scope,
-                  freshId,
-                );
-                conflicts.push({
-                  type: "record_edited",
-                  entity: mapping.table,
-                  id: recId,
-                  message: `${mapping.table} record was modified on survivor after merge. Survivor retains edit; original restored to duplicate.`,
-                });
-              } else {
-                // Unchanged: move back to duplicate!
-                if (mapping.table === "interactions") {
-                  sqlite
-                    .prepare(
-                      // tenant-lint: allow owner-checked by caller
-                      "UPDATE interactions SET contactId = ? WHERE id = ? AND ownerId = ?",
-                    )
-                    .run(entry.duplicateId, recId, scope.ownerId);
-                } else {
-                  sqlite
-                    .prepare(
-                      `UPDATE ${mapping.table} SET contactId = ? WHERE id = ?`,
-                    )
-                    .run(entry.duplicateId, recId);
-                }
-              }
-            }
-          }
+      for (const [key, mapping] of Object.entries(childTableMapping) as [
+        keyof MergeSnapshotData["changes"]["movedRecords"],
+        { table: string; snapshotKey: keyof MergeSnapshotData["duplicate"] },
+      ][]) {
+        if (key === "actionItems") {
+          // Action items handled separately below for follow-up date calculation
+          continue;
         }
-
-        // 2. Action items
-        const movedActionItemIds =
-          snapshot.changes?.movedRecords?.actionItems ?? [];
-        const originalActionItems = snapshot.duplicate?.actionItems ?? [];
-        const origTaskMap = new Map<string, Record<string, unknown>>(
-          originalActionItems.map((a) => [a.id as string, a]),
+        const movedIds = snapshot.changes?.movedRecords?.[key] ?? [];
+        const originalList = (snapshot.duplicate[mapping.snapshotKey] ??
+          []) as Record<string, unknown>[];
+        const originalMap = new Map<string, Record<string, unknown>>(
+          originalList.map((r) => [r.id as string, r]),
         );
 
-        for (const taskId of movedActionItemIds) {
-          const originalTask = origTaskMap.get(taskId);
-          const currentTask = sqlite
-            .prepare("SELECT * FROM action_items WHERE id = ? AND ownerId = ?")
-            .get(taskId, scope.ownerId) as Record<string, unknown> | undefined;
+        for (const recId of movedIds) {
+          const originalRow = originalMap.get(recId);
+          const currentRow = (
+            mapping.table === "interactions"
+              ? sqlite
+                  .prepare(
+                    // tenant-lint: allow owner-checked by caller
+                    "SELECT * FROM interactions WHERE id = ? AND ownerId = ?",
+                  )
+                  .get(recId, scope.ownerId)
+              : sqlite
+                  .prepare(`SELECT * FROM ${mapping.table} WHERE id = ?`)
+                  .get(recId)
+          ) as Record<string, unknown> | undefined;
 
-          if (!currentTask) {
-            // Task deleted from survivor
-            if (originalTask) {
+          if (!currentRow) {
+            // Deleted from survivor
+            if (originalRow) {
               restoreChildRow(
-                "action_items",
-                originalTask,
+                mapping.table,
+                originalRow,
                 entry.duplicateId,
                 scope,
               );
               conflicts.push({
                 type: "record_deleted",
-                entity: "action_items",
-                id: taskId,
-                message:
-                  "Follow-up task was deleted from survivor after merge. Restored to duplicate.",
+                entity: mapping.table,
+                id: recId,
+                message: `${mapping.table} record was deleted from survivor after merge. Restored original to duplicate.`,
               });
             }
-          } else if (currentTask.contactId !== entry.primaryId) {
-            // Task moved elsewhere
-            if (originalTask) {
+          } else if (currentRow.contactId !== entry.primaryId) {
+            // Moved elsewhere
+            if (originalRow) {
               const freshId = crypto.randomUUID();
               restoreChildRow(
-                "action_items",
-                originalTask,
+                mapping.table,
+                originalRow,
                 entry.duplicateId,
                 scope,
                 freshId,
               );
               conflicts.push({
                 type: "record_edited",
-                entity: "action_items",
-                id: taskId,
-                message:
-                  "Follow-up task was moved away from survivor. Restored copy to duplicate.",
+                entity: mapping.table,
+                id: recId,
+                message: `${mapping.table} record was moved away from survivor. Restored copy to duplicate.`,
               });
             }
-          } else if (currentTask.completedAt && !originalTask?.completedAt) {
-            // Task was completed on survivor!
-            const freshId = crypto.randomUUID();
+          } else {
+            // Record is still on primary: check if modified
+            if (
+              originalRow &&
+              isChildRowModified(mapping.table, currentRow, originalRow)
+            ) {
+              // Keep edited row on primary, restore original copy to duplicate with fresh UUID
+              const freshId = crypto.randomUUID();
+              restoreChildRow(
+                mapping.table,
+                originalRow,
+                entry.duplicateId,
+                scope,
+                freshId,
+              );
+              conflicts.push({
+                type: "record_edited",
+                entity: mapping.table,
+                id: recId,
+                message: `${mapping.table} record was modified on survivor after merge. Survivor retains edit; original restored to duplicate.`,
+              });
+            } else {
+              // Unchanged: move back to duplicate!
+              if (mapping.table === "interactions") {
+                sqlite
+                  .prepare(
+                    // tenant-lint: allow owner-checked by caller
+                    "UPDATE interactions SET contactId = ? WHERE id = ? AND ownerId = ?",
+                  )
+                  .run(entry.duplicateId, recId, scope.ownerId);
+              } else if (columnsOf(mapping.table).has("isPrimary")) {
+                // The merge took the primary mark off an email or phone
+                // that joined a contact with one. Back home, it is the
+                // duplicate's primary again, as it was.
+                sqlite
+                  .prepare(
+                    `UPDATE ${mapping.table} SET contactId = ?, isPrimary = ? WHERE id = ?`,
+                  )
+                  .run(
+                    entry.duplicateId,
+                    originalRow?.isPrimary ? 1 : 0,
+                    recId,
+                  );
+              } else {
+                sqlite
+                  .prepare(
+                    `UPDATE ${mapping.table} SET contactId = ? WHERE id = ?`,
+                  )
+                  .run(entry.duplicateId, recId);
+              }
+            }
+          }
+        }
+      }
+
+      // 2. Action items
+      const movedActionItemIds =
+        snapshot.changes?.movedRecords?.actionItems ?? [];
+      const originalActionItems = snapshot.duplicate?.actionItems ?? [];
+      const origTaskMap = new Map<string, Record<string, unknown>>(
+        originalActionItems.map((a) => [a.id as string, a]),
+      );
+
+      for (const taskId of movedActionItemIds) {
+        const originalTask = origTaskMap.get(taskId);
+        const currentTask = sqlite
+          .prepare("SELECT * FROM action_items WHERE id = ? AND ownerId = ?")
+          .get(taskId, scope.ownerId) as Record<string, unknown> | undefined;
+
+        if (!currentTask) {
+          // Task deleted from survivor
+          if (originalTask) {
             restoreChildRow(
               "action_items",
-              originalTask!,
+              originalTask,
               entry.duplicateId,
               scope,
-              freshId,
             );
             conflicts.push({
-              type: "task_completed",
+              type: "record_deleted",
               entity: "action_items",
               id: taskId,
               message:
-                "Follow-up task was completed on survivor after merge. Survivor retains completed task; restored pending task on duplicate.",
+                "Follow-up task was deleted from survivor after merge. Restored to duplicate.",
             });
-          } else if (
-            originalTask &&
-            (currentTask.title !== originalTask.title ||
-              currentTask.dueAt !== originalTask.dueAt)
-          ) {
-            // Task was edited on survivor!
+          }
+        } else if (currentTask.contactId !== entry.primaryId) {
+          // Task moved elsewhere
+          if (originalTask) {
             const freshId = crypto.randomUUID();
             restoreChildRow(
               "action_items",
@@ -1051,125 +1039,157 @@ export function undoSoftMerge(
               entity: "action_items",
               id: taskId,
               message:
-                "Follow-up task was edited on survivor after merge. Survivor retains edit; original restored to duplicate.",
+                "Follow-up task was moved away from survivor. Restored copy to duplicate.",
             });
-          } else {
-            // Unchanged: move back to duplicate!
-            sqlite
-              .prepare(
-                "UPDATE action_items SET contactId = ? WHERE id = ? AND ownerId = ?",
-              )
-              .run(entry.duplicateId, taskId, scope.ownerId);
           }
-        }
-
-        // Recompute nextFollowUpAt for BOTH primary and duplicate
-        sqlite
-          .prepare(
-            `UPDATE contacts SET nextFollowUpAt = (
-               SELECT MIN(dueAt) FROM action_items
-               WHERE contactId = ? AND ownerId = ? AND completedAt IS NULL
-             ) WHERE id = ? AND ownerId = ?`,
-          )
-          .run(entry.primaryId, scope.ownerId, entry.primaryId, scope.ownerId);
-
-        sqlite
-          .prepare(
-            `UPDATE contacts SET nextFollowUpAt = (
-               SELECT MIN(dueAt) FROM action_items
-               WHERE contactId = ? AND ownerId = ? AND completedAt IS NULL
-             ) WHERE id = ? AND ownerId = ?`,
-          )
-          .run(
+        } else if (currentTask.completedAt && !originalTask?.completedAt) {
+          // Task was completed on survivor!
+          const freshId = crypto.randomUUID();
+          restoreChildRow(
+            "action_items",
+            originalTask!,
             entry.duplicateId,
-            scope.ownerId,
-            entry.duplicateId,
-            scope.ownerId,
+            scope,
+            freshId,
           );
-
-        // 3. Mentions
-        for (const mid of snapshot.changes?.movedMentions ?? []) {
+          conflicts.push({
+            type: "task_completed",
+            entity: "action_items",
+            id: taskId,
+            message:
+              "Follow-up task was completed on survivor after merge. Survivor retains completed task; restored pending task on duplicate.",
+          });
+        } else if (
+          originalTask &&
+          (currentTask.title !== originalTask.title ||
+            currentTask.dueAt !== originalTask.dueAt)
+        ) {
+          // Task was edited on survivor!
+          const freshId = crypto.randomUUID();
+          restoreChildRow(
+            "action_items",
+            originalTask,
+            entry.duplicateId,
+            scope,
+            freshId,
+          );
+          conflicts.push({
+            type: "record_edited",
+            entity: "action_items",
+            id: taskId,
+            message:
+              "Follow-up task was edited on survivor after merge. Survivor retains edit; original restored to duplicate.",
+          });
+        } else {
+          // Unchanged: move back to duplicate!
           sqlite
             .prepare(
-              "UPDATE interaction_mentions SET contactId = ? WHERE contactId = ? AND interactionId = ?",
+              "UPDATE action_items SET contactId = ? WHERE id = ? AND ownerId = ?",
             )
-            .run(entry.duplicateId, entry.primaryId, mid);
+            .run(entry.duplicateId, taskId, scope.ownerId);
         }
-        for (const mid of snapshot.changes?.deletedMentions ?? []) {
-          sqlite
-            .prepare(
-              "INSERT OR IGNORE INTO interaction_mentions (interactionId, contactId) VALUES (?, ?)",
-            )
-            .run(mid, entry.duplicateId);
-        }
+      }
 
-        // 4. Scalar fields
-        const currentPrimary = sqlite
-          .prepare("SELECT * FROM contacts WHERE id = ? AND ownerId = ?")
-          .get(entry.primaryId, scope.ownerId) as
-          Record<string, unknown> | undefined;
+      // Recompute nextFollowUpAt for BOTH primary and duplicate
+      sqlite
+        .prepare(
+          `UPDATE contacts SET nextFollowUpAt = (
+               SELECT MIN(dueAt) FROM action_items
+               WHERE contactId = ? AND ownerId = ? AND completedAt IS NULL
+             ) WHERE id = ? AND ownerId = ?`,
+        )
+        .run(entry.primaryId, scope.ownerId, entry.primaryId, scope.ownerId);
 
-        if (currentPrimary && snapshot.changes?.scalarUpdates) {
-          const scalarReverts: Record<string, unknown> = {};
-          for (const [field, { oldValue, transferredValue }] of Object.entries(
-            snapshot.changes.scalarUpdates,
-          )) {
-            const curr = currentPrimary[field];
-            if (curr === transferredValue) {
-              scalarReverts[field] = oldValue;
-            } else {
-              conflicts.push({
-                type: "scalar_edited",
-                entity: "contacts",
-                field,
-                currentValue: curr,
-                oldValue,
-                duplicateValue: transferredValue,
-                message: `Contact field '${field}' was edited on survivor after merge. Survivor retained value '${curr}'.`,
-              });
-            }
-          }
-          if (snapshot.changes.addedAtUpdated) {
-            if (
-              currentPrimary.addedAt ===
-              snapshot.changes.addedAtUpdated.newAddedAt
-            ) {
-              scalarReverts.addedAt =
-                snapshot.changes.addedAtUpdated.oldAddedAt;
-            }
-          }
-          if (Object.keys(scalarReverts).length > 0) {
-            scalarReverts.updatedAt = new Date().toISOString();
-            db.update(schema.contacts)
-              .set(scalarReverts as Partial<ContactRow>)
-              .where(
-                and(
-                  eq(schema.contacts.id, entry.primaryId),
-                  eq(schema.contacts.ownerId, scope.ownerId),
-                ),
-              )
-              .run();
-          }
-        }
-
-        // 5. List memberships
-        for (const listId of snapshot.changes?.addedListIds ?? []) {
-          sqlite
-            .prepare(
-              "DELETE FROM list_members WHERE listId = ? AND contactId = ?",
-            )
-            .run(listId, entry.primaryId);
-          sqlite
-            .prepare(
-              "INSERT OR IGNORE INTO list_members (listId, contactId) VALUES (?, ?)",
-            )
-            .run(listId, entry.duplicateId);
-        }
-      } catch (err) {
-        log.warn(
-          "DedupeSuggestions",
-          `[${rid}] Error restoring from snapshot, falling back to basic undo: ${err}`,
+      sqlite
+        .prepare(
+          `UPDATE contacts SET nextFollowUpAt = (
+               SELECT MIN(dueAt) FROM action_items
+               WHERE contactId = ? AND ownerId = ? AND completedAt IS NULL
+             ) WHERE id = ? AND ownerId = ?`,
+        )
+        .run(
+          entry.duplicateId,
+          scope.ownerId,
+          entry.duplicateId,
+          scope.ownerId,
         );
+
+      // 3. Mentions
+      for (const mid of snapshot.changes?.movedMentions ?? []) {
+        sqlite
+          .prepare(
+            "UPDATE interaction_mentions SET contactId = ? WHERE contactId = ? AND interactionId = ?",
+          )
+          .run(entry.duplicateId, entry.primaryId, mid);
+      }
+      for (const mid of snapshot.changes?.deletedMentions ?? []) {
+        sqlite
+          .prepare(
+            "INSERT OR IGNORE INTO interaction_mentions (interactionId, contactId) VALUES (?, ?)",
+          )
+          .run(mid, entry.duplicateId);
+      }
+
+      // 4. Scalar fields
+      const currentPrimary = sqlite
+        .prepare("SELECT * FROM contacts WHERE id = ? AND ownerId = ?")
+        .get(entry.primaryId, scope.ownerId) as
+        Record<string, unknown> | undefined;
+
+      if (currentPrimary && snapshot.changes?.scalarUpdates) {
+        const scalarReverts: Record<string, unknown> = {};
+        for (const [field, { oldValue, transferredValue }] of Object.entries(
+          snapshot.changes.scalarUpdates,
+        )) {
+          const curr = currentPrimary[field];
+          if (curr === transferredValue) {
+            scalarReverts[field] = oldValue;
+          } else {
+            conflicts.push({
+              type: "scalar_edited",
+              entity: "contacts",
+              field,
+              currentValue: curr,
+              oldValue,
+              duplicateValue: transferredValue,
+              message: `Contact field '${field}' was edited on survivor after merge. Survivor retained value '${curr}'.`,
+            });
+          }
+        }
+        if (snapshot.changes.addedAtUpdated) {
+          if (
+            currentPrimary.addedAt ===
+            snapshot.changes.addedAtUpdated.newAddedAt
+          ) {
+            scalarReverts.addedAt = snapshot.changes.addedAtUpdated.oldAddedAt;
+          }
+        }
+        if (Object.keys(scalarReverts).length > 0) {
+          scalarReverts.updatedAt = new Date().toISOString();
+          db.update(schema.contacts)
+            .set(scalarReverts as Partial<ContactRow>)
+            .where(
+              and(
+                eq(schema.contacts.id, entry.primaryId),
+                eq(schema.contacts.ownerId, scope.ownerId),
+              ),
+            )
+            .run();
+        }
+      }
+
+      // 5. List memberships
+      for (const listId of snapshot.changes?.addedListIds ?? []) {
+        sqlite
+          .prepare(
+            "DELETE FROM list_members WHERE listId = ? AND contactId = ?",
+          )
+          .run(listId, entry.primaryId);
+        sqlite
+          .prepare(
+            "INSERT OR IGNORE INTO list_members (listId, contactId) VALUES (?, ?)",
+          )
+          .run(listId, entry.duplicateId);
       }
     }
 

@@ -643,6 +643,15 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
             const endDate = endStr
               ? new Date(endStr)
               : new Date(startDate.getTime() + 60 * 60 * 1000);
+            // An all-day event has a day and no time. It is kept as the day
+            // (`2026-10-09`), which every reader's calendar reads as that
+            // day. As midnight UTC it was the evening before west of UTC.
+            const allDay = !event.start?.dateTime;
+            const startsAt = allDay ? startStr : startDate.toISOString();
+            const endsAt =
+              allDay && event.end?.date
+                ? event.end.date
+                : endDate.toISOString();
 
             const attendees: Participant[] = (event.attendees || [])
               .map((a) => ({
@@ -671,8 +680,8 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
                 externalId: `google:calendar:${event.id}`,
                 type: "meeting",
                 title,
-                date: startDate.toISOString(),
-                endsAt: endDate.toISOString(),
+                date: startsAt,
+                endsAt,
                 participants: attendees,
                 raw: { id: event.id, iCalUID: event.iCalUID },
               };
@@ -681,8 +690,8 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
                 kind: "upcoming",
                 externalId: `google:calendar:${event.id}`,
                 title,
-                startsAt: startDate.toISOString(),
-                endsAt: endDate.toISOString(),
+                startsAt,
+                endsAt,
                 participants: attendees,
               };
             }

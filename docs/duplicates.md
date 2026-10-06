@@ -250,7 +250,11 @@ group at once.
 
 If you changed a moved record after the merge, your change stays on the kept
 contact, and the restored contact gets the record as it was. The message after
-the undo says how many records this happened to.
+the undo says how many records this happened to. An email or phone that was
+the restored contact's primary is its primary again.
+
+An undo is all or nothing. If one step fails, nothing changes, the merge stays
+in **Merge history**, and you can try the undo again.
 
 After 90 days the entry leaves **Merge history**, and Contrack deletes the
 hidden contact and the files that only it used. The kept contact keeps

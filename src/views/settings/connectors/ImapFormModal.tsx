@@ -147,9 +147,11 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
           rollup,
           ghostThreshold,
           summaries,
-          maxMessagesPerRun: 5000,
         },
+        // Editing with the field empty keeps the saved password, so the
+        // test uses the saved one too.
         secret: password ? { password } : undefined,
+        connectorId: !password && isEditing ? connector?.id : undefined,
       });
       setTestResult({ ok: true, message: res.detail });
       toast.success(res.detail);
@@ -196,7 +198,6 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
       rollup,
       ghostThreshold,
       summaries,
-      maxMessagesPerRun: 5000,
     };
 
     try {

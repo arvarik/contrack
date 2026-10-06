@@ -15,6 +15,7 @@ import * as m0003 from "./0003_map_pins.ts";
 import * as m0004 from "./0004_oauth.ts";
 import * as m0005 from "./0005_dedupe_pair_index.ts";
 import * as m0006 from "./0006_dedupe_caveat.ts";
+import * as m0007 from "./0007_contacts_archived_at.ts";
 
 export const MIGRATIONS: readonly Migration[] = [
   { id: "0001_baseline", up: m0001.up },
@@ -23,6 +24,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { id: "0004_oauth", up: m0004.up },
   { id: "0005_dedupe_pair_index", up: m0005.up },
   { id: "0006_dedupe_caveat", up: m0006.up },
+  { id: "0007_contacts_archived_at", up: m0007.up },
 ];
 
 /** The last migration this build holds. A database that is up to date has it. */

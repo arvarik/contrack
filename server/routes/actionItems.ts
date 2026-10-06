@@ -8,7 +8,7 @@ import { requireContact } from "../services/contactGuard.ts";
 import { Router } from "express";
 import { log } from "../utils/logger.ts";
 import { actionItemService } from "../services/actionItemService.ts";
-import { validateBody } from "../utils/validators.ts";
+import { readerTimeZone, validateBody } from "../utils/validators.ts";
 import { actionItemRoutes } from "../../shared/contracts/actionItems.ts";
 import { NotFoundError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
@@ -45,7 +45,10 @@ router.get(
   "/action-items/count",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const count = actionItemService.getUrgentCount(scopeOf(req));
+    const count = actionItemService.getUrgentCount(
+      scopeOf(req),
+      readerTimeZone(req.query.tz),
+    );
     log.debug("API", `[${rid}] GET /api/action-items/count → ${count}`);
     res.json({ count });
   }),
@@ -80,7 +83,7 @@ router.patch(
       String(req.params.id),
       req.body,
     );
-    if (!updated) throw new NotFoundError("Action item");
+    if (!updated) throw new NotFoundError("Follow-up");
     log.info(
       "API",
       `[${rid}] PATCH /api/action-items/${String(req.params.id)}`,
@@ -97,7 +100,7 @@ router.patch(
       scopeOf(req),
       String(req.params.id),
     );
-    if (!completed) throw new NotFoundError("Action item");
+    if (!completed) throw new NotFoundError("Follow-up");
     log.info(
       "API",
       `[${rid}] PATCH /api/action-items/${String(req.params.id)}/complete`,
@@ -114,7 +117,7 @@ router.delete(
       scopeOf(req),
       String(req.params.id),
     );
-    if (!success) throw new NotFoundError("Action item");
+    if (!success) throw new NotFoundError("Follow-up");
     log.info(
       "API",
       `[${rid}] DELETE /api/action-items/${String(req.params.id)}`,

@@ -196,7 +196,7 @@ export const ConnectorsView: React.FC = () => {
           <div className={cn(SETTINGS_CARD, "space-y-4")}>
             <p className="text-sm text-on-surface-variant text-pretty">
               Contrack learns who you talk to from your calendar and your mail.
-              Nothing leaves this server unless you turn on AI summaries
+              Nothing leaves the server unless you turn on AI summaries
             </p>
             {/* A row for each kind, with its own Connect: three equal
                 choices, so none of them is the page's one primary. */}

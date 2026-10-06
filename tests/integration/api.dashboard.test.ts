@@ -117,6 +117,36 @@ describe("GET /api/dashboard", () => {
     );
     const soon = inDays(2);
     event.run("dash-cal", actor.user.id, "soon", "Soon", soon, soon, '["c-1"]');
+    // An all-day event is a day, and today's shows all day. A meeting
+    // that ended this morning does not show, and noon on the seventh day
+    // does.
+    const today = dayInZone(new Date())!;
+    event.run("dash-cal", actor.user.id, "day", "Offsite", today, today, "[]");
+    event.run(
+      "dash-cal",
+      actor.user.id,
+      "done",
+      "Done",
+      inDays(-0.2),
+      inDays(-0.1),
+      "[]",
+    );
+    const now = new Date();
+    const seventh = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + 7,
+      12,
+    ).toISOString();
+    event.run(
+      "dash-cal",
+      actor.user.id,
+      "seventh",
+      "Seventh",
+      seventh,
+      seventh,
+      "[]",
+    );
     event.run(
       "dash-cal",
       actor.user.id,
@@ -148,7 +178,9 @@ describe("GET /api/dashboard", () => {
     const res = await getDashboard();
     expect(res.status).toBe(200);
     expect(res.body.meetings).toEqual([
+      { title: "Offsite", startsAt: today, endsAt: today, contactIds: [] },
       { title: "Soon", startsAt: soon, endsAt: soon, contactIds: ["c-1"] },
+      { title: "Seventh", startsAt: seventh, endsAt: seventh, contactIds: [] },
     ]);
   });
 
@@ -194,6 +226,16 @@ describe("GET /api/dashboard", () => {
     };
     expect(await groupOf(ahead)).toBe("dueToday");
     expect(await groupOf("Pacific/Pago_Pago")).toBe("upcoming");
+    // The sidebar badge counts on the same calendar as Pulse.
+    const badge = async (tz: string) =>
+      (
+        await asUser(actor)(
+          request(app).get(
+            `/api/action-items/count?tz=${encodeURIComponent(tz)}`,
+          ),
+        )
+      ).body.count;
+    expect(await badge(ahead)).toBe((await badge("Pacific/Pago_Pago")) + 1);
   });
 });
 

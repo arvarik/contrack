@@ -289,7 +289,7 @@ export function resolveCapability(
     if (config.kind === "openai-compatible" && !model) {
       log.warn(
         "AICapabilities",
-        `Skipping "${id}" for ${capability}: no chat model discovered — refresh its model list in Settings → Administration → AI`,
+        `Skipping "${id}" for ${capability}: no chat model discovered — refresh its model list in Settings → AI`,
       );
       continue;
     }

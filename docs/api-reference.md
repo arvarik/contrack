@@ -648,7 +648,7 @@ A follow-up (an action item) is a task with a due date on one contact.
 | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
 | `GET /api/action-items`                | Your open follow-ups, soonest due first, with `contactName`, `contactCompany`, `contactAvatarUrl` and `contactThemeColor`. Follow-ups on archived, trashed, merged and ghost contacts are left out. | your data |
 | `GET /api/action-items/completed`      | Your 50 most recently completed follow-ups.                                                                                                                                                         | your data |
-| `GET /api/action-items/count`          | The number of open follow-ups due today or earlier: `{ count }`.                                                                                                                                    | your data |
+| `GET /api/action-items/count`          | The number of open follow-ups due today or earlier: `{ count }`. `tz` is your IANA time zone, for the day that is today. Without it, the server's zone.                                             | your data |
 | `GET /api/contacts/:id/action-items`   | One contact's follow-ups.                                                                                                                                                                           | your data |
 | `POST /api/contacts/:id/action-items`  | Create a follow-up: `{ title, dueAt }`. `201`.                                                                                                                                                      | your data |
 | `POST /api/action-items/bulk`          | The same follow-up for many contacts: `{ contactIds, title, dueAt }`, up to 500 ids. `201 { count }`. An id you cannot use refuses the whole call, and nothing is written.                          | your data |
@@ -706,13 +706,13 @@ there is none. `null` completes the open follow-ups.
 
 ## Tags
 
-| Endpoint                | What it does                                                                                                                              | Access    |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `GET /api/tags`         | Every tag you use, as a plain array of strings.                                                                                           | your data |
-| `GET /api/tags/summary` | Each tag with the number of contacts that carry it, by name: `{ tags: [{ tag, count }] }`. Archived and trashed contacts do not count.    | your data |
-| `PATCH /api/tags/:tag`  | Rename a tag on all your contacts: `{ "to": "new-name" }`. A contact that already has the new tag keeps one copy. Answers `{ affected }`. | your data |
-| `DELETE /api/tags/:tag` | Remove a tag from all your contacts. Answers `{ affected }`.                                                                              | your data |
-| `GET /api/industries`   | Every industry your contacts name, as a plain array of strings.                                                                           | your data |
+| Endpoint                | What it does                                                                                                                                                                                                   | Access    |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `GET /api/tags`         | Every tag you use, as a plain array of strings.                                                                                                                                                                | your data |
+| `GET /api/tags/summary` | Each tag with the number of contacts that carry it, by name: `{ tags: [{ tag, count, total }] }`. `count` leaves out archived and trashed contacts, and `total`, which a rename or a delete changes, has them. | your data |
+| `PATCH /api/tags/:tag`  | Rename a tag on all your contacts: `{ "to": "new-name" }`. A contact that already has the new tag keeps one copy. Answers `{ affected }`.                                                                      | your data |
+| `DELETE /api/tags/:tag` | Remove a tag from all your contacts. Answers `{ affected }`.                                                                                                                                                   | your data |
+| `GET /api/industries`   | Every industry your contacts name, as a plain array of strings.                                                                                                                                                | your data |
 
 ## Search
 
@@ -1009,9 +1009,9 @@ with `details.queued`. The merge routes for two or more contacts are in
 | Endpoint                              | What it does                                                                                                                                                                                                                                                                                                           | Access    |
 | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
 | `GET /api/dashboard`                  | The Pulse data: `overdue`, `dueToday`, `upcoming`, `ghosts`, `metrics`, `catchUp`, `tracking`, `recentlyAdded`, the composition lists, 30-day timelines, `hygiene`, `meetings` and `correspondents`. `tz` is your IANA time zone, for the days of `overdue`, `dueToday` and `upcoming`. Without it, the server's zone. | your data |
-| `GET /api/dashboard/activity`         | Activity counts: 84 `days`, 12 `weekTotals` and `prevWeekTotals`, `streak`, `today` and `thisWeek`, in the server's time zone.                                                                                                                                                                                         | your data |
+| `GET /api/dashboard/activity`         | Activity counts: 84 `days`, 12 `weekTotals` from your week start (this week last), `streak`, `today` and `thisWeek`. `tz` is your IANA time zone, for the days. Without it, the server's zone.                                                                                                                         | your data |
 | `GET /api/dashboard/insight`          | The daily insight, written by AI. Answers `null` with no provider.                                                                                                                                                                                                                                                     | your data |
-| `GET /api/command-palette/zero-state` | What the command palette shows before you type: `{ insights }`, such as follow-ups due, catch-ups and ghosts. No model runs.                                                                                                                                                                                           | your data |
+| `GET /api/command-palette/zero-state` | What the command palette shows before you type: `{ insights }`, such as follow-ups due, catch-ups and ghosts. No model runs. `tz` is your IANA time zone, for the follow-ups due today.                                                                                                                                | your data |
 
 In `GET /api/dashboard`, `catchUp` lists up to ten tracked contacts past their
 cadence, the furthest first. `tracking` holds `count`, the score `bands`,
@@ -1083,6 +1083,7 @@ must list it.
 | `POST /api/trash/:id/restore`  | Restore a trashed contact. Answers the contact. `404` when it is not in the trash.                            | your data |
 | `POST /api/trash/bulk-restore` | Restore many: `{ ids }`. Skips ids that are not in the trash. Answers `{ success, count }`.                   | your data |
 | `DELETE /api/trash/:id`        | Delete a trashed contact and its history now.                                                                 | your data |
+| `DELETE /api/trash`            | Empty the trash: delete every trashed contact and its history now. Answers `{ count }`.                       | your data |
 | `GET /api/backups`             | Every database snapshot, with its `verification`: `{ backups }`.                                              | admin     |
 | `POST /api/backups`            | Take a snapshot now. `201` with its details.                                                                  | admin     |
 | `GET /api/export/json`         | Your data as one JSON file: `contacts`, `interactions`, `lists`, `listMembers`, `actionItems` and `mergeLog`. | your data |
@@ -1168,7 +1169,7 @@ data of the account that created it.
 | Endpoint                       | What it does                                                                                                                                                                                         | Access               |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
 | `GET /api/avatar/:style`       | A generated avatar as SVG. Styles: `avataaars`, `lorelei`, `bottts` and `initials`. `seed` is required. Optional `bg=1`, `theme` (`light` or `dark`) and `look` (`f`, `m` or `n`). Cached for a day. | any signed-in caller |
-| `GET /api/logos/:domain`       | A company logo as PNG, at most 128 px. The server fetches it once and keeps it. `404` when the domain has no logo, and `503` for a failure that may pass.                                            | any signed-in caller |
+| `GET /api/logos/:domain`       | A company logo as PNG, at most 128 px. The server fetches it once and keeps it. `204` with no body when the domain has no logo, and `503` for a failure that may pass.                               | any signed-in caller |
 | `GET /api/link-preview/unfurl` | The title, description and image of a web page: `?url=`. The server fetches the page, keeps the image in your uploads, and answers a local `image` path.                                             | your data            |
 
 The server fetches pages and logos, so the browser never contacts those sites.

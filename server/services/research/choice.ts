@@ -87,7 +87,7 @@ export function strategyOf(choice: ResearchChoice): string {
 function refuseWhileOff(): void {
   if (isResearchOff())
     throw new AppError(
-      "Web search is off, so contact research cannot run. An admin can turn it on in Settings → Administration → AI → Web search.",
+      "Web search is off, so contact research cannot run. An admin can turn it on in Settings → AI → Web search.",
       503,
       { code: "RESEARCH_OFF" },
     );

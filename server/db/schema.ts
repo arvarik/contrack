@@ -418,6 +418,12 @@ export const contacts = sqliteTable("contacts", {
    */
   trackedAt: text("trackedAt"),
   /**
+   * When `isArchived` last turned on, written by the
+   * `contacts_archive_stamp_*` triggers (migration 0007) and cleared when it
+   * turns off. The date on the Archived page.
+   */
+  archivedAt: text("archivedAt"),
+  /**
    * Extra search words for this contact, indexed in `contacts_fts` and read
    * by vector search. A derived cache: nothing in 2.0 writes it, and the
    * triggers and the index queue clear it when the text under it changes.

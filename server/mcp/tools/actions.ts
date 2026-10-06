@@ -83,7 +83,7 @@ export function registerActionItemTools({ tool, scope }: McpToolContext): void {
     "create_action_item",
     {
       contactId: z.string().min(1).describe("Contact ID"),
-      title: createBody.title.describe("Title of the action item"),
+      title: createBody.title.describe("Title of the follow-up"),
       // The REST route's rule. A value such as "next Friday" would be
       // saved, and then never count as overdue or due today.
       dueAt: createBody.dueAt.describe(
@@ -104,7 +104,7 @@ export function registerActionItemTools({ tool, scope }: McpToolContext): void {
   tool(
     "update_action_item",
     {
-      id: z.string().min(1).describe("Action item ID to change"),
+      id: z.string().min(1).describe("Follow-up ID to change"),
       title: updateBody.title.describe("The new title"),
       dueAt: updateBody.dueAt.describe(
         "The new due date in ISO 8601: a day (2026-11-03) or a date and time",
@@ -128,7 +128,7 @@ export function registerActionItemTools({ tool, scope }: McpToolContext): void {
   tool(
     "complete_action_item",
     {
-      id: z.string().min(1).describe("Action item ID to complete"),
+      id: z.string().min(1).describe("Follow-up ID to complete"),
     },
     ({ id }) => {
       const completed = actionItemService.complete(scope, id);

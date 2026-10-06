@@ -109,9 +109,9 @@ export function registerPrompts(server: McpServer, scope: Scope): void {
                 text:
                   `Please conduct a weekly review of my network using the following Pulse data:\n\n` +
                   `Network Metrics:\n${JSON.stringify(lean(pulse.metrics), null, 2)}\n\n` +
-                  `Overdue Action Items:\n${JSON.stringify(lean(pulse.overdue), null, 2)}\n\n` +
-                  `Action Items Due Today:\n${JSON.stringify(lean(pulse.dueToday), null, 2)}\n\n` +
-                  `Action Items Due This Week:\n${JSON.stringify(lean(pulse.upcoming), null, 2)}\n\n` +
+                  `Overdue follow-ups:\n${JSON.stringify(lean(pulse.overdue), null, 2)}\n\n` +
+                  `Follow-ups due today:\n${JSON.stringify(lean(pulse.dueToday), null, 2)}\n\n` +
+                  `Follow-ups due this week:\n${JSON.stringify(lean(pulse.upcoming), null, 2)}\n\n` +
                   `Tracked Contacts (count, bands, rising, cooling):\n${JSON.stringify(lean(pulse.tracking), null, 2)}\n\n` +
                   `Catch-ups (tracked contacts past their cadence):\n${JSON.stringify(lean(pulse.catchUp), null, 2)}\n\n` +
                   `Please provide a prioritized action list: who to reach out to first, which follow-ups need immediate attention, and recommended focus areas for this week.`,

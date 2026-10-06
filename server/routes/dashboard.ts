@@ -4,19 +4,9 @@ import { dashboardService } from "../services/dashboardService.ts";
 import { zeroStateService } from "../services/zeroStateService.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { scopeOf } from "../tenancy/scope.ts";
-import { isValidTimeZone } from "../../shared/contracts/common.ts";
+import { readerTimeZone } from "../utils/validators.ts";
 
 const router = Router();
-
-/**
- * The reader's IANA zone, from `?tz=`, when Intl knows it. Pulse sends it,
- * as note search does. Without one the server's zone stands.
- */
-function readerTimeZone(raw: unknown): string | undefined {
-  return typeof raw === "string" && raw.length <= 64 && isValidTimeZone(raw)
-    ? raw
-    : undefined;
-}
 
 router.get(
   "/dashboard",
@@ -38,7 +28,10 @@ router.get(
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
 
-    const payload = dashboardService.getActivity(scopeOf(req));
+    const payload = dashboardService.getActivity(
+      scopeOf(req),
+      readerTimeZone(req.query.tz),
+    );
     log.debug("API", `[${rid}] GET /api/dashboard/activity`);
 
     res.json(payload);
@@ -88,7 +81,10 @@ router.get(
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
 
-    const payload = zeroStateService.getPayload(scopeOf(req));
+    const payload = zeroStateService.getPayload(
+      scopeOf(req),
+      readerTimeZone(req.query.tz),
+    );
     log.debug(
       "API",
       `[${rid}] GET /api/command-palette/zero-state → ${payload.insights.length} insights`,
