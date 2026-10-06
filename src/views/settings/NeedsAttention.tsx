@@ -20,7 +20,7 @@ import { ChevronRight, Copy, UploadCloud } from "lucide-react";
 import { useDedupeCount } from "../../api";
 import { useImports } from "../../api/imports";
 import { TONE_WASH } from "../../lib/styles";
-import { cn } from "../../lib/utils";
+import { cn, plural } from "../../lib/utils";
 import { SETTINGS_SECTION_HEADING } from "./layout";
 import { SlideLink } from "./slide";
 
@@ -50,9 +50,6 @@ export function useAttentionCounts() {
 
   return { duplicates, failedImports };
 }
-
-const plural = (count: number, one: string, many: string) =>
-  `${count} ${count === 1 ? one : many}`;
 
 export const NeedsAttention = () => {
   const { duplicates, failedImports } = useAttentionCounts();

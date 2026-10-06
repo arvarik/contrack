@@ -12,6 +12,7 @@
  *
  * @module views/pulse/lib/dayLine
  */
+import { plural } from "../../../lib/utils";
 
 /** The numbers the masthead speaks about. */
 export interface MastheadCounts {
@@ -39,9 +40,6 @@ interface DayLineItem {
   text: string;
   target?: JumpTarget;
 }
-
-const plural = (n: number, one: string, many: string) =>
-  `${n} ${n === 1 ? one : many}`;
 
 /**
  * The line under the date, as items in reading order.

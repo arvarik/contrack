@@ -41,7 +41,7 @@ import { useDedupe } from "../../../contexts/DedupeContext";
 import { useAiAllowed } from "../../../hooks/useAiAllowed";
 import { useInstanceAi } from "../../../api/aiSettings";
 import { useDedupeCount } from "../../../api";
-import { cn } from "../../../lib/utils";
+import { cn, plural } from "../../../lib/utils";
 import { TONE_WASH, TONE_TEXT } from "../../../lib/styles";
 import { SETTINGS_CARD } from "../../settings/layout";
 import { CHECK_STEPS, runsAiPass, stepStatus } from "../utils/scanPhases";
@@ -78,9 +78,6 @@ function finishedAgo(scan: DedupeScanProgress): string {
   }
   return formatDistanceToNowStrict(at, { addSuffix: true });
 }
-
-const plural = (n: number, one: string, many: string) =>
-  `${n} ${n === 1 ? one : many}`;
 
 /** The steps of a running check, each with its state. */
 function Steps({ scan }: { scan: DedupeScanProgress }) {

@@ -96,3 +96,24 @@ export function safeHref(url: string | null | undefined): string | undefined {
   }
   return undefined;
 }
+
+/**
+ * A count with its noun: `plural(1, "contact", "contacts")` is "1 contact",
+ * and every other count takes the plural.
+ */
+export function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
+/**
+ * The words of a thrown error for a toast: its message without a period at
+ * the end, because a toast is a statement and has none.
+ *
+ * @param fallback - What to say for a thrown value that is not an Error.
+ *   Without one, the value as text.
+ */
+export function errorText(err: unknown, fallback?: string): string {
+  return err instanceof Error
+    ? err.message.replace(/\.$/, "")
+    : (fallback ?? String(err));
+}
