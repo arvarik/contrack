@@ -1,9 +1,10 @@
 // =============================================================================
 // Contracts: sign-up
 // =============================================================================
-// The bodies of the two routes that create an account from outside. These
-// routes have no contract yet: they are in `UNCONTRACTED` in `index.ts`. The
-// token routes under /api/auth have theirs in `tokens.ts`.
+// The check of an invitation link, and the bodies of the two routes that
+// create an account from outside. Those two have no contract yet: they are
+// in `UNCONTRACTED` in `index.ts`. The token routes under /api/auth have
+// theirs in `tokens.ts`.
 // =============================================================================
 
 import { z } from "zod";
