@@ -5,14 +5,13 @@
  * Google Contacts, HubSpot and Dex lay out their duplicates pages:
  *
  * ```
- * Duplicates                                              [ ⟲ ]
+ * Duplicates                                        [ Merge history ]
  * Find and merge contacts that are the same person
  *
  * ┌ 4 possible duplicates ─────────────────── Review them → ┐   when any wait
- * [ Scan | Manual merge ]
+ * [ Check | Manual merge ]
  * ┌──────────────────────────────────────────────────────────┐
- * │ ◉ Exact scan     ○ AI scan        ○ Full AI scan         │
- * │                                            [ Scan now ]  │
+ * │ Check for duplicates                       [ Check now ] │
  * └──────────────────────────────────────────────────────────┘
  * AUTOMATIC MERGING
  * ┌──────────────────────────────────────────────────────────┐
@@ -22,10 +21,9 @@
  * └──────────────────────────────────────────────────────────┘
  * ```
  *
- * The three settings used to sit in a card above the tool, and the tool
- * opened on a hero with a large icon that repeated the page's title. Merge
- * activity, the history of what was merged and undone, is the square button
- * in the header's corner at every width, the way Ask Contrack's History is.
+ * What a check finds waits in Possible duplicates, which is also where
+ * Merge history lives: the header's button opens it there, with its name
+ * on it, because the Undo a merge needs must not hide behind a glyph.
  *
  * The page is a block in the shell's one scroller, like every settings
  * page, so the shell draws Reset to defaults under it while a setting here
@@ -42,7 +40,7 @@ import { Segmented } from "../../../components/ui/Segmented";
 import { Switch } from "../../../components/ui/Switch";
 import { useDedupeSettings } from "../../../hooks/useDedupeSettings";
 import { usePreferences } from "../../../contexts/PreferencesContext";
-import { useDedupeOptional } from "../../../contexts/DedupeContext";
+import { NAMES } from "../../../lib/names";
 import { useDedupeCount } from "../../../api";
 import { cn } from "../../../lib/utils";
 import {
@@ -52,18 +50,24 @@ import {
 } from "../layout";
 import { SettingsCallout } from "../SettingsCallout";
 
+/**
+ * What each preset merges with nobody asked, in the matches a person knows
+ * rather than the confidence each needs (97%, 93% and 88% in
+ * server/services/dedupe/policy.ts). A pair with a caveat, such as two
+ * first names that differ, merges under none of them.
+ */
 const DEDUPE_PRESET_COPY = {
   conservative:
-    "Merges a pair by itself at 97% confidence or more, and leaves the most for you",
-  default: "Merges a pair by itself at 93% confidence or more",
+    "Merges by itself only when two contacts share an email address. The rest wait for you",
+  default:
+    "Merges by itself on a shared email, phone number or profile link, or the same name at the same company",
   aggressive:
-    "Merges a pair by itself at 88% confidence or more, with more to undo",
+    "Also merges the same name, a nickname or a middle name added, when nothing argues against it. More to undo",
 } as const;
 
 export const DuplicatesPage = () => {
   const { preset, setPreset } = useDedupeSettings();
   const { preferences, setPreference } = usePreferences();
-  const dedupe = useDedupeOptional();
   const { data: dedupeData } = useDedupeCount();
   const dedupeCount =
     typeof dedupeData === "number" ? dedupeData : (dedupeData?.count ?? 0);
@@ -71,23 +75,20 @@ export const DuplicatesPage = () => {
   return (
     <div className={cn(SETTINGS_PAGE, "space-y-8")}>
       <SettingsHeaderActions>
-        <button
-          type="button"
-          onClick={() => dedupe?.setShowActivity(true)}
-          aria-label="Merge activity"
-          title="Merge activity"
-          aria-haspopup="dialog"
-          className="btn-secondary btn-icon shrink-0"
+        <Link
+          to="/pulse/duplicates?view=merged"
+          className="btn-secondary shrink-0"
         >
-          <History className="w-5 h-5" aria-hidden="true" />
-        </button>
+          <History className="w-4 h-4" aria-hidden="true" />
+          {NAMES.mergeHistory.label}
+        </Link>
       </SettingsHeaderActions>
 
       {dedupeCount > 0 && (
         <SettingsCallout
           icon={Copy}
           title={`${dedupeCount} possible duplicate${dedupeCount === 1 ? "" : "s"}`}
-          body="Pairs that may be the same person, waiting for you to decide"
+          body="Contacts that may be the same person, waiting for you to decide"
         >
           <Link to="/pulse/duplicates" className="btn-primary btn-sm">
             Review them
@@ -107,7 +108,7 @@ export const DuplicatesPage = () => {
             id="sensitivity"
             title="Auto-merge sensitivity"
             prefKey="dedupePreset"
-            description={`${DEDUPE_PRESET_COPY[preset]}. It applies to scans, imports and new contacts, and every merge can be undone`}
+            description={`${DEDUPE_PRESET_COPY[preset]}. It applies to checks, imports and new contacts, and every merge can be undone`}
           >
             <Segmented
               label="Auto-merge sensitivity"

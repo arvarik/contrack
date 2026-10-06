@@ -7,11 +7,13 @@ import { corvidReact } from "../lib/corvid";
  * Deduplication API Hooks — React Query hooks for the async duplicate detection engine.
  *
  * Provides:
- * - `useStartDedupeScan` — Kicks off a background scan with mode selection
- * - `useDedupeStream` — SSE hook for real-time scan progress
- * - `useMergeContacts` — Merge a single pair
- * - `useMergeCluster` — Merge an entire cluster into one contact
- * - `useMergeClusters` — Bulk merge multiple clusters
+ * - `useStartDedupeScan` — Starts a check for duplicates in the background
+ * - `useDedupeStream` — SSE hook for real-time check progress
+ * - `useMergeCluster` — Merge two or more contacts into one
+ * - `useMergeClusters` — Merge several groups in one call
+ *
+ * Each merge answers with its merge-log ids, so the message after it can
+ * offer Undo without reading Merge history.
  *
  * @module api/dedupe
  */
@@ -22,7 +24,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 import type { DedupeScanMode, DedupeScanProgress } from "../types";
-import { suggestionKeys } from "./suggestions";
+import { refreshDuplicates } from "./suggestions";
 
 const API_BASE = "/api";
 
@@ -184,8 +186,9 @@ export const useDedupeStream = (
     function deliver(scan: DedupeScanProgress) {
       onUpdateRef.current(scan);
       if (scan.phase === "complete" || scan.phase === "error") {
-        // Merged data has to appear everywhere, not just on this page.
-        queryClient.invalidateQueries({ queryKey: ["contacts"] });
+        // What the check merged and found has to appear everywhere: the
+        // contacts, Possible duplicates, its count and Merge history.
+        refreshDuplicates(queryClient, { contacts: true });
         stop();
       }
     }
@@ -276,52 +279,23 @@ export const useDedupeStream = (
 };
 
 // =============================================================================
-// Merge mutations
-// =============================================================================
-
-export const useMergeContacts = () => {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({
-      primaryId,
-      duplicateId,
-    }: {
-      primaryId: string;
-      duplicateId: string;
-    }) =>
-      apiJson(
-        contactRoutes.merge,
-        `/contacts/merge`,
-        jsonBody({ primaryId, duplicateId }),
-      ),
-    onSuccess: () => {
-      // Two records made one: the corvid tidies its own feathers.
-      corvidReact("preen");
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
-    },
-  });
-};
-
-// =============================================================================
 // Cluster merge mutations
 // =============================================================================
 
 /**
- * After a cluster merge: the contacts reload, and the review queue and its
- * badge drop the suggestions the server resolved.
+ * After a merge: the contacts reload, and Possible duplicates, its count,
+ * the contact pages' banners and Merge history drop what the server
+ * resolved.
  */
 function afterClusterMerge(queryClient: QueryClient): void {
   // Two records made one: the corvid tidies its own feathers.
   corvidReact("preen");
-  queryClient.invalidateQueries({ queryKey: ["contacts"] });
-  queryClient.invalidateQueries({ queryKey: suggestionKeys.pending });
-  queryClient.invalidateQueries({ queryKey: suggestionKeys.count });
-  queryClient.invalidateQueries({ queryKey: suggestionKeys.mergeLog });
+  refreshDuplicates(queryClient, { contacts: true });
 }
 
 /**
- * Merge all duplicate contacts in a cluster into a single primary contact.
- * The server merges each duplicate sequentially and isolates per-duplicate errors.
+ * Merge two or more contacts into the one kept. The server merges each of
+ * the others in turn, and one that fails does not stop the rest.
  */
 export const useMergeCluster = () => {
   const queryClient = useQueryClient();
@@ -342,10 +316,7 @@ export const useMergeCluster = () => {
   });
 };
 
-/**
- * Bulk merge multiple clusters in a single request.
- * Each cluster specifies a primaryId and an array of duplicateIds.
- */
+/** Merge several groups in one request, each into the contact it keeps. */
 export const useMergeClusters = () => {
   const queryClient = useQueryClient();
   return useMutation({

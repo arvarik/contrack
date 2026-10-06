@@ -195,15 +195,24 @@ export interface PersistedDedupeSuggestion {
   contactIdB: string;
   matchType: string;
   confidence: number;
+  /** Why the two look like one person, in plain words. */
   reasoning: string;
+  /**
+   * Why a person should look twice, or null: "First names differ: Ada and
+   * Ben". Older rows kept it at the end of `reasoning`.
+   */
+  caveat?: string | null;
   matchedField: string | null;
   status: "pending" | "auto_merged" | "merged" | "dismissed";
   createdAt: string;
   reviewedAt: string | null;
   reviewedBy: string | null;
-  contactA?: Contact | null;
-  contactB?: Contact | null;
+  contactA?: SuggestedContact | null;
+  contactB?: SuggestedContact | null;
 }
+
+/** A contact in a suggestion, with its open follow-ups counted. */
+export type SuggestedContact = Contact & { openFollowUpCount?: number };
 
 /** A trashed (soft-deleted) contact row from /api/trash. */
 export interface TrashedContact {
@@ -228,6 +237,11 @@ export interface MergeLogEntry {
   duplicateSnapshot: string | null;
   primaryName?: string;
   duplicateName?: string;
+  /** What tells two entries for one name apart. */
+  primaryCompany?: string | null;
+  primaryLocation?: string | null;
+  duplicateCompany?: string | null;
+  duplicateLocation?: string | null;
 }
 
 interface MergeConflict {
@@ -246,6 +260,8 @@ export interface UndoMergeResponse {
   success: boolean;
   restoredContactId?: string;
   conflicts?: MergeConflict[];
+  /** The undo also marked the two as different people. */
+  keptSeparate?: boolean;
 }
 
 /** A single piece of evidence connecting two contacts within a cluster. */

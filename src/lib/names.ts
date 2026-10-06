@@ -55,7 +55,12 @@ export const NAMES = {
   possibleDuplicates: {
     label: "Possible duplicates",
     title: "Possible duplicates",
-    description: "Pairs that may be the same person, waiting for a decision",
+    description: "Contacts that may be the same person, waiting for a decision",
+  },
+  mergeHistory: {
+    label: "Merge history",
+    title: "Merge history",
+    description: "Recent merges, each with Undo for 90 days",
   },
   enrichment: {
     label: "Contact enrichment",

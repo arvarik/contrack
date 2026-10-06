@@ -30,6 +30,7 @@ import { contactRoutes } from "../../shared/contracts/contacts";
 import type { BodyOf } from "../../shared/contracts/route";
 import { apiFetch, apiJson, jsonBody } from "./client";
 import { GEO_STATUS_KEY } from "./geo";
+import { watchNewContact } from "../lib/mergeNotice";
 
 /**
  * Canonical fetcher for the `['contacts']` query — the single source of truth
@@ -240,6 +241,8 @@ export const useCreateContact = () => {
       invalidateContactViews(queryClient);
       if (!isValidLatLng(contact.lat, contact.lng))
         followPin(queryClient, contact);
+      // The check a few seconds later can merge it into one that existed.
+      watchNewContact(queryClient, contact);
     },
   });
 };
