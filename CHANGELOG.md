@@ -32,6 +32,16 @@ with an empty `DATA_DIR`.
   density and search history follow the account to every device.
 - Outgoing mail (`SMTP_URL`) sends invitations, password resets and sign-in
   links.
+- Disable, and removing an AI key or a custom AI server, ask first. **Email
+  a reset link** says when the mail failed, and the unsent link stops working.
+- A reset-link or sign-in-link request answers at the same speed whether or
+  not the address has an account. An invitation link that cannot be used
+  says so before its form opens.
+- Sign-in and setup pages do not open the phone keyboard by themselves. The
+  built-in account is named **Local account**.
+- An admin can download a database snapshot from **Backups**, and the audit
+  log records each download. AI usage, Instance health and the audit log use
+  plain words.
 
 ### Security
 
@@ -75,6 +85,11 @@ with an empty `DATA_DIR`.
   layer at a time. It asks AI only on `Enter`, finds pages, lists the facets
   under **Filter**, leads `>` logging a step at a time, says when AI is not
   set up, and opens from every page on a phone, above the on-screen keyboard.
+- `added:<30d` lists the people added in the last 30 days. Pulse's "new this
+  month" row opens exactly the people it counts.
+- Ask does not open the phone keyboard on arrival, says why a question is too
+  short, offers a next step on an empty network, and its results are one Tab
+  stop.
 
 ### Pulse and tracking
 
@@ -84,6 +99,13 @@ with an empty `DATA_DIR`.
   **Keeping up**, **Activity**, **Inbox** and **Coming up**. You can move and
   hide its cards. Overdue and Today follow your own time zone, not the
   server's.
+- The sidebar badge, the palette and **Activity** count days on your own
+  calendar, and **Activity**'s weeks begin on your week start. **Coming up**
+  shows the meetings from now through the seventh day, an all-day event on
+  its own day, and offers a calendar only when none is connected.
+- Pulse keys do nothing while a menu or a dialog is open. Up next is one Tab
+  stop and shows eight rows on a phone, and a snooze and **Reset layout**
+  offer Undo. The Insight card tells a failed provider from a missing model.
 
 ### Contacts
 
@@ -101,6 +123,14 @@ with an empty `DATA_DIR`.
   them, and Save stays above the keyboard while the tab bar steps aside.
   The app keeps clear of the status bar and a side cutout, and a contact
   opens without its timeline jumping.
+- **Empty trash** deletes the Trash after one confirmation, and an archived
+  contact shows when it was archived. Trash and Archived rows wrap rather
+  than cut their text.
+- A tag rename that joins two tags asks first, and the tag dialogs count the
+  archived and trashed contacts that a change reaches.
+- The Lists page adds people, moves a list with **Move up** and **Move
+  down**, keeps a typed name, and offers Undo on a removed member. **Remove
+  from list** shows on a tablet.
 
 ### AI and research
 
@@ -118,6 +148,8 @@ with an empty `DATA_DIR`.
   searches leave out its pages. When research finds little, the Research card
   asks for a school, a city or a former name and searches again.
 - The usage page shows what each provider costs.
+- **Not this person** keeps a field that you changed after the run, such as
+  an About you added to.
 
 ### Map
 
@@ -127,6 +159,12 @@ with an empty `DATA_DIR`.
   who is not on the map yet.
 - Place a pin by hand, find a place by name, and open the results of a
   question on the map.
+- The map keeps the keyboard's place: **Go to** puts focus in its box, a
+  closed contact or a cluster zoom gives focus to a pin, and Esc in the
+  filter box clears it. On a narrow window, `/` opens **Filters**.
+- On a phone or a tablet, **Open in map** shows the pin and its card, not the
+  contact over the map. The count says "on the map", map moves follow the
+  Motion setting, and the Select menu puts **All in view** first.
 
 ### Import, sync and export
 
@@ -137,6 +175,17 @@ with an empty `DATA_DIR`.
   goes in.
 - A Google, mailbox or calendar call that stops answering times out, so one
   stuck sync no longer holds up every connector.
+- Import reads Google's current CSV columns and the older ones, counts the
+  entries that have no name, says when its duplicate check did not finish,
+  and reads a file type in any case. Its tabs take the arrow keys and fit a
+  phone.
+- The CSV export holds the birthday, addresses, About and social links.
+- Each Google account keeps its own connector, and a failed Google sign-in
+  comes back to **Connectors** in words. **Add as contact** uses the name a
+  mail or a meeting gave, and asks for one when there was only an address.
+- A calendar keeps its meeting threshold, and an all-day event stays on its
+  day. An IMAP test from the edit form uses the saved password, for the same
+  server only.
 
 ### Duplicates
 
@@ -148,6 +197,10 @@ with an empty `DATA_DIR`.
   Undo. An undo of a merge keeps the two apart.
 - The same name at two different companies or cities waits for review, and
   the import check no longer suggests weak pairs.
+- An undo of a merge is all or nothing, and it gives a moved email or phone
+  back its primary mark.
+- A **Check carefully** pair takes two presses to merge, and the keys work
+  with Caps Lock.
 
 ### Privacy
 

@@ -61,6 +61,15 @@
   (1,269 lines) needs a refactor of its own. The duplicates screens were
   rebuilt as one review list, and their largest file is now
   `src/views/dedupe/components/DuplicateQueue.tsx` (about 750).
+- **Archive and Trash.** A delete marks the contact archived as well, and a
+  restore clears both, so a contact archived before it was deleted comes back
+  unarchived.
+- **Google sign-in.** A session that ends between the start and the callback
+  still meets the API's 401 JSON at the callback.
+- **Map selection.** A keyboard user can select with **All in view** only. Box
+  and lasso still need a pointer.
+- **Touch tooltips.** The Tags page row icons wait for the shared tooltip
+  that shows on touch.
 - **Test-only seams.** The ones PR #147 listed are gone. A few exports still
   exist only so a test can reset module state, such as `resetPendingDeletes`
   in `src/lib/pendingDeletes.ts`, and the `__reset*` functions of the rate

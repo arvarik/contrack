@@ -72,7 +72,7 @@ export function settingsPagePreload(
 }
 
 /** The pages this viewer can open. */
-export function visibleSettingsPages(viewer: SettingsViewer): SettingsPage[] {
+function visibleSettingsPages(viewer: SettingsViewer): SettingsPage[] {
   return SETTINGS_PAGES.filter((page) => isSettingsPageVisible(page, viewer));
 }
 
