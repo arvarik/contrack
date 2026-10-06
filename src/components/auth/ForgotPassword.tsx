@@ -10,7 +10,7 @@
  */
 
 import React, { useState } from "react";
-import { Mail, Loader2, ArrowLeft } from "lucide-react";
+import { Mail, Loader2, ArrowLeft, ChevronDown } from "lucide-react";
 import {
   AuthShell,
   AuthField,
@@ -74,8 +74,14 @@ export const ForgotPassword = ({
             a temporary password to sign in with
           </p>
           {/* Closed, so a visitor does not get a server command first. */}
-          <details>
-            <summary className="cursor-pointer font-semibold text-on-surface min-h-[44px] flex items-center">
+          {/* A chevron says it opens: `flex` on a summary takes the
+              browser's own arrow away. */}
+          <details className="group/server">
+            <summary className="state-layer cursor-pointer list-none rounded-xl -mx-2 px-2 font-semibold text-on-surface min-h-[44px] flex items-center gap-2">
+              <ChevronDown
+                aria-hidden="true"
+                className="w-4 h-4 transition-transform duration-(--dur-fast) group-open/server:rotate-180"
+              />
               I run this server
             </summary>
             <p>
