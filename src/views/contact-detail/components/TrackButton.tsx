@@ -82,7 +82,7 @@ import {
   ActionMenu,
   type ActionMenuItem,
 } from "../../../components/ui/ActionMenu";
-import { SELECTED_TINT } from "../../../lib/styles";
+import { DIALOG_ACTIONS, FORM_INPUT, SELECTED_TINT } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 
 interface TrackButtonProps {
@@ -264,11 +264,11 @@ export const TrackButton = ({ contact, compact = false }: TrackButtonProps) => {
               max={MAX_CADENCE_DAYS}
               step={1}
               defaultValue={on ? cadenceDays : defaultDays}
-              className="w-24 min-h-[44px] sm:pointer-fine:min-h-0 px-3 py-2 rounded-xl bg-surface-container-low text-base sm:text-sm"
+              className={cn(FORM_INPUT, "w-24")}
             />
             days
           </label>
-          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+          <div className={DIALOG_ACTIONS}>
             <button
               type="button"
               onClick={() => setAsking(false)}

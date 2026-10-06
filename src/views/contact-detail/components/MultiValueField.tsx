@@ -60,6 +60,7 @@ import {
   type ActionMenuItem,
 } from "../../../components/ui/ActionMenu";
 import { cn } from "../../../lib/utils";
+import { INLINE_INPUT } from "../../../lib/styles";
 import { mailtoHref, smsHref, telHref } from "../../../lib/contactLinks";
 import { useMediaQuery } from "../../../hooks/useMediaQuery";
 import { EditableField, INPUT_KIND } from "./EditableField";
@@ -679,7 +680,7 @@ export const MultiValueField = ({
             }}
             placeholder={inputPlaceholder}
             // 16 px on a phone, so iOS does not zoom in on focus.
-            className="flex-1 min-w-[10rem] min-h-[44px] sm:pointer-fine:min-h-0 text-base sm:text-sm bg-surface-container-high rounded px-2 py-1 border-none"
+            className={cn(INLINE_INPUT, "flex-1 min-w-[10rem]")}
           />
         </div>
       ) : (

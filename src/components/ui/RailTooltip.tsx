@@ -10,6 +10,9 @@
  *
  * Any other icon-only control uses it too, with the label below it
  * (`side="bottom"`): the list's Select and Import, the composer's kinds.
+ * A control at a header's right edge takes `bottom-end`, so its label
+ * opens leftward and stays on screen, and one at the left edge
+ * `bottom-start`.
  *
  * A finger has no hover, so a long press shows the label for a moment
  * instead, and that press does not also press the control
@@ -43,6 +46,17 @@ const SIDES = {
   bottom: {
     box: "top-full mt-2 left-1/2",
     caret: "left-1/2 -translate-x-1/2 -top-1",
+    from: { y: -4 },
+  },
+  // The caret sits under the middle of a 32 px icon button.
+  "bottom-start": {
+    box: "top-full mt-2 left-0",
+    caret: "left-3 -top-1",
+    from: { y: -4 },
+  },
+  "bottom-end": {
+    box: "top-full mt-2 right-0",
+    caret: "right-3 -top-1",
     from: { y: -4 },
   },
 } as const;

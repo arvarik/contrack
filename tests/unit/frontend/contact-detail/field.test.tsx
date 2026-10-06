@@ -23,6 +23,7 @@ import {
 } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { toast } from "sonner";
+import { UNDO_DURATION_MS } from "../../../../src/lib/undoToast";
 import type { Contact } from "../../../../src/types";
 import { DetailsCard } from "../../../../src/views/contact-detail/components/DetailsCard";
 import { Field } from "../../../../src/views/contact-detail/components/Field";
@@ -390,7 +391,7 @@ describe("DetailsCard", () => {
     expect(toast).toHaveBeenCalledTimes(1);
     const { label, duration, action } = firstToast();
     expect(label).toBe('Removed "Tea"');
-    expect(duration).toBe(7000);
+    expect(duration).toBe(UNDO_DURATION_MS);
     expect(action.label).toBe("Undo");
     action.onClick();
     expect(onUpdate).toHaveBeenLastCalledWith("preferences", "Coffee, Tea");
@@ -474,7 +475,7 @@ describe("MultiValueField", () => {
 
     const { label, duration, action } = firstToast();
     expect(label).toBe('Removed "b@x.com"');
-    expect(duration).toBe(7000);
+    expect(duration).toBe(UNDO_DURATION_MS);
     expect(action.label).toBe("Undo");
     action.onClick();
     expect(onSave).toHaveBeenLastCalledWith(saved(EMAILS));

@@ -7,7 +7,7 @@
  * of the Details tab. One component, so both places add and remove a tag the
  * same way, with the same undo.
  */
-import { toast } from "sonner";
+import { showUndoToast } from "./Field";
 
 import type { Contact, ContactUpdateData } from "../../../types";
 import { cn } from "../../../lib/utils";
@@ -51,17 +51,12 @@ export const ContactTags = ({
       id: contact.id,
       data: { tags: after.map((tag) => ({ tag: tag.tag })) },
     });
-    toast("Tag removed", {
-      duration: 7000,
-      action: {
-        label: "Undo",
-        onClick: () =>
-          updateContact({
-            id: contact.id,
-            data: { tags: before.map((tag) => ({ tag: tag.tag })) },
-          }),
-      },
-    });
+    showUndoToast("Tag removed", () =>
+      updateContact({
+        id: contact.id,
+        data: { tags: before.map((tag) => ({ tag: tag.tag })) },
+      }),
+    );
   };
 
   // The row always shows, so "+ tag" is always there.

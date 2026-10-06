@@ -56,6 +56,7 @@ import Mention from "@tiptap/extension-mention";
 import { FileText, Phone, Handshake, Mail, CalendarClock } from "lucide-react";
 import * as chrono from "chrono-node";
 import { toast } from "sonner";
+import { formatDue } from "../lib/datetime";
 import { LinkPreviewExtension } from "./LinkPreviewExtension";
 import { getMentionSuggestion } from "./MentionSuggestion";
 import { Segmented, type SegmentedOption } from "./ui/Segmented";
@@ -144,16 +145,6 @@ export function followUpFromText(
     dueAt: found.start.date().toISOString(),
   };
 }
-
-/** A follow-up's date with its weekday, so a wrong day shows: "Fri, Oct 9, 2:00 PM". */
-const followUpWhen = (date: Date) =>
-  date.toLocaleString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 
 /**
  * What is left of the follow-up line once the submitted part is removed.
@@ -442,9 +433,7 @@ const Composer = ({
       }
 
       if (followUpItem) {
-        toast.success(
-          `Follow-up set for ${followUpWhen(new Date(followUpItem.dueAt))}`,
-        );
+        toast.success(`Follow-up set for ${formatDue(followUpItem.dueAt)}`);
       }
       // Only now, and only the submitted part.
       removeSubmitted(editor, mark);
@@ -694,7 +683,7 @@ const Composer = ({
             />
             {parsedDate && (
               <span className={cn(TAG_PILL, "ml-2 shrink-0")}>
-                {followUpWhen(parsedDate)}
+                {formatDue(parsedDate.toISOString())}
               </span>
             )}
           </div>

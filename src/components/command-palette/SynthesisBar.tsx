@@ -22,7 +22,7 @@ import React, { useState, useCallback, useRef, useEffect } from "react";
 import { Sparkles, X, AlertTriangle } from "lucide-react";
 import { CorvidThinking } from "../brand/CorvidThinking";
 import { LiveStatus } from "../ui/LiveStatus";
-import { useAiSetup } from "../../hooks/useAiSetup";
+import { useBlockedAi } from "../../hooks/useAiSetup";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -72,8 +72,7 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
   compact = false,
 }) => {
   const [phase, setPhase] = useState<SynthesisPhase>("idle");
-  const setup = useAiSetup("briefings");
-  const blocked = setup !== null && setup.state !== "limited";
+  const blocked = useBlockedAi("briefings") !== null;
   const [synthesisText, setSynthesisText] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const abortRef = useRef<AbortController | null>(null);

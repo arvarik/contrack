@@ -49,6 +49,7 @@ import React, {
 import { Link } from "react-router-dom";
 import { MoreVertical, Check, type LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { RailTooltip } from "./RailTooltip";
 import { focusOnPointer } from "../../lib/a11y";
 import { useClickOutside } from "../../hooks/useClickOutside";
 import { usePanelPlacement } from "../../hooks/usePanelPlacement";
@@ -121,7 +122,12 @@ interface ActionMenuProps {
   panelClassName?: string;
   /** Custom trigger content replacing the default icon-only trigger. */
   triggerContent?: React.ReactNode;
-  /** A tooltip for a pointer, for a trigger that shows a glyph and no text. */
+  /**
+   * The trigger's label for the eye. A trigger that is a glyph alone shows
+   * it in the shared tooltip (`RailTooltip`), on hover and on a long press,
+   * as every icon-only control does. A trigger with words of its own keeps
+   * it as the browser's tooltip, for a sentence such as why it waits.
+   */
   title?: string;
   /** A heading over the rows, for example "Snooze until". */
   heading?: string;
@@ -335,11 +341,8 @@ export const ActionMenu = ({
         )}
       </>
     );
-    const classes = cn(
-      MENU_ITEM,
-      item.danger && MENU_ITEM_DANGER,
-      item.disabled && "opacity-50 cursor-not-allowed",
-    );
+    // A row that waits is dimmed by `MENU_ITEM` itself (`aria-disabled`).
+    const classes = cn(MENU_ITEM, item.danger && MENU_ITEM_DANGER);
     // A spoken hint joins the name after a comma: "Quarterly, Default".
     // Written out, because the hint is a flex item, a block of its own to
     // the name, and text in its box was read with a space before the comma.
@@ -385,33 +388,48 @@ export const ActionMenu = ({
     );
   };
 
+  // A glyph alone takes the shared tooltip. Under the trigger, on the side
+  // the menu opens to, and gone while the menu is open.
+  const tooltip = triggerContent === undefined ? title : undefined;
+  const triggerButton = (
+    <button
+      ref={setTrigger}
+      type="button"
+      aria-label={label}
+      title={tooltip === undefined ? title : undefined}
+      aria-haspopup="menu"
+      aria-expanded={open}
+      aria-controls={open ? menuId : undefined}
+      disabled={disabled}
+      onClick={() => (open ? close() : openMenu("first"))}
+      onKeyDown={onTriggerKeyDown}
+      className={cn(
+        TRIGGER_VARIANT[variant],
+        // A primary trigger with only its glyph is a square button.
+        variant === "primary" && !triggerContent && "btn-icon",
+        open &&
+          variant === "ghost" &&
+          "bg-surface-container-high text-on-surface",
+        triggerClassName,
+      )}
+    >
+      {triggerContent ?? <Icon aria-hidden="true" className={iconClassName} />}
+    </button>
+  );
+
   return (
     <div ref={wrapper} className={cn("relative inline-flex", className)}>
-      <button
-        ref={setTrigger}
-        type="button"
-        aria-label={label}
-        title={title}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={open ? menuId : undefined}
-        disabled={disabled}
-        onClick={() => (open ? close() : openMenu("first"))}
-        onKeyDown={onTriggerKeyDown}
-        className={cn(
-          TRIGGER_VARIANT[variant],
-          // A primary trigger with only its glyph is a square button.
-          variant === "primary" && !triggerContent && "btn-icon",
-          open &&
-            variant === "ghost" &&
-            "bg-surface-container-high text-on-surface",
-          triggerClassName,
-        )}
-      >
-        {triggerContent ?? (
-          <Icon aria-hidden="true" className={iconClassName} />
-        )}
-      </button>
+      {tooltip !== undefined ? (
+        <RailTooltip
+          label={tooltip}
+          side={align === "start" ? "bottom-start" : "bottom-end"}
+          disabled={open}
+        >
+          {triggerButton}
+        </RailTooltip>
+      ) : (
+        triggerButton
+      )}
       {open && (
         <div
           ref={menu}

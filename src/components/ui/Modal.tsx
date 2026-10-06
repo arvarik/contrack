@@ -1,14 +1,18 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import {
+  type ButtonHTMLAttributes,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type RefObject,
+  type Ref,
   useEffect,
   useRef,
   useSyncExternalStore,
 } from "react";
 import { useCloseRequest } from "../../hooks/useCloseRequest";
+import { IconButton } from "./IconButton";
+import { cn } from "../../lib/utils";
 
 const SIZE_MAP = {
   sm: "sm:max-w-sm",
@@ -49,6 +53,28 @@ export function useDialogOpen(): boolean {
     () => false,
   );
 }
+
+/**
+ * A dialog's X: one look and one name in every dialog. `Modal` draws it in
+ * its title bar, and a dialog with a header of its own (`ariaLabel`) puts
+ * it at the end of that header.
+ */
+export const DialogCloseButton = ({
+  ref,
+  ...props
+}: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & {
+  ref?: Ref<HTMLButtonElement>;
+}) => (
+  <IconButton
+    ref={ref}
+    aria-label="Close dialog"
+    tone="subtle"
+    {...props}
+    className={cn("-mr-2 shrink-0", props.className)}
+  >
+    <X aria-hidden="true" className="w-5 h-5" />
+  </IconButton>
+);
 
 /** A drag down this far, or this fast, closes the sheet. */
 const CLOSE_DISTANCE = 96;
@@ -236,11 +262,8 @@ export function Modal({
               <Dialog.Title className="text-lg sm:text-xl font-bold font-headline">
                 {title}
               </Dialog.Title>
-              <Dialog.Close
-                className="state-layer -mr-2 inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-lg transition-colors"
-                aria-label="Close dialog"
-              >
-                <X className="w-5 h-5" />
+              <Dialog.Close asChild>
+                <DialogCloseButton />
               </Dialog.Close>
             </div>
           ) : (

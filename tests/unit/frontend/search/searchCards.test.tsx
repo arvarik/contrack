@@ -29,7 +29,10 @@ import type { SemanticMatch } from "../../../../src/types";
 
 const api = vi.hoisted(() => ({ fetch: vi.fn() }));
 // The brief's button asks whether a model can write it. Here one can.
-vi.mock("../../../../src/hooks/useAiSetup", () => ({ useAiSetup: () => null }));
+vi.mock("../../../../src/hooks/useAiSetup", () => ({
+  useAiSetup: () => null,
+  useBlockedAi: () => null,
+}));
 vi.mock("../../../../src/api/client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../../src/api/client")>()),
   apiFetch: (...args: unknown[]) => api.fetch(...args),

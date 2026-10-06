@@ -11,7 +11,7 @@
  *   </RouteErrorBoundary>
  */
 import { Component, type ErrorInfo, type ReactNode } from "react";
-import { AlertCircle, CloudOff, RotateCcw } from "lucide-react";
+import { AlertCircle, CloudOff, RefreshCw, RotateCcw } from "lucide-react";
 import { TONE_WASH } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
@@ -120,8 +120,13 @@ export class RouteErrorBoundary extends Component<Props, State> {
               onClick={isChunk ? this.handleReload : this.handleRetry}
               className="btn-primary"
             >
-              <RotateCcw className="w-4 h-4" />
-              {isChunk ? "Reload" : "Retry"}
+              {/* A reload in the app-wide error screen's words and glyph. */}
+              {isChunk ? (
+                <RefreshCw aria-hidden="true" className="w-4 h-4" />
+              ) : (
+                <RotateCcw aria-hidden="true" className="w-4 h-4" />
+              )}
+              {isChunk ? "Reload the page" : "Retry"}
             </button>
           </div>
         </div>

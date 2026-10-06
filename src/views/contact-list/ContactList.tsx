@@ -27,6 +27,7 @@ import {
   Search,
   Users,
   Upload,
+  User,
   UserPlus,
   ListPlus,
   Square,
@@ -50,6 +51,7 @@ import {
   useUnarchiveContact,
 } from "../../api";
 import { withUndo } from "../../lib/undoToast";
+import { CLIPBOARD_DENIED, copyToClipboard } from "../../lib/clipboard";
 import { parseFacetQuery } from "../../../shared/facetQuery";
 import { unknownFacetValue } from "../../../shared/searchFacets";
 import {
@@ -204,14 +206,14 @@ const ListChip = ({
     {
       id: "left",
       label: "Move left",
-      icon: <ArrowLeft className="w-3.5 h-3.5" />,
+      icon: ArrowLeft,
       disabled: index === 0,
       onClick: () => onMove(index, index - 1),
     },
     {
       id: "right",
       label: "Move right",
-      icon: <ArrowRight className="w-3.5 h-3.5" />,
+      icon: ArrowRight,
       disabled: index === count - 1,
       onClick: () => onMove(index, index + 1),
     },
@@ -289,24 +291,25 @@ const ContactRowWrapper = React.memo(
         {
           id: "view",
           label: "View contact",
-          icon: <UserPlus className="w-3.5 h-3.5" />,
+          icon: User,
           onClick: () => navigate(`/contact/${contact.id}`),
         },
         {
           id: "copy-email",
           label: contact.emails?.[0]?.email ? "Copy email" : "No email",
-          icon: <Copy className="w-3.5 h-3.5" />,
+          icon: Copy,
           disabled: !contact.emails?.[0]?.email,
-          onClick: () => {
-            navigator.clipboard.writeText(contact.emails![0].email);
-            toast.success("Email copied");
-          },
+          onClick: () =>
+            copyToClipboard(contact.emails![0].email).then(
+              () => toast.success("Email copied"),
+              () => toast.error(CLIPBOARD_DENIED),
+            ),
         },
         { id: "sep1", label: "", separator: true as const },
         {
           id: "archive",
           label: "Archive",
-          icon: <Archive className="w-3.5 h-3.5" />,
+          icon: Archive,
           onClick: () => archiveContact({ id: contact.id, name: contact.name }),
         },
       ],
@@ -923,7 +926,7 @@ export const ContactList = () => {
     async (contact: { id: string; name: string }) => {
       await archiveContactMutateAsync(contact.id);
       toast.success(
-        `Archived "${contact.name}"`,
+        `Archived ${contact.name}`,
         withUndo(() =>
           unarchiveContactMutate(contact.id, {
             onError: (err) => toast.error(`Could not undo: ${err.message}`),

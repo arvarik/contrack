@@ -40,7 +40,9 @@ import { SkeletonText } from "../../../components/ui/AnimatedSkeleton";
 import { CorvidThinking } from "../../../components/brand/CorvidThinking";
 import { useAiAllowed } from "../../../hooks/useAiAllowed";
 import { ResearchCard } from "./ResearchCard";
-import { AiSetupNote, EnrichMenu, useBlockedAi } from "./EnrichMenu";
+import { EnrichMenu } from "./EnrichMenu";
+import { AiSetupNote } from "../../../components/AiSetupNote";
+import { useBlockedAi } from "../../../hooks/useAiSetup";
 import type { ResearchAnchor } from "../../../lib/research";
 
 // ═══════════════════════════════════════════════════════════════════════════

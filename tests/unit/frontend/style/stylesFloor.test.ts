@@ -450,3 +450,27 @@ describe("the one look", () => {
     );
   });
 });
+
+/**
+ * One helper for one act, so the act looks and fails the same everywhere.
+ * The Network row's Copy email wrote to the clipboard itself, and said
+ * nothing when the browser refused.
+ */
+describe("the shared helpers", () => {
+  /** The files outside `owner` whose source matches `pattern`. */
+  const usersOutside = (owner: string, pattern: RegExp) =>
+    sourceFiles()
+      .filter((file) => rel(file) !== owner && !file.endsWith(".css"))
+      .filter((file) => pattern.test(fs.readFileSync(file, "utf8")))
+      .map(rel);
+
+  it("copies through copyToClipboard, which says when the browser refuses", () => {
+    expect(usersOutside("lib/clipboard.ts", /navigator\.clipboard/)).toEqual(
+      [],
+    );
+  });
+
+  it("closes every dialog with DialogCloseButton, the one X named Close dialog", () => {
+    expect(usersOutside("components/ui/Modal.tsx", /Close dialog/)).toEqual([]);
+  });
+});

@@ -10,7 +10,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
 import { cn } from "../../../lib/utils";
-import { TONE_WASH } from "../../../lib/styles";
+import { INLINE_INPUT, TONE_WASH } from "../../../lib/styles";
 import { EditHint } from "./EditableField";
 import { AddButton } from "./Field";
 import {
@@ -81,7 +81,7 @@ export const BirthdayField = ({
             closedByKey.current = true;
             setIsEditing(false);
           }}
-          className="min-h-[44px] sm:pointer-fine:min-h-0 text-base sm:text-sm font-medium bg-surface-container-high rounded-lg px-2 py-1 border-none w-full"
+          className={cn(INLINE_INPUT, "w-full")}
         />
         {invalid && (
           <p id={invalidId} className="text-xs font-semibold text-error">
