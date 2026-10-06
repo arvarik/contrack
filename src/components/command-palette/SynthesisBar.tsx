@@ -128,8 +128,6 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
         signal: controller.signal,
       });
 
-      if (!res.ok) throw new Error(`The server answered ${res.status}`);
-
       let complete = false;
       let streamed = "";
       await readNdjson(

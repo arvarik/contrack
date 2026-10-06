@@ -70,7 +70,6 @@ export const useDedupeCount = () =>
     queryKey: suggestionKeys.count,
     queryFn: async ({ signal }) => {
       const res = await apiFetch(`/dedupe/suggestions/count`, { signal });
-      if (!res.ok) return { count: 0 };
       return res.json() as Promise<{ count: number }>;
     },
     refetchInterval: 60_000,
@@ -83,7 +82,6 @@ export const usePendingSuggestions = () =>
     queryKey: suggestionKeys.pending,
     queryFn: async ({ signal }) => {
       const res = await apiFetch(`/dedupe/suggestions?limit=200`, { signal });
-      if (!res.ok) throw new Error("Failed to fetch suggestions");
       const data = await res.json();
       return data.suggestions as PersistedDedupeSuggestion[];
     },
@@ -98,7 +96,6 @@ export const suggestionQuery = (contactId: string) =>
       const res = await apiFetch(`/dedupe/suggestion-for/${contactId}`, {
         signal,
       });
-      if (!res.ok) return null;
       const data = await res.json();
       return data.suggestion ?? null;
     },
@@ -112,7 +109,6 @@ const mergeLogQuery = queryOptions({
   queryKey: suggestionKeys.mergeLog,
   queryFn: async ({ signal }) => {
     const res = await apiFetch(`/dedupe/merge-log?limit=50`, { signal });
-    if (!res.ok) throw new Error("Failed to fetch merge log");
     const data = await res.json();
     return data.entries as MergeLogEntry[];
   },

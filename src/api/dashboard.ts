@@ -99,7 +99,6 @@ const dashboardQuery = queryOptions({
   queryKey: ["dashboard"],
   queryFn: async ({ signal }): Promise<DashboardPayload> => {
     const res = await apiFetch(`/dashboard${zoneQuery()}`, { signal });
-    if (!res.ok) throw new Error("Failed to fetch dashboard payload");
     return res.json();
   },
   staleTime: STALE_TIMES.dashboard,
@@ -111,7 +110,6 @@ const dashboardActivityQuery = queryOptions({
     const res = await apiFetch(`/dashboard/activity${zoneQuery()}`, {
       signal,
     });
-    if (!res.ok) throw new Error("Failed to fetch dashboard activity");
     return res.json();
   },
   staleTime: STALE_TIMES.dashboard,
@@ -140,7 +138,6 @@ export const useDailyInsight = (options?: { enabled?: boolean }) => {
     queryKey: ["dashboard", "insight"],
     queryFn: async ({ signal }): Promise<DailyInsight | null> => {
       const res = await apiFetch(`/dashboard/insight`, { signal });
-      if (!res.ok) throw new Error("Failed to fetch daily insight");
       return res.json();
     },
     staleTime: 1000 * 60 * 60 * 2, // 2 hours stale time to prevent multi-fetching AI calls
@@ -162,7 +159,6 @@ export const useZeroState = () => {
       const res = await apiFetch(`/command-palette/zero-state${zoneQuery()}`, {
         signal,
       });
-      if (!res.ok) throw new Error("Failed to fetch zero state");
       return res.json();
     },
     staleTime: 1000 * 60 * 2, // 2 minutes

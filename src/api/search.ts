@@ -28,7 +28,6 @@ export const useSearchContacts = (q: string, filters: FacetFilter[] = []) => {
           signal,
         },
       );
-      if (!res.ok) throw new Error("Failed to search contacts");
       return res.json();
     },
     enabled: q.trim().length > 0,
@@ -245,7 +244,6 @@ export const useSearchCoverage = () => {
     queryKey: ["search", "coverage"],
     queryFn: async (): Promise<SearchCoverage> => {
       const res = await apiFetch("/search/coverage");
-      if (!res.ok) throw new Error("Failed to fetch search coverage");
       return res.json();
     },
     refetchInterval: (query) => {
@@ -269,7 +267,6 @@ export const starterQuestionsQuery = () =>
     queryKey: ["contacts", "starters"] as const,
     queryFn: async ({ signal }): Promise<StarterQuestionsResponse> => {
       const res = await apiFetch("/search/starters", { signal });
-      if (!res.ok) throw new Error("Failed to load starter questions");
       return res.json();
     },
     staleTime: 5 * 60_000,
@@ -293,15 +290,7 @@ export const useRefreshSearchIndex = () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(params ?? {}),
       });
-      const data = await res.json();
-      if (!res.ok) {
-        const error = new Error(
-          data.error || "Failed to refresh search index",
-        ) as Error & { data: RefreshIndexResponse };
-        error.data = data;
-        throw error;
-      }
-      return data;
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["search", "coverage"] });
@@ -382,7 +371,6 @@ export const useInteractionSearch = (params: InteractionSearchParams) => {
         `/search/interactions?${interactionSearchQueryString(params)}`,
         { signal },
       );
-      if (!res.ok) throw new Error("Failed to search notes");
       return res.json();
     },
     enabled: active,
