@@ -175,7 +175,14 @@ export function moveInMenu(
   else if (event.key === "ArrowUp") focusAt(index - 1);
   else if (event.key === "Home") focusAt(0);
   else if (event.key === "End") focusAt(list.length - 1);
-  else if (event.key.length === 1 && /\S/.test(event.key)) {
+  // A chord is the browser's or the app's: ⌘R still reloads, ⌘F finds.
+  else if (
+    event.key.length === 1 &&
+    /\S/.test(event.key) &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.altKey
+  ) {
     const letter = event.key.toLowerCase();
     const order = [...list.slice(index + 1), ...list.slice(0, index + 1)];
     order
