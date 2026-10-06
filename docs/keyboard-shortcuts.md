@@ -222,8 +222,7 @@ These work on the **Ask Contrack** page, in **People** and in **Notes** mode.
 ## Possible duplicates
 
 These work on the **Possible duplicates** page. Open it with **Review them**
-on **Settings → Duplicates**, or with the number on the **Pulse** icon in the
-sidebar. In **Contact to keep**, the arrows choose the contact, and the
+on **Settings → Duplicates**, or from the **Inbox** card on **Pulse**. In **Contact to keep**, the arrows choose the contact, and the
 letters still decide. See
 [Review possible duplicates](duplicates.md#review-possible-duplicates).
 
