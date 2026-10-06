@@ -5,6 +5,7 @@ import {
   useMutation,
   useQueryClient,
   type InfiniteData,
+  type QueryClient,
 } from "@tanstack/react-query";
 import { apiJson, jsonBody } from "./client";
 import type {
@@ -54,6 +55,43 @@ export function useSearchHistoryList(filters?: HistoryListFilters) {
     },
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
   });
+}
+
+type HistoryPages = InfiniteData<HistoryListResponse>;
+
+/**
+ * Edits every cached history list before the server answers, and returns
+ * what they held, for `restoreHistory`.
+ */
+async function editHistory(
+  queryClient: QueryClient,
+  edit: (old: HistoryPages) => HistoryPages,
+) {
+  await queryClient.cancelQueries({ queryKey: SEARCH_HISTORY_KEY });
+  const previous = queryClient.getQueriesData({ queryKey: SEARCH_HISTORY_KEY });
+  queryClient.setQueriesData<HistoryPages>(
+    { queryKey: SEARCH_HISTORY_KEY },
+    (old) => old && edit(old),
+  );
+  return { previous };
+}
+
+/** A failed write puts the cached lists back. Every write refetches them. */
+function restoreHistory(queryClient: QueryClient) {
+  return {
+    onError: (
+      _err: unknown,
+      _vars: unknown,
+      context: Awaited<ReturnType<typeof editHistory>> | void,
+    ) => {
+      for (const [key, data] of context?.previous ?? []) {
+        queryClient.setQueryData(key, data);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: SEARCH_HISTORY_KEY });
+    },
+  };
 }
 
 /** The last recorded search, so a repeat within 2 seconds is not recorded. */
@@ -106,11 +144,6 @@ export function useRecordSearch() {
         return;
       }
 
-      await queryClient.cancelQueries({ queryKey: SEARCH_HISTORY_KEY });
-      const previous = queryClient.getQueriesData({
-        queryKey: SEARCH_HISTORY_KEY,
-      });
-
       const optimisticEntry: HistoryEntry = {
         id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         ownerId: "",
@@ -126,43 +159,29 @@ export function useRecordSearch() {
         lastRunAt: new Date().toISOString(),
       };
 
-      queryClient.setQueriesData<InfiniteData<HistoryListResponse>>(
-        { queryKey: SEARCH_HISTORY_KEY },
-        (old) => {
-          if (!old || !old.pages.length) return old;
-          const firstPage = old.pages[0];
-          const filteredEntries = firstPage.entries.filter(
-            (e) =>
-              !(
-                e.mode === optimisticEntry.mode &&
-                e.normalizedQuery === optimisticEntry.normalizedQuery
-              ),
-          );
-          const exists = filteredEntries.length < firstPage.entries.length;
-          const newFirstPage: HistoryListResponse = {
-            ...firstPage,
-            entries: [optimisticEntry, ...filteredEntries],
-            total: exists ? firstPage.total : firstPage.total + 1,
-          };
-          return {
-            ...old,
-            pages: [newFirstPage, ...old.pages.slice(1)],
-          };
-        },
-      );
-
-      return { previous };
+      return editHistory(queryClient, (old) => {
+        if (!old.pages.length) return old;
+        const firstPage = old.pages[0];
+        const filteredEntries = firstPage.entries.filter(
+          (e) =>
+            !(
+              e.mode === optimisticEntry.mode &&
+              e.normalizedQuery === optimisticEntry.normalizedQuery
+            ),
+        );
+        const exists = filteredEntries.length < firstPage.entries.length;
+        const newFirstPage: HistoryListResponse = {
+          ...firstPage,
+          entries: [optimisticEntry, ...filteredEntries],
+          total: exists ? firstPage.total : firstPage.total + 1,
+        };
+        return {
+          ...old,
+          pages: [newFirstPage, ...old.pages.slice(1)],
+        };
+      });
     },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) {
-        for (const [key, data] of context.previous) {
-          queryClient.setQueryData(key, data);
-        }
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: SEARCH_HISTORY_KEY });
-    },
+    ...restoreHistory(queryClient),
   });
 }
 
@@ -180,40 +199,17 @@ export function useSetPinned() {
         },
       );
     },
-    onMutate: async ({ id, pinned }) => {
-      await queryClient.cancelQueries({ queryKey: SEARCH_HISTORY_KEY });
-      const previous = queryClient.getQueriesData({
-        queryKey: SEARCH_HISTORY_KEY,
-      });
-
-      queryClient.setQueriesData<InfiniteData<HistoryListResponse>>(
-        { queryKey: SEARCH_HISTORY_KEY },
-        (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              entries: page.entries.map((e) =>
-                e.id === id ? { ...e, pinned } : e,
-              ),
-            })),
-          };
-        },
-      );
-
-      return { previous };
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) {
-        for (const [key, data] of context.previous) {
-          queryClient.setQueryData(key, data);
-        }
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: SEARCH_HISTORY_KEY });
-    },
+    onMutate: ({ id, pinned }) =>
+      editHistory(queryClient, (old) => ({
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          entries: page.entries.map((e) =>
+            e.id === id ? { ...e, pinned } : e,
+          ),
+        })),
+      })),
+    ...restoreHistory(queryClient),
   });
 }
 
@@ -229,39 +225,16 @@ export function useDeleteHistoryEntry() {
         },
       );
     },
-    onMutate: async (id: string) => {
-      await queryClient.cancelQueries({ queryKey: SEARCH_HISTORY_KEY });
-      const previous = queryClient.getQueriesData({
-        queryKey: SEARCH_HISTORY_KEY,
-      });
-
-      queryClient.setQueriesData<InfiniteData<HistoryListResponse>>(
-        { queryKey: SEARCH_HISTORY_KEY },
-        (old) => {
-          if (!old) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page) => ({
-              ...page,
-              entries: page.entries.filter((e) => e.id !== id),
-              total: Math.max(0, page.total - 1),
-            })),
-          };
-        },
-      );
-
-      return { previous };
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previous) {
-        for (const [key, data] of context.previous) {
-          queryClient.setQueryData(key, data);
-        }
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: SEARCH_HISTORY_KEY });
-    },
+    onMutate: (id: string) =>
+      editHistory(queryClient, (old) => ({
+        ...old,
+        pages: old.pages.map((page) => ({
+          ...page,
+          entries: page.entries.filter((e) => e.id !== id),
+          total: Math.max(0, page.total - 1),
+        })),
+      })),
+    ...restoreHistory(queryClient),
   });
 }
 
