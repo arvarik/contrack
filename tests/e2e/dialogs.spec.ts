@@ -102,9 +102,8 @@ test("a search result opens a contact dialog that returns focus to the result", 
 
   const dialog = page.getByRole("dialog", { name: "Contact details" });
   await expect(dialog).toBeVisible();
-  await expect(
-    dialog.getByRole("button", { name: "Close contact details" }),
-  ).toBeFocused();
+  // Focus on the card itself, as on a dialog with no field.
+  await expect(dialog).toBeFocused();
   // The contact's own header, with its actions menu, is inside the dialog.
   await expect(
     dialog.getByRole("button", { name: "Contact actions" }),

@@ -117,6 +117,11 @@ interface ContactProfileProps {
   /** The name of the page Back goes to, for the Back button's text. */
   backLabel?: string;
   showNetworkButton?: boolean;
+  /**
+   * Runs after a delete instead of going to Network: the card over Ask or
+   * Archived closes, and the person stays where they were, Undo included.
+   */
+  onDeleted?: () => void;
 }
 
 /** The page's outer box, the same while it loads and once it has. */
@@ -162,6 +167,7 @@ export const ContactProfile = ({
   onClose,
   backLabel,
   showNetworkButton = false,
+  onDeleted,
 }: ContactProfileProps) => {
   const navigate = useNavigate();
   const { mode } = usePreferences();
@@ -359,7 +365,11 @@ export const ContactProfile = ({
           retentionDays,
           onUndo: () => {
             restoreContact(id, {
-              onSuccess: () => navigate(`/contact/${id}`),
+              // On its own page, Undo opens the contact again. Over another
+              // page, the person stays on that page.
+              onSuccess: onDeleted
+                ? undefined
+                : () => navigate(`/contact/${id}`),
               onError: (err) =>
                 toast.error(
                   `Could not restore: ${err instanceof Error ? err.message : String(err)}`,
@@ -367,15 +377,16 @@ export const ContactProfile = ({
             });
           },
         });
+        if (onDeleted) return onDeleted();
         navigate("/");
         if (onClose) onClose();
       },
       onError: (err) =>
         toast.error(
-          `Delete failed: ${err instanceof Error ? err.message : String(err)}`,
+          `Could not delete: ${err instanceof Error ? err.message : String(err)}`,
         ),
     });
-  }, [id, name, deleteContact, restoreContact, navigate, onClose]);
+  }, [id, name, deleteContact, restoreContact, navigate, onClose, onDeleted]);
 
   // ── Theme ─────────────────────────────────────────────────────────────
   // The vibe replaces the primary palette for this page only, so it has to be
