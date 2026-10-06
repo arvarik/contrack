@@ -151,7 +151,7 @@ export const BackupsView = () => {
         empty={{
           icon: Database,
           title: "No snapshots yet",
-          body: "Take one now, or turn on scheduled snapshots in General",
+          body: "Take one now, or turn on scheduled snapshots in Settings → General",
         }}
         header={
           <div className={cn("grid gap-4", COLUMNS)}>

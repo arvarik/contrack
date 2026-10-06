@@ -38,7 +38,7 @@ const PROBLEMS: Record<string, string> = {
   bad_redirect:
     "The app asked to send you to an address it did not register, so Contrack stopped here. Go back to the app and connect again",
   client_unavailable:
-    "Contrack could not read the app's details. Check that this server can reach the internet, then connect again from the app",
+    "Contrack could not read the app's details. Check that the server can reach the internet, then connect again from the app",
   bad_request:
     "The app asked in a way Contrack does not accept, so it stopped here. Go back to the app and connect again",
 };

@@ -173,8 +173,8 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
                 </p>
                 <p className="text-xs text-on-surface-variant">
                   {isAdmin
-                    ? "Add a Google OAuth client ID and secret under Integrations in General first"
-                    : "Ask an administrator to add a Google OAuth client under Integrations in General"}
+                    ? "Add a Google OAuth client ID and secret in Settings → General, under Integrations, first"
+                    : "Ask an administrator to add a Google OAuth client in Settings → General, under Integrations"}
                 </p>
               </div>
             </div>
@@ -188,7 +188,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
                 }}
                 className="hit-area state-layer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-warning/20 text-on-surface transition-colors"
               >
-                <span>Open Integrations in General</span>
+                <span>Open Settings → General</span>
                 <ArrowRight aria-hidden="true" className="w-3.5 h-3.5" />
               </button>
             )}

@@ -270,7 +270,7 @@ describe("Frontend Mail & Google Connectors Components", () => {
       expect(
         screen.getByText(/Google sign-in is not set up yet/i),
       ).toBeTruthy();
-      expect(screen.getByText(/Open Integrations in General/i)).toBeTruthy();
+      expect(screen.getByText("Open Settings → General")).toBeTruthy();
     });
   });
 

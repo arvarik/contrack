@@ -45,7 +45,7 @@ const GOOGLE_FAILURES: Record<string, string> = {
   denied: "Could not connect Google: access was not given",
   expired: "Could not connect Google: the sign-in expired. Start it again",
   "not-configured":
-    "Could not connect Google: sign-in with Google is not set up on this server",
+    "Could not connect Google: sign-in with Google is not set up on the server",
 };
 
 export const ConnectorsView: React.FC = () => {
