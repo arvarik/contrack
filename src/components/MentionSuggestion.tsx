@@ -39,6 +39,9 @@ const MentionList = forwardRef<
 
   useImperativeHandle(ref, () => ({
     onKeyDown: ({ event }: { event: KeyboardEvent }) => {
+      // No one matches: the keys are the editor's again, so Enter after
+      // "@Ada went home" starts a new line.
+      if (!props.items.length) return false;
       if (event.key === "ArrowUp") {
         setSelectedIndex(
           (selectedIndex + props.items.length - 1) % props.items.length,
@@ -50,72 +53,85 @@ const MentionList = forwardRef<
         return true;
       }
       if (event.key === "Enter") {
-        if (props.items.length) {
-          props.command({
-            id: props.items[selectedIndex].id,
-            label: props.items[selectedIndex].name,
-          });
-        }
+        props.command({
+          id: props.items[selectedIndex].id,
+          label: props.items[selectedIndex].name,
+        });
         return true;
       }
       return false;
     },
   }));
 
+  // No one matches: nothing shows. A space can be part of a name, so the
+  // query goes on after "@Ada " into the rest of the sentence.
+  if (!props.items.length) return null;
   return (
     <div className={cn(MENU_PANEL, "z-50 flex flex-col w-64 min-w-0")}>
-      {props.items.length ? (
-        props.items.map((item: ContactSlim, index: number) => {
-          const words = scoreWords(scoreView(item));
-          return (
-            <button
-              className={cn(
-                MENU_ITEM,
-                index === selectedIndex && MENU_ITEM_SELECTED,
-              )}
-              key={item.id}
-              onClick={() => {
-                props.command({ id: item.id, label: item.name });
-              }}
-            >
-              {/* Sized to the row, and hidden: the name beside it already
+      {props.items.map((item: ContactSlim, index: number) => {
+        const words = scoreWords(scoreView(item));
+        return (
+          <button
+            className={cn(
+              MENU_ITEM,
+              index === selectedIndex && MENU_ITEM_SELECTED,
+            )}
+            key={item.id}
+            onClick={() => {
+              props.command({ id: item.id, label: item.name });
+            }}
+          >
+            {/* Sized to the row, and hidden: the name beside it already
                   names the button. The tooltip on this wrapper still shows
                   the score to a pointer user. */}
-              <div
-                className="w-7 h-7 shrink-0"
-                title={words ?? undefined}
-                aria-hidden="true"
-              >
-                <ScoreRingAvatar
-                  contact={item}
-                  size={28}
-                  ring="list"
-                  decorative
-                />
-              </div>
-              <span className="truncate">{item.name}</span>
-              {/* The ring is hidden, so the button's name says the score in
+            <div
+              className="w-7 h-7 shrink-0"
+              title={words ?? undefined}
+              aria-hidden="true"
+            >
+              <ScoreRingAvatar
+                contact={item}
+                size={28}
+                ring="list"
+                decorative
+              />
+            </div>
+            <span className="truncate">{item.name}</span>
+            {/* The ring is hidden, so the button's name says the score in
                   words after the person's name. A contact nobody tracks has
                   no score, and the button says only the name. */}
-              {words && (
-                <span className="sr-only">
-                  , {scoreWords(scoreView(item), { sentence: true })}
-                </span>
-              )}
-              {item.isGhost && (
-                <span className={cn(LABEL, "ml-auto")}>Ghost</span>
-              )}
-            </button>
-          );
-        })
-      ) : (
-        <div className="px-2.5 py-2 text-sm text-on-surface-variant">
-          No results...
-        </div>
-      )}
+            {words && (
+              <span className="sr-only">
+                , {scoreWords(scoreView(item), { sentence: true })}
+              </span>
+            )}
+            {item.isGhost && (
+              <span className={cn(LABEL, "ml-auto")}>Ghost</span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 });
+
+/**
+ * The people an @ query names: each typed word starts a word of the name,
+ * so "@smi" finds Ada Smith and "@ada s" finds her too. It matched only the
+ * start of the full name, so a surname found no one. Eight at most.
+ */
+export function mentionMatches<T extends { name: string }>(
+  people: readonly T[],
+  query: string,
+): T[] {
+  const typed = query.toLowerCase().split(/\s+/).filter(Boolean);
+  return people
+    .filter((person) => {
+      const words = person.name.toLowerCase().split(/[\s'-]+/);
+      return typed.every((part) => words.some((word) => word.startsWith(part)));
+    })
+    .slice(0, 8);
+}
 
 /**
  * The @mention suggestion for a tiptap editor.
@@ -136,11 +152,9 @@ const MentionList = forwardRef<
  * last release was in 2021, and its Popper engine's in 2023.
  */
 export const getMentionSuggestion = (contacts: () => ContactSlim[]) => ({
-  items: ({ query }: { query: string }) => {
-    return contacts()
-      .filter((item) => item.name.toLowerCase().startsWith(query.toLowerCase()))
-      .slice(0, 5);
-  },
+  // A space may be part of the query: "@Ada Lo".
+  allowSpaces: true,
+  items: ({ query }: { query: string }) => mentionMatches(contacts(), query),
 
   render: () => {
     let component: ReactRenderer;

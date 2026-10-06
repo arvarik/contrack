@@ -43,6 +43,7 @@ import {
   InteractionComposer,
 } from "../../../../src/components/InteractionComposer";
 import { QuickInteractionModal } from "../../../../src/components/QuickInteractionModal";
+import { mentionMatches } from "../../../../src/components/MentionSuggestion";
 import { draftKey } from "../../../../src/lib/composerDrafts";
 
 /** The signed-in account, switched per test. Null is an un-gated instance. */
@@ -298,6 +299,19 @@ describe("the controls", () => {
     );
     expect(followUpInput().value).toBe("Send the deck");
     expect(saves).toHaveLength(0);
+  });
+
+  it("@ finds a person by any word of the name, and by two words", () => {
+    const people = [
+      { name: "Rowan Vale" },
+      { name: "Ada Smith" },
+      { name: "Smitty O'Brien" },
+    ];
+    const names = (query: string) =>
+      mentionMatches(people, query).map((p) => p.name);
+    expect(names("smi")).toEqual(["Ada Smith", "Smitty O'Brien"]);
+    expect(names("ada s")).toEqual(["Ada Smith"]);
+    expect(names("brien")).toEqual(["Smitty O'Brien"]);
   });
 
   it("reads a weekday as the next one: on a Monday, Friday is this Friday", () => {
