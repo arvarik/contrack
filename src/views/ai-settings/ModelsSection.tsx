@@ -1,19 +1,9 @@
 /**
- * ModelsSection: the models every AI feature runs on, on Administration →
- * AI.
- *
- * Three choices and one fact. The Fast model takes the frequent, simple
- * work and the Strong model the rarer, harder work: the same kind of model
- * at two sizes, so routine work runs on a cheap one. The embedding model is
- * a different kind of model, which turns contacts into numbers to compare
- * by meaning; the search index's coverage sits under it, since a new one
- * rebuilds the index. The reranker is read-only: only SEARCH_RERANK_MODEL
- * sets it, and the row says so instead of leaving it unseen.
- *
- * The web search model is in the Web search section, beside the switch and
- * SearXNG it works with.
- *
- * @module views/ai-settings/ModelsSection
+ * The models every AI feature runs on. Fast and Strong are one kind of model
+ * at two sizes, so routine work runs on a cheap one. The search index's
+ * coverage sits under the embedding model, because a new one rebuilds the
+ * index. Only SEARCH_RERANK_MODEL sets the reranker, so its row is read-only.
+ * The web search model is in the Web search section.
  */
 import { Check, Minus } from "lucide-react";
 import type { AISettings } from "../../api/aiSettings";

@@ -1,14 +1,7 @@
 /**
- * SelectionOverlay — SVG overlay for box (Shift+drag) and lasso (L) selection.
- *
- * Requirements:
- * - Draws Shift+drag box or freehand lasso shape in --color-primary at 15% fill.
- * - Stops pointer events while drawing so the map does not pan.
- * - Touch devices never trigger drag selection.
- * - Unprojects screen coordinates to geographical coordinates on release.
- * - Entire SVG is aria-hidden="true" (selection results are announced separately).
- *
- * @module views/map/SelectionOverlay
+ * Box (Shift+drag) and lasso (L) selection, drawn in an SVG over the map. It
+ * stops pointer events while drawing so the map does not pan, and touch
+ * never draws. The SVG is aria-hidden: the page announces the selection.
  */
 import React, { useEffect, useState, useRef } from "react";
 import type { Map as MapLibreMap } from "maplibre-gl";
@@ -47,7 +40,6 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
   const isLassoModeRef = useRef(isLassoMode);
   isLassoModeRef.current = isLassoMode;
 
-  // Escape key cancels lasso mode
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isLassoModeRef.current) {
@@ -63,9 +55,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     if (!container || !map) return;
 
     const onPointerDown = (e: PointerEvent) => {
-      // Touch devices never draw selection
       if (e.pointerType === "touch") return;
-      // Only primary mouse button initiates selection
       if (e.button !== 0) return;
 
       const isShift = e.shiftKey;
@@ -107,7 +97,6 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     };
   }, [containerRef, map]);
 
-  // Window pointermove and pointerup listeners while drawing
   useEffect(() => {
     if (!isDrawingBox && !isDrawingLasso) return;
     const container = containerRef.current;
@@ -138,7 +127,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         const minY = Math.min(boxStart.y, boxCurrent.y);
         const maxY = Math.max(boxStart.y, boxCurrent.y);
 
-        // Require at least a 4px drag in both dimensions
+        // A drag of 4 px or less either way selects nothing.
         if (maxX - minX > 4 && maxY - minY > 4) {
           const nw = map.unproject([minX, minY]);
           const se = map.unproject([maxX, maxY]);

@@ -1,20 +1,15 @@
-/**
- * AIStatsSkeleton — Loading state for the AI Stats page.
- * Shows pulsing placeholders for the summary bar, KPI cards, and feed rows.
- */
+/** Placeholders for the summary bar, KPI tiles and feed while the AI usage page loads. */
 import { CARD_TINTED, CARD_COMPACT, CARD } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 
 export const AIStatsSkeleton = () => (
   <div className="space-y-4">
-    {/* Summary bar skeleton */}
     <div className={cn(CARD_TINTED, "space-y-3")}>
       <div className="h-3 bg-primary/20 rounded animate-pulse w-24" />
       <div className="h-5 bg-primary/20 rounded animate-pulse w-3/4" />
       <div className="h-5 bg-primary/20 rounded animate-pulse w-full" />
     </div>
 
-    {/* KPI row skeleton */}
     <div className="grid grid-cols-3 gap-3">
       {[0, 1, 2].map((i) => (
         <div key={i} className={cn(CARD_COMPACT, "space-y-3")}>
@@ -27,7 +22,6 @@ export const AIStatsSkeleton = () => (
       ))}
     </div>
 
-    {/* Feed skeleton */}
     <div className={cn(CARD, "space-y-3")}>
       <div className="h-3 bg-surface-container-high rounded animate-pulse w-20" />
       {[0, 1, 2, 3].map((i) => (

@@ -1,23 +1,9 @@
 /**
- * How the map moves to a contact, and how it makes room for one.
- *
- * Opening a contact from a pin, or from a link on the contact page, ends on
- * the same view: that person centered at {@link CONTACT_ZOOM}, or closer if
- * the map was already closer. The move is an animation, because a map that
- * jumps leaves the reader to find where they landed.
- *
- * "Centered" means centered in the part of the map nothing covers. The open
- * contact covers the right of the map on a wide screen, so the fly-to takes
- * the covers as MapLibre padding (see `insets.ts`), and the pin lands in the
- * open part. When the contact closes, {@link settlePadding} eases the
- * padding away and the pin glides to the center of the whole map.
- *
- * Every animation asks one question first. A person who chose Reduced in
- * the Motion setting, or "reduce motion" in their system, asked for no
- * animation, so for them the same move happens with `jumpTo`, at the same end
- * position. See WCAG 2.3.3.
- *
- * @module views/map/flyTo
+ * How the map moves to a contact and makes room for one. A contact opens
+ * centered at {@link CONTACT_ZOOM} or closer, in the part of the map nothing
+ * covers (the covers become padding, see `insets.ts`). The move animates so
+ * the reader sees where they land. With reduced motion (the Motion setting or
+ * the system), the same move uses `jumpTo` (WCAG 2.3.3).
  */
 import type { PaddingOptions } from "maplibre-gl";
 import { samePadding } from "./insets";
@@ -35,7 +21,6 @@ interface FlyTarget {
   latitude: number;
 }
 
-/** What one move asks of the camera. */
 export interface CameraMove {
   center?: [number, number];
   zoom?: number;
@@ -45,12 +30,7 @@ export interface CameraMove {
   easing?: (t: number) => number;
 }
 
-/**
- * The part of a MapLibre map this module uses.
- *
- * A structural type, not the class: a unit test passes a stand-in that
- * records the calls, and jsdom has no WebGL to hold a real map.
- */
+/** A structural type, not the class: jsdom has no WebGL for a real map. */
 export interface MovableMap {
   getZoom: () => number;
   getPadding: () => PaddingOptions;
@@ -60,22 +40,12 @@ export interface MovableMap {
 }
 
 interface MoveOptions {
-  /**
-   * Forces the jump. It defaults to what the system says, and a caller
-   * passes it only to be explicit.
-   */
+  /** Overrides the reduced motion preference. */
   reducedMotion?: boolean;
   /** The covers over the map. Left out, the map keeps the padding it has. */
   padding?: PaddingOptions;
 }
 
-/**
- * Move the map to one contact.
- *
- * @param map     The map to move.
- * @param target  Where the contact is, in degrees.
- * @param options See {@link MoveOptions}.
- */
 export function flyToContact(
   map: MovableMap,
   target: FlyTarget,
@@ -95,12 +65,9 @@ export function flyToContact(
 }
 
 /**
- * Give the map new covers without changing what is centered.
- *
- * The map keeps its center in the open part, so the view slides by half the
- * difference. Nothing happens when the padding is already this. The move
- * takes the contact's 400 ms slide by default, and a caller that moves the
- * map with another cover passes that cover's duration and curve.
+ * Give the map new covers and keep the same point centered in the open part.
+ * The default duration matches the contact's slide. A caller that moves with
+ * another cover passes that cover's duration and curve.
  */
 export function settlePadding(
   map: MovableMap,

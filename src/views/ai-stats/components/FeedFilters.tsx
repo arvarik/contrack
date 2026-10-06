@@ -1,9 +1,6 @@
 /**
- * FeedFilters — the cache filter and the sort toggle for the AI Stats
- * activity feed. The cache filter is a `Segmented`, so it is one radio group
- * with arrow keys for a screen reader and a keyboard, not three loose
- * buttons. The sort toggle is a flat button with the state layer, as tall as
- * the trough beside it.
+ * The activity feed's cache filter and sort toggle. The filter is a
+ * `Segmented`: one radio group with arrow keys, not three loose buttons.
  */
 import { cn } from "../../../lib/utils";
 import { ArrowUpDown } from "lucide-react";
@@ -40,7 +37,6 @@ export const FeedFilters = ({
         className="w-auto"
       />
 
-      {/* Sort toggle */}
       <button
         onClick={() => onSortChange(sort === "newest" ? "oldest" : "newest")}
         className={cn(

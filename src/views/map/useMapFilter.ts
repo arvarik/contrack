@@ -2,8 +2,6 @@
  * The map's filter. The text is the whole filter: its facets are the pills,
  * and the URL's `?q=` and a saved view hold the same text. Ask's "Show on
  * map" adds `?people=`, the ids of the people it found.
- *
- * @module views/map/useMapFilter
  */
 import {
   useCallback,

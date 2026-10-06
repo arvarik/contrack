@@ -1,19 +1,11 @@
 /**
- * How much of the map page something else is covering.
+ * How much of the map page something else covers: the contact panel and the
+ * open insights panel on the right, and the phone tab bar at the bottom. Each
+ * becomes MapLibre padding, so a fly-to or a cluster split centers on the
+ * part of the map a person can see.
  *
- * Three things sit over the map: the contact that opens over it from the
- * right on a wide screen, the open insights panel, and the tab bar over its
- * bottom on a phone. The map's center should be the center of what a person
- * can see, so each becomes MapLibre padding. A fly-to then lands its pin in
- * the open part of the map, and a cluster that splits, splits around a point
- * the reader can see.
- *
- * Each cover is found by an attribute, `data-covers-map="right"` on the
- * contact and on the open panel and `data-covers-map="bottom"` on the tab
- * bar, rather than by a width copied from a class name. The width in the
- * class name changes with the breakpoint, and a copy of it here would drift.
- *
- * @module views/map/insets
+ * Covers are found by `data-covers-map`, not by a width copied from a class
+ * name, because that width changes with the breakpoint and a copy would drift.
  */
 import type { PaddingOptions } from "maplibre-gl";
 
@@ -26,9 +18,8 @@ export interface Insets {
 }
 
 /**
- * Below this much open map, the cover is the whole map, and centring in the
- * rest would center in a sliver. On a phone the contact covers the map edge
- * to edge, and the pin is centered for the moment the contact closes.
+ * Below this much open map, the cover counts as the whole map, so nothing
+ * centers in a sliver. On a phone the pin centers for when the contact closes.
  */
 export const MIN_OPEN_PX = 240;
 
@@ -45,12 +36,7 @@ const cover = (covered: number, size: number): number => {
   return size - overlap >= MIN_OPEN_PX ? overlap : 0;
 };
 
-/**
- * The insets for a map of `mapWidth` by `mapHeight` with `panelWidth` of its
- * right edge and `barHeight` of its bottom edge covered.
- *
- * Pure, so the sliver rule is tested without a layout.
- */
+/** Pure, so the sliver rule is tested without a layout. */
 export function insetsFor(input: {
   mapWidth: number;
   mapHeight: number;
@@ -63,12 +49,10 @@ export function insetsFor(input: {
   };
 }
 
-/** The insets as the four-sided padding MapLibre takes. */
 export function paddingFor(insets: Insets): PaddingOptions {
   return { top: 0, right: insets.right, bottom: insets.bottom, left: 0 };
 }
 
-/** True when two paddings ask for the same view. */
 export function samePadding(a: PaddingOptions, b: PaddingOptions): boolean {
   return (
     a.top === b.top &&
@@ -82,15 +66,10 @@ export function samePadding(a: PaddingOptions, b: PaddingOptions): boolean {
 const INSIGHTS_LABEL = "Map insights";
 
 /**
- * How much of the map's width a right-hand cover takes, in px, wherever it
- * is in its slide.
- *
- * The cover is placed by its layout box, `offsetLeft` from its offset
- * parent, which a transform does not move: the contact slides in and out
- * and is measured mid-slide. What it covers is the part of its box over
- * the map, which is its whole width while both run to the window's edge.
- * With no offset parent (a document with no layout) it is taken to sit
- * flush with the map's right edge.
+ * How much of the map's width a right-hand cover takes, in px. It reads the
+ * layout box (`offsetLeft`), which a transform does not move, because the
+ * contact is measured mid-slide. With no offset parent (no layout) the cover
+ * sits flush with the map's right edge.
  */
 function coveredWidth(panel: HTMLElement, map: DOMRect): number {
   const width = panel.offsetWidth;
@@ -122,18 +101,10 @@ export function measureOpenWidth(container: HTMLElement): number | null {
 }
 
 /**
- * Measure the covers over `container`, the map's element.
- *
- * A right-hand cover is read by its layout box (`coveredWidth`), which a
- * transform does not change, because the contact slides in and out and is
- * measured mid-slide. The contact is counted only while one is open: the
- * closing panel is still in the document for the length of its exit
- * animation, and the map should already be moving back. The insights panel
- * carries the attribute only while it is open.
- *
- * The tab bar is fixed to the bottom of the window, and its overlap is how
- * far the map's bottom edge reaches past its top. A bar that is not
- * displayed measures zero and covers nothing.
+ * Measure the covers over `container`, the map's element. The contact counts
+ * only while one is open: a closing panel stays in the document for its exit
+ * animation, and the map should already move back. The insights panel has
+ * the attribute only while it is open. A hidden tab bar measures zero.
  */
 export function measureInsets(
   container: HTMLElement,
@@ -165,11 +136,9 @@ export function measureInsets(
 }
 
 /**
- * The part of the map that nothing covers, as `[west, south, east, north]`.
- * "N in view" counts the people a person can see: at 1440 px the open
- * insights panel lay over Tokyo and Sydney, and the line still counted them.
- * The map is never rotated, so the clear rectangle is a box of longitude and
- * latitude.
+ * The part of the map that nothing covers, as `[west, south, east, north]`,
+ * so "N in view" counts only people a person can see. The map never rotates,
+ * so the clear rectangle is a box of longitude and latitude.
  */
 export function clearBounds(
   map: {

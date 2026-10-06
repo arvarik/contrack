@@ -19,7 +19,10 @@ export function contactPinLabel(
   return contact.company ? `${contact.name}, ${contact.company}` : contact.name;
 }
 
-/** Only http(s) URLs and same-origin paths are drawn. `javascript:`, `data:` and the rest get the generated avatar. */
+/**
+ * Only http(s) URLs and same-origin paths are drawn. Anything else, such as
+ * `javascript:` or `data:`, gets the generated avatar.
+ */
 export function pinAvatarSrc(
   contact: Pick<MapContact, "name" | "avatarUrl">,
 ): string {

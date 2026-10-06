@@ -1,16 +1,7 @@
 /**
- * useMapSelection — manages geospatial multi-selection on the map.
- *
- * Provides:
- * - A Set of selected contact IDs
- * - Selection via Box (Shift+drag), Lasso (freehand polygon), and All in view
- * - Selection tests actual MapContact rows, not rendered tiles, so contacts
- *   inside clusters are included
- * - Preserves selection across filter changes and reports hidden count
- * - Escape key to clear selection
- * - Accessibility announcements: "N people selected" and "(M hidden by filter)"
- *
- * @module views/map/useMapSelection
+ * Multi-selection on the map: box, lasso and all in view. It tests contact
+ * rows, not rendered tiles, so people inside clusters count. A selection
+ * survives filter changes, and the announcement counts the hidden ones.
  */
 import { useState, useCallback, useEffect, useMemo } from "react";
 import type { Map as MapLibreMap } from "maplibre-gl";
@@ -100,11 +91,10 @@ export function useMapSelection({
     [activeContacts, addMany],
   );
 
-  // Clear selection on Escape when no modal or menu is open
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !e.defaultPrevented && selectedIds.size > 0) {
-        // If a modal or menu is open, let the modal handle Escape first
+        // An open dialog or menu takes Escape first.
         if (document.querySelector('[role="dialog"], [role="menu"]')) return;
         e.preventDefault();
         clear();

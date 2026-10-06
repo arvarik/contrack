@@ -1,8 +1,6 @@
 /**
  * A card that opens once the pointer rests on its pin, and closes after a
  * grace that the card can cancel, so the pointer can move into it.
- *
- * @module views/map/useHoverCard
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 

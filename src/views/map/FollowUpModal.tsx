@@ -1,9 +1,4 @@
-/**
- * FollowUpModal — one follow-up for each selected contact, sent as one
- * request that saves all of them or none.
- *
- * @module views/map/FollowUpModal
- */
+/** One follow-up per selected contact, in one request: all saved or none. */
 import React, { useState } from "react";
 import { toast } from "sonner";
 import { Loader2, Calendar } from "lucide-react";
@@ -16,7 +11,6 @@ import { RadioDot } from "../../components/ui/RadioDot";
 
 type DueDatePreset = "tomorrow" | "3days" | "nextweek" | "pick";
 
-/** The due date choices, in the order the toggles show them. */
 const PRESETS: { value: DueDatePreset; label: string }[] = [
   { value: "tomorrow", label: "Tomorrow" },
   { value: "3days", label: "3 days" },
@@ -119,11 +113,7 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
         <div>
           <span className={FORM_LABEL}>Due date</span>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-1.5">
-            {/*
-              A selected preset is the tint and its ink, with a filled
-              `RadioDot`, so "chosen" is a shape as well as a hue, and
-              `aria-pressed` says it to a screen reader.
-            */}
+            {/* The `RadioDot` shows "chosen" as a shape, not only a hue. */}
             {PRESETS.map(({ value, label }) => (
               <button
                 key={value}

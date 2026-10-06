@@ -1,17 +1,7 @@
 /**
- * AISearchContactList — Selectable contact list with status badges.
- *
- * Extracted from AISearchView for maintainability and testability.
- * Each row shows: checkbox, avatar, name/role, a status badge, and a link
- * that opens the contact. The link sits beside the row's toggle, not in it,
- * so the two are separate controls with their own names.
- *
- * Status badge logic:
- * - "No page" + date: the last research found no page about this person
- * - ✨ + date: previously searched (aiHydratedAt is non-null), the date
- *   short on a phone ("Jan 20", "Dec 2025")
- * - New: never searched (gray pill)
- * - 🔴 Error: last batch errored for this contact
+ * A selectable contact row with a research status badge. The link to the
+ * contact sits beside the row's toggle, not in it, so the two are separate
+ * controls with their own names.
  */
 import React from "react";
 import { Link } from "react-router-dom";
@@ -30,20 +20,13 @@ import { cn } from "../../../lib/utils";
 import type { Contact } from "../../../types";
 import { activateOnKey } from "../../../lib/a11y";
 
-// ---------------------------------------------------------------------------
-// Contact Row
-// ---------------------------------------------------------------------------
-
 interface ContactRowProps {
   key?: React.Key;
   contact: Contact;
   isSelected: boolean;
   hasError: boolean;
   onToggle: () => void;
-  /**
-   * The link's state for the contact page, such as where its Back goes:
-   * the Enrichment page hands its own filtered list.
-   */
+  /** The link's state for the contact page, such as where its Back goes. */
   openState?: unknown;
 }
 
@@ -56,7 +39,7 @@ export function ContactRow({
 }: ContactRowProps) {
   const words = scoreWords(scoreView(contact));
   return (
-    // A checked row is a selected row: the tint, under both controls.
+    // The selected tint spans both controls.
     <div
       className={cn(
         "flex items-center transition-colors",
@@ -72,7 +55,6 @@ export function ContactRow({
         // badge and the link.
         className="state-layer flex min-w-0 flex-1 items-center gap-3 py-3.5 pl-4 pr-1 cursor-pointer sm:gap-4 sm:pl-6 sm:pr-2"
       >
-        {/* Checkbox */}
         <div
           className={cn(
             "w-5 h-5 rounded-md flex items-center justify-center transition-colors shrink-0",
@@ -84,10 +66,9 @@ export function ContactRow({
           {isSelected && <CheckCheck className="w-3 h-3 text-on-primary" />}
         </div>
 
-        {/* Avatar. The row is a button named by its text, and a named ring
-          here would put the score before the person's name. So the ring is
-          decorative, the tooltip sits on this wrapper, and the score words
-          follow the name below. */}
+        {/* The ring is decorative: the row is a button named by its text,
+            and a named ring would read the score before the name. The score
+            words follow the name. */}
         <div
           className="relative shrink-0"
           title={words ?? undefined}
@@ -96,8 +77,7 @@ export function ContactRow({
           <ScoreRingAvatar contact={contact} size={40} ring="list" decorative />
         </div>
 
-        {/* Info. The name and the line under it wrap: on a phone the row
-            cut both to a few letters. */}
+        {/* The name and role wrap, so a phone does not cut them short. */}
         <div className="flex-1 min-w-0">
           <span className="font-semibold text-sm text-on-surface break-words block text-left">
             {contact.name}
@@ -110,7 +90,6 @@ export function ContactRow({
           {words && <span className="sr-only">{words}</span>}
         </div>
 
-        {/* Status badge */}
         <StatusBadge contact={contact} hasError={hasError} />
       </div>
       {/* Opens the contact, for a detail that helps research find them. */}
@@ -126,10 +105,6 @@ export function ContactRow({
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Status Badge
-// ---------------------------------------------------------------------------
 
 /** The badge at the end of a row, on its tone's wash. */
 const BADGE = "text-[11px] font-bold px-2 py-0.5 rounded-md shrink-0";
@@ -149,8 +124,8 @@ function StatusBadge({ contact, hasError }: StatusBadgeProps) {
     );
   }
 
-  // The last research searched and found no page about this person: the
-  // "Found nothing" filter's rows, which want a detail more before a retry.
+  // The last research found no page about this person. These rows need one
+  // more detail before a retry.
   if (contact.aiHydratedAt && contact.researchOutcome === "no-public-info") {
     return (
       <span className={cn(TONE_WASH.neutral, BADGE, "flex items-center gap-1")}>

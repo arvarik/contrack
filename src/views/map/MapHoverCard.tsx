@@ -1,8 +1,6 @@
 /**
  * The map's cards: a pin's hover card and its phone sheet, and a cluster's
  * preview. A card keeps inside `padding`, the part of the map nothing covers.
- *
- * @module views/map/MapHoverCard
  */
 import React, {
   useEffect,
@@ -64,10 +62,7 @@ const ACTIONS: {
 
 const MORE = "text-[11px] font-semibold text-on-surface-variant";
 
-/**
- * The `tel:` link of the contact's primary phone, or null. A card offers
- * Call only when there is a number to call.
- */
+/** The `tel:` link of the contact's primary phone, or null. */
 const callHref = (contact: MapContact) => {
   const phone = contact.phones?.[0]?.phone;
   return phone ? telHref(phone) : null;
@@ -77,15 +72,11 @@ const callHref = (contact: MapContact) => {
 const CALL_ICON_LINK =
   "state-layer inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-xl p-1.5 text-on-surface-variant hover:text-on-surface";
 
-/**
- * One cell of the phone sheet's row of actions. The cells share the row by
- * their words, so "Follow-up" keeps one line when Call makes the row six
- * cells on a 375 px phone.
- */
+// The cells of the phone sheet share the row by their words, so "Follow-up"
+// keeps one line when Call makes six cells on a 375 px phone.
 const SHEET_ACTION =
   "state-layer flex flex-auto min-w-[44px] min-h-[44px] flex-col items-center justify-center gap-1 rounded-xl px-1 whitespace-nowrap text-[11px] font-semibold text-on-surface";
 
-/** The phone sheet's Call cell, or nothing for a contact with no phone. */
 const SheetCall = ({ contact }: { contact: MapContact }) => {
   const call = callHref(contact);
   return call ? (
@@ -282,10 +273,7 @@ export const MapHoverCard = ({
   );
 };
 
-/**
- * A finger cannot hover, so a tap on a pin shows its card here first. With
- * a phone number, Call joins the row after Open.
- */
+/** A finger cannot hover, so a tap on a pin shows its card here first. */
 export const MapPeekSheet = ({
   contact,
   onAction,

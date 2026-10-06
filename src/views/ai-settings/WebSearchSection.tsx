@@ -1,17 +1,8 @@
 /**
- * WebSearchSection: everything contact research's web search needs, in one
- * place on Administration → AI.
- *
- * 1. "Allow web search": off stops every web search, the web search
- *    model's and SearXNG's. It was the research model's "Off" option, a
- *    model choice that also stopped a second engine and lost a pinned model.
- * 2. The web search model: a model that searches the web itself.
- * 3. The SearXNG address. It was under General, apart from everything it
- *    works with. SEARXNG_URL sets it and locks the field.
- * 4. The web search engine: what research searches with when an account
- *    keeps "Instance default".
- *
- * @module views/ai-settings/WebSearchSection
+ * Everything contact research's web search needs, on Administration → AI.
+ * "Allow web search" is its own switch, not a model choice, so turning it off
+ * stops SearXNG too and keeps a pinned model. SEARXNG_URL sets the SearXNG
+ * address and locks the field.
  */
 import { useState } from "react";
 import { toast } from "sonner";

@@ -1,14 +1,7 @@
 /**
- * The heat layer: where a network gathers, drawn as a density field.
- *
- * It reads its own unclustered copy of the contacts (to a heatmap a cluster
- * is one point), weighs every person, scales to the densest place, and
- * colors density with a ramp that turns with the basemap: darkest for the
- * most over a light map, brightest over a dark one. From zoom 7 it fades,
- * and the pins come back. The approach follows MapLibre's heatmap example
- * and the usual cartography of color ramps.
- *
- * @module views/map/heat
+ * The heat layer: contact density as a heatmap. It reads its own unclustered
+ * copy of the contacts (to a heatmap a cluster is one point). The ramp shows
+ * the most as darkest over a light map and brightest over a dark one.
  */
 import { useEffect, useRef, useState } from "react";
 import type {
@@ -57,18 +50,16 @@ const KERNEL_PEAK = 1 / Math.sqrt(2 * Math.PI);
 const DOUBLINGS = 7;
 
 /**
- * The fewest people the densest place counts as. With nobody sharing a
- * place, one person would otherwise be the whole ramp.
+ * The fewest people the densest place counts as, so one person alone is not
+ * the whole ramp.
  */
 const MIN_DENSEST = 4;
 
 /**
- * The intensity that puts the densest place at full density.
- *
- * The densest place is the heaviest 1 degree cell, about 110 km, which is
- * the heat's radius at a country's zoom. Past 128 people it stops growing,
- * so one person keeps a color on the ramp's first stop, and a bigger place
- * shows as a wider core rather than a darker one.
+ * The intensity that puts the densest place at full density. The densest
+ * place is the heaviest 1 degree cell (about 110 km, the heat's radius at a
+ * country's zoom). It caps at 128 people, so one person keeps a color on the
+ * first stop and a bigger place shows as a wider core, not a darker one.
  */
 export function heatIntensity(
   contacts: readonly Pick<MapContact, "lat" | "lng" | "interactionCount">[],
@@ -87,10 +78,8 @@ export function heatIntensity(
 }
 
 /**
- * The heat layer's paint.
- *
- * The intensity eases up with the zoom: over the world the regions add up
- * and would read heavier than the places in them.
+ * The intensity grows with the zoom: over the world the regions add up and
+ * would read heavier than the places in them.
  */
 export function heatPaint(
   intensity: number,
@@ -119,7 +108,6 @@ export function heatPaint(
   };
 }
 
-/** One stop of the ramp. */
 export interface HeatStop {
   /** The density it sits at, 0 to 1. */
   density: number;
@@ -149,9 +137,8 @@ function mix(from: Oklch, to: Oklch, t: number): Oklch {
 }
 
 /**
- * The ramp for an accent, `--color-primary` as the page computes it, in one
- * palette. Null when the value is not a hex color, the form every token
- * takes: the map then draws no heat rather than a color of its own.
+ * The ramp for `--color-primary` as the page computes it. Null when that is
+ * not a hex color: the map then draws no heat rather than a color of its own.
  */
 export function heatStops(
   primary: string,
@@ -188,9 +175,8 @@ export function heatGradient(stops: readonly HeatStop[]): string {
 }
 
 /**
- * The ramp for the page's accent and palette, while `active`. Read again
- * when either changes, a frame late: the provider paints a new palette in
- * its own effect, after this one.
+ * The ramp for the page's accent and palette, while `active`. It reads a frame
+ * late: the provider paints a new palette in its own effect, after this one.
  */
 export function useHeatStops(active: boolean): HeatStop[] | null {
   const { mode, preferences } = usePreferences();
@@ -313,10 +299,9 @@ export function useHeatReadout(
 }
 
 /**
- * The basemap's first label over its last road, border or fill: where the
- * labels start. A style can put a label lower down (the dark style names the
- * water under its roads), and the heat under that one would have the roads
- * drawn across it.
+ * The basemap's first label above its last non-label layer. A style can put a
+ * label lower down (the dark style names the water under its roads), and heat
+ * under that label would have the roads drawn across it.
  */
 function firstLabelLayer(
   layers: readonly { id: string; type: string }[],
@@ -331,9 +316,8 @@ function firstLabelLayer(
 
 /**
  * Keep the heat under the basemap's labels, so a city's name reads over its
- * own heat. A new style (a palette change) adds the layer back on top, so
- * it moves down again whenever the style changes. The layers the app adds
- * over GeoJSON are not the basemap's and are left out.
+ * heat. A new style (a palette change) adds the layer back on top, so it moves
+ * down on every style change. The app's GeoJSON layers are not the basemap's.
  */
 export function useHeatUnderLabels(map: MapLibreMap | null, enabled: boolean) {
   useEffect(() => {

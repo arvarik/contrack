@@ -1,19 +1,11 @@
 /**
- * AdjustPinModal — put a contact's pin where it belongs, by hand.
+ * Moves a contact's pin by hand when the geocoder placed it wrong: drag it,
+ * click a spot, nudge it with the arrow keys, or find a place by name. The
+ * server marks the row `geoSource = 'manual'`, and the geocoder then leaves
+ * it alone. "Use address again" hands the pin back.
  *
- * The geocoder reads an address and places a pin, and sometimes it reads
- * wrong: the other Springfield, the office instead of the house, a street
- * that two cities share. This dialog is the zero-API fix. A person moves the
- * pin, or chooses a spot on the map, or nudges the pin with the arrow keys,
- * and saves. The hint names the keys only where a keyboard is likely.
- * The server marks the row `geoSource = 'manual'` and the geocoder leaves it
- * alone from then on. "Use address again" hands the pin back.
- *
- * The map inside is {@link ContactMap} with no contacts: the one pin here is
- * a draggable marker of this dialog's own, because a pin the map clusters
- * and a pin a person drags are two different things.
- *
- * @module views/map/AdjustPinModal
+ * The map is {@link ContactMap} with no contacts, and the pin is this
+ * dialog's own draggable marker, because clustered pins cannot be dragged.
  */
 import { useCallback, useEffect, useId, useState } from "react";
 import { Marker, type MarkerDragEvent } from "@vis.gl/react-maplibre";
@@ -33,17 +25,15 @@ import type { MiniMapContact } from "./LocationMiniMap";
 import { CONTACT_ZOOM } from "./mapMath";
 import { NO_AUTOCORRECT } from "../../components/ui/SearchField";
 
-/** Where a pin is, or is about to be. */
 interface PinPosition {
   latitude: number;
   longitude: number;
 }
 
-/** One arrow key moves the pin this many pixels. Shift makes it five times. */
+/** Pixels one arrow key moves the pin, and with Shift. */
 const NUDGE_PX = 10;
 const NUDGE_SHIFT_PX = 50;
 
-/** The pin, as text a person can read back or paste elsewhere. */
 function formatPin(pin: PinPosition): string {
   return `${pin.latitude.toFixed(5)}, ${pin.longitude.toFixed(5)}`;
 }
@@ -108,8 +98,7 @@ export const AdjustPinModal = ({
   const [finding, setFinding] = useState(false);
   const [findError, setFindError] = useState<string | null>(null);
 
-  // A reopened dialog starts from the pin as it is now, not from the last
-  // drag that was canceled.
+  // A reopened dialog starts from the saved pin, not a canceled drag.
   useEffect(() => {
     if (isOpen) setPin(start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -130,9 +119,8 @@ export const AdjustPinModal = ({
   );
 
   /**
-   * Arrow keys move the pin by pixels on the screen, so a nudge is the same
-   * size at every zoom. The key is stopped here, because the map's own
-   * keyboard handler sits above the marker and would pan the map as well.
+   * A nudge is in screen pixels, so it is the same size at every zoom. The
+   * key stops here, or the map's keyboard handler pans the map too.
    */
   const onPinKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -276,10 +264,8 @@ export const AdjustPinModal = ({
                   aria-label={contactPinLabel(contact)}
                   aria-describedby={hintId}
                   onKeyDown={onPinKeyDown}
-                  // MapLibre claims the pointer press for the drag and stops
-                  // its default, which is where a button would have taken
-                  // focus. Taken here instead, so a dragged pin can be
-                  // fine-tuned with the arrow keys straight after.
+                  // MapLibre prevents the press default for the drag, so the
+                  // button takes focus here, ready for the arrow keys.
                   onPointerDown={(event) =>
                     event.currentTarget.focus({ preventScroll: true })
                   }
@@ -296,8 +282,7 @@ export const AdjustPinModal = ({
             )}
           </ContactMap>
         </div>
-        {/* An <output> is a live region by default, so a nudge or a drag reads
-            its new coordinates back without a second element for the job. */}
+        {/* An <output> is a live region, so each move is read aloud. */}
         <output
           aria-label="Pin coordinates"
           className="block text-xs font-mono text-on-surface-variant"

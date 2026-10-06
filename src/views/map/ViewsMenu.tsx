@@ -37,13 +37,10 @@ export interface ViewsMenuProps {
 }
 
 /**
- * The saved-views menu. It is not an `ActionMenu` because each row holds
- * three buttons (select, rename, delete), and an `ActionMenu` row is one
- * item. It paints the same panel and rows, and it keeps the promise
- * `role="menu"` makes: it opens with the focus on the view shown (or the
- * first item), the arrows move between the items and wrap, and Escape goes
- * back to the button, as every action does. A drag, or Alt and an arrow,
- * moves a view.
+ * The saved-views menu. Not an `ActionMenu`, because each row holds three
+ * buttons (select, rename, delete). It keeps the `role="menu"` contract: it
+ * opens with the focus on the view shown, the arrows move and wrap, and
+ * Escape returns to the button. A drag, or Alt and an arrow, moves a view.
  */
 export const ViewsMenu: React.FC<ViewsMenuProps> = ({
   views,
@@ -84,10 +81,8 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
-  /**
-   * Close and hand the focus back to the button, before the action runs. A
-   * dialog the action opens then returns the focus there too.
-   */
+  // Returns the focus to the button before the action runs, so a dialog the
+  // action opens returns it there too.
   const closeMenu = () => {
     setIsOpen(false);
     triggerRef.current?.focus();
@@ -108,9 +103,8 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
         return;
       }
       if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
-      // The arrows move between the items and wrap at the ends. From the
-      // trigger (or a rename or delete button), ArrowDown starts at the
-      // first item and ArrowUp at the last.
+      // The arrows wrap at the ends. From the trigger, ArrowDown starts at
+      // the first item and ArrowUp at the last.
       const items = Array.from(
         containerRef.current?.querySelectorAll<HTMLElement>(
           '[role="menuitem"]',
@@ -149,8 +143,7 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
         aria-expanded={isOpen}
         className={cn(
           "hit-area px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors border",
-          // Selected is the tint and its ink. The border turns transparent
-          // rather than going away, so the toggle keeps its size.
+          // Selected keeps a transparent border, so the toggle keeps its size.
           isOpen || activeViewId
             ? cn(SELECTED_TINT, "border-transparent")
             : "state-layer bg-surface-container-high/60 text-on-surface border-outline-variant/30",
@@ -258,12 +251,9 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
                       <span className="truncate">{view.name}</span>
                     </button>
 
-                    {/*
-                      Rename and Delete are items of the menu too, so the
-                      arrows reach them and a screen reader is not told of
-                      a menu with a button it does not know. Each is a 24 px
-                      target with a 44 px tap box.
-                    */}
+                    {/* Rename and Delete are menu items too, so the arrows
+                        reach them and the menu holds only items. Each is a
+                        24 px target with a 44 px tap box. */}
                     <div className="flex items-center gap-0.5 pr-1 opacity-80 group-hover:opacity-100 shrink-0">
                       <button
                         type="button"

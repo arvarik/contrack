@@ -1,19 +1,9 @@
 /**
- * ProvidersSection: the services Contrack's AI runs on, on Administration →
- * AI.
- *
- * Two kinds, in two lists: the hosted providers (Gemini, OpenAI,
- * Anthropic), each by its key, and OpenAI-compatible servers (Ollama, vLLM,
- * LM Studio, OpenRouter…), each by its address. A key set in the
- * environment says which variable set it, and cannot be removed here.
- *
- * A custom endpoint is a provider on the server, so it arrives in both
- * lists. Rendering both listed it twice, and the second row carried a
- * "remove key" button that deletes from the provider-key store, where a
- * custom endpoint has no entry, so it reported success and removed nothing.
- * The servers list owns them, discovery status included.
- *
- * @module views/ai-settings/ProvidersSection
+ * The services Contrack's AI runs on: hosted providers by their key, and
+ * OpenAI-compatible servers by their address. A key set in the environment
+ * names its variable and cannot be removed here. A custom endpoint is also a
+ * provider on the server, so only the servers list shows it: a key row's
+ * Remove deletes from the key store, where an endpoint has no entry.
  */
 import { useState } from "react";
 import {
@@ -40,11 +30,7 @@ import { ICON_BTN, LABEL } from "../../lib/styles";
 import { cn, errorText } from "../../lib/utils";
 import { SETTINGS_CARD, SETTINGS_SECTION_HEADING } from "../settings/layout";
 
-/**
- * "Add a key" and "Add a server": a flat row in the primary with the state
- * layer, under the connected rows on the wash, so an empty slot never reads
- * as one that is filled.
- */
+/** A flat add row under the filled connected rows, so an empty slot never reads as filled. */
 const ADD_ROW =
   "state-layer w-full min-h-[44px] sm:pointer-fine:min-h-0 flex items-center gap-3 py-2.5 px-3 rounded-xl text-left text-sm font-semibold text-primary";
 
@@ -168,9 +154,8 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
                         </code>
                       </span>
                     )}
-                    {/* Grounding support is a real capability difference between
-                      providers, and it decides whether this one can appear in
-                      the web-research list at all. */}
+                    {/* Grounding decides whether this provider can be the web
+                        search model. */}
                     {provider.supportsGrounding && (
                       <span className="text-[11px] uppercase tracking-[0.08em] bg-info/10 text-info px-1.5 py-0.5 rounded font-bold flex items-center gap-1">
                         <Globe className="w-2.5 h-2.5" />
@@ -266,7 +251,6 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
             ))}
           </div>
 
-          {/* OpenAI-compatible servers */}
           <div
             id="openai-compatible"
             ref={serversRef}
@@ -291,9 +275,8 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
                     <div className="text-xs text-on-surface-variant font-mono truncate">
                       {endpoint.baseUrl}
                     </div>
-                    {/* Discovery status decides whether this endpoint can serve
-                      anything at all: with no models found there is nothing to
-                      call, so saying "connected" alone would be misleading. */}
+                    {/* With no models found there is nothing to call, so
+                        "connected" alone would mislead. */}
                     <div className="text-xs flex items-center gap-2 mt-0.5 flex-wrap">
                       {status?.modelCount ? (
                         <span className="text-success flex items-center gap-1">
@@ -363,7 +346,6 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
         </div>
       </section>
 
-      {/* ── Key modal ─────────────────────────────────────────────────── */}
       <Modal
         isOpen={!!keyModalProvider}
         onClose={() => setKeyModalProvider(null)}
@@ -421,7 +403,6 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
         }
       />
 
-      {/* ── Endpoint modal ────────────────────────────────────────────── */}
       <Modal
         isOpen={endpointModalOpen}
         onClose={() => setEndpointModalOpen(false)}
@@ -432,9 +413,8 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
             Works with Ollama, vLLM, LM Studio, llama.cpp, OpenRouter, xAI,
             DeepSeek and Mistral: any server that speaks the OpenAI API
           </p>
-          {/* The two mistakes that make a working server look broken. Both
-              produce the same "could not reach endpoint" error, and neither is
-              guessable from it. */}
+          {/* Two mistakes make a working server look broken, and the "could
+              not reach" error does not say which. */}
           <ul className="text-xs text-on-surface-variant bg-surface-container-low rounded-lg px-3 py-2 space-y-1 list-disc list-inside">
             <li>
               End the URL with <code className="font-mono">/v1</code>. Ollama

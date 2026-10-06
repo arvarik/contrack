@@ -1,21 +1,11 @@
 /**
- * MapInsightsPane — who is in view, and what they have in common.
+ * Who is in view, and what they have in common: the top industries,
+ * companies and tags (each a filter to press on and off), the time zones,
+ * and the people, the overdue first.
  *
- * From `lg` it is the page's `SidePanel`: a square button with the
- * insights glyph in the map's top-right corner, level with the toolbar, and
- * a 320 px panel that slides in under it from the window's edge. The panel carries
- * `data-covers-map="right"` while it is open, so the map keeps its pins, its
- * toolbar and its controls in the part it leaves (`insets.ts`). Below `lg`
- * the same content opens in a bottom sheet from the toolbar's Insights
- * button. The `mapPaneOpen` preference and the I key open and close it on a
- * wide screen.
- *
- * Two views: a summary of the people in view (their top industries,
- * companies and tags, each a filter to press on and off, and their time
- * zones) and the people themselves, the overdue first. Pointing at a person
- * marks their pin, and a press flies to it and shows their card.
- *
- * @module views/map/MapInsightsPane
+ * From `lg` it is the page's `SidePanel`, marked `data-covers-map="right"`
+ * while open so the map keeps its pins and controls clear of it
+ * (`insets.ts`). Below `lg` the same content opens in a bottom sheet.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -67,7 +57,6 @@ const VIEWS: readonly SegmentedOption<View>[] = [
 /** A scroller that reaches the panel's edges, so its bar sits on the edge. */
 const SCROLLER = SIDE_PANEL_SCROLLER;
 
-/** The small caps heading over each group. */
 const GROUP_HEADING = cn(SECTION_HEADING, "flex items-center gap-1.5 mb-1");
 
 /** What the panel says with no one in view, by the reason. */
@@ -118,11 +107,8 @@ export const MapInsightsPane = ({
 }: MapInsightsPaneProps) => {
   const isWide = useMediaQuery(WIDE_QUERY);
   const [view, setView] = useState<View>("summary");
-  // The switch between the two views. In the side panel it sits in the
-  // heading row, where its two words and the content under it say what the
-  // panel is, so the row holds the switch and the title stays for a screen
-  // reader. In the sheet it heads the content, under the sheet's own
-  // title.
+  // In the side panel the view switch fills the heading row, and the title
+  // stays for a screen reader only. In the sheet it heads the content.
   const viewSwitch = (
     <Segmented<View>
       options={VIEWS}
@@ -322,10 +308,8 @@ const Bars = ({
 
 const ROW_HEIGHT = 56;
 
-/**
- * The people in view, the overdue first and then by name. Virtualized: a
- * network can put thousands in view.
- */
+// The people in view, the overdue first, then by name. Virtualized, since a
+// network can put thousands in view.
 const People = ({
   contacts,
   onSelect,
