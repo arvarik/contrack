@@ -34,6 +34,7 @@ import { Badge } from "../../../components/ui/Badge";
 import type { MergeLogEntry } from "../../../types";
 import { guessMatchType, plainReason } from "../utils/reason";
 import { parseServerTime } from "../../../lib/datetime";
+import { errorText } from "../../../lib/errorText";
 
 /**
  * A merge's time. SQLite writes "2026-10-05 22:52:02" in UTC with no zone,
@@ -97,9 +98,7 @@ function Entry({ entry }: { entry: MergeLogEntry }) {
             : "Contrack will not suggest the two again",
       });
     } catch (err) {
-      toast.error(
-        `Could not undo: ${err instanceof Error ? err.message.replace(/\.$/, "") : String(err)}`,
-      );
+      toast.error(`Could not undo: ${errorText(err)}`);
     } finally {
       setPending(false);
     }

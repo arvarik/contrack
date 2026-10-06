@@ -11,7 +11,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { AlertCircle, Calendar, Loader2, Plus, Users } from "lucide-react";
+import { Calendar, Loader2, Plus, Users } from "lucide-react";
 import {
   useConnectors,
   useConnectorKinds,
@@ -24,7 +24,6 @@ import { ImapFormModal } from "./ImapFormModal";
 import { GoogleFormModal } from "./GoogleFormModal";
 import { RunHistoryDrawer } from "./RunHistoryDrawer";
 import { SettingsHeaderActions } from "../SettingsHeader";
-import { EmptyState } from "../../../components/ui/EmptyState";
 import {
   SETTINGS_CARD,
   SETTINGS_PAGE,
@@ -36,6 +35,7 @@ import type {
   ConnectorKind,
   ConnectorSummary,
 } from "../../../../shared/connectors";
+import { LoadFailed } from "../../../components/ui/LoadFailed";
 
 /**
  * What a Google sign-in that did not finish says, by the reason the server
@@ -178,13 +178,7 @@ export const ConnectorsView: React.FC = () => {
       )}
 
       {isError && (
-        <EmptyState
-          icon={AlertCircle}
-          tone="error"
-          title="Connectors did not load"
-          body="Nothing has changed. Try again in a moment"
-          action={{ label: "Try again", onClick: () => void refetch() }}
-        />
+        <LoadFailed what="connectors" onRetry={() => void refetch()} />
       )}
 
       {!isLoading && !isError && hasConnectors && (

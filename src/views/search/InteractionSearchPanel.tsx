@@ -40,6 +40,7 @@ import React, {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ActivitySquare,
+  AlertCircle,
   AlertTriangle,
   CalendarDays,
   ChevronLeft,
@@ -75,6 +76,7 @@ import type { InteractionSearchHit } from "../../types";
 import { Highlighted } from "../../components/ui/Highlighted";
 import { AskSearchBox } from "./AskSearchBox";
 import { ShimmerCard } from "./SearchResultCards";
+import { errorText } from "../../lib/errorText";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -766,14 +768,10 @@ export const InteractionSearchPanel = () => {
       {search.isError && (
         <div role="alert" className="tile-enter">
           <EmptyState
-            icon={AlertTriangle}
+            icon={AlertCircle}
             tone="error"
-            title="Search failed"
-            body={
-              search.error instanceof Error
-                ? search.error.message
-                : "An unexpected error occurred"
-            }
+            title="Could not search"
+            body={errorText(search.error)}
           />
         </div>
       )}

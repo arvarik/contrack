@@ -13,14 +13,13 @@ import {
   passkeyAutofillSupported,
   signInWithPasskey,
 } from "../../api/passkeys";
-import { isNetworkError } from "../../api/client";
-import { rateLimitMessage } from "../../lib/rateLimitMessage";
 import {
   AuthShell,
   AuthField,
   AuthSubmit,
   AuthError,
   touchFirst,
+  authErrorText,
 } from "./AuthShell";
 import { PasskeyButton } from "./PasskeyButton";
 import { ForgotPassword } from "./ForgotPassword";
@@ -193,16 +192,11 @@ export const SignIn = ({
       } catch {}
       onSignedIn();
     } catch (err) {
-      setError(
-        isNetworkError(err)
-          ? "Can't reach the Contrack server. Is it running?"
-          : // Sign-in shares one per-address budget with register, accept-
-            // invitation and change-password. A refusal for that reason is
-            // not a wrong password, and saying "incorrect" would send
-            // somebody hunting for a password that was right.
-            (rateLimitMessage(err) ??
-              (err instanceof Error ? err.message : "Sign-in failed")),
-      );
+      // Sign-in shares one per-address budget with register, accept-
+      // invitation and change-password. A refusal for that reason is not a
+      // wrong password, and saying "incorrect" would send somebody hunting
+      // for a password that was right.
+      setError(authErrorText(err, "Could not sign in"));
       // Clear only the password. Retyping a username you already got right is
       // busywork, and the failure is almost always the other field.
       setPassword("");
@@ -396,14 +390,7 @@ const MagicLinkRequest = ({
       await requestMagicLink(email.trim());
       setSent(true);
     } catch (err) {
-      setError(
-        isNetworkError(err)
-          ? "Can't reach the Contrack server. Is it running?"
-          : (rateLimitMessage(err) ??
-              (err instanceof Error
-                ? err.message
-                : "Could not send sign-in link")),
-      );
+      setError(authErrorText(err, "Could not send sign-in link"));
     } finally {
       setBusy(false);
     }

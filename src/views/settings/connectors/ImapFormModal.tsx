@@ -24,6 +24,7 @@ import type {
 } from "../../../../shared/connectors";
 import { FORM_INPUT, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
+import { errorText } from "../../../lib/errorText";
 
 interface ImapFormModalProps {
   isOpen: boolean;
@@ -156,7 +157,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
       setTestResult({ ok: true, message: res.detail });
       toast.success(res.detail);
     } catch (err) {
-      const msg = (err as Error).message || "Connection test failed";
+      const msg = errorText(err) || "Could not test the connection";
       setTestResult({ ok: false, message: msg });
       toast.error(msg);
     }
@@ -222,7 +223,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
       }
       onClose();
     } catch (err) {
-      const msg = (err as Error).message || "Failed to save connector";
+      const msg = errorText(err) || "Could not save the connector";
       setFormError(msg);
       toast.error(msg);
     }

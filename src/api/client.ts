@@ -127,7 +127,7 @@ export function retryApiQuery(failures: number, error: unknown): boolean {
  */
 export class NetworkError extends Error {
   constructor(cause?: unknown) {
-    super("Can't reach the Contrack server");
+    super("Could not reach the server");
     this.name = "NetworkError";
     this.cause = cause;
   }

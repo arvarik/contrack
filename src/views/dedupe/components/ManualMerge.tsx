@@ -11,6 +11,7 @@ import { withUndo } from "../../../lib/undoToast";
 import { suggestKeeper } from "../utils/mergeOutcome";
 import { SelectStage } from "./manual/SelectStage";
 import { CompareStage } from "./manual/CompareStage";
+import { errorText } from "../../../lib/errorText";
 
 // =============================================================================
 // ManualMerge — choose contacts, then compare and merge them
@@ -74,9 +75,7 @@ export const ManualMerge = () => {
       });
       const undo = withUndo(() => {
         void undoMerges(qc, result.mergeLogIds, false).catch((err: unknown) =>
-          toast.error(
-            `Could not undo: ${err instanceof Error ? err.message : String(err)}`,
-          ),
+          toast.error(`Could not undo: ${errorText(err)}`),
         );
       });
       if (result.merged === 0) {
@@ -99,9 +98,7 @@ export const ManualMerge = () => {
       setPrimaryId(null);
       setStage("select");
     } catch (err: unknown) {
-      toast.error(
-        `Could not merge: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      toast.error(`Could not merge: ${errorText(err)}`);
     }
   }, [primary, others, mergeCluster, qc]);
 

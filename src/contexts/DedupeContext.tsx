@@ -35,6 +35,7 @@ import {
 import { toast } from "sonner";
 import { rateLimitFacts } from "../api/client";
 import type { DedupeScanMode, DedupeScanProgress } from "../types";
+import { errorText } from "../lib/errorText";
 
 interface DedupeContextValue {
   startScan: (mode: DedupeScanMode) => void;
@@ -257,7 +258,7 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
               );
               return;
             }
-            toast.error(err instanceof Error ? err.message : String(err));
+            toast.error(`Could not check for duplicates: ${errorText(err)}`);
           },
         },
       );

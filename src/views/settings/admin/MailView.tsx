@@ -16,7 +16,6 @@ import {
 import { useAuth } from "../../../components/auth/AuthGate";
 import { Badge, type BadgeTone } from "../../../components/ui/Badge";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
-import { EmptyState } from "../../../components/ui/EmptyState";
 import { Switch } from "../../../components/ui/Switch";
 import { cn } from "../../../lib/utils";
 import {
@@ -26,6 +25,7 @@ import {
   SETTINGS_PAGE,
   SETTINGS_SECTION_HEADING,
 } from "../layout";
+import { LoadFailed } from "../../../components/ui/LoadFailed";
 
 /** One field of the form: its name over it. */
 const Field = ({
@@ -76,13 +76,7 @@ export const MailView = () => {
   if (isError) {
     return (
       <div className={SETTINGS_PAGE}>
-        <EmptyState
-          icon={AlertCircle}
-          tone="error"
-          title="Mail settings did not load"
-          body="Nothing has changed. Try again in a moment"
-          action={{ label: "Try again", onClick: () => void refetch() }}
-        />
+        <LoadFailed what="the mail settings" onRetry={() => void refetch()} />
       </div>
     );
   }

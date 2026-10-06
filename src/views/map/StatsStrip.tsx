@@ -32,7 +32,7 @@ const LINE_BUTTON =
 
 const EMPTY_LINE: Record<MapEmpty, string> = {
   loading: "Loading contacts…",
-  failed: "Could not load contacts",
+  failed: "Could not load your contacts",
   none: "No one is on the map yet",
 };
 

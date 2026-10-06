@@ -11,7 +11,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  AlertCircle,
   Check,
   ChevronRight,
   Hash,
@@ -42,6 +41,8 @@ import {
 import { cn } from "../../../lib/utils";
 import { tagFilterPath } from "../../contact-list/hooks/useContactListFilters";
 import { SETTINGS_INPUT, SETTINGS_PAGE } from "../layout";
+import { errorText } from "../../../lib/errorText";
+import { LoadFailed } from "../../../components/ui/LoadFailed";
 
 /** A tag row's icon buttons: flat, with the one hover layer. */
 const ROW_ACTION =
@@ -59,9 +60,6 @@ function reach(t: TagSummary): string {
     ? `${contacts(t.total)}, ${hidden} of them archived or in the Trash`
     : contacts(t.total);
 }
-
-const errorText = (err: unknown, fallback: string) =>
-  err instanceof Error ? err.message : fallback;
 
 export const TagsPage = () => {
   const { data: tags = [], isLoading, isError, refetch } = useTagSummary();
@@ -185,13 +183,7 @@ export const TagsPage = () => {
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
         </div>
       ) : isError ? (
-        <EmptyState
-          icon={AlertCircle}
-          tone="error"
-          title="Tags did not load"
-          body="Nothing has changed. Try again in a moment"
-          action={{ label: "Try again", onClick: () => void refetch() }}
-        />
+        <LoadFailed what="your tags" onRetry={() => void refetch()} />
       ) : tags.length === 0 ? (
         <EmptyState icon={Tag} title="No tags yet" />
       ) : (

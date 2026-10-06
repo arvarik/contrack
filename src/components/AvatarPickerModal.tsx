@@ -23,6 +23,7 @@ import {
 } from "../lib/styles";
 import { Segmented } from "./ui/Segmented";
 import { usePreferences } from "../contexts/PreferencesContext";
+import { errorText } from "../lib/errorText";
 
 // ---------------------------------------------------------------------------
 // Dicebear cartoon presets — a curated set of fun seeds across 3 styles
@@ -178,9 +179,7 @@ export const AvatarPickerModal = ({
             handleClose();
           },
           onError: (err) =>
-            toast.error(
-              `Upload failed: ${err instanceof Error ? err.message : String(err)}`,
-            ),
+            toast.error(`Could not upload the photo: ${errorText(err)}`),
         },
       );
     } else if (tab === "avatar" && selectedUrl) {
@@ -192,9 +191,7 @@ export const AvatarPickerModal = ({
             handleClose();
           },
           onError: (err) =>
-            toast.error(
-              `Could not save the avatar: ${err instanceof Error ? err.message : String(err)}`,
-            ),
+            toast.error(`Could not save the avatar: ${errorText(err)}`),
         },
       );
     }

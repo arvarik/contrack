@@ -32,6 +32,7 @@ import { CorvidMark } from "../components/brand/CorvidMark";
 import { cn } from "../lib/utils";
 import { FloatingContactCard } from "../components/FloatingContactCard";
 import { SETTINGS_PAGE } from "./settings/layout";
+import { errorText } from "../lib/errorText";
 
 // ---------------------------------------------------------------------------
 // ArchivedContactsView — lists archived contacts with individual + bulk restore
@@ -41,9 +42,6 @@ import { SETTINGS_PAGE } from "./settings/layout";
 // for. A row opens the contact's card; its name is the button a keyboard
 // reaches, since the row itself is not one.
 // ---------------------------------------------------------------------------
-
-const errorText = (err: unknown) =>
-  err instanceof Error ? err.message : String(err);
 
 export const ArchivedContactsView = () => {
   const { data: contacts = [], isLoading } = useArchivedContacts();

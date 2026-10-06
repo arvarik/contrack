@@ -14,7 +14,7 @@ import {
 } from "react-router-dom";
 import { addDays } from "date-fns";
 import { toast } from "sonner";
-import { HeartPulse, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import {
   useDashboard,
   useDailyInsight,
@@ -37,7 +37,6 @@ import {
   useHiddenPendingIds,
 } from "../../lib/pendingDeletes";
 import { PAGE_TOP, PAGE_X } from "../../lib/styles";
-import { EmptyState } from "../../components/ui/EmptyState";
 import { cn } from "../../lib/utils";
 import {
   resolveLayout,
@@ -71,6 +70,7 @@ import { ComingUpCard } from "./cards/ComingUpCard";
 import { ActivityCard } from "./cards/ActivityCard";
 import { KeepingUpCard } from "./cards/KeepingUpCard";
 import { CompositionCard } from "./cards/CompositionCard";
+import { LoadFailed } from "../../components/ui/LoadFailed";
 
 const DuplicatesPage = React.lazy(() =>
   import("./pages/DuplicatesPage").then((m) => ({ default: m.DuplicatesPage })),
@@ -615,12 +615,10 @@ const PulseOffice = () => {
   if (isError && !dashboard) {
     return (
       <div className="w-full h-full flex items-center justify-center p-8">
-        <EmptyState
-          icon={HeartPulse}
-          tone="error"
-          title="Could not load Pulse"
+        <LoadFailed
+          what="Pulse"
           body="Check that the server is running, then try again"
-          action={{ label: "Try again", onClick: () => void refetch() }}
+          onRetry={() => void refetch()}
         />
       </div>
     );

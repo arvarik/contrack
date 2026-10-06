@@ -21,7 +21,6 @@ import React, {
 } from "react";
 import { useMatch, useNavigate, useLocation } from "react-router-dom";
 import {
-  AlertCircle,
   ArrowLeft,
   ArrowRight,
   Search,
@@ -116,6 +115,8 @@ import { ActionMenu } from "../../components/ui/ActionMenu";
 import { RailTooltip } from "../../components/ui/RailTooltip";
 import { useSwapFocus } from "../../components/bulk/useSwapFocus";
 import { settleSlide } from "../settings/slide";
+import { errorText } from "../../lib/errorText";
+import { LoadFailed } from "../../components/ui/LoadFailed";
 
 /**
  * What to try when a search matches no one. A facet value the search does
@@ -1535,12 +1536,9 @@ export const ContactList = () => {
           cannot be reached, so a 500 left the list blank.
         */}
         {!isLoading && isError && activeContactCount === 0 && (
-          <EmptyState
-            icon={AlertCircle}
-            tone="error"
-            title="Your contacts did not load"
-            body="Nothing has changed. Try again in a moment"
-            action={{ label: "Retry", onClick: () => void refetch() }}
+          <LoadFailed
+            what="your contacts"
+            onRetry={() => void refetch()}
             level={id ? 3 : 2}
           />
         )}
@@ -1685,8 +1683,7 @@ export const ContactList = () => {
             setIsCreateListOpen(false);
             toast.success(`Created list "${name}"`);
           } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err);
-            toast.error(`Could not create the list: ${message}`);
+            toast.error(`Could not create the list: ${errorText(err)}`);
           }
         }}
         isCreateListPending={createList.isPending}

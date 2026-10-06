@@ -16,6 +16,7 @@ import { cn } from "../lib/utils";
 import { fallbackAvatarUrl } from "../lib/avatar";
 import type { TrashedContact } from "../types";
 import { SETTINGS_PAGE } from "./settings/layout";
+import { errorText } from "../lib/errorText";
 
 // ---------------------------------------------------------------------------
 // TrashView — recently deleted contacts with restore + permanent delete
@@ -51,8 +52,6 @@ export const TrashView = () => {
   const empty = useEmptyTrash();
   const [purgeTarget, setPurgeTarget] = useState<TrashedContact | null>(null);
   const [confirmEmpty, setConfirmEmpty] = useState(false);
-  const errorText = (err: unknown) =>
-    err instanceof Error ? err.message : String(err);
 
   const handleRestore = (item: TrashedContact) => {
     restore.mutate(item.id, {

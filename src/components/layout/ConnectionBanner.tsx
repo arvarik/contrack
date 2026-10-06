@@ -59,7 +59,7 @@ export const ConnectionBanner = () => {
               ) : (
                 <RefreshCw className="w-3.5 h-3.5" />
               )}
-              {isRetrying ? "Retrying…" : "Retry"}
+              {isRetrying ? "Trying again…" : "Try again"}
             </button>
           </div>
         </motion.div>

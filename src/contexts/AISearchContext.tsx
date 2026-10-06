@@ -57,6 +57,7 @@ import {
 import { engineThatRuns } from "../lib/aiFeatures";
 import { usePreferences } from "./PreferencesContext";
 import { AISearchProgressOverlay } from "../views/ai-search/components/AISearchProgressOverlay";
+import { errorText } from "../lib/errorText";
 
 /** How one call to `startSearch` reports a limit. */
 interface StartSearchOptions {
@@ -255,7 +256,7 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
               return;
             }
             setLimitMessage(null);
-            toast.error(err instanceof Error ? err.message : String(err));
+            toast.error(`Could not start the research: ${errorText(err)}`);
           },
         },
       );

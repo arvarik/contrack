@@ -14,14 +14,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import {
-  AlertCircle,
-  EyeOff,
-  Loader2,
-  UserCheck,
-  UserPlus,
-  UserRound,
-} from "lucide-react";
+import { EyeOff, Loader2, UserCheck, UserPlus, UserRound } from "lucide-react";
 import {
   useCorrespondents,
   useIgnoreCorrespondent,
@@ -41,6 +34,8 @@ import {
   TONE_WASH,
 } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
+import { LoadFailed } from "../../../components/ui/LoadFailed";
+import { errorText } from "../../../lib/errorText";
 
 /**
  * A name to start from, out of an address's local part: "rowan.vale" and
@@ -96,9 +91,7 @@ export const CorrespondentsView: React.FC = () => {
       toast.success(`Added ${displayName} as a contact`);
       void refetch();
     } catch (err) {
-      toast.error(
-        `Could not add ${displayName}${(err as Error).message ? `: ${(err as Error).message}` : ""}`,
-      );
+      toast.error(`Could not add ${displayName}: ${errorText(err)}`);
     } finally {
       setProcessingId(null);
     }
@@ -117,9 +110,7 @@ export const CorrespondentsView: React.FC = () => {
       toast.success(`Ignored ${displayName}`);
       void refetch();
     } catch (err) {
-      toast.error(
-        `Could not ignore ${displayName}${(err as Error).message ? `: ${(err as Error).message}` : ""}`,
-      );
+      toast.error(`Could not ignore ${displayName}: ${errorText(err)}`);
     } finally {
       setProcessingId(null);
     }
@@ -139,13 +130,7 @@ export const CorrespondentsView: React.FC = () => {
       )}
 
       {isError && (
-        <EmptyState
-          icon={AlertCircle}
-          tone="error"
-          title="Correspondents did not load"
-          body="Nothing has changed. Try again in a moment"
-          action={{ label: "Try again", onClick: () => void refetch() }}
-        />
+        <LoadFailed what="correspondents" onRetry={() => void refetch()} />
       )}
 
       {/* One card: a strip that counts them, then a row for each. */}

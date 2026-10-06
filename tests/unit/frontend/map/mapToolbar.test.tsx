@@ -244,7 +244,7 @@ describe("MapToolbar and useMapFilter", () => {
     expect(toast).toHaveBeenCalledWith("Showing Paris, France");
     await waitFor(() =>
       expect(screen.getByRole("alert").textContent).toBe(
-        "Can't reach the Contrack server",
+        "Could not reach the server",
       ),
     );
   });

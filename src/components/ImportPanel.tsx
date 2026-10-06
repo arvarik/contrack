@@ -57,6 +57,7 @@ import { TAB_CONTAINER, TONE_WASH, tabItem } from "../lib/styles";
 import { DURATION, EASE } from "../lib/motion";
 import { cn } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
+import { errorText } from "../lib/errorText";
 
 interface ImportPanelProps {
   onComplete?: (summary: ImportSummary) => void;
@@ -257,7 +258,7 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
               return;
             }
           } else {
-            setError(err instanceof Error ? err.message : String(err));
+            setError(errorText(err));
             setPhase("failed");
             setProgress(null);
             return;
@@ -308,10 +309,7 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
           await poll(id);
           return;
         }
-        setError(
-          (err instanceof Error ? err.message : String(err)) ||
-            "Could not import the file",
-        );
+        setError(errorText(err) || "Could not import the file");
         setPhase("idle");
         setProgress(null);
         return;
@@ -366,10 +364,7 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
       newContacts = parsed.contacts;
       setSkipped(parsed.skipped);
     } catch (err: unknown) {
-      setError(
-        (err instanceof Error ? err.message : String(err)) ||
-          "Could not read the file",
-      );
+      setError(errorText(err) || "Could not read the file");
       setPhase("idle");
       setProgress(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -433,7 +428,7 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
       ) {
         await poll(importId);
       } else {
-        setError(err instanceof Error ? err.message : String(err));
+        setError(errorText(err));
       }
     } finally {
       setIsRetrying(false);

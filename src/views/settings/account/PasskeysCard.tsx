@@ -34,7 +34,8 @@ import { EmptyState } from "../../../components/ui/EmptyState";
 import { ICON_BTN, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { SETTINGS_CARD, SETTINGS_INPUT } from "../layout";
-import { LoadFailed } from "../LoadFailed";
+import { errorText } from "../../../lib/errorText";
+import { LoadFailed } from "../../../components/ui/LoadFailed";
 
 function formatWhen(iso: string): string {
   const date = new Date(iso.includes("T") ? iso : `${iso.replace(" ", "T")}Z`);
@@ -98,9 +99,7 @@ export const PasskeysCard = () => {
     } catch (err: unknown) {
       const errName = (err as { name?: string })?.name;
       if (errName !== "AbortError" && errName !== "NotAllowedError") {
-        toast.error(
-          err instanceof Error ? err.message : "Could not add the passkey",
-        );
+        toast.error(`Could not add the passkey: ${errorText(err)}`);
       }
     } finally {
       setIsAdding(false);
@@ -161,7 +160,11 @@ export const PasskeysCard = () => {
       {isLoading ? (
         <p className="text-sm text-on-surface-variant">Loading passkeys…</p>
       ) : isError ? (
-        <LoadFailed what="your passkeys" onRetry={() => void refetch()} />
+        <LoadFailed
+          what="your passkeys"
+          onRetry={() => void refetch()}
+          level={3}
+        />
       ) : passkeys.length === 0 ? (
         <EmptyState
           icon={KeyRound}

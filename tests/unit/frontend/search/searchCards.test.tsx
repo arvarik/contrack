@@ -296,9 +296,11 @@ describe("the streamed brief", () => {
     pending.push(
       line({ phase: "error", error: "The provider is not answering" }),
     );
-    await screen.findByText("Synthesis failed: The provider is not answering");
+    await screen.findByText(
+      "Could not write the summary: The provider is not answering",
+    );
     expect(screen.queryByText("You have")).toBeNull();
-    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
     expect(summaryStatus().textContent).toBe("");
   });
 
@@ -322,7 +324,9 @@ describe("the streamed brief", () => {
           line({ phase: "complete", text: FINAL }),
       ),
     );
-    await screen.findByText("Synthesis failed: The summary is too long");
+    await screen.findByText(
+      "Could not write the summary: The summary is too long",
+    );
     expect(screen.queryByText(FINAL)).toBeNull();
     expect(summaryStatus().textContent).toBe("");
   });

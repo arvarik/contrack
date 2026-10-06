@@ -14,9 +14,8 @@
 import React, { useEffect, useState } from "react";
 import { Loader2, MailCheck } from "lucide-react";
 import { acceptInvitation, checkInvitation } from "../../api/auth";
-import { isNetworkError, ApiError } from "../../api/client";
-import { rateLimitMessage } from "../../lib/rateLimitMessage";
-import { AuthShell, AuthSubmit, AuthError } from "./AuthShell";
+import { ApiError } from "../../api/client";
+import { AuthShell, AuthSubmit, AuthError, authErrorText } from "./AuthShell";
 import {
   AccountFields,
   createAccountThenPhoto,
@@ -88,14 +87,7 @@ export const AcceptInvitation = ({
       onAccepted();
     } catch (err) {
       if (isDeadLink(err)) setDead(true);
-      setFormError(
-        isNetworkError(err)
-          ? "Can't reach the Contrack server. Is it running?"
-          : (rateLimitMessage(err) ??
-              (err instanceof Error
-                ? err.message
-                : "Could not accept the invitation")),
-      );
+      setFormError(authErrorText(err, "Could not accept the invitation"));
       setBusy(false);
     }
   };

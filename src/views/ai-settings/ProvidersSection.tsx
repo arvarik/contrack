@@ -39,6 +39,7 @@ import { useHashTarget } from "../settings/SettingRow";
 import { ICON_BTN, LABEL } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { SETTINGS_CARD, SETTINGS_SECTION_HEADING } from "../settings/layout";
+import { errorText } from "../../lib/errorText";
 
 /**
  * "Add a key" and "Add a server": a flat row in the primary with the state
@@ -110,9 +111,7 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
       setKeyModalProvider(null);
       setKeyInput("");
     } catch (err) {
-      toast.error(
-        `Could not connect: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      toast.error(`Could not connect: ${errorText(err)}`);
     }
   };
 
@@ -128,9 +127,7 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
       setEndpointModalOpen(false);
       setEndpointForm({ id: "", label: "", baseUrl: "", apiKey: "" });
     } catch (err) {
-      toast.error(
-        `Could not reach the server: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      toast.error(`Could not reach the server: ${errorText(err)}`);
     }
   };
 

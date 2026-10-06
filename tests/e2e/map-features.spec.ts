@@ -219,7 +219,7 @@ test.describe("map features - filters and place search", () => {
   });
 
   // A failed load read "No one in view", with no message and no retry.
-  test("says when the contacts did not load, and loads them on Retry", async ({
+  test("says when the contacts did not load, and loads them on Try again", async ({
     page,
   }) => {
     let failing = true;
@@ -237,14 +237,14 @@ test.describe("map features - filters and place search", () => {
     await page.goto("/map");
     const failed = page
       .getByRole("alert")
-      .filter({ hasText: "Could not load contacts" });
+      .filter({ hasText: "Could not load your contacts" });
     await expect(failed).toBeVisible();
     await expect(page.getByRole("region", { name: "In view" })).toContainText(
-      "Could not load contacts",
+      "Could not load your contacts",
     );
 
     failing = false;
-    await page.getByRole("button", { name: "Retry" }).click();
+    await page.getByRole("button", { name: "Try again" }).click();
     await expect(
       page
         .getByRole("region", { name: "Contact map" })

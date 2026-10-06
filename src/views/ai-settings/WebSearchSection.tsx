@@ -27,6 +27,7 @@ import { EngineChoice } from "../settings/EngineChoice";
 import { SETTINGS_CARD, SETTINGS_SECTION_HEADING } from "../settings/layout";
 import { cn } from "../../lib/utils";
 import { ModelRow } from "./ModelRow";
+import { errorText } from "../../lib/errorText";
 
 const FIELD =
   "w-full min-h-[44px] sm:pointer-fine:min-h-0 px-3 py-2 rounded-xl bg-surface-container-highest text-sm font-mono";
@@ -42,7 +43,9 @@ export function WebSearchSection({ settings }: { settings: AISettings }) {
         onSuccess: () =>
           toast.success(on ? "Web search is on" : "Web search is off"),
         onError: (err) =>
-          toast.error(err instanceof Error ? err.message : String(err)),
+          toast.error(
+            `Could not turn web search ${on ? "on" : "off"}: ${errorText(err)}`,
+          ),
       },
     );
 
@@ -127,7 +130,7 @@ function SearxngField({
         toast.success(message);
       },
       onError: (err) =>
-        toast.error(err instanceof Error ? err.message : String(err)),
+        toast.error(`Could not save the address: ${errorText(err)}`),
     });
 
   return (

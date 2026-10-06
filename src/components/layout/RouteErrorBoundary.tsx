@@ -126,7 +126,7 @@ export class RouteErrorBoundary extends Component<Props, State> {
               ) : (
                 <RotateCcw aria-hidden="true" className="w-4 h-4" />
               )}
-              {isChunk ? "Reload the page" : "Retry"}
+              {isChunk ? "Reload the page" : "Try again"}
             </button>
           </div>
         </div>

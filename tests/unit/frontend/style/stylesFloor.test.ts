@@ -473,4 +473,15 @@ describe("the shared helpers", () => {
   it("closes every dialog with DialogCloseButton, the one X named Close dialog", () => {
     expect(usersOutside("components/ui/Modal.tsx", /Close dialog/)).toEqual([]);
   });
+
+  it("reads an error's words through errorText, which drops the closing period", () => {
+    // ListPicker.tsx is reserved in PR #196. It leaves this list when it
+    // moves to errorText.
+    expect(
+      usersOutside(
+        "lib/errorText.ts",
+        /instanceof Error\s*(?:\?|&&)\s*\w+\.message|as Error\)\.message/,
+      ),
+    ).toEqual(["components/command-palette/ListPicker.tsx"]);
+  });
 });

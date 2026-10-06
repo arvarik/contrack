@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Modal } from "../../components/ui/Modal";
 import type { MapView } from "../../api/mapViews";
 import { FORM_INPUT, FORM_LABEL } from "../../lib/styles";
+import { errorText } from "../../lib/errorText";
 
 interface RenameViewModalProps {
   view: MapView | null;
@@ -49,7 +50,7 @@ export const RenameViewModal: React.FC<RenameViewModalProps> = ({
       await onRename(view.id, trimmed);
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to rename view");
+      setError(errorText(err, "Could not rename the view"));
     } finally {
       setIsSaving(false);
     }

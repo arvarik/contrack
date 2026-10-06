@@ -100,6 +100,7 @@ import { LiveStatus } from "../../components/ui/LiveStatus";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { boundsOf, degreesAcross, densestSpan } from "./mapMath";
 import { cn } from "../../lib/utils";
+import { errorText } from "../../lib/errorText";
 
 // The dialog's chunk loads the first time a card asks for it.
 const AdjustPinModal = lazy(() =>
@@ -488,7 +489,7 @@ export const MapView = () => {
             },
             onError: (err) => {
               toast.error(
-                `Failed: ${err instanceof Error ? err.message : String(err)}`,
+                `Could not add the contact to the list: ${errorText(err)}`,
               );
             },
           },
@@ -881,14 +882,14 @@ export const MapView = () => {
           >
             <div className="pointer-events-auto glass-panel shadow-xl rounded-2xl border border-outline-variant/20 flex items-center gap-3 py-2 pl-4 pr-2">
               <p role="alert" className="text-sm font-semibold text-on-surface">
-                Could not load contacts
+                Could not load your contacts
               </p>
               <button
                 type="button"
                 onClick={() => void refetch()}
                 className="btn-secondary btn-sm"
               >
-                Retry
+                Try again
               </button>
             </div>
           </div>

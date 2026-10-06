@@ -38,7 +38,7 @@ describe("StatsStrip", () => {
   it("says why nobody is on the map, in place of the count", () => {
     for (const [empty, words] of [
       ["loading", "Loading contacts…"],
-      ["failed", "Could not load contacts"],
+      ["failed", "Could not load your contacts"],
       ["none", "No one is on the map yet"],
     ] as const) {
       render(

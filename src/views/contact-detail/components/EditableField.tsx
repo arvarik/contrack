@@ -3,6 +3,7 @@ import { Check, Loader2, Pencil } from "lucide-react";
 import { cn } from "../../../lib/utils";
 import { EDITABLE_INPUT } from "../../../lib/styles";
 import { useMediaQuery } from "../../../hooks/useMediaQuery";
+import { errorText } from "../../../lib/errorText";
 
 /**
  * The pencil after an editable value.
@@ -147,9 +148,7 @@ export function EditableField({
       }
     } catch (err) {
       if (mounted.current) {
-        setError(
-          err instanceof Error && err.message ? err.message : "Save failed",
-        );
+        setError(errorText(err) || "Could not save");
       }
     } finally {
       pending.current = false;

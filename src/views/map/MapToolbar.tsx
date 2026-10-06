@@ -56,6 +56,7 @@ import { cn } from "../../lib/utils";
 import { SELECTED_TINT, TONE_WASH } from "../../lib/styles";
 import { useMediaQuery, WIDE_QUERY } from "../../hooks/useMediaQuery";
 import { PaletteButton } from "../../components/command-palette/PaletteButton";
+import { errorText } from "../../lib/errorText";
 
 const LAYER_OPTIONS: readonly SegmentedOption<MapLayer>[] = [
   { value: "pins", label: "Pins" },
@@ -240,10 +241,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
       setIsMobileSheetOpen(false);
     } catch (error) {
       // The server says which: nothing found, a busy geocoder, no server.
-      setGotoError(
-        (error instanceof Error && error.message) ||
-          "Nothing found for that place",
-      );
+      setGotoError(errorText(error) || "Nothing found for that place");
     } finally {
       setGotoLoading(false);
     }

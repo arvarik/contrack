@@ -12,9 +12,7 @@
 import React, { useState } from "react";
 import { Loader2, UserPlus } from "lucide-react";
 import { registerAccount } from "../../api/auth";
-import { isNetworkError } from "../../api/client";
-import { rateLimitMessage } from "../../lib/rateLimitMessage";
-import { AuthShell, AuthSubmit, AuthError } from "./AuthShell";
+import { AuthShell, AuthSubmit, AuthError, authErrorText } from "./AuthShell";
 import {
   AccountFields,
   createAccountThenPhoto,
@@ -52,14 +50,7 @@ export const Register = ({
       );
       onRegistered();
     } catch (err) {
-      setFormError(
-        isNetworkError(err)
-          ? "Can't reach the Contrack server. Is it running?"
-          : (rateLimitMessage(err) ??
-              (err instanceof Error
-                ? err.message
-                : "Could not create the account")),
-      );
+      setFormError(authErrorText(err, "Could not create the account"));
       setBusy(false);
     }
   };

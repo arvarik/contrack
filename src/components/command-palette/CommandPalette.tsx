@@ -51,6 +51,7 @@ import { FacetAutocomplete } from "./FacetAutocomplete";
 import { ActionSubMenu } from "./ActionSubMenu";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import { useCloseRequest } from "../../hooks/useCloseRequest";
+import { errorText } from "../../lib/errorText";
 
 /** The icon at the start of the input, swapped when the mode changes. */
 const ICON_SWAP = {
@@ -495,9 +496,7 @@ export const CommandPalette = () => {
       handleClose();
       toast.success(`Created contact ${newContact.name}`);
     } catch (e: unknown) {
-      toast.error(
-        `Could not create the contact: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      toast.error(`Could not create the contact: ${errorText(e)}`);
     }
   };
 
@@ -526,9 +525,7 @@ export const CommandPalette = () => {
       handleClose();
       toast.success(`Logged ${kind} for ${contact.name}`);
     } catch (e: unknown) {
-      toast.error(
-        `Could not log the interaction: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      toast.error(`Could not log the interaction: ${errorText(e)}`);
     }
   };
 

@@ -31,6 +31,7 @@ import { contactPinLabel, pinAvatarSrc } from "./ContactMarker";
 import { flyToContact } from "./flyTo";
 import type { MiniMapContact } from "./LocationMiniMap";
 import { CONTACT_ZOOM } from "./mapMath";
+import { errorText } from "../../lib/errorText";
 
 /** Where a pin is, or is about to be. */
 interface PinPosition {
@@ -187,7 +188,7 @@ export const AdjustPinModal = ({
       setPin({ latitude: found.lat, longitude: found.lng });
       if (map) flyToContact(map, { longitude: found.lng, latitude: found.lat });
     } catch (error) {
-      setFindError(error instanceof Error ? error.message : String(error));
+      setFindError(errorText(error));
     } finally {
       setFinding(false);
     }

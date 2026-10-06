@@ -83,6 +83,8 @@ import { isAiReason, plainReason, reasonIcon } from "../utils/reason";
 import { suggestKeeper, type ReviewContact } from "../utils/mergeOutcome";
 import { DuplicateDetail, groupName } from "./DuplicateDetail";
 import { DuplicateCheck, useDuplicateCheck } from "./DuplicateCheck";
+import { errorText } from "../../../lib/errorText";
+import { LoadFailed } from "../../../components/ui/LoadFailed";
 
 /** A merge request names at most this many contacts besides the one kept. */
 const MERGE_LIMIT = 10;
@@ -91,9 +93,6 @@ const MERGE_LIMIT = 10;
 const UNDO_TOAST = "duplicates-undo";
 
 const LEVELS: MatchLevel[] = ["very-likely", "likely", "check"];
-
-const errorText = (err: unknown) =>
-  err instanceof Error ? err.message.replace(/\.$/, "") : String(err);
 
 /** What tells one contact from another of the same name. */
 function hint(contact: ReviewContact): string | null {
@@ -542,12 +541,7 @@ export const DuplicateQueue = () => {
 
   if (isError) {
     return (
-      <EmptyState
-        tone="error"
-        icon={AlertTriangle}
-        title="Possible duplicates did not load"
-        action={{ label: "Try again", onClick: () => void refetch() }}
-      />
+      <LoadFailed what="possible duplicates" onRetry={() => void refetch()} />
     );
   }
 

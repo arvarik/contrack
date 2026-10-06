@@ -39,6 +39,7 @@ import {
   SETTINGS_SECTION_HEADING,
 } from "../layout";
 import { cn } from "../../../lib/utils";
+import { errorText } from "../../../lib/errorText";
 
 /** One fact about where data lives: a static tile on the card's wash. */
 const Fact = ({
@@ -91,11 +92,7 @@ export const PrivacyPage = () => {
         toast.success("Search history cleared");
       },
       onError: (err) => {
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : "Could not clear the search history",
-        );
+        toast.error(`Could not clear the search history: ${errorText(err)}`);
       },
     });
   };

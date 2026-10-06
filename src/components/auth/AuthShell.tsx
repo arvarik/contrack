@@ -26,6 +26,9 @@ import { CorvidMark } from "../brand/CorvidMark";
 import { useCorvidControls } from "../../hooks/useCorvidLife";
 import { useCorvidLevel } from "../../hooks/useCorvidLevel";
 import { useAuth } from "./AuthGate";
+import { isNetworkError } from "../../api/client";
+import { errorText } from "../../lib/errorText";
+import { rateLimitMessage } from "../../lib/rateLimitMessage";
 
 /**
  * What the server says when the credential is simply wrong.
@@ -53,6 +56,20 @@ const ShakeContext = createContext<(() => void) | null>(null);
  * over the form, so these screens focus their first field only with a
  * mouse or a trackpad.
  */
+/**
+ * What a sign-in screen says when its request fails: that the server is out
+ * of reach, the wait a rate limit asks for, or the server's own words. Nine
+ * screens wrote these three branches by hand.
+ *
+ * @param err - What the request rejected with.
+ * @param fallback - The words for a failure with nothing to say, starting
+ *   "Could not": "Could not sign in".
+ */
+export const authErrorText = (err: unknown, fallback: string): string =>
+  isNetworkError(err)
+    ? "Could not reach the server. Is it running?"
+    : (rateLimitMessage(err) ?? errorText(err, fallback));
+
 export const touchFirst = (): boolean =>
   typeof window !== "undefined" &&
   !!window.matchMedia &&

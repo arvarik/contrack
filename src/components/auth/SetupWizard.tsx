@@ -18,8 +18,7 @@
 import React, { useState } from "react";
 import { UserPlus, Loader2 } from "lucide-react";
 import { setupAccount } from "../../api/auth";
-import { isNetworkError } from "../../api/client";
-import { AuthShell, AuthSubmit, AuthError } from "./AuthShell";
+import { AuthShell, AuthSubmit, AuthError, authErrorText } from "./AuthShell";
 import {
   AccountFields,
   createAccountThenPhoto,
@@ -62,13 +61,7 @@ export const SetupWizard = ({
       );
       onCreated();
     } catch (err) {
-      setFormError(
-        isNetworkError(err)
-          ? "Can't reach the Contrack server. Is it running?"
-          : err instanceof Error
-            ? err.message
-            : "Could not create the account",
-      );
+      setFormError(authErrorText(err, "Could not create the account"));
       setBusy(false);
     }
   };

@@ -12,6 +12,7 @@ import { FeatureMap } from "./FeatureMap";
 import { ProvidersSection } from "./ProvidersSection";
 import { ModelsSection } from "./ModelsSection";
 import { WebSearchSection } from "./WebSearchSection";
+import { errorText } from "../../lib/errorText";
 
 // ---------------------------------------------------------------------------
 // AISettingsView — Settings → Administration → AI
@@ -51,7 +52,9 @@ export const AISettingsView = () => {
           on ? "AI is on for this instance" : "AI is off for this instance",
         ),
       onError: (err) =>
-        toast.error(err instanceof Error ? err.message : String(err)),
+        toast.error(
+          `Could not turn AI ${on ? "on" : "off"}: ${errorText(err)}`,
+        ),
     });
   };
 

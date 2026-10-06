@@ -382,7 +382,7 @@ describe("asking the same question again", () => {
     renderView();
 
     ask(QUESTION);
-    await screen.findByText("Search failed");
+    await screen.findByText("Could not search");
     expect(screen.queryByText("Ada Lovelace")).toBeNull();
     expect(
       screen.queryByRole("button", { name: "Refresh results" }),
@@ -390,7 +390,7 @@ describe("asking the same question again", () => {
 
     // Retry asks the question that failed, not whatever is typed by now.
     fireEvent.change(input(), { target: { value: "something else" } });
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     await screen.findByText("Ada Lovelace");
     expect(semantic(sent)).toHaveLength(2);
     expect(semantic(sent)[1].body).toEqual({ query: QUESTION });

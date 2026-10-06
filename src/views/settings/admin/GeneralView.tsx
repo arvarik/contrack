@@ -38,7 +38,6 @@ import { Switch } from "../../../components/ui/Switch";
 import { ChoiceGroup, type Choice } from "../../../components/ui/ChoiceGroup";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { RowsUnderHeading, SettingRow } from "../SettingRow";
-import { LoadFailed } from "../LoadFailed";
 import {
   SETTINGS_CARD,
   SETTINGS_INPUT,
@@ -46,6 +45,7 @@ import {
   SETTINGS_PAGE,
   SETTINGS_SECTION_HEADING,
 } from "../layout";
+import { LoadFailed } from "../../../components/ui/LoadFailed";
 
 /** A key or a URL in the Integrations card. */
 const KEY_INPUT = cn(SETTINGS_INPUT, "font-mono");
@@ -452,7 +452,13 @@ const AddressLookups = () => {
   const { data, isError, refetch } = useAddressLookups();
   const save = useSetAddressLookups();
   if (isError)
-    return <LoadFailed what="these settings" onRetry={() => void refetch()} />;
+    return (
+      <LoadFailed
+        what="these settings"
+        onRetry={() => void refetch()}
+        level={3}
+      />
+    );
   const on = data ? !data.off : false;
   return (
     <SettingRow
@@ -744,7 +750,13 @@ const GoogleRow = () => {
 const Integrations = () => {
   const { isError, refetch } = useIntegrations();
   if (isError)
-    return <LoadFailed what="these settings" onRetry={() => void refetch()} />;
+    return (
+      <LoadFailed
+        what="these settings"
+        onRetry={() => void refetch()}
+        level={3}
+      />
+    );
   return <GoogleRow />;
 };
 

@@ -104,14 +104,14 @@ function mount() {
 }
 
 describe("the Network list", () => {
-  it("says the contacts did not load, and Retry asks again", () => {
+  it("says the contacts did not load, and Try again asks again", () => {
     contactsQuery.isError = true;
     mount();
     expect(
-      screen.getByRole("heading", { name: "Your contacts did not load" }),
+      screen.getByRole("heading", { name: "Could not load your contacts" }),
     ).toBeTruthy();
     expect(screen.queryByText("Your network is empty")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(contactsQuery.refetch).toHaveBeenCalledTimes(1);
   });
 

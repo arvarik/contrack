@@ -55,6 +55,7 @@ import {
 } from "../../../shared/webSearchEngine";
 import { cn } from "../../lib/utils";
 import { TOUCH_LINK } from "./layout";
+import { errorText } from "../../lib/errorText";
 
 const RESEARCH = AI_FEATURES.find((feature) => feature.id === "research")!;
 
@@ -151,7 +152,7 @@ export function EngineChoice({ scope }: EngineChoiceProps) {
           toast.success(`Research searches with ${engineName(next, provider)}`);
         },
         onError: (err) =>
-          toast.error(err instanceof Error ? err.message : String(err)),
+          toast.error(`Could not change the search engine: ${errorText(err)}`),
       },
     );
   };

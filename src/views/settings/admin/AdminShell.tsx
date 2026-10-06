@@ -14,7 +14,7 @@
  * and a table row depending on the width.
  */
 import React, { type ReactNode } from "react";
-import { AlertCircle, Loader2, type LucideIcon } from "lucide-react";
+import { Loader2, type LucideIcon } from "lucide-react";
 import type { UserRole } from "../../../api/admin";
 import { ChoiceGroup, type Choice } from "../../../components/ui/ChoiceGroup";
 import { EmptyState } from "../../../components/ui/EmptyState";
@@ -22,6 +22,7 @@ import { CARD, SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { SETTINGS_LABEL, SETTINGS_PAGE } from "../layout";
 import { SettingsHeaderActions } from "../SettingsHeader";
+import { LoadFailed } from "../../../components/ui/LoadFailed";
 
 /**
  * One administration page: optional actions, drawn in the header, and
@@ -109,12 +110,10 @@ export const AdminList = ({
       // a rendering. A failed read leaves `isLoading` false and `data`
       // undefined, so without this branch a 500 or a dropped connection
       // reported an empty instance in reassuring copy.
-      <EmptyState
-        icon={AlertCircle}
-        tone="error"
-        title="This did not load"
+      <LoadFailed
+        what="this page"
         body="It is not empty, and nothing here has changed"
-        action={onRetry && { label: "Try again", onClick: onRetry }}
+        onRetry={onRetry}
       />
     ) : isEmpty ? (
       <EmptyState icon={empty.icon} title={empty.title} body={empty.body} />

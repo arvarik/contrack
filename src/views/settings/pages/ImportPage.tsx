@@ -31,6 +31,7 @@ import {
   SETTINGS_PAGE,
   SETTINGS_SECTION_HEADING,
 } from "../layout";
+import { errorText } from "../../../lib/errorText";
 
 const statusBadges: Record<
   ImportStatus,
@@ -64,7 +65,7 @@ export const ImportPage = () => {
         `Retried import: ${result.imported} imported, ${result.failed} failed`,
       );
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Retry failed");
+      toast.error(`Could not retry the import: ${errorText(err)}`);
     } finally {
       setRetryingId(null);
     }
@@ -165,7 +166,7 @@ export const ImportPage = () => {
                               isRetrying && "animate-spin",
                             )}
                           />
-                          Retry
+                          Try again
                         </button>
                       </div>
                     )}

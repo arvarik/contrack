@@ -21,6 +21,7 @@ import {
   type MergedInto,
 } from "../api/suggestions";
 import { withUndo } from "./undoToast";
+import { errorText } from "./errorText";
 
 /**
  * When to ask whether a new contact merged: after the check that runs five
@@ -45,9 +46,7 @@ function undoOptions(
     void undoMerges(qc, [id], true)
       .then(() => afterUndo?.())
       .catch((err: unknown) =>
-        toast.error(
-          `Could not undo: ${err instanceof Error ? err.message : String(err)}`,
-        ),
+        toast.error(`Could not undo: ${errorText(err)}`),
       );
   });
 }

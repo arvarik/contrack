@@ -629,7 +629,9 @@ describe("Frontend Connectors Components", () => {
       );
       fireEvent.click(screen.getByRole("menuitem", { name: "Pause" }));
       await waitFor(() =>
-        expect(toast.error).toHaveBeenCalledWith("Update failed"),
+        expect(toast.error).toHaveBeenCalledWith(
+          "Could not pause Error Card: Update failed",
+        ),
       );
 
       // Trigger delete error: the dialog stays open for another try
@@ -639,7 +641,9 @@ describe("Frontend Connectors Components", () => {
       fireEvent.click(screen.getByRole("menuitem", { name: "Remove" }));
       fireEvent.click(screen.getByRole("button", { name: "Remove connector" }));
       await waitFor(() =>
-        expect(toast.error).toHaveBeenCalledWith("Delete failed"),
+        expect(toast.error).toHaveBeenCalledWith(
+          "Could not remove Error Card: Delete failed",
+        ),
       );
       expect(screen.getByText("Remove Error Card?")).toBeTruthy();
     });
@@ -1063,7 +1067,7 @@ describe("Frontend Connectors Components", () => {
 
       renderWithClient(<ConnectorsView />);
 
-      expect(screen.getByText("Connectors did not load")).toBeTruthy();
+      expect(screen.getByText("Could not load connectors")).toBeTruthy();
       const retryBtn = screen.getByRole("button", { name: "Try again" });
       fireEvent.click(retryBtn);
 

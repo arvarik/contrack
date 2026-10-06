@@ -45,6 +45,7 @@ import { formatBytes, formatRelative, formatWhen } from "../../../lib/datetime";
 import { CARD, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { AdminPage } from "./AdminShell";
+import { LoadFailed } from "../../../components/ui/LoadFailed";
 
 // ---------------------------------------------------------------------------
 // The card, and the one row inside it
@@ -647,12 +648,9 @@ export const HealthView = () => {
       )}
 
       {isError && (
-        <EmptyState
-          icon={AlertTriangle}
-          tone="error"
-          title="The instance could not be read"
-          body="That is itself worth knowing. Nothing here has changed"
-          action={{ label: "Try again", onClick: () => void refetch() }}
+        <LoadFailed
+          what="the instance's health"
+          onRetry={() => void refetch()}
         />
       )}
 

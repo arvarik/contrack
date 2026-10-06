@@ -118,13 +118,13 @@ test.describe("the wait for AI", () => {
       }),
     );
     await ask(page);
-    await expect(page.getByRole("alert")).toContainText("Search failed");
+    await expect(page.getByRole("alert")).toContainText("Could not search");
     await expect(card(page, "Linus Torvalds")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Refresh results" }),
     ).toHaveCount(0);
     await answerPeopleSearch(page, [personMatch(seed.byName("Ada Lovelace"))]);
-    await page.getByRole("button", { name: "Retry" }).click();
+    await page.getByRole("button", { name: "Try again" }).click();
     await expect(card(page, "Ada Lovelace")).toBeVisible();
     await expect(page.getByRole("alert")).toHaveCount(0);
     await expect(status(page)).toHaveText(`1 match for “${QUESTION}”.`);

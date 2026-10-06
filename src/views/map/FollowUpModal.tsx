@@ -13,6 +13,7 @@ import { MAX_BULK_ACTION_ITEMS } from "../../../shared/contracts/actionItems";
 import { FORM_INPUT, FORM_LABEL, SELECTED_TINT } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { RadioDot } from "../../components/ui/RadioDot";
+import { errorText } from "../../lib/errorText";
 
 type DueDatePreset = "tomorrow" | "3days" | "nextweek" | "pick";
 
@@ -89,8 +90,7 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
       handleClose();
       onSuccess?.();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      toast.error(`Could not add the follow-up: ${message}`);
+      toast.error(`Could not add the follow-up: ${errorText(err)}`);
     } finally {
       setIsSubmitting(false);
     }

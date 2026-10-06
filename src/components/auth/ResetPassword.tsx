@@ -10,11 +10,16 @@
 
 import React, { useState } from "react";
 import { KeyRound, Loader2 } from "lucide-react";
-import { AuthShell, AuthField, AuthSubmit, AuthError } from "./AuthShell";
+import {
+  AuthShell,
+  AuthField,
+  AuthSubmit,
+  AuthError,
+  authErrorText,
+} from "./AuthShell";
 import { PasswordStrengthMeter } from "../../lib/passwordStrength";
 import { completePasswordReset } from "../../api/authLinks";
-import { isNetworkError, ApiError } from "../../api/client";
-import { rateLimitMessage } from "../../lib/rateLimitMessage";
+import { ApiError } from "../../api/client";
 
 export const ResetPassword = ({
   token,
@@ -50,14 +55,7 @@ export const ResetPassword = ({
       ) {
         setDead(true);
       }
-      setError(
-        isNetworkError(err)
-          ? "Can't reach the Contrack server. Is it running?"
-          : (rateLimitMessage(err) ??
-              (err instanceof Error
-                ? err.message
-                : "Could not reset your password")),
-      );
+      setError(authErrorText(err, "Could not reset your password"));
       setBusy(false);
     }
   };

@@ -22,6 +22,7 @@ import type {
 } from "../../../../shared/connectors";
 import { FORM_INPUT, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
+import { errorText } from "../../../lib/errorText";
 
 interface GoogleFormModalProps {
   isOpen: boolean;
@@ -126,7 +127,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
       toast.success(`Updated ${trimmedName}`);
       onClose();
     } catch (err) {
-      const msg = (err as Error).message || "Failed to update connector";
+      const msg = errorText(err) || "Could not save the connector";
       setFormError(msg);
       toast.error(msg);
     }

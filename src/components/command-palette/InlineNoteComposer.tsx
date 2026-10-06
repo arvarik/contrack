@@ -38,6 +38,7 @@ import {
 import { useAuth } from "../auth/AuthGate";
 import { INTERACTION_LABELS } from "../../lib/interactionKinds";
 import type { LogKind } from "./actionMode";
+import { errorText } from "../../lib/errorText";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -129,9 +130,7 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
       toast.success(`${KIND[type].label} logged for ${contactName}`);
       onComplete();
     } catch (err: unknown) {
-      toast.error(
-        `Could not log the ${type}: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      toast.error(`Could not log the ${type}: ${errorText(err)}`);
     }
   }, [
     content,

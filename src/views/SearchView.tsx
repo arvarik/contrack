@@ -3,7 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Sparkles,
   Upload,
-  AlertTriangle,
+  AlertCircle,
   ArrowRight,
   HistoryIcon,
   MapPin,
@@ -48,6 +48,7 @@ import { peopleSearchStatus } from "../lib/searchAnnouncements";
 import { useAISearchSession } from "../contexts/SessionContext";
 import type { HistoryEntry } from "../../shared/searchHistory";
 import { useAiAllowed } from "../hooks/useAiAllowed";
+import { errorText } from "../lib/errorText";
 
 // =============================================================================
 // SearchView — Dedicated full-page "Ask Contrack" semantic search
@@ -696,7 +697,7 @@ export const SearchView = () => {
                 Error state. `role="alert"` so the failure is announced the
                 moment it appears (WCAG 4.1.3, technique ARIA19). The status
                 region above says nothing for an error, so it is spoken
-                once. The question that failed is kept by the hook, so Retry
+                once. The question that failed is kept by the hook, so Try again
                 asks it again without reading the input, which may have
                 moved on. Asking clears the error, so the button is gone
                 before a second press could send the question twice.
@@ -704,17 +705,14 @@ export const SearchView = () => {
               {semanticSearch.isError && (
                 <div role="alert" className="tile-enter">
                   <EmptyState
-                    icon={AlertTriangle}
+                    icon={AlertCircle}
                     tone="error"
-                    title="Search failed"
-                    body={
-                      (semanticSearch.error as Error)?.message ||
-                      "An unexpected error occurred"
-                    }
+                    title="Could not search"
+                    body={errorText(semanticSearch.error)}
                     action={
                       submittedQuery
                         ? {
-                            label: "Retry",
+                            label: "Try again",
                             onClick: handleRerun,
                             icon: RotateCw,
                           }

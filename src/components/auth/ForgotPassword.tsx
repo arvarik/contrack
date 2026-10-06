@@ -17,10 +17,9 @@ import {
   AuthSubmit,
   AuthError,
   touchFirst,
+  authErrorText,
 } from "./AuthShell";
 import { requestPasswordReset } from "../../api/authLinks";
-import { isNetworkError } from "../../api/client";
-import { rateLimitMessage } from "../../lib/rateLimitMessage";
 
 export const ForgotPassword = ({
   onBack,
@@ -47,14 +46,7 @@ export const ForgotPassword = ({
       await requestPasswordReset(email.trim());
       setSent(true);
     } catch (err) {
-      setError(
-        isNetworkError(err)
-          ? "Can't reach the Contrack server. Is it running?"
-          : (rateLimitMessage(err) ??
-              (err instanceof Error
-                ? err.message
-                : "Could not request password reset")),
-      );
+      setError(authErrorText(err, "Could not request password reset"));
     } finally {
       setBusy(false);
     }

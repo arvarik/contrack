@@ -37,13 +37,11 @@ import {
   reasonIcon,
 } from "../../dedupe/utils/reason";
 import type { PersistedDedupeSuggestion } from "../../../types";
+import { errorText } from "../../../lib/errorText";
 
 interface DupeBannerProps {
   contactId: string;
 }
-
-const errorText = (err: unknown) =>
-  err instanceof Error ? err.message.replace(/\.$/, "") : String(err);
 
 export const DupeBanner = ({ contactId }: DupeBannerProps) => {
   const { data: suggestion, isLoading } = useSuggestionForContact(contactId);

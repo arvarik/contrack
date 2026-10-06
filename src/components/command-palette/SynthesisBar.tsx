@@ -23,6 +23,7 @@ import { Sparkles, X, AlertTriangle } from "lucide-react";
 import { CorvidThinking } from "../brand/CorvidThinking";
 import { LiveStatus } from "../ui/LiveStatus";
 import { useBlockedAi } from "../../hooks/useAiSetup";
+import { errorText } from "../../lib/errorText";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -127,7 +128,7 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
         signal: controller.signal,
       });
 
-      if (!res.ok) throw new Error(`Synthesis failed (${res.status})`);
+      if (!res.ok) throw new Error(`The server answered ${res.status}`);
 
       let complete = false;
       let streamed = "";
@@ -163,10 +164,7 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
       if (!controller.signal.aborted && abortRef.current === controller) {
         // The streamed text was never confirmed, so it goes.
         setSynthesisText("");
-        setErrorMessage(
-          (err instanceof Error ? err.message : String(err)) ||
-            "Synthesis failed",
-        );
+        setErrorMessage(errorText(err));
         setPhase("error");
       }
     }
@@ -290,13 +288,14 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
             <div className={`flex items-center gap-2 ${textSize}`}>
               <AlertTriangle className="w-3.5 h-3.5 text-error shrink-0" />
               <span className="text-error">
-                Synthesis failed{errorMessage ? `: ${errorMessage}` : ""}
+                Could not write the summary
+                {errorMessage ? `: ${errorMessage}` : ""}
               </span>
               <button
                 onClick={handleSynthesize}
                 className="hit-area ml-auto text-xs text-primary hover:underline"
               >
-                Retry
+                Try again
               </button>
               <button
                 onClick={handleDismiss}

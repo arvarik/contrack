@@ -113,9 +113,11 @@ test.describe("people", () => {
     await input.press("Enter");
 
     const alert = page.getByRole("alert");
-    await expect(alert).toContainText("Search failed");
+    await expect(alert).toContainText("Could not search");
     await expect(alert).toContainText("The provider is not answering.");
-    await expect(alert.getByRole("button", { name: "Retry" })).toBeVisible();
+    await expect(
+      alert.getByRole("button", { name: "Try again" }),
+    ).toBeVisible();
     await expect(status(page)).toHaveText("");
   });
 
@@ -188,7 +190,7 @@ test.describe("notes", () => {
     await box.press("Enter");
 
     const alert = page.getByRole("alert");
-    await expect(alert).toContainText("Search failed");
+    await expect(alert).toContainText("Could not search");
     await expect(status(page)).toHaveText("");
   });
 });

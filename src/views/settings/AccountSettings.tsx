@@ -62,7 +62,6 @@ import { Modal } from "../../components/ui/Modal";
 import { Badge, type BadgeTone } from "../../components/ui/Badge";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../components/ui/EmptyState";
-import { LoadFailed } from "./LoadFailed";
 import { SecretReveal } from "../../components/ui/SecretReveal";
 import { Segmented, type SegmentedOption } from "../../components/ui/Segmented";
 import { CARD, LABEL_PRIMARY, TONE_WASH } from "../../lib/styles";
@@ -78,6 +77,7 @@ import {
   SETTINGS_PAGE,
   SETTINGS_SECTION_HEADING,
 } from "./layout";
+import { LoadFailed } from "../../components/ui/LoadFailed";
 
 /** The tile beside a session or a token: the primary wash with its ink. */
 const ROW_ICON = cn(
@@ -567,7 +567,11 @@ const SessionsCard = () => {
       {isLoading ? (
         <p className="text-sm text-on-surface-variant">Loading devices…</p>
       ) : isError ? (
-        <LoadFailed what="your devices" onRetry={() => void refetch()} />
+        <LoadFailed
+          what="your devices"
+          onRetry={() => void refetch()}
+          level={3}
+        />
       ) : (
         <ul className="space-y-4">
           {sessions.map((session) => (
@@ -894,7 +898,11 @@ const ApiTokensCard = () => {
         </p>
       ) : isError ? (
         <div className="px-4 sm:px-6 py-6">
-          <LoadFailed what="your tokens" onRetry={() => void refetch()} />
+          <LoadFailed
+            what="your tokens"
+            onRetry={() => void refetch()}
+            level={3}
+          />
         </div>
       ) : tokens.length === 0 ? (
         <p className="px-4 sm:px-6 py-6 text-sm text-on-surface-variant text-pretty">

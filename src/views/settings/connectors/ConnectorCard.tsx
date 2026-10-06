@@ -39,6 +39,7 @@ import type {
   ConnectorSummary,
 } from "../../../../shared/connectors";
 import { KIND_ICONS } from "./AddConnectorSheet";
+import { errorText } from "../../../lib/errorText";
 
 interface ConnectorCardProps {
   connector: ConnectorSummary;
@@ -142,7 +143,7 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
       await sync.mutateAsync(connector.id);
       toast.success(`Sync started for ${connector.name}`);
     } catch (err) {
-      toast.error((err as Error).message || "Failed to start sync");
+      toast.error(`Could not sync ${connector.name}: ${errorText(err)}`);
     }
   };
 
@@ -160,7 +161,7 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
       );
     } catch (err) {
       toast.error(
-        (err as Error).message || "Failed to update connector status",
+        `Could not ${nextStatus === "paused" ? "pause" : "resume"} ${connector.name}: ${errorText(err)}`,
       );
     }
   };
@@ -174,7 +175,7 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
       toast.success(`Removed ${connector.name}`);
       setDeleteConfirmOpen(false);
     } catch (err) {
-      toast.error((err as Error).message || "Failed to delete connector");
+      toast.error(`Could not remove ${connector.name}: ${errorText(err)}`);
     }
   };
 
