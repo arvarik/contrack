@@ -61,6 +61,10 @@ export function EditableField({
   href,
 }: {
   value: string | null;
+  /**
+   * Saves the value. A promise that resolves to `false` or to an `Error`
+   * means the save failed, and the field shows the error's message.
+   */
   onSave: (value: string) => unknown;
   placeholder: string;
   className?: string;
@@ -82,7 +86,8 @@ export function EditableField({
   const [draft, setDraft] = useState(value ?? "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState(false);
+  /** Why the last save failed, from the server when it said: "Name is required". */
+  const [error, setError] = useState<string | null>(null);
   const cancelled = useRef(false);
   const pending = useRef(false);
   const mounted = useRef(true);
@@ -115,7 +120,7 @@ export function EditableField({
     cancelled.current = false;
     setDraft(value ?? "");
     setSaved(false);
-    setError(false);
+    setError(null);
     setEditing(true);
   };
   const commit = async () => {
@@ -127,17 +132,22 @@ export function EditableField({
     }
     pending.current = true;
     setSaving(true);
-    setError(false);
+    setError(null);
     try {
       const result = onSave(next);
       const completed = await result;
+      if (completed instanceof Error) throw completed;
       if (completed === false) throw new Error("Save failed");
       if (mounted.current) {
         setEditing(false);
         setSaved(result instanceof Promise);
       }
-    } catch {
-      if (mounted.current) setError(true);
+    } catch (err) {
+      if (mounted.current) {
+        setError(
+          err instanceof Error && err.message ? err.message : "Save failed",
+        );
+      }
     } finally {
       pending.current = false;
       if (mounted.current) setSaving(false);
@@ -150,7 +160,7 @@ export function EditableField({
           <input
             {...(kind && INPUT_KIND[kind])}
             aria-label={inputLabel ?? placeholder}
-            aria-invalid={error || undefined}
+            aria-invalid={!!error || undefined}
             aria-busy={saving}
             // eslint-disable-next-line jsx-a11y/no-autofocus
             autoFocus
@@ -175,7 +185,7 @@ export function EditableField({
                 refocus.current = true;
                 cancelled.current = true;
                 setEditing(false);
-                setError(false);
+                setError(null);
               }
             }}
             className={cn(
@@ -191,7 +201,7 @@ export function EditableField({
         </span>
         {error && (
           <span role="alert" className="text-xs text-error">
-            Save failed. Press Enter to retry or Escape to cancel
+            {error}. Press Enter to retry or Escape to cancel
           </span>
         )}
       </span>

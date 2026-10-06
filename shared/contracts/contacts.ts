@@ -18,8 +18,10 @@ import { route } from "./route.ts";
 import {
   childRecordsSchema,
   dateSchema,
+  emailSchema,
   idsSchema,
   INTERNAL,
+  phoneSchema,
   queryText,
   stringToBool,
 } from "./common.ts";
@@ -81,9 +83,33 @@ const contactLocationSchema = z.union([
   z.strictObject({ regeocode: z.literal(true) }),
 ]);
 
+/**
+ * The items of a list an import can read. An import keeps the emails and
+ * phones that are real and leaves out the rest: one "n/a" in a file of
+ * 5,000 rows must not refuse the whole file.
+ */
+const readable = (item: z.ZodType) =>
+  z
+    .preprocess(
+      (list) =>
+        Array.isArray(list)
+          ? list.filter((value) => item.safeParse(value).success)
+          : list,
+      z.array(item).max(100),
+    )
+    .optional()
+    .describe("An item that cannot be read is left out, and the rest saves");
+
 // Cap bulk imports — combined with the 50 MB JSON body limit, an unbounded
 // array lets one request allocate arbitrary memory.
-const contactBulkCreateSchema = z.array(contactCreateSchema).max(5000);
+const contactBulkCreateSchema = z
+  .array(
+    contactCreateSchema.extend({
+      emails: readable(emailSchema),
+      phones: readable(phoneSchema),
+    }),
+  )
+  .max(5000);
 
 /**
  * The child arrays, which a bulk edit refuses. The same ten keys as

@@ -324,13 +324,15 @@ export const ContactProfile = ({
   });
 
   // ── Event handlers ────────────────────────────────────────────────────
+  // A failed save answers with its error, so a field can show the server's
+  // reason ("Name is required"): it said only "Save failed".
   const handleUpdate = useCallback(
     async (field: string, val: string) => {
       try {
         await saveContact({ id, data: { [field]: val } });
         return true;
-      } catch {
-        return false;
+      } catch (err) {
+        return err instanceof Error ? err : false;
       }
     },
     [id, saveContact],
