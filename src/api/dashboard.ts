@@ -86,13 +86,19 @@ export interface DailyInsight {
   generatedAt: string;
 }
 
+/**
+ * `?tz=` with the browser's zone, so "today" on the server is the reader's
+ * day: Pulse's groups, its activity, the badge and the palette's count.
+ */
+export function zoneQuery(): string {
+  const tz = browserTimeZone();
+  return tz ? `?tz=${encodeURIComponent(tz)}` : "";
+}
+
 const dashboardQuery = queryOptions({
   queryKey: ["dashboard"],
   queryFn: async ({ signal }): Promise<DashboardPayload> => {
-    // The browser's zone, so Overdue and Today are the reader's days.
-    const tz = browserTimeZone();
-    const query = tz ? `?tz=${encodeURIComponent(tz)}` : "";
-    const res = await apiFetch(`/dashboard${query}`, { signal });
+    const res = await apiFetch(`/dashboard${zoneQuery()}`, { signal });
     if (!res.ok) throw new Error("Failed to fetch dashboard payload");
     return res.json();
   },
@@ -102,7 +108,9 @@ const dashboardQuery = queryOptions({
 const dashboardActivityQuery = queryOptions({
   queryKey: ["dashboard", "activity"],
   queryFn: async ({ signal }): Promise<DashboardActivityResponse> => {
-    const res = await apiFetch(`/dashboard/activity`, { signal });
+    const res = await apiFetch(`/dashboard/activity${zoneQuery()}`, {
+      signal,
+    });
     if (!res.ok) throw new Error("Failed to fetch dashboard activity");
     return res.json();
   },
@@ -151,7 +159,9 @@ export const useZeroState = () => {
   return useQuery({
     queryKey: ["zeroState"],
     queryFn: async ({ signal }): Promise<ZeroStatePayload> => {
-      const res = await apiFetch(`/command-palette/zero-state`, { signal });
+      const res = await apiFetch(`/command-palette/zero-state${zoneQuery()}`, {
+        signal,
+      });
       if (!res.ok) throw new Error("Failed to fetch zero state");
       return res.json();
     },

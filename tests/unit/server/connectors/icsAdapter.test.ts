@@ -177,11 +177,12 @@ describe("icsAdapter", () => {
       "weekly-sync@example.com_2026-02-02T10:00:00.000Z",
     ]);
 
-    // 4. Check all-day event
+    // 4. An all-day event is kept as its day, so no reader's zone moves it
+    // to the evening before.
     const allDay = interactionEvents.find((e) =>
       "title" in e ? e.title === "Company Offsite" : false,
     );
-    expect(allDay).toBeDefined();
+    expect(allDay).toMatchObject({ date: "2026-01-20", endsAt: "2026-01-21" });
   });
 
   it("produces deterministic externalIds across multiple sync passes", async () => {

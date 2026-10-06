@@ -10,12 +10,12 @@ describe("pulse.streak computeStreak", () => {
   const local = (month: number, day: number, hour: number) =>
     new Date(2026, month - 1, day, hour).toISOString();
 
-  it("returns 0 and null for empty interactions", () => {
-    const res = computeStreak([], now);
-    expect(res).toEqual({ current: 0, best: 0, lastDay: null });
-  });
-
   it.each([
+    [
+      "has no streak with no interactions",
+      [],
+      { current: 0, best: 0, lastDay: null },
+    ],
     [
       "counts consecutive days ending today as current",
       [
@@ -35,73 +35,46 @@ describe("pulse.streak computeStreak", () => {
       { current: 3, best: 3, lastDay: "2026-09-16" },
     ],
     [
-      // Yesterday (2026-09-16) and today (2026-09-17) are missing.
-      "resets current streak when there is a gap before yesterday",
+      // Yesterday and today are missing. The best streak stays.
+      "resets the current streak after a gap and keeps the best",
       [
-        { date: local(9, 13, 10), type: "note" },
-        { date: local(9, 14, 10), type: "note" },
+        { date: local(8, 1, 10), type: "note" },
+        { date: local(8, 2, 10), type: "note" },
+        { date: local(8, 3, 10), type: "note" },
         { date: local(9, 15, 12), type: "call" },
       ],
       { current: 0, best: 3, lastDay: "2026-09-15" },
+    ],
+    [
+      // 09-16 has only an import and a synced note, so only 09-17 counts.
+      "counts neither imports nor synced rows",
+      [
+        { date: local(9, 16, 8), type: "import" },
+        { date: local(9, 16, 9), type: "note", source: "imap" },
+        { date: local(9, 17, 10), type: "note", source: null },
+      ],
+      { current: 1, best: 1, lastDay: "2026-09-17" },
     ],
   ])("%s", (_what, interactions, streak) => {
     expect(computeStreak(interactions, now)).toEqual(streak);
   });
 
-  it("keeps the best streak across history even if current streak is shorter or 0", () => {
+  it("counts the days on the reader's calendar when it has a zone", () => {
+    // 03:00 UTC on the 17th is the evening of the 16th in Los Angeles.
     const interactions = [
-      // Past 5-day streak
-      { date: local(8, 1, 10), type: "note" },
-      { date: local(8, 2, 10), type: "note" },
-      { date: local(8, 3, 10), type: "note" },
-      { date: local(8, 4, 10), type: "note" },
-      { date: local(8, 5, 10), type: "note" },
-      // Gap
-      // Current 2-day streak ending today
-      { date: local(9, 16, 10), type: "note" },
-      { date: local(9, 17, 10), type: "note" },
+      { date: "2026-09-16T18:00:00.000Z", type: "note" },
+      { date: "2026-09-17T03:00:00.000Z", type: "note" },
     ];
-    const res = computeStreak(interactions, now);
-    expect(res).toEqual({ current: 2, best: 5, lastDay: "2026-09-17" });
-  });
-
-  it("excludes days with only import rows", () => {
-    const interactions = [
-      { date: local(9, 16, 10), type: "import" },
-      { date: local(9, 17, 10), type: "note" },
-    ];
-    const res = computeStreak(interactions, now);
-    // 2026-09-16 only had import, so only 2026-09-17 counts (streak = 1)
-    expect(res).toEqual({ current: 1, best: 1, lastDay: "2026-09-17" });
-  });
-
-  it("excludes days where source is non-null", () => {
-    const interactions = [
-      { date: local(9, 16, 10), type: "note", source: "google_calendar" },
-      { date: local(9, 17, 10), type: "note", source: null },
-    ];
-    const res = computeStreak(interactions, now);
-    // 2026-09-16 had source set, so only 2026-09-17 counts (streak = 1)
-    expect(res).toEqual({ current: 1, best: 1, lastDay: "2026-09-17" });
-  });
-
-  it("counts a day if it has at least one valid manual row among import/source rows", () => {
-    const interactions = [
-      { date: local(9, 16, 8), type: "import" },
-      { date: local(9, 16, 9), type: "note", source: "imap" },
-      { date: local(9, 16, 10), type: "note", source: null }, // valid!
-      { date: local(9, 17, 10), type: "call" }, // valid!
-    ];
-    const res = computeStreak(interactions, now);
-    expect(res).toEqual({ current: 2, best: 2, lastDay: "2026-09-17" });
-  });
-
-  it("computes the day boundary according to the server's local day", () => {
-    // 2026-09-17 at 23:55 local time
-    const lateToday = new Date(2026, 8, 17, 23, 55);
-    const interactions = [{ date: lateToday.toISOString(), type: "note" }];
-    const res = computeStreak(interactions, lateToday);
-    expect(res.current).toBe(1);
-    expect(res.lastDay).toBe("2026-09-17");
+    const at = new Date("2026-09-17T05:00:00.000Z");
+    expect(computeStreak(interactions, at, "America/Los_Angeles")).toEqual({
+      current: 1,
+      best: 1,
+      lastDay: "2026-09-16",
+    });
+    expect(computeStreak(interactions, at, "UTC")).toEqual({
+      current: 2,
+      best: 2,
+      lastDay: "2026-09-17",
+    });
   });
 });

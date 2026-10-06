@@ -474,6 +474,12 @@ describe("Google Workspace Connector & OAuth Integration", () => {
                     { email: "bob@builder.com", displayName: "Bob Builder" },
                   ],
                 },
+                {
+                  id: "cal-all-day-3",
+                  summary: "Site Holiday",
+                  start: { date: "2099-01-05" },
+                  end: { date: "2099-01-06" },
+                },
               ],
               nextSyncToken: "calendar-sync-token-v1",
             },
@@ -561,8 +567,14 @@ describe("Google Workspace Connector & OAuth Integration", () => {
 
       // Assert upcoming event (future)
       const upcoming = events.filter((e) => e.kind === "upcoming");
-      expect(upcoming).toHaveLength(1);
+      expect(upcoming).toHaveLength(2);
       expect(upcoming[0].title).toBe("Future Site Inspection");
+      // An all-day event is its day, not midnight UTC, so it never shows on
+      // the evening before west of UTC.
+      expect(upcoming[1]).toMatchObject({
+        startsAt: "2099-01-05",
+        endsAt: "2099-01-06",
+      });
 
       // Every call carries a timeout and the sync's signal. With neither, a
       // half-open connection held the sync and its slots until a restart.

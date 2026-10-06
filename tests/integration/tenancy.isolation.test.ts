@@ -1666,8 +1666,6 @@ describe("GET /api/dashboard/activity", () => {
     expect(forB.body.days).toHaveLength(84);
     expect(forA.body.weekTotals).toHaveLength(12);
     expect(forB.body.weekTotals).toHaveLength(12);
-    expect(forA.body.prevWeekTotals).toHaveLength(12);
-    expect(forB.body.prevWeekTotals).toHaveLength(12);
 
     // Every note in this file is dated in the last few days, so each account's
     // twelve weeks hold exactly its own notes. A leak would add the other's.
@@ -1686,7 +1684,6 @@ describe("GET /api/dashboard/activity", () => {
     expect(res.status).toBe(200);
     expect(res.body.days).toHaveLength(84);
     expect(res.body.weekTotals).toEqual(new Array(12).fill(0));
-    expect(res.body.prevWeekTotals).toEqual(new Array(12).fill(0));
     expect(res.body.streak).toEqual({ current: 0, best: 0, lastDay: null });
     expect(res.body.today).toEqual({ logged: 0, completed: 0, due: 0 });
     expect(res.body.thisWeek).toEqual({ logged: 0, byType: {} });

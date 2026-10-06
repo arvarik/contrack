@@ -1,6 +1,7 @@
 import { apiJson, jsonBody } from "./client";
 import { invalidateContactViews, refreshContact } from "./contactCache";
 import { corvidReact } from "../lib/corvid";
+import { zoneQuery } from "./dashboard";
 import { actionItemRoutes } from "../../shared/contracts/actionItems";
 import type { BodyOf } from "../../shared/contracts/route";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -20,7 +21,9 @@ export const useUrgentActionItemCount = () => {
   return useQuery({
     queryKey: ["actionItems", "urgentCount"],
     queryFn: ({ signal }) =>
-      apiJson(actionItemRoutes.count, `/action-items/count`, { signal }),
+      apiJson(actionItemRoutes.count, `/action-items/count${zoneQuery()}`, {
+        signal,
+      }),
     // We poll this occasionally or rely on invalidation from mutations
     staleTime: 1000 * 60 * 5, // 5 mins
   });
