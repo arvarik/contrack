@@ -9,6 +9,7 @@ import {
   Building,
   Briefcase,
   CalendarClock,
+  MapPin,
   Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -24,7 +25,6 @@ import { DENSITY_METRICS, type ListDensity } from "../../hooks/useListDensity";
 import { ROVING_INDEX_ATTR, type RovingItemProps } from "./useRovingList";
 import { PROXIMITY_ROW_ATTR } from "../../hooks/useProximityLift";
 import { describeFollowUp } from "../../lib/followUp";
-import { MapPin } from "lucide-react";
 
 import { formatDistanceToNowStrict } from "date-fns";
 

@@ -32,7 +32,6 @@ export const CompareStage = ({
     queries: selected.map((c) => contactQuery(c.id)),
   });
   const contacts = selected.map((c, i) => full[i]?.data ?? c);
-  const others = selected.length - 1;
 
   return (
     <motion.div
@@ -70,9 +69,7 @@ export const CompareStage = ({
           ) : (
             <GitMerge className="w-4 h-4" aria-hidden="true" />
           )}
-          {others === 1
-            ? "Merge 2 contacts"
-            : `Merge ${selected.length} contacts`}
+          {`Merge ${selected.length} contacts`}
         </button>
       </div>
     </motion.div>

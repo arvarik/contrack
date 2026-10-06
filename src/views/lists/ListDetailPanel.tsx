@@ -234,7 +234,7 @@ export const ListDetailPanel = ({
         </section>
 
         <section className="px-5 pb-5 space-y-3">
-          <h4 className={cn(SECTION_HEADING)}>Members · {members.length}</h4>
+          <h4 className={SECTION_HEADING}>Members · {members.length}</h4>
           <AddPeople list={list} memberIds={memberIds} />
 
           {membersLoading ? (
