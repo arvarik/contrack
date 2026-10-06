@@ -699,6 +699,24 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
   const view = scoreView(contact);
   const headerScore = view.kind === "scored" ? view.score : null;
 
+  // A ghost's one step: beside the menus on a wide header, under the name on
+  // a phone.
+  const addToNetwork = (className: string) => (
+    <button
+      type="button"
+      onClick={() => {
+        promoteGhost(contact.id, {
+          onSuccess: () => toast.success(`${contact.name} added to Network`),
+        });
+      }}
+      disabled={promotePending}
+      className={className}
+    >
+      <Sparkles aria-hidden="true" className="w-4 h-4" />
+      {promotePending ? "Adding…" : "Add to Network"}
+    </button>
+  );
+
   return (
     <>
       {onClose && <BackBar onClose={onClose} backLabel={backLabel} />}
@@ -844,22 +862,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
               </h1>
 
               <div className="flex flex-wrap items-center gap-2 shrink-0">
-                {!!contact.isGhost && !narrow && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      promoteGhost(contact.id, {
-                        onSuccess: () =>
-                          toast.success(`${contact.name} added to Network`),
-                      });
-                    }}
-                    disabled={promotePending}
-                    className="btn-secondary"
-                  >
-                    <Sparkles aria-hidden="true" className="w-4 h-4" />
-                    {promotePending ? "Adding…" : "Add to Network"}
-                  </button>
-                )}
+                {!!contact.isGhost && !narrow && addToNetwork("btn-secondary")}
 
                 {/* A ghost cannot be tracked: it shows Add to Network. */}
                 {!contact.isGhost && (
@@ -940,23 +943,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
               />
             )}
 
-            {/* A ghost's one step, under the name where a phone has room. */}
-            {!!contact.isGhost && narrow && (
-              <button
-                type="button"
-                onClick={() => {
-                  promoteGhost(contact.id, {
-                    onSuccess: () =>
-                      toast.success(`${contact.name} added to Network`),
-                  });
-                }}
-                disabled={promotePending}
-                className="btn-secondary mt-3"
-              >
-                <Sparkles aria-hidden="true" className="w-4 h-4" />
-                {promotePending ? "Adding…" : "Add to Network"}
-              </button>
-            )}
+            {!!contact.isGhost && narrow && addToNetwork("btn-secondary mt-3")}
 
             {showNetworkButton && (
               <div className="mt-4 flex items-center gap-3 flex-wrap">
