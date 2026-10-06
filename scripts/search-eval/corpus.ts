@@ -17,8 +17,6 @@
 //
 // Nothing here is a real person. The names are assembled from parts.
 
-import { createRng } from "../../src/lib/corvidMotion.ts";
-
 export interface EvalContact {
   /** Stable identity across regenerations. The queries name these. */
   key: string;
@@ -1306,6 +1304,17 @@ const QUERIES: [id: string, kind: QueryKind, q: string, expect: string][] = [
 
 // Distractors
 
+/** Deterministic 32-bit PRNG. The corpus must be byte identical every run. */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 const FIRST_NAMES = [
   "Adam",
   "Adele",
@@ -1647,7 +1656,7 @@ function fill(template: string, values: Record<string, string>): string {
  * the weights in `search/lexical.ts` decide which wins.
  */
 function buildCollisions(targets: EvalContact[]): EvalContact[] {
-  const rand = createRng(0xc0111d3);
+  const rand = mulberry32(0xc0111d3);
   // Entries 10 to 19 are the company-plus-role block, the ten queries that
   // name an employer and a job title.
   return targets.slice(10, 20).map((target) => {
@@ -1689,7 +1698,7 @@ function buildDistractors(
   count: number,
   targets: EvalContact[],
 ): EvalContact[] {
-  const rand = createRng(0x5eed_1234);
+  const rand = mulberry32(0x5eed_1234);
   const out: EvalContact[] = [];
 
   // Near misses: one per target, cycling through which field is shared.
@@ -1777,7 +1786,7 @@ function buildDistractors(
  * hand-written address keeps it.
  */
 function assignAddresses(contacts: EvalContact[]): void {
-  const rand = createRng(0xadd2e55);
+  const rand = mulberry32(0xadd2e55);
   for (const contact of contacts) {
     const roll = rand();
     const swap = rand();

@@ -28,7 +28,6 @@ import {
   normalizePhone,
   tokenizeName,
 } from "../../server/utils/nlp/index.ts";
-import { createRng } from "../../src/lib/corvidMotion.ts";
 
 // Shapes
 
@@ -1298,6 +1297,17 @@ const LOCATION_POOL =
     "|",
   );
 
+/** Deterministic 32-bit PRNG, so the corpus is the same on every machine. */
+function mulberry32(seed: number): () => number {
+  return function () {
+    seed |= 0;
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 const DISTRACTOR_COUNT = 90;
 
 /**
@@ -1308,7 +1318,7 @@ const DISTRACTOR_COUNT = 90;
  * one does.
  */
 function buildDistractors(): EvalContact[] {
-  const rand = createRng(0x9e3779b9);
+  const rand = mulberry32(0x9e3779b9);
   const out: EvalContact[] = [];
   const usedNames = new Set<string>();
 
