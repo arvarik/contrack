@@ -66,7 +66,7 @@ import { ContextMenu, useContextMenu } from "../../components/ui/ContextMenu";
 import { AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { filterPill, ICON_BTN, LABEL, PAGE_TOP } from "../../lib/styles";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { usePageTitle } from "../../hooks/usePageTitle";
 import {
@@ -109,7 +109,6 @@ import { ActionMenu } from "../../components/ui/ActionMenu";
 import { RailTooltip } from "../../components/ui/RailTooltip";
 import { useSwapFocus } from "../../components/bulk/useSwapFocus";
 import { settleSlide } from "../settings/slide";
-import { errorText } from "../../lib/errorText";
 import { LoadFailed } from "../../components/ui/LoadFailed";
 import { SearchField } from "../../components/ui/SearchField";
 

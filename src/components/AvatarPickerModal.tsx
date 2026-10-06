@@ -13,7 +13,7 @@ import { Upload, Check, RefreshCw } from "lucide-react";
 import { Modal } from "./ui/Modal";
 import { useUploadAvatar, useSetDicebearAvatar } from "../api";
 import { toast } from "sonner";
-import { cn } from "../lib/utils";
+import { cn, errorText } from "../lib/utils";
 import {
   BTN_QUIET,
   DROPZONE_INPUT,
@@ -23,7 +23,6 @@ import {
 } from "../lib/styles";
 import { Segmented } from "./ui/Segmented";
 import { usePreferences } from "../contexts/PreferencesContext";
-import { errorText } from "../lib/errorText";
 
 // ---------------------------------------------------------------------------
 // Dicebear cartoon presets — a curated set of fun seeds across 3 styles

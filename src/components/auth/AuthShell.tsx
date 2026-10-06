@@ -20,14 +20,13 @@ import React, {
   useState,
 } from "react";
 import { Eye, EyeOff } from "lucide-react";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { TONE_WASH } from "../../lib/styles";
 import { CorvidMark } from "../brand/CorvidMark";
 import { useCorvidControls } from "../../hooks/useCorvidLife";
 import { useCorvidLevel } from "../../hooks/useCorvidLevel";
 import { useAuth } from "./AuthGate";
 import { isNetworkError } from "../../api/client";
-import { errorText } from "../../lib/errorText";
 import { rateLimitMessage } from "../../lib/rateLimitMessage";
 
 /**

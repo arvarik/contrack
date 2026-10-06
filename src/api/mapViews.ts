@@ -9,7 +9,7 @@ import {
   type MapLayer,
   type MapView,
 } from "../../shared/mapViews";
-import { errorText } from "../lib/errorText";
+import { errorText } from "../lib/utils";
 
 export type { MapBounds, MapLayer, MapView };
 

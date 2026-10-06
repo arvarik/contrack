@@ -918,7 +918,8 @@ export const contactService = {
         recordEvent(scope, "contact.deleted", id, { permanent: true });
       }
     })();
-    dispatchEvents();
+    // One event per contact: the AI cache drops each tier once, not per row.
+    dispatchAsBatch();
     if (uploads.length > 0) removeUploads(scope.ownerId, uploads);
     return count;
   },

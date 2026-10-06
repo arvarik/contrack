@@ -37,7 +37,7 @@ import { useDropzone } from "react-dropzone";
 import { UserX } from "lucide-react";
 import { toast } from "sonner";
 import { toastUndoableDelete } from "../../../lib/undoToast";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import { CARD } from "../../../lib/styles";
 
 import { usePageTitle } from "../../../hooks/usePageTitle";
@@ -106,7 +106,6 @@ import { vibeTokens } from "../../../lib/theme";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { DupeBanner } from "./DupeBanner";
 import { useMergedRedirect } from "./useMergedRedirect";
-import { errorText } from "../../../lib/errorText";
 import { LoadFailed } from "../../../components/ui/LoadFailed";
 
 // ═══════════════════════════════════════════════════════════════════════════

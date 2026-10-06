@@ -55,7 +55,7 @@ import {
   computeNextHighlightIndex,
   type UpNextItem,
 } from "./lib/upNext";
-import { pageKeyTaken } from "./lib/pageKeys";
+import { isPageKeyTaken } from "../../lib/keyboard";
 import { getUpcomingBirthdays } from "./lib/birthdays";
 import { jumpToGroup } from "./lib/jumpToGroup";
 import { Masthead, type JumpTarget } from "./components/Masthead";
@@ -430,7 +430,7 @@ const PulseOffice = () => {
     const onKeyDown = (e: KeyboardEvent) => {
       // A key in a field, a dialog or a menu is theirs: D on a button in the
       // Log note dialog, or in an open Snooze menu, completed the row behind.
-      if (pageKeyTaken(e)) return;
+      if (isPageKeyTaken(e)) return;
       // A card in the air owns the keyboard until it lands.
       if (draggingRef.current) return;
 

@@ -35,7 +35,7 @@ import {
 import { toast } from "sonner";
 import { rateLimitFacts } from "../api/client";
 import type { DedupeScanMode, DedupeScanProgress } from "../types";
-import { errorText } from "../lib/errorText";
+import { errorText } from "../lib/utils";
 
 interface DedupeContextValue {
   startScan: (mode: DedupeScanMode) => void;

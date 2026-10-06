@@ -28,10 +28,9 @@ import { ImportModal } from "../../components/ImportModal";
 import { BulkModals } from "../../components/bulk/BulkModals";
 import { AnimatedSkeleton } from "../../components/ui/AnimatedSkeleton";
 import { FORM_INPUT, FORM_LABEL, formInputHighlight } from "../../lib/styles";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { CreateListModal } from "./CreateListModal";
 import { fallbackAvatarUrl } from "../../lib/avatar";
-import { errorText } from "../../lib/errorText";
 
 // =============================================================================
 // Props

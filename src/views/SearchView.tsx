@@ -13,7 +13,8 @@ import {
 import { useStarterDraw } from "../hooks/useStarterDraw";
 import { useRecordSearch } from "../api/searchHistory";
 import { useStarterQuestions } from "../api";
-import { pageKeyTaken } from "./pulse/lib/pageKeys";
+import { isPageKeyTaken } from "../lib/keyboard";
+import { touchFirst } from "../lib/platform";
 import { useRovingFocus } from "./search/useRovingFocus";
 import { usePreferences } from "../contexts/PreferencesContext";
 import { useMediaQuery, WIDE_QUERY } from "../hooks/useMediaQuery";
@@ -25,7 +26,7 @@ import {
   SECTION_HEADING,
   SUGGESTION_CHIP,
 } from "../lib/styles";
-import { cn } from "../lib/utils";
+import { cn, errorText } from "../lib/utils";
 import { FloatingContactCard } from "../components/FloatingContactCard";
 import { SynthesisBar } from "../components/command-palette/SynthesisBar";
 import { CorvidThinking } from "../components/brand/CorvidThinking";
@@ -48,8 +49,6 @@ import { peopleSearchStatus } from "../lib/searchAnnouncements";
 import { useAISearchSession } from "../contexts/SessionContext";
 import type { HistoryEntry } from "../../shared/searchHistory";
 import { useAiAllowed } from "../hooks/useAiAllowed";
-import { errorText } from "../lib/errorText";
-import { isTouchScreen } from "../lib/platform";
 
 // =============================================================================
 // SearchView — Dedicated full-page "Ask Contrack" semantic search
@@ -121,7 +120,7 @@ export const SearchView = () => {
   // The box takes focus on arrival on a desktop. On a touch screen that
   // opened the keyboard over the page before a person chose to type.
   useEffect(() => {
-    if (isTouchScreen()) return;
+    if (touchFirst()) return;
     inputRef.current?.focus();
   }, []);
 
@@ -260,7 +259,7 @@ export const SearchView = () => {
       if (!singleKeys) return;
       // A key in a field, a dialog or a menu is theirs: H in the history's
       // Clear confirmation, or in an open menu, closed the pane under it.
-      if (pageKeyTaken(e)) return;
+      if (isPageKeyTaken(e)) return;
       if (e.key === "/") {
         e.preventDefault();
         inputRef.current?.focus();

@@ -38,8 +38,7 @@ import {
   SETTINGS_PAGE,
   SETTINGS_SECTION_HEADING,
 } from "../layout";
-import { cn } from "../../../lib/utils";
-import { errorText } from "../../../lib/errorText";
+import { cn, errorText } from "../../../lib/utils";
 
 /** One fact about where data lives: a static tile on the card's wash. */
 const Fact = ({

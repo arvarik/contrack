@@ -68,17 +68,6 @@ export function isApplePlatform(nav?: Navigator | PlatformSource): boolean {
  */
 export const TOUCH_QUERY = "(pointer: coarse)";
 
-/**
- * True on a touch screen, read when called. A field that takes focus there
- * opens the keyboard over the page, so a page puts focus in its first field
- * on arrival only for a mouse or a trackpad: the sign-in screens and Ask
- * Contrack.
- *
- * @returns True when the main pointer is coarse.
- */
-export const isTouchScreen = (): boolean =>
-  typeof window !== "undefined" && !!window.matchMedia?.(TOUCH_QUERY).matches;
-
 /** Read once: the platform does not change while the page is open. */
 export const IS_APPLE = isApplePlatform();
 
@@ -126,4 +115,19 @@ export function navChordKey(event: KeyboardEvent): string {
   if (!event.metaKey && isTypingTarget(event)) return "";
   if (event.code === "Comma") return ",";
   return event.code.startsWith("Key") ? event.code.slice(3).toLowerCase() : "";
+}
+
+/**
+ * True on a touch screen: the main pointer is a finger. A field that takes
+ * focus there opens the on-screen keyboard over the page, so a screen puts
+ * focus in its first field only for a mouse or a trackpad.
+ *
+ * @returns False where the browser cannot tell, such as a test without
+ *   `matchMedia`.
+ */
+export function touchFirst(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia?.(TOUCH_QUERY).matches === true
+  );
 }

@@ -11,9 +11,8 @@ import { Modal } from "../../components/ui/Modal";
 import { useBulkCreateActionItems } from "../../api/actionItems";
 import { MAX_BULK_ACTION_ITEMS } from "../../../shared/contracts/actionItems";
 import { FORM_INPUT, FORM_LABEL, SELECTED_TINT } from "../../lib/styles";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { RadioDot } from "../../components/ui/RadioDot";
-import { errorText } from "../../lib/errorText";
 
 type DueDatePreset = "tomorrow" | "3days" | "nextweek" | "pick";
 

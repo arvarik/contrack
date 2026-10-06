@@ -63,6 +63,7 @@ import { cn } from "../../../lib/utils";
 import { INLINE_INPUT } from "../../../lib/styles";
 import { mailtoHref, smsHref, telHref } from "../../../lib/contactLinks";
 import { useMediaQuery } from "../../../hooks/useMediaQuery";
+import type { MapLink } from "../../map/mapLink";
 import { EditableField, INPUT_KIND } from "./EditableField";
 import { AddButton, FIELD_VALUE, showUndoToast } from "./Field";
 
@@ -141,7 +142,7 @@ interface RowProps {
   labelOptions: readonly string[];
   isAddress: boolean;
   kind?: ValueKind;
-  mapHref?: string;
+  mapLink?: MapLink;
   /** True after Alt+Arrow placed this row, until focus leaves it. */
   moved: boolean;
   onEdit: (index: number, value: string) => void;
@@ -160,7 +161,7 @@ const SortableRow = ({
   labelOptions,
   isAddress,
   kind,
-  mapHref,
+  mapLink,
   moved,
   onEdit,
   onLabelChange,
@@ -217,12 +218,13 @@ const SortableRow = ({
     });
   }
   // Every address row leads to the same pin, because the contact has one.
-  if (isAddress && mapHref) {
+  if (isAddress && mapLink) {
     actions.push({
       id: "map",
       label: "Show on map",
       icon: MapPin,
-      to: mapHref,
+      to: mapLink.to,
+      state: mapLink.state,
     });
   }
   actions.push({
@@ -283,7 +285,7 @@ const SortableRow = ({
       />
       {/* The primary address places the pin. A status, not a link: the
           kebab's "Show on map" is the way to the map. */}
-      {isAddress && index === 0 && mapHref && (
+      {isAddress && index === 0 && mapLink && (
         <span className="inline-flex items-center gap-1 text-xs font-medium text-on-surface-variant">
           <Check aria-hidden="true" className="w-3.5 h-3.5" />
           Map pin
@@ -342,11 +344,11 @@ interface MultiValueFieldProps {
    */
   kind?: ValueKind;
   /**
-   * Where an address row's "Show on map" item goes. Left out when the
-   * contact has no coordinates, and the rows then offer no map item and no
-   * "Map pin" status.
+   * Where an address row's "Show on map" item goes (`useMapLink`). Left out
+   * when the contact has no coordinates, and the rows then offer no map item
+   * and no "Map pin" status.
    */
-  mapHref?: string;
+  mapLink?: MapLink;
   /**
    * Something that belongs to the rows and shows under them: the mini map
    * and its caption, for addresses. The add control stays last, so a new
@@ -374,7 +376,7 @@ export const MultiValueField = ({
   inputPlaceholder,
   isAddress = false,
   kind,
-  mapHref,
+  mapLink,
   afterRows,
   openRequest,
   openLabel,
@@ -623,7 +625,7 @@ export const MultiValueField = ({
                 labelOptions={labelOptions}
                 isAddress={isAddress}
                 kind={kind}
-                mapHref={mapHref}
+                mapLink={mapLink}
                 moved={movedRow === index}
                 onEdit={edit}
                 onLabelChange={relabel}

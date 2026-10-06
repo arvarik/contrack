@@ -59,6 +59,7 @@ export const InfoTip = ({
   align = "start",
   tone = "muted",
   wide = false,
+  tabIndex,
 }: {
   /** Accessible name for the trigger, e.g. "About the Briefing cache". */
   label: string;
@@ -82,6 +83,11 @@ export const InfoTip = ({
    * wrap to a column, such as a price for each of three providers.
    */
   wide?: boolean;
+  /**
+   * The trigger's place in the Tab order, for a tip inside a list that is
+   * one Tab stop (`useRovingFocus`): -1 off the current row.
+   */
+  tabIndex?: number;
 }) => {
   const [openedBy, setOpenedBy] = useState<OpenedBy>(null);
   const open = openedBy !== null;
@@ -154,6 +160,7 @@ export const InfoTip = ({
       <button
         ref={triggerRef}
         type="button"
+        tabIndex={tabIndex}
         aria-label={label}
         aria-describedby={panelId}
         aria-expanded={open}

@@ -41,7 +41,7 @@ import {
   Undo2,
   UserX,
 } from "lucide-react";
-import { cn } from "../../../lib/utils";
+import { cn, plural } from "../../../lib/utils";
 import {
   BTN_QUIET,
   FIELD_LABEL,
@@ -142,9 +142,6 @@ function ListCell({ items }: { items: string[] }) {
     </span>
   );
 }
-
-const plural = (n: number, one: string, many: string) =>
-  `${n} ${n === 1 ? one : many}`;
 
 const listKey = (items: string[]) =>
   items.map(norm).filter(Boolean).sort().join("|");

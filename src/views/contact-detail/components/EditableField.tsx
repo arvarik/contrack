@@ -1,9 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { Check, Loader2, Pencil } from "lucide-react";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import { EDITABLE_INPUT } from "../../../lib/styles";
 import { useMediaQuery } from "../../../hooks/useMediaQuery";
-import { errorText } from "../../../lib/errorText";
 import { TOUCH_QUERY } from "../../../lib/platform";
 
 /**

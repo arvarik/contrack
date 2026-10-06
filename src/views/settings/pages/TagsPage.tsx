@@ -32,10 +32,9 @@ import { EmptyState } from "../../../components/ui/EmptyState";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { Modal } from "../../../components/ui/Modal";
 import { CARD, FORM_INPUT, FORM_LABEL } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { cn, errorText, plural } from "../../../lib/utils";
 import { tagFilterPath } from "../../contact-list/hooks/useContactListFilters";
 import { SETTINGS_INPUT, SETTINGS_PAGE } from "../layout";
-import { errorText } from "../../../lib/errorText";
 import { LoadFailed } from "../../../components/ui/LoadFailed";
 import { SearchField } from "../../../components/ui/SearchField";
 import { NO_AUTOCORRECT } from "../../../components/ui/SearchField";
@@ -44,7 +43,7 @@ import { NO_AUTOCORRECT } from "../../../components/ui/SearchField";
 const ROW_ACTION =
   "hit-area state-layer p-2.5 rounded-xl text-on-surface-variant min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors";
 
-const contacts = (n: number) => `${n} ${n === 1 ? "contact" : "contacts"}`;
+const contacts = (n: number) => plural(n, "contact", "contacts");
 
 /**
  * Who a rename or a delete changes. It changes every contact with the tag,
@@ -262,7 +261,7 @@ export const TagsPage = () => {
                       // Network list showing the contacts with the tag.
                       <Link
                         to={tagFilterPath(item.tag)}
-                        aria-label={`${item.tag}, ${item.count} ${item.count === 1 ? "contact" : "contacts"}`}
+                        aria-label={`${item.tag}, ${contacts(item.count)}`}
                         title="See who has this tag"
                         className="hit-area group/tag flex items-center gap-3 min-w-0 rounded-md"
                       >

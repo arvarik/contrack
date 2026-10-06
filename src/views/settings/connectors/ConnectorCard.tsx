@@ -27,7 +27,7 @@ import { ActionMenu } from "../../../components/ui/ActionMenu";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { formatRelative } from "../../../lib/datetime";
 import { CARD, TONE_WASH } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import {
   useDeleteConnector,
   useSyncConnector,
@@ -39,7 +39,6 @@ import type {
   ConnectorSummary,
 } from "../../../../shared/connectors";
 import { KIND_ICONS } from "./AddConnectorSheet";
-import { errorText } from "../../../lib/errorText";
 
 interface ConnectorCardProps {
   connector: ConnectorSummary;

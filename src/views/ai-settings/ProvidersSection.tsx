@@ -37,9 +37,8 @@ import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Modal } from "../../components/ui/Modal";
 import { useHashTarget } from "../settings/SettingRow";
 import { ICON_BTN, LABEL } from "../../lib/styles";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { SETTINGS_CARD, SETTINGS_SECTION_HEADING } from "../settings/layout";
-import { errorText } from "../../lib/errorText";
 
 /**
  * "Add a key" and "Add a server": a flat row in the primary with the state

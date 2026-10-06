@@ -10,7 +10,7 @@ import { useState } from "react";
 import { KeyRound, Loader2 } from "lucide-react";
 import { AuthShell, AuthSubmit, AuthError } from "./AuthShell";
 import { registerPasskey, dismissPasskeyNudge } from "../../api/passkeys";
-import { errorText } from "../../lib/errorText";
+import { errorText } from "../../lib/utils";
 
 export const PasskeyNudge = ({ onDone }: { onDone: () => void }) => {
   const [busy, setBusy] = useState(false);

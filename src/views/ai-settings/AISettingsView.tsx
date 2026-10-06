@@ -2,7 +2,7 @@ import { toast } from "sonner";
 import { useAISettings, useSetInstanceAi } from "../../api/aiSettings";
 import { Switch } from "../../components/ui/Switch";
 import { SettingRow, useHashTarget } from "../settings/SettingRow";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import {
   SETTINGS_CARD,
   SETTINGS_PAGE,
@@ -12,7 +12,6 @@ import { FeatureMap } from "./FeatureMap";
 import { ProvidersSection } from "./ProvidersSection";
 import { ModelsSection } from "./ModelsSection";
 import { WebSearchSection } from "./WebSearchSection";
-import { errorText } from "../../lib/errorText";
 
 // ---------------------------------------------------------------------------
 // AISettingsView — Settings → Administration → AI

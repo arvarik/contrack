@@ -25,13 +25,12 @@ import {
 } from "../../../api/imports";
 import { formatRelative, formatWhen } from "../../../lib/datetime";
 import { CARD, TONE_WASH, type Tone } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import {
   SETTINGS_CARD,
   SETTINGS_PAGE,
   SETTINGS_SECTION_HEADING,
 } from "../layout";
-import { errorText } from "../../../lib/errorText";
 
 const statusBadges: Record<
   ImportStatus,

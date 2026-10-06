@@ -29,7 +29,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { ICON_BTN, KBD } from "../../lib/styles";
 import { DURATION, EASE } from "../../lib/motion";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { CLOSE_PALETTE_EVENT, OPEN_PALETTE_EVENT } from "../../lib/appEvents";
 import type { SemanticMatch, ZeroStateInsight } from "../../types";
 import { formatFacet } from "../../../shared/facetQuery";
@@ -51,7 +51,6 @@ import { FacetAutocomplete } from "./FacetAutocomplete";
 import { ActionSubMenu } from "./ActionSubMenu";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import { useCloseRequest } from "../../hooks/useCloseRequest";
-import { errorText } from "../../lib/errorText";
 import { NO_AUTOCORRECT } from "../ui/SearchField";
 
 /** The icon at the start of the input, swapped when the mode changes. */

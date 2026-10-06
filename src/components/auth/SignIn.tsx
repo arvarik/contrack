@@ -24,7 +24,7 @@ import { PasskeyButton } from "./PasskeyButton";
 import { ForgotPassword } from "./ForgotPassword";
 import { requestMagicLink } from "../../api/authLinks";
 import { NO_AUTOCORRECT } from "../ui/SearchField";
-import { isTouchScreen } from "../../lib/platform";
+import { touchFirst } from "../../lib/platform";
 
 /** Why this screen appeared, when it was not the user's own doing. */
 type SignInReason = "expired" | "disabled" | null;
@@ -89,7 +89,7 @@ export const SignIn = ({
   const autofillAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    if (savedIdentifier && !isTouchScreen()) {
+    if (savedIdentifier && !touchFirst()) {
       passwordRef.current?.focus();
     }
   }, [savedIdentifier]);
@@ -287,7 +287,7 @@ export const SignIn = ({
           // Focus password if prefilled; otherwise start on identifier. Not
           // on a touch screen, where focus opens the keyboard.
           // eslint-disable-next-line jsx-a11y/no-autofocus
-          autoFocus={!savedIdentifier && !isTouchScreen()}
+          autoFocus={!savedIdentifier && !touchFirst()}
         />
         <AuthField
           ref={passwordRef}

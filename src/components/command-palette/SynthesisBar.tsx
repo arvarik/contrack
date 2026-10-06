@@ -23,7 +23,7 @@ import { Sparkles, X, AlertTriangle } from "lucide-react";
 import { CorvidThinking } from "../brand/CorvidThinking";
 import { LiveStatus } from "../ui/LiveStatus";
 import { useBlockedAi } from "../../hooks/useAiSetup";
-import { errorText } from "../../lib/errorText";
+import { errorText } from "../../lib/utils";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

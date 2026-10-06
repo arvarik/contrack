@@ -55,9 +55,8 @@ import {
 import { useAuth } from "./auth/AuthGate";
 import { TAB_CONTAINER, TONE_WASH, tabItem } from "../lib/styles";
 import { DURATION, EASE } from "../lib/motion";
-import { cn } from "../lib/utils";
+import { cn, errorText } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
-import { errorText } from "../lib/errorText";
 
 interface ImportPanelProps {
   onComplete?: (summary: ImportSummary) => void;

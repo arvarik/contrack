@@ -18,7 +18,7 @@ import {
 } from "../../api";
 import { ICON_BTN, SELECTED_ROW } from "../../lib/styles";
 import { DURATION, EASE } from "../../lib/motion";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { ListIcon } from "../../views/contact-list/CreateListModal";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -66,9 +66,7 @@ export const ListPicker: React.FC<ListPickerProps> = ({
           toast.success(`Added ${contactName} to "${listName}"`);
         }
       } catch (err: unknown) {
-        toast.error(
-          `Could not change the list: ${err instanceof Error ? err.message : String(err)}`,
-        );
+        toast.error(`Could not change the list: ${errorText(err)}`);
       } finally {
         setPendingListId(null);
       }
@@ -156,7 +154,7 @@ export const ListPicker: React.FC<ListPickerProps> = ({
       {lists.length === 0 ? (
         <div className="px-3 py-6 text-center text-sm text-on-surface-variant">
           <p className="font-bold text-on-surface mb-1">No lists yet</p>
-          <p className="text-xs">Create a list from the Settings page first</p>
+          <p className="text-xs">Create a list in Settings → Lists first</p>
         </div>
       ) : (
         // A listbox the palette's input names the current row of

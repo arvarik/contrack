@@ -61,7 +61,7 @@ import { aiSetupLine, useBlockedAi } from "../../../hooks/useAiSetup";
 import { withUndo } from "../../../lib/undoToast";
 import { VibePickerPopover } from "./VibePickerPopover";
 import type { ProfileHeaderProps } from "./ProfileHeader";
-import { errorText } from "../../../lib/errorText";
+import { errorText } from "../../../lib/utils";
 
 /** Name, emails and phones: enough to reach the person. */
 function basicDetailsText(contact: Contact): string {

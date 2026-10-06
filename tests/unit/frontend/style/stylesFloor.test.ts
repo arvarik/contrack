@@ -517,7 +517,7 @@ describe("the shared helpers", () => {
     expect(offenders).toEqual([]);
   });
 
-  it("asks for a touch screen through TOUCH_QUERY or isTouchScreen", () => {
+  it("asks for a touch screen through TOUCH_QUERY or touchFirst", () => {
     // MultiValueField.tsx is reserved in PR #196. It leaves this list when
     // it moves to TOUCH_QUERY.
     expect(
@@ -535,13 +535,11 @@ describe("the shared helpers", () => {
   });
 
   it("reads an error's words through errorText, which drops the closing period", () => {
-    // ListPicker.tsx is reserved in PR #196. It leaves this list when it
-    // moves to errorText.
     expect(
       usersOutside(
-        "lib/errorText.ts",
+        "lib/utils.ts",
         /instanceof Error\s*(?:\?|&&)\s*\w+\.message|as Error\)\.message|Could not [^`]*\$\{(?:err|error|e)\.message\}/,
       ),
-    ).toEqual(["components/command-palette/ListPicker.tsx"]);
+    ).toEqual([]);
   });
 });

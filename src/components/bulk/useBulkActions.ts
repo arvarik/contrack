@@ -27,7 +27,7 @@ import {
   useBulkAddToList,
 } from "../../api";
 import type { Contact, ContactUpdateData } from "../../types";
-import { errorText } from "../../lib/errorText";
+import { errorText } from "../../lib/utils";
 
 interface ContactLike {
   id: string;

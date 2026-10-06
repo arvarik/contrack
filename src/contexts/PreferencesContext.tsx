@@ -45,7 +45,7 @@ import {
   type PreferencesResponse,
 } from "../api/preferences";
 import { applyTheme, readThemeCache, type ResolvedMode } from "../lib/theme";
-import { errorText } from "../lib/errorText";
+import { errorText } from "../lib/utils";
 
 const QUERY_KEY = ["preferences"] as const;
 

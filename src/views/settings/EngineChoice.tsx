@@ -53,9 +53,8 @@ import {
   type EngineNeed,
   type WebSearchEngine,
 } from "../../../shared/webSearchEngine";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { TOUCH_LINK } from "./layout";
-import { errorText } from "../../lib/errorText";
 
 const RESEARCH = AI_FEATURES.find((feature) => feature.id === "research")!;
 

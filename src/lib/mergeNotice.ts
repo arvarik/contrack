@@ -21,7 +21,7 @@ import {
   type MergedInto,
 } from "../api/suggestions";
 import { withUndo } from "./undoToast";
-import { errorText } from "./errorText";
+import { errorText } from "./utils";
 
 /**
  * When to ask whether a new contact merged: after the check that runs five

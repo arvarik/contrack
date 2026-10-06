@@ -29,10 +29,9 @@ import {
 import { DURATION, EASE } from "../lib/motion";
 import { EmptyState } from "../components/ui/EmptyState";
 import { CorvidMark } from "../components/brand/CorvidMark";
-import { cn } from "../lib/utils";
+import { cn, errorText, plural } from "../lib/utils";
 import { FloatingContactCard } from "../components/FloatingContactCard";
 import { SETTINGS_PAGE } from "./settings/layout";
-import { errorText } from "../lib/errorText";
 
 // ---------------------------------------------------------------------------
 // ArchivedContactsView — lists archived contacts with individual + bulk restore
@@ -94,7 +93,7 @@ export const ArchivedContactsView = () => {
       {
         onSuccess: ({ count }) => {
           toast.success(
-            `Restored ${count} contact${count !== 1 ? "s" : ""} to Network`,
+            `Restored ${plural(count, "contact", "contacts")} to Network`,
           );
           exitSelectMode();
         },
@@ -155,8 +154,7 @@ export const ArchivedContactsView = () => {
         <div className={cn(CARD, "p-0")}>
           <div className="flex items-center gap-2 px-4 sm:px-6 py-2 min-h-[48px] bg-surface-container-low rounded-t-2xl">
             <span className={cn(SECTION_HEADING, "flex-1 min-w-0")}>
-              {contacts.length} {contacts.length === 1 ? "contact" : "contacts"}{" "}
-              archived
+              {plural(contacts.length, "contact", "contacts")} archived
             </span>
             {isSelectMode && (
               <button

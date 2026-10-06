@@ -26,7 +26,7 @@ import {
   useRestoreSuggestion,
   useSuggestionForContact,
 } from "../../../api";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import { TONE_WASH } from "../../../lib/styles";
 import { withUndo } from "../../../lib/undoToast";
 import { DuplicateComparison } from "../../dedupe/components/DuplicateComparison";
@@ -37,7 +37,6 @@ import {
   reasonIcon,
 } from "../../dedupe/utils/reason";
 import type { PersistedDedupeSuggestion } from "../../../types";
-import { errorText } from "../../../lib/errorText";
 
 interface DupeBannerProps {
   contactId: string;

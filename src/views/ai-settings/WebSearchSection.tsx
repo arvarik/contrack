@@ -25,9 +25,8 @@ import { featuresUsing } from "../../lib/aiFeatures";
 import { RowsUnderHeading, SettingRow } from "../settings/SettingRow";
 import { EngineChoice } from "../settings/EngineChoice";
 import { SETTINGS_CARD, SETTINGS_SECTION_HEADING } from "../settings/layout";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { ModelRow } from "./ModelRow";
-import { errorText } from "../../lib/errorText";
 
 const FIELD =
   "w-full min-h-[44px] sm:pointer-fine:min-h-0 px-3 py-2 rounded-xl bg-surface-container-highest text-sm font-mono";

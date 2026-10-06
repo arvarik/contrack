@@ -32,7 +32,7 @@ import type { BodyOf } from "../../shared/contracts/route";
 import { apiFetch, apiJson, jsonBody } from "./client";
 import { GEO_STATUS_KEY } from "./geo";
 import { watchNewContact } from "../lib/mergeNotice";
-import { errorText } from "../lib/errorText";
+import { errorText } from "../lib/utils";
 
 /**
  * Canonical fetcher for the `['contacts']` query — the single source of truth

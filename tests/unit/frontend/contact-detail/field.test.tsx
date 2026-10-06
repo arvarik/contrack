@@ -263,11 +263,13 @@ describe("DetailsCard", () => {
       screen.getByRole("button", { name: "Actions for 1 Main St, London" }),
     );
     expect(menuItems()).toEqual(["Show on map", "Remove"]);
+    // jsdom is a narrow screen: the map opens at the pin, not under the
+    // contact (`useMapLink`).
     expect(
       screen
         .getByRole("menuitem", { name: "Show on map" })
         .getAttribute("href"),
-    ).toBe("/map/contact/c1");
+    ).toBe("/map");
     fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
 
     fireEvent.click(
@@ -658,7 +660,7 @@ describe("MultiValueField", () => {
         noun: "address",
         addLabel: "Add location",
         isAddress: true,
-        mapHref: "/map/contact/c1",
+        mapLink: { to: "/map/contact/c1" },
       },
     );
     fireEvent.keyDown(

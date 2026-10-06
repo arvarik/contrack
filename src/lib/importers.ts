@@ -401,7 +401,7 @@ function cell(row: CsvRow, ...columns: string[]): string {
  * Entries a parser dropped because they had no name. The import counts
  * them, so a file of four cards that saves three says why.
  */
-export interface ImportTally {
+interface ImportTally {
   skipped: number;
 }
 
@@ -752,7 +752,7 @@ export const SOURCE_FILES: Record<
 };
 
 /** What a file held: the contacts, and the entries with no name. */
-export interface ParsedImport {
+interface ParsedImport {
   contacts: ImportedContact[];
   skipped: number;
 }

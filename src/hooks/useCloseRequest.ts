@@ -16,7 +16,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
-import { isTouchScreen } from "../lib/platform";
+import { touchFirst } from "../lib/platform";
 
 interface Watcher {
   onclose: (() => void) | null;
@@ -39,7 +39,7 @@ export function useCloseRequest(open: boolean, onClose: () => void): void {
     if (!open) return;
     const Watcher = (globalThis as { CloseWatcher?: WatcherConstructor })
       .CloseWatcher;
-    if (!Watcher || !isTouchScreen()) return;
+    if (!Watcher || !touchFirst()) return;
     let watcher: Watcher;
     try {
       watcher = new Watcher();

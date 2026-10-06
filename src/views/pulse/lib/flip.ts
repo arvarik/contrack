@@ -20,24 +20,10 @@
  *
  * @module views/pulse/lib/flip
  */
-import { DURATION, EASE } from "../../../lib/motion";
+import { DURATION, EASE, prefersReducedMotion } from "../../../lib/motion";
 
 /** The app's one curve, for the Web Animations API and dnd-kit. */
 export const EASE_CSS = `cubic-bezier(${EASE.join(", ")})`;
-
-/**
- * Whether motion is off: the operating system asks for less, or the Motion
- * row in Settings is Reduced (`data-motion` on the root). CSS transitions
- * already collapse under both, but a script animation does not, so a script
- * asks here, at the moment it would start one.
- */
-export function prefersReducedMotion(): boolean {
-  if (typeof window === "undefined") return true;
-  if (document.documentElement.dataset.motion === "reduced") return true;
-  return (
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true
-  );
-}
 
 /** The id the slides carry, so the next change can find and stop them. */
 const FLIP_ID = "pulse-flip";

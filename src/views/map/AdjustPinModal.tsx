@@ -25,13 +25,12 @@ import { useContact, useSetContactLocation } from "../../api";
 import { searchPlace } from "../../api/geo";
 import { Modal } from "../../components/ui/Modal";
 import { FORM_INPUT } from "../../lib/styles";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { ContactMap } from "./ContactMap";
 import { contactPinLabel, pinAvatarSrc } from "./ContactMarker";
 import { flyToContact } from "./flyTo";
 import type { MiniMapContact } from "./LocationMiniMap";
 import { CONTACT_ZOOM } from "./mapMath";
-import { errorText } from "../../lib/errorText";
 import { NO_AUTOCORRECT } from "../../components/ui/SearchField";
 
 /** Where a pin is, or is about to be. */

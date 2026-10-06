@@ -50,13 +50,12 @@ import { Segmented, type SegmentedOption } from "../../components/ui/Segmented";
 import type { MapLayer, MapView } from "../../api/mapViews";
 import { ViewsMenu, type ViewsMenuProps } from "./ViewsMenu";
 import type { MapFilter } from "./useMapFilter";
-import { prefersReducedMotion } from "./flyTo";
+import { prefersReducedMotion } from "../../lib/motion";
 import { MIN_OPEN_PX, measureInsets, paddingFor } from "./insets";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { SELECTED_TINT, TONE_WASH } from "../../lib/styles";
 import { useMediaQuery, WIDE_QUERY } from "../../hooks/useMediaQuery";
 import { PaletteButton } from "../../components/command-palette/PaletteButton";
-import { errorText } from "../../lib/errorText";
 import { NO_AUTOCORRECT } from "../../components/ui/SearchField";
 import { ClearButton } from "../../components/ui/SearchField";
 

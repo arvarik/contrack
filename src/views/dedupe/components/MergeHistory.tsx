@@ -27,14 +27,13 @@ import { formatDistanceToNowStrict } from "date-fns";
 import { Bot, Clock, Undo2, User } from "lucide-react";
 import { toast } from "sonner";
 import { useMergeLog, useUndoMerge } from "../../../api";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import { LABEL, TONE_WASH } from "../../../lib/styles";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { Badge } from "../../../components/ui/Badge";
 import type { MergeLogEntry } from "../../../types";
 import { guessMatchType, plainReason } from "../utils/reason";
 import { parseServerTime } from "../../../lib/datetime";
-import { errorText } from "../../../lib/errorText";
 
 /**
  * A merge's time. SQLite writes "2026-10-05 22:52:02" in UTC with no zone,

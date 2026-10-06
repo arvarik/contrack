@@ -32,9 +32,8 @@ import { Badge } from "../../../components/ui/Badge";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ICON_BTN, TONE_WASH } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import { SETTINGS_CARD, SETTINGS_INPUT } from "../layout";
-import { errorText } from "../../../lib/errorText";
 import { LoadFailed } from "../../../components/ui/LoadFailed";
 
 function formatWhen(iso: string): string {

@@ -13,7 +13,7 @@ import { openQuickNote } from "../../../lib/appEvents";
 import { flyWhenClear } from "../../../lib/corvid";
 import { GROUP_TONE, PULSE_TYPE } from "../lib/pulseStyles";
 import { groupHeadingId, SHOW_ALL_UP_NEXT } from "../lib/jumpToGroup";
-import { prefersReducedMotion } from "../lib/flip";
+import { prefersReducedMotion } from "../../../lib/motion";
 import type { UpNextGroupMeta, UpNextItem } from "../lib/upNext";
 
 interface UpNextCardProps {

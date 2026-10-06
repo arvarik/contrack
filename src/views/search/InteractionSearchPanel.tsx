@@ -67,7 +67,7 @@ import {
   filterPill,
 } from "../../lib/styles";
 import { noteSearchStatus } from "../../lib/searchAnnouncements";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { LiveStatus } from "../../components/ui/LiveStatus";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { IconButton } from "../../components/ui/IconButton";
@@ -76,7 +76,6 @@ import type { InteractionSearchHit } from "../../types";
 import { Highlighted } from "../../components/ui/Highlighted";
 import { AskSearchBox } from "./AskSearchBox";
 import { ShimmerCard } from "./SearchResultCards";
-import { errorText } from "../../lib/errorText";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 

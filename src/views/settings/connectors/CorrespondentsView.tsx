@@ -33,9 +33,8 @@ import {
   SECTION_HEADING,
   TONE_WASH,
 } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import { LoadFailed } from "../../../components/ui/LoadFailed";
-import { errorText } from "../../../lib/errorText";
 
 /**
  * A name to start from, out of an address's local part: "rowan.vale" and

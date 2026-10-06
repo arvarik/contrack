@@ -21,8 +21,7 @@ import type {
   ConnectorSummary,
 } from "../../../../shared/connectors";
 import { FORM_INPUT, TONE_WASH } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
-import { errorText } from "../../../lib/errorText";
+import { cn, errorText } from "../../../lib/utils";
 
 interface GoogleFormModalProps {
   isOpen: boolean;

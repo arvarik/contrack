@@ -5,13 +5,12 @@ import { toast } from "sonner";
 import type { Contact } from "../../../types";
 import { undoMerges, useMergeCluster } from "../../../api";
 import { usePreferences } from "../../../contexts/PreferencesContext";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import { SELECTED_TINT } from "../../../lib/styles";
 import { withUndo } from "../../../lib/undoToast";
 import { suggestKeeper } from "../utils/mergeOutcome";
 import { SelectStage } from "./manual/SelectStage";
 import { CompareStage } from "./manual/CompareStage";
-import { errorText } from "../../../lib/errorText";
 
 // =============================================================================
 // ManualMerge — choose contacts, then compare and merge them

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Modal } from "../../components/ui/Modal";
 import type { MapView } from "../../api/mapViews";
 import { FORM_INPUT, FORM_LABEL } from "../../lib/styles";
-import { errorText } from "../../lib/errorText";
+import { errorText } from "../../lib/utils";
 
 interface RenameViewModalProps {
   view: MapView | null;

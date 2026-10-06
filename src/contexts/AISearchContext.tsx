@@ -57,7 +57,7 @@ import {
 import { engineThatRuns } from "../lib/aiFeatures";
 import { usePreferences } from "./PreferencesContext";
 import { AISearchProgressOverlay } from "../views/ai-search/components/AISearchProgressOverlay";
-import { errorText } from "../lib/errorText";
+import { errorText } from "../lib/utils";
 
 /** How one call to `startSearch` reports a limit. */
 interface StartSearchOptions {

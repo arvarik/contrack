@@ -19,7 +19,7 @@ import {
   authErrorText,
 } from "./AuthShell";
 import { requestPasswordReset } from "../../api/authLinks";
-import { isTouchScreen } from "../../lib/platform";
+import { touchFirst } from "../../lib/platform";
 
 export const ForgotPassword = ({
   onBack,
@@ -136,7 +136,7 @@ export const ForgotPassword = ({
           autoComplete="email"
           required
           // eslint-disable-next-line jsx-a11y/no-autofocus
-          autoFocus={!isTouchScreen()}
+          autoFocus={!touchFirst()}
         />
         {error && <AuthError>{error}</AuthError>}
       </div>

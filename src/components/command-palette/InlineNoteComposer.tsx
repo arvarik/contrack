@@ -27,7 +27,7 @@ import { toast } from "sonner";
 import { useAddInteraction } from "../../api";
 import { BTN_QUIET, ICON_BTN, KBD_SM } from "../../lib/styles";
 import { DURATION, EASE } from "../../lib/motion";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { chordLabel, MOD_KEY } from "../../lib/platform";
 import {
   clearDraft,
@@ -38,7 +38,6 @@ import {
 import { useAuth } from "../auth/AuthGate";
 import { INTERACTION_LABELS } from "../../lib/interactionKinds";
 import type { LogKind } from "./actionMode";
-import { errorText } from "../../lib/errorText";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

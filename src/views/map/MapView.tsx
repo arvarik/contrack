@@ -57,10 +57,10 @@ import {
   SIDE_PANEL_OPEN_MS,
   SIDE_PANEL_WIDTH,
 } from "../../components/layout/SidePanel";
-import { EASE } from "../../lib/motion";
+import { EASE, prefersReducedMotion } from "../../lib/motion";
 import { ContactMap } from "./ContactMap";
 import type { CardAction } from "./MapHoverCard";
-import { flyToContact, prefersReducedMotion, settlePadding } from "./flyTo";
+import { flyToContact, settlePadding } from "./flyTo";
 import {
   HEAT_END_ZOOM,
   HEAT_FADE_ZOOM,
@@ -99,8 +99,7 @@ import { QuickInteractionModal } from "../../components/QuickInteractionModal";
 import { LiveStatus } from "../../components/ui/LiveStatus";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { boundsOf, degreesAcross, densestSpan } from "./mapMath";
-import { cn } from "../../lib/utils";
-import { errorText } from "../../lib/errorText";
+import { cn, errorText } from "../../lib/utils";
 
 // The dialog's chunk loads the first time a card asks for it.
 const AdjustPinModal = lazy(() =>

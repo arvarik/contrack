@@ -65,7 +65,7 @@ import { useCreateActionItem } from "../api/actionItems";
 import type { Interaction } from "../types";
 import { COMPOSER, KBD_SM, TAG_PILL } from "../lib/styles";
 import { cn } from "../lib/utils";
-import { MOD_KEY } from "../lib/platform";
+import { MOD_KEY, touchFirst } from "../lib/platform";
 import { useAuth } from "./auth/AuthGate";
 import {
   draftKey,
@@ -78,7 +78,6 @@ import {
   INTERACTION_LABELS,
   type InteractionKind,
 } from "../lib/interactionKinds";
-import { isTouchScreen } from "../lib/platform";
 
 /** The type control's options, in the order they are shown. */
 const INTERACTION_TYPES: readonly SegmentedOption<InteractionKind>[] = [
@@ -664,7 +663,7 @@ const Composer = ({
                   event.key === "Enter" &&
                   !event.metaKey &&
                   !event.ctrlKey &&
-                  isTouchScreen()
+                  touchFirst()
                 ) {
                   event.currentTarget.blur();
                 }
