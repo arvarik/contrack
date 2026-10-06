@@ -129,16 +129,16 @@ The **Contact actions** menu, the three dots, holds these items in order:
 
 ### The Details card
 
-| Field              | What it holds                                                                   |
-| ------------------ | ------------------------------------------------------------------------------- |
-| **Location**       | Addresses, each labelled home, work or other. The first one places the map pin. |
-| **Email**          | Email addresses, each labelled work, personal or other.                         |
-| **Phone**          | Phone numbers, each labelled mobile, work, home or other.                       |
-| **Birthday**       | A date. A badge shows when the birthday is within 30 days.                      |
-| **Industry**       | One industry. The box suggests common ones.                                     |
-| **Preferences**    | Short notes, such as "Tea" or "Morning calls".                                  |
-| **Interests**      | Topics the person cares about.                                                  |
-| **Next follow-up** | The date of the next open follow-up, when there is one.                         |
+| Field              | What it holds                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------- |
+| **Location**       | Addresses, each labelled home, work or other. The first one places the map pin.                   |
+| **Email**          | Email addresses, each labelled work, personal or other.                                           |
+| **Phone**          | Phone numbers, each labelled mobile, work, home or other.                                         |
+| **Birthday**       | A day, with a year or without: "May 14", "May 14, 1990". A badge shows when it is within 30 days. |
+| **Industry**       | One industry. The box suggests common ones.                                                       |
+| **Preferences**    | Short notes, such as "Tea" or "Morning calls".                                                    |
+| **Interests**      | Topics the person cares about.                                                                    |
+| **Next follow-up** | The next open follow-up and its day. Its menu changes the date or marks it done.                  |
 
 - **Edit**: click a value, or give it focus and press `Enter`. `Enter` saves
   and `Esc` cancels. Press a row's label to change the label.
@@ -147,7 +147,7 @@ The **Contact actions** menu, the three dots, holds these items in order:
   edit one, press the pencil after it. The phone field opens the phone
   keyboard on a phone. With a mouse, a click on the value edits it.
 - **Row menu**: **Message** (a phone, on a touch screen), **Make primary**,
-  **Show on map** and **Remove**, with **Undo** for 7 seconds. The first
+  **Show on map** and **Remove**, with **Undo** for 10 seconds. The first
   email and phone are the primary ones, and the first address places the pin
   and says **Map pin**.
 - **Order**: open a row's menu and drag the row by its handle, or press
@@ -215,15 +215,18 @@ follow-up, [select them on the map](map.md#select-contacts-on-the-map).
   there. See [The Pulse page](pulse.md#the-pulse-page).
 - The contact page shows the follow-up band, and **Next follow-up** in
   **Details**. A Network row with an open follow-up has a calendar mark.
-- In an entry's dialog, press a follow-up under **Follow-up** to complete it.
+- In an entry's dialog, press a follow-up under **Follow-up** to mark it done.
+  **Next follow-up** in **Details** has **Mark done** too. Each offers
+  **Undo**. A due date names its weekday, such as "Fri, Oct 9", so a wrong
+  day shows at once.
 
 ## @mentions
 
-In the composer, type `@` and the start of a name. A list shows up to five
-contacts whose names start with what you typed, and marks a ghost **Ghost**.
-Press `↑`, `↓` and `Enter`, or click a name. `Esc` closes the list. The note
-then shows on the mentioned person's timeline too, with a **via** button that
-opens the contact you logged it on.
+In the composer, type `@` and the start of any word of a name: `@vale` and
+`@rowan v` both find Rowan Vale. A list shows up to eight contacts, and marks a
+ghost **Not added**. Press `↑`, `↓` and `Enter`, or choose a name. `Esc`
+closes the list. The note then shows on the mentioned person's timeline too,
+with a **via** button that opens the contact you logged it on.
 
 ## Ghosts
 
@@ -240,8 +243,8 @@ A ghost is a person Contrack has seen, but that you have not added yet.
 A ghost's picture has a sparkle badge. Point at it to see where the ghost came
 from. Ghosts stay out of the Network list and the map, and you cannot track or
 research one. Under a note, the dashed names in **Mentioned:** are ghosts. To
-make a ghost a full contact, open it and press **Promote to contact**, or
-press its dashed name under a note.
+make a ghost a full contact, open it and press **Add to Network**, or press
+its dashed name under a note.
 
 ## The Dossier tab
 
@@ -259,12 +262,15 @@ press its dashed name under a note.
   their pages, and every source. **Enrich again** runs it again. A contact
   with nothing to show says "No dossier yet" and offers **Enrich contact**.
   See [Research contacts](ai.md#research-contacts).
+- With no AI model or web search set up, **Generate briefing**, **Enrich
+  contact** and **Enrich again** wait. A line under each says why, and an
+  admin gets a link to the page that fixes it.
 
 ## Avatars
 
-Press the pencil on the picture to open **Edit avatar**. **Choose avatar**
-shows faces in the styles **Cartoon**, **Illustrated** and **Bot**.
-**Upload image** takes a JPEG, PNG, GIF, WebP or AVIF photo of up to 10 MB.
+Press the pencil on the picture to open **Edit avatar**. **Choose an avatar**
+shows faces in the styles **Cartoon**, **Illustrated** and **Bot**. **Upload
+a photo** takes a JPEG, PNG, GIF, WebP or AVIF photo of up to 10 MB.
 Then press **Apply**.
 
 A contact with no picture gets a cartoon face that your own server draws, so
@@ -293,7 +299,7 @@ list, or **New list** on **Settings → Lists**. Choose an icon, type the
 
 A tag is a short label on a contact, such as "investor". On the contact page,
 press **+ tag**, type the tag and press `Enter`. Press the × on a tag to
-remove it, and the toast offers **Undo** for 7 seconds.
+remove it, and the toast offers **Undo** for 10 seconds.
 
 **Settings → Tags** lists every tag with the number of contacts that have it,
 not counting archived and deleted contacts. **Filter tags** narrows the list,
