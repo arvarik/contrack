@@ -1,17 +1,8 @@
 /**
- * A settings page's controls, in the shell's header.
- *
- * The shell draws every settings page's header (`PageHeader`), so a page
- * cannot hand its buttons to it as a prop. A page puts them in
- * `SettingsHeaderActions` instead, and they render at the header's right
- * edge through a portal, the place every other page in the app keeps its
- * actions: Accounts' Invite and Create account, Backups' Snapshot now.
- *
- * The page tells the shell it has actions before the browser paints (a
- * layout effect), and the shell draws the slot only then, so a page with no
- * actions has no empty box in its header.
- *
- * @module views/settings/SettingsHeader
+ * A settings page's buttons, portaled to the right edge of the shell's
+ * header, because the shell (not the page) draws the header. A page claims
+ * the slot in a layout effect, before paint, and the shell draws the slot
+ * only then, so a page with no actions has no empty box.
  */
 import React, { createContext, useContext, useLayoutEffect } from "react";
 import { createPortal } from "react-dom";
@@ -27,10 +18,7 @@ export const SettingsHeaderContext = createContext<SettingsHeaderSlot | null>(
   null,
 );
 
-/**
- * The page's actions, drawn in the header. Outside the shell (a unit test
- * that renders one page) they render where they stand.
- */
+/** Outside the shell (a unit test of one page) the actions render in place. */
 export const SettingsHeaderActions = ({
   children,
 }: {

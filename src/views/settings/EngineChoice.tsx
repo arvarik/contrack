@@ -1,32 +1,15 @@
 /**
- * EngineChoice: what contact research searches the web with.
+ * The web search engine contact research uses, as tiles.
  *
- * ```
- * ┌───────────────────┐ ┌───────────────────┐ ┌───────────────────────────┐
- * │ ◉ Google Gemini   │ │ ○ SearXNG         │ │ ○ Google Gemini and       │
- * │   Its own web     │ │   Needs a SearXNG │ │   SearXNG                 │
- * │   search…         │ │   address         │ │   Needs a SearXNG address │
- * └───────────────────┘ └───────────────────┘ └───────────────────────────┘
- * SearXNG is not set up. Set it up in Administration → AI.
- * ```
+ * - `scope="instance"` (Administration, AI): the instance's engine, used by
+ *   every account that keeps "Instance default".
+ * - `scope="account"` (Contact enrichment): this account's engine, with an
+ *   "Instance default" tile first. On a one-account instance the account is
+ *   the admin, so the tiles set the instance's engine instead.
  *
- * One value, shown where it is set and where it is used:
- *
- * - `scope="instance"` on Administration → AI → Web search: the instance's
- *   engine, which an account that keeps "Instance default" searches with.
- * - `scope="account"` on Contact enrichment: this account's engine. With
- *   more than one account it is the account's own choice, and its first
- *   tile is "Instance default (…)". With one account, that account is the
- *   admin and the instance is theirs alone, so the tile sets the instance's
- *   engine, the same value as the AI page, and there is no "Instance
- *   default" to explain.
- *
- * An engine that cannot run stays as a disabled tile that says what it
- * lacks, rather than disappearing. The line under the tiles says what
- * research does about it, with a link to the setup for an admin and "Ask
- * your admin" for a member.
- *
- * @module views/settings/EngineChoice
+ * An engine that cannot run stays as a disabled tile that names what it
+ * lacks. The line under the tiles links an admin to the setup and tells a
+ * member to ask the admin.
  */
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
@@ -59,7 +42,6 @@ import { TEXT_LINK } from "../../lib/styles";
 
 const RESEARCH = AI_FEATURES.find((feature) => feature.id === "research")!;
 
-/** Where an admin sets web search up. */
 const AI_PAGE = "/settings/admin/ai";
 
 /** Where an admin fixes the first need an engine lacks. */
@@ -68,7 +50,6 @@ function setupLink(need: EngineNeed | undefined): string {
 }
 
 interface EngineChoiceProps {
-  /** The instance's engine, or this account's. */
   scope: "instance" | "account";
 }
 
@@ -78,8 +59,7 @@ export function EngineChoice({ scope }: EngineChoiceProps) {
   const { preferences, setPreference } = usePreferences();
   const setWebSearch = useSetWebSearch();
 
-  // Tile-shaped placeholders while the settings load, so the page under the
-  // tiles does not jump when they arrive.
+  // Tile-shaped placeholders, so the page does not jump on load.
   if (!settings)
     return (
       <ul
@@ -127,8 +107,8 @@ export function EngineChoice({ scope }: EngineChoiceProps) {
     ...WEB_SEARCH_ENGINES.map(engineTile),
   ];
 
-  // The instance's value, or the account's. On a one-account instance, an
-  // engine the account chose before also counts until the next choice.
+  // On a one-account instance, an engine the account chose before counts
+  // until the next choice.
   const value: Choosable = instanceScope
     ? engineFor(
         scope === "instance" ? "default" : accountChoice,
@@ -169,8 +149,7 @@ export function EngineChoice({ scope }: EngineChoiceProps) {
     .filter((engine): engine is WebSearchEngine => engine !== "default")
     .map((engine) => webSearch.engines[engine])
     .find((state) => !state.available);
-  // What to do about it, on Contact enrichment: an admin goes to the setup,
-  // a member asks for it. The AI page is the setup, so it needs neither.
+  // Only Contact enrichment says what to do. The AI page is the setup.
   const aiOff = settings.instance.aiOff || preferences.aiAssist === false;
   const next =
     scope !== "account" || aiOff

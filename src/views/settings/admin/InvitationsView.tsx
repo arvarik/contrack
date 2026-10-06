@@ -1,16 +1,9 @@
 /**
- * InvitationsView — links that create an account.
- *
- * An invitation is a link the admin copies and hands over however they
- * already talk to the person, or, when outgoing mail is set up, sends by
- * email as well. The database holds only
- * the SHA-256 of the secret inside it, which is why the link is shown once,
- * at the moment it is made, and never again. A lost link is replaced, not
- * recovered.
- *
- * The accepted and expired ones stay in the list below the live ones. They
- * are the record of how everybody got here, which is the question somebody
- * asks six months later.
+ * Invitations: links that create an account. The admin copies a link, or
+ * mails it when outgoing mail is set up. The database holds only the SHA-256
+ * of the secret, so the link shows once, when it is made, and a lost link is
+ * replaced, not recovered. Accepted and expired ones stay in the list as the
+ * record of how each account got here.
  */
 import React, { useState } from "react";
 import { toast } from "sonner";
@@ -171,12 +164,8 @@ const NewInvitationModal = ({
               // eslint-disable-next-line jsx-a11y/no-autofocus
               autoFocus
             />
-            {/*
-              A note to the admin, not a rule. The person accepting chooses
-              their own email, and the server does not check it against this
-              one — which is deliberate: an invitation forwarded to the right
-              colleague with a different address should still work.
-            */}
+            {/* Not a rule: the server does not check the accepted email
+                against this one, so a forwarded invitation still works. */}
             <p
               id="invite-email-hint"
               className="text-xs text-on-surface-variant"
@@ -238,8 +227,8 @@ export const InvitationsView = () => {
   const [creating, setCreating] = useState(false);
   const [revoking, setRevoking] = useState<Invitation | null>(null);
 
-  // Live ones first, then the record. Both in the same frame, because two
-  // lists with two headings suggests two different kinds of thing.
+  // Live ones first, then the record, in one list: two lists would suggest
+  // two kinds of thing.
   const sorted = React.useMemo(() => {
     if (!invitations) return [];
     const rank = (invitation: Invitation) =>
@@ -324,13 +313,8 @@ export const InvitationsView = () => {
         })}
       </AdminList>
 
-      {/*
-        Worth saying where it will be read. `invitations.invitedBy` is NOT
-        NULL with ON DELETE CASCADE, so removing an admin removes the
-        invitations they issued — including ones already sent and not yet
-        opened. Somebody who deletes a departing colleague and then hears that
-        a new starter's link no longer works deserves to have been told.
-      */}
+      {/* `invitations.invitedBy` is NOT NULL with ON DELETE CASCADE, so
+          deleting an admin also deletes the pending links they sent. */}
       <p className="flex items-start gap-2 text-xs text-on-surface-variant px-1 text-pretty">
         <Link2 className="w-3.5 h-3.5 shrink-0 mt-0.5" />
         Deleting the admin who created a pending invitation revokes it. Issue

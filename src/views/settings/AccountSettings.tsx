@@ -1,19 +1,8 @@
 /**
- * AccountSettings — the signed-in account: profile, password, devices, tokens.
- *
- * Cards in the order people actually need them: who you are (changed most
- * often), your password (changed rarely but urgently), where you are signed
- * in (read when something feels wrong), and the tokens your scripts carry
- * (created once and then forgotten about, which is why they are listed).
- *
- * Each card saves independently. A single page-wide Save would mean typing a
- * new password and a new display name are the same commit, which is both
- * surprising and a worse failure — a rejected password should not discard a
- * name change.
- *
- * On an un-gated instance this page explains why there is nothing to manage
- * rather than hiding, because arriving at a blank page you were linked to is
- * more confusing than being told the link does not apply yet.
+ * The signed-in account: profile, sign-in methods, devices and API tokens,
+ * in the order people need them. Each card saves on its own, so a rejected
+ * password does not discard a name change. Without sign-in, the page says
+ * why there is no account instead of going blank.
  */
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
@@ -80,7 +69,6 @@ import {
 import { LoadFailed } from "../../components/ui/LoadFailed";
 import { NO_AUTOCORRECT } from "../../components/ui/SearchField";
 
-/** The tile beside a session or a token: the primary wash with its ink. */
 const ROW_ICON = cn(
   "shrink-0 w-9 h-9 rounded-xl flex items-center justify-center",
   TONE_WASH.primary,
@@ -88,41 +76,28 @@ const ROW_ICON = cn(
 
 const MIN_PASSWORD_LENGTH = 8;
 
-/** Where this account is signed in. */
 const sessionsQuery = queryOptions({
   queryKey: ["auth", "sessions"],
   queryFn: fetchSessions,
   staleTime: 30_000,
 });
 
-/** The account's API tokens. */
 const tokensQuery = queryOptions({
   queryKey: ["auth", "tokens"],
   queryFn: fetchApiTokens,
   staleTime: 30_000,
 });
 
-/**
- * Starts loading the three lists the page reads from the server: devices,
- * tokens and passkeys. The settings rail calls it when a person points at,
- * focuses or presses the Account link, so the page opens with its lists and
- * not with "Loading devices…" that then pushes the cards down. A list read
- * in the last 30 s is not read again.
- */
+/** Warms devices, tokens and passkeys, so no "Loading…" pushes cards down. */
 export function prefetchAccount(queryClient: QueryClient): void {
   void queryClient.prefetchQuery(sessionsQuery);
   void queryClient.prefetchQuery(tokensQuery);
   if (passkeysSupported()) void queryClient.prefetchQuery(passkeysQuery);
 }
 
-// ---------------------------------------------------------------------------
 // Building blocks
-// ---------------------------------------------------------------------------
 
-/**
- * One section: a heading over its cards. The id is the search's deep link
- * (`/settings/account#tokens`), so a result lands on its section.
- */
+/** The id is the search's deep link (`/settings/account#tokens`). */
 const Section = ({
   id,
   title,
@@ -132,7 +107,7 @@ const Section = ({
   title: string;
   children: React.ReactNode;
 }) => {
-  // Scrolled to and focused; a section has no face of its own to flash.
+  // Scrolled to and focused, with no flash: a section has no face.
   const { ref } = useHashTarget<HTMLElement>(id);
   return (
     <section
@@ -151,14 +126,8 @@ const Section = ({
 };
 
 /**
- * A labeled input that can also be wrong.
- *
- * The `error` half matches `AuthField` on the sign-in screens deliberately.
- * This component used to route validation messages through `hint`, so "These
- * don't match" rendered in the same muted gray as "At least 8 characters" —
- * indistinguishable from ordinary help, with no `aria-invalid` for anybody
- * not reading the color. The identical sentence on the forced-password
- * screen was red and announced.
+ * A labeled input. `error` matches `AuthField`: it shows in red with
+ * `aria-invalid`, so a validation message does not read as plain help.
  */
 const Field = ({
   id,
@@ -298,9 +267,7 @@ function formatWhen(iso: string): string {
   });
 }
 
-// ---------------------------------------------------------------------------
 // Cards
-// ---------------------------------------------------------------------------
 
 const PhotoCard = () => {
   const { user, refresh } = useAuth();
@@ -456,9 +423,7 @@ const PasswordCard = () => {
       setCurrent("");
       setNext("");
       setConfirm("");
-      // Worth saying out loud: the server ends every other session on a
-      // password change, and someone who does not know that will wonder why
-      // their phone signed out.
+      // The server ends every other session on a password change.
       toast.success("Password changed. Your other devices are signed out");
     },
     onError: (error: Error) => toast.error(error.message),
@@ -595,20 +560,12 @@ const SessionsCard = () => {
   );
 };
 
-// ---------------------------------------------------------------------------
 // API tokens
-// ---------------------------------------------------------------------------
 
 /**
- * How long a new token should last.
- *
- * Presets rather than a number field, and "Never" is not the default. A token
- * with no expiry is a credential that outlives the reason it was made, and
- * the script it was made for is usually still running long after the person
- * who wrote it stopped thinking about it.
- *
- * In days. Never is 0, because `Segmented` takes a number, and the request
- * sends it as `null`.
+ * Token lifetimes in days. "Never" is not the default, because a token with
+ * no expiry outlives the reason it was made. Never is 0 for `Segmented`, and
+ * the request sends it as `null`.
  */
 const TOKEN_EXPIRY_PRESETS: readonly SegmentedOption<number>[] = [
   { value: 30, label: "30 days" },
@@ -617,11 +574,7 @@ const TOKEN_EXPIRY_PRESETS: readonly SegmentedOption<number>[] = [
   { value: 0, label: "Never" },
 ];
 
-/**
- * What a new token may do. A read-only token reads, and its MCP client sees
- * only the tools that change nothing. Read and write is the default, which
- * is what every token was before the choice existed.
- */
+/** A read-only token's MCP client sees only the tools that change nothing. */
 type TokenAccess = "write" | "read";
 
 const TOKEN_ACCESS_OPTIONS: readonly SegmentedOption<TokenAccess>[] = [
@@ -631,7 +584,6 @@ const TOKEN_ACCESS_OPTIONS: readonly SegmentedOption<TokenAccess>[] = [
 
 type TokenState = "active" | "revoked" | "expired";
 
-/** What a token is doing now, from the two timestamps that can end it. */
 function tokenState(
   token: Pick<ApiTokenSummary, "revokedAt" | "expiresAt">,
 ): TokenState {
@@ -660,8 +612,8 @@ const TokenRow = ({
   onRevoke: () => void;
 }) => {
   const state = tokenState(token);
-  // An app approved with OAuth, such as Claude, rather than a token the
-  // person made. Its prefix line holds the host it signs in from.
+  // An app approved with OAuth, not a token the person made. Its prefix
+  // line holds the host it signs in from.
   const app = token.kind === "oauth";
   const Icon = app ? AppWindow : Terminal;
   return (
@@ -714,11 +666,8 @@ const TokenRow = ({
 };
 
 /**
- * Create a token, and show it once.
- *
- * The dialog does not close on success. The plaintext is in that response and
- * nowhere else — the server holds only its SHA-256 — so closing the dialog
- * for the user would throw away the only copy that will ever exist.
+ * The dialog stays open on success: the response holds the only copy of the
+ * plaintext, and the server keeps only its SHA-256.
  */
 const CreateTokenModal = ({
   isOpen,
@@ -749,8 +698,7 @@ const CreateTokenModal = ({
 
   const close = () => {
     onClose();
-    // Reset after the dialog is gone, so the secret does not flash back into
-    // view during the closing animation.
+    // Reset after the closing animation, so the secret does not flash back.
     window.setTimeout(() => {
       setName("");
       setExpiresInDays(90);
@@ -950,9 +898,7 @@ const ApiTokensCard = () => {
   );
 };
 
-// ---------------------------------------------------------------------------
 // Page
-// ---------------------------------------------------------------------------
 
 export const AccountSettings = () => {
   const { user, authRequired, isAdmin, signOut } = useAuth();
@@ -1001,13 +947,8 @@ export const AccountSettings = () => {
         <ApiTokensCard />
       </Section>
 
-      {/*
-        Session length used to be a card here. It decides how long *everyone's*
-        sign-in lasts, which stopped being a personal setting the moment an
-        instance could have more than one account, so it lives with the other
-        instance settings now. An admin gets a pointer rather than a silent
-        disappearance; a member never had the ability and gets nothing.
-      */}
+      {/* Session length applies to every account, so it is an instance
+        setting. An admin gets a pointer to it here. */}
       {isAdmin && (
         <Section id="session-length" title="Session length">
           <div

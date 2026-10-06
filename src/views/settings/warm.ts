@@ -1,30 +1,17 @@
 /**
- * Warm: a settings page starts loading before its link is pressed.
+ * Loads settings pages before their link is pressed, so a page opens with
+ * no "Loading…" and no rows that push its cards down.
  *
- * Every settings page is its own lazy module, so the first click on a page
- * waited for its code, and a page with lists of its own (Account's devices,
- * tokens and passkeys) then showed "Loading…" rows that pushed its cards
- * down. Two things now start earlier:
+ * - Once Settings is on screen, the code of every visible page loads, one
+ *   per idle moment, with its `prefetch` data (`useWarmSettingsPages`). A
+ *   browser told to save data is left alone (`lib/idle`).
+ * - Hover, focus or press on a link loads that page's code and `prefetch`
+ *   data (`useWarmSettingsLink`). React Query keeps the result for the
+ *   page's first render.
  *
- * 1. The code of every page the viewer can open, one page per idle moment,
- *    once Settings is on screen (`useWarmSettingsPages`), and the first
- *    data of a page that has a `prefetch`. A browser told to save data is
- *    left alone (`lib/idle`).
- * 2. A page's code and its first data when a person points at, focuses or
- *    presses its link (`useWarmSettingsLink`): the page's module may export
- *    a `prefetch`, and the rail, the list and the search results call it.
- *    React Query keeps what arrives, so the page reads it on its first
- *    render, and a list read a moment ago is not read again.
- *
- * A page whose code has arrived renders at once (`settingsPagePreload`, on
- * `lib/preloadable`): a plain `React.lazy` page suspended even then, and
- * React held it behind "Loading…" for 300 ms.
- *
- * Only pages the viewer can see are warmed, so a member never asks for an
- * admin page's data, and the Account page's lists are asked for only on an
- * instance that has accounts.
- *
- * @module views/settings/warm
+ * `preloadable` renders a loaded page at once: a plain `React.lazy` page
+ * suspends even then, and React holds it for 300 ms. Only visible pages are
+ * warmed, so a member never asks for admin data.
  */
 import { useContext, useEffect, useMemo } from "react";
 import { QueryClientContext, type QueryClient } from "@tanstack/react-query";
@@ -40,11 +27,7 @@ import {
   type SettingsViewer,
 } from "./registry";
 
-/**
- * Settings' shell. The app renders `settingsShell.Component`, which is at
- * once when this code is here: a plain `React.lazy` view suspended even
- * then, and React held Settings back for 300 ms.
- */
+/** Settings' shell, preloadable for the same 300 ms reason. */
 export const settingsShell = preloadable(() =>
   import("./SettingsShell").then((m) => ({ default: m.SettingsShell })),
 );
@@ -56,10 +39,7 @@ export function warmSettingsShell(): void {
 
 const pagePreloads = new Map<string, Preloadable<object, SettingsPageModule>>();
 
-/**
- * A page's code, downloaded once and kept, and its component, which renders
- * at once when the code is kept and suspends when it is not.
- */
+/** One cached preloadable per page. */
 export function settingsPagePreload(
   page: SettingsPage,
 ): Preloadable<object, SettingsPageModule> {
@@ -71,15 +51,11 @@ export function settingsPagePreload(
   return preload;
 }
 
-/** The pages this viewer can open. */
 function visibleSettingsPages(viewer: SettingsViewer): SettingsPage[] {
   return SETTINGS_PAGES.filter((page) => isSettingsPageVisible(page, viewer));
 }
 
-/**
- * Loads a page's code and, with a query client, starts its data. A failure
- * here is left for the page's own load to report.
- */
+/** A failure here is left for the page's own load to report. */
 export function warmSettingsPage(
   page: SettingsPage | undefined,
   queryClient?: QueryClient,
@@ -100,10 +76,7 @@ export function warmSettingsPath(to: string, queryClient?: QueryClient): void {
   warmSettingsPage(findSettingsPage(to.split(/[?#]/)[0]), queryClient);
 }
 
-/**
- * Warms each page in turn, one per idle moment: its code, and its first
- * data with a query client. Returns a function that stops the rest.
- */
+/** Warms one page per idle moment. Returns a function that stops the rest. */
 export function warmSettingsPages(
   pages: readonly SettingsPage[],
   queryClient?: QueryClient,
@@ -129,7 +102,6 @@ export function warmSettingsPages(
   };
 }
 
-/** The shell's warm-up: every page this viewer can open. */
 export function useWarmSettingsPages(viewer: SettingsViewer): void {
   const { isAdmin, authRequired } = viewer;
   const queryClient = useContext(QueryClientContext);
@@ -143,10 +115,7 @@ export function useWarmSettingsPages(viewer: SettingsViewer): void {
   );
 }
 
-/**
- * The handlers a settings link spreads to warm its page. The query client is
- * read from context, not required: without one, only the code is warmed.
- */
+/** Link handlers. Without a query client in context, only code is warmed. */
 export function useWarmSettingsLink(to: string) {
   const queryClient = useContext(QueryClientContext);
   return useMemo(() => {
@@ -156,11 +125,8 @@ export function useWarmSettingsLink(to: string) {
 }
 
 /**
- * The app's warm-up, in idle moments like the map's: Settings' shell, then
- * the code of every settings page this viewer can open, one page per idle
- * moment. All of it is about 106 KB gzipped. Settings and each of its pages
- * then open at once, with no "Loading…" between them. The data waits for
- * Settings itself (`useWarmSettingsPages`) or a link's intent.
+ * The app's idle warm-up: Settings' shell, then every visible page's code
+ * (about 106 KB gzipped). Data waits for Settings or a link's intent.
  */
 export function useWarmSettingsFromApp(): void {
   const { isAdmin, authRequired } = useAuth();

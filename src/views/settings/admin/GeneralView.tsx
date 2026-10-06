@@ -1,23 +1,8 @@
 /**
- * GeneralView — the settings that belong to the instance, not to a person.
- *
- * Four sections, each a heading over a card of rows:
- *
- *   1. Instance: its name.
- *   2. Sign-in: whether anyone can create an account, sign in by emailed
- *      link, and how long a sign-in lasts.
- *   3. Data: how long Trash keeps a contact, and the backup schedule.
- *   4. Integrations: address lookups for the map and the Google OAuth
- *      client.
- *
- * Every row is a `SettingRow`, so each one is a search result's target
- * (`#name`, `#registration`, `#session-length`, `#trash`, `#backups`) and
- * flashes when one lands on it. A choice among a few values is a
- * `ChoiceGroup`: the four sets of tiles here were four copies of one
- * radio group. A value the environment sets shows as a locked group with
- * one line naming the variable. The page used to repeat each section's
- * heading as the card's first sentence, and to close most cards with a
- * paragraph of its own.
+ * The settings that belong to the instance, not to a person: Instance,
+ * Sign-in, Data and Integrations. Every row is a `SettingRow`, so a search
+ * result can land on it by id and flash it. A value the environment sets
+ * shows as a locked group with one line that names the variable.
  */
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -47,14 +32,12 @@ import {
 } from "../layout";
 import { LoadFailed } from "../../../components/ui/LoadFailed";
 
-/** A key or a URL in the Integrations card. */
 const KEY_INPUT = cn(SETTINGS_INPUT, "font-mono");
 
 /** A note under a row: the environment's lock, a warning, a way to fix it. */
 const NOTE =
   "flex items-start gap-2 rounded-xl bg-surface-container-low p-3 text-xs text-on-surface-variant text-pretty";
 
-/** The "Configured" chip beside an integration's name. */
 const CONFIGURED_CHIP = cn(
   "inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md",
   TONE_WASH.success,
@@ -81,7 +64,6 @@ function useSaveInstance() {
 /** "1 day", "30 days". */
 const days = (count: number) => `${count} ${count === 1 ? "day" : "days"}`;
 
-/** One section: a heading over its card. */
 const Section = ({
   title,
   id,
@@ -162,7 +144,7 @@ function ChoiceRow({
   );
 }
 
-// ─── 1. Instance ─────────────────────────────────────────────────────────────
+// Instance
 
 const InstanceName = ({ data }: { data: InstanceSettings | undefined }) => {
   const save = useUpdateInstanceSettings();
@@ -230,7 +212,7 @@ const InstanceName = ({ data }: { data: InstanceSettings | undefined }) => {
   );
 };
 
-// ─── 2. Sign-in ──────────────────────────────────────────────────────────────
+// Sign-in
 
 const TTL_PRESETS: readonly Choice<number | undefined>[] = [
   { value: 1, label: "1 day", hint: "Exposed to the internet" },
@@ -348,7 +330,7 @@ const SignIn = ({ data }: { data: InstanceSettings | undefined }) => {
   );
 };
 
-// ─── 3. Data ─────────────────────────────────────────────────────────────────
+// Data
 
 const TRASH_PRESETS: readonly Choice<number | undefined>[] = [
   { value: 7, label: "7 days" },
@@ -445,7 +427,7 @@ const Data = ({ data }: { data: InstanceSettings | undefined }) => {
   );
 };
 
-// ─── 4. Integrations ─────────────────────────────────────────────────────────
+// Integrations
 
 /** The map's address lookups, which send each address to Nominatim. */
 const AddressLookups = () => {
@@ -759,8 +741,6 @@ const Integrations = () => {
     );
   return <GoogleRow />;
 };
-
-// ─── Main View ───────────────────────────────────────────────────────────────
 
 export const GeneralView = () => {
   const { data, isError, refetch } = useInstanceSettings();

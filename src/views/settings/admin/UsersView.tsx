@@ -1,23 +1,9 @@
 /**
- * UsersView — the accounts on this instance.
- *
- * What an admin can see here is deliberately limited to facts *about* an
- * account: its name, its role, whether it is usable, how much it holds, when
- * it was last used. Not one contact, not one note. The single exception is
- * the export, which exists for the day somebody leaves and writes an audit
- * row naming the account it read.
- *
- * Three refusals are worth expecting rather than treating as errors, because
- * each one is the system working:
- *
- *   409 LAST_ADMIN           an instance nobody can administer is a locked-out
- *                            instance, so the last admin cannot be removed.
- *   400 CANNOT_TARGET_SELF   an admin cannot lock themselves out either.
- *   409 LOCAL_OWNER_PROTECTED  while sign-in is off, this device's account is
- *                            what owns the data, and deleting it deletes
- *                            everything.
- *
- * They arrive as the server's own sentences and are shown as they are.
+ * The accounts on this instance. An admin sees only facts about an account,
+ * never one contact or note. The one exception is the export, which writes
+ * an audit row. The server refuses some acts on purpose and the page shows
+ * its sentence: 409 LAST_ADMIN, 400 CANNOT_TARGET_SELF, and
+ * 409 LOCAL_OWNER_PROTECTED (while sign-in is off, that account owns the data).
  */
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -80,10 +66,6 @@ import { NO_AUTOCORRECT } from "../../../components/ui/SearchField";
 const COLUMNS =
   "sm:grid-cols-[minmax(0,2.2fr)_minmax(0,1fr)_88px_minmax(0,1.1fr)_44px]";
 
-// ---------------------------------------------------------------------------
-// Row menu
-// ---------------------------------------------------------------------------
-
 interface RowActions {
   onEdit: () => void;
   onReset: () => void;
@@ -92,11 +74,7 @@ interface RowActions {
   onDelete: () => void;
 }
 
-/**
- * The ⋮ menu on a row. `ActionMenu` owns the keys, the outside click and
- * the focus return to the button, so this only decides which items a row
- * offers.
- */
+/** The ⋮ menu on a row. `ActionMenu` owns keys and focus, this picks items. */
 const RowMenu = ({
   user,
   actions,
@@ -107,12 +85,9 @@ const RowMenu = ({
   const items: ActionMenuItem[] = [
     { id: "edit", label: "Edit", icon: Pencil, onSelect: actions.onEdit },
   ];
-  // Not the local owner, which has no password to reset, and not your own
-  // account. A reset deletes every session of its target, so an admin
-  // resetting themselves is signed out by their own click, with the only
-  // copy of the new password inside the dialog that unmounts with them.
-  // Your own password is changed in Account settings, which keeps the
-  // session it is made on. The server refuses this too.
+  // Not the local owner, which has no password, and not yourself. A reset
+  // deletes every session of its target, so a self-reset signs you out and
+  // unmounts the dialog that holds the new password. The server refuses it.
   if (!user.isLocalOwner && !user.isSelf) {
     items.push({
       id: "reset",
@@ -171,10 +146,6 @@ const exportAccount = (user: AdminUser) =>
     `contrack-export-${user.username}-${new Date().toISOString().slice(0, 10)}.json`,
   );
 
-// ---------------------------------------------------------------------------
-// Dialogs
-// ---------------------------------------------------------------------------
-
 const AdminField = ({
   id,
   label,
@@ -204,11 +175,8 @@ const AdminField = ({
 );
 
 /**
- * Create an account, and show its temporary password once.
- *
- * The server generates the password. An admin who types one they thought of
- * is how an instance ends up with three accounts sharing it, and the new
- * account has to change it on first use anyway.
+ * Create an account, and show its temporary password once. The server
+ * generates the password, so no two accounts share one an admin made up.
  */
 const CreateUserModal = ({
   isOpen,
@@ -227,13 +195,9 @@ const CreateUserModal = ({
     temporaryPassword: string;
   } | null>(null);
 
-  // Cleared when the dialog closes, however it closes.
-  //
-  // `createOpen` comes from the route, and a route can change without this
-  // component's own close handler ever running: a link, the back button, a
-  // redirect. Resetting from the handler left the previous account's
-  // temporary password in state, so reopening the dialog showed it again,
-  // under the next person's name.
+  // Cleared however the dialog closes. `createOpen` comes from the route,
+  // which can close it without the close handler (a link, Back, a redirect),
+  // and a reopened dialog must not show the last temporary password.
   React.useEffect(() => {
     if (isOpen) return;
     const timer = window.setTimeout(() => {
@@ -380,10 +344,9 @@ const EditUserModal = ({
         onSubmit={(event) => {
           event.preventDefault();
           if (!dirty) return;
-          // Only the fields actually touched. The `user` object is a
-          // snapshot taken when the menu opened, so sending an untouched role
-          // turns somebody else's concurrent change into a silent revert and
-          // writes a `user.role.changed` audit row nobody asked for.
+          // Only the touched fields. `user` is a snapshot from when the menu
+          // opened, so an untouched role would revert a concurrent change and
+          // write a `user.role.changed` audit row.
           update.mutate(
             {
               id: user.id,
@@ -410,19 +373,11 @@ const EditUserModal = ({
           onChange={(e) => setDisplayName(e.target.value)}
           maxLength={100}
         />
-        {/*
-          No role picker on your own row. Demoting yourself takes the
-          administration area away mid-edit and needs another admin to undo,
-          which is the same reason disable and delete refuse a self-target.
-          Somebody stepping down asks a colleague, as they would to be
-          removed.
-        */}
+        {/* No role picker on your own row: demoting yourself takes this area
+            away mid-edit, and only another admin can undo it. */}
         {!user.isSelf && <RolePicker value={role} onChange={setRole} />}
-        {/*
-          The email and the username belong to the account holder, who changes
-          them in their own settings. An admin who could rewrite the identifier
-          somebody signs in with could lock them out silently.
-        */}
+        {/* Only the account holder changes the email and username: an admin
+            who could change a sign-in identifier could lock them out. */}
         <p className="text-xs text-on-surface-variant text-pretty">
           The email and username are {user.username}&rsquo;s own to change,
           under their account settings
@@ -442,12 +397,9 @@ const EditUserModal = ({
 };
 
 /**
- * Delete an account and everything it owns.
- *
- * Opened by a `409 USER_HAS_DATA`, which is what the first click produces:
- * that refusal is where the four numbers come from, and it also proves the
- * guards passed. Asking `GET /admin/users/:id` for the counts instead would
- * cheerfully open this dialog for an account that cannot be deleted at all.
+ * Delete an account and everything it owns. The first click's
+ * `409 USER_HAS_DATA` opens it: that refusal carries the counts and proves
+ * the guards passed, which a `GET /admin/users/:id` would not.
  */
 const DeleteUserDialog = ({
   user,
@@ -552,10 +504,6 @@ const DeleteUserDialog = ({
   );
 };
 
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
-
 export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
   const navigate = useNavigate();
   const { user: me } = useAuth();
@@ -610,9 +558,8 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
               ? (error.details as { counts?: OwnedCounts } | undefined)?.counts
               : undefined;
           if (counts) setDeleting({ user, counts });
-          // LAST_ADMIN, CANNOT_TARGET_SELF and LOCAL_OWNER_PROTECTED all land
-          // here. Each is the system working, and each says so in a sentence
-          // better than anything this file could compose.
+          // LAST_ADMIN, CANNOT_TARGET_SELF and LOCAL_OWNER_PROTECTED land
+          // here, with the server's own sentence.
           else toast.error(error.message);
         },
         onSuccess: () => {
@@ -673,11 +620,8 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
                     {user.displayName || user.username}
                   </span>
                   {user.isSelf && <Badge tone="primary">You</Badge>}
-                  {/*
-                    The account an un-secured instance runs as. It holds the
-                    data while sign-in is off, which is why it cannot be
-                    removed then.
-                  */}
+                  {/* The account an unsecured instance runs as. It holds the
+                      data while sign-in is off, so it cannot be removed. */}
                   {user.isLocalOwner && <Badge>Local account</Badge>}
                 </p>
                 <p className="text-xs text-on-surface-variant truncate">

@@ -1,22 +1,9 @@
 /**
- * McpView.tsx — The MCP and API settings page.
- *
- * One card walks a person through connecting an assistant, in the order they
- * do it:
- * 1. The server address, with a note when only this computer can reach it.
- * 2. Where they use the assistant: Claude Code, Cursor, VS Code, and so on.
- * 3. Access, when the instance asks for sign-in: create a token for that
- *    client here, or paste one. The token stays on this page and is never
- *    saved by it.
- * 4. The command, the config or the one-press install link, with the address
- *    and the token already in it.
- * A second card lists the tools a client can call.
- *
- * A Copy is an action, so it is a `.btn-secondary`. The code wraps rather
- * than scrolling sideways, so nothing is cut off at a card's edge, and a copy
- * takes the exact text whatever the wrap.
- *
- * @module views/settings/mcp/McpView
+ * The MCP and API settings page. One card walks through connecting an
+ * assistant in order: the server address, the client, access (a token made
+ * or pasted here, which this page never saves), then the command, config or
+ * install link with both filled in. A second card lists the tools. Code
+ * wraps instead of scrolling sideways, and Copy takes the exact text.
  */
 
 import React, { useState } from "react";
@@ -60,11 +47,9 @@ import {
 import { NO_AUTOCORRECT } from "../../../components/ui/SearchField";
 import { TEXT_LINK } from "../../../lib/styles";
 
-/** A value or a snippet, on the card's wash, in the code face. */
 const CODE_BOX =
   "rounded-xl bg-surface-container-highest px-3 py-2.5 font-mono text-xs text-on-surface whitespace-pre-wrap [overflow-wrap:anywhere]";
 
-/** A step's heading inside the card. */
 const STEP_HEADING = "text-sm font-bold text-on-surface";
 
 /** How long a token made here lasts. Account settings offers the others. */
@@ -117,7 +102,6 @@ const CopyButton = ({
   );
 };
 
-/** The client the person uses: one pill each, one choice. */
 const ClientPicker = ({
   value,
   onChange,
@@ -158,14 +142,9 @@ const ACCESS_OPTIONS: readonly SegmentedOption<TokenAccess>[] = [
 ];
 
 /**
- * Access, on an instance that asks for sign-in. A token made here is named
- * after the client, lasts 90 days, and is shown on this page only, inside
- * the setup below. A person who has a token pastes it instead.
- */
-/**
- * The token step's state. It lives in the page, not in the step: the step
- * leaves the page while another client or browser sign-in is picked, and a
- * token made a moment ago must still be there when the person comes back.
+ * The token step's state. It lives in the page, because the step unmounts
+ * while another client or browser sign-in is picked, and a token made a
+ * moment ago must still be there when the person comes back.
  */
 interface TokenDraft {
   /** The token that fills the setup, made here or pasted whole. */
@@ -184,6 +163,10 @@ const NO_TOKEN: TokenDraft = {
   pasted: "",
 };
 
+/**
+ * Access, on an instance that asks for sign-in. A token made here is named
+ * after the client and shows on this page only. A person can paste one too.
+ */
 const TokenStep = ({
   client,
   draft,
@@ -554,9 +537,8 @@ export const McpView: React.FC = () => {
             {MCP_TOOLS.length} tools a client can call. A read-only token sees
             only the read-only ones
           </p>
-          {/* A table with no lines: the columns and the space between rows
-              hold it. On a phone the access badge moves under the tool's
-              name, so the two columns left fit with no sideways scroll. */}
+          {/* A table with no lines. On a phone the access badge moves under
+              the tool's name, so two columns fit with no sideways scroll. */}
           <table className="w-full text-left">
             <thead>
               <tr className={SECTION_HEADING}>
@@ -594,9 +576,8 @@ export const McpView: React.FC = () => {
                       <span className="block mt-1 sm:hidden">{access}</span>
                     </td>
                     <td className="py-2 pr-4 text-sm text-on-surface text-pretty">
-                      {/* The server writes each description for an AI
-                          client, in sentences. On this page it is a
-                          statement, so its last period goes. */}
+                      {/* The server writes each description as a sentence
+                          for an AI client. This page drops the last period. */}
                       {tool.description.replace(/\.$/, "")}
                     </td>
                     <td className="py-2 text-right whitespace-nowrap hidden sm:table-cell">

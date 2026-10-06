@@ -1,17 +1,8 @@
 /**
- * The frame every administration page shares.
- *
- * Five pages, one shape: the shell's header says what the page is for and
- * holds the page's action or two at the right (`SettingsHeaderActions`), and
- * a list follows. The pieces live here so the five cannot drift into five
- * layouts, and so the mobile rule — a row becomes a card, it does not become
- * a horizontal scroll — is written once.
- *
- * There is no `<table>` anywhere in this codebase and this does not introduce
- * one. A table would need a horizontal scroll on a phone, and a row a reader
- * has to drag sideways to finish is not a row they will read. Each row is a
- * flex column below `sm` and a grid from `sm`, so the same markup is a card
- * and a table row depending on the width.
+ * The frame every administration page shares: the page's actions in the
+ * settings header, then a list. There is no `<table>`, because a table needs
+ * a horizontal scroll on a phone. A row is a flex column below `sm` and a
+ * grid from `sm`, so the same markup is a card or a table row.
  */
 import React, { type ReactNode } from "react";
 import { Loader2, type LucideIcon } from "lucide-react";
@@ -24,10 +15,7 @@ import { SETTINGS_LABEL, SETTINGS_PAGE } from "../layout";
 import { SettingsHeaderActions } from "../SettingsHeader";
 import { LoadFailed } from "../../../components/ui/LoadFailed";
 
-/**
- * One administration page: optional actions, drawn in the header, and
- * content. The settings page box, so the list starts under the shell's title.
- */
+/** One administration page. Its `actions` render in the settings header. */
 export const AdminPage = ({
   actions,
   children,
@@ -49,13 +37,9 @@ interface AdminEmpty {
 }
 
 /**
- * A framed list.
- *
- * The frame is a surface shift, not a border — `.agent/STYLE.md` calls a line
- * a failure of hierarchy, and the existing archived-contacts list is the
- * pattern this follows. The column header is `hidden sm:grid`: on a phone
- * each row carries its own labels and a header strip would describe columns
- * that are not there.
+ * A framed list. The frame is a surface shift, not a border (`.agent/STYLE.md`
+ * has no lines). The column header shows only from `sm`, because on a phone
+ * each row carries its own labels.
  */
 export const AdminList = ({
   header,
@@ -78,18 +62,16 @@ export const AdminList = ({
   children: ReactNode;
   footer?: ReactNode;
 }) => (
-  // No `overflow-hidden`. It rounded the corners for free and clipped the row
-  // menu: an absolutely positioned dropdown is clipped by an ancestor's
-  // overflow no matter its z-index, so on the last row of a list every item
-  // was painted outside the box and could not be clicked. The corners are
-  // rounded on the first and last child instead.
+  // No `overflow-hidden`: an ancestor's overflow clips the absolutely
+  // positioned row menu at any z-index, and the last row's menu could not be
+  // clicked. The first and last child round the corners instead.
   <div
     className={cn(
       CARD,
       "p-0 [&>*:first-child]:rounded-t-2xl [&>*:last-child]:rounded-b-2xl",
     )}
   >
-    {/* Column names name columns: none over a message. */}
+    {/* No column names over a loading, error or empty message. */}
     {header && !isLoading && !isError && !isEmpty && (
       <div
         className={cn(
@@ -106,10 +88,8 @@ export const AdminList = ({
         Loading…
       </p>
     ) : isError ? (
-      // "We could not load this" and "there is nothing here" must never share
-      // a rendering. A failed read leaves `isLoading` false and `data`
-      // undefined, so without this branch a 500 or a dropped connection
-      // reported an empty instance in reassuring copy.
+      // A failed read leaves `isLoading` false and `data` undefined. Without
+      // this branch, a 500 renders as an empty list.
       <LoadFailed
         what="this page"
         body="It is not empty, and nothing here has changed"
@@ -127,15 +107,9 @@ export const AdminList = ({
 );
 
 /**
- * One row.
- *
- * `grid-cols` comes from the caller, and applies only from `sm`. Below that
- * the row stacks, which is what turns it into a card without a second set of
- * markup to keep in step.
- *
- * The alternating background is `even:` rather than a divider, again because
- * of the no-line rule. The row is not a control, so it has no hover: its
- * buttons and menus are the controls.
+ * One row. `columns` applies from `sm`, and below that the row stacks into a
+ * card. Rows alternate with `even:` instead of a divider. The row has no
+ * hover, because only its buttons and menus are controls.
  */
 export const AdminRow = ({
   columns,
@@ -161,11 +135,8 @@ export const AdminRow = ({
 );
 
 /**
- * One cell, with the label a phone needs and a desktop does not.
- *
- * On a phone the column header is gone, so a bare date in a stacked card says
- * nothing. The label is `sm:hidden` and the header strip is `hidden sm:block`:
- * exactly one of the two is on screen at any width.
+ * One cell. Its label shows only below `sm`, where the column header is
+ * hidden, so exactly one of the two is on screen at any width.
  */
 export const AdminCell = ({
   label,
