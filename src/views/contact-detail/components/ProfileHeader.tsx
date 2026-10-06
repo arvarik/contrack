@@ -90,6 +90,7 @@ import { ScoreBreakdown } from "../../../components/ScoreBreakdown";
 import { scoreView } from "../../../../shared/scoreBand";
 
 import { EditableField } from "./EditableField";
+import { showUndoToast } from "./Field";
 import { PlatformIcon, PLATFORM_COLORS, hasKnownIcon } from "./PlatformIcon";
 import { AddLink } from "./AddLink";
 import { ContactActionsMenu } from "./ContactActionsMenu";
@@ -718,17 +719,12 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
       id: contact.id,
       data: { socialLinks: linkPayload(after) },
     });
-    toast("Link removed", {
-      duration: 7000,
-      action: {
-        label: "Undo",
-        onClick: () =>
-          updateContact({
-            id: contact.id,
-            data: { socialLinks: linkPayload(before) },
-          }),
-      },
-    });
+    showUndoToast("Link removed", () =>
+      updateContact({
+        id: contact.id,
+        data: { socialLinks: linkPayload(before) },
+      }),
+    );
   };
 
   // ── Meta line ─────────────────────────────────────────────────────────

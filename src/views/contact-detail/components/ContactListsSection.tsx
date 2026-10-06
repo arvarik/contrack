@@ -1,6 +1,5 @@
 import { ListPlus, X, type LucideIcon } from "lucide-react";
-import { toast } from "sonner";
-import { withUndo } from "../../../lib/undoToast";
+import { showUndoToast } from "./Field";
 import {
   Star,
   Heart,
@@ -105,11 +104,8 @@ export const ContactListsSection = ({
                 { listId: list.id, contactId },
                 {
                   onSuccess: () =>
-                    toast.success(
-                      `Removed from ${list.name}`,
-                      withUndo(() =>
-                        addToList.mutate({ listId: list.id, contactId }),
-                      ),
+                    showUndoToast(`Removed from ${list.name}`, () =>
+                      addToList.mutate({ listId: list.id, contactId }),
                     ),
                 },
               )
