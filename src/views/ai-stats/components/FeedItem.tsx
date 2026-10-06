@@ -5,6 +5,7 @@ import { motion } from "motion/react";
 import type { AIStatsFeedItem } from "../../../api";
 import { formatDay } from "../../../lib/datetime";
 import { DURATION, EASE } from "../../../lib/motion";
+import { formatCompact } from "../formatCompact";
 
 interface FeedItemProps {
   key?: React.Key;
@@ -55,9 +56,7 @@ function formatRelativeTime(iso: string): string {
 
 function formatTokens(n: number | null): string {
   if (n === null || n === undefined) return "—";
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
+  return formatCompact(n);
 }
 
 export const FeedItem = ({ item, index }: FeedItemProps) => {

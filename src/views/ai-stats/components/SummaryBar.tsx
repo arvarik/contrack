@@ -5,6 +5,7 @@ import { DURATION, EASE } from "../../../lib/motion";
 import { Brain } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import type { AIStatsSummary } from "../../../api";
+import { formatCompact } from "../formatCompact";
 
 interface SummaryBarProps {
   summary?: AIStatsSummary | null;
@@ -51,12 +52,6 @@ function buildSummaryText(s: AIStatsSummary): string {
   }
 
   return parts.join(" · ");
-}
-
-function formatCompact(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
 }
 
 export const SummaryBar = ({ summary, isLoading }: SummaryBarProps) => {

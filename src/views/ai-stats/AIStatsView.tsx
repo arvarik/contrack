@@ -17,12 +17,7 @@ import { InstanceUsageTable } from "./components/InstanceUsageTable";
 import { Segmented } from "../../components/ui/Segmented";
 import { useAuth } from "../../components/auth/AuthGate";
 import { EmptyState } from "../../components/ui/EmptyState";
-
-function formatCompact(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
+import { formatCompact } from "./formatCompact";
 
 export const AIStatsView = () => {
   const { isAdmin } = useAuth();
