@@ -257,7 +257,7 @@ test.describe("the Network header and start panel", () => {
     await expect(bar).toContainText("0 selected");
     await expect(
       page.getByRole("textbox", { name: "Search contacts" }),
-    ).toHaveAttribute("placeholder", "Search...");
+    ).toHaveAttribute("placeholder", "Search…");
     const selectAllBtn = page.getByRole("button", { name: "Select all" });
     const doneBtn = page.getByRole("button", { name: "Done" });
     await expect(selectAllBtn).toBeVisible();

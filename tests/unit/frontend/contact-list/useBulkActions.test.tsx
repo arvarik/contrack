@@ -242,9 +242,11 @@ describe("useBulkActions", () => {
       act(() => {
         mockBulkUpdateMutate.mock.calls[0][1].onSuccess({ count: 2 });
       });
+      // The one already tracked is said, not counted in.
       expect(toastMock.success).toHaveBeenCalledWith(
         "Tracking 2 contacts",
         expect.objectContaining({
+          description: "1 was already tracked",
           action: expect.objectContaining({ label: "Undo" }),
         }),
       );

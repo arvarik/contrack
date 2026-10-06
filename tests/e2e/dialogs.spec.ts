@@ -155,7 +155,7 @@ test("Escape in a list inside a dialog closes the list and keeps the dialog", as
   await page.getByRole("button", { name: "Select all" }).click();
   await page
     .getByRole("toolbar", { name: "Bulk actions" })
-    .getByRole("button", { name: "Field", exact: true })
+    .getByRole("button", { name: "Edit field", exact: true })
     .click();
 
   const dialog = page.getByRole("dialog", { name: "Edit field" });

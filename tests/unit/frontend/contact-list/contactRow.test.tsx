@@ -122,7 +122,8 @@ function mount(
       </MemoryRouter>
     </QueryClientProvider>,
   );
-  return screen.getByRole("link");
+  // In select mode a row picks, so it is a checkbox.
+  return screen.getByRole(state.isSelectMode ? "checkbox" : "link");
 }
 
 describe("the row's accessible name", () => {
@@ -233,6 +234,7 @@ describe("the selected look", () => {
 
   it("marks a row picked in select mode the same way", () => {
     const row = mount(makeContact(), { isSelectMode: true, isSelected: true });
+    expect(row.getAttribute("aria-checked")).toBe("true");
     expect(row.classList.contains("row-selected")).toBe(true);
     expect(row.className).not.toMatch(/\b(ring|outline)-/);
     expect(name(row).classList.contains("text-on-primary-wash")).toBe(true);

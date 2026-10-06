@@ -5,7 +5,7 @@
  *
  * @module components/bulk/BulkModals
  */
-import React from "react";
+import React, { type RefObject } from "react";
 import type { ContactList } from "../../types";
 import { Modal } from "../ui/Modal";
 import { BulkEditFieldModal } from "../BulkEditFieldModal";
@@ -25,6 +25,12 @@ interface BulkModalsProps {
   onCloseBulkEdit: () => void;
   onBulkEditApply: (field: string, value: string | number) => void;
   isBulkEditPending?: boolean;
+  /**
+   * Where focus goes when a dialog closes, when it is there: a done action
+   * ends select mode, and the bar button that opened the dialog leaves
+   * with the bar. The Network list passes its Select button.
+   */
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }
 
 export const BulkModals: React.FC<BulkModalsProps> = ({
@@ -38,6 +44,7 @@ export const BulkModals: React.FC<BulkModalsProps> = ({
   onCloseBulkEdit,
   onBulkEditApply,
   isBulkEditPending = false,
+  returnFocusRef,
 }) => {
   const { data: fetchedLists = [] } = useLists();
   const lists = passedLists ?? fetchedLists;
@@ -49,6 +56,7 @@ export const BulkModals: React.FC<BulkModalsProps> = ({
         isOpen={isAddToListOpen}
         onClose={onCloseAddToList}
         title="Add to list"
+        returnFocusRef={returnFocusRef}
       >
         <div className="space-y-2 pt-2">
           <p className="text-xs text-on-surface-variant mb-4">
@@ -89,6 +97,7 @@ export const BulkModals: React.FC<BulkModalsProps> = ({
         selectedCount={selectedCount}
         onApply={onBulkEditApply}
         isPending={isBulkEditPending}
+        returnFocusRef={returnFocusRef}
       />
     </>
   );

@@ -2,11 +2,12 @@ import { useRef, useState, useEffect } from "react";
 
 const THRESHOLD = 80;
 
-/** Read one touch gesture and refresh once. Cancelled gestures preserve normal scrolling. */
-export function usePullToRefresh(
-  onRefresh: () => Promise<void> | void,
-  { disabled = false }: { disabled?: boolean } = {},
-) {
+/**
+ * Read one touch gesture and refresh once. Cancelled gestures preserve
+ * normal scrolling. It listens for touches only, so a mouse never pulls,
+ * and it works at every width: a tablet or a phone on its side pulls too.
+ */
+export function usePullToRefresh(onRefresh: () => Promise<void> | void) {
   const containerRef = useRef<HTMLDivElement>(null);
   const refreshRef = useRef(onRefresh);
   const refreshingRef = useRef(false);
@@ -17,7 +18,7 @@ export function usePullToRefresh(
   }, [onRefresh]);
   useEffect(() => {
     const element = containerRef.current;
-    if (!element || disabled) return;
+    if (!element) return;
     let startY: number | null = null;
     let distance = 0;
     let frame: number | undefined;
@@ -82,7 +83,7 @@ export function usePullToRefresh(
       element.removeEventListener("touchend", end);
       element.removeEventListener("touchcancel", cancel);
     };
-  }, [disabled]);
+  }, []);
   return {
     containerRef,
     isPulling: pullDistance > 0,

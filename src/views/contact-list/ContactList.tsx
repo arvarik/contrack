@@ -22,6 +22,8 @@ import React, {
 import { useMatch, useNavigate, useLocation } from "react-router-dom";
 import {
   AlertCircle,
+  ArrowLeft,
+  ArrowRight,
   Search,
   Users,
   Upload,
@@ -48,6 +50,8 @@ import {
   useUnarchiveContact,
 } from "../../api";
 import { withUndo } from "../../lib/undoToast";
+import { parseFacetQuery } from "../../../shared/facetQuery";
+import { unknownFacetValue } from "../../../shared/searchFacets";
 import {
   measureElement,
   observeElementOffset,
@@ -56,7 +60,7 @@ import {
 } from "@tanstack/react-virtual";
 import { useListDensity, type ListDensity } from "../../hooks/useListDensity";
 import { AlphabetRail, bucketFor } from "./AlphabetRail";
-import type { Contact } from "../../types";
+import type { Contact, ContactList as ContactListType } from "../../types";
 import { ContextMenu, useContextMenu } from "../../components/ui/ContextMenu";
 import { AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -76,7 +80,7 @@ import {
   SCROLL_ANCHOR_ATTR,
   useScrollRestoration,
 } from "../../hooks/useScrollRestoration";
-import { WIDE_QUERY } from "../../hooks/useMediaQuery";
+import { useMediaQuery, WIDE_QUERY } from "../../hooks/useMediaQuery";
 import { usePullToRefresh } from "../../hooks/usePullToRefresh";
 import { PullIndicator } from "../../components/ui/PullIndicator";
 import { EmptyState } from "../../components/ui/EmptyState";
@@ -107,8 +111,22 @@ import { useRovingList, type RovingItemProps } from "./useRovingList";
 import { useRecent } from "../../contexts/SessionContext";
 import { NAMES, TRACKED_INTRO } from "../../lib/names";
 import { ActionMenu } from "../../components/ui/ActionMenu";
+import { RailTooltip } from "../../components/ui/RailTooltip";
 import { useSwapFocus } from "../../components/bulk/useSwapFocus";
 import { settleSlide } from "../settings/slide";
+
+/**
+ * What to try when a search matches no one. A facet value the search does
+ * not know (`tracked:maybe`) gets the values it takes. Fewer letters would
+ * not help that one.
+ */
+function searchHint(query: string): string {
+  for (const filter of parseFacetQuery(query).filters) {
+    const values = unknownFacetValue(filter);
+    if (values) return `${filter.field}: takes ${values}`;
+  }
+  return "Try fewer letters, or search a company or a tag";
+}
 
 /** The space under each row of the list, in px: `space-y-2`. */
 const ROW_GAP = 8;
@@ -150,6 +168,79 @@ const FilterButton = ({
     </span>
   </button>
 );
+
+// ---------------------------------------------------------------------------
+// ListChip — a list's chip, which a mouse drags and a menu moves
+// ---------------------------------------------------------------------------
+
+type OpenMenu = ReturnType<typeof useContextMenu>["handleContextMenu"];
+
+/**
+ * A list's chip in the filter row. A mouse drags it to a new place. A finger
+ * cannot drag it, so a long press, a right click or the keyboard's menu key
+ * opens its menu: Move left and Move right.
+ */
+const ListChip = ({
+  list,
+  index,
+  count,
+  active,
+  onToggle,
+  onMove,
+  openMenu,
+  drag,
+}: {
+  list: ContactListType;
+  index: number;
+  count: number;
+  active: boolean;
+  onToggle: () => void;
+  onMove: (from: number, to: number) => void;
+  openMenu: OpenMenu;
+  /** The drag props and look, for a mouse only. */
+  drag: React.HTMLAttributes<HTMLDivElement> | null;
+}) => {
+  const items = [
+    {
+      id: "left",
+      label: "Move left",
+      icon: <ArrowLeft className="w-3.5 h-3.5" />,
+      disabled: index === 0,
+      onClick: () => onMove(index, index - 1),
+    },
+    {
+      id: "right",
+      label: "Move right",
+      icon: <ArrowRight className="w-3.5 h-3.5" />,
+      disabled: index === count - 1,
+      onClick: () => onMove(index, index + 1),
+    },
+  ];
+  // The menu opens where the finger is. A press is no mouse event, so it
+  // passes the place the menu reads.
+  const longPress = useLongPress(({ clientX, clientY }) =>
+    openMenu(
+      { clientX, clientY, preventDefault: () => {} } as React.MouseEvent,
+      items,
+    ),
+  );
+  return (
+    <div
+      {...longPress}
+      {...drag}
+      onContextMenu={(e) => openMenu(e, items)}
+      className={cn("shrink-0 [-webkit-touch-callout:none]", drag?.className)}
+    >
+      <FilterButton
+        label={list.name}
+        icon={<ListIcon icon={list.icon} className="w-3.5 h-3.5" />}
+        count={list.memberCount ?? 0}
+        active={active}
+        onClick={onToggle}
+      />
+    </div>
+  );
+};
 
 // ---------------------------------------------------------------------------
 // ContactRowWrapper — attaches context menu + long-press + recordVisit to a row
@@ -332,9 +423,7 @@ const ContactRows = ({
     pullProgress,
     isRefreshing,
     pullDistance,
-  } = usePullToRefresh(onRefresh, {
-    disabled: typeof window !== "undefined" && window.innerWidth >= 768,
-  });
+  } = usePullToRefresh(onRefresh);
   // The rows rise toward the pointer. Nothing renders while it moves.
   useProximityLift(scrollRef);
 
@@ -669,7 +758,8 @@ const ContactRows = ({
         {...roving.containerProps}
         className={cn(
           "h-full overflow-y-auto scrollbar-on-hover px-4 pt-1 pb-24 md:pb-4 overscroll-contain outline-none",
-          showAlphabetRail && "pr-8",
+          // No rail in a short window (`AlphabetRail`), so no gutter for it.
+          showAlphabetRail && "pr-8 [@media(max-height:499px)]:pr-4",
         )}
         style={
           barRoom
@@ -678,7 +768,7 @@ const ContactRows = ({
         }
       >
         <div dir="ltr" className="space-y-2">
-          {/* Pull-to-refresh indicator — mobile only */}
+          {/* Pull to refresh, on a touch screen */}
           <PullIndicator
             isPulling={isPulling}
             isRefreshing={isRefreshing}
@@ -784,6 +874,7 @@ const ContactRows = ({
           index={bucketIndex}
           activeBucket={activeBucket}
           onJump={jumpToIndex}
+          bottomRoom={barRoom}
         />
       )}
     </div>
@@ -905,33 +996,63 @@ export const ContactList = () => {
     onSmartPaste: openSmartPaste,
   });
 
-  // ── Drag-to-reorder lists ───────────────────────────────────────────
+  // ── Reorder lists: a mouse drags a chip, its menu moves it ──────────
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const finePointer = useMediaQuery("(pointer: fine)");
 
-  const handleDragStart = (idx: number) => setDragIdx(idx);
-  const handleDragOver = (e: React.DragEvent, idx: number) => {
-    e.preventDefault();
-    if (dragIdx === null || dragIdx === idx) return;
-    setDragOverIdx(idx);
+  const moveList = (from: number, to: number) => {
+    const order = lists.map((l) => l.id);
+    const [moved] = order.splice(from, 1);
+    order.splice(to, 0, moved);
+    reorderLists.mutate(order);
   };
-  const handleDrop = (idx: number) => {
-    if (dragIdx === null || dragIdx === idx) {
-      setDragIdx(null);
-      setDragOverIdx(null);
-      return;
-    }
-    const newOrder = [...lists];
-    const [moved] = newOrder.splice(dragIdx, 1);
-    newOrder.splice(idx, 0, moved);
-    reorderLists.mutate(newOrder.map((l) => l.id));
+  const endDrag = () => {
     setDragIdx(null);
     setDragOverIdx(null);
   };
-  const handleDragEnd = () => {
-    setDragIdx(null);
-    setDragOverIdx(null);
-  };
+  const dragProps = (idx: number): React.HTMLAttributes<HTMLDivElement> => ({
+    draggable: true,
+    onDragStart: () => setDragIdx(idx),
+    onDragOver: (e) => {
+      e.preventDefault();
+      if (dragIdx !== null && dragIdx !== idx) setDragOverIdx(idx);
+    },
+    onDrop: () => {
+      if (dragIdx !== null && dragIdx !== idx) moveList(dragIdx, idx);
+      endDrag();
+    },
+    onDragEnd: endDrag,
+    className: cn(
+      "transition-all cursor-grab active:cursor-grabbing",
+      // The drop target's dashed line, as on the Lists page. A solid ring
+      // read as keyboard focus.
+      dragOverIdx === idx &&
+        dragIdx !== idx &&
+        "outline-2 outline-dashed outline-primary/60 rounded-xl",
+      dragIdx === idx && "opacity-40",
+    ),
+  });
+
+  // ── The chip row's edge ─────────────────────────────────────────────
+  // The fade at the right says more chips sit past the edge, so it shows
+  // only while they do. A mouse wheel scrolls the row sideways: the row
+  // hides its bar, and a plain wheel could not reach the last chips.
+  const pillsRef = useRef<HTMLDivElement>(null);
+  const [moreRight, setMoreRight] = useState(false);
+  const measurePills = useCallback(() => {
+    const row = pillsRef.current;
+    if (row)
+      setMoreRight(row.scrollLeft + row.clientWidth < row.scrollWidth - 1);
+  }, []);
+  useLayoutEffect(measurePills, [measurePills, lists, filters.filterMode]);
+  useEffect(() => {
+    const row = pillsRef.current;
+    if (!row || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measurePills);
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, [measurePills]);
 
   // ── Shorthand refs ──────────────────────────────────────────────────
   const {
@@ -1173,35 +1294,35 @@ export const ContactList = () => {
             <>
               {/*
                 Select and Import are icon buttons, and New is the page's
-                call to action. Each is named for a screen reader and titled
-                for a pointer, so the row costs one word of space per action
-                and still says what it does. The gap keeps the three 44 px
-                tap boxes apart.
+                call to action. Each is named for a screen reader and labelled
+                under its glyph for a pointer or a long press, so the row
+                costs one word of space per action and still says what it
+                does. The gap keeps the three 44 px tap boxes apart.
 
                 A touch screen also gets the command palette's button first,
                 from PageHeader, as on every page.
               */}
-              <button
-                key="select"
-                ref={selectButtonRef}
-                type="button"
-                onClick={enterSelectMode}
-                className={ICON_BTN}
-                aria-label="Select"
-                title="Select"
-              >
-                <Square className="w-5 h-5" aria-hidden="true" />
-              </button>
-              <button
-                key="import"
-                type="button"
-                onClick={() => setIsImportOpen(true)}
-                className={ICON_BTN}
-                aria-label="Import"
-                title="Import"
-              >
-                <Upload className="w-5 h-5" aria-hidden="true" />
-              </button>
+              <RailTooltip key="select" label="Select" side="bottom">
+                <button
+                  ref={selectButtonRef}
+                  type="button"
+                  onClick={enterSelectMode}
+                  className={ICON_BTN}
+                  aria-label="Select"
+                >
+                  <Square className="w-5 h-5" aria-hidden="true" />
+                </button>
+              </RailTooltip>
+              <RailTooltip key="import" label="Import" side="bottom">
+                <button
+                  type="button"
+                  onClick={() => setIsImportOpen(true)}
+                  className={ICON_BTN}
+                  aria-label="Import"
+                >
+                  <Upload className="w-5 h-5" aria-hidden="true" />
+                </button>
+              </RailTooltip>
               <ActionMenu
                 key="new"
                 label="New"
@@ -1223,13 +1344,29 @@ export const ContactList = () => {
               id="search-input"
               type="text"
               enterKeyHint="search"
-              placeholder="Search..."
+              placeholder="Search…"
+              // Names and companies, not prose: no red underline under a
+              // surname, and no phone changing a name it does not know.
+              spellCheck={false}
+              autoCorrect="off"
+              autoCapitalize="off"
               value={inputValue}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Escape") {
                   setSearchQuery("");
                   e.currentTarget.blur();
+                } else if (e.key === "ArrowDown" && !e.altKey) {
+                  // ↓ goes on to the results: the list's current row, or
+                  // the list itself while that row is scrolled out, which
+                  // hands focus to the row.
+                  const list = document.getElementById("contact-list");
+                  const row =
+                    list?.querySelector<HTMLElement>('[tabindex="0"]') ??
+                    (list?.tabIndex === 0 ? list : null);
+                  if (!row) return;
+                  e.preventDefault();
+                  row.focus();
                 }
               }}
               className={SEARCH_INPUT}
@@ -1280,9 +1417,17 @@ export const ContactList = () => {
           )}
           inert={isSelectMode}
         >
-          <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-surface-container-lowest to-transparent z-10" />
+          {moreRight && (
+            <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-surface-container-lowest to-transparent z-10" />
+          )}
           <div
             id="filter-pills-row"
+            ref={pillsRef}
+            onScroll={measurePills}
+            onWheel={(e) => {
+              if (Math.abs(e.deltaY) > Math.abs(e.deltaX))
+                e.currentTarget.scrollLeft += e.deltaY;
+            }}
             // A scroller clips what sits outside its padding box, so the
             // 8 px above and below give each pill's 44 px tap box room,
             // and 4 px at each side give its focus ring room. The negative
@@ -1320,33 +1465,19 @@ export const ContactList = () => {
               }
             />
             {lists.map((list, idx) => (
-              <div
+              <ListChip
                 key={list.id}
-                draggable
-                onDragStart={() => handleDragStart(idx)}
-                onDragOver={(e) => handleDragOver(e, idx)}
-                onDrop={() => handleDrop(idx)}
-                onDragEnd={handleDragEnd}
-                className={cn(
-                  "transition-all cursor-grab active:cursor-grabbing shrink-0",
-                  // The drop target's dashed line, as on the Lists page. A
-                  // solid ring read as keyboard focus.
-                  dragOverIdx === idx &&
-                    dragIdx !== idx &&
-                    "outline-2 outline-dashed outline-primary/60 rounded-xl",
-                  dragIdx === idx && "opacity-40",
-                )}
-              >
-                <FilterButton
-                  label={list.name}
-                  icon={<ListIcon icon={list.icon} className="w-3.5 h-3.5" />}
-                  count={list.memberCount ?? 0}
-                  active={filterMode === list.id}
-                  onClick={() =>
-                    setFilterMode(filterMode === list.id ? "all" : list.id)
-                  }
-                />
-              </div>
+                list={list}
+                index={idx}
+                count={lists.length}
+                active={filterMode === list.id}
+                onToggle={() =>
+                  setFilterMode(filterMode === list.id ? "all" : list.id)
+                }
+                onMove={moveList}
+                openMenu={handleContextMenu}
+                drag={finePointer ? dragProps(idx) : null}
+              />
             ))}
             <div className="shrink-0 w-6" aria-hidden />
           </div>
@@ -1445,8 +1576,8 @@ export const ContactList = () => {
           (searchQuery ? (
             <EmptyState
               icon={SearchX}
-              title={`Nobody matches "${searchQuery}"`}
-              body="Try fewer letters, or search a company or a tag"
+              title={`No one matches "${searchQuery}"`}
+              body={searchHint(searchQuery)}
               action={{
                 label: "Clear search",
                 onClick: () => setSearchQuery(""),
@@ -1456,7 +1587,7 @@ export const ContactList = () => {
           ) : filterMode === TRACKED_FILTER ? (
             <EmptyState
               icon={Radar}
-              title="Nobody is tracked yet"
+              title="No one is tracked yet"
               body={TRACKED_INTRO}
               action={{
                 label: "Choose people",
@@ -1467,7 +1598,7 @@ export const ContactList = () => {
           ) : tagFilter ? (
             <EmptyState
               icon={Tag}
-              title={`Nobody has the tag "${tagFilter}"`}
+              title={`No one has the tag "${tagFilter}"`}
               action={{
                 label: "Show everyone",
                 onClick: () => setFilterMode("all"),
@@ -1528,6 +1659,7 @@ export const ContactList = () => {
         onBulkEditApply={multiSelect.handleBulkEditApply}
         isBulkEditPending={multiSelect.isBulkEditPending}
         returnFocusRef={createOpener}
+        bulkReturnFocusRef={selectButtonRef}
         isModalOpen={isModalOpen}
         onCloseModal={() => setIsModalOpen(false)}
         onContactCreated={(newId) => {
@@ -1551,7 +1683,7 @@ export const ContactList = () => {
             toast.success(`Created list "${name}"`);
           } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);
-            toast.error(`Failed to create list: ${message}`);
+            toast.error(`Could not create the list: ${message}`);
           }
         }}
         isCreateListPending={createList.isPending}

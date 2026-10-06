@@ -38,7 +38,7 @@ test.describe("Network list", () => {
     // No match: the empty state says so, and no count stands over nothing.
     await search(page).fill("zzqx");
     await expect(
-      page.getByRole("heading", { name: 'Nobody matches "zzqx"' }),
+      page.getByRole("heading", { name: 'No one matches "zzqx"' }),
     ).toBeVisible();
     await expect(list(page).getByText(/\d+ match/)).toHaveCount(0);
     await expect(
