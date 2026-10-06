@@ -149,7 +149,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
           <p>
             <strong>Privacy:</strong> Contrack connects directly to Google
             Workspace to sync contacts, email headers, and calendar events.
-            Nothing leaves this server unless you enable AI summaries
+            Nothing leaves the server unless you turn on AI summaries
           </p>
         </div>
 

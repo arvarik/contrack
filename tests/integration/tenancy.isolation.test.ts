@@ -3622,6 +3622,21 @@ describe("connectors isolate by account", () => {
     expect(resC.body.connectors).toEqual([]);
   });
 
+  it("POST /api/connectors/test: tests with the caller's saved secret, never another account's", async () => {
+    const send = (actor: Actor) =>
+      asUser(actor)(
+        request(app)
+          .post("/api/connectors/test")
+          .send({
+            kind: "ics",
+            config: { url: "https://example.com/test.ics" },
+            connectorId: idA,
+          }),
+      );
+    expect((await send(B)).status).toBe(404);
+    expect((await send(A)).status).toBe(200);
+  });
+
   it("GET /api/connectors/:id: actor B cannot read actor A's connector", async () => {
     const res404 = await asUser(B)(request(app).get(`/api/connectors/${idA}`));
     expect(res404.status).toBe(404);

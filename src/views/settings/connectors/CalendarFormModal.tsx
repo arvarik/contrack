@@ -176,8 +176,8 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
         <div className="rounded-lg bg-surface-container p-3 text-xs text-on-surface-variant leading-relaxed">
           <p>
             <strong>Privacy:</strong> Only event times, titles, and participant
-            email addresses are imported. Event notes and descriptions remain on
-            your device unless you opt in below
+            email addresses are imported. Event notes and descriptions are not,
+            unless you turn them on below
           </p>
         </div>
 

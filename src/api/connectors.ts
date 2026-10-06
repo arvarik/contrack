@@ -77,6 +77,8 @@ export function useTestConnector() {
       kind: ConnectorKind;
       config: Record<string, unknown>;
       secret?: unknown;
+      /** Editing: test with this connector's saved secret. */
+      connectorId?: string;
     }) =>
       apiJson<{ ok: true; detail: string }>("/connectors/test", {
         method: "POST",

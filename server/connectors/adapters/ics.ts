@@ -31,6 +31,8 @@ export const icsConfigSchema = z.object({
   lookbackDays: z.number().int().min(1).max(365).default(90).optional(),
   maxAttendees: z.number().int().min(1).max(500).default(25).optional(),
   includeDescription: z.boolean().default(false).optional(),
+  /** Meetings with a stranger before Contrack suggests them as a contact. */
+  ghostThreshold: z.coerce.number().int().min(1).max(10).default(3).optional(),
 });
 
 export type IcsConfig = z.infer<typeof icsConfigSchema>;

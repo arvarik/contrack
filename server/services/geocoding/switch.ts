@@ -83,7 +83,7 @@ export function setGeocodingOff(off: boolean): void {
   log.info(
     "Geocode",
     off
-      ? "Address lookups turned off: no address will leave this server"
+      ? "Address lookups turned off: no address leaves the server"
       : "Address lookups turned back on",
   );
 }

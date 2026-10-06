@@ -98,6 +98,8 @@ const testConnectorSchema = z.object({
   kind: z.string().trim().min(1),
   config: z.record(z.string(), z.unknown()),
   secret: z.unknown().optional(),
+  /** Editing with the secret left empty: test with the saved one. */
+  connectorId: z.string().min(1).optional(),
 });
 
 connectorsRouter.post(
@@ -111,6 +113,7 @@ connectorsRouter.post(
       req.body.kind,
       req.body.config,
       req.body.secret,
+      req.body.connectorId,
     );
     res.json(result);
   }),

@@ -41,7 +41,7 @@ describe("Connectors API (/api/connectors)", () => {
   let syncShouldThrowGenericError = false;
 
   const mockAdapter: ConnectorAdapter<
-    { testKey?: string },
+    { testKey?: string; host?: string },
     { secretKey?: string }
   > = {
     kind: mockAdapterKind as unknown as ConnectorKind,
@@ -50,12 +50,18 @@ describe("Connectors API (/api/connectors)", () => {
     capabilities: { schedule: true },
     configSchema: z.object({
       testKey: z.string().optional(),
+      host: z.string().optional(),
     }),
     secretSchema: z.object({
       secretKey: z.string().optional(),
     }),
-    async test(_config, _secret) {
-      return { ok: true, detail: "Mock adapter test passed" };
+    async test(_config, secret) {
+      return {
+        ok: true,
+        detail: secret
+          ? "Mock adapter test passed with a secret"
+          : "Mock adapter test passed",
+      };
     },
     async *sync(
       _ctx: SyncContext<{ testKey?: string }, { secretKey?: string }>,
@@ -197,6 +203,35 @@ describe("Connectors API (/api/connectors)", () => {
       }
     ).c;
     expect(countAfter).toBe(countBefore);
+  });
+
+  it("POST /test uses the saved secret only for the same destination", async () => {
+    const created = await request(server)
+      .post("/api/connectors")
+      .set("Cookie", actorA.cookie)
+      .send({
+        kind: mockAdapterKind,
+        name: "Saved Secret",
+        config: { host: "mail.example.com" },
+        secret: { secretKey: "saved-pass" },
+      });
+    expect(created.status).toBe(201);
+    const test = (host: string) =>
+      request(server)
+        .post("/api/connectors/test")
+        .set("Cookie", actorA.cookie)
+        .send({
+          kind: mockAdapterKind,
+          config: { host },
+          connectorId: created.body.id,
+        });
+
+    const same = await test("mail.example.com");
+    expect(same.body.detail).toBe("Mock adapter test passed with a secret");
+    // Another host must not receive the saved password.
+    const other = await test("mail.attacker.example");
+    expect(other.status).toBe(400);
+    expect(other.body.error.code).toBe("SECRET_NEEDS_REENTRY");
   });
 
   it("creates a connector and strips secrets from output", async () => {
