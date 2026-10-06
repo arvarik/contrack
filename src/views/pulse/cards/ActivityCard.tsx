@@ -41,6 +41,7 @@ export const ActivityCard = ({ activity }: ActivityCardProps) => {
         />
         <Sparkline
           weekTotals={activity.weekTotals}
+          days={activity.days}
           thisWeek={activity.thisWeek}
         />
       </div>
