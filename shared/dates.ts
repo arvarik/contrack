@@ -114,7 +114,7 @@ function dayFormatter(timeZone?: string): Intl.DateTimeFormat {
 }
 
 /** The weekday of a `YYYY-MM-DD` day: 0 for Sunday to 6 for Saturday. */
-export function weekdayOf(day: string): number {
+function weekdayOf(day: string): number {
   const [y, m, d] = day.split("-").map(Number);
   return new Date(Date.UTC(y, m - 1, d)).getUTCDay();
 }
