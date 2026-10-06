@@ -123,6 +123,21 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     [stored, preferences],
   );
 
+  // The server's answer, under any change made while it was on its way.
+  const storeAnswer = (response: PreferencesResponse) => {
+    queryClient.setQueryData<PreferencesResponse>(QUERY_KEY, (current) => {
+      if (!current) return response;
+      return {
+        ...response,
+        preferences: {
+          ...response.preferences,
+          ...current.preferences,
+        },
+        stored: [...new Set([...response.stored, ...current.stored])],
+      };
+    });
+  };
+
   const mutation = useMutation({
     mutationFn: savePreferences,
     onMutate: async (patch: Partial<Preferences>) => {
@@ -148,19 +163,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       }
       toast.error(`Could not save the setting: ${errorText(err)}`);
     },
-    onSuccess: (response) => {
-      queryClient.setQueryData<PreferencesResponse>(QUERY_KEY, (current) => {
-        if (!current) return response;
-        return {
-          ...response,
-          preferences: {
-            ...response.preferences,
-            ...current.preferences,
-          },
-          stored: [...new Set([...response.stored, ...current.stored])],
-        };
-      });
-    },
+    onSuccess: storeAnswer,
   });
 
   const resetMutation = useMutation({
@@ -185,19 +188,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       }
       toast.error(`Could not reset the setting: ${errorText(err)}`);
     },
-    onSuccess: (response) => {
-      queryClient.setQueryData<PreferencesResponse>(QUERY_KEY, (current) => {
-        if (!current) return response;
-        return {
-          ...response,
-          preferences: {
-            ...response.preferences,
-            ...current.preferences,
-          },
-          stored: [...new Set([...response.stored, ...current.stored])],
-        };
-      });
-    },
+    onSuccess: storeAnswer,
   });
 
   const { mutate } = mutation;
