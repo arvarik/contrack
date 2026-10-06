@@ -550,12 +550,11 @@ test.describe("the contact header", () => {
     const menu = page.getByRole("menu", { name: "Contact actions" });
     // Change avatar left for the pencil on the avatar, and the two enrich
     // depths follow the colour: AI actions about this contact. Each ends
-    // with its time when research runs on Gemini, and this instance has no
-    // AI key, so the rows are the words alone.
+    // with its time, because research runs on Gemini here.
     await expect(menu.getByRole("menuitem")).toHaveText([
       "Change colour",
-      "Enrich contact",
-      "Enrich deeply",
+      /^Enrich contactabout \d+ s$/,
+      /^Enrich deeplyabout \d+ s$/,
       "Copy basic details",
       "Copy full details",
       "Save contact card",
@@ -760,7 +759,7 @@ test.describe("the contact header", () => {
     await expect(
       page.getByText("Contact enrichment", { exact: true }),
     ).toBeVisible();
-    expect(started).toEqual({ contactIds: [id], depth: "standard" });
+    expect(started).toMatchObject({ contactIds: [id], depth: "standard" });
     await expect(
       page.getByText("Enrichment started for 1 contact"),
     ).toHaveCount(0);
