@@ -438,7 +438,9 @@ describe("the app icons", () => {
         type: string;
       }>;
     };
-    expect(manifest.theme_color).toBe(BRAND.mark);
+    // The page's own surface, as its theme-color meta says: an installed
+    // app's title bar and splash do not flash the accent.
+    expect(manifest.theme_color).toBe(BRAND.surface);
     expect(manifest.background_color).toBe(BRAND.surface);
     const listed = manifest.icons.map(
       (icon) => `${icon.purpose}:${icon.sizes}`,

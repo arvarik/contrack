@@ -77,7 +77,7 @@ export const ComposerPlaceholder = ({
 
         {/* Next-action row */}
         <div className="mt-4 flex items-center">
-          <div className="flex flex-1 items-center min-h-[44px] sm:min-h-0 px-3 sm:py-2.5 bg-surface-container-lowest rounded-xl shadow-sm">
+          <div className="flex flex-1 items-center min-h-[44px] sm:pointer-fine:min-h-0 px-3 sm:py-2.5 bg-surface-container-lowest rounded-xl shadow-sm">
             <CalendarClock className="w-4 h-4 text-primary mr-2.5 shrink-0" />
             <span className="text-xs font-semibold text-on-surface-variant">
               Next action, like follow up Tuesday

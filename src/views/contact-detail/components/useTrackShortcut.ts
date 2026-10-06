@@ -4,14 +4,15 @@
  * The same flip as the header's Track button, toast and Undo included. It
  * listens only on the contact's own page (`/contact/:id`, and the contact
  * over the map), never inside the floating card on the Archived page. It
- * steps aside when focus is in a field, when a dialog is open, when the
- * single-key shortcuts are off, and for a ghost, which cannot be tracked.
+ * steps aside when focus is in a field, when a dialog or a menu is open,
+ * when the single-key shortcuts are off, and for a ghost, which cannot be
+ * tracked. Caps Lock does not stop it.
  *
  * Registered in `src/lib/shortcuts.ts` under Contact.
  */
 import { useEffect } from "react";
 import { useMatch } from "react-router-dom";
-import { isTypingTarget } from "../../../lib/keyboard";
+import { isPageKeyTaken } from "../../../lib/keyboard";
 import { useSingleKeyShortcuts } from "../../../hooks/useSingleKeyShortcuts";
 import {
   useTrackToggle,
@@ -30,9 +31,7 @@ export function useTrackShortcut(
   useEffect(() => {
     if (!contact || contact.isGhost || !onPage || !singleKeys) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== "t" || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.defaultPrevented || isTypingTarget(e)) return;
-      if (document.querySelector('[role="dialog"]')) return;
+      if (e.key.toLowerCase() !== "t" || isPageKeyTaken(e)) return;
       e.preventDefault();
       toggle(contact);
     };

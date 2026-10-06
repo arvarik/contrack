@@ -36,6 +36,7 @@ import React, {
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { PageHeader } from "../../components/layout/PageHeader";
+import { SETTINGS_CONTENT_ID } from "../../components/layout/SkipLink";
 import {
   SETTINGS_LIST_PATH,
   SETTINGS_PAGES,
@@ -212,7 +213,9 @@ export const SettingsShell = () => {
           {/* ── The stage: header and page. Below lg it is what slides, so it
             has its own opaque surface for the picture. ── */}
           <div
-            className="settings-stage flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-surface"
+            id={SETTINGS_CONTENT_ID}
+            tabIndex={-1}
+            className="settings-stage flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-surface outline-none"
             onClickCapture={onStageClickCapture}
           >
             {/* Every page centres its header and its body in the same width:

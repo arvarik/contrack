@@ -14,7 +14,9 @@
  *    `aria-expanded`. Click, Enter or Space opens the menu and focuses the
  *    first item. ArrowDown opens on the first item, ArrowUp on the last.
  * 2. Inside the menu, ArrowDown and ArrowUp move and wrap, Home and End jump,
- *    and a letter moves to the next item that starts with it.
+ *    and a letter moves to the next item that starts with it. Every letter
+ *    is the menu's, a letter that matches no item too, so J or D never
+ *    reaches a page shortcut behind the open menu.
  * 3. Escape closes the menu and returns focus to the trigger. Tab closes it
  *    and lets focus move on. A click outside closes it.
  * 4. Choosing an item closes the menu, returns focus to the trigger, and then
@@ -67,7 +69,10 @@ export interface ActionMenuItem {
   label: string;
   /** A 16 px glyph before the label. Decoration only. */
   icon?: LucideIcon;
-  /** Whether the item is currently selected/checked. */
+  /**
+   * The item is one choice of several (a sort, a cadence), and this says
+   * whether it is the current one. Such an item is a `menuitemradio`.
+   */
   checked?: boolean;
   /** What the item does. Runs after the menu closes. */
   onSelect?: () => void;
@@ -145,6 +150,41 @@ const TRIGGER_VARIANT: Record<
   secondary: "btn-secondary",
 };
 
+/** The enabled items of an open menu, in order. */
+const menuItems = (menu: HTMLElement | null) =>
+  Array.from(
+    menu?.querySelectorAll<HTMLElement>(
+      '[role="menuitem"]:not([aria-disabled="true"], :disabled), [role="menuitemradio"]:not([aria-disabled="true"])',
+    ) ?? [],
+  );
+
+/**
+ * The keys that move inside an open menu, for `ActionMenu` and the row's
+ * right-click menu (`ContextMenu`): the arrows move and wrap, Home and End
+ * jump, and a letter moves to the next item that starts with it. Escape and
+ * Tab are the caller's, because each menu closes in its own way.
+ */
+export function moveInMenu(
+  event: React.KeyboardEvent,
+  menu: HTMLElement | null,
+): void {
+  const list = menuItems(menu);
+  const index = list.indexOf(document.activeElement as HTMLElement);
+  const focusAt = (i: number) => list[(i + list.length) % list.length]?.focus();
+  if (event.key === "ArrowDown") focusAt(index + 1);
+  else if (event.key === "ArrowUp") focusAt(index - 1);
+  else if (event.key === "Home") focusAt(0);
+  else if (event.key === "End") focusAt(list.length - 1);
+  else if (event.key.length === 1 && /\S/.test(event.key)) {
+    const letter = event.key.toLowerCase();
+    const order = [...list.slice(index + 1), ...list.slice(0, index + 1)];
+    order
+      .find((el) => el.textContent?.trim().toLowerCase().startsWith(letter))
+      ?.focus();
+  } else return;
+  event.preventDefault();
+}
+
 const assignRef = <T,>(ref: React.Ref<T> | undefined, value: T | null) => {
   if (!ref) return;
   if (typeof ref === "function") ref(value);
@@ -209,19 +249,11 @@ export const ActionMenu = ({
   });
   useClickOutside(wrapper, close, open);
 
-  /** The enabled items in the open menu, in order. */
-  const enabledItems = () =>
-    Array.from(
-      menu.current?.querySelectorAll<HTMLElement>(
-        '[role="menuitem"]:not([aria-disabled="true"]), [role="menuitemcheckbox"]:not([aria-disabled="true"])',
-      ) ?? [],
-    );
-
   // Opening moves focus into the menu. `usePanelPlacement` has already
   // measured it in its own layout effect, declared above this one.
   useLayoutEffect(() => {
     if (!open) return;
-    const list = enabledItems();
+    const list = menuItems(menu.current);
     const target = openAt === "last" ? list[list.length - 1] : list[0];
     (target ?? menu.current)?.focus({ preventScroll: true });
     // Once per opening. `openAt` is set in the same batch as `open`.
@@ -244,52 +276,17 @@ export const ActionMenu = ({
   };
 
   const onMenuKeyDown = (event: React.KeyboardEvent) => {
-    const list = enabledItems();
-    if (list.length === 0) return;
-    const index = list.indexOf(document.activeElement as HTMLElement);
-    const focusAt = (i: number) =>
-      list[(i + list.length) % list.length]?.focus();
-
-    switch (event.key) {
-      case "ArrowDown":
-        event.preventDefault();
-        focusAt(index + 1);
-        return;
-      case "ArrowUp":
-        event.preventDefault();
-        focusAt(index - 1);
-        return;
-      case "Home":
-        event.preventDefault();
-        focusAt(0);
-        return;
-      case "End":
-        event.preventDefault();
-        focusAt(list.length - 1);
-        return;
-      case "Escape":
-        // Handled: a page-level Escape (the contact over the map closes on
-        // Escape) must not also run for this press.
-        event.preventDefault();
-        event.stopPropagation();
-        close();
-        trigger.current?.focus();
-        return;
-      case "Tab":
-        close();
-        return;
-      default:
-        if (event.key.length === 1 && /\S/.test(event.key)) {
-          const letter = event.key.toLowerCase();
-          const order = [...list.slice(index + 1), ...list.slice(0, index + 1)];
-          const hit = order.find((el) =>
-            el.textContent?.trim().toLowerCase().startsWith(letter),
-          );
-          if (hit) {
-            event.preventDefault();
-            hit.focus();
-          }
-        }
+    if (event.key === "Escape") {
+      // Handled: a page-level Escape (the contact over the map closes on
+      // Escape) must not also run for this press.
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+      trigger.current?.focus();
+    } else if (event.key === "Tab") {
+      close();
+    } else {
+      moveInMenu(event, menu.current);
     }
   };
 
@@ -307,7 +304,7 @@ export const ActionMenu = ({
     const ItemIcon = item.icon;
     const isChecked = item.checked === true;
     const isCheckable = item.checked !== undefined;
-    const role = isCheckable ? "menuitemcheckbox" : "menuitem";
+    const role = isCheckable ? "menuitemradio" : "menuitem";
 
     const content = (
       <>

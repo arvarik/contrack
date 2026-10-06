@@ -178,7 +178,11 @@ export function EditableField({
                 setError(false);
               }
             }}
-            className={cn(EDITABLE_INPUT, "min-h-[44px] sm:min-h-0", className)}
+            className={cn(
+              EDITABLE_INPUT,
+              "min-h-[44px] sm:pointer-fine:min-h-0",
+              className,
+            )}
             placeholder={placeholder}
           />
           {saving && (

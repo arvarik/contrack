@@ -14,10 +14,11 @@
  *
  * 1. `isNavChord` accepts both forms on every platform. A handler needs no
  *    platform branch, and a test that presses ⌘ ⇧ works on a Linux runner.
- * 2. The handlers still compare `event.key` with the letter. On a European
- *    Windows layout, `Ctrl Alt` is AltGr and types a character ("ś", "µ",
- *    "@"). That key is the character and not the letter, so typing it in a
- *    field never moves the page.
+ * 2. `navChordKey` reads the letter. It reads the character first, so a
+ *    Dvorak layout keeps its own letters. When the character is no letter,
+ *    it reads the physical key: Shift turns "," into "<" on a US keyboard,
+ *    and on a European layout `Ctrl Alt` is AltGr and types "ś" or "µ". In a
+ *    field only the character counts, so AltGr still types there.
  * 3. Only the labels depend on the platform. A Mac shows ⌘, and every other
  *    platform shows Ctrl.
  *
@@ -29,6 +30,8 @@
  *
  * @module lib/platform
  */
+
+import { isTypingTarget } from "./keyboard";
 
 /** The part of `navigator` this module reads. */
 type PlatformSource = {
@@ -83,8 +86,8 @@ export function chordLabel(keys: readonly string[]): string {
  * True when the event holds the modifiers of a navigation chord.
  *
  * ⌘ ⇧ with no Alt is the Mac form. `Ctrl Alt` with no ⌘ and no ⇧ is the
- * Windows and Linux form. Both work on every platform. The caller then
- * compares `event.key` with the letter it wants.
+ * Windows and Linux form. Both work on every platform. `navChordKey` then
+ * reads the letter.
  */
 export function isNavChord(
   event: Pick<KeyboardEvent, "metaKey" | "ctrlKey" | "altKey" | "shiftKey">,
@@ -93,4 +96,17 @@ export function isNavChord(
   const other =
     event.ctrlKey && event.altKey && !event.metaKey && !event.shiftKey;
   return mac || other;
+}
+
+/**
+ * The key of a navigation chord: a lower-case letter or ",", or "" when the
+ * event is not a chord (point 2 above says how it reads the key).
+ */
+export function navChordKey(event: KeyboardEvent): string {
+  if (!isNavChord(event)) return "";
+  const char = event.key.toLowerCase();
+  if (/^[a-z,]$/.test(char)) return char;
+  if (!event.metaKey && isTypingTarget(event)) return "";
+  if (event.code === "Comma") return ",";
+  return event.code.startsWith("Key") ? event.code.slice(3).toLowerCase() : "";
 }

@@ -80,7 +80,7 @@ export const IndustryField = ({
   }
   return (
     // 44 px tall on a phone, so the row gives the value's tap box room.
-    <div className="flex items-center min-h-[44px] sm:min-h-0">
+    <div className="flex items-center min-h-[44px] sm:pointer-fine:min-h-0">
       {/* A real button: Enter and Space open the editor with no key handler,
           and `group/edit` shows the pencil on keyboard focus. hit-area: a
           short value such as "Law" is narrower than a thumb. */}

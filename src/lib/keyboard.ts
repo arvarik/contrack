@@ -61,7 +61,6 @@ export function isActivationTarget(): boolean {
         '[role="button"]',
         '[role="link"]',
         '[role="menuitem"]',
-        '[role="menuitemcheckbox"]',
         '[role="menuitemradio"]',
         '[role="option"]',
         '[role="radio"]',
@@ -70,5 +69,49 @@ export function isActivationTarget(): boolean {
         '[role="tab"]',
       ].join(", "),
     ) !== null
+  );
+}
+
+/** A dialog, a menu, an open list of options or the palette, over the page. */
+const OVERLAY = [
+  '[role="dialog"]',
+  '[role="alertdialog"]',
+  '[role="menu"]',
+  '[role="listbox"]',
+  "[cmdk-dialog]",
+].join(", ");
+
+/** Whether a dialog, a menu, an open list or the palette is on screen. */
+export function overlayIsOpen(): boolean {
+  return document.querySelector(OVERLAY) !== null;
+}
+
+/**
+ * Returns `true` when a page's own shortcut must leave this key alone.
+ *
+ * - Another control used it first (`defaultPrevented`): an arrow that moved
+ *   a radio, a letter in a menu.
+ * - It holds ⌘, Ctrl or Alt: ⌘↑ is the browser's, ⌘V is a paste.
+ * - Focus is in a field (`isTypingTarget`).
+ * - A dialog or a menu is open: J behind the avatar picker opened the next
+ *   contact and closed the picker with its work.
+ */
+export function isPageKeyTaken(e: KeyboardEvent): boolean {
+  return (
+    e.defaultPrevented ||
+    e.metaKey ||
+    e.ctrlKey ||
+    e.altKey ||
+    isTypingTarget(e) ||
+    overlayIsOpen()
+  );
+}
+
+/** Whether the element scrolls its own content up and down. */
+export function isScroller(el: Element | null): el is HTMLElement {
+  return (
+    el instanceof HTMLElement &&
+    el.scrollHeight > el.clientHeight &&
+    /auto|scroll/.test(getComputedStyle(el).overflowY)
   );
 }

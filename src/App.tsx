@@ -6,8 +6,8 @@ import {
   useLocation,
 } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { isTypingTarget } from "./lib/keyboard";
-import { isNavChord } from "./lib/platform";
+import { isScroller, isTypingTarget } from "./lib/keyboard";
+import { navChordKey } from "./lib/platform";
 import { whenIdle } from "./lib/idle";
 import { useSettlePendingNav } from "./lib/pendingNav";
 import { settingsShell, useWarmSettingsFromApp } from "./views/settings/warm";
@@ -28,6 +28,8 @@ import {
   type OpenQuickNoteDetail,
 } from "./lib/appEvents";
 import { NAMES } from "./lib/names";
+import { useToastFocusReturn } from "./lib/undoToast";
+import { usePreferences } from "./contexts/PreferencesContext";
 import { useMediaQuery, WIDE_QUERY } from "./hooks/useMediaQuery";
 
 // Route-level code splitting: secondary views load on demand so the initial
@@ -55,6 +57,7 @@ import {
 import { askPage, mapPage, pulsePage, useWarmPages } from "./views/pages";
 import { ConnectionBanner } from "./components/layout/ConnectionBanner";
 import { StartRedirect } from "./components/layout/StartRedirect";
+import { NotFoundPanel } from "./components/layout/StartPanel";
 import { RouteErrorBoundary } from "./components/layout/RouteErrorBoundary";
 import { starterQuestionsQuery } from "./api";
 import { useQueryClient } from "@tanstack/react-query";
@@ -63,8 +66,59 @@ import { DedupeProvider } from "./contexts/DedupeContext";
 import { SessionProvider, useRecent } from "./contexts/SessionContext";
 import { useSoftKeyboard } from "./hooks/useSoftKeyboard";
 
+/** A control that keeps the focus a click gives it. */
+const CONTROL =
+  'a[href], button, input, textarea, select, [contenteditable="true"]';
+
+/**
+ * A click on blank space focuses the scroller under it.
+ *
+ * The page's landmarks take focus by script, for the skip link, so a click
+ * on blank space inside one gave it focus. A landmark does not scroll: the
+ * scroller inside it does. So Space, PageDown and the arrows scrolled
+ * nothing on a contact, Settings, Pulse or Ask, and on a contact ↑ and ↓
+ * opened other contacts instead. Such a click now moves focus on to the
+ * scroller between the click and the landmark, and the keys scroll what the
+ * person clicked. The scroller takes no ring: a pointer put it there.
+ */
+function useClickFocusesScroller() {
+  useEffect(() => {
+    let pressed: Element | null = null;
+    const onPointerDown = (event: PointerEvent) => {
+      pressed = event.target as Element;
+      // The focus a press gives comes in the same task.
+      setTimeout(() => (pressed = null));
+    };
+    const onFocusIn = (event: FocusEvent) => {
+      const box = event.target as HTMLElement;
+      if (!pressed || !box.contains(pressed) || box.tabIndex !== -1) return;
+      if (box.matches(CONTROL)) return;
+      for (
+        let el: Element | null = pressed;
+        el !== box;
+        el = el.parentElement
+      ) {
+        if (!el) return;
+        if (isScroller(el)) {
+          el.tabIndex = -1;
+          el.style.outline = "none";
+          el.focus({ preventScroll: true });
+          return;
+        }
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown, true);
+    document.addEventListener("focusin", onFocusIn);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("focusin", onFocusIn);
+    };
+  }, []);
+}
+
 const ResponsiveLayout = () => {
   const location = useLocation();
+  useClickFocusesScroller();
   // Narrow context read — see SessionContext for the split rationale. This
   // component no longer re-renders on every AI-search keystroke.
   const { setLastContactId } = useRecent();
@@ -72,6 +126,7 @@ const ResponsiveLayout = () => {
   const matchContact = useMatch("/contact/:id");
   const matchMapContact = useMatch("/map/contact/:id");
   const isContactSelected = matchContact || matchMapContact;
+  const isHome = useMatch("/");
 
   // Track the most recently visited contact to restore it when clicking "Network"
   useEffect(() => {
@@ -132,6 +187,14 @@ const ResponsiveLayout = () => {
 
   // Full-page views (cleanup, search, pulse) take the full main area
   const isFullPage = isCleanup || isSearch || isPulse;
+  /**
+   * An address that names no page. The list is the catch-all, so it used to
+   * show with an empty pane beside it. The pane says "Page not found", and
+   * on a phone it shows in place of the list, as a contact does.
+   */
+  const isUnknown =
+    !isFullPage && !isMapActive && !isHome && !isContactSelected;
+  const showsPane = isContactSelected || isUnknown;
   const pageName = isCleanup
     ? NAMES.settings.label
     : isSearch
@@ -251,7 +314,7 @@ const ResponsiveLayout = () => {
       */}
             <section
               id={
-                isMapActive || (!isWide && !isContactSelected)
+                isMapActive || (!isWide && !showsPane)
                   ? MAIN_CONTENT_ID
                   : undefined
               }
@@ -266,7 +329,7 @@ const ResponsiveLayout = () => {
               }
               tabIndex={-1}
               className={`
-        ${isContactSelected && !isMapActive ? "hidden lg:flex" : "flex"}
+        ${showsPane && !isMapActive ? "hidden lg:flex" : "flex"}
         ${isMapActive ? "flex-1 z-0" : "flex-1 min-w-0 lg:flex-none lg:w-(--pane-width) bg-surface-container-lowest z-10 lg:z-[15]"}
         h-full flex-col relative outline-none
       `}
@@ -316,11 +379,11 @@ const ResponsiveLayout = () => {
             {/* Right Pane: Standard Detail View */}
             {!isMapActive && (
               <main
-                id={isWide || isContactSelected ? MAIN_CONTENT_ID : undefined}
+                id={isWide || showsPane ? MAIN_CONTENT_ID : undefined}
                 tabIndex={-1}
                 aria-label="Contact"
                 className={`
-          ${isContactSelected ? "flex" : "hidden lg:flex"}
+          ${showsPane ? "flex" : "hidden lg:flex"}
           flex-1 min-w-0 bg-surface z-10 h-full overflow-hidden relative flex-col outline-none
         `}
               >
@@ -334,6 +397,7 @@ const ResponsiveLayout = () => {
                       </RouteErrorBoundary>
                     }
                   />
+                  <Route path="*" element={<NotFoundPanel />} />
                 </Routes>
               </main>
             )}
@@ -392,6 +456,8 @@ const ResponsiveLayout = () => {
 export default function App() {
   // `data-typing` and `--keyboard-inset` for the phone's CSS (index.css).
   useSoftKeyboard();
+  const { mode } = usePreferences();
+  useToastFocusReturn();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [quickNoteOpen, setQuickNoteOpen] = useState(false);
   const [quickNoteContactId, setQuickNoteContactId] = useState<
@@ -429,13 +495,15 @@ export default function App() {
 
       // Cmd+Shift+I on a Mac, Ctrl+Alt+I on Windows and Linux, where the
       // browser keeps Ctrl+Shift+I for its developer tools (`lib/platform`).
-      // Conflict guard: close Cmd+K if open
-      // Either case: with Shift held, a browser may report the key as "I".
-      if (e.key.toLowerCase() === "i" && isNavChord(e)) {
+      if (navChordKey(e) === "i") {
         e.preventDefault();
         // If Cmd+K is open, close it first. Not with an Escape: that only
         // clears a palette that holds text.
         closeCommandPalette();
+        // On a contact page the note is about that contact.
+        setQuickNoteContactId(
+          window.location.pathname.match(/^\/(?:map\/)?contact\/([^/]+)/)?.[1],
+        );
         setQuickNoteOpen((prev) => !prev);
         return;
       }
@@ -483,7 +551,9 @@ export default function App() {
         */}
         <CorvidFlight />
         <Toaster
-          theme="light"
+          // The app's own palette, not the system's: a dark page drew dark
+          // grey descriptions on the dark glass of a light-theme toast.
+          theme={mode}
           position="bottom-right"
           // The mobile tab bar is fixed to the bottom of the viewport, so a
           // default-offset toast lands underneath it and the user never sees

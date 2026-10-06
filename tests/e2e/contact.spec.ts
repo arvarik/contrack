@@ -191,7 +191,7 @@ test.describe("the Network header and start panel", () => {
     const sortButton = page.getByRole("button", { name: "Sort: A to Z" });
     await sortButton.click();
 
-    const zToA = page.getByRole("menuitemcheckbox", { name: "Z to A" });
+    const zToA = page.getByRole("menuitemradio", { name: "Z to A" });
     await expect(zToA).toBeVisible();
     await zToA.click();
 
@@ -201,7 +201,7 @@ test.describe("the Network header and start panel", () => {
     await expect(firstRow).not.toContainText("Ada Lovelace");
 
     await page.getByRole("button", { name: "Sort: Z to A" }).click();
-    await page.getByRole("menuitemcheckbox", { name: "A to Z" }).click();
+    await page.getByRole("menuitemradio", { name: "A to Z" }).click();
     await expect(
       page.getByRole("button", { name: "Sort: A to Z" }),
     ).toBeVisible();
@@ -224,7 +224,7 @@ test.describe("the Network header and start panel", () => {
     const menu = page.getByRole("menu");
     await expect(menu).toBeVisible();
     await expect(menu).toHaveAttribute("popover", "manual");
-    const item = page.getByRole("menuitemcheckbox", { name: "Newest" });
+    const item = page.getByRole("menuitemradio", { name: "Newest" });
     const onTop = await item.evaluate((el) => {
       const r = el.getBoundingClientRect();
       const hit = document.elementFromPoint(
@@ -830,7 +830,7 @@ test.describe("tracking", () => {
       /^Quarterly,?\s*Default$/,
       "Yearly",
     ]);
-    await expect(menu.getByRole("menuitemcheckbox")).toHaveCount(0);
+    await expect(menu.getByRole("menuitemradio")).toHaveCount(0);
     await menu.getByRole("menuitem", { name: /^Quarterly/ }).click();
 
     const tracked = page.getByRole("button", {
@@ -870,17 +870,17 @@ test.describe("tracking", () => {
     menu = page.getByRole("menu", {
       name: "Tracking quarterly, change or stop",
     });
-    await expect(menu.getByRole("menuitemcheckbox")).toHaveText([
+    await expect(menu.getByRole("menuitemradio")).toHaveText([
       "Weekly",
       "Monthly",
       "Quarterly",
       "Yearly",
     ]);
     await expect(
-      menu.getByRole("menuitemcheckbox", { name: "Quarterly" }),
+      menu.getByRole("menuitemradio", { name: "Quarterly" }),
     ).toHaveAttribute("aria-checked", "true");
     await expect(menu.getByRole("menuitem")).toHaveText(["Stop tracking"]);
-    await menu.getByRole("menuitemcheckbox", { name: "Monthly" }).click();
+    await menu.getByRole("menuitemradio", { name: "Monthly" }).click();
     const monthly = page.getByRole("button", {
       name: "Tracking monthly, change or stop",
     });
@@ -928,7 +928,7 @@ test.describe("tracking", () => {
     const menu = page.getByRole("menu", {
       name: "Tracking every 2 months, change or stop",
     });
-    await expect(menu.getByRole("menuitemcheckbox")).toHaveText([
+    await expect(menu.getByRole("menuitemradio")).toHaveText([
       "Weekly",
       "Monthly",
       "Every 2 months",
@@ -937,11 +937,11 @@ test.describe("tracking", () => {
       "Yearly",
     ]);
     await expect(
-      menu.getByRole("menuitemcheckbox", { name: "Every 2 months" }),
+      menu.getByRole("menuitemradio", { name: "Every 2 months" }),
     ).toHaveAttribute("aria-checked", "true");
 
     // Yearly, and the toast says it in a sentence.
-    await menu.getByRole("menuitemcheckbox", { name: "Yearly" }).click();
+    await menu.getByRole("menuitemradio", { name: "Yearly" }).click();
     await expect(
       page.getByRole("button", { name: "Tracking yearly, change or stop" }),
     ).toBeVisible();

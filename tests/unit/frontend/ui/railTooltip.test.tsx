@@ -42,7 +42,7 @@ describe("RailTooltip", () => {
     const anchor = screen.getByRole("button", {
       name: "History",
     }).parentElement!;
-    fireEvent.mouseEnter(anchor);
+    fireEvent.pointerEnter(anchor, { pointerType: "mouse" });
     act(() => vi.advanceTimersByTime(200));
     expect(screen.queryByText("H")).toBeNull();
     act(() => vi.advanceTimersByTime(60));
@@ -51,7 +51,7 @@ describe("RailTooltip", () => {
     expect(screen.getByText("H").closest(".left-full")).toBeTruthy();
 
     vi.useRealTimers();
-    fireEvent.mouseLeave(anchor);
+    fireEvent.pointerLeave(anchor, { pointerType: "mouse" });
     await waitFor(() => expect(screen.queryByText("H")).toBeNull());
   });
 
@@ -60,7 +60,7 @@ describe("RailTooltip", () => {
     const anchor = screen.getByRole("button", {
       name: "History",
     }).parentElement!;
-    fireEvent.mouseEnter(anchor);
+    fireEvent.pointerEnter(anchor, { pointerType: "mouse" });
     act(() => vi.advanceTimersByTime(260));
     expect(screen.getByText("H").closest(".right-full")).toBeTruthy();
   });
@@ -70,7 +70,7 @@ describe("RailTooltip", () => {
     const anchor = screen.getByRole("button", {
       name: "History",
     }).parentElement!;
-    fireEvent.mouseEnter(anchor);
+    fireEvent.pointerEnter(anchor, { pointerType: "mouse" });
     unmount();
     // No state update on an unmounted component, and nothing left to run.
     expect(() => act(() => vi.advanceTimersByTime(300))).not.toThrow();
@@ -86,7 +86,7 @@ describe("RailTooltip", () => {
     const anchor = screen.getByRole("button", {
       name: "History",
     }).parentElement!;
-    fireEvent.mouseEnter(anchor);
+    fireEvent.pointerEnter(anchor, { pointerType: "mouse" });
     act(() => vi.advanceTimersByTime(300));
     expect(screen.queryByText("H")).toBeNull();
   });
@@ -104,15 +104,15 @@ describe("RailTooltip", () => {
     const anchor = screen.getByRole("button", {
       name: "History",
     }).parentElement!;
-    fireEvent.mouseEnter(anchor);
+    fireEvent.pointerEnter(anchor, { pointerType: "mouse" });
     act(() => vi.advanceTimersByTime(300));
     rerender(<Tip disabled={false} />);
     act(() => vi.advanceTimersByTime(300));
     expect(screen.queryByText("H")).toBeNull();
 
     // A pointer that leaves and comes back shows it as usual.
-    fireEvent.mouseLeave(anchor);
-    fireEvent.mouseEnter(anchor);
+    fireEvent.pointerLeave(anchor, { pointerType: "mouse" });
+    fireEvent.pointerEnter(anchor, { pointerType: "mouse" });
     act(() => vi.advanceTimersByTime(260));
     expect(screen.getByText("H")).toBeTruthy();
   });

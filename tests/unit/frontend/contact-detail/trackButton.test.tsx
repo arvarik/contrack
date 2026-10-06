@@ -239,7 +239,7 @@ describe("the menu before the contact is tracked", () => {
     const menu = openMenu("Track, choose how often");
     expect(within(menu).getByText("Keep up")).toBeTruthy();
     // Plain items, not checkboxes: there is no cadence yet to be checked.
-    expect(within(menu).queryAllByRole("menuitemcheckbox")).toHaveLength(0);
+    expect(within(menu).queryAllByRole("menuitemradio")).toHaveLength(0);
     const items = within(menu).getAllByRole("menuitem");
     expect(items.map((item) => item.textContent)).toEqual([
       "Weekly",
@@ -304,7 +304,7 @@ describe("the menu while tracked", () => {
     mount(<TrackButton contact={TRACKED} />);
     const menu = openMenu(/^Tracking/);
     expect(within(menu).getByText("Keep up")).toBeTruthy();
-    const rows = within(menu).getAllByRole("menuitemcheckbox");
+    const rows = within(menu).getAllByRole("menuitemradio");
     expect(rows.map((row) => row.textContent)).toEqual([
       "Weekly",
       "Monthly",
@@ -328,7 +328,7 @@ describe("the menu while tracked", () => {
 
   it("shows a cadence off the list as one more checked row, in its place", () => {
     mount(<TrackButton contact={{ ...TRACKED, cadenceDays: 60 }} />);
-    const rows = within(openMenu(/^Tracking/)).getAllByRole("menuitemcheckbox");
+    const rows = within(openMenu(/^Tracking/)).getAllByRole("menuitemradio");
     expect(rows.map((row) => row.textContent)).toEqual([
       "Weekly",
       "Monthly",
@@ -347,7 +347,7 @@ describe("the menu while tracked", () => {
   it("writes another cadence and toasts the contact and the word", async () => {
     mount(<TrackButton contact={TRACKED} />);
     fireEvent.click(
-      within(openMenu(/^Tracking/)).getByRole("menuitemcheckbox", {
+      within(openMenu(/^Tracking/)).getByRole("menuitemradio", {
         name: "Monthly",
       }),
     );
@@ -365,7 +365,7 @@ describe("the menu while tracked", () => {
   it("does nothing when the current cadence is chosen again", async () => {
     mount(<TrackButton contact={TRACKED} />);
     fireEvent.click(
-      within(openMenu(/^Tracking/)).getByRole("menuitemcheckbox", {
+      within(openMenu(/^Tracking/)).getByRole("menuitemradio", {
         name: "Quarterly",
       }),
     );

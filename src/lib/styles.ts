@@ -429,16 +429,17 @@ export const MENU_PANEL =
  * One row. 44 px tall on a touch screen, a phone on its side too, and 36 px
  * for a mouse. The keyboard ring is
  * drawn inside the row, because the rows touch and an outside ring would be
- * cut off by the panel's edge. The tint on `:focus` (not only
- * `:focus-visible`) is what shows where the arrow keys start after a click
- * opened the menu, since the browser draws no ring for that.
+ * cut off by the panel's edge. With a mouse the tint on `:focus` (not only
+ * `:focus-visible`) shows where the arrow keys start after a click opened
+ * the menu. After a tap it would grey the first row beside the checked one,
+ * so a touch screen tints only for a keyboard.
  */
 export const MENU_ITEM =
-  "w-full min-h-[44px] pointer-fine:min-h-[36px] flex items-center gap-2.5 px-2.5 rounded-md text-sm font-medium text-left text-on-surface transition-colors hover:bg-surface-container-high focus:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary";
+  "w-full min-h-[44px] pointer-fine:min-h-[36px] flex items-center gap-2.5 px-2.5 rounded-md text-sm font-medium text-left text-on-surface transition-colors hover:bg-surface-container-high pointer-fine:focus:bg-surface-container-high focus-visible:bg-surface-container-high focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-primary";
 
 /** A destructive row: the error colour, on its own tint. */
 export const MENU_ITEM_DANGER =
-  "text-error hover:bg-error/10 focus:bg-error/10";
+  "text-error hover:bg-error/10 pointer-fine:focus:bg-error/10 focus-visible:bg-error/10";
 
 /** A row that is the current choice. */
 export const MENU_ITEM_SELECTED = SELECTED_TINT;
@@ -512,4 +513,4 @@ export const ADD_BUTTON_SMALL = cn(ADD_BUTTON, "text-xs px-2 mx-0 py-1");
  * stops iOS zooming in. From `sm` it is 32 px tall with 12 px text.
  */
 export const ADD_FIELD =
-  "min-h-[44px] sm:min-h-[32px] w-40 max-w-full rounded-md bg-surface-container-high px-3 text-base sm:text-xs font-medium text-on-surface placeholder:text-on-surface-variant border-none";
+  "min-h-[44px] sm:pointer-fine:min-h-[32px] w-40 max-w-full rounded-md bg-surface-container-high px-3 text-base sm:text-xs font-medium text-on-surface placeholder:text-on-surface-variant border-none";

@@ -23,9 +23,8 @@ test("the keyboard shortcuts dialog traps focus and returns it on Escape", async
 
   const dialog = page.getByRole("dialog", { name: "Keyboard shortcuts" });
   await expect(dialog).toBeVisible();
-  await expect(
-    dialog.getByRole("button", { name: "Close dialog" }),
-  ).toBeFocused();
+  // A dialog with no field takes focus itself, never on Close.
+  await expect(dialog).toBeFocused();
   await expect(dialog.getByText("Go to Network")).toBeVisible();
 
   await expectFocusStaysWithin(page, dialog, 4);
@@ -64,11 +63,7 @@ test("the new contact form opens on N, names its fields, and closes on Escape", 
   await page.keyboard.press("n");
   const dialog = page.getByRole("dialog", { name: "New contact" });
   await expect(dialog).toBeVisible();
-  await expect(
-    dialog.getByRole("button", { name: "Close dialog" }),
-  ).toBeFocused();
-
-  await page.keyboard.press("Tab");
+  // The first field, so a typed space never presses Close.
   await expect(dialog.getByLabel("Full name")).toBeFocused();
   for (const label of ["Role", "Company", "Email", "Phone", "Location"]) {
     await expect(dialog.getByLabel(label)).toBeVisible();

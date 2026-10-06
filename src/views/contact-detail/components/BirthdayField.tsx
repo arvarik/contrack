@@ -61,7 +61,7 @@ export const BirthdayField = ({
             setIsEditing(false);
           }
         }}
-        className="min-h-[44px] sm:min-h-0 text-sm font-medium bg-surface-container-high rounded-lg px-2 py-1 border-none w-full"
+        className="min-h-[44px] sm:pointer-fine:min-h-0 text-sm font-medium bg-surface-container-high rounded-lg px-2 py-1 border-none w-full"
       />
     );
   }
@@ -70,7 +70,7 @@ export const BirthdayField = ({
 
   return (
     // 44 px tall on a phone, so the row gives the value's tap box room.
-    <div className="flex flex-wrap items-center gap-2 min-h-[44px] sm:min-h-0">
+    <div className="flex flex-wrap items-center gap-2 min-h-[44px] sm:pointer-fine:min-h-0">
       {/* A real button: Enter and Space open the date input with no key
           handler, and `group/edit` shows the pencil on keyboard focus. */}
       <button

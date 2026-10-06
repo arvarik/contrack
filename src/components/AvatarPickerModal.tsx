@@ -212,7 +212,7 @@ export const AvatarPickerModal = ({
               onClick={() => setTab(t)}
               className={cn(
                 tabItem(tab === t),
-                "flex-1 min-h-[44px] sm:min-h-0",
+                "flex-1 min-h-[44px] sm:pointer-fine:min-h-0",
               )}
             >
               {t === "avatar" ? "🎭 Choose avatar" : "📷 Upload image"}

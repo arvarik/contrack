@@ -110,7 +110,7 @@ export const InteractionDetailModal = ({
                         aria-label="Interaction title"
                         value={editingTitle}
                         onChange={(e) => setEditingTitle(e.target.value)}
-                        className="min-h-[44px] sm:min-h-0 text-lg font-bold text-on-surface w-full bg-surface-container-low border border-primary/50 px-2 py-0.5 rounded"
+                        className="min-h-[44px] sm:pointer-fine:min-h-0 text-lg font-bold text-on-surface w-full bg-surface-container-low border border-primary/50 px-2 py-0.5 rounded"
                         placeholder="Interaction title"
                       />
                     ) : (

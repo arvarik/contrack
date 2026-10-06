@@ -4,34 +4,44 @@
 // =============================================================================
 // It shows the mark and the words "No contact selected", and nothing else.
 // The cards it once carried (Up next, Recently viewed, Add people) are gone,
-// and so is the line that told a reader to pick somebody, so this checks
-// that none of it is back: no regions, no buttons, no links, no second line.
+// and so is the line that told a reader to pick somebody. With nobody in the
+// network it shows nothing: the list's own empty state has the bird.
 // =============================================================================
 import { afterEach, describe, expect, it } from "vitest";
 import React from "react";
 import { cleanup, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StartPanel } from "../../../../src/components/layout/StartPanel";
 
 afterEach(() => {
   cleanup();
 });
 
+const renderWith = (contacts: unknown[]) => {
+  const client = new QueryClient();
+  client.setQueryData(["contacts"], contacts);
+  return render(
+    <QueryClientProvider client={client}>
+      <StartPanel />
+    </QueryClientProvider>,
+  );
+};
+
 describe("StartPanel", () => {
-  it("shows the mark and says that no contact is selected", () => {
-    const { container } = render(<StartPanel />);
+  it("shows the mark and says once that no contact is selected", () => {
+    const { container } = renderWith([{ id: "c1", name: "Rowan Vale" }]);
     expect(
       screen.getByRole("heading", { level: 2, name: "No contact selected" }),
     ).toBeTruthy();
     const mark = container.querySelector("svg");
-    expect(mark).not.toBeNull();
     // Decorative: the heading beside it says what the pane is.
     expect(mark?.getAttribute("aria-hidden")).toBe("true");
-    expect(mark?.getAttribute("width")).toBe("144");
+    expect(container.textContent?.trim()).toBe("No contact selected");
   });
 
-  it("says it once: the mark and the heading, and no other words", () => {
-    const { container } = render(<StartPanel />);
-    expect(container.querySelectorAll("p")).toHaveLength(0);
-    expect(container.textContent?.trim()).toBe("No contact selected");
+  it("draws no second bird beside an empty network", () => {
+    const { container } = renderWith([]);
+    expect(container.querySelector("svg")).toBeNull();
+    expect(container.textContent).toBe("");
   });
 });

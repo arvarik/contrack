@@ -8,13 +8,26 @@
  *   <ContextMenu {...contextMenu} onClose={closeContextMenu} />
  *
  * Items follow the ContextMenuItem interface. Separator items have `separator: true`.
+ *
+ * It is a menu like `ActionMenu`: focus moves to the first item when it
+ * opens, the arrows, Home, End and letters move (`moveInMenu`), Escape,
+ * Tab or Android's Back close it, and focus goes back to the row.
  */
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
 import { DURATION, EASE } from "../../lib/motion";
 import { MENU_ITEM, MENU_PANEL, MENU_SEPARATOR } from "../../lib/styles";
+import { focusOnPointer } from "../../lib/a11y";
+import { useCloseRequest } from "../../hooks/useCloseRequest";
+import { moveInMenu } from "./ActionMenu";
 
 interface ContextMenuItem {
   id: string;
@@ -48,24 +61,34 @@ export const ContextMenu = ({
   onClose,
 }: ContextMenuProps) => {
   const menuRef = useRef<HTMLDivElement>(null);
+  /** The row that had focus, where focus goes back when the menu closes. */
+  const opener = useRef<HTMLElement | null>(null);
+  useCloseRequest(isOpen, onClose);
 
-  // Close on outside click or Escape
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    opener.current = document.activeElement as HTMLElement | null;
+    menuRef.current
+      ?.querySelector<HTMLElement>('[role="menuitem"]:not(:disabled)')
+      ?.focus({ preventScroll: true });
+  }, [isOpen]);
+
+  /** Close, and put focus back on the row for a keyboard user. */
+  const closeToOpener = () => {
+    onClose();
+    opener.current?.focus({ preventScroll: true });
+  };
+
+  // Close on an outside click.
   useEffect(() => {
     if (!isOpen) return;
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
     const handleClick = (e: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node))
         onClose();
     };
-    window.addEventListener("keydown", handleKey);
     // Use capture to fire before other handlers
     window.addEventListener("mousedown", handleClick, true);
-    return () => {
-      window.removeEventListener("keydown", handleKey);
-      window.removeEventListener("mousedown", handleClick, true);
-    };
+    return () => window.removeEventListener("mousedown", handleClick, true);
   }, [isOpen, onClose]);
 
   // Clamp to viewport so menu never clips off-screen
@@ -95,18 +118,36 @@ export const ContextMenu = ({
           style={{ position: "fixed", left: adjustedPos.x, top: adjustedPos.y }}
           // The panel without `menu-enter`: Motion animates this one.
           className={cn(MENU_PANEL, "menu-enter-none z-[300] min-w-[180px]")}
+          role="menu"
+          aria-label="Actions"
           onContextMenu={(e) => e.preventDefault()}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              e.preventDefault();
+              closeToOpener();
+            } else if (e.key === "Tab") {
+              onClose();
+            } else {
+              moveInMenu(e, menuRef.current);
+            }
+          }}
         >
           {items.map((item) => {
             if (item.separator) {
-              return <div key={item.id} className={MENU_SEPARATOR} />;
+              return (
+                <div key={item.id} role="none" className={MENU_SEPARATOR} />
+              );
             }
             return (
               <button
                 key={item.id}
+                type="button"
+                role="menuitem"
+                tabIndex={-1}
                 disabled={item.disabled}
+                onPointerMove={focusOnPointer}
                 onClick={() => {
-                  onClose();
+                  closeToOpener();
                   item.onClick?.();
                 }}
                 // A long press opens this on a phone, so rows are 44 px

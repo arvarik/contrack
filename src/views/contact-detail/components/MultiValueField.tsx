@@ -678,7 +678,7 @@ export const MultiValueField = ({
             }}
             placeholder={inputPlaceholder}
             // 16 px on a phone, so iOS does not zoom in on focus.
-            className="flex-1 min-w-[10rem] min-h-[44px] sm:min-h-0 text-base sm:text-sm bg-surface-container-high rounded px-2 py-1 border-none"
+            className="flex-1 min-w-[10rem] min-h-[44px] sm:pointer-fine:min-h-0 text-base sm:text-sm bg-surface-container-high rounded px-2 py-1 border-none"
           />
         </div>
       ) : (

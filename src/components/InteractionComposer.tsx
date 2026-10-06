@@ -604,7 +604,7 @@ const Composer = ({
               // A field draws no `::after`, so the 44 px tap floor on a phone
               // has to be the field's own height. 16 px there stops iOS
               // zooming in.
-              className="flex-1 min-w-0 min-h-[44px] sm:min-h-0 bg-transparent border-none text-base sm:text-xs font-semibold text-on-surface p-0 placeholder:text-on-surface-variant"
+              className="flex-1 min-w-0 min-h-[44px] sm:pointer-fine:min-h-0 bg-transparent border-none text-base sm:text-xs font-semibold text-on-surface p-0 placeholder:text-on-surface-variant"
             />
             {parsedDate && (
               <span className={cn(TAG_PILL, "ml-2 shrink-0")}>
