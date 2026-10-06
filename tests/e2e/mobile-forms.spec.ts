@@ -170,7 +170,7 @@ gatedTest.describe("gated instance", () => {
 
       await submitSignIn(page, ADMIN.username, "not the password");
       await expect(page.getByRole("alert")).toHaveText(
-        "Incorrect username or password.",
+        "Incorrect username or password",
       );
       await expect(page.getByLabel("Password", { exact: true })).toHaveValue(
         "",
