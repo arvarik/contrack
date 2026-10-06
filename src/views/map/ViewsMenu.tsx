@@ -40,8 +40,10 @@ export interface ViewsMenuProps {
  * The saved-views menu. It is not an `ActionMenu` because each row holds
  * three buttons (select, rename, delete), and an `ActionMenu` row is one
  * item. It paints the same panel and rows, and it keeps the promise
- * `role="menu"` makes: the arrows move between the items and wrap, and
- * Escape goes back to the button. A drag, or Alt and an arrow, moves a view.
+ * `role="menu"` makes: it opens with the focus on the view shown (or the
+ * first item), the arrows move between the items and wrap, and Escape goes
+ * back to the button, as every action does. A drag, or Alt and an arrow,
+ * moves a view.
  */
 export const ViewsMenu: React.FC<ViewsMenuProps> = ({
   views,
@@ -68,6 +70,28 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
       ?.focus();
     moved.current = null;
   });
+  // An open menu holds the focus: on the view shown, or the first item.
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const items = containerRef.current?.querySelectorAll<HTMLElement>(
+      '[role="menuitem"]:not([tabindex="-1"])',
+    );
+    const shown = containerRef.current?.querySelector<HTMLElement>(
+      `[data-view-id="${CSS.escape(activeViewId ?? "")}"] button`,
+    );
+    (shown ?? items?.[0])?.focus();
+    // Only as it opens: a view applied while it is open must not move it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  /**
+   * Close and hand the focus back to the button, before the action runs. A
+   * dialog the action opens then returns the focus there too.
+   */
+  const closeMenu = () => {
+    setIsOpen(false);
+    triggerRef.current?.focus();
+  };
 
   useEffect(() => {
     if (!isOpen) return;
@@ -152,7 +176,13 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
         >
           <div role="presentation" className={MENU_HEADING}>
             Saved views
-            {onMoveView && views.length > 1 && " · drag to reorder"}
+            {onMoveView && views.length > 1 && (
+              // A mouse drags. A finger cannot, so a touch screen is not told to.
+              <span className="hidden pointer-fine:inline">
+                {" "}
+                · drag to reorder
+              </span>
+            )}
           </div>
 
           <div className="max-h-60 overflow-y-auto">
@@ -208,8 +238,8 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
                         move(index + (e.key === "ArrowUp" ? -1 : 1));
                       }}
                       onClick={() => {
+                        closeMenu();
                         onSelectView(view);
-                        setIsOpen(false);
                       }}
                       className={cn(
                         MENU_ITEM,
@@ -242,7 +272,7 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
                         tabIndex={-1}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setIsOpen(false);
+                          closeMenu();
                           onStartRename(view);
                         }}
                         aria-label={`Rename ${view.name}`}
@@ -258,7 +288,7 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
                         tabIndex={-1}
                         onClick={(e) => {
                           e.stopPropagation();
-                          setIsOpen(false);
+                          closeMenu();
                           onDeleteView(view);
                         }}
                         aria-label={`Delete ${view.name}`}
@@ -280,7 +310,7 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
             role="menuitem"
             onPointerMove={focusOnPointer}
             onClick={() => {
-              setIsOpen(false);
+              closeMenu();
               onOpenSaveModal();
             }}
             className={cn(MENU_ITEM, "text-primary")}
@@ -297,7 +327,7 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
               role="menuitem"
               onPointerMove={focusOnPointer}
               onClick={() => {
-                setIsOpen(false);
+                closeMenu();
                 onUpdateView(lastView);
               }}
               className={MENU_ITEM}

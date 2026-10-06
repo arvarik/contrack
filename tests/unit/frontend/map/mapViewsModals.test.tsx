@@ -308,8 +308,7 @@ describe("ViewsMenu actions", () => {
     const remove = screen.getByRole("menuitem", { name: "Delete Alpha View" });
     const save = screen.getByRole("menuitem", { name: "Save current view…" });
 
-    // From the trigger, ArrowDown starts at the first item.
-    fireEvent.keyDown(trigger, { key: "ArrowDown" });
+    // It opens with the focus on the first item.
     expect(document.activeElement).toBe(alpha);
 
     // A view's Rename and Delete are items too, so the arrows reach them.

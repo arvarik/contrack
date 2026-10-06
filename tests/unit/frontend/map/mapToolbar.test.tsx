@@ -287,11 +287,13 @@ describe("MapToolbar and useMapFilter", () => {
   });
 
   // The Select menu is an `ActionMenu`: a menu button that opens a named
-  // menu, and choosing an item closes it before the item runs.
-  it("opens the Select menu and runs lasso and all-in-view from its items", () => {
+  // menu, and choosing an item closes it before the item runs. All in view
+  // comes first, the one way without a pointer, and box and lasso show only
+  // under one.
+  it("opens the Select menu and runs all-in-view and lasso from its items", () => {
     const handleLasso = vi.fn();
     const handleInView = vi.fn();
-    renderWithProviders(
+    const { unmount } = renderWithProviders(
       <TestComponent
         onStartLasso={handleLasso}
         onSelectInView={handleInView}
@@ -299,15 +301,25 @@ describe("MapToolbar and useMapFilter", () => {
     );
     const trigger = screen.getByRole("button", { name: "Select contacts" });
     expect(trigger.getAttribute("aria-haspopup")).toBe("menu");
-
     fireEvent.click(trigger);
-    expect(screen.getByRole("menuitem", { name: "Box select" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("menuitem", { name: "Lasso select" }));
-    expect(handleLasso).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("menu")).toBeNull();
-
-    fireEvent.click(trigger);
+    expect(screen.getAllByRole("menuitem").map((i) => i.textContent)).toEqual([
+      "All in view",
+    ]);
     fireEvent.click(screen.getByRole("menuitem", { name: "All in view" }));
     expect(handleInView).toHaveBeenCalledTimes(1);
+    unmount();
+
+    vi.stubGlobal("matchMedia", (query: string) => ({
+      matches: query === "(pointer: fine)",
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    renderWithProviders(<TestComponent onStartLasso={handleLasso} />);
+    fireEvent.click(screen.getByRole("button", { name: "Select contacts" }));
+    expect(screen.getByRole("menuitem", { name: /Box select/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("menuitem", { name: /Lasso select/ }));
+    expect(handleLasso).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("menu")).toBeNull();
+    vi.unstubAllGlobals();
   });
 });

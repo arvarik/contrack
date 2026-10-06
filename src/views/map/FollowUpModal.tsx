@@ -84,13 +84,13 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
         dueAt,
       });
       toast.success(
-        `Added follow-up for ${added} contact${added !== 1 ? "s" : ""}`,
+        `Follow-up added for ${added} contact${added !== 1 ? "s" : ""}`,
       );
       handleClose();
       onSuccess?.();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
-      toast.error(`Failed to add follow-up: ${message}`);
+      toast.error(`Could not add the follow-up: ${message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -104,7 +104,7 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
       <form onSubmit={handleSubmit} className="space-y-4 pt-2">
         <div>
           <label htmlFor="followup-title" className={FORM_LABEL}>
-            Task title *
+            Follow-up *
           </label>
           <input
             id="followup-title"
@@ -112,7 +112,7 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="e.g. Catch up over coffee"
+            placeholder="For example, catch up over coffee"
             className={FORM_INPUT}
           />
         </div>

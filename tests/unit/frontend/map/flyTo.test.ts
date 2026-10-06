@@ -98,6 +98,17 @@ describe("flyToContact", () => {
     expect(map.jumpTo).toHaveBeenCalled();
     vi.unstubAllGlobals();
   });
+
+  it("jumps when the Motion setting says Reduced, whatever the system says", () => {
+    vi.stubGlobal("window", { matchMedia: () => ({ matches: false }) });
+    vi.stubGlobal("document", {
+      documentElement: { getAttribute: () => "reduced" },
+    });
+    const map = mapAtZoom(1);
+    flyToContact(map, LONDON);
+    expect(map.jumpTo).toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
 });
 
 describe("settlePadding", () => {

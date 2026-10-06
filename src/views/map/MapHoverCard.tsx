@@ -386,7 +386,7 @@ export const ClusterPreview = ({
           <p className={MORE}>and {cluster.count - shown.length} more</p>
         )}
         <p className="text-[11px] font-semibold text-primary">
-          {stacked ? "Click to list them" : "Click to zoom in"}
+          {stacked ? "Choose it to list them" : "Choose it to zoom in"}
         </p>
       </div>
     </Popup>

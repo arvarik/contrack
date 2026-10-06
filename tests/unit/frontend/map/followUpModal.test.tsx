@@ -60,7 +60,7 @@ describe("FollowUpModal", () => {
       onSuccess,
     });
 
-    fireEvent.change(screen.getByLabelText(/task title/i), {
+    fireEvent.change(screen.getByRole("textbox", { name: /follow-up/i }), {
       target: { value: "Review proposal" },
     });
     fireEvent.click(screen.getByRole("button", { name: "Add to 2 contacts" }));
@@ -80,7 +80,7 @@ describe("FollowUpModal", () => {
       }),
     );
     expect(toast.success).toHaveBeenCalledWith(
-      "Added follow-up for 2 contacts",
+      "Follow-up added for 2 contacts",
     );
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["actionItems"] });
     expect(onClose).toHaveBeenCalled();
@@ -94,7 +94,7 @@ describe("FollowUpModal", () => {
       contactIds: Array.from({ length: count }, (_, i) => `c-${i}`),
     });
 
-    fireEvent.change(screen.getByLabelText(/task title/i), {
+    fireEvent.change(screen.getByRole("textbox", { name: /follow-up/i }), {
       target: { value: "Mass announcement" },
     });
     const submit = screen.getByRole("button", {
