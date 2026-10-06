@@ -88,7 +88,7 @@ interface ScoredEntry {
   phonetic: string;
   /**
    * Normalized company, or null when the mention named none. `normalizeCompany`
-   * runs thirty-three suffix regexes and is the most expensive step here (217
+   * runs thirty-two suffix regexes and is the most expensive step here (217
    * ms per 50,000 calls, against 41 ms for Double Metaphone), and most mentions
    * carry no company to compare, so it is skipped for them.
    */

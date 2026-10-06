@@ -27,8 +27,8 @@ export const CHARS_PER_TOKEN = 3;
 
 /**
  * The context window, in tokens, of a custom endpoint's model that reports
- * none. Ollama gives a model 4,096 on a machine without a large GPU, and its
- * OpenAI-compatible API cannot ask for more.
+ * none. Ollama 0.35 gives a model 4,096 on a machine without a large GPU, and
+ * its OpenAI-compatible API cannot ask for more.
  */
 export const UNREPORTED_WINDOW_TOKENS = 4_096;
 

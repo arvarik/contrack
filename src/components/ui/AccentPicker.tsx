@@ -1,7 +1,9 @@
 /**
  * Choose the color the app is built around: a radiogroup of presets and a
  * native color well. The swatches show the derived primary, not the raw
- * pick, so a pale yellow shows as the brown-gold the contrast rules make.
+ * pick, so a pale yellow shows as the brown-gold the contrast rules make. The
+ * well is a native `<input type="color">` on purpose: every platform has a
+ * picker people know, and a hand-built one traps the keyboard.
  */
 import { useId, useRef } from "react";
 import { Check } from "lucide-react";

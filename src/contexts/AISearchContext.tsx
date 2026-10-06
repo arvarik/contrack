@@ -233,6 +233,8 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Memoized, so a parent's render does not redraw every consumer.
+  // `startSearch` keeps one identity for the provider's life: it closes over
+  // only the stable `startMutate`.
   const value = useMemo(
     () => ({
       startSearch,

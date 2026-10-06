@@ -12,9 +12,10 @@ import App from "./App.tsx";
 import "./index.css";
 
 /**
- * Data changes only through the app's own mutations, which invalidate what
- * they touch, so there is no refetch on window focus. A query's own
- * staleTime overrides this one (src/lib/queryConfig.ts).
+ * Mutations invalidate what they touch, so there is no refetch on window
+ * focus. Work that runs in the background (connector syncs, research batches,
+ * imports) arrives by polling, each query with its own `refetchInterval`. A
+ * query's own staleTime overrides this one (src/lib/queryConfig.ts).
  */
 const queryClient = new QueryClient({
   defaultOptions: {

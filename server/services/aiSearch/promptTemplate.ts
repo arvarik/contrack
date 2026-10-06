@@ -817,8 +817,8 @@ function findingKey(finding: ResearchFinding): string {
 /**
  * The findings of several answers, with each repeated fact once.
  *
- * A deep run's two asks, and the two asks after a first one that cited nothing,
- * report many of the same facts: 39 of the 437 lines of 13 runs were repeats.
+ * A deep run's two asks, and the plain ask repeated when none answered, report
+ * many of the same facts: 39 of the 437 lines of 13 runs were repeats.
  * Facts that differ only in case, punctuation or small words are one fact. It
  * keeps the copy with a page, else the one with a site, at the place it first
  * appeared.
@@ -898,9 +898,9 @@ export function clipList(value: string, max = ATTRIBUTE_VALUE_MAX): string {
 }
 
 /**
- * An attribute's value, cut rather than refused when it is long. The value
- * joins every item of one kind ("Publications", "Awards"), and a deep run's
- * list can pass 500 characters: refused, the whole entry was lost.
+ * An attribute's value, cut with `clipList` rather than refused when it is
+ * long. The value joins every item of one kind ("Publications", "Awards"), and
+ * a deep run's list can pass the limit. A refused value loses the whole entry.
  */
 const attributeValue = z
   .string()

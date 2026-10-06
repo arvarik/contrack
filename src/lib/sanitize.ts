@@ -1,7 +1,8 @@
 /**
- * The DOMPurify settings for a note's rich text: exactly the tags and
- * attributes the composer writes, so stored HTML cannot carry anything else
- * through to the page.
+ * The DOMPurify settings for a note's rich text: the tags and attributes the
+ * composer writes, so stored HTML cannot carry anything else through to the
+ * page. The composer can also write `h4` to `h6` and `hr`, which this removes:
+ * DOMPurify keeps the text of a removed tag. Any `data-` attribute passes.
  */
 export const TIPTAP_SANITIZE_CONFIG = {
   ALLOWED_TAGS: [

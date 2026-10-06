@@ -124,9 +124,9 @@ function runQueued(
     Number.isFinite(overrideMs) && overrideMs > 0
       ? overrideMs
       : (options.timeoutMs ?? 60_000);
-  // At most 150 s. Contact research asks for 120: at thinking "high", Gemini
-  // 3.8 Flash took from 20 s to more than 75 s on one contact's research
-  // prompt. No other caller asks for more than 90.
+  // At most 150 s. Contact research asks for 120 (`ASK_TIMEOUT_MS`): one
+  // search ask takes from 15 s to more than 80 s. No other caller asks for
+  // more than 90.
   const timeoutMs =
     Number.isFinite(requestedMs) && requestedMs > 0
       ? Math.min(requestedMs, 150_000)

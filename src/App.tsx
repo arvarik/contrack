@@ -249,7 +249,11 @@ const ResponsiveLayout = () => {
     <div className="h-dvh w-full flex flex-col overflow-hidden bg-surface text-on-surface font-body font-medium pt-[env(safe-area-inset-top)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
       <ConnectionBanner />
       <div className="flex-1 min-h-0 flex">
-        {/* The navigation stays mounted at every width, a contact open or not. */}
+        {/*
+          The navigation stays mounted at every width, a contact open or not.
+          Hiding it for an open contact left no navigation between 768 and
+          1023 px (an iPad in portrait), where the tab bar is hidden too.
+        */}
         <SkipLink />
         <div className="hidden md:flex shrink-0">
           <Sidebar />

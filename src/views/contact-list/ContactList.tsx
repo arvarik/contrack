@@ -476,7 +476,8 @@ const ContactRows = ({
     setScrollMargin((previous) =>
       Math.abs(previous - offset) > 1 ? offset : previous,
     );
-    // Each dependency can change the height above the list.
+    // Each dependency can change the height above the list. `children` is new
+    // on each render of the page, so this runs on each render.
   }, [children, recentContacts.length, density, pullDistance, scrollRef]);
 
   /** Bucket → index of its first contact. */
@@ -1198,7 +1199,9 @@ export const ContactList = () => {
           />
         </div>
 
-        {/* In select mode the chips stay, faded and `inert`: removing them
+        {/* Filter chips: All, Tracked, then one per list. The row shows with no
+            lists too, because the Tracked chip is the way into tracking. In
+            select mode the chips stay, faded and `inert`: removing them
             shrinks the header 44 px and moves every row under the finger. */}
         <div
           className={cn(

@@ -278,9 +278,9 @@ export function valuesOf(card: ParsedVCard, name: string): VCardProperty[] {
 /**
  * The first value of one property, unescaped, or null. For simple values
  * only (`FN`, `TITLE`, `NOTE`, `BDAY`). A structured value or a list must be
- * split before it is unescaped, or `N:Smith\; Jr.;Robert;;;` loses its
- * surname. Use {@link firstRaw} with {@link splitComponents} or
- * {@link splitList} for those.
+ * split before it is unescaped, or `N:Smith\; Jr.;Robert;;;` is cut into the
+ * surname "Smith" and the given name " Jr.". Use {@link firstRaw} with
+ * {@link splitComponents} or {@link splitList} for those.
  */
 export function firstValue(card: ParsedVCard, name: string): string | null {
   const raw = firstRaw(card, name);
@@ -389,8 +389,9 @@ interface SplitName {
  * `N` is required, and address books sort by it.
  *
  * Conservative: only "Family, Given" and "Given … Family", and nothing with a
- * semicolon. A wrong guess files somebody under the wrong letter, and an
- * empty N falls back to FN.
+ * semicolon, the format's own separator, which makes a name with one unsafe to
+ * guess. A wrong guess files somebody under the wrong letter, and an empty N
+ * falls back to FN.
  */
 export function splitDisplayName(name: string): SplitName {
   const empty = { given: "", family: "", suffix: "" };

@@ -3,7 +3,8 @@
  * in its memory cache only while something holds it, so a remounted row
  * would read its avatar back from the disk cache a frame late and flash a
  * gray circle. `keepImage` holds each loaded picture in an `Image`, the last
- * `KEEP_LIMIT` of them, oldest dropped first.
+ * `KEEP_LIMIT` of them, oldest dropped first. `decoding="sync"` does not help:
+ * the picture is not there to decode.
  */
 import type { SyntheticEvent } from "react";
 

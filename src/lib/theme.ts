@@ -338,8 +338,10 @@ export function deriveAccent(hex: string, mode: ResolvedMode): AccentTokens {
  * The six colors a contact can be given. Each is one base value, derived the
  * way a chosen accent is, so a vibe meets the same contrast contract in both
  * palettes. A vibe replaces the primary on its contact's page, so every vibe
- * keeps {@link AI_HUE_CLEARANCE} degrees from the AI hue. A stored id that
- * is not here, such as "violet" or "indigo", reads as the first vibe.
+ * keeps {@link AI_HUE_CLEARANCE} degrees from the AI hue. Otherwise the buttons
+ * and links of a violet contact wear the color that means "a model wrote
+ * this", and the AI chips beside them say nothing. A stored id that is not
+ * here, such as "violet" or "indigo", reads as the first vibe.
  */
 export const VIBES: readonly { id: string; label: string; base: string }[] = [
   { id: "brand", label: "Blue", base: DEFAULT_ACCENT },

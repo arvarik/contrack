@@ -37,7 +37,7 @@ const TITLE_SUFFIXES = new Set([
  * NFD splits an accented character into its base letter and a combining mark,
  * and the range below is those marks. Without it, the `[^\w\s'-]` class below
  * would turn every accent into a space ("María García" into ["mar", "a",
- * "garc", "a"]). "ø" and "ł" keep their stroke inside the code point, so NFD
+ * "garc", "a"]). "ø", "ł", "đ", "ß", "æ" and "œ" have no decomposition, so NFD
  * leaves them alone and they are mapped by hand.
  */
 function foldDiacritics(value: string): string {

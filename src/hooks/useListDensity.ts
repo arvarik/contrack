@@ -1,9 +1,9 @@
 /**
  * How tightly the contact list packs its rows. The default row spends 72 px
  * on a 48 px avatar, a name and a company, about eight people per phone
- * screen. Compact about doubles that with the same fields: the avatar
- * shrinks and the padding tightens. Stored on the account, so the choice
- * follows the person to their phone (contexts/PreferencesContext).
+ * screen. Compact rows are 52 px with the same fields, about eleven people:
+ * the avatar shrinks and the padding tightens. Stored on the account, so the
+ * choice follows the person to their phone (contexts/PreferencesContext).
  */
 import { useCallback } from "react";
 import { usePreferences } from "../contexts/PreferencesContext";

@@ -19,12 +19,12 @@ export const NOW_ISO_SQL = `strftime('%Y-%m-%dT%H:%M:%fZ','now')`;
 
 /**
  * `lastContactedAt` is the newest interaction, and never the future. The route
- * refuses a future date with five minutes of clock slack, and `MIN` here closes
- * the slack and any older row ahead of now: `recencyScore` returns 100 for any
- * date at or ahead of now, so a contact stamped ahead would score full marks on
- * a 40 percent signal until its next real interaction. SQLite's two-argument
- * `MIN` returns NULL when either side is NULL, so a contact with no
- * interactions left stays NULL.
+ * refuses a future date with five minutes of clock slack (one day for a date
+ * with no time), and `MIN` here closes the slack and any older row ahead of
+ * now: `recencyScore` returns 100 for any date at or ahead of now, so a contact
+ * stamped ahead would score full marks on a 40 percent signal until its next
+ * real interaction. SQLite's two-argument `MIN` returns NULL when either side
+ * is NULL, so a contact with no interactions left stays NULL.
  *
  * @param contactColumn - Placeholder or literal for the contact id.
  * @param ownerColumn - Placeholder or literal for the owner id.

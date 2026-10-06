@@ -26,8 +26,9 @@ export const useStartAISearch = () => {
        */
       strategy?: "two-pass" | "searxng" | "combined";
     }) => {
-      // A refusal throws `ApiError` with the server's words. A cooldown 429
-      // carries `details.yours` (see `rateLimitFacts`).
+      // A refusal throws `ApiError` with the server's words. A 429 here means
+      // another account's batch holds the research lock, and it carries
+      // `details.yours` (see `rateLimitFacts`).
       const res = await apiFetch(`/ai-search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

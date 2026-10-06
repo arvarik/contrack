@@ -455,7 +455,8 @@ function pendingEmbeddings(scope: Scope): PendingEmbedding[] {
 
 /**
  * Embed one slice and store it. The caller runs this inside the owning
- * account's context, so every provider call bills that account.
+ * account's context, so every provider call is recorded for that account in
+ * `ai_invocations`.
  */
 async function embedAndStore(
   items: PendingEmbedding[],

@@ -134,8 +134,9 @@ export function thinkingLevelFor(
   const generation = config?.generation ?? extractGeneration(model) ?? 0;
   if (generation < 3) return undefined;
   // A caller that asks for a level gets it. On the research prompt, Gemini 3.8
-  // Flash searched 0 of 3 times at "low" and 5 of 5 at "high", so contact
-  // research asks for "medium" with a 16,384-token budget.
+  // Flash searched 0 of 3 times at "low", so contact research asks for
+  // "medium" with a 16,384-token budget. providerSearch.ts says why not
+  // "high".
   if (requested) return requested;
   const cls = config?.modelClass ?? modelClass;
   if (!grounded && cls === "lite") return undefined;

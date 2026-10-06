@@ -13,10 +13,10 @@
  * 4. Choosing an item closes the menu, returns focus to the trigger, then
  *    runs the item, so a dialog it opens has a trigger to return focus to.
  *
- * Items are 44 px tall on a phone, 36 px from `sm`. A `danger` item sits
- * last, under a hairline. The panel is solid (`.menu-panel`) and opens in
- * the top layer (`usePanelPlacement`), where it fits: up when the space
- * below runs out, and in from the window's edge near it.
+ * Items are 44 px tall on a touch screen and 36 px with a mouse. A `danger`
+ * item sits last, under a hairline. The panel is solid (`.menu-panel`) and
+ * opens in the top layer (`usePanelPlacement`), where it fits: up when the
+ * space below runs out, and in from the window's edge near it.
  */
 import { useCloseRequest } from "../../hooks/useCloseRequest";
 import React, {

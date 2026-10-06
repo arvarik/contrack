@@ -400,8 +400,9 @@ export const contacts = sqliteTable("contacts", {
 
 // OWNERSHIP
 //
-// `ownerId` is on eight tables: contacts, lists, interactions, action_items,
-// dedupe_suggestions, dedupe_exclusions, dedupe_merge_log and ai_invocations.
+// `ownerId` is on every table in `OWNED_TABLES` (server/db.ts): contacts,
+// lists, interactions, action_items, dedupe_suggestions, dedupe_exclusions,
+// dedupe_merge_log, ai_invocations and the tables listed after them.
 //
 // THE INVARIANT: after boot, `ownerId` is never NULL. SQLite cannot add a NOT
 // NULL column to an existing table, so triggers give the guarantee.

@@ -223,8 +223,8 @@ async function runEmbed(id: number, job: EmbedJob): Promise<void> {
 
 port.on("message", (message: HostMessage) => {
   // The host drops a canceled job that has not been sent. A running job is not
-  // stopped here: nothing in the product cancels one, and a path with no caller
-  // and no test is worse than none.
+  // stopped here: the host sends the cancel when a caller aborts, and the
+  // worker ignores it, so the job runs to the end.
   if (message.type === "cancel") return;
 
   const { id, job } = message;

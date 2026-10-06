@@ -491,8 +491,8 @@ export function adminRefusal(req: Request): AppError | null {
  * audit log. `adminRefusal` says who passes.
  *
  * Mounted on each admin route, not with `router.use`, so the route manifest
- * test can find it in `route.stack`. That needs a named function declaration:
- * an arrow assigned to a const has an empty `handle.name`.
+ * test can find it in `route.stack` by its `handle.name`. A wrapper such as
+ * `asyncHandler` gives an empty name, so this stays a plain named function.
  */
 export function requireAdmin(
   req: Request,

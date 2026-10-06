@@ -6,8 +6,8 @@
 // Four message kinds: start, progress, result, cancel. The host numbers each
 // job, and every worker message carries its job's id, so two jobs in flight
 // cannot be confused. Canceling happens on the host, which drops a job not yet
-// sent; the worker ignores a cancel for a running job, because nothing in the
-// product cancels one.
+// sent. The worker ignores a cancel for a running job, so that job runs to the
+// end.
 //
 // Two job kinds: `embed` turns text into vectors, and `rerank` scores (query,
 // profile) pairs with a cross-encoder. Both hold an onnxruntime session, so

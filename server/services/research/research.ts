@@ -44,10 +44,10 @@ import type {
 } from "./types.ts";
 
 /**
- * Time allowed for one contact, by depth: the first asks, the two that follow
- * at once when none cites a page, and the extraction. A search ask takes from
- * 15 s to more than 80 s, and one that returns nothing as long. Three asks in a
- * row ran past 240 s; two rounds stay inside it.
+ * Time allowed for one contact, by depth: the first asks, one more plain ask
+ * when none answered, and the extraction. A search ask takes from 15 s to more
+ * than 80 s, and one that returns nothing as long. Three asks in a row ran past
+ * 240 s; two rounds stay inside it.
  */
 export const RESEARCH_TIMEOUT_MS: Record<ResearchDepth, number> = {
   standard: 240_000,

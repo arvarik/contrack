@@ -558,10 +558,12 @@ export function deleteUser(
 /**
  * Remove every row this owner has, in one transaction.
  *
- * The order matters. Four tables have no foreign key to `contacts` or `users`
- * (the two vector tables, the embedding meta table and the merge log), so
- * nothing else removes their rows. Everything else is deleted parent-last, so a
- * cascade never walks a table a statement above already emptied.
+ * The order matters. No cascade clears four tables: the two vector tables and
+ * the embedding meta table have no foreign key, and the merge log has none to
+ * `contacts`. The merge log's `ownerId` does reference `users`, with ON DELETE
+ * RESTRICT, so its rows must go before the user. Everything else is deleted
+ * parent-last, so a cascade never walks a table a statement above already
+ * emptied.
  *
  * 10,000 contacts and 10,000 emails take 147 to 160 ms, against a budget of two
  * seconds. If a much larger account ever exceeds it, chunk the contacts delete

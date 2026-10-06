@@ -94,7 +94,8 @@ morgan.token("url", (req) =>
 
 /**
  * Build the API application: every middleware and router. The caller adds
- * SPA handling, then `finalizeApp` adds the error handler.
+ * `notFoundHandler`, then SPA handling, and `finalizeApp` adds the error
+ * handler last.
  */
 export function createApp(options: CreateAppOptions = {}): express.Express {
   validatePublicUrl(process.env.PUBLIC_URL);

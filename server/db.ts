@@ -219,7 +219,8 @@ export function tableExists(name: string): boolean {
 /**
  * Refuse to start below the release that introduced partition keys. The version
  * has a leading `v` and may have a pre-release suffix (`v0.1.10-alpha.4`), so
- * this compares three integers: as strings, `"v0.1.10" < "v0.1.6"`.
+ * this compares three integers. As strings `"v0.1.10" < "v0.1.6"` is true, and
+ * as versions it is false.
  */
 export function assertVecVersion(version: string, minimum = [0, 1, 6]): void {
   const parts = version
