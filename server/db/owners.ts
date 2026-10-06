@@ -57,7 +57,7 @@ export function ensureLocalOwner(sqlite: Database.Database): string {
   sqlite
     .prepare(
       `INSERT INTO users (id, email, username, displayName, passwordHash, role, credentialState)
-       VALUES (?, 'local@contrack.local', 'local', 'This device', 'none$', 'admin', 'none')`,
+       VALUES (?, 'local@contrack.local', 'local', 'Local account', 'none$', 'admin', 'none')`,
     )
     .run(id);
   log.info("Database", `Created the local owner account (${id})`);

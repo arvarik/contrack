@@ -8,7 +8,7 @@ It also covers your own account, password resets, and what an admin manages.
 ## Sign-in is off by default
 
 Out of the box, Contrack asks no one to sign in. It runs as one built-in
-account, **This device**, which owns your data and is an admin. **Settings →
+account, **Local account**, which owns your data and is an admin. **Settings →
 Account** is not shown, a link to it says **No account needed**, and MCP
 clients connect without a token.
 
@@ -152,7 +152,7 @@ docker exec -it contrack node scripts/reset-password.ts <username-or-email>
 
 The command prints a temporary password. It also signs the account out
 everywhere and stops its API tokens. Use it when you are the only admin and
-you lost your password. The built-in **This device** account has no password
+you lost your password. The built-in **Local account** has no password
 to reset.
 
 After a temporary password, the next sign-in opens **Choose your own
