@@ -18,6 +18,7 @@ import type {
 import { cn } from "../../../lib/utils";
 import type { ResearchAnchor } from "../../../lib/research";
 import { formatDay, formatWhen } from "../../../lib/datetime";
+import { toLocalDay } from "../../../../shared/pulse";
 import {
   startPendingDelete,
   useHiddenPendingIds,
@@ -149,25 +150,15 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
     ai: !!interest.isAiGenerated,
   }));
 
-  // The server reads `isAiGenerated` as a boolean, and the list comes back
-  // with 1 and 0: sent back as numbers, every interest research found lost
-  // its mark on the next edit.
-  const saveInterests = (next: NonNullable<ContactUpdateData["interests"]>) =>
-    updateContact({
-      id: contactId,
-      data: {
-        interests: next.map((item) => ({
-          ...item,
-          isAiGenerated: !!item.isAiGenerated,
-        })),
-      },
-    });
+  const saveInterests = (next: ContactUpdateData["interests"]) =>
+    updateContact({ id: contactId, data: { interests: next } });
 
   const addInterests = (texts: string[]) =>
     saveInterests([
       ...interests,
       ...texts.map((interest) => ({
-        id: crypto.randomUUID(),
+        // Not `crypto.randomUUID`: plain HTTP on a LAN has no secure context.
+        id: Math.random().toString(),
         interest,
         isAiGenerated: false,
       })),
@@ -333,10 +324,13 @@ const NextFollowUp = ({ contactId }: { contactId: string }) => {
   const next = items.find((item) => !item.completedAt && !done.has(item.id));
   if (!next) return null;
 
+  // The local day: the UTC one is the next day on an evening in America.
+  const dueDay = toLocalDay(next.dueAt);
+
   /** A new calendar day, from the field. Unchanged or empty saves nothing. */
   const saveDate = (day: string) => {
     setEditing(false);
-    if (day && day !== next.dueAt.slice(0, 10)) {
+    if (day && day !== dueDay) {
       update.mutate({ id: next.id, data: { dueAt: day } });
     }
   };
@@ -350,7 +344,7 @@ const NextFollowUp = ({ contactId }: { contactId: string }) => {
           // Opened by Change date.
           // eslint-disable-next-line jsx-a11y/no-autofocus
           autoFocus
-          defaultValue={next.dueAt.slice(0, 10)}
+          defaultValue={dueDay}
           // Saves on Enter or when focus leaves: a date field sends a change
           // for each part typed.
           onBlur={(e) => saveDate(e.target.value)}
