@@ -160,6 +160,27 @@ test.describe("Pulse Office", () => {
       .toBe(true);
   });
 
+  test("the Snooze menu snoozes the row to a named day, and Undo puts its date back", async ({
+    page,
+    instance,
+    seed,
+  }) => {
+    const ada = seed.byName("Ada Lovelace");
+    await addActionItem(instance, ada.id, "Snooze me", daysFromNow(-3));
+
+    await page.goto("/pulse");
+    const row = page.getByRole("listitem").filter({ hasText: "Snooze me" });
+    await expect(row).toContainText("3 days overdue");
+    await row.hover();
+    await row.getByRole("button", { name: "Snooze item" }).click();
+    await page.getByRole("menuitem", { name: "Tomorrow" }).click();
+    await expect(page.getByText(/^Follow-up snoozed to /)).toBeVisible();
+    await expect(row).toContainText("Tomorrow");
+
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(row).toContainText("3 days overdue");
+  });
+
   test("Enter on a focused control activates it and never opens the highlighted contact", async ({
     page,
     instance,

@@ -130,6 +130,7 @@ Type a facet name and its colon to see values to pick. The text facets list the 
 | `tag:`       | `tag:investor`     | with a tag that contains the word                                                                        |
 | `score:`     | `score:>70`        | with a score of 70 or more. `score:<40` keeps 40 or less                                                 |
 | `updated:`   | `updated:>6m`      | that nobody edited for more than six months. `updated:<1m` keeps the ones edited in the last month       |
+| `added:`     | `added:<30d`       | added in the last 30 days. `added:>1y` keeps the ones added more than a year ago                         |
 | `contacted:` | `contacted:>90d`   | last contacted more than 90 days ago, or never. See [Last contact](#last-contact)                        |
 | `missing:`   | `missing:email`    | with no `company`, `location`, `email` or `phone`                                                        |
 | `list:`      | `list:investors`   | in a list. Name the list, or write its name with dashes for spaces (`list:board-members`), or use its id |
@@ -152,7 +153,7 @@ Type a facet name and its colon to see values to pick. The text facets list the 
 | `contacted:<30d`  | contacts contacted in the last 30 days                                      |
 | `contacted:never` | contacts with no logged interaction                                         |
 
-The units are `d` (days), `w` (weeks), `m` (30 days) and `y` (365 days). `updated:` takes the same units. A value with no `>` or `<` means `>`. The list of values offers **Within 30 days**, **Over 90 days ago, or never** and **Never**.
+The units are `d` (days), `w` (weeks), `m` (30 days) and `y` (365 days). `updated:` and `added:` take the same units. A value with no `>` or `<` means `>`. The list of values offers **Within 30 days**, **Over 90 days ago, or never** and **Never**.
 
 ## Ask Contrack
 
