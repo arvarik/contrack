@@ -82,14 +82,9 @@ const QUOTED = /^(?:"[^"]+"|“[^“”]+”)$/;
 
 const NICKNAMES = new Set(NICKNAME_GROUPS.flat());
 
-/** Lower case, accents folded, so "José" and "jose" are one token. */
-function fold(text: string): string {
-  return foldName(text);
-}
-
 /** The word tokens of a name or a query, folded. */
 function wordTokens(text: string): string[] {
-  return fold(text).match(/[\p{L}\p{N}]+/gu) ?? [];
+  return foldName(text).match(/[\p{L}\p{N}]+/gu) ?? [];
 }
 
 /**
@@ -151,7 +146,7 @@ export function classifyQuery(
   signals: NameSignals = NO_SIGNALS,
 ): QueryIntent {
   const text = query.trim();
-  const tokens = searchTokens(text).map(fold);
+  const tokens = searchTokens(text).map(foldName);
   const result = (kind: QueryKind): QueryIntent => {
     const local = kind !== "conceptual" && kind !== "mixed";
     const weights = local ? WEIGHTS.local : WEIGHTS[kind];
