@@ -23,7 +23,7 @@ import type {
   ConnectorSummary,
 } from "../../../../shared/connectors";
 import { FORM_INPUT, TONE_WASH } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 
 interface ImapFormModalProps {
   isOpen: boolean;
@@ -118,6 +118,23 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
 
+  /**
+   * The settings the server stores. The test sends the same, because a test
+   * that keeps the saved password must name the saved server and username.
+   */
+  const formConfig = () => ({
+    host: host.trim(),
+    port,
+    secure: port === 993,
+    username: username.trim(),
+    folders: parsedFolders.length ? parsedFolders : ["INBOX"],
+    aliases: parsedAliases,
+    lookbackDays,
+    rollup,
+    ghostThreshold,
+    summaries,
+  });
+
   const handleTest = async () => {
     setFormError(null);
     if (!host.trim()) {
@@ -136,25 +153,16 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
     try {
       const res = await testConnector.mutateAsync({
         kind: "imap",
-        config: {
-          host: host.trim(),
-          port,
-          secure: port === 993,
-          username: username.trim(),
-          folders: parsedFolders.length ? parsedFolders : ["INBOX"],
-          aliases: parsedAliases,
-          lookbackDays,
-          rollup,
-          ghostThreshold,
-          summaries,
-          maxMessagesPerRun: 5000,
-        },
+        config: formConfig(),
+        // Editing with the field empty keeps the saved password, so the
+        // test uses the saved one too.
         secret: password ? { password } : undefined,
+        connectorId: !password && isEditing ? connector?.id : undefined,
       });
       setTestResult({ ok: true, message: res.detail });
       toast.success(res.detail);
     } catch (err) {
-      const msg = (err as Error).message || "Connection test failed";
+      const msg = errorText(err) || "Could not test the connection";
       setTestResult({ ok: false, message: msg });
       toast.error(msg);
     }
@@ -185,19 +193,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
       return;
     }
 
-    const config = {
-      host: trimmedHost,
-      port,
-      secure: port === 993,
-      username: trimmedUsername,
-      folders: parsedFolders.length ? parsedFolders : ["INBOX"],
-      aliases: parsedAliases,
-      lookbackDays,
-      rollup,
-      ghostThreshold,
-      summaries,
-      maxMessagesPerRun: 5000,
-    };
+    const config = formConfig();
 
     try {
       if (isEditing && connector) {
@@ -221,7 +217,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
       }
       onClose();
     } catch (err) {
-      const msg = (err as Error).message || "Failed to save connector";
+      const msg = errorText(err) || "Could not save the connector";
       setFormError(msg);
       toast.error(msg);
     }

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import type { Contact } from "../../../types";
 import { undoMerges, useMergeCluster } from "../../../api";
 import { usePreferences } from "../../../contexts/PreferencesContext";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import { SELECTED_TINT } from "../../../lib/styles";
 import { withUndo } from "../../../lib/undoToast";
 import { suggestKeeper } from "../utils/mergeOutcome";
@@ -74,9 +74,7 @@ export const ManualMerge = () => {
       });
       const undo = withUndo(() => {
         void undoMerges(qc, result.mergeLogIds, false).catch((err: unknown) =>
-          toast.error(
-            `Could not undo: ${err instanceof Error ? err.message : String(err)}`,
-          ),
+          toast.error(`Could not undo: ${errorText(err)}`),
         );
       });
       if (result.merged === 0) {
@@ -99,9 +97,7 @@ export const ManualMerge = () => {
       setPrimaryId(null);
       setStage("select");
     } catch (err: unknown) {
-      toast.error(
-        `Could not merge: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      toast.error(`Could not merge: ${errorText(err)}`);
     }
   }, [primary, others, mergeCluster, qc]);
 

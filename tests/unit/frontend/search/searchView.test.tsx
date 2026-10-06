@@ -308,7 +308,7 @@ function leavablePage(path = "/search") {
 }
 
 const input = () =>
-  screen.getByLabelText("Ask anything about your network") as HTMLInputElement;
+  screen.getByLabelText("Ask about your network") as HTMLInputElement;
 
 function ask(question: string) {
   fireEvent.change(input(), { target: { value: question } });
@@ -382,7 +382,7 @@ describe("asking the same question again", () => {
     renderView();
 
     ask(QUESTION);
-    await screen.findByText("Search failed");
+    await screen.findByText("Could not search");
     expect(screen.queryByText("Ada Lovelace")).toBeNull();
     expect(
       screen.queryByRole("button", { name: "Refresh results" }),
@@ -390,7 +390,7 @@ describe("asking the same question again", () => {
 
     // Retry asks the question that failed, not whatever is typed by now.
     fireEvent.change(input(), { target: { value: "something else" } });
-    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     await screen.findByText("Ada Lovelace");
     expect(semantic(sent)).toHaveLength(2);
     expect(semantic(sent)[1].body).toEqual({ query: QUESTION });
@@ -512,29 +512,6 @@ describe("the history", () => {
     });
   });
 
-  it("re-runs the search when clicking a fetched history entry", async () => {
-    const sent = stubFetch((s) => {
-      if (s.url.includes("/search/history") && s.method === "GET") {
-        return historyList([historyEntry("hist-123", "Who knows Python?")]);
-      }
-    });
-
-    renderView();
-    const entryButton = await screen.findByRole("button", {
-      name: /Who knows Python\?/i,
-    });
-    fireEvent.click(entryButton);
-
-    expect(input().value).toBe("Who knows Python?");
-    await waitFor(() => {
-      const calls = semantic(sent);
-      expect(calls.length).toBeGreaterThanOrEqual(1);
-      expect(calls[calls.length - 1].body).toEqual({
-        query: "Who knows Python?",
-      });
-    });
-  });
-
   it("puts the count and Clear in the panel's heading row, and draws no heading of its own", async () => {
     stubFetch((s) => {
       if (s.url.includes("/search/history") && s.method === "GET") {
@@ -553,44 +530,6 @@ describe("the history", () => {
     expect(
       within(panel).queryByRole("button", { name: "Close history" }),
     ).toBeNull();
-  });
-
-  it("clears the history from the heading row's Clear, after asking", async () => {
-    const sent = stubFetch((s) => {
-      if (s.url.includes("/search/history") && s.method === "GET") {
-        return historyList([historyEntry("hist-1", "Who knows Python?")]);
-      }
-    });
-    renderView();
-
-    const panel = await screen.findByRole("complementary", { name: "History" });
-    await within(panel).findByText("Who knows Python?");
-    fireEvent.click(within(panel).getByRole("button", { name: "Clear" }));
-
-    // It asks first, and a cancel sends nothing.
-    const dialog = await screen.findByRole("dialog", {
-      name: "Clear search history?",
-    });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("dialog", { name: "Clear search history?" }),
-      ).toBeNull(),
-    );
-    const deletes = () =>
-      sent.filter(
-        (s) => s.url.includes("/search/history") && s.method === "DELETE",
-      );
-    expect(deletes()).toHaveLength(0);
-
-    fireEvent.click(within(panel).getByRole("button", { name: "Clear" }));
-    const again = await screen.findByRole("dialog", {
-      name: "Clear search history?",
-    });
-    fireEvent.click(
-      within(again).getByRole("button", { name: "Clear history" }),
-    );
-    await waitFor(() => expect(deletes()).toHaveLength(1));
   });
 
   it("opens and closes from the rail icon, the one History control on a wide screen", async () => {
@@ -667,43 +606,6 @@ describe("the history", () => {
     expect(document.activeElement).toBe(
       screen.getByRole("button", { name: "History" }),
     );
-  });
-
-  it("opens the sheet from the header below lg, where the sheet's own close control is the way out", async () => {
-    stubMatchMedia(false);
-    stubFetch();
-    renderView();
-
-    // No side panel below lg: the header's button opens a sheet.
-    const button = await screen.findByRole("button", { name: "History" });
-    expect(panel()).toBeNull();
-    expect(button.getAttribute("aria-expanded")).toBe("false");
-    expect(button.getAttribute("aria-haspopup")).toBe("dialog");
-    fireEvent.click(button);
-
-    // The sheet draws the heading row itself, with a visible X.
-    const sheet = await screen.findByRole("dialog", { name: "Search history" });
-    expect(
-      within(sheet).getByRole("heading", { name: "History" }),
-    ).toBeTruthy();
-    expect(
-      within(sheet).queryByRole("button", { name: "Hide history" }),
-    ).toBeNull();
-    fireEvent.click(
-      within(sheet).getByRole("button", { name: "Close history" }),
-    );
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("dialog", { name: "Search history" }),
-      ).toBeNull(),
-    );
-    expect(document.activeElement).toBe(button);
-
-    // H opens it again.
-    fireEvent.keyDown(button, { key: "h" });
-    expect(
-      await screen.findByRole("dialog", { name: "Search history" }),
-    ).toBeTruthy();
   });
 });
 

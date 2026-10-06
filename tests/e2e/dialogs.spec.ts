@@ -88,7 +88,7 @@ test("a search result opens a contact dialog that returns focus to the result", 
 
   await page.goto("/search");
   const input = page.getByRole("textbox", {
-    name: "Ask anything about your network",
+    name: "Ask about your network",
   });
   await input.fill("who knows engines");
   await input.press("Enter");

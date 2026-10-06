@@ -115,7 +115,7 @@ describe("the contact page", () => {
       Promise.resolve(Response.json({ error: "boom" }, { status: 500 })),
     );
     mount();
-    const retry = await screen.findByRole("button", { name: "Retry" });
+    const retry = await screen.findByRole("button", { name: "Try again" });
     expect(screen.queryByText("Contact not found")).toBeNull();
 
     // Retry asks again, and this time the contact is gone.

@@ -160,6 +160,27 @@ test.describe("Pulse Office", () => {
       .toBe(true);
   });
 
+  test("the Snooze menu snoozes the row to a named day, and Undo puts its date back", async ({
+    page,
+    instance,
+    seed,
+  }) => {
+    const ada = seed.byName("Ada Lovelace");
+    await addActionItem(instance, ada.id, "Snooze me", daysFromNow(-3));
+
+    await page.goto("/pulse");
+    const row = page.getByRole("listitem").filter({ hasText: "Snooze me" });
+    await expect(row).toContainText("3 days overdue");
+    await row.hover();
+    await row.getByRole("button", { name: "Snooze item" }).click();
+    await page.getByRole("menuitem", { name: "Tomorrow" }).click();
+    await expect(page.getByText(/^Follow-up snoozed to /)).toBeVisible();
+    await expect(row).toContainText("Tomorrow");
+
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(row).toContainText("3 days overdue");
+  });
+
   test("Enter on a focused control activates it and never opens the highlighted contact", async ({
     page,
     instance,
@@ -310,6 +331,12 @@ test.describe("Pulse Office", () => {
     // Current from the start, but nothing looks selected before the
     // keyboard reaches the list.
     await expect(rows.first()).not.toHaveClass(/row-selected/);
+    // The first Tab on a fresh page reaches the skip link. A scroll to the
+    // first row on load used to move the Tab start into the queue.
+    await page.keyboard.press("Tab");
+    await expect(
+      page.getByRole("link", { name: "Skip to main content" }),
+    ).toBeFocused();
 
     // The highlighted row is the list's one tab stop. The control before
     // it in the page is the Keyboard tip in the card's header.
@@ -348,7 +375,7 @@ test.describe("Pulse Office", () => {
     await expect(page).toHaveURL(new RegExp(`/contact/${grace.id}$`));
   });
 
-  test("Tab into another row makes it the current row, tinted and spoken, and a click outside the list takes the tint away", async ({
+  test("the queue is one Tab stop: Tab reaches the current row's controls and leaves, the arrows change the row, and a click outside takes the tint away", async ({
     page,
     instance,
     seed,
@@ -363,18 +390,14 @@ test.describe("Pulse Office", () => {
     await expect(rows.first()).toContainText("Focus row one");
     await expect(rows.nth(1)).toContainText("Focus row two");
 
-    // Tab from the card's Keyboard tip onto the first row, then on through
-    // its controls into the second row. The controls stay in the order.
+    // Tab from the card's Keyboard tip onto the first row. ↓ makes the
+    // second row current, and Tab goes on into that row's controls only.
     await page.getByRole("button", { name: "Keyboard", exact: true }).focus();
     await page.keyboard.press("Tab");
     await expect(rows.first()).toBeFocused();
-    for (let i = 0; i < 6; i++) {
-      await page.keyboard.press("Tab");
-      const inSecond = await rows
-        .nth(1)
-        .evaluate((row) => row.contains(document.activeElement));
-      if (inSecond) break;
-    }
+    await page.keyboard.press("ArrowDown");
+    await expect(rows.nth(1)).toBeFocused();
+    await page.keyboard.press("Tab");
     await expect(
       rows.nth(1).getByRole("button", { name: 'Mark "Focus row two" done' }),
     ).toBeFocused();
@@ -389,6 +412,15 @@ test.describe("Pulse Office", () => {
         .getByRole("status")
         .filter({ hasText: /^Row 2 of \d+, Grace Hopper/ }),
     ).toHaveCount(1);
+
+    // The name and the snooze, and then Tab leaves the list: 38 rows used
+    // to be about 100 Tab stops.
+    for (let i = 0; i < 3; i++) await page.keyboard.press("Tab");
+    expect(
+      await page
+        .getByRole("group", { name: "Up next items" })
+        .evaluate((list) => list.contains(document.activeElement)),
+    ).toBe(false);
 
     // A click outside the list takes the tint away. The row stays current.
     const title = page.getByRole("heading", { level: 1, name: "Pulse" });
@@ -579,14 +611,9 @@ test.describe("Pulse Office", () => {
     expect(inputValue).toBe("industry:Technology");
   });
 
-  test("the Inbox's New people row counts the untracked people added this month and lands on the list at tracked:no", async ({
+  test("the Inbox's New people row counts the untracked people added this month and lands on the list of them", async ({
     page,
-    seed,
   }) => {
-    const ada = seed.byName("Ada Lovelace");
-    const linus = seed.byName("Linus Torvalds");
-    const margaret = seed.byName("Margaret Hamilton");
-
     await page.goto("/pulse");
     const inbox = page.locator('[data-card-id="inbox"]');
     // Six seeded people this month, two of them untracked. Other specs in
@@ -595,21 +622,29 @@ test.describe("Pulse Office", () => {
       name: /^\d+ new this month, \d+ untracked$/,
     });
     await expect(row).toBeVisible();
-    await expect(row).toHaveAttribute("href", "/?q=tracked:no");
+    // The people the row counts: added in 30 days and not tracked. It
+    // opened every untracked contact.
+    const href = `/?q=${encodeURIComponent("added:<30d tracked:no")}`;
+    await expect(row).toHaveAttribute("href", href);
     // The tracking action is the first row.
-    await expect(inbox.getByRole("link").first()).toHaveAttribute(
-      "href",
-      "/?q=tracked:no",
-    );
+    await expect(inbox.getByRole("link").first()).toHaveAttribute("href", href);
 
+    // The list holds exactly the people the row counts.
+    const untracked = Number(
+      /(\d+) untracked$/.exec(
+        (await row.getAttribute("aria-label")) ?? (await row.innerText()),
+      )![1],
+    );
     await row.click();
-    await expect(page).toHaveURL(/\/\?q=tracked:no/);
     const searchInput = page.getByRole("textbox", { name: /search/i });
-    await expect(searchInput).toHaveValue("tracked:no");
-    // The list is the untracked people and none of the tracked.
-    await expect(page.locator(`#contact-row-${linus.id}`)).toBeVisible();
-    await expect(page.locator(`#contact-row-${margaret.id}`)).toBeVisible();
-    await expect(page.locator(`#contact-row-${ada.id}`)).toHaveCount(0);
+    await expect(searchInput).toHaveValue("added:<30d tracked:no");
+    await expect(
+      page
+        .locator("#contact-list")
+        .getByText(`${untracked} ${untracked === 1 ? "match" : "matches"}`, {
+          exact: true,
+        }),
+    ).toBeVisible();
   });
 
   test("the masthead holds no form, and the insight is one line with the next step", async ({
@@ -625,7 +660,7 @@ test.describe("Pulse Office", () => {
     // next step by role, on the page surface and not in a card.
     const insight = page.locator('[data-card-id="insight"]');
     await expect(insight).toHaveText(
-      /Add an AI key to get one\.|Your admin has not added an AI key yet/,
+      /Set up a Fast model to get one\.|Your admin has not set up AI yet/,
     );
     const insightSurface = await insight.evaluate((el) => el.className);
     expect(insightSurface).not.toContain("bg-surface-container-lowest");
@@ -740,16 +775,19 @@ test.describe("Pulse Office", () => {
     await page.goto("/pulse");
     await expect(page.locator('[data-card-id="keeping-up"]')).toBeVisible();
 
-    // Every card keeps its place and its height when the controls appear.
-    // A card's header keeps its 24 px row, and a line keeps its words'
-    // place with the controls over the end of its title's row.
+    // Every card keeps its height and its place beside the others when the
+    // controls appear. A card's header keeps its 24 px row, and a line keeps
+    // its words' place with the controls over the end of its title's row.
+    // The bar and the columns' names come in over the cards, so every card
+    // moves down by the same distance.
     const boxes = () =>
-      page.locator("section[data-card-id]").evaluateAll((sections) =>
-        sections.map((section) => {
+      page.locator("section[data-card-id]").evaluateAll((sections) => {
+        const first = sections[0].getBoundingClientRect().top;
+        return sections.map((section) => {
           const box = section.getBoundingClientRect();
-          return `${section.getAttribute("data-card-id")} ${Math.round(box.top)} ${Math.round(box.height)}`;
-        }),
-      );
+          return `${section.getAttribute("data-card-id")} ${Math.round(box.top - first)} ${Math.round(box.left)} ${Math.round(box.height)}`;
+        });
+      });
     // The insight and the activity arrive after the page, and a card that
     // is still loading is not the height of the card it becomes. Measure
     // once both have landed.
@@ -760,7 +798,7 @@ test.describe("Pulse Office", () => {
     ).toHaveCount(0);
     await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
     await expect(page.locator('[data-card-id="insight"]')).toHaveText(
-      /Add an AI key to get one\.|Your admin has not added an AI key yet/,
+      /Set up a Fast model to get one\.|Your admin has not set up AI yet/,
     );
     await expect(
       page.locator('[data-card-id="activity"]').locator('svg[role="img"]'),
@@ -784,20 +822,31 @@ test.describe("Pulse Office", () => {
       name: "Hide Keeping up",
     });
     await expect(hideKeepingUpBtn).toBeVisible();
-    await hideKeepingUpBtn.click();
+    await hideKeepingUpBtn.focus();
+    await page.keyboard.press("Enter");
 
-    // Card is hidden from column, appears in hidden tray
+    // Card is hidden from column, appears in hidden tray, and the tray's
+    // Show takes the focus the eye had, so Enter again brings it back.
     await expect(
       page.locator('.grid [data-card-id="keeping-up"]'),
     ).not.toBeVisible();
     const hiddenTray = page.getByTestId("hidden-cards-tray");
     await expect(hiddenTray).toBeVisible();
     await expect(hiddenTray.getByText("Keeping up")).toBeVisible();
+    await expect(
+      hiddenTray.getByRole("button", { name: "Show Keeping up" }),
+    ).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(hideKeepingUpBtn).toBeFocused();
+    await hideKeepingUpBtn.click();
+    await expect(hiddenTray).toBeVisible();
 
-    // Click Done
+    // Done ends customize mode, and focus goes to the More menu.
     const doneBtn = page.getByRole("button", { name: "Done", exact: true });
-    await doneBtn.click();
+    await doneBtn.focus();
+    await page.keyboard.press("Enter");
     await expect(page.getByText("Editing layout")).not.toBeVisible();
+    await expect(page.getByRole("button", { name: "More" })).toBeFocused();
 
     // Reload page, verify Keeping up is still hidden
     await page.reload();
@@ -811,8 +860,10 @@ test.describe("Pulse Office", () => {
     const resetBtn = page.getByRole("button", { name: "Reset layout" });
     await resetBtn.click();
 
-    // The Keeping up card is restored to its column
+    // The Keeping up card is restored to its column, and the toast's Undo
+    // could take the reset back.
     await expect(page.locator('[data-card-id="keeping-up"]')).toBeVisible();
+    await expect(page.getByText("Layout reset to default")).toBeVisible();
 
     // Click Done to finish
     await page.getByRole("button", { name: "Done", exact: true }).click();
@@ -905,7 +956,7 @@ test.describe("Pulse Office", () => {
     await page.keyboard.press("Space");
     await expect(
       page.getByText(
-        "Picked up Keeping up. It is in Network, position 1 of 2.",
+        "Picked up Keeping up. It is in Network column, position 1 of 2.",
       ),
     ).toBeAttached();
     await expect(page.locator('[data-flip-id="keeping-up"]')).toHaveClass(
@@ -914,11 +965,11 @@ test.describe("Pulse Office", () => {
     await page.evaluate(() => new Promise((r) => setTimeout(r, 0)));
     await page.keyboard.press("ArrowDown");
     await expect(
-      page.getByText("Keeping up moves to Network, position 2 of 2."),
+      page.getByText("Keeping up moves to Network column, position 2 of 2."),
     ).toBeAttached();
     await page.keyboard.press("Space");
     await expect(
-      page.getByText("Dropped Keeping up in Network, position 2 of 2."),
+      page.getByText("Dropped Keeping up in Network column, position 2 of 2."),
     ).toBeAttached();
     // Focus comes back to the grip, in the card's new place.
     await expect(
@@ -1022,7 +1073,7 @@ test.describe("Pulse Office", () => {
     );
     const preview = page.locator("[data-drag-preview]");
     await expect(preview).toContainText("Keeping up");
-    await expect(preview).toContainText("Network · 1 of 2");
+    await expect(preview).toContainText("Network column · 1 of 2");
 
     // Into Intelligence, over the top of Coming up: the gap opens there,
     // before Coming up, while the card is still in the air.
@@ -1046,7 +1097,7 @@ test.describe("Pulse Office", () => {
       .toBe(1);
     const order = await intelOrder();
     await expect(preview).toContainText(
-      `Intelligence · ${order.indexOf("keeping-up") + 1} of ${order.length}`,
+      `Intelligence column · ${order.indexOf("keeping-up") + 1} of ${order.length}`,
     );
     await page.mouse.up();
 
@@ -1167,7 +1218,7 @@ test.describe("Pulse on a phone", () => {
     await expect(page.getByTestId("hidden-cards-tray")).toHaveCount(0);
     await expect(
       page.getByText(
-        "Hold a card's handle, then drag it. Use the eye to hide one",
+        "Move a card by its handle or its Move menu. Use the eye to hide one",
       ),
     ).toBeVisible();
     await page.getByRole("button", { name: "Hide Keeping up" }).click();

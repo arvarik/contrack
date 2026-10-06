@@ -39,6 +39,8 @@ import { SIDE_PANEL_SCROLLER } from "../../components/layout/SidePanel";
 import { cn } from "../../lib/utils";
 import { HistoryEntryRow } from "./HistoryEntryRow";
 import { groupHistoryEntries } from "./historyGroups";
+import { NO_AUTOCORRECT } from "../../components/ui/SearchField";
+import { ClearButton } from "../../components/ui/SearchField";
 
 /** What a frame with its own heading row places. */
 interface HistoryPaneParts {
@@ -204,20 +206,17 @@ export const HistoryPane = ({
             }}
             placeholder="Filter questions"
             aria-label="Filter history"
+            {...NO_AUTOCORRECT}
             className="w-full pl-9 pr-8 py-1.5 text-sm bg-surface-container-highest rounded-xl border-none text-on-surface placeholder:text-on-surface-variant"
           />
           {filterText.length > 0 && (
-            <button
-              type="button"
+            <ClearButton
+              label="Clear filter text"
               onClick={() => {
                 setFilterText("");
                 filterInputRef.current?.focus();
               }}
-              aria-label="Clear filter text"
-              className={cn(ICON_BTN, "absolute right-2 p-1 cursor-pointer")}
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
+            />
           )}
         </div>
 

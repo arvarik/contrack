@@ -61,6 +61,7 @@ import { aiSetupLine, useBlockedAi } from "../../../hooks/useAiSetup";
 import { withUndo } from "../../../lib/undoToast";
 import { VibePickerPopover } from "./VibePickerPopover";
 import type { ProfileHeaderProps } from "./ProfileHeader";
+import { errorText } from "../../../lib/utils";
 
 /** Name, emails and phones: enough to reach the person. */
 function basicDetailsText(contact: Contact): string {
@@ -190,7 +191,7 @@ export const ContactActionsMenu = ({
   };
 
   const failed = (what: string) => (err: Error) =>
-    toast.error(`Could not ${what}: ${err.message}`);
+    toast.error(`Could not ${what}: ${errorText(err)}`);
 
   // Each way, with Undo, in the words the Network list's Archive uses.
   const archive = () =>

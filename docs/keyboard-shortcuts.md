@@ -119,9 +119,9 @@ the notifications, where **Undo** waits for 10 seconds after a change. After
 
 ## Pulse
 
-These work on the **Pulse** page. `↑` and `↓` work once a row in **Up next**
-has focus, so press `Tab` to reach the queue first. `Enter` on a focused row
-opens its contact. On a button, a link or a menu item, `Enter` does what that
+These work on the **Pulse** page. **Up next** is one `Tab` stop: `↑` and `↓`
+work once its row has focus, so press `Tab` to reach the queue first. `Enter`
+on a focused row opens its contact. On a button, a link or a menu item, `Enter` does what that
 control does. See [The Pulse page](pulse.md#the-pulse-page).
 
 | Keys       | What it does                                  | Single key |
@@ -172,21 +172,24 @@ menu key, and choose **Move left** or **Move right**. See
 
 These work on the **Map** page, also while a contact is open over the map.
 `Enter` and `Space` work on a pin that has focus: `Enter` opens the contact,
-and `Space` moves into its card's buttons. The single keys do nothing while a
-menu is open or a dialog has the focus. See
+and `Space` moves into its card's buttons. On a narrow window, or beside an
+open contact, `/` opens **Filters**. In **Go to**, `Enter` or `Esc` puts focus
+back in the filter box, and `Esc` on a stack's list puts it back on the
+stack. The single keys do nothing while a menu is open or a dialog has the
+focus. See
 [Select contacts on the map](map.md#select-contacts-on-the-map).
 
-| Keys    | What it does                              | Single key |
-| ------- | ----------------------------------------- | ---------- |
-| `/`     | Focus search                              | Yes        |
-| `F`     | Fit all in view                           | Yes        |
-| `I`     | Toggle insights pane                      | Yes        |
-| `L`     | Lasso select                              | Yes        |
-| `Esc`   | Close the contact, or clear the selection | No         |
-| `Enter` | Open contact                              | No         |
-| `Space` | Card actions                              | No         |
-| `⌥ ↑`   | Move a view up, in Views                  | No         |
-| `⌥ ↓`   | Move a view down, in Views                | No         |
+| Keys    | What it does                                                    | Single key |
+| ------- | --------------------------------------------------------------- | ---------- |
+| `/`     | Focus the filter box                                            | Yes        |
+| `F`     | Fit all in view                                                 | Yes        |
+| `I`     | Toggle insights pane                                            | Yes        |
+| `L`     | Lasso select                                                    | Yes        |
+| `Esc`   | Clear the filter box, close the contact, or clear the selection | No         |
+| `Enter` | Open contact                                                    | No         |
+| `Space` | Card actions                                                    | No         |
+| `⌥ ↑`   | Move a view up, in Views                                        | No         |
+| `⌥ ↓`   | Move a view down, in Views                                      | No         |
 
 ## Contact
 
@@ -210,29 +213,34 @@ arrow keys scroll it. See
 ## Ask Contrack
 
 These work on the **Ask Contrack** page, in **People** and in **Notes** mode.
-`H` shows or hides the history. `Esc` clears the search box. See
+`H` shows or hides the history. `Esc` clears the search box. The results are
+one `Tab` stop, and the arrows, `Home` and `End` move between them. See
 [History](search.md#history).
 
-| Keys  | What it does          | Single key |
-| ----- | --------------------- | ---------- |
-| `/`   | Focus search          | Yes        |
-| `H`   | Toggle search history | Yes        |
-| `Esc` | Clear the search      | No         |
+| Keys       | What it does          | Single key |
+| ---------- | --------------------- | ---------- |
+| `/`        | Focus search          | Yes        |
+| `H`        | Toggle search history | Yes        |
+| `Esc`      | Clear the search      | No         |
+| `↑` or `↓` | Move between results  | No         |
 
 ## Possible duplicates
 
 These work on the **Possible duplicates** page. Open it with **Review them**
 on **Settings → Duplicates**, or from the **Inbox** card on **Pulse**. In **Contact to keep**, the arrows choose the contact, and the
-letters still decide. See
+letters still decide. A **Check carefully** group never merges from one key:
+the first `L` or `→` opens its comparison with focus on **Merge**, and a
+second `L` or `Enter` merges. The letters work with Caps Lock on. In **Manual
+merge**, `↓` in the search box goes to the first contact. See
 [Review possible duplicates](duplicates.md#review-possible-duplicates).
 
-| Keys       | What it does                   | Single key |
-| ---------- | ------------------------------ | ---------- |
-| `↓` or `J` | Next group                     | The letter |
-| `↑` or `K` | Previous group                 | The letter |
-| `→` or `L` | Merge into the contact to keep | The letter |
-| `←` or `H` | Keep them separate             | The letter |
-| `Z`        | Undo the last decision         | Yes        |
+| Keys       | What it does                                                              | Single key |
+| ---------- | ------------------------------------------------------------------------- | ---------- |
+| `↓` or `J` | Next group                                                                | The letter |
+| `↑` or `K` | Previous group                                                            | The letter |
+| `→` or `L` | Merge into the contact to keep. A Check carefully group takes two presses | The letter |
+| `←` or `H` | Keep them separate                                                        | The letter |
+| `Z`        | Undo the last decision                                                    | Yes        |
 
 ## Other keys
 

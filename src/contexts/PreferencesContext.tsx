@@ -45,6 +45,7 @@ import {
   type PreferencesResponse,
 } from "../api/preferences";
 import { applyTheme, readThemeCache, type ResolvedMode } from "../lib/theme";
+import { errorText } from "../lib/utils";
 
 const QUERY_KEY = ["preferences"] as const;
 
@@ -168,11 +169,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       if (context?.previous) {
         queryClient.setQueryData(QUERY_KEY, context.previous);
       }
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : "Failed to save preference. Changes reverted",
-      );
+      toast.error(`Could not save the setting: ${errorText(err)}`);
     },
     onSuccess: (response) => {
       queryClient.setQueryData<PreferencesResponse>(QUERY_KEY, (current) => {
@@ -209,11 +206,7 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
       if (context?.previous) {
         queryClient.setQueryData(QUERY_KEY, context.previous);
       }
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : "Failed to reset preference. Changes reverted",
-      );
+      toast.error(`Could not reset the setting: ${errorText(err)}`);
     },
     onSuccess: (response) => {
       queryClient.setQueryData<PreferencesResponse>(QUERY_KEY, (current) => {

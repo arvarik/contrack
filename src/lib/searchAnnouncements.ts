@@ -16,11 +16,7 @@
  *
  * @module lib/searchAnnouncements
  */
-
-/** "1 match" / "3 matches". */
-function plural(count: number, singular: string, pluralForm: string) {
-  return `${count} ${count === 1 ? singular : pluralForm}`;
-}
+import { plural } from "./utils";
 
 const quoted = (query: string) => `“${query.trim()}”`;
 

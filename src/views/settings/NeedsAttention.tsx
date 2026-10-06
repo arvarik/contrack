@@ -20,7 +20,7 @@ import { ChevronRight, Copy, UploadCloud } from "lucide-react";
 import { useDedupeCount } from "../../api";
 import { useImports } from "../../api/imports";
 import { TONE_WASH } from "../../lib/styles";
-import { cn } from "../../lib/utils";
+import { cn, plural } from "../../lib/utils";
 import { SETTINGS_SECTION_HEADING } from "./layout";
 import { SlideLink } from "./slide";
 
@@ -50,9 +50,6 @@ export function useAttentionCounts() {
 
   return { duplicates, failedImports };
 }
-
-const plural = (count: number, one: string, many: string) =>
-  `${count} ${count === 1 ? one : many}`;
 
 export const NeedsAttention = () => {
   const { duplicates, failedImports } = useAttentionCounts();
@@ -86,7 +83,7 @@ export const NeedsAttention = () => {
   return (
     <section aria-label="Needs attention">
       <h2 className={SETTINGS_SECTION_HEADING}>Needs attention</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {items.map((item) => {
           const Icon = item.icon;
           return (
@@ -100,7 +97,8 @@ export const NeedsAttention = () => {
               >
                 <Icon className="w-4 h-4" />
               </span>
-              <span className="font-semibold text-sm truncate flex-1">
+              {/* Wraps rather than cuts: the count is the point of the tile. */}
+              <span className="font-semibold text-sm text-pretty min-w-0 flex-1">
                 {item.label}
               </span>
               <ChevronRight className="w-4 h-4 text-primary shrink-0" />

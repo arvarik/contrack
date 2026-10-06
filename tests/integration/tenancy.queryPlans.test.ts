@@ -293,24 +293,6 @@ const CASES: PlanCase[] = [
     index: /USING (?:COVERING )?INDEX idx_action_items_owner_done/,
   },
   {
-    label: "urgent action item count",
-    source: "server/services/actionItemService.ts getUrgentCount",
-    sql: `
-      SELECT COUNT(*) as count
-      FROM action_items ai
-      JOIN contacts c ON ai.contactId = c.id
-      WHERE ai.ownerId = ?
-        AND ai.completedAt IS NULL
-        AND date(ai.dueAt) <= date('now')
-        AND (c.isArchived = 0 OR c.isArchived IS NULL)`,
-    params: () => [ownerA],
-    index: /USING (?:COVERING )?INDEX idx_action_items_owner_(?:due|done)/,
-    note:
-      "`date(ai.dueAt)` wraps the column, so the second column of the " +
-      "partial `_owner_due` cannot answer the range. That leaves the two " +
-      "indexes even on the owner alone, and either is an owner seek.",
-  },
-  {
     label: "lists",
     source: "server/services/listService.ts getAllLists",
     sql: `
@@ -419,9 +401,26 @@ const CASES: PlanCase[] = [
   {
     label: "dashboard activity query",
     source: "server/services/dashboardService.ts getActivity",
-    sql: `SELECT date, type, source FROM interactions WHERE ownerId = ? AND date >= ? ORDER BY date ASC`,
+    sql: `SELECT date, type FROM interactions WHERE ownerId = ? AND date >= ?`,
     params: () => [ownerA, "2026-01-01"],
     index: /USING (?:COVERING )?INDEX idx_interactions_owner_date/,
+  },
+  {
+    label: "follow-ups done since yesterday",
+    source: "server/services/dashboardService.ts getActivity",
+    sql: `SELECT completedAt FROM action_items WHERE ownerId = ? AND completedAt >= ?`,
+    params: () => [ownerA, "2026-01-01"],
+    index: /USING (?:COVERING )?INDEX idx_action_items_owner_done/,
+  },
+  {
+    label: "meetings in the coming week",
+    source: "server/services/dashboardService.ts getDashboardPayload",
+    sql: `
+      SELECT title, startsAt, endsAt, contactIds FROM upcoming_events
+      WHERE ownerId = ? AND startsAt >= ? AND startsAt < ?
+      ORDER BY startsAt ASC`,
+    params: () => [ownerA, "2026-01-01", "2026-01-10"],
+    index: /USING (?:COVERING )?INDEX idx_upcoming_owner_start/,
   },
 ];
 

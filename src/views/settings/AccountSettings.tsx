@@ -77,6 +77,8 @@ import {
   SETTINGS_PAGE,
   SETTINGS_SECTION_HEADING,
 } from "./layout";
+import { LoadFailed } from "../../components/ui/LoadFailed";
+import { NO_AUTOCORRECT } from "../../components/ui/SearchField";
 
 /** The tile beside a session or a token: the primary wash with its ink. */
 const ROW_ICON = cn(
@@ -415,9 +417,7 @@ const ProfileCard = () => {
         onChange={(e) => setUsername(e.target.value)}
         hint="You can sign in with this or your email"
         autoComplete="username"
-        autoCapitalize="none"
-        autoCorrect="off"
-        spellCheck={false}
+        {...NO_AUTOCORRECT}
       />
       <Field
         id="account-email"
@@ -426,9 +426,7 @@ const ProfileCard = () => {
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         autoComplete="email"
-        autoCapitalize="none"
-        autoCorrect="off"
-        spellCheck={false}
+        {...NO_AUTOCORRECT}
       />
       <div className="flex justify-end">
         <SaveButton busy={save.isPending} disabled={!dirty}>
@@ -461,7 +459,7 @@ const PasswordCard = () => {
       // Worth saying out loud: the server ends every other session on a
       // password change, and someone who does not know that will wonder why
       // their phone signed out.
-      toast.success("Password changed — other devices have been signed out");
+      toast.success("Password changed. Your other devices are signed out");
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -543,7 +541,7 @@ const SessionRow = ({ session }: { session: SessionSummary }) => (
 
 const SessionsCard = () => {
   const queryClient = useQueryClient();
-  const { data, isLoading } = useQuery(sessionsQuery);
+  const { data, isLoading, isError, refetch } = useQuery(sessionsQuery);
 
   const revoke = useMutation({
     mutationFn: revokeOtherSessions,
@@ -565,6 +563,12 @@ const SessionsCard = () => {
     <div className={cn(SETTINGS_CARD, "space-y-4")}>
       {isLoading ? (
         <p className="text-sm text-on-surface-variant">Loading devices…</p>
+      ) : isError ? (
+        <LoadFailed
+          what="your devices"
+          onRetry={() => void refetch()}
+          level={3}
+        />
       ) : (
         <ul className="space-y-4">
           {sessions.map((session) => (
@@ -850,7 +854,7 @@ const ApiTokensCard = () => {
   const [creating, setCreating] = useState(false);
   const [revoking, setRevoking] = useState<ApiTokenSummary | null>(null);
 
-  const { data, isLoading } = useQuery(tokensQuery);
+  const { data, isLoading, isError, refetch } = useQuery(tokensQuery);
 
   const revoke = useMutation({
     mutationFn: (id: string) => revokeApiToken(id),
@@ -889,6 +893,14 @@ const ApiTokensCard = () => {
         <p className="px-4 sm:px-6 py-6 text-sm text-on-surface-variant">
           Loading tokens…
         </p>
+      ) : isError ? (
+        <div className="px-4 sm:px-6 py-6">
+          <LoadFailed
+            what="your tokens"
+            onRetry={() => void refetch()}
+            level={3}
+          />
+        </div>
       ) : tokens.length === 0 ? (
         <p className="px-4 sm:px-6 py-6 text-sm text-on-surface-variant text-pretty">
           No tokens yet. Create one when you connect an MCP client or a script
@@ -925,7 +937,7 @@ const ApiTokensCard = () => {
               <strong className="text-on-surface">{revoking?.name}</strong>{" "}
               {revoking?.kind === "oauth"
                 ? "stops working immediately. To use it again, connect it again from the app"
-                : "stops working immediately. Anything using it — a script, an MCP client — starts failing on its next request"}
+                : "stops working immediately. A script or an MCP client that uses it fails on its next request"}
             </p>
             <p>
               The entry stays in this list, marked revoked, so you can see what
@@ -956,7 +968,8 @@ export const AccountSettings = () => {
             <>
               This Contrack does not ask anyone to sign in, so there is no
               account to manage. Set <code>AUTH_REQUIRED=true</code> on the
-              server to ask for one, and everything here comes with you
+              server to ask for one. The first account then keeps every contact
+              already here
             </>
           }
         />
@@ -1004,15 +1017,15 @@ export const AccountSettings = () => {
             )}
           >
             <p className="text-sm text-on-surface-variant text-pretty">
-              How long a sign-in lasts applies to every account on this
-              instance, so it is set under Administration
+              How long a sign-in lasts applies to every account, so it is set in
+              Settings → General
             </p>
             <Link
               to="/settings/admin/general#session-length"
               className="btn-secondary shrink-0"
             >
               <ServerCog className="w-4 h-4" />
-              Instance settings
+              Open General
             </Link>
           </div>
         </Section>

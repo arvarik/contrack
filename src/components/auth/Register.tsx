@@ -11,11 +11,8 @@
  */
 import React, { useState } from "react";
 import { Loader2, UserPlus } from "lucide-react";
-import { toast } from "sonner";
 import { registerAccount } from "../../api/auth";
-import { isNetworkError } from "../../api/client";
-import { rateLimitMessage } from "../../lib/rateLimitMessage";
-import { AuthShell, AuthSubmit, AuthError } from "./AuthShell";
+import { AuthShell, AuthSubmit, AuthError, authErrorText } from "./AuthShell";
 import {
   AccountFields,
   createAccountThenPhoto,
@@ -47,25 +44,13 @@ export const Register = ({
     setBusy(true);
     setFormError(null);
     try {
-      const { photoFailed } = await createAccountThenPhoto(
+      await createAccountThenPhoto(
         () => registerAccount(form.payload()),
         form.photo,
       );
-      if (photoFailed) {
-        toast.error(
-          "Your account is ready. The photo did not upload. Add it in Settings > Account",
-        );
-      }
       onRegistered();
     } catch (err) {
-      setFormError(
-        isNetworkError(err)
-          ? "Can't reach the Contrack server. Is it running?"
-          : (rateLimitMessage(err) ??
-              (err instanceof Error
-                ? err.message
-                : "Could not create the account")),
-      );
+      setFormError(authErrorText(err, "Could not create the account"));
       setBusy(false);
     }
   };
@@ -73,7 +58,7 @@ export const Register = ({
   return (
     <AuthShell
       title="Create an account"
-      subtitle="This Contrack is open to new accounts. Yours starts empty — nobody else's contacts are in it, and yours are not in theirs"
+      subtitle="This Contrack is open to new accounts. Yours starts empty. No one else's contacts are in it, and yours are not in theirs"
       onSubmit={handleSubmit}
       footer={
         <>

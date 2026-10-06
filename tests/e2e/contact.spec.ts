@@ -1001,8 +1001,8 @@ test.describe("tracking", () => {
       await expect(main.getByRole("button", { name: "Done" })).toBeFocused();
       const bar = page.getByRole("toolbar", { name: "Bulk actions" });
       await expect(bar).toBeVisible();
-      // Nobody is picked: all three of the bar's buttons wait.
-      for (const name of ["Track", "Untrack", "Cadence"]) {
+      // No one is picked: all three of the bar's buttons wait.
+      for (const name of ["Track", "Stop tracking", "Cadence"]) {
         await expect(
           bar.getByRole("button", { name, exact: true }),
         ).toBeDisabled();

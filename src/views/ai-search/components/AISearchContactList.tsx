@@ -96,13 +96,14 @@ export function ContactRow({
           <ScoreRingAvatar contact={contact} size={40} ring="list" decorative />
         </div>
 
-        {/* Info */}
+        {/* Info. The name and the line under it wrap: on a phone the row
+            cut both to a few letters. */}
         <div className="flex-1 min-w-0">
-          <span className="font-semibold text-sm text-on-surface truncate block text-left">
+          <span className="font-semibold text-sm text-on-surface break-words block text-left">
             {contact.name}
           </span>
           {(contact.role || contact.company) && (
-            <p className="text-xs text-on-surface-variant mt-0.5 truncate">
+            <p className="text-xs text-on-surface-variant mt-0.5 break-words">
               {[contact.role, contact.company].filter(Boolean).join(" · ")}
             </p>
           )}

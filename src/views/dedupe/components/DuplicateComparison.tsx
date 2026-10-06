@@ -41,7 +41,7 @@ import {
   Undo2,
   UserX,
 } from "lucide-react";
-import { cn } from "../../../lib/utils";
+import { cn, plural } from "../../../lib/utils";
 import {
   BTN_QUIET,
   FIELD_LABEL,
@@ -111,6 +111,15 @@ const platformName = (platform: string) =>
       ? "GitHub"
       : platform.charAt(0).toUpperCase() + platform.slice(1);
 
+/**
+ * An email or a link that may wrap after its "@" and its dots, so a narrow
+ * column breaks it there and not inside a word ("…exam / ple").
+ */
+export const breakable = (text: string) =>
+  text
+    .split(/(?<=[@.])/)
+    .flatMap((part, i) => (i === 0 ? [part] : [<wbr key={i} />, part]));
+
 /** A cell's list, or nothing for an empty one, so the row knows it is empty. */
 const listCell = (items: string[]) =>
   items.length === 0 ? null : <ListCell items={items} />;
@@ -122,7 +131,7 @@ function ListCell({ items }: { items: string[] }) {
     <span className="flex flex-col gap-0.5 min-w-0">
       {shown.map((item) => (
         <span key={item} className="break-words">
-          {item}
+          {breakable(item)}
         </span>
       ))}
       {items.length > LIST_LIMIT && (
@@ -133,9 +142,6 @@ function ListCell({ items }: { items: string[] }) {
     </span>
   );
 }
-
-const plural = (n: number, one: string, many: string) =>
-  `${n} ${n === 1 ? one : many}`;
 
 const listKey = (items: string[]) =>
   items.map(norm).filter(Boolean).sort().join("|");

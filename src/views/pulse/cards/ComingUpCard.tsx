@@ -10,7 +10,7 @@
  * names no window of its own.
  *
  * With nothing to show the card is one line, and the line offers the one
- * thing that would fill it: a calendar.
+ * thing that would fill it: a calendar, unless one is connected already.
  */
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
@@ -28,7 +28,10 @@ import {
   PULSE_TYPE,
 } from "../lib/pulseStyles";
 import { describeDueChip } from "../lib/upNext";
+import { isPlainDay, parseServerTime } from "../../../lib/datetime";
 import type { UpcomingBirthday } from "../lib/birthdays";
+import { useConnectors } from "../../../api/connectors";
+import { TEXT_LINK } from "../../../lib/styles";
 
 interface MeetingItem {
   title: string;
@@ -49,17 +52,24 @@ type Entry =
   | { kind: "birthday"; key: string; when: Date; birthday: UpcomingBirthday }
   | { kind: "meeting"; key: string; when: Date; meeting: MeetingItem };
 
-/** "Thu 2 Oct, 3:00 PM" in the person's own locale. */
+/**
+ * "Thu 2 Oct, 3:00 PM" in the person's own locale, or "Thu 2 Oct, all day"
+ * for an all-day event. A plain day is that day on the local calendar
+ * (`parseServerTime`): read as UTC midnight it showed on the evening before
+ * west of Greenwich, at "5:00 PM".
+ */
 function formatMeetingTime(startsAt: string): string {
-  const date = new Date(startsAt);
-  if (Number.isNaN(date.getTime())) return startsAt;
-  return date.toLocaleString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const date = parseServerTime(startsAt);
+  if (!date) return startsAt;
+  const day = { weekday: "short", day: "numeric", month: "short" } as const;
+  // An all-day event starts on a plain day ("2026-10-09"), with no time.
+  return isPlainDay(startsAt)
+    ? `${date.toLocaleDateString(undefined, day)}, all day`
+    : date.toLocaleString(undefined, {
+        ...day,
+        hour: "numeric",
+        minute: "2-digit",
+      });
 }
 
 export const ComingUpCard = ({
@@ -79,27 +89,39 @@ export const ComingUpCard = ({
       });
     }
     meetings.forEach((m, index) => {
-      const when = new Date(m.startsAt);
       list.push({
         kind: "meeting",
         key: `m-${index}-${m.startsAt}`,
-        when: Number.isNaN(when.getTime()) ? new Date(8640000000000000) : when,
+        when: parseServerTime(m.startsAt) ?? new Date(8640000000000000),
         meeting: m,
       });
     });
     return list.sort((a, b) => a.when.getTime() - b.when.getTime());
   }, [birthdays, meetings]);
+  // Whether a calendar is connected, asked only while the card is empty.
+  const { data: connectors } = useConnectors({
+    enabled: entries.length === 0,
+    poll: false,
+  });
+  const calendarConnected = connectors?.some(
+    (c) => c.kind === "ics" || c.kind === "google",
+  );
 
   if (entries.length === 0) {
     return (
       <CardFrame cardId="coming-up" title="Coming up" count={0} variant="line">
-        Nothing coming up.{" "}
-        <Link
-          to="/settings/connectors"
-          className="hit-area inline-flex items-center font-medium text-primary hover:underline underline-offset-4"
-        >
-          Connect a calendar
-        </Link>
+        Nothing coming up
+        {calendarConnected === false && (
+          <>
+            .{" "}
+            <Link
+              to="/settings/connectors"
+              className={cn(TEXT_LINK, "hit-area")}
+            >
+              Connect a calendar
+            </Link>
+          </>
+        )}
       </CardFrame>
     );
   }

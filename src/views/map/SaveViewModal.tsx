@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Modal } from "../../components/ui/Modal";
 import type { MapLayer } from "../../api/mapViews";
 import { FORM_INPUT, FORM_LABEL } from "../../lib/styles";
+import { errorText } from "../../lib/utils";
 
 interface SaveViewModalProps {
   isOpen: boolean;
@@ -56,7 +57,7 @@ export const SaveViewModal: React.FC<SaveViewModalProps> = ({
       await onSave(trimmed);
       onClose();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save view");
+      setError(errorText(err, "Could not save the view"));
     } finally {
       setIsSaving(false);
     }

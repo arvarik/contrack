@@ -77,7 +77,7 @@ const EMPTY: Record<
 > = {
   loading: { title: "Loading contacts…" },
   failed: {
-    title: "Could not load contacts",
+    title: "Could not load your contacts",
     icon: AlertTriangle,
     tone: "error",
   },

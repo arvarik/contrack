@@ -401,12 +401,18 @@ test.describe("Settings — Tools and Data", () => {
       "N:Test;Zora;;;",
       "EMAIL;TYPE=INTERNET:zora@example.com",
       "END:VCARD",
+      // A card with no name is counted, not dropped without a word.
+      "BEGIN:VCARD",
+      "VERSION:3.0",
+      "EMAIL;TYPE=INTERNET:noname@example.com",
+      "END:VCARD",
       "",
     ].join("\n");
 
     const fileInput = page.locator('input[type="file"]');
+    // The extension is read in any case.
     await fileInput.setInputFiles({
-      name: "zora.vcf",
+      name: "ZORA.VCF",
       mimeType: "text/vcard",
       buffer: Buffer.from(vcard),
     });
@@ -415,7 +421,10 @@ test.describe("Settings — Tools and Data", () => {
     await expect(page.getByText("Import complete")).toBeVisible({
       timeout: 10_000,
     });
-    await expect(page.getByText("1 contacts processed")).toBeVisible();
+    await expect(page.getByText("1 contact imported")).toBeVisible();
+    await expect(
+      page.getByText("1 entry has no name and was not imported"),
+    ).toBeVisible();
 
     // Click Done to finish
     await page.getByRole("button", { name: "Done" }).click();
@@ -434,6 +443,24 @@ test.describe("Settings — Tools and Data", () => {
     if (created) {
       await instance.api("DELETE", `/contacts/${created.id}`);
     }
+  });
+
+  test("Trash empties after one confirmation", async ({ page, instance }) => {
+    const { id } = await instance.api<{ id: string }>("POST", "/contacts", {
+      name: "Tess Trashed",
+    });
+    await instance.api("DELETE", `/contacts/${id}`);
+
+    await page.goto("/settings/trash");
+    await page.getByRole("button", { name: "Empty trash" }).click();
+    const dialog = page.getByRole("dialog", { name: "Empty the Trash?" });
+    await dialog.getByRole("button", { name: "Empty trash" }).click();
+    await expect(
+      page.getByRole("heading", { name: "Trash is empty" }),
+    ).toBeVisible();
+    expect(
+      (await instance.api<{ items: { id: string }[] }>("GET", "/trash")).items,
+    ).toEqual([]);
   });
 
   test("enrichment page filters by who and by research state, each pill counted", async ({
@@ -638,7 +665,7 @@ test.describe("Tracked contacts", () => {
       unscored.getByRole("link", { name: "Zuri Untracked" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("button", { name: "Untrack Zuri Untracked" }),
+      page.getByRole("button", { name: "Stop tracking Zuri Untracked" }),
     ).toBeVisible();
 
     // Select mode: the bar, and one group at a time.

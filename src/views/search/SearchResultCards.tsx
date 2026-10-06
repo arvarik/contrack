@@ -4,6 +4,10 @@
  * Animation strategy: CSS `result-card-enter` with `animation-delay` instead of
  * Framer Motion per-card stagger. CSS opacity animations are always GPU-composited
  * and never trigger layout recalculation.
+ *
+ * The list is one Tab stop (`useRovingFocus`): the card takes the stop's
+ * props, and so does its question mark, so Tab reaches the mark of the
+ * current card only.
  */
 import React from "react";
 import {
@@ -36,6 +40,10 @@ interface ResultCardProps {
   /** The chunk's `fallback`. It decides the badge when the match has no `verified`. */
   isFallback: boolean;
   onClick: () => void;
+  /** The list's roving Tab stop, from `useRovingFocus`. */
+  itemProps?: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    "data-roving"?: number;
+  };
 }
 
 export const ResultCard = ({
@@ -43,6 +51,7 @@ export const ResultCard = ({
   index,
   isFallback,
   onClick,
+  itemProps,
 }: ResultCardProps) => {
   /** AI did not check this match. "Approximate" says more, so it wins. */
   const unverified = !match.approximate && isUnverified(match, isFallback);
@@ -54,6 +63,8 @@ export const ResultCard = ({
       style={{ animationDelay: `${index * 45}ms` }}
     >
       <button
+        type="button"
+        {...itemProps}
         onClick={onClick}
         className={cn(
           CARD_INTERACTIVE,
@@ -164,6 +175,8 @@ export const ResultCard = ({
           label={`${match.name}: not verified by AI`}
           tone="warning"
           align="end"
+          // The question mark follows the card's Tab stop.
+          tabIndex={itemProps?.tabIndex}
           className="absolute top-3 right-3"
         >
           <strong className="block font-bold">Not verified by AI</strong>

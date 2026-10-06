@@ -14,8 +14,10 @@ const affectedSchema = z.strictObject({ affected: z.number().int() });
 
 const tagSummarySchema = z.strictObject({
   tag: z.string(),
-  /** Contacts with the tag that are not archived. */
+  /** Contacts with the tag that are not archived and not in the Trash. */
   count: z.number().int(),
+  /** Every contact with the tag, archived and trashed ones too. */
+  total: z.number().int(),
 });
 
 export const tagRoutes = {

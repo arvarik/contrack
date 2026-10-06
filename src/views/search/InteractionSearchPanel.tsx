@@ -40,6 +40,7 @@ import React, {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ActivitySquare,
+  AlertCircle,
   AlertTriangle,
   CalendarDays,
   ChevronLeft,
@@ -66,7 +67,7 @@ import {
   filterPill,
 } from "../../lib/styles";
 import { noteSearchStatus } from "../../lib/searchAnnouncements";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { LiveStatus } from "../../components/ui/LiveStatus";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { IconButton } from "../../components/ui/IconButton";
@@ -766,14 +767,10 @@ export const InteractionSearchPanel = () => {
       {search.isError && (
         <div role="alert" className="tile-enter">
           <EmptyState
-            icon={AlertTriangle}
+            icon={AlertCircle}
             tone="error"
-            title="Search failed"
-            body={
-              search.error instanceof Error
-                ? search.error.message
-                : "An unexpected error occurred"
-            }
+            title="Could not search"
+            body={errorText(search.error)}
           />
         </div>
       )}

@@ -141,13 +141,24 @@ lift. The Network list is the one exception: its rows rise toward the pointer
 - `Switch` for every on/off setting. A setting off its default shows the
   `CHANGED_MARK` dot, and the page ends with one **Reset to defaults** button.
 - `Modal` renders as a bottom sheet below `sm`. `ConfirmDialog` for anything
-  irreversible. Never a hand-rolled overlay. A dialog with a header of its
-  own ends it with `DialogCloseButton`, the one X named "Close dialog", and
-  its buttons sit in `DIALOG_ACTIONS`.
+  irreversible, an inline "are you sure" row included: it took the focus
+  away with the button that opened it. Never a hand-rolled overlay. A dialog
+  with a header of its own ends it with `DialogCloseButton`, the one X named
+  "Close dialog", and its buttons sit in `DIALOG_ACTIONS`. A dialog keeps
+  its title and body through its exit (`Modal` holds them), so a caller may
+  clear what it names as it closes.
 - `ActionMenu` and `ContextMenu` draw the same rows (`MENU_ITEM`, `MENU_ICON`),
   and a row that waits is dimmed by `MENU_ITEM` itself.
 - `EmptyState` for every empty screen: an icon or the corvid, a title, at most
-  one sentence and one action.
+  one sentence and one action. A place whose data did not load shows
+  `LoadFailed` instead: "Could not load <what>", nothing lost, **Try again**.
+  The word to ask again is "Try again", never "Retry".
+- `SearchField` for a search box: the glass, `SEARCH_INPUT`, `ClearButton`
+  (the one X) and `NO_AUTOCORRECT`. Any other field whose words are not prose
+  (a filter, an email, a username, a link) spreads `NO_AUTOCORRECT`.
+  `stylesFloor.test.ts` checks both.
+- A link inside a sentence is `TEXT_LINK`, underlined at rest, not on hover
+  only.
 - `glass-panel` is for modals, the command palette and toasts.
 
 ### Page layout
@@ -206,6 +217,15 @@ unknown>` and narrow. Cast a better-sqlite3 row once, to a narrow row type.
   bare letters obey the **Single-key shortcuts** switch.
 - **Command palette**: a control inside it that is not a `Command.Item` needs
   `onMouseDown={(e) => e.preventDefault()}`, or cmdk closes the palette.
+- **Small helpers live once.** Reuse them before writing another:
+  `plural` and `errorText` (`src/lib/utils.ts`), `touchFirst` and
+  `TOUCH_QUERY` (`src/lib/platform.ts`), `prefersReducedMotion`
+  (`src/lib/motion.ts`), `isPageKeyTaken` (`src/lib/keyboard.ts`),
+  `withUndo` (`src/lib/undoToast.ts`), `authErrorText` for the sign-in
+  screens (`src/components/auth/AuthShell.tsx`), and `isPlainDay` and
+  `dayInZone` (`shared/dates.ts`). An error toast is "Could not <act>:
+  ${errorText(err)}". `stylesFloor.test.ts` checks `errorText`,
+  `TOUCH_QUERY`, `withUndo` and the `pointer-fine:` hover rule.
 
 ## 5. Anti-patterns
 
@@ -291,10 +311,16 @@ are `src/views/pulse/lib/pulseStyles.ts` in words.
   counts. **Log note** is the one primary button.
 - Up next is a pane of rows grouped Overdue, Today, This week, Birthdays and
   Catch up, each in its tone. Chips say facts in words ("12 days overdue").
-- Enter belongs to the control that has focus. Rows use a roving tab stop.
-  The first queue key only shows the highlight.
+  Below `lg` it shows its first eight rows and **Show all**.
+- Enter belongs to the control that has focus. Rows use a roving tab stop,
+  and only the current row's controls are Tab stops. The first queue key
+  only shows the highlight, and no page key acts while a dialog or a menu is
+  open.
+- A change to a follow-up or to the layout ends with a toast with Undo: done,
+  snooze, reset.
 - Customize mode drags a card by its grip and offers a Move menu, so no one
-  has to drag.
+  has to drag. Its bar sits under the masthead, where no toast covers it,
+  and each column shows the name its Move menu says.
 
 ## 9. Decisions the machine asks for
 
@@ -329,7 +355,13 @@ the Undo.
 - **One key per decision, then the next.** `J` and `K` move, `L` acts, `H`
   declines, `Z` undoes, and focus moves to the next item after a decision. A
   key another control used first (`event.defaultPrevented`, an arrow in a
-  radio group) is that control's. Letters obey **Single-key shortcuts**.
+  radio group) is that control's, and so is a key while a menu or a dialog
+  is open. Letters obey **Single-key shortcuts**, and Caps Lock does not
+  change them.
+- **A caution takes two steps.** The first `L` on a Check carefully item
+  opens its comparison and puts focus on the action, which the caution
+  describes. The second `L` or `Enter` acts. Its button is never the primary
+  one, and below `lg` its row offers Compare instead.
 - **List and detail.** From `lg` the list and the open item sit side by side,
   with the item's actions at the top of its pane. Below `lg` each row carries
   its actions, and the item opens in a sheet with its actions at the bottom.

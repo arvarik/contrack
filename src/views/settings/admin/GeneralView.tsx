@@ -37,7 +37,7 @@ import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
 import { Switch } from "../../../components/ui/Switch";
 import { ChoiceGroup, type Choice } from "../../../components/ui/ChoiceGroup";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
-import { SettingRow } from "../SettingRow";
+import { RowsUnderHeading, SettingRow } from "../SettingRow";
 import {
   SETTINGS_CARD,
   SETTINGS_INPUT,
@@ -45,6 +45,7 @@ import {
   SETTINGS_PAGE,
   SETTINGS_SECTION_HEADING,
 } from "../layout";
+import { LoadFailed } from "../../../components/ui/LoadFailed";
 
 /** A key or a URL in the Integrations card. */
 const KEY_INPUT = cn(SETTINGS_INPUT, "font-mono");
@@ -93,7 +94,7 @@ const Section = ({
   <section aria-label={title}>
     <h2 className={SETTINGS_SECTION_HEADING}>{title}</h2>
     <div id={id} className={SETTINGS_CARD}>
-      {children}
+      <RowsUnderHeading>{children}</RowsUnderHeading>
     </div>
   </section>
 );
@@ -160,20 +161,6 @@ function ChoiceRow({
     </SettingRow>
   );
 }
-
-/** Shown in place of settings whose values could not be read. */
-const ReadFailed = ({ onRetry }: { onRetry: () => void }) => (
-  <div className="space-y-3">
-    <p className="flex items-start gap-2 text-sm text-on-surface text-pretty">
-      <TriangleAlert className="w-4 h-4 text-warning shrink-0 mt-0.5" />
-      These settings did not load, so their values are unknown. Nothing has
-      changed
-    </p>
-    <button type="button" onClick={onRetry} className="btn-secondary">
-      Try again
-    </button>
-  </div>
-);
 
 // ─── 1. Instance ─────────────────────────────────────────────────────────────
 
@@ -257,6 +244,9 @@ const SignIn = ({ data }: { data: InstanceSettings | undefined }) => {
   const open = data?.registrationOpen === true;
   const magicLink = data?.magicLinkSignIn === true;
   const mailReady = data?.mailConfigured === true;
+  // A mailed link points at PUBLIC_URL. Without it the sign-in page never
+  // offers the link, so the switch cannot turn on.
+  const linksReady = data?.mailLinksReady === true;
 
   return (
     <>
@@ -265,7 +255,7 @@ const SignIn = ({ data }: { data: InstanceSettings | undefined }) => {
         title="Anyone can create an account"
         description={
           <>
-            Adds a Create one link to the sign-in screen. A new account is a
+            Adds a “Create one” link to the sign-in screen. A new account is a
             member and starts empty
             {open && (
               <span className={cn(NOTE, "mt-2 bg-warning/10 text-on-surface")}>
@@ -313,6 +303,12 @@ const SignIn = ({ data }: { data: InstanceSettings | undefined }) => {
                 </span>
               </span>
             )}
+            {data && mailReady && !linksReady && (
+              <span className={cn(NOTE, "mt-2")}>
+                A link needs the address people open Contrack at. Set PUBLIC_URL
+                on the server first
+              </span>
+            )}
           </>
         }
         inline
@@ -320,7 +316,8 @@ const SignIn = ({ data }: { data: InstanceSettings | undefined }) => {
         <Switch
           checked={magicLink}
           label="Sign in by emailed link"
-          disabled={!data || pending || !mailReady}
+          // Off stays possible, so a switch left on can still be turned off.
+          disabled={!data || pending || (!magicLink && !linksReady)}
           onChange={() =>
             run({ magicLinkSignIn: !magicLink }, (settings) =>
               settings.magicLinkSignIn
@@ -454,7 +451,14 @@ const Data = ({ data }: { data: InstanceSettings | undefined }) => {
 const AddressLookups = () => {
   const { data, isError, refetch } = useAddressLookups();
   const save = useSetAddressLookups();
-  if (isError) return <ReadFailed onRetry={() => void refetch()} />;
+  if (isError)
+    return (
+      <LoadFailed
+        what="these settings"
+        onRetry={() => void refetch()}
+        level={3}
+      />
+    );
   const on = data ? !data.off : false;
   return (
     <SettingRow
@@ -464,7 +468,7 @@ const AddressLookups = () => {
         <>
           Sends each contact&apos;s address to{" "}
           {data?.host ?? "OpenStreetMap's Nominatim"} to place its pin. Off, no
-          address leaves this server, and a pin comes from an earlier lookup or
+          address leaves the server, and a pin comes from an earlier lookup or
           by hand
           {data?.lockedByEnv && (
             <span className={cn(NOTE, "mt-2")}>
@@ -484,7 +488,7 @@ const AddressLookups = () => {
             onSuccess: (state) =>
               toast.success(
                 state.off
-                  ? "Address lookups are off. No address leaves this server"
+                  ? "Address lookups are off. No address leaves the server"
                   : "Address lookups are on",
               ),
             onError: (error: Error) => toast.error(error.message),
@@ -745,7 +749,14 @@ const GoogleRow = () => {
 
 const Integrations = () => {
   const { isError, refetch } = useIntegrations();
-  if (isError) return <ReadFailed onRetry={() => void refetch()} />;
+  if (isError)
+    return (
+      <LoadFailed
+        what="these settings"
+        onRetry={() => void refetch()}
+        level={3}
+      />
+    );
   return <GoogleRow />;
 };
 
@@ -757,7 +768,7 @@ export const GeneralView = () => {
     <div className={cn(SETTINGS_PAGE, "space-y-8")}>
       {isError ? (
         <div className={SETTINGS_CARD}>
-          <ReadFailed onRetry={() => void refetch()} />
+          <LoadFailed what="these settings" onRetry={() => void refetch()} />
         </div>
       ) : (
         <>

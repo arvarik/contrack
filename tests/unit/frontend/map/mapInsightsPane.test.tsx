@@ -227,7 +227,7 @@ describe("MapInsightsPane", () => {
     const nobody = { ...stats, inView: 0, matching: 0 };
     for (const [empty, words] of [
       ["loading", "Loading contacts…"],
-      ["failed", "Could not load contacts"],
+      ["failed", "Could not load your contacts"],
       ["none", "No one is on the map yetAdd a location to a contact"],
       [undefined, "No one in viewZoom out or clear the filters"],
     ] as const) {

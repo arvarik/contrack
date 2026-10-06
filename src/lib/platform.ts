@@ -62,6 +62,12 @@ export function isApplePlatform(nav?: Navigator | PlatformSource): boolean {
   return true;
 }
 
+/**
+ * A touch screen: its main pointer is a finger. CSS says `pointer-coarse:`,
+ * and `useMediaQuery(TOUCH_QUERY)` follows it in a render.
+ */
+export const TOUCH_QUERY = "(pointer: coarse)";
+
 /** Read once: the platform does not change while the page is open. */
 export const IS_APPLE = isApplePlatform();
 
@@ -109,4 +115,19 @@ export function navChordKey(event: KeyboardEvent): string {
   if (!event.metaKey && isTypingTarget(event)) return "";
   if (event.code === "Comma") return ",";
   return event.code.startsWith("Key") ? event.code.slice(3).toLowerCase() : "";
+}
+
+/**
+ * True on a touch screen: the main pointer is a finger. A field that takes
+ * focus there opens the on-screen keyboard over the page, so a screen puts
+ * focus in its first field only for a mouse or a trackpad.
+ *
+ * @returns False where the browser cannot tell, such as a test without
+ *   `matchMedia`.
+ */
+export function touchFirst(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia?.(TOUCH_QUERY).matches === true
+  );
 }

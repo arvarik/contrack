@@ -2,7 +2,7 @@ import { toast } from "sonner";
 import { useAISettings, useSetInstanceAi } from "../../api/aiSettings";
 import { Switch } from "../../components/ui/Switch";
 import { SettingRow, useHashTarget } from "../settings/SettingRow";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import {
   SETTINGS_CARD,
   SETTINGS_PAGE,
@@ -51,7 +51,9 @@ export const AISettingsView = () => {
           on ? "AI is on for this instance" : "AI is off for this instance",
         ),
       onError: (err) =>
-        toast.error(err instanceof Error ? err.message : String(err)),
+        toast.error(
+          `Could not turn AI ${on ? "on" : "off"}: ${errorText(err)}`,
+        ),
     });
   };
 
@@ -67,7 +69,7 @@ export const AISettingsView = () => {
           description={
             <>
               Off sends nothing to any AI provider, for every account. Search on
-              this server still works
+              the server still works
               {settings.instance.lockedByEnv && (
                 <span className="block mt-1 font-medium text-on-surface">
                   Set by <code className="font-mono">AI_DISABLED</code>

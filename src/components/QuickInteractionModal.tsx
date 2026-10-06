@@ -51,6 +51,7 @@ import {
   INTERACTION_LABELS,
   type InteractionKind,
 } from "../lib/interactionKinds";
+import { NO_AUTOCORRECT } from "./ui/SearchField";
 
 /**
  * The composer carries tiptap and ProseMirror, so it arrives in its own
@@ -291,9 +292,7 @@ export const QuickInteractionModal: React.FC<QuickInteractionModalProps> = ({
                     // focus (which would otherwise rescale the bottom sheet).
                     className="flex-1 bg-transparent border-none text-base sm:text-sm text-on-surface placeholder:text-on-surface-variant"
                     autoComplete="off"
-                    autoCorrect="off"
-                    autoCapitalize="off"
-                    spellCheck={false}
+                    {...NO_AUTOCORRECT}
                     inputMode="search"
                   />
                 </div>

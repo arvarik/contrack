@@ -11,7 +11,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { AlertCircle, Calendar, Loader2, Plus, Users } from "lucide-react";
+import { Calendar, Loader2, Plus, Users } from "lucide-react";
 import {
   useConnectors,
   useConnectorKinds,
@@ -24,7 +24,6 @@ import { ImapFormModal } from "./ImapFormModal";
 import { GoogleFormModal } from "./GoogleFormModal";
 import { RunHistoryDrawer } from "./RunHistoryDrawer";
 import { SettingsHeaderActions } from "../SettingsHeader";
-import { EmptyState } from "../../../components/ui/EmptyState";
 import {
   SETTINGS_CARD,
   SETTINGS_PAGE,
@@ -36,6 +35,18 @@ import type {
   ConnectorKind,
   ConnectorSummary,
 } from "../../../../shared/connectors";
+import { LoadFailed } from "../../../components/ui/LoadFailed";
+
+/**
+ * What a Google sign-in that did not finish says, by the reason the server
+ * puts in the address (`?error=`, server/routes/connectors.ts).
+ */
+const GOOGLE_FAILURES: Record<string, string> = {
+  denied: "Could not connect Google: access was not given",
+  expired: "Could not connect Google: the sign-in expired. Start it again",
+  "not-configured":
+    "Could not connect Google: sign-in with Google is not set up on the server",
+};
 
 export const ConnectorsView: React.FC = () => {
   const { data: connectors, isLoading, isError, refetch } = useConnectors();
@@ -68,7 +79,9 @@ export const ConnectorsView: React.FC = () => {
         { replace: true },
       );
     } else if (error) {
-      toast.error(`Google connection failed: ${error}`);
+      toast.error(
+        GOOGLE_FAILURES[error] ?? "Could not connect Google. Try again",
+      );
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev);
@@ -165,13 +178,7 @@ export const ConnectorsView: React.FC = () => {
       )}
 
       {isError && (
-        <EmptyState
-          icon={AlertCircle}
-          tone="error"
-          title="Connectors did not load"
-          body="Nothing has changed. Try again in a moment"
-          action={{ label: "Try again", onClick: () => void refetch() }}
-        />
+        <LoadFailed what="connectors" onRetry={() => void refetch()} />
       )}
 
       {!isLoading && !isError && hasConnectors && (
@@ -196,7 +203,7 @@ export const ConnectorsView: React.FC = () => {
           <div className={cn(SETTINGS_CARD, "space-y-4")}>
             <p className="text-sm text-on-surface-variant text-pretty">
               Contrack learns who you talk to from your calendar and your mail.
-              Nothing leaves this server unless you turn on AI summaries
+              Nothing leaves the server unless you turn on AI summaries
             </p>
             {/* A row for each kind, with its own Connect: three equal
                 choices, so none of them is the page's one primary. */}

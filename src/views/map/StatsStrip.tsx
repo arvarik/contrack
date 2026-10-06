@@ -3,9 +3,10 @@
  *
  * One line in the bottom-left corner:
  *
- *   - How many people are in view, and of how many when some are off screen.
- *     While the contacts load, if they fail, or if none has a place, it says
- *     that instead.
+ *   - How many people are on the map, which is everyone with a place, and
+ *     how many of them are in view when some are off screen. Network counts
+ *     everyone, so the words say "on the map". While the contacts load, if
+ *     they fail, or if none has a place, it says that instead.
  *   - The overdue among them, as a filter to press: it shows only them.
  *     Hidden when nobody in view is overdue, unless it is on.
  *   - "Fit all" when nobody is in view, so an empty map has a way back.
@@ -31,7 +32,7 @@ const LINE_BUTTON =
 
 const EMPTY_LINE: Record<MapEmpty, string> = {
   loading: "Loading contacts…",
-  failed: "Could not load contacts",
+  failed: "Could not load your contacts",
   none: "No one is on the map yet",
 };
 
@@ -69,8 +70,8 @@ export const StatsStrip = ({
     : inView === 0
       ? "No one in view"
       : inView < matching
-        ? `${inView} of ${matching} in view`
-        : `${inView} in view`;
+        ? `${inView} in view, of ${matching} on the map`
+        : `${matching} on the map`;
   const announcement = overdue > 0 ? `${count}, ${overdue} overdue` : count;
 
   return (

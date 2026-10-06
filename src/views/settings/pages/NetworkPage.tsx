@@ -102,8 +102,8 @@ export const NetworkPage = () => {
             value={preferences.listSort}
             onChange={(next) => setPreference("listSort", next)}
             options={[
-              { value: "name", label: "Name" },
-              { value: "recent", label: "Recent" },
+              { value: "name", label: "A to Z" },
+              { value: "recent", label: "Newest" },
             ]}
           />
         </SettingRow>

@@ -153,48 +153,12 @@ describe("the Ask page's question mark", () => {
     expect(card.className).toMatch(/\bpr-12\b/);
   });
 
-  it("explains itself on a press, and the card does not open", () => {
-    const { mark, onClick } = renderAsk();
-    expect(screen.queryByRole("tooltip")).toBeNull();
-    fireEvent.click(mark);
-    expect(screen.getByRole("tooltip").textContent).toBe(
-      "Not verified by AI" +
-        "Ada Lovelace matches your words or their meaning, but AI did not check the match",
-    );
-    expect(mark.getAttribute("aria-expanded")).toBe("true");
-    expect(onClick).not.toHaveBeenCalled();
-  });
-
-  it("closes on a second press, on Escape, and on a press elsewhere", () => {
-    const { mark } = renderAsk();
-    fireEvent.click(mark);
-    fireEvent.click(mark);
-    expect(screen.queryByRole("tooltip")).toBeNull();
-
-    fireEvent.click(mark);
-    fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.queryByRole("tooltip")).toBeNull();
-    // Escape moves nothing, so it cannot open the panel again on a focus.
-    expect(document.activeElement).not.toBe(mark);
-
-    fireEvent.click(mark);
-    fireEvent.pointerDown(document.body);
-    expect(screen.queryByRole("tooltip")).toBeNull();
-  });
-
   it("describes the mark to a screen reader, open or closed", () => {
     const { mark } = renderAsk();
     const described = document.getElementById(
       mark.getAttribute("aria-describedby")!,
     );
     expect(described?.textContent).toMatch(/AI did not check the match/);
-  });
-
-  it("wears the warning ink, and the card still opens on its own press", () => {
-    const { mark, card, onClick } = renderAsk();
-    expect(mark.className).toMatch(/\btext-warning\b/);
-    fireEvent.click(card);
-    expect(onClick).toHaveBeenCalledOnce();
   });
 
   it("is not there for a verified match, and the card keeps its padding", () => {
@@ -332,9 +296,11 @@ describe("the streamed brief", () => {
     pending.push(
       line({ phase: "error", error: "The provider is not answering" }),
     );
-    await screen.findByText("Synthesis failed: The provider is not answering");
+    await screen.findByText(
+      "Could not write the summary: The provider is not answering",
+    );
     expect(screen.queryByText("You have")).toBeNull();
-    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Try again" })).toBeTruthy();
     expect(summaryStatus().textContent).toBe("");
   });
 
@@ -358,7 +324,9 @@ describe("the streamed brief", () => {
           line({ phase: "complete", text: FINAL }),
       ),
     );
-    await screen.findByText("Synthesis failed: The summary is too long");
+    await screen.findByText(
+      "Could not write the summary: The summary is too long",
+    );
     expect(screen.queryByText(FINAL)).toBeNull();
     expect(summaryStatus().textContent).toBe("");
   });

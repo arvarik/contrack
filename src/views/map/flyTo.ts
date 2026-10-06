@@ -12,15 +12,17 @@
  * open part. When the contact closes, {@link settlePadding} eases the
  * padding away and the pin glides to the centre of the whole map.
  *
- * Every animation asks one question first. A person who set "reduce motion"
- * in their system asked for no animation, so for them the same move happens
- * with `jumpTo`, at the same end position. See WCAG 2.3.3.
+ * Every animation asks one question first. A person who chose Reduced in
+ * the Motion setting, or "reduce motion" in their system, asked for no
+ * animation, so for them the same move happens with `jumpTo`, at the same end
+ * position. See WCAG 2.3.3.
  *
  * @module views/map/flyTo
  */
 import type { PaddingOptions } from "maplibre-gl";
 import { samePadding } from "./insets";
 import { CONTACT_ZOOM } from "./mapMath";
+import { prefersReducedMotion } from "../../lib/motion";
 
 /** Long enough to follow the move, short enough not to wait for it. */
 export const FLY_DURATION_MS = 800;
@@ -56,11 +58,6 @@ export interface MovableMap {
   easeTo: (options: CameraMove) => void;
   jumpTo: (options: CameraMove) => void;
 }
-
-/** True when this person asked their system for less animation. */
-export const prefersReducedMotion = (): boolean =>
-  typeof window !== "undefined" &&
-  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 
 interface MoveOptions {
   /**

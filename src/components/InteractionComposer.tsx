@@ -65,7 +65,7 @@ import { useCreateActionItem } from "../api/actionItems";
 import type { Interaction } from "../types";
 import { COMPOSER, KBD_SM, TAG_PILL } from "../lib/styles";
 import { cn } from "../lib/utils";
-import { MOD_KEY } from "../lib/platform";
+import { MOD_KEY, touchFirst } from "../lib/platform";
 import { useAuth } from "./auth/AuthGate";
 import {
   draftKey,
@@ -663,7 +663,7 @@ const Composer = ({
                   event.key === "Enter" &&
                   !event.metaKey &&
                   !event.ctrlKey &&
-                  window.matchMedia?.("(pointer: coarse)").matches
+                  touchFirst()
                 ) {
                   event.currentTarget.blur();
                 }

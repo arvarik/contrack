@@ -20,6 +20,7 @@ import { NotFoundError } from "../utils/AppError.ts";
 import type { Scope } from "../tenancy/scope.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
 import { dispatchEvents, recordEvent } from "../events/index.ts";
+import { dayInZone } from "../../shared/dates.ts";
 
 /**
  * Narrow action_items row shape — only the columns the mutation guards
@@ -89,24 +90,19 @@ export const actionItemService = {
   },
 
   /**
-   * Count of overdue + due-today items for the sidebar badge.
-   * Only counts items where dueAt <= today (inclusive).
+   * The follow-ups due today or overdue, for the sidebar badge and the
+   * palette. The same rows as Pulse's Overdue and Today groups, on the same
+   * calendar: the reader's, when the request names its zone. The UTC day
+   * made the badge say 20 at 22:00 in California while Pulse said 18.
    */
-  getUrgentCount(scope: Scope): number {
-    const row = sqlite
-      .prepare(
-        `
-      SELECT COUNT(*) as count
-      FROM action_items ai
-      JOIN contacts c ON ai.contactId = c.id
-      WHERE ai.ownerId = ?
-        AND ai.completedAt IS NULL
-        AND date(ai.dueAt) <= date('now')
-        AND (c.isArchived = 0 OR c.isArchived IS NULL)
-    `,
-      )
-      .get(scope.ownerId) as { count: number };
-    return row.count;
+  getUrgentCount(scope: Scope, timeZone?: string): number {
+    const today = dayInZone(new Date(), timeZone)!;
+    return (this.getAllPending(scope) as { dueAt: string | null }[]).filter(
+      (item) => {
+        const due = item.dueAt ? dayInZone(item.dueAt, timeZone) : null;
+        return due !== null && due <= today;
+      },
+    ).length;
   },
 
   /**

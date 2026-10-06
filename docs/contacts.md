@@ -286,14 +286,18 @@ list, or **New list** on **Settings → Lists**. Choose an icon, type the
 
 - **Add people**: on a contact page, press **Add to a list**, the list button
   after the tags. Or select several contacts and press **List** in the bar.
+  Or open the list on **Settings → Lists**, type a name in **Add people**, and
+  press `Enter` or choose the person.
 - **See who is on it**: press its chip in the Network list, or press
   **View in Network** on **Settings → Lists**.
 - **Remove someone**: press the × on the list's chip on the contact page, or
-  the remove button beside the person on **Settings → Lists**.
-- **Change a list**: on **Settings → Lists**, drag a list to move it, or open
-  it to change its icon and name and press **Save**. To delete it, press
-  **Delete** beside **Delete this list**, then **Delete** again. The contacts
-  stay.
+  the remove button beside the person on **Settings → Lists**. The toast
+  offers **Undo**.
+- **Change a list**: on **Settings → Lists**, drag a list to move it, or use
+  **Move up** and **Move down** in its row's menu. Open it to change its icon
+  and name. The name saves when you leave the field or press `Enter`, and
+  `Esc` puts the saved name back. To delete it, press **Delete list**, then
+  **Delete list** in the dialog that asks first. The contacts stay.
 
 ## Tags
 
@@ -306,10 +310,13 @@ not counting archived and deleted contacts. **Filter tags** narrows the list,
 and a tag's name opens the Network list filtered to that tag.
 
 - **Rename**: type a new name and save it. When another tag has that name,
-  the two tags merge.
+  the rename joins the two tags, so it opens **Merge into…** to ask first.
 - **Merge into…**: choose or type the **Target tag** and press
   **Merge tags**. The first tag's contacts get the target tag instead.
 - **Delete**: asks first, then removes the tag. The contacts stay.
+
+A rename, a merge and a delete change every contact with the tag, archived
+and deleted ones too. The dialogs say how many of those there are.
 
 ## Archive and trash
 
@@ -317,7 +324,8 @@ and a tag's name opens the Network list filtered to that tag.
 contact and keeps its history. The toast offers **Undo** for 10 seconds. An
 archived contact leaves the Network list,
 the map, Pulse and Ask Contrack. **Settings → Archived contacts** lists them,
-with **Restore** on each row, and **Select** to restore or delete several.
+newest first, with the day each was archived, **Restore** on each row, and
+**Select** to restore or delete several.
 
 **Delete** moves a contact and its whole history to the trash. It does not
 ask first, and the toast offers **Undo** for 10 seconds.
@@ -326,13 +334,15 @@ ask first, and the toast offers **Undo** for 10 seconds.
 - **Restore** brings the contact back, with its history and its pin.
 - **Delete forever** asks first, then removes the contact and every
   interaction, note and follow-up it had. This cannot be undone.
+- **Empty trash** asks first, then deletes every contact in the trash in the
+  same way.
 - Removing a contact for good also removes every contact that was merged
   into it, the merge history that names them, and their files: photos,
   attachments and link-preview images. A file that another contact still
   shows stays. See [Privacy](privacy.md#what-a-delete-removes).
 - The trash removes a contact for good after 30 days. An admin can set 1 to
-  365 days in **Trash** on **Settings → Administration → General**, unless
-  the server's configuration sets the number.
+  365 days in **Trash** on **Settings → General**, unless the server's
+  configuration sets the number.
 
 ## Related
 

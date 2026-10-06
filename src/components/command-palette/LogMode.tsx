@@ -27,6 +27,7 @@ import {
 import { fallbackAvatarUrl } from "../../lib/avatar";
 import { KBD, KBD_SM } from "../../lib/styles";
 import { cn } from "../../lib/utils";
+import { touchFirst } from "../../lib/platform";
 import {
   findLogContact,
   LOG_KINDS,
@@ -162,7 +163,7 @@ export const LogMode = ({
         key={person.id}
         value={`logto_${person.id}_${person.name}`}
         onSelect={() =>
-          window.matchMedia?.("(pointer: coarse)").matches
+          touchFirst()
             ? onCompose({ kind: step.kind, contact: person, text })
             : onFill(`> ${step.kind} ${person.name}: ${text}`)
         }

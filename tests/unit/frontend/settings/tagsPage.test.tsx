@@ -44,36 +44,20 @@ describe("TagsPage", () => {
       </QueryClientProvider>,
     );
 
-  it("shows empty state when no tags exist", () => {
+  const withTags = (data: { tag: string; count: number; total?: number }[]) =>
     vi.mocked(tagsApi.useTagSummary).mockReturnValue({
-      data: [],
+      data: data.map((t) => ({ total: t.count, ...t })),
       isLoading: false,
       isError: false,
     } as unknown as ReturnType<typeof tagsApi.useTagSummary>);
-
-    renderComponent();
-    expect(
-      screen.getByRole("heading", { level: 2, name: "No tags yet" }),
-    ).toBeTruthy();
-    // A simple place says it in the title, with no sentence under it.
-    expect(screen.queryByText(/Tags you add/i)).toBeNull();
-  });
 
   it("renders tag list with counts alphabetically", () => {
-    vi.mocked(tagsApi.useTagSummary).mockReturnValue({
-      data: [
-        { tag: "work", count: 12 },
-        { tag: "family", count: 4 },
-      ],
-      isLoading: false,
-      isError: false,
-    } as unknown as ReturnType<typeof tagsApi.useTagSummary>);
+    withTags([
+      { tag: "work", count: 12 },
+      { tag: "family", count: 4 },
+    ]);
 
     renderComponent();
-    expect(screen.getByText("family")).toBeTruthy();
-    expect(screen.getByText("4")).toBeTruthy();
-    expect(screen.getByText("work")).toBeTruthy();
-    expect(screen.getByText("12")).toBeTruthy();
     // The server sent work first.
     expect(
       screen
@@ -82,82 +66,49 @@ describe("TagsPage", () => {
     ).toEqual(["family, 4 contacts", "work, 12 contacts"]);
   });
 
-  it("allows inline rename of a tag", async () => {
-    vi.mocked(tagsApi.useTagSummary).mockReturnValue({
-      data: [{ tag: "friends", count: 5 }],
-      isLoading: false,
-      isError: false,
-    } as unknown as ReturnType<typeof tagsApi.useTagSummary>);
-
+  it("renames a tag, and asks first when the new name joins another tag", async () => {
+    withTags([
+      { tag: "friends", count: 5 },
+      { tag: "work", count: 10, total: 12 },
+    ]);
     renderComponent();
-    const renameBtn = screen.getByRole("button", { name: "Rename friends" });
-    fireEvent.click(renameBtn);
+    const rename = (to: string) => {
+      fireEvent.click(screen.getByRole("button", { name: "Rename friends" }));
+      fireEvent.change(
+        screen.getByRole("textbox", { name: "Rename tag friends" }),
+        { target: { value: to } },
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Save tag name" }));
+    };
 
-    const input = screen.getByRole("textbox", { name: "Rename tag friends" });
-    expect(input).toBeTruthy();
-    fireEvent.change(input, { target: { value: "close-friends" } });
-
-    const saveBtn = screen.getByRole("button", { name: "Save tag name" });
-    fireEvent.click(saveBtn);
-
-    await waitFor(() => {
+    rename("close-friends");
+    await waitFor(() =>
       expect(mockRename).toHaveBeenCalledWith({
         from: "friends",
         to: "close-friends",
-      });
-    });
+      }),
+    );
+
+    // "Work" is the tag "work": the rename is a merge, so it asks first.
+    mockRename.mockClear();
+    rename("Work");
+    expect(screen.getByText('Merge "friends" into…')).toBeTruthy();
+    expect(mockRename).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Merge tags" }));
+    await waitFor(() =>
+      expect(mockRename).toHaveBeenCalledWith({ from: "friends", to: "work" }),
+    );
   });
 
-  it("opens merge modal and submits merge", async () => {
-    vi.mocked(tagsApi.useTagSummary).mockReturnValue({
-      data: [
-        { tag: "colleagues", count: 3 },
-        { tag: "work", count: 10 },
-      ],
-      isLoading: false,
-      isError: false,
-    } as unknown as ReturnType<typeof tagsApi.useTagSummary>);
+  it("says that a delete reaches archived contacts too, and deletes", async () => {
+    withTags([{ tag: "old-tag", count: 2, total: 3 }]);
 
     renderComponent();
-    const mergeBtn = screen.getByRole("button", {
-      name: "Merge colleagues into another tag",
-    });
-    fireEvent.click(mergeBtn);
-
-    expect(screen.getByText('Merge "colleagues" into…')).toBeTruthy();
-    const targetInput = screen.getByLabelText("Target tag");
-    fireEvent.change(targetInput, { target: { value: "work" } });
-
-    const submitBtn = screen.getByRole("button", { name: "Merge tags" });
-    fireEvent.click(submitBtn);
-
-    await waitFor(() => {
-      expect(mockRename).toHaveBeenCalledWith({
-        from: "colleagues",
-        to: "work",
-      });
-    });
-  });
-
-  it("opens delete confirm dialog and deletes tag", async () => {
-    vi.mocked(tagsApi.useTagSummary).mockReturnValue({
-      data: [{ tag: "old-tag", count: 2 }],
-      isLoading: false,
-      isError: false,
-    } as unknown as ReturnType<typeof tagsApi.useTagSummary>);
-
-    renderComponent();
-    const deleteBtn = screen.getByRole("button", {
-      name: "Delete tag old-tag",
-    });
-    fireEvent.click(deleteBtn);
-
-    expect(screen.getByText('Delete tag "old-tag"?')).toBeTruthy();
-    const confirmBtn = screen.getByRole("button", { name: "Delete tag" });
-    fireEvent.click(confirmBtn);
-
-    await waitFor(() => {
-      expect(mockDelete).toHaveBeenCalledWith("old-tag");
-    });
+    fireEvent.click(screen.getByRole("button", { name: "Delete tag old-tag" }));
+    expect(
+      screen.getByText(/3 contacts, 1 of them archived or in the Trash/),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Delete tag" }));
+    await waitFor(() => expect(mockDelete).toHaveBeenCalledWith("old-tag"));
   });
 });

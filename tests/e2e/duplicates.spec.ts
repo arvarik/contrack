@@ -103,7 +103,8 @@ test("a check fills the review list, and the contact chosen is the one a key kee
     .click();
   const keep = page.getByRole("radiogroup", { name: "Contact to keep" });
   await keep.getByRole("radio", { name: /Bob Halvorsen/ }).click();
-  await page.keyboard.press("l");
+  // An upper-case L, as Caps Lock types it, decides too.
+  await page.keyboard.press("L");
   await expect(
     page.getByText("Merged Robert Halvorsen into Bob Halvorsen"),
   ).toBeVisible();
@@ -113,11 +114,25 @@ test("a check fills the review list, and the contact chosen is the one a key kee
     page.getByRole("heading", { name: /^Likely \(1\)/ }),
   ).toBeVisible();
 
-  // 4. Keep separate holds.
+  // 4. A pair to check carefully never merges from one key: L opens its
+  // comparison and puts focus on Merge, which names the caution.
   await page
     .getByRole("button", { name: /Ada Quill/ })
     .first()
     .click();
+  await page.keyboard.press("l");
+  const pane = page.getByRole("region", {
+    name: "The group you are looking at",
+  });
+  await expect(pane.getByRole("button", { name: /^Merge/ })).toBeFocused();
+  await expect(
+    pane.getByText("Check the differences, then press L again or Enter"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /^Check carefully \(1\)/ }),
+  ).toBeVisible();
+
+  // 5. Keep separate holds.
   await page
     .getByRole("button", { name: /Keep separate/ })
     .last()

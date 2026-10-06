@@ -42,6 +42,8 @@ import {
 } from "../../lib/aiFeatures";
 import { TONE_WASH, type Tone } from "../../lib/styles";
 import { cn } from "../../lib/utils";
+import { TOUCH_LINK } from "../settings/layout";
+import { TEXT_LINK } from "../../lib/styles";
 
 const STATE_TONE: Record<FeatureState, Tone> = {
   ready: "success",
@@ -89,10 +91,7 @@ export function FeatureMap({ scope }: { scope: "instance" | "account" }) {
           {links && (
             <>
               {" "}
-              <Link
-                to="#providers"
-                className="font-semibold text-primary hover:underline"
-              >
+              <Link to="#providers" className={cn(TEXT_LINK, TOUCH_LINK)}>
                 Add a key
               </Link>
             </>
@@ -135,7 +134,10 @@ export function FeatureMap({ scope }: { scope: "instance" | "account" }) {
                       // Underlined, so the link does not rely on its colour.
                       <Link
                         to={`#${ROLE_ANCHORS[part.role]}`}
-                        className="text-primary underline underline-offset-2"
+                        className={cn(
+                          "text-primary underline underline-offset-2",
+                          TOUCH_LINK,
+                        )}
                       >
                         {part.name}
                       </Link>
@@ -157,7 +159,7 @@ export function FeatureMap({ scope }: { scope: "instance" | "account" }) {
                       {". "}
                       <Link
                         to={`#${status.fix.anchor}`}
-                        className="font-semibold text-primary hover:underline"
+                        className={cn(TEXT_LINK, TOUCH_LINK)}
                       >
                         {status.fix.label}
                       </Link>

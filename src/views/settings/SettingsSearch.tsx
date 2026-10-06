@@ -7,12 +7,14 @@
  * in over the list (`useSlideNavigate`).
  */
 import React, { useMemo } from "react";
-import { Search, X } from "lucide-react";
+import { Search } from "lucide-react";
 import { findRows, type SettingsSearchHit } from "./registry";
 import { useAuth } from "../../components/auth/AuthGate";
 import { SECTION_HEADING } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { SlideLink, useSlideNavigate } from "./slide";
+import { NO_AUTOCORRECT } from "../../components/ui/SearchField";
+import { ClearButton } from "../../components/ui/SearchField";
 
 interface SettingsSearchProps {
   value: string;
@@ -84,23 +86,16 @@ export const SettingsSearch = ({
           onKeyDown={handleKeyDown}
           placeholder="Search settings"
           aria-label="Search settings"
+          {...NO_AUTOCORRECT}
           className={cn(
             "w-full pl-10 pr-9 py-2.5 rounded-xl min-h-[44px] bg-surface-container-highest text-on-surface placeholder:text-on-surface-variant",
             // The clear button below is the one clear control; the
             // browser's own would draw a second one beside it.
-            "[&::-webkit-search-cancel-button]:appearance-none",
             isRail ? "text-sm" : "text-base sm:text-sm",
           )}
         />
         {query && (
-          <button
-            type="button"
-            onClick={() => setQuery("")}
-            aria-label="Clear search"
-            className="hit-area state-layer absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-on-surface-variant hover:text-on-surface transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <ClearButton label="Clear search" onClick={() => setQuery("")} />
         )}
       </div>
 
@@ -134,7 +129,7 @@ export const SettingsSearch = ({
                         key={hit.path}
                         to={hit.path}
                         onClick={picked}
-                        className="state-layer flex items-center px-3 py-2 rounded-xl text-on-surface font-semibold transition-colors min-h-[44px] sm:min-h-0"
+                        className="state-layer flex items-center px-3 py-2 rounded-xl text-on-surface font-semibold transition-colors min-h-[44px] sm:pointer-fine:min-h-0"
                       >
                         <span className="truncate">{hit.label}</span>
                       </SlideLink>

@@ -1,7 +1,7 @@
 /**
  * PrivacyPage — Privacy and AI settings for this account.
  *
- * The AI switch, the search history, what stays on this machine, and what
+ * The AI switch, the search history, what stays on the server, and what
  * each AI feature uses (`FeatureMap`), with a link to AI usage.
  *
  * The switch is the account's own, "Use AI for my account", when the
@@ -38,7 +38,8 @@ import {
   SETTINGS_PAGE,
   SETTINGS_SECTION_HEADING,
 } from "../layout";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
+import { TEXT_LINK } from "../../../lib/styles";
 
 /** One fact about where data lives: a static tile on the card's wash. */
 const Fact = ({
@@ -91,9 +92,7 @@ export const PrivacyPage = () => {
         toast.success("Search history cleared");
       },
       onError: (err) => {
-        toast.error(
-          err instanceof Error ? err.message : "Failed to clear search history",
-        );
+        toast.error(`Could not clear the search history: ${errorText(err)}`);
       },
     });
   };
@@ -107,8 +106,8 @@ export const PrivacyPage = () => {
             title="Use AI"
             description={
               <>
-                Off sends nothing to any AI provider. Search on this server
-                still works
+                Off sends nothing to any AI provider. Search on the server still
+                works
                 {instanceAi?.lockedByEnv && (
                   <span className="block mt-1 font-medium text-on-surface">
                     Set by <code className="font-mono">AI_DISABLED</code>
@@ -189,7 +188,7 @@ export const PrivacyPage = () => {
 
       <section aria-labelledby="privacy-local">
         <h2 id="privacy-local" className={SETTINGS_SECTION_HEADING}>
-          What stays on this machine
+          What stays on the server
         </h2>
         <div className={cn(SETTINGS_CARD, "space-y-4")}>
           <p className="text-sm text-on-surface-variant text-pretty">
@@ -198,7 +197,7 @@ export const PrivacyPage = () => {
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Fact icon={ShieldCheck} title="Search runs here">
-              Full-text search and search by meaning run on this server, with no
+              Full-text search and search by meaning run on the server, with no
               call to anyone else
             </Fact>
             <Fact
@@ -230,11 +229,8 @@ export const PrivacyPage = () => {
             {isAdmin ? (
               <>
                 The models and web search for everyone here.{" "}
-                <Link
-                  to="/settings/admin/ai"
-                  className="font-semibold text-primary hover:underline"
-                >
-                  Change them in Administration → AI
+                <Link to="/settings/admin/ai" className={TEXT_LINK}>
+                  Change them in Settings → Administration → AI
                 </Link>
               </>
             ) : (

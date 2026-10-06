@@ -91,7 +91,8 @@ import {
 } from "@dnd-kit/core";
 import { getEventCoordinates } from "@dnd-kit/utilities";
 import { cn } from "../../../lib/utils";
-import { DURATION } from "../../../lib/motion";
+import { LABEL } from "../../../lib/styles";
+import { DURATION, prefersReducedMotion } from "../../../lib/motion";
 import {
   CARD_TITLES,
   COLUMN_NAMES,
@@ -119,7 +120,7 @@ import {
   type DropPlace,
   type KeyStep,
 } from "../lib/dropTarget";
-import { EASE_CSS, createFlip, prefersReducedMotion } from "../lib/flip";
+import { EASE_CSS, createFlip } from "../lib/flip";
 import {
   COLUMN_CLASSES,
   DRAG_GRIP_OFFSET,
@@ -334,6 +335,13 @@ const DroppableColumn = ({
       data-pulse-column={id}
       className={cn("flex flex-col gap-6 rounded-2xl p-1", COLUMN_CLASSES[id])}
     >
+      {/* In customize mode each column shows its name, the name its Move
+          menu items say. */}
+      {isEditing && (
+        <p className={cn(LABEL, "px-1 -mb-3 lg:col-span-2")}>
+          {COLUMN_NAMES[id]}
+        </p>
+      )}
       {children}
       {isEmpty && isEditing && (
         <div className="flex items-center justify-center h-16 rounded-2xl border-2 border-dashed border-outline-variant text-xs text-on-surface-variant font-medium">

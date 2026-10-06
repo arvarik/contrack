@@ -21,7 +21,7 @@ import type {
   ConnectorSummary,
 } from "../../../../shared/connectors";
 import { FORM_INPUT, TONE_WASH } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 
 interface GoogleFormModalProps {
   isOpen: boolean;
@@ -126,7 +126,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
       toast.success(`Updated ${trimmedName}`);
       onClose();
     } catch (err) {
-      const msg = (err as Error).message || "Failed to update connector";
+      const msg = errorText(err) || "Could not save the connector";
       setFormError(msg);
       toast.error(msg);
     }
@@ -149,7 +149,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
           <p>
             <strong>Privacy:</strong> Contrack connects directly to Google
             Workspace to sync contacts, email headers, and calendar events.
-            Nothing leaves this server unless you enable AI summaries
+            Nothing leaves the server unless you turn on AI summaries
           </p>
         </div>
 
@@ -173,8 +173,8 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
                 </p>
                 <p className="text-xs text-on-surface-variant">
                   {isAdmin
-                    ? "Add a Google OAuth client ID and secret under Integrations in General first"
-                    : "Ask an administrator to add a Google OAuth client under Integrations in General"}
+                    ? "Add a Google OAuth client ID and secret in Settings → General, under Integrations, first"
+                    : "Ask an administrator to add a Google OAuth client in Settings → General, under Integrations"}
                 </p>
               </div>
             </div>
@@ -188,7 +188,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
                 }}
                 className="hit-area state-layer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-warning/20 text-on-surface transition-colors"
               >
-                <span>Open Integrations in General</span>
+                <span>Open Settings → General</span>
                 <ArrowRight aria-hidden="true" className="w-3.5 h-3.5" />
               </button>
             )}

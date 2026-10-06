@@ -333,6 +333,8 @@ const contactColumns = {
   isTracked: z.boolean(),
   /** When `isTracked` last turned on. Null while untracked. */
   trackedAt: z.string().nullable(),
+  /** When the contact was archived. Null while it is not. */
+  archivedAt: z.string().nullable(),
   /** The research record, JSON in the shape of shared/researchRecord.ts. */
   aiResearch: z.string().nullable(),
   ownerId: z.string().meta(INTERNAL),

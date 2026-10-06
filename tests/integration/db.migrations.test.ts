@@ -62,6 +62,12 @@ const ADDED_SINCE_FIXTURE = [
   "idx_dedupe_sugg_contact_b",
   // 0006_dedupe_caveat: dedupe_suggestions gains a column
   "dedupe_suggestions",
+  // 0007_archived_at: contacts gains a column and two triggers
+  "contacts",
+  "contacts_archive_stamp_ins",
+  "contacts_archive_stamp_upd",
+  // 0008_correspondent_names: connector_links gains a column
+  "connector_links",
 ];
 
 interface MasterRow {

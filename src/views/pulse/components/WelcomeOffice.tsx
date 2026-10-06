@@ -10,7 +10,6 @@ import {
 import { CARD, KBD_SM, LABEL_PRIMARY, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { useAuth } from "../../../components/auth/AuthGate";
-import { SETTINGS_PAGES } from "../../settings/registry";
 import { openQuickNote } from "../../../lib/appEvents";
 import { chordLabel, NAV_MODIFIERS } from "../../../lib/platform";
 import { PULSE_ROW } from "../lib/pulseStyles";
@@ -34,10 +33,6 @@ const STEP_CHEVRON =
 export const WelcomeOffice = () => {
   const { isAdmin } = useAuth();
   const navigate = useNavigate();
-
-  const hasConnectorsPage = SETTINGS_PAGES.some(
-    (p) => p.id === "connectors" || p.path === "/settings/connectors",
-  );
 
   const aiSettingsPath = isAdmin
     ? "/settings/admin/ai"
@@ -112,31 +107,28 @@ export const WelcomeOffice = () => {
               <div>
                 <span className={STEP_TITLE}>Connect AI</span>
                 <span className="text-xs text-on-surface-variant mt-0.5 block">
-                  Enable relationship analysis, smart parsing, and daily
-                  insights
+                  Ask questions, read briefings and get a daily insight
                 </span>
               </div>
             </div>
             <ChevronRight className={STEP_CHEVRON} />
           </Link>
 
-          {/* Step 4: Connect a calendar (hidden without connectors page) */}
-          {hasConnectorsPage && (
-            <Link to="/settings/connectors" className={STEP}>
-              <div className="flex items-start gap-3.5">
-                <div className={STEP_ICON}>
-                  <Calendar className="w-5 h-5" />
-                </div>
-                <div>
-                  <span className={STEP_TITLE}>Connect a calendar</span>
-                  <span className="text-xs text-on-surface-variant mt-0.5 block">
-                    Sync meetings and automatically track upcoming interactions
-                  </span>
-                </div>
+          {/* Step 4: Connect a calendar */}
+          <Link to="/settings/connectors" className={STEP}>
+            <div className="flex items-start gap-3.5">
+              <div className={STEP_ICON}>
+                <Calendar className="w-5 h-5" />
               </div>
-              <ChevronRight className={STEP_CHEVRON} />
-            </Link>
-          )}
+              <div>
+                <span className={STEP_TITLE}>Connect a calendar</span>
+                <span className="text-xs text-on-surface-variant mt-0.5 block">
+                  Bring in your meetings, and see the next ones here
+                </span>
+              </div>
+            </div>
+            <ChevronRight className={STEP_CHEVRON} />
+          </Link>
         </div>
       </div>
     </div>

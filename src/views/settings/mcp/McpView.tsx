@@ -57,6 +57,8 @@ import {
   type McpClient,
   type McpClientId,
 } from "./clients";
+import { NO_AUTOCORRECT } from "../../../components/ui/SearchField";
+import { TEXT_LINK } from "../../../lib/styles";
 
 /** A value or a snippet, on the card's wash, in the code face. */
 const CODE_BOX =
@@ -226,10 +228,7 @@ const TokenStep = ({
           A {madeFor.access === "read" ? "read-only " : ""}token named “
           {madeFor.client}” is in the setup below. This page shows it once. It
           works for {TOKEN_DAYS} days, or until you revoke it in{" "}
-          <Link
-            to="/settings/account#tokens"
-            className="font-semibold text-primary hover:underline"
-          >
+          <Link to="/settings/account#tokens" className={TEXT_LINK}>
             Account
           </Link>
         </p>
@@ -258,7 +257,7 @@ const TokenStep = ({
             id="mcp-token-input"
             type="password"
             autoComplete="off"
-            spellCheck="false"
+            {...NO_AUTOCORRECT}
             value={pasted}
             onChange={(e) => {
               const value = e.target.value.trim();
@@ -329,7 +328,7 @@ const TokenStep = ({
         <button
           type="button"
           onClick={() => onDraft({ pasting: true })}
-          className="font-semibold text-primary hover:underline"
+          className={TEXT_LINK}
         >
           Use a token I have
         </button>
@@ -536,7 +535,7 @@ export const McpView: React.FC = () => {
                 </pre>
                 {!authRequired && (
                   <p className="text-xs text-on-surface-variant text-pretty">
-                    This Contrack asks nobody to sign in, so a client needs no
+                    This Contrack asks no one to sign in, so a client needs no
                     token. Anyone who can reach the address can use it
                   </p>
                 )}

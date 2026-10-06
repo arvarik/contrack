@@ -8,7 +8,7 @@ It also covers your own account, password resets, and what an admin manages.
 ## Sign-in is off by default
 
 Out of the box, Contrack asks no one to sign in. It runs as one built-in
-account, **This device**, which owns your data and is an admin. **Settings →
+account, **Local account**, which owns your data and is an admin. **Settings →
 Account** is not shown, a link to it says **No account needed**, and MCP
 clients connect without a token.
 
@@ -134,7 +134,8 @@ is set.
 You are then signed in. Every other session ends, and your API tokens stop.
 One address can ask 3 times in 15 minutes, and one account gets at most 3
 links an hour. When mail cannot carry links, the screen says **This Contrack
-cannot send email**.
+cannot send email, so an admin resets it for you**, and **I run this server**
+shows the reset command.
 
 **Ask an admin.** An admin can send you a reset link or give you a temporary
 password, see [Accounts](#accounts).
@@ -151,7 +152,7 @@ docker exec -it contrack node scripts/reset-password.ts <username-or-email>
 
 The command prints a temporary password. It also signs the account out
 everywhere and stops its API tokens. Use it when you are the only admin and
-you lost your password. The built-in **This device** account has no password
+you lost your password. The built-in **Local account** has no password
 to reset.
 
 After a temporary password, the next sign-in opens **Choose your own
@@ -177,9 +178,9 @@ records it.
 ### Accounts
 
 **Settings → Administration → Accounts** lists every account with its role,
-its number of contacts, and its last sign-in. Badges mark **You**, **This
-device** (the built-in account), **Disabled**, and **Must reset** (a temporary
-password is still in use).
+its number of contacts, and its last sign-in. Badges mark **You**, **Local
+account** (the built-in account), **Disabled**, and **Must reset** (a
+temporary password is still in use).
 
 To create an account, select **Create account**. Enter the **Email**, the
 **Username**, and an optional **Display name**, choose the **Role**, and
@@ -191,16 +192,17 @@ Each row's menu holds these actions:
 
 - **Edit**: the display name and the role. Your own row has no role choice.
   The person changes their own email and username.
-- **Reset password**: with outgoing mail set up, choose **Email a reset link**,
-  which works for 24 hours, or **Show a temporary password**. Without mail,
-  Contrack shows a temporary password. A temporary password signs the person
-  out everywhere and stops their API tokens at once. A link does the same when
-  they set the new password.
+- **Reset password**: with outgoing mail set up and `PUBLIC_URL` set, choose
+  **Email a reset link**, which works for 24 hours, or **Show a temporary
+  password**. Otherwise Contrack shows a temporary password. A temporary
+  password signs the person out everywhere and stops their API tokens and MCP
+  apps at once. A link does the same when they set the new password. When the
+  mail does not go, the dialog says so and the link is deleted.
 - **Export data**: downloads the account's data as one JSON file, for someone
   who leaves. The audit log records it.
-- **Disable**: signs the person out everywhere and stops their API tokens.
-  **Enable** undoes it, and their tokens work again. Disable an account before
-  you delete it.
+- **Disable**: asks first, then signs the person out everywhere and stops
+  their API tokens. **Enable** undoes it at once, and their tokens work again.
+  Disable an account before you delete it.
 - **Delete**: two steps. The first shows what the account owns: contacts,
   interactions, lists, and files. **Export their data first** downloads it.
   Tick **I understand this cannot be undone**, and select **Delete account
@@ -220,7 +222,8 @@ An invitation is a link that creates one account, once.
    it**.
 
 Send the link the way you would send a password. The person who opens it sees
-**You've been invited**, and the new account starts empty. The list shows each
+**You've been invited**, and the new account starts empty. A link that was
+used, revoked or expired says so before the form shows. The list shows each
 invitation as **Pending**, **Accepted**, **Revoked**, or **Expired**.
 **Revoke** stops a pending link at once. Deleting the admin who created a
 pending invitation revokes it too.
@@ -235,7 +238,8 @@ pending invitation revokes it too.
   A new account is a member and starts empty. On a server open to the
   internet, send invitations instead.
 - **Sign in by emailed link**: lets members sign in with an emailed link. Set
-  up outgoing mail first.
+  up outgoing mail and `PUBLIC_URL` first. Until both are set, the switch
+  cannot turn on.
 - **Session length**: **1 day**, **1 week**, **30 days** (the default), or **1
   year**, for every account. A change applies to new sign-ins. To end a
   session now, disable the account or reset its password.
@@ -251,12 +255,14 @@ and every sign-in, newest first. Filter it with **Everything**, **Accounts**,
 entries. The log never holds a password, a token, or an invitation secret. A
 failed sign-in records whether the name typed matched an account, and which
 account, never the text typed, so a password typed into the wrong field does
-not reach the log. Contrack deletes an entry after 90 days.
+not reach the log. Its row says **for an existing account** or **for a name
+with no account**. A row by an account that was since deleted says **by a
+deleted account**. Contrack deletes an entry after 90 days.
 
 ### What keeps an instance administrable
 
-- While sign-in is off, the built-in **This device** account cannot be
-  disabled or deleted, because it owns the data.
+- While sign-in is off, the built-in **Local account** cannot be disabled or
+  deleted, because it holds the data.
 - The last active admin cannot be demoted, disabled, or deleted. Promote
   another account first.
 - An admin cannot reset the password of, disable, or delete their own

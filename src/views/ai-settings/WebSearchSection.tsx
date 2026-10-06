@@ -22,14 +22,14 @@ import {
 } from "../../api/aiSettings";
 import { Switch } from "../../components/ui/Switch";
 import { featuresUsing } from "../../lib/aiFeatures";
-import { SettingRow } from "../settings/SettingRow";
+import { RowsUnderHeading, SettingRow } from "../settings/SettingRow";
 import { EngineChoice } from "../settings/EngineChoice";
 import { SETTINGS_CARD, SETTINGS_SECTION_HEADING } from "../settings/layout";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { ModelRow } from "./ModelRow";
 
 const FIELD =
-  "w-full min-h-[44px] sm:min-h-0 px-3 py-2 rounded-xl bg-surface-container-highest text-sm font-mono";
+  "w-full min-h-[44px] sm:pointer-fine:min-h-0 px-3 py-2 rounded-xl bg-surface-container-highest text-sm font-mono";
 
 export function WebSearchSection({ settings }: { settings: AISettings }) {
   const setWebSearch = useSetWebSearch();
@@ -42,7 +42,9 @@ export function WebSearchSection({ settings }: { settings: AISettings }) {
         onSuccess: () =>
           toast.success(on ? "Web search is on" : "Web search is off"),
         onError: (err) =>
-          toast.error(err instanceof Error ? err.message : String(err)),
+          toast.error(
+            `Could not turn web search ${on ? "on" : "off"}: ${errorText(err)}`,
+          ),
       },
     );
 
@@ -52,48 +54,50 @@ export function WebSearchSection({ settings }: { settings: AISettings }) {
         Web search
       </h2>
       <div className={SETTINGS_CARD}>
-        <SettingRow
-          id="allow-web-search"
-          title="Allow web search"
-          description="Contact research searches the web for public facts. Off stops every web search, SearXNG's too"
-          inline
-        >
-          <Switch
-            label="Allow web search"
-            checked={webSearch.allowed}
-            disabled={setWebSearch.isPending}
-            onChange={allow}
+        <RowsUnderHeading>
+          <SettingRow
+            id="allow-web-search"
+            title="Allow web search"
+            description="Contact research searches the web for public facts. Off stops every web search, SearXNG's too"
+            inline
+          >
+            <Switch
+              label="Allow web search"
+              checked={webSearch.allowed}
+              disabled={setWebSearch.isPending}
+              onChange={allow}
+            />
+          </SettingRow>
+          <ModelRow
+            id="web-search-model"
+            capability="research"
+            title="Web search model"
+            summary="A model that searches the web itself. Only Gemini, OpenAI and Anthropic models can"
+            usedBy={featuresUsing("webSearch")}
+            state={settings.capabilities.research}
+            noModels="None of your providers has a model that searches the web"
           />
-        </SettingRow>
-        <ModelRow
-          id="web-search-model"
-          capability="research"
-          title="Web search model"
-          summary="A model that searches the web itself. Only Gemini, OpenAI and Anthropic models can"
-          usedBy={featuresUsing("webSearch")}
-          state={settings.capabilities.research}
-          noModels="None of your providers has a model that searches the web"
-        />
-        <SettingRow
-          id="searxng"
-          title="SearXNG address"
-          description="Your own SearXNG search engine, such as http://127.0.0.1:8888. Turn on its JSON answers"
-          below
-        >
-          <SearxngField searxng={webSearch.searxng} />
-        </SettingRow>
-        <SettingRow
-          id="web-search-engine"
-          title="Web search engine"
-          description={
-            settings.multipleAccounts
-              ? "What contact research searches with. An account can choose its own on Contact enrichment"
-              : "What contact research searches with. Contact enrichment shows it too"
-          }
-          below
-        >
-          <EngineChoice scope="instance" />
-        </SettingRow>
+          <SettingRow
+            id="searxng"
+            title="SearXNG address"
+            description="Your own SearXNG search engine, such as http://127.0.0.1:8888. Turn on its JSON answers"
+            below
+          >
+            <SearxngField searxng={webSearch.searxng} />
+          </SettingRow>
+          <SettingRow
+            id="web-search-engine"
+            title="Web search engine"
+            description={
+              settings.multipleAccounts
+                ? "What contact research searches with. An account can choose its own on Contact enrichment"
+                : "What contact research searches with. Contact enrichment shows it too"
+            }
+            below
+          >
+            <EngineChoice scope="instance" />
+          </SettingRow>
+        </RowsUnderHeading>
       </div>
     </section>
   );
@@ -125,7 +129,7 @@ function SearxngField({
         toast.success(message);
       },
       onError: (err) =>
-        toast.error(err instanceof Error ? err.message : String(err)),
+        toast.error(`Could not save the address: ${errorText(err)}`),
     });
 
   return (

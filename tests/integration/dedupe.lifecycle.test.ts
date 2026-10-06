@@ -171,6 +171,69 @@ describe("undoing an automatic merge", () => {
     expect(canonicalIdOf(duplicate)).toBe(primary);
   });
 
+  /** A merge by hand of two people with one email each, and its log id. */
+  async function mergedByHand() {
+    choose("conservative");
+    const [primary, duplicate] = await seed([
+      { name: "Ines Faro", emails: ["ines@example.com"] },
+      { name: "Ines Faro", emails: ["ines@northwind.example"] },
+    ]);
+    sqlite
+      .prepare(
+        `INSERT INTO interactions (id, contactId, ownerId, type, title) VALUES ('lunch', ?, ?, 'note', 'Lunch')`,
+      )
+      .run(duplicate, scope.ownerId);
+    const merged = await request(app)
+      .post("/api/contacts/merge")
+      .send({ primaryId: primary, duplicateId: duplicate });
+    expect(merged.status).toBe(200);
+    return { primary, duplicate, logId: merged.body.mergeLogId as string };
+  }
+  const emailOwner = (email: string) =>
+    sqlite
+      .prepare(
+        "SELECT contactId, isPrimary FROM contact_emails WHERE email = ?",
+      )
+      .get(email) as { contactId: string; isPrimary: number };
+
+  it("gives a moved email back its primary mark", async () => {
+    const { duplicate, logId } = await mergedByHand();
+    // The merge took the mark off, because the kept contact had a primary.
+    expect(emailOwner("ines@northwind.example").isPrimary).toBe(0);
+
+    const undone = await request(app).post(
+      `/api/dedupe/merge-log/${logId}/undo`,
+    );
+    expect(undone.status).toBe(200);
+    expect(emailOwner("ines@northwind.example")).toEqual({
+      contactId: duplicate,
+      isPrimary: 1,
+    });
+  });
+
+  it("changes nothing, and stays undoable, when the undo cannot finish", async () => {
+    const { primary, duplicate, logId } = await mergedByHand();
+    // The note was deleted after the merge, and its saved copy cannot be
+    // written back: the undo fails after it moved the email back.
+    sqlite.prepare("DELETE FROM interactions WHERE id = 'lunch'").run();
+    const row = sqlite
+      .prepare("SELECT duplicateSnapshot FROM dedupe_merge_log WHERE id = ?")
+      .get(logId) as { duplicateSnapshot: string };
+    const snapshot = JSON.parse(row.duplicateSnapshot);
+    snapshot.duplicate.interactions[0].title = null;
+    sqlite
+      .prepare("UPDATE dedupe_merge_log SET duplicateSnapshot = ? WHERE id = ?")
+      .run(JSON.stringify(snapshot), logId);
+
+    const undone = await request(app).post(
+      `/api/dedupe/merge-log/${logId}/undo`,
+    );
+    expect(undone.status).not.toBe(200);
+    expect(emailOwner("ines@northwind.example").contactId).toBe(primary);
+    expect(canonicalIdOf(duplicate)).toBe(primary);
+    expect(logIdOf(duplicate)).toBe(logId);
+  });
+
   it("refuses a body it does not know", async () => {
     const res = await request(app)
       .post("/api/dedupe/merge-log/nothing/undo")

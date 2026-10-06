@@ -52,7 +52,7 @@ const tipOf = (page: Page, name: string) =>
 async function ask(page: Page, question = QUESTION) {
   await page.goto("/search");
   const input = page.getByRole("textbox", {
-    name: "Ask anything about your network",
+    name: "Ask about your network",
   });
   await input.fill(question);
   await input.press("Enter");
@@ -118,13 +118,13 @@ test.describe("the wait for AI", () => {
       }),
     );
     await ask(page);
-    await expect(page.getByRole("alert")).toContainText("Search failed");
+    await expect(page.getByRole("alert")).toContainText("Could not search");
     await expect(card(page, "Linus Torvalds")).toHaveCount(0);
     await expect(
       page.getByRole("button", { name: "Refresh results" }),
     ).toHaveCount(0);
     await answerPeopleSearch(page, [personMatch(seed.byName("Ada Lovelace"))]);
-    await page.getByRole("button", { name: "Retry" }).click();
+    await page.getByRole("button", { name: "Try again" }).click();
     await expect(card(page, "Ada Lovelace")).toBeVisible();
     await expect(page.getByRole("alert")).toHaveCount(0);
     await expect(status(page)).toHaveText(`1 match for “${QUESTION}”.`);

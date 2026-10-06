@@ -62,7 +62,7 @@ import {
   type CardAction,
 } from "./MapHoverCard";
 import { STACK_LIMIT, StackPopup, type ContactStack } from "./StackPopup";
-import { prefersReducedMotion } from "./flyTo";
+import { prefersReducedMotion } from "../../lib/motion";
 import { cardPadding } from "./insets";
 import { useHoverCard } from "./useHoverCard";
 import { readLastView, writeLastView } from "./lastView";
@@ -83,6 +83,7 @@ import { WORLD_BOUNDS, minZoomFor } from "./mapMath";
 import { registerPmtilesProtocol, styleFor } from "./mapStyles";
 import { MAPLIBRE_WORKER_URL } from "./maplibreWorker";
 import { useClusterFeatures, type ClusterFeature } from "./useClusterFeatures";
+import { touchFirst } from "../../lib/platform";
 
 registerPmtilesProtocol();
 
@@ -489,7 +490,7 @@ export const ContactMap = ({
     asked.current = cardRequest;
     if (!hoverCard || !byId.has(cardRequest.id)) return;
     const from = document.activeElement;
-    const touch = window.matchMedia?.("(hover: none)").matches;
+    const touch = touchFirst();
     setCard({
       kind: "contact",
       id: cardRequest.id,
@@ -510,15 +511,53 @@ export const ContactMap = ({
     }
   }, [features, stack]);
 
+  /**
+   * Give the focus to a pin by its contact, quietly (no tooltip), or to the
+   * map when no pin of theirs is drawn. The map keeps the arrow keys, so a
+   * keyboard is never left on the page.
+   */
+  const refocus = useCallback(
+    (contactId: string | null, selector?: string) => {
+      const wrapper = wrapperRef.current;
+      const target = wrapper?.querySelector<HTMLElement>(
+        selector ?? `[data-contact-id="${CSS.escape(contactId ?? "")}"]`,
+      );
+      if (target && contactId) refocused.current = contactId;
+      (target ?? map?.getCanvas())?.focus({ preventScroll: true });
+    },
+    [map],
+  );
+
+  // A contact that closes takes the focus away with its panel: Escape, its
+  // close button or Back. The focus comes back to that contact's pin.
+  const lastSelected = useRef(selectedId);
+  useEffect(() => {
+    const closed = lastSelected.current;
+    lastSelected.current = selectedId;
+    if (!closed || selectedId) return;
+    const frame = requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (active && active !== document.body) {
+        if (!active.closest("section[data-covers-map]")) return;
+      }
+      refocus(closed);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [refocus, selectedId]);
+
   // Escape closes the card, or else the stack, and nothing under it. Focus
-  // goes back to the pin, and the tooltip stays shut.
+  // goes back to the pin, or the stack's cluster, and the tooltip stays shut.
   useEffect(() => {
     if (!card && !stack) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || event.defaultPrevented) return;
       event.preventDefault();
       const open = openCard.current;
-      if (!open) return setStack(null);
+      if (!open) {
+        if (stack)
+          refocus(null, `[data-cluster-key="${CSS.escape(stack.key)}"]`);
+        return setStack(null);
+      }
       setCard(null);
       if (open.kind !== "contact" || open.mode === "hover") return;
       if (open.from) return open.from.focus();
@@ -532,7 +571,7 @@ export const ContactMap = ({
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [card, stack, openCard, setCard]);
+  }, [card, stack, openCard, setCard, refocus]);
 
   const handleError = useCallback(
     (event: ErrorEvent) => {
@@ -565,6 +604,28 @@ export const ContactMap = ({
     [onMapClick, handleCloseCard],
   );
 
+  /** Focus the pin drawn nearest a spot, while the map holds the focus. */
+  const focusNearest = useCallback(
+    (spot: { longitude: number; latitude: number }) => {
+      const wrapper = wrapperRef.current;
+      if (!map || !wrapper || document.activeElement !== map.getCanvas())
+        return;
+      const box = wrapper.getBoundingClientRect();
+      const at = map.project([spot.longitude, spot.latitude]);
+      let nearest: HTMLElement | null = null;
+      let best = Infinity;
+      for (const pin of wrapper.querySelectorAll<HTMLElement>(".map-pin")) {
+        const r = pin.getBoundingClientRect();
+        const x = r.left + r.width / 2 - box.left;
+        const y = r.top + r.height / 2 - box.top;
+        const distance = Math.hypot(x - at.x, y - at.y);
+        if (distance < best) [nearest, best] = [pin, distance];
+      }
+      nearest?.focus({ preventScroll: true });
+    },
+    [map],
+  );
+
   const expandCluster = useCallback(
     async (cluster: ClusterFeature) => {
       const source = map?.getSource<GeoJSONSource>(CONTACTS_SOURCE_ID);
@@ -572,11 +633,21 @@ export const ContactMap = ({
       setCard(null);
       const people = peopleOf(cluster);
       if (!people?.stack && cluster.clusterId !== undefined) {
+        const focused = document.activeElement;
         map.easeTo({
           center: [cluster.longitude, cluster.latitude],
           zoom: await source.getClusterExpansionZoom(cluster.clusterId),
           duration: prefersReducedMotion() ? 0 : 500,
         });
+        // The cluster's button goes with the zoom. The focus waits on the
+        // map, and a keyboard's moves on to the pin nearest the spot once
+        // the split is drawn.
+        if (!(focused instanceof HTMLElement)) return;
+        if (!wrapperRef.current?.contains(focused)) return;
+        const keyboard = focused.matches(":focus-visible");
+        map.getCanvas().focus({ preventScroll: true });
+        if (keyboard)
+          map.once("idle", () => setTimeout(() => focusNearest(cluster), 0));
         return;
       }
       // Everyone is on one spot, which no zoom splits. List them.
@@ -593,7 +664,7 @@ export const ContactMap = ({
         padding: room(),
       });
     },
-    [map, byId, peopleOf, setCard, room],
+    [map, byId, peopleOf, setCard, room, focusNearest],
   );
 
   // The cluster's people for its preview, the ones with the most history first.

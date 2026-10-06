@@ -105,6 +105,11 @@ export function createAuthLink(
   return { id, token, expiresAt };
 }
 
+/** Delete a link whose mail was never sent, so nobody can redeem it. */
+export function discardAuthLink(id: string): void {
+  sqlite.prepare(`DELETE FROM auth_links WHERE id = ?`).run(id);
+}
+
 function parseDbDate(dateStr: string): number {
   let normalized = dateStr.trim();
   if (!normalized.includes("T") && normalized.includes(" ")) {

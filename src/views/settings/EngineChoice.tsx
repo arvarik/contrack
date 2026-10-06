@@ -53,6 +53,9 @@ import {
   type EngineNeed,
   type WebSearchEngine,
 } from "../../../shared/webSearchEngine";
+import { cn, errorText } from "../../lib/utils";
+import { TOUCH_LINK } from "./layout";
+import { TEXT_LINK } from "../../lib/styles";
 
 const RESEARCH = AI_FEATURES.find((feature) => feature.id === "research")!;
 
@@ -149,7 +152,7 @@ export function EngineChoice({ scope }: EngineChoiceProps) {
           toast.success(`Research searches with ${engineName(next, provider)}`);
         },
         onError: (err) =>
-          toast.error(err instanceof Error ? err.message : String(err)),
+          toast.error(`Could not change the search engine: ${errorText(err)}`),
       },
     );
   };
@@ -176,7 +179,7 @@ export function EngineChoice({ scope }: EngineChoiceProps) {
         ? blocked && (
             <Link
               to={setupLink(blocked.missing[0])}
-              className="font-semibold text-primary hover:underline"
+              className={cn(TEXT_LINK, TOUCH_LINK)}
             >
               {webSearch.allowed ? "Set up web search" : "Turn web search on"}
             </Link>

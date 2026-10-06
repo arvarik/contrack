@@ -2,6 +2,7 @@ import type { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import { ValidationError } from "./AppError.ts";
 import { interactionSearchQuerySchema } from "../../shared/contracts/interactions.ts";
+import { isValidTimeZone } from "../../shared/contracts/common.ts";
 
 // The request schemas live in shared/contracts/, beside each route's answer,
 // where the client, the MCP tools and the OpenAPI file read them too. This
@@ -53,6 +54,17 @@ export function parseQuery<S extends z.ZodType>(
 // ============================================================================
 
 type InteractionSearchQuery = z.output<typeof interactionSearchQuerySchema>;
+
+/**
+ * The reader's IANA zone from `?tz=`, when Intl knows it. Pulse, the badge
+ * and the palette send it, so "today" is the reader's day. Without one, or
+ * with one Intl does not know, the server's zone stands.
+ */
+export function readerTimeZone(raw: unknown): string | undefined {
+  return typeof raw === "string" && raw.length <= 64 && isValidTimeZone(raw)
+    ? raw
+    : undefined;
+}
 
 /** Read and validate the query string of a note search. Throws 400 on a bad one. */
 export function parseInteractionSearchQuery(

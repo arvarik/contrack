@@ -84,6 +84,15 @@ router.post(
 );
 
 router.delete(
+  "/trash",
+  asyncHandler(async (req, res) => {
+    const count = contactService.emptyTrash(scopeOf(req));
+    log.info("API", `[${req.requestId}] DELETE /api/trash → ${count} purged`);
+    res.json({ count });
+  }),
+);
+
+router.delete(
   "/trash/:id",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;

@@ -1261,6 +1261,15 @@ html[data-text-scale="large"] {
 .contact-map .maplibregl-ctrl-group button:focus:focus-visible {
   box-shadow: inset 0 0 0 2px var(--color-primary);
 }
+/*
+ * The canvas takes the focus for the arrow keys and + and −. The base ring
+ * sits 2 px outside it, where the map's wrapper clips it, so it is drawn
+ * inside.
+ */
+.contact-map .maplibregl-canvas:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
 .contact-map
   .maplibregl-ctrl-attrib:has(.maplibregl-ctrl-attrib-button:focus-visible) {
   outline: 2px solid var(--color-primary);
@@ -1281,6 +1290,14 @@ html[data-text-scale="large"] {
 .contact-map .maplibregl-ctrl-attrib a {
   color: var(--color-primary);
   text-decoration: underline;
+}
+/* A finger gets the 44 px tap floor on every map: the page's and the pin
+   dialog's zoom buttons were 29 px. */
+@media (pointer: coarse) {
+  .contact-map .maplibregl-ctrl-group button {
+    width: 44px;
+    height: 44px;
+  }
 }
 /* The compact attribution toggle is 24 px. The tap box is 44 px. */
 .contact-map .maplibregl-ctrl-attrib-button::after {
@@ -1533,6 +1550,12 @@ html[data-text-scale="large"] {
   :is(input, textarea)[class*="text-inherit"] {
     font-size: max(16px, 1em);
   }
+}
+
+/* A search field has one clear button, the app's own (`ClearButton`), and
+   not the browser's as well. */
+input[type="search"]::-webkit-search-cancel-button {
+  appearance: none;
 }
 
 /* The app scrolls inside its panes. On a touch screen the page itself does

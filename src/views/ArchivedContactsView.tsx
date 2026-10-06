@@ -16,7 +16,7 @@ import {
 import { ScoreRingAvatar } from "../components/ScoreRingAvatar";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
-import { formatDay } from "../lib/datetime";
+import { formatRelative } from "../lib/datetime";
 import { toastUndoableDelete } from "../lib/undoToast";
 import {
   BAR_BUTTON,
@@ -29,7 +29,7 @@ import {
 import { DURATION, EASE } from "../lib/motion";
 import { EmptyState } from "../components/ui/EmptyState";
 import { CorvidMark } from "../components/brand/CorvidMark";
-import { cn } from "../lib/utils";
+import { cn, errorText, plural } from "../lib/utils";
 import { FloatingContactCard } from "../components/FloatingContactCard";
 import { SETTINGS_PAGE } from "./settings/layout";
 
@@ -79,11 +79,9 @@ export const ArchivedContactsView = () => {
   // ── Individual restore ────────────────────────────────────────────────
   const handleUnarchive = (id: string, name: string) => {
     unarchive.mutate(id, {
-      onSuccess: () => toast.success(`${name} restored to network`),
+      onSuccess: () => toast.success(`${name} restored to Network`),
       onError: (err) =>
-        toast.error(
-          `Failed: ${err instanceof Error ? err.message : String(err)}`,
-        ),
+        toast.error(`Could not restore ${name}: ${errorText(err)}`),
     });
   };
 
@@ -95,14 +93,12 @@ export const ArchivedContactsView = () => {
       {
         onSuccess: ({ count }) => {
           toast.success(
-            `Restored ${count} contact${count !== 1 ? "s" : ""} to network`,
+            `Restored ${plural(count, "contact", "contacts")} to Network`,
           );
           exitSelectMode();
         },
         onError: (err) =>
-          toast.error(
-            `Restore failed: ${err instanceof Error ? err.message : String(err)}`,
-          ),
+          toast.error(`Could not restore the contacts: ${errorText(err)}`),
       },
     );
   };
@@ -123,17 +119,13 @@ export const ArchivedContactsView = () => {
           onUndo: () =>
             bulkRestore.mutate(ids, {
               onError: (err) =>
-                toast.error(
-                  `Could not restore: ${err instanceof Error ? err.message : String(err)}`,
-                ),
+                toast.error(`Could not restore: ${errorText(err)}`),
             }),
         });
         exitSelectMode();
       },
       onError: (err) =>
-        toast.error(
-          `Delete failed: ${err instanceof Error ? err.message : String(err)}`,
-        ),
+        toast.error(`Could not delete the contacts: ${errorText(err)}`),
     });
   };
 
@@ -162,8 +154,7 @@ export const ArchivedContactsView = () => {
         <div className={cn(CARD, "p-0")}>
           <div className="flex items-center gap-2 px-4 sm:px-6 py-2 min-h-[48px] bg-surface-container-low rounded-t-2xl">
             <span className={cn(SECTION_HEADING, "flex-1 min-w-0")}>
-              {contacts.length} {contacts.length === 1 ? "contact" : "contacts"}{" "}
-              archived
+              {plural(contacts.length, "contact", "contacts")} archived
             </span>
             {isSelectMode && (
               <button
@@ -263,23 +254,24 @@ export const ArchivedContactsView = () => {
                     <button
                       type="button"
                       aria-pressed={isSelectMode ? isSelected : undefined}
-                      className="font-semibold text-sm text-on-surface truncate block max-w-full text-left rounded-md"
+                      className="font-semibold text-sm text-on-surface break-words block max-w-full text-left rounded-md"
                     >
                       {contact.name}
                     </button>
-                    {(contact.role || contact.company) && (
-                      <p className="text-xs text-on-surface-variant mt-0.5 truncate">
-                        {[contact.role, contact.company]
+                    {/* The words wrap rather than cut on a narrow phone. The
+                        date says what it is, so it is not read as the last
+                        edit. */}
+                    <p className="text-xs text-on-surface-variant mt-0.5">
+                      {[
+                        [contact.role, contact.company]
                           .filter(Boolean)
-                          .join(" at ")}
-                      </p>
-                    )}
+                          .join(" at "),
+                        `Archived ${formatRelative(contact.archivedAt ?? contact.updatedAt, "")}`,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
                   </div>
-
-                  {/* Archived date */}
-                  <span className="text-xs text-on-surface-variant hidden sm:block shrink-0">
-                    {formatDay(contact.updatedAt, "")}
-                  </span>
 
                   {/* Individual restore button (hidden in select mode) */}
                   {!isSelectMode && (

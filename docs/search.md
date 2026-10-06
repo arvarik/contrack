@@ -130,6 +130,7 @@ Type a facet name and its colon to see values to pick. The text facets list the 
 | `tag:`       | `tag:investor`     | with a tag that contains the word                                                                        |
 | `score:`     | `score:>70`        | with a score of 70 or more. `score:<40` keeps 40 or less                                                 |
 | `updated:`   | `updated:>6m`      | that nobody edited for more than six months. `updated:<1m` keeps the ones edited in the last month       |
+| `added:`     | `added:<30d`       | added in the last 30 days. `added:>1y` keeps the ones added more than a year ago                         |
 | `contacted:` | `contacted:>90d`   | last contacted more than 90 days ago, or never. See [Last contact](#last-contact)                        |
 | `missing:`   | `missing:email`    | with no `company`, `location`, `email` or `phone`                                                        |
 | `list:`      | `list:investors`   | in a list. Name the list, or write its name with dashes for spaces (`list:board-members`), or use its id |
@@ -152,21 +153,21 @@ Type a facet name and its colon to see values to pick. The text facets list the 
 | `contacted:<30d`  | contacts contacted in the last 30 days                                      |
 | `contacted:never` | contacts with no logged interaction                                         |
 
-The units are `d` (days), `w` (weeks), `m` (30 days) and `y` (365 days). `updated:` takes the same units. A value with no `>` or `<` means `>`. The list of values offers **Within 30 days**, **Over 90 days ago, or never** and **Never**.
+The units are `d` (days), `w` (weeks), `m` (30 days) and `y` (365 days). `updated:` and `added:` take the same units. A value with no `>` or `<` means `>`. The list of values offers **Within 30 days**, **Over 90 days ago, or never** and **Never**.
 
 ## Ask Contrack
 
-Open **Ask Contrack** in the sidebar, or press `Cmd+Shift+S` (`Ctrl+Alt+S` on Windows and Linux). The switch at the top chooses **People** or **Notes**. `/` puts the cursor in the box, and `Esc` in the box clears the search.
+Open **Ask Contrack** in the sidebar, or press `Cmd+Shift+S` (`Ctrl+Alt+S` on Windows and Linux). The switch at the top chooses **People** or **Notes**. On a computer the cursor starts in the box. On a touch screen it does not, so the keyboard opens only when you tap the box. `/` puts the cursor in the box, and `Esc` in the box clears the search.
 
 ### Ask about people
 
-1. Type a question in the box, with at least three characters.
+1. Type a question in the box, with at least three characters. A shorter one shows "Type 3 or more letters to ask".
 2. Press `Enter`, or select the search button.
-3. Select a result to see the contact in a card over the page.
+3. Select a result to see the contact in a card over the page. The results are one `Tab` stop: `↑`/`↓` move between them, and `Home` and `End` go to the first and the last.
 
 ![Ask Contrack in People mode, with verified matches and the fields that match under each name](images/ask.png)
 
-Before a search, **Try asking** shows six questions drawn from a pool of up to 500. The pool is built from your own contacts: industries, cities, companies, roles, interests and tags that two of them share, and an industry with a city. It also holds seven questions that any network can ask: who you have not contacted in over 3 months, who you track and who you do not, whose details are over 6 months old, and who is missing an email address, a phone number or a location. A question is in the pool only when it finds someone. A small network gets one question for each contact, and beside them every general question that finds some of its people and not all, such as who is missing an email address. Each set of six takes one question from each of six different kinds when it can, so the general questions show up among the long lists of companies and roles. A new set shows each time you open the page and after you clear the box. Select one to ask it.
+Before a search, **Try asking** shows six questions drawn from a pool of up to 500. The pool is built from your own contacts: industries, cities, companies, roles, interests and tags that two of them share, and an industry with a city. It also holds seven questions that any network can ask: who you have not contacted in over 3 months, who you track and who you do not, whose details are over 6 months old, and who is missing an email address, a phone number or a location. A question is in the pool only when it finds someone. A small network gets one question for each contact, and beside them every general question that finds some of its people and not all, such as who is missing an email address. Each set of six takes one question from each of six different kinds when it can, so the general questions show up among the long lists of companies and roles. A new set shows each time you open the page and after you clear the box. Select one to ask it. With no one in your network yet, the page offers **Import contacts** instead.
 
 Questions that work well:
 
@@ -218,9 +219,9 @@ People search reads an index of your contacts. One line shows under the box whil
 
 - **Index missing** adds the missing contacts to the index.
 - **Retry failed** tries the failed contacts again.
-- **Inspect failed** lists the failed contacts.
+- **Show failed** lists the failed contacts, each with its error and how many tries it took.
 
-When your instance indexes with a paid AI provider, Contrack asks you to confirm first, because indexing can cost money. When the index is complete, the line goes away.
+When your instance indexes with a paid AI provider, Contrack asks first in **Update the search index**, because the provider may charge for it. When the index is complete, the line goes away.
 
 ### The group brief
 

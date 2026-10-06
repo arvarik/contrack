@@ -230,10 +230,12 @@ function joinAddress(value: string): string {
 export const parseVCard = (
   vcardData: string,
   sourcePlatform: string,
+  tally?: ImportTally,
 ): ImportedContact[] => {
   const contacts: ImportedContact[] = [];
+  const cards = parseVCards(vcardData);
 
-  for (const card of parseVCards(vcardData)) {
+  for (const card of cards) {
     // A card with no name is not a contact anyone can use. FN is required by
     // the specification; N is the fallback for exporters that skip it.
     const nComponents = splitComponents(firstRaw(card, "N") ?? "");
@@ -364,80 +366,110 @@ export const parseVCard = (
     });
   }
 
+  if (tally) tally.skipped += cards.length - contacts.length;
   return contacts;
 };
+
+// ===========================================================================
+// CSV helpers
+// ===========================================================================
+
+type CsvRow = Record<string, string | undefined>;
+
+/** The rows of a CSV that starts with a header line, keyed by the header. */
+function readCsv(csvData: string): Promise<CsvRow[]> {
+  return new Promise((resolve, reject) => {
+    Papa.parse<CsvRow>(csvData, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => resolve(results.data),
+      error: () => reject(new Error("Could not read the CSV file")),
+    });
+  });
+}
+
+/** The first of these columns that holds a value in the row, trimmed. */
+function cell(row: CsvRow, ...columns: string[]): string {
+  for (const column of columns) {
+    const value = row[column]?.trim();
+    if (value) return value;
+  }
+  return "";
+}
+
+/**
+ * Entries a parser dropped because they had no name. The import counts
+ * them, so a file of four cards that saves three says why.
+ */
+interface ImportTally {
+  skipped: number;
+}
+
+/** The contacts that the rows make, counting the rows that make none. */
+function collect<T>(
+  rows: T[],
+  toContact: (row: T) => ImportedContact | null,
+  tally?: ImportTally,
+): ImportedContact[] {
+  const contacts: ImportedContact[] = [];
+  for (const row of rows) {
+    const contact = toContact(row);
+    if (contact) contacts.push(contact);
+  }
+  if (tally) tally.skipped += rows.length - contacts.length;
+  return contacts;
+}
 
 // ===========================================================================
 // LinkedIn CSV Parser
 // Columns: First Name, Last Name, URL, Email Address, Company, Position, Connected On
 // ===========================================================================
-export const parseLinkedInCSV = (
+export const parseLinkedInCSV = async (
   csvData: string,
+  tally?: ImportTally,
 ): Promise<ImportedContact[]> => {
-  return new Promise((resolve, reject) => {
-    // LinkedIn CSVs may have introductory lines before the real header
-    // Strip any lines before the actual header row
-    const lines = csvData.split("\n");
-    let headerIndex = lines.findIndex(
+  // LinkedIn puts a few lines of notes before the real header row.
+  const lines = csvData.split("\n");
+  const headerIndex = Math.max(
+    0,
+    lines.findIndex(
       (line) => line.includes("First Name") && line.includes("Last Name"),
-    );
-    if (headerIndex === -1) headerIndex = 0;
-    const cleanedCSV = lines.slice(headerIndex).join("\n");
+    ),
+  );
+  const rows = await readCsv(lines.slice(headerIndex).join("\n"));
+  return collect(
+    rows,
+    (row) => {
+      const firstName = cell(row, "First Name");
+      const lastName = cell(row, "Last Name");
+      const name = `${firstName} ${lastName}`.trim();
+      if (!name) return null;
 
-    Papa.parse<Record<string, string | undefined>>(cleanedCSV, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        try {
-          const parsed = results.data
-            .map((row) => {
-              const firstName = (row["First Name"] || "").trim();
-              const lastName = (row["Last Name"] || "").trim();
-              const fullName = `${firstName} ${lastName}`.trim();
-              if (!fullName) return null;
-
-              const email = (row["Email Address"] || "").trim();
-              const company = (row["Company"] || "").trim();
-              const position = (row["Position"] || "").trim();
-              const profileUrl = (row["URL"] || "").trim();
-              const connectedOn = (row["Connected On"] || "").trim();
-
-              const emails: ImportedEmail[] = email
-                ? [{ email, label: "work", isPrimary: true }]
-                : [];
-              const socialLinks: ImportedSocialLink[] = profileUrl
-                ? [{ platform: "linkedin", url: profileUrl }]
-                : [];
-
-              return {
-                name: fullName,
-                firstName: firstName || null,
-                lastName: lastName || null,
-                company: company || null,
-                role: position || null,
-                emails,
-                socialLinks,
-                sources: [
-                  {
-                    platform: "linkedin",
-                    externalId: profileUrl || null,
-                    connectedOn: connectedOn || null,
-                    rawData: JSON.stringify(row),
-                  },
-                ],
-                _sourcePlatform: "linkedin",
-              } satisfies ImportedContact;
-            })
-            .filter((c): c is NonNullable<typeof c> => c !== null);
-
-          resolve(parsed);
-        } catch {
-          reject(new Error("Failed to parse LinkedIn CSV structure"));
-        }
-      },
-      error: () => reject(new Error("Failed to read CSV file")),
-    });
-  });
+      const email = cell(row, "Email Address");
+      const profileUrl = cell(row, "URL");
+      return {
+        name,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        company: cell(row, "Company") || null,
+        role: cell(row, "Position") || null,
+        emails: email ? [{ email, label: "work", isPrimary: true }] : [],
+        socialLinks: profileUrl
+          ? [{ platform: "linkedin", url: profileUrl }]
+          : [],
+        sources: [
+          {
+            platform: "linkedin",
+            externalId: profileUrl || null,
+            connectedOn: cell(row, "Connected On") || null,
+            rawData: JSON.stringify(row),
+          },
+        ],
+        _sourcePlatform: "linkedin",
+      };
+    },
+    tally,
+  );
 };
 
 // ===========================================================================
@@ -449,210 +481,319 @@ interface FacebookFriend {
   timestamp?: number;
 }
 
-export const parseFacebookJSON = (jsonData: string): ImportedContact[] => {
+/** The friends array of a Facebook export, wherever the export put it. */
+function facebookFriends(data: unknown): FacebookFriend[] {
+  if (Array.isArray(data)) return data;
+  if (!data || typeof data !== "object") return [];
+  const record = data as Record<string, unknown>;
+  for (const key of ["friends_v2", "friends", ...Object.keys(record)]) {
+    const value = record[key];
+    if (
+      Array.isArray(value) &&
+      value.length > 0 &&
+      typeof value[0] === "object" &&
+      value[0] !== null &&
+      "name" in value[0]
+    ) {
+      return value;
+    }
+  }
+  return [];
+}
+
+export const parseFacebookJSON = (
+  jsonData: string,
+  tally?: ImportTally,
+): ImportedContact[] => {
+  let data: unknown;
   try {
-    const data = JSON.parse(jsonData);
-
-    // Facebook exports come in various structures
-    // Common: { friends_v2: [{ name, timestamp }] }
-    // Or: [{ name, timestamp }]
-    let friends: FacebookFriend[] = [];
-
-    if (data.friends_v2) {
-      friends = data.friends_v2;
-    } else if (data.friends) {
-      friends = data.friends;
-    } else if (Array.isArray(data)) {
-      friends = data;
-    } else {
-      // Try to find any array of objects with a 'name' field
-      for (const key of Object.keys(data)) {
-        if (
-          Array.isArray(data[key]) &&
-          data[key].length > 0 &&
-          data[key][0].name
-        ) {
-          friends = data[key];
-          break;
-        }
-      }
-    }
-
-    if (friends.length === 0) {
-      throw new Error(
-        'Could not find friends data in the JSON file. Expected a "friends_v2" or "friends" array',
-      );
-    }
-
-    return friends
-      .filter((f): f is FacebookFriend & { name: string } => Boolean(f.name))
-      .map((f) => {
-        // Facebook uses UTF-8 escaped encoding for names
-        let name = f.name;
-        try {
-          name = decodeURIComponent(escape(f.name));
-        } catch {
-          /* keep original */
-        }
-
-        const connectedOn = f.timestamp
-          ? new Date(f.timestamp * 1000).toISOString().split("T")[0]
-          : null;
-
-        return {
-          name,
-          sources: [
-            {
-              platform: "facebook",
-              connectedOn,
-              rawData: JSON.stringify(f),
-            },
-          ],
-          _sourcePlatform: "facebook",
-        } satisfies ImportedContact;
-      });
-  } catch (e) {
-    if ((e instanceof Error ? e.message : String(e)).includes("Could not find"))
-      throw e;
+    data = JSON.parse(jsonData);
+  } catch {
     throw new Error(
-      "Failed to parse Facebook JSON. Ensure you uploaded the correct friends data file",
+      "Could not read the Facebook file. Choose the friends file from the export",
     );
   }
+  const friends = facebookFriends(data);
+  if (friends.length === 0) {
+    throw new Error(
+      'Could not find friends in the file. Expected a "friends_v2" or "friends" list',
+    );
+  }
+
+  return collect(
+    friends,
+    (friend) => {
+      if (!friend.name) return null;
+      // Facebook writes names as UTF-8 bytes in \u escapes.
+      let name = friend.name;
+      try {
+        name = decodeURIComponent(escape(friend.name));
+      } catch {
+        /* keep the name as it is */
+      }
+      return {
+        name,
+        sources: [
+          {
+            platform: "facebook",
+            connectedOn: friend.timestamp
+              ? new Date(friend.timestamp * 1000).toISOString().split("T")[0]
+              : null,
+            rawData: JSON.stringify(friend),
+          },
+        ],
+        _sourcePlatform: "facebook",
+      };
+    },
+    tally,
+  );
 };
 
 // ===========================================================================
 // Google Contacts CSV Parser
-// Columns: Given Name, Family Name, E-mail 1 - Value, Phone 1 - Value,
-//          Organization 1 - Name, Organization 1 - Title, etc.
 // ===========================================================================
-export const parseGoogleCSV = (csvData: string): Promise<ImportedContact[]> => {
-  return new Promise((resolve, reject) => {
-    Papa.parse<Record<string, string | undefined>>(csvData, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        try {
-          const parsed = results.data
-            .map((row) => {
-              const firstName = (row["Given Name"] || "").trim();
-              const lastName = (row["Family Name"] || "").trim();
-              const fullName = (
-                row["Name"] || `${firstName} ${lastName}`
-              ).trim();
-              if (!fullName) return null;
+// Google has written two sets of column names. The current export (2024 on)
+// has "First Name", "Last Name", "Organization Name" and "E-mail 1 - Label".
+// The older one has "Name", "Given Name", "Family Name", "Organization 1 -
+// Name" and "E-mail 1 - Type". Both are read, so a file from either works.
+// A cell can hold two values of one label joined by " ::: ", and a label
+// that starts with "* " marks the primary value.
+// ===========================================================================
 
-              // Collect all emails (Google supports E-mail 1, E-mail 2, etc.)
-              const emails: ImportedEmail[] = [];
-              for (let i = 1; i <= 5; i++) {
-                const email = (row[`E-mail ${i} - Value`] || "").trim();
-                const type = (
-                  row[`E-mail ${i} - Type`] || "personal"
-                ).toLowerCase();
-                if (email) {
-                  emails.push({
-                    email,
-                    label: type === "*" ? "personal" : type,
-                    isPrimary: i === 1,
-                  });
-                }
-              }
+/** "* Home" → "home". The star is Google's mark for the primary value. */
+function googleLabel(raw: string, fallback: string): string {
+  return (
+    raw
+      .replace(/^\*\s*/, "")
+      .trim()
+      .toLowerCase() || fallback
+  );
+}
 
-              // Collect all phones
-              const phones: ImportedPhone[] = [];
-              for (let i = 1; i <= 5; i++) {
-                const phone = (row[`Phone ${i} - Value`] || "").trim();
-                const type = (
-                  row[`Phone ${i} - Type`] || "mobile"
-                ).toLowerCase();
-                if (phone) {
-                  phones.push({
-                    phone,
-                    label: type === "*" ? "mobile" : type,
-                    isPrimary: i === 1,
-                  });
-                }
-              }
+/** The values of one cell, which Google joins with " ::: ". */
+function googleValues(raw: string): string[] {
+  return raw
+    .split(":::")
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
 
-              const company = (row["Organization 1 - Name"] || "").trim();
-              const role = (row["Organization 1 - Title"] || "").trim();
-              const location = (row["Address 1 - Formatted"] || "").trim();
-              const birthday = (row["Birthday"] || "").trim();
-              const notes = (row["Notes"] || "").trim();
-              const website = (row["Website 1 - Value"] || "").trim();
+/**
+ * Every value of a numbered field ("E-mail 1 - Value", "Phone 2 - Value"),
+ * with its label, in column order. `prefixes` are the names the two export
+ * versions give the field.
+ */
+function googleEntries(
+  row: CsvRow,
+  prefixes: string[],
+  fallbackLabel: string,
+): { value: string; label: string }[] {
+  const entries: { value: string; label: string }[] = [];
+  for (let i = 1; ; i++) {
+    const columns = prefixes.map((prefix) => `${prefix} ${i} -`);
+    if (!columns.some((column) => `${column} Value` in row)) break;
+    const label = googleLabel(
+      cell(row, ...columns.flatMap((c) => [`${c} Label`, `${c} Type`])),
+      fallbackLabel,
+    );
+    for (const value of googleValues(
+      cell(row, ...columns.map((c) => `${c} Value`)),
+    )) {
+      entries.push({ value, label });
+    }
+  }
+  return entries;
+}
 
-              return {
-                name: fullName,
-                firstName: firstName || null,
-                lastName: lastName || null,
-                company: company || null,
-                role: role || null,
-                location: location || null,
-                birthday: birthday || null,
-                about: notes || null,
-                website: website || null,
-                emails,
-                phones,
-                sources: [{ platform: "google" }],
-                _sourcePlatform: "google",
-              } satisfies ImportedContact;
-            })
-            .filter((c): c is NonNullable<typeof c> => c !== null);
-
-          resolve(parsed);
-        } catch {
-          reject(new Error("Failed to parse Google Contacts CSV structure"));
-        }
-      },
-      error: () => reject(new Error("Failed to read CSV file")),
+/** The addresses of a row, from "Formatted" or else from its parts. */
+function googleAddresses(row: CsvRow): ImportedAddress[] {
+  const addresses: ImportedAddress[] = [];
+  for (
+    let i = 1;
+    `Address ${i} - Street` in row || `Address ${i} - Formatted` in row;
+    i++
+  ) {
+    const at = (part: string) => cell(row, `Address ${i} - ${part}`);
+    const address =
+      at("Formatted").replace(/\n/g, ", ") ||
+      [
+        at("Street"),
+        at("City"),
+        [at("Region"), at("Postal Code")].filter(Boolean).join(" "),
+        at("Country"),
+      ]
+        .filter(Boolean)
+        .join(", ");
+    if (!address) continue;
+    addresses.push({
+      address,
+      label: googleLabel(
+        cell(row, `Address ${i} - Label`, `Address ${i} - Type`),
+        "home",
+      ),
+      isPrimary: addresses.length === 0,
     });
-  });
+  }
+  return addresses;
+}
+
+export const parseGoogleCSV = async (
+  csvData: string,
+  tally?: ImportTally,
+): Promise<ImportedContact[]> => {
+  const rows = await readCsv(csvData);
+  return collect(
+    rows,
+    (row) => {
+      const firstName = cell(row, "First Name", "Given Name");
+      const lastName = cell(row, "Last Name", "Family Name");
+      const company = cell(row, "Organization Name", "Organization 1 - Name");
+      const name =
+        cell(row, "Name") ||
+        [firstName, cell(row, "Middle Name", "Additional Name"), lastName]
+          .filter(Boolean)
+          .join(" ") ||
+        cell(row, "File As", "Nickname") ||
+        company;
+      if (!name) return null;
+
+      const emails: ImportedEmail[] = googleEntries(
+        row,
+        ["E-mail", "Email"],
+        "personal",
+      ).map(({ value, label }, i) => ({
+        email: value,
+        label,
+        isPrimary: i === 0,
+      }));
+      const phones: ImportedPhone[] = googleEntries(
+        row,
+        ["Phone"],
+        "mobile",
+      ).map(({ value, label }, i) => ({
+        phone: value,
+        label,
+        isPrimary: i === 0,
+      }));
+      const addresses = googleAddresses(row);
+      // Google's own groups ("* myContacts", "* starred") are not tags.
+      const tags = googleValues(cell(row, "Labels", "Group Membership")).filter(
+        (label) => !label.startsWith("*"),
+      );
+
+      return {
+        name,
+        firstName: firstName || null,
+        lastName: lastName || null,
+        company: company || null,
+        role: cell(row, "Organization Title", "Organization 1 - Title") || null,
+        location: addresses[0]?.address ?? null,
+        birthday: cell(row, "Birthday") || null,
+        about: cell(row, "Notes") || null,
+        website: googleEntries(row, ["Website"], "website")[0]?.value ?? null,
+        emails,
+        phones,
+        addresses,
+        tags,
+        sources: [{ platform: "google" }],
+        _sourcePlatform: "google",
+      };
+    },
+    tally,
+  );
 };
 
 // ===========================================================================
 // Generic CSV Parser (fallback)
 // ===========================================================================
-export const parseGenericCSV = (
+export const parseGenericCSV = async (
   csvData: string,
   sourceName: string,
+  tally?: ImportTally,
 ): Promise<ImportedContact[]> => {
-  return new Promise((resolve, reject) => {
-    Papa.parse<Record<string, string | undefined>>(csvData, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        try {
-          const parsed = results.data
-            .map((row) => {
-              const name = row["Name"] || row["name"] || row["Full Name"];
-              if (!name || name === "Unknown") return null;
-
-              const email =
-                row["Email"] || row["email"] || row["Email Address"] || "";
-              const phone =
-                row["Phone"] || row["phone"] || row["Phone Number"] || "";
-
-              return {
-                name,
-                company: row["Company"] || row["company"] || null,
-                role: row["Role"] || row["Title"] || row["Position"] || null,
-                emails: email
-                  ? [{ email, label: "personal", isPrimary: true }]
-                  : [],
-                phones: phone
-                  ? [{ phone, label: "mobile", isPrimary: true }]
-                  : [],
-                sources: [{ platform: sourceName }],
-                _sourcePlatform: sourceName,
-              } satisfies ImportedContact;
-            })
-            .filter((c): c is NonNullable<typeof c> => c !== null);
-
-          resolve(parsed);
-        } catch {
-          reject(new Error("Failed to parse CSV structure"));
-        }
-      },
-      error: () => reject(new Error("Failed to read CSV file")),
-    });
-  });
+  const rows = await readCsv(csvData);
+  return collect(
+    rows,
+    (row) => {
+      const name = cell(row, "Name", "name", "Full Name");
+      if (!name || name === "Unknown") return null;
+      const email = cell(row, "Email", "email", "Email Address");
+      const phone = cell(row, "Phone", "phone", "Phone Number");
+      return {
+        name,
+        company: cell(row, "Company", "company") || null,
+        role: cell(row, "Role", "Title", "Position") || null,
+        emails: email ? [{ email, label: "personal", isPrimary: true }] : [],
+        phones: phone ? [{ phone, label: "mobile", isPrimary: true }] : [],
+        sources: [{ platform: sourceName }],
+        _sourcePlatform: sourceName,
+      };
+    },
+    tally,
+  );
 };
+
+// ===========================================================================
+// One file in, contacts out
+// ===========================================================================
+
+/** The sources the Import tabs offer. */
+export type ImportSource = "apple" | "linkedin" | "google" | "facebook";
+
+/** The file types each source's export comes in. */
+export const SOURCE_FILES: Record<
+  ImportSource,
+  { accept: string; label: string }
+> = {
+  apple: { accept: ".vcf", label: "vCard (.vcf)" },
+  linkedin: { accept: ".csv", label: "CSV (.csv)" },
+  google: { accept: ".csv", label: "CSV (.csv)" },
+  facebook: { accept: ".json", label: "JSON (.json)" },
+};
+
+/** What a file held: the contacts, and the entries with no name. */
+interface ParsedImport {
+  contacts: ImportedContact[];
+  skipped: number;
+}
+
+/**
+ * Read one chosen file with the parser its type and source call for. The
+ * type is the file name's extension in any case, so "Contacts.VCF" is a
+ * vCard. Throws an Error a person can read when the file does not fit.
+ */
+export async function parseImportFile(
+  fileName: string,
+  text: string,
+  source: ImportSource,
+): Promise<ParsedImport> {
+  const tally: ImportTally = { skipped: 0 };
+  const extension = fileName.toLowerCase().split(".").pop();
+  let contacts: ImportedContact[];
+  if (extension === "vcf") {
+    contacts = parseVCard(text, "apple", tally);
+  } else if (extension === "csv") {
+    contacts =
+      source === "linkedin"
+        ? await parseLinkedInCSV(text, tally)
+        : source === "google"
+          ? await parseGoogleCSV(text, tally)
+          : await parseGenericCSV(text, source, tally);
+  } else if (extension === "json" && source === "facebook") {
+    contacts = parseFacebookJSON(text, tally);
+  } else if (extension === "json") {
+    throw new Error("Only a Facebook export can be a .json file");
+  } else {
+    throw new Error("Choose a .vcf, .csv or .json file");
+  }
+  if (contacts.length === 0) {
+    throw new Error(
+      tally.skipped === 1
+        ? "The one entry in the file has no name"
+        : tally.skipped > 1
+          ? `None of the ${tally.skipped} entries in the file has a name`
+          : "Could not find any contacts in the file",
+    );
+  }
+  return { contacts, skipped: tally.skipped };
+}

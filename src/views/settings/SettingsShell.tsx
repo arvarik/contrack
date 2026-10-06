@@ -33,7 +33,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { SETTINGS_CONTENT_ID } from "../../components/layout/SkipLink";
@@ -58,7 +58,10 @@ import {
   settleSlide,
   useSlideNavigate,
 } from "./slide";
-import { RequireAdmin } from "../../components/auth/RequireAdmin";
+import {
+  RequireAdmin,
+  SettingsRedirect,
+} from "../../components/auth/RequireAdmin";
 import { useAuth } from "../../components/auth/AuthGate";
 import { useMediaQuery, WIDE_QUERY } from "../../hooks/useMediaQuery";
 import { usePageTitle } from "../../hooks/usePageTitle";
@@ -295,10 +298,12 @@ export const SettingsShell = () => {
                     );
                   })}
 
-                  {/* Wildcard fallback to /settings */}
+                  {/* An address Settings does not have: the list, and why. */}
                   <Route
                     path="*"
-                    element={<Navigate to={SETTINGS_LIST_PATH} replace />}
+                    element={
+                      <SettingsRedirect notice="Settings has no page at that address" />
+                    }
                   />
                 </Routes>
               </Suspense>

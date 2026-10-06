@@ -25,7 +25,7 @@ import {
 } from "../../../api/imports";
 import { formatRelative, formatWhen } from "../../../lib/datetime";
 import { CARD, TONE_WASH, type Tone } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import {
   SETTINGS_CARD,
   SETTINGS_PAGE,
@@ -64,7 +64,7 @@ export const ImportPage = () => {
         `Retried import: ${result.imported} imported, ${result.failed} failed`,
       );
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Retry failed");
+      toast.error(`Could not retry the import: ${errorText(err)}`);
     } finally {
       setRetryingId(null);
     }
@@ -165,7 +165,7 @@ export const ImportPage = () => {
                               isRetrying && "animate-spin",
                             )}
                           />
-                          Retry
+                          Try again
                         </button>
                       </div>
                     )}

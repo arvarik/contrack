@@ -11,6 +11,7 @@ export type FacetField =
   | "tag"
   | "score"
   | "updated"
+  | "added"
   | "contacted"
   | "missing"
   | "list"
@@ -26,6 +27,7 @@ export const FACET_FIELDS = [
   "tag",
   "score",
   "updated",
+  "added",
   "contacted",
   "missing",
   "list",
@@ -36,7 +38,7 @@ export const FACET_FIELDS = [
 export interface FacetFilter {
   field: FacetField;
   value: string;
-  /** For score:, updated: and contacted: operators (e.g., >80, <40, >90d) */
+  /** For score:, updated:, added: and contacted: operators (>80, <30d, >90d) */
   operator?: ">" | "<";
   /** Distance in kilometers for near: filter (default 25) */
   km?: number;
@@ -58,6 +60,8 @@ export interface FacetContact {
   /** A person chose to keep up with this contact. */
   isTracked?: boolean;
   updatedAt?: string | null;
+  /** When the contact joined the network: `added:<30d` is the new ones. */
+  addedAt?: string | null;
   lastContactedAt?: string | null;
   emails?: { email: string }[];
   phones?: { phone: string }[];
@@ -132,6 +136,8 @@ export function matchesFacet(
       return matchesTrackedFilter(contact.isTracked ?? false, v);
     case "updated":
       return matchesDateFilter(contact.updatedAt ?? null, filter);
+    case "added":
+      return matchesDateFilter(contact.addedAt ?? null, filter);
     case "contacted":
       return matchesContactedFilter(contact.lastContactedAt ?? null, filter);
     case "missing":
@@ -265,7 +271,7 @@ export function facetTime(value: string | null | undefined): number | null {
   return parseServerTime(value)?.getTime() ?? null;
 }
 
-/** Date comparison: updated:>3m (older than 3 months), updated:<1m (newer than 1 month) */
+/** Date comparison: updated:>3m (older than 3 months), added:<1m (newer than 1 month) */
 function matchesDateFilter(
   dateStr: string | null,
   filter: FacetFilter,

@@ -16,6 +16,7 @@ import crypto from "node:crypto";
 import { sqlite } from "../../../../server/db.ts";
 import { buildContactMatcher } from "../../../../server/connectors/matching.ts";
 import { ingestStream } from "../../../../server/connectors/ingest.ts";
+import { listCorrespondents } from "../../../../server/connectors/service.ts";
 import type { SyncEvent } from "../../../../server/connectors/types.ts";
 import {
   scopeForOwnerId,
@@ -191,6 +192,11 @@ describe("connectors ingestStream", () => {
     );
     expect(r1.stats.correspondents).toBe(1);
     expect(r1.stats.ghosts).toBe(0);
+    // The name the meeting gave is kept, so "Add as contact" uses it and
+    // not the address.
+    expect(listCorrespondents(scope)).toMatchObject([
+      { email: strangerEmail, name: "Mysterious Stranger" },
+    ]);
 
     // Run 2: second encounter -> seenCount = 2, still correspondent
     async function* s2() {

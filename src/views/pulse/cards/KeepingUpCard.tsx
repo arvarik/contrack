@@ -117,7 +117,7 @@ export const KeepingUpCard = ({ tracking }: KeepingUpCardProps) => {
         <EmptyState
           level={3}
           icon={Radar}
-          title="Nobody is tracked yet"
+          title="No one is tracked yet"
           body={TRACKED_INTRO}
           action={{
             label: "Choose people",

@@ -36,6 +36,7 @@
 import React, { useCallback } from "react";
 import { Link, useNavigate, type LinkProps } from "react-router-dom";
 import { WIDE_QUERY } from "../../hooks/useMediaQuery";
+import { prefersReducedMotion } from "../../lib/motion";
 import { useWarmSettingsLink } from "./warm";
 
 type SlideDirection = "forward" | "back";
@@ -86,8 +87,7 @@ type ViewTransitionDocument = Document & {
 function wantsSlide(doc: ViewTransitionDocument): boolean {
   if (typeof doc.startViewTransition !== "function") return false;
   if (window.matchMedia?.(WIDE_QUERY).matches) return false;
-  if (doc.documentElement.dataset.motion === "reduced") return false;
-  return !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  return !prefersReducedMotion();
 }
 
 /**

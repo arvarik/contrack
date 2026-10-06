@@ -13,12 +13,18 @@ import {
   passkeyAutofillSupported,
   signInWithPasskey,
 } from "../../api/passkeys";
-import { isNetworkError } from "../../api/client";
-import { rateLimitMessage } from "../../lib/rateLimitMessage";
-import { AuthShell, AuthField, AuthSubmit, AuthError } from "./AuthShell";
+import {
+  AuthShell,
+  AuthField,
+  AuthSubmit,
+  AuthError,
+  authErrorText,
+} from "./AuthShell";
 import { PasskeyButton } from "./PasskeyButton";
 import { ForgotPassword } from "./ForgotPassword";
 import { requestMagicLink } from "../../api/authLinks";
+import { NO_AUTOCORRECT } from "../ui/SearchField";
+import { touchFirst } from "../../lib/platform";
 
 /** Why this screen appeared, when it was not the user's own doing. */
 type SignInReason = "expired" | "disabled" | null;
@@ -83,7 +89,7 @@ export const SignIn = ({
   const autofillAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    if (savedIdentifier) {
+    if (savedIdentifier && !touchFirst()) {
       passwordRef.current?.focus();
     }
   }, [savedIdentifier]);
@@ -187,16 +193,11 @@ export const SignIn = ({
       } catch {}
       onSignedIn();
     } catch (err) {
-      setError(
-        isNetworkError(err)
-          ? "Can't reach the Contrack server. Is it running?"
-          : // Sign-in shares one per-address budget with register, accept-
-            // invitation and change-password. A refusal for that reason is
-            // not a wrong password, and saying "incorrect" would send
-            // somebody hunting for a password that was right.
-            (rateLimitMessage(err) ??
-              (err instanceof Error ? err.message : "Sign-in failed")),
-      );
+      // Sign-in shares one per-address budget with register, accept-
+      // invitation and change-password. A refusal for that reason is not a
+      // wrong password, and saying "incorrect" would send somebody hunting
+      // for a password that was right.
+      setError(authErrorText(err, "Could not sign in"));
       // Clear only the password. Retyping a username you already got right is
       // busywork, and the failure is almost always the other field.
       setPassword("");
@@ -267,7 +268,7 @@ export const SignIn = ({
               <button
                 type="button"
                 onClick={handleNotYou}
-                className="text-xs text-primary font-medium hover:underline inline-flex items-center min-h-[36px] sm:min-h-[44px] py-1"
+                className="text-xs text-primary font-medium hover:underline inline-flex items-center min-h-[44px] py-1"
               >
                 Not you?
               </button>
@@ -280,14 +281,13 @@ export const SignIn = ({
             setIdentifier(e.target.value);
           }}
           autoComplete={isPasskeySupported ? "username webauthn" : "username"}
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
+          {...NO_AUTOCORRECT}
           required
           // The sign-in screen is the whole page and has one starting point.
-          // Focus password if prefilled; otherwise start on identifier.
+          // Focus password if prefilled; otherwise start on identifier. Not
+          // on a touch screen, where focus opens the keyboard.
           // eslint-disable-next-line jsx-a11y/no-autofocus
-          autoFocus={!savedIdentifier}
+          autoFocus={!savedIdentifier && !touchFirst()}
         />
         <AuthField
           ref={passwordRef}
@@ -389,14 +389,7 @@ const MagicLinkRequest = ({
       await requestMagicLink(email.trim());
       setSent(true);
     } catch (err) {
-      setError(
-        isNetworkError(err)
-          ? "Can't reach the Contrack server. Is it running?"
-          : (rateLimitMessage(err) ??
-              (err instanceof Error
-                ? err.message
-                : "Could not send sign-in link")),
-      );
+      setError(authErrorText(err, "Could not send sign-in link"));
     } finally {
       setBusy(false);
     }

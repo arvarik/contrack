@@ -15,8 +15,11 @@ import React, { useCallback, useMemo, useState } from "react";
 import { uploadAccountAvatar } from "../../api/auth";
 import { signedOutAccountAvatarUrl } from "../../lib/avatar";
 import { AccountPhotoField } from "./AccountPhotoField";
+import { toast } from "sonner";
 import { AuthField } from "./AuthShell";
+import { touchFirst } from "../../lib/platform";
 import { PasswordStrengthMeter } from "../../lib/passwordStrength";
+import { NO_AUTOCORRECT } from "../ui/SearchField";
 
 /** Kept in step with USERNAME_PATTERN in server/services/authService.ts. */
 const USERNAME_PATTERN = /^[a-z0-9](?:[a-z0-9._-]{1,30}[a-z0-9])?$/;
@@ -195,22 +198,21 @@ export function useAccountForm(): AccountForm {
  * Run account creation followed by photo upload when a photo was selected.
  *
  * A failure during photo upload does not block account creation: the account
- * is already created and authenticated, so it resolves with `{ photoFailed: true }`
- * and lets the caller notify the user.
+ * is already created and authenticated, so a toast tells the person where to
+ * add the photo later.
  */
 export async function createAccountThenPhoto(
   submit: () => Promise<unknown>,
   photo: File | null,
-): Promise<{ photoFailed: boolean }> {
+): Promise<void> {
   await submit();
-  if (!photo) {
-    return { photoFailed: false };
-  }
+  if (!photo) return;
   try {
     await uploadAccountAvatar(photo);
-    return { photoFailed: false };
   } catch {
-    return { photoFailed: true };
+    toast.error(
+      "Your account is ready. The photo did not upload. Add it in Settings → Account",
+    );
   }
 }
 
@@ -218,7 +220,8 @@ export async function createAccountThenPhoto(
  * The fields that create an account, in the order they are filled in.
  *
  * `autoFocus` is on the first field because each of the three screens is the
- * whole page with one thing to do on it.
+ * whole page with one thing to do on it. Not on a touch screen, where focus
+ * opens the keyboard over the form.
  */
 export const AccountFields = ({
   form,
@@ -263,7 +266,7 @@ export const AccountFields = ({
         onBlur={form.blur("displayName")}
         autoComplete="name"
         // eslint-disable-next-line jsx-a11y/no-autofocus
-        autoFocus
+        autoFocus={!touchFirst()}
       />
       <AuthField
         id="email"
@@ -276,9 +279,7 @@ export const AccountFields = ({
         onBlur={form.blur("email")}
         error={form.errorFor("email")}
         autoComplete="email"
-        autoCapitalize="none"
-        autoCorrect="off"
-        spellCheck={false}
+        {...NO_AUTOCORRECT}
         required
       />
       <AuthField
@@ -291,9 +292,7 @@ export const AccountFields = ({
         onBlur={form.blur("username")}
         error={form.errorFor("username")}
         autoComplete="username"
-        autoCapitalize="none"
-        autoCorrect="off"
-        spellCheck={false}
+        {...NO_AUTOCORRECT}
         required
       />
       <AuthField

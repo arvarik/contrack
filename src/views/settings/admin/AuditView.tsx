@@ -16,7 +16,9 @@ import { useState } from "react";
 import {
   Archive,
   Ban,
+  Cable,
   Check,
+  Fingerprint,
   KeyRound,
   LogIn,
   LogOut,
@@ -40,7 +42,7 @@ import { AdminButton, AdminList, AdminPage } from "./AdminShell";
 /** One filter: the selected tint when it is on, the hover layer when not. */
 const filterClass = (active: boolean) =>
   cn(
-    "px-4 min-h-[44px] sm:min-h-0 sm:py-2 rounded-lg text-xs font-bold transition-colors",
+    "px-4 min-h-[44px] sm:pointer-fine:min-h-0 sm:py-2 rounded-lg text-xs font-bold transition-colors",
     active
       ? SELECTED_TINT
       : "state-layer text-on-surface-variant hover:text-on-surface",
@@ -78,6 +80,21 @@ const LOOK: Record<
     icon: LogIn,
     tone: "neutral",
     label: "Signed in with link",
+  },
+  "auth.passkey.added": {
+    icon: Fingerprint,
+    tone: "primary",
+    label: "Passkey added",
+  },
+  "auth.passkey.renamed": {
+    icon: Fingerprint,
+    tone: "neutral",
+    label: "Passkey renamed",
+  },
+  "auth.passkey.removed": {
+    icon: Fingerprint,
+    tone: "neutral",
+    label: "Passkey removed",
   },
   "auth.token.created": {
     icon: Terminal,
@@ -153,8 +170,59 @@ const LOOK: Record<
     tone: "neutral",
     label: "Test email sent",
   },
+  "integrations.changed": {
+    icon: Settings2,
+    tone: "primary",
+    label: "Integration changed",
+  },
   "backup.created": { icon: Archive, tone: "neutral", label: "Snapshot" },
+  "backup.downloaded": {
+    icon: Archive,
+    tone: "warning",
+    label: "Snapshot downloaded",
+  },
+  "connector.created": {
+    icon: Cable,
+    tone: "primary",
+    label: "Connector added",
+  },
+  "connector.updated": {
+    icon: Cable,
+    tone: "neutral",
+    label: "Connector changed",
+  },
+  "connector.deleted": {
+    icon: Cable,
+    tone: "neutral",
+    label: "Connector removed",
+  },
+  "connector.reauth": {
+    icon: Cable,
+    tone: "warning",
+    label: "Connector needs signing in again",
+  },
+  "connector.run.failed": {
+    icon: Cable,
+    tone: "warning",
+    label: "Connector sync failed",
+  },
 };
+
+/**
+ * Who did it. A failed sign-in has no actor on purpose: nobody proved who
+ * they are, and the row says whether the name typed matched an account.
+ * Any other row with no actor outlived its account (`actorUserId` is
+ * `ON DELETE SET NULL`).
+ */
+function actorLine(entry: AuditEntry): string {
+  if (entry.actor) return `by ${entry.actor.username}`;
+  if (entry.action === "auth.login.failed") {
+    return entry.details?.matched
+      ? "for an existing account"
+      : "for a name with no account";
+  }
+  return "by a deleted account";
+}
 
 const FALLBACK = { icon: ScrollText, tone: "neutral" as BadgeTone, label: "" };
 
@@ -180,11 +248,14 @@ const EntryRow = ({ entry }: { entry: AuditEntry }) => {
   // the key that changed and never the value, and the key is in `targetId`.
   // Reading only `details` therefore rendered every settings row as the
   // identical line "Setting changed by ada", whatever it was that changed.
+  // A failed sign-in says all it has in `actorLine`.
   const detail =
-    describeDetails(entry.details) ||
-    (entry.targetId
-      ? `${entry.targetType ?? "target"}: ${entry.targetId}`
-      : "");
+    entry.action === "auth.login.failed"
+      ? ""
+      : describeDetails(entry.details) ||
+        (entry.targetId
+          ? `${entry.targetType ?? "target"}: ${entry.targetId}`
+          : "");
 
   return (
     <div className="flex items-start gap-3 px-4 sm:px-6 py-3.5 even:bg-surface-container-low/40">
@@ -202,13 +273,8 @@ const EntryRow = ({ entry }: { entry: AuditEntry }) => {
           <span className="text-sm font-bold text-on-surface">
             {look.label || entry.action}
           </span>
-          {/*
-            A row whose actor is null is one whose account has since been
-            deleted: `audit_log.actorUserId` is ON DELETE SET NULL, so the row
-            survives the account and says as much.
-          */}
           <span className="text-xs text-on-surface-variant">
-            by {entry.actor ? entry.actor.username : "a deleted account"}
+            {actorLine(entry)}
           </span>
           {!look.label && <Badge>{entry.action}</Badge>}
         </p>

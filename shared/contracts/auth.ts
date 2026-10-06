@@ -1,12 +1,27 @@
 // =============================================================================
-// Contracts: sign-up (request schemas only)
+// Contracts: sign-up
 // =============================================================================
-// The bodies of the two routes that create an account from outside. These
-// routes have no contract yet: they are in `UNCONTRACTED` in `index.ts`. The
-// token routes under /api/auth have theirs in `tokens.ts`.
+// The check of an invitation link, and the bodies of the two routes that
+// create an account from outside. Those two have no contract yet: they are
+// in `UNCONTRACTED` in `index.ts`. The token routes under /api/auth have
+// theirs in `tokens.ts`.
 // =============================================================================
 
 import { z } from "zod";
+import { route } from "./route.ts";
+
+export const authRoutes = {
+  invitationCheck: route({
+    method: "POST",
+    path: "/api/auth/invitations/check",
+    summary:
+      "Whether an invitation link can still make an account: 404 for one that never was, 410 for one used, revoked or expired",
+    // Any string, like accepting the link: an empty token is one more
+    // unknown link, not a field error.
+    body: z.object({ token: z.string() }),
+    response: z.strictObject({ ok: z.literal(true) }),
+  }),
+};
 
 /** Body for POST /api/auth/accept-invitation.
  *

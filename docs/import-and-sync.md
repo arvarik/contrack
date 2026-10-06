@@ -11,9 +11,11 @@ calendar, mail, and Google account with connectors, and export your data.
    Network list's header.
 2. Choose the tab for your source: **Apple**, **LinkedIn**, **Google**, or
    **Facebook**.
-3. Drop the file on the box, or select the box to choose the file.
+3. Select the box to choose the file. On a computer, you can also drop the
+   file on the box.
 
-Contrack remembers the tab you used last in this browser.
+Contrack remembers the tab you used last in this browser. The tabs take the
+arrow keys. The file type is read in any case, so `Contacts.VCF` works.
 
 ### Supported files
 
@@ -21,12 +23,17 @@ Contrack remembers the tab you used last in this browser.
 | ------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | **Apple**    | vCard (`.vcf`)      | Names, emails, phones, addresses, company, job title, birthday, notes, websites, social profiles, groups as tags, and photos |
 | **LinkedIn** | `Connections.csv`   | Name, company, position, email, profile URL, and the date you connected                                                      |
-| **Google**   | Google CSV (`.csv`) | Name, emails and phones, company, role, address, birthday, notes, and website                                                |
+| **Google**   | Google CSV (`.csv`) | Name, emails and phones, company, role, addresses, birthday, notes, website, and labels as tags                              |
 | **Facebook** | `friends.json`      | Friend names and the date you connected. Facebook exports no emails or phone numbers                                         |
 
 A vCard from any other address book, such as Outlook or an Android phone,
-works on the **Apple** tab. One import holds up to 5,000 contacts. Split a
-larger file.
+works on the **Apple** tab. The **Google** tab reads the current Google CSV
+(with **First Name** and **Last Name** columns) and the older one (with
+**Given Name** and **Family Name**). One import holds up to 5,000 contacts.
+Split a larger file.
+
+An entry with no name is not imported. The summary says how many entries had
+no name. A Google entry with only a company takes the company as its name.
 
 ### Export from your address book
 
@@ -34,9 +41,9 @@ Select **How to export from** under the drop zone to see these steps in the
 app.
 
 - **Apple Contacts:** open the Contacts app on your Mac. Select the contacts,
-  or press `Cmd+A` for all. Choose **File > Export > Export vCard...**, and
+  or press `⌘A` for all. Choose **File > Export > Export vCard…**, and
   save the `.vcf` file.
-- **LinkedIn:** open **Settings & Privacy**, then **Data Privacy** > **Get a
+- **LinkedIn:** open **Settings & Privacy**, then **Data privacy** > **Get a
   copy of your data**. Choose **Connections** and request the archive.
   Download it, extract it, and use `Connections.csv`.
 - **Google Contacts:** go to contacts.google.com. Select **Export**, choose
@@ -52,14 +59,16 @@ Your browser reads the file and sends the contacts to your Contrack server.
 The import then runs in up to three steps:
 
 1. **Importing contacts.** Contrack saves each contact.
-2. **Generating contact fingerprints.** Contrack makes the embeddings that
-   the duplicate check uses.
+2. **Preparing the contacts for search.** Contrack makes the embeddings that
+   search and the duplicate check use.
 3. **Looking for duplicates.** This step runs when **Check imports
    automatically** is on in **Settings → Duplicates**.
 
-The summary counts the contacts processed and the duplicates that merged by
-themselves. It also counts the likely matches to review and the new unique
-contacts. Imported contacts start untracked, see
+The summary counts the contacts imported and the duplicates that merged by
+themselves. It also counts the likely matches to review and the new
+contacts. If the duplicate check did not finish, the summary says so, and the
+contacts stay saved: select **Check now** in **Settings → Duplicates** to run
+it again. Imported contacts start untracked, see
 [Track a contact](pulse.md#track-a-contact).
 
 If the connection drops, the import goes on, and nothing is imported twice.
@@ -75,7 +84,7 @@ A row that cannot be saved stays on the server with its reason, and the
 summary lists it. **Retry failed rows** runs these rows again, with no need
 for the file. **Settings → Import** also lists **Recent imports**, newest
 first, with each status (**Complete**, **Checking**, **Running**, or
-**Failed**) and its counts. Select **Retry** on a row with failed rows. If an
+**Failed**) and its counts. Select **Try again** on a row with failed rows. If an
 import saved nothing, import the file again.
 
 ### Duplicates at import
@@ -189,9 +198,13 @@ stops every Google connector on the instance.
    the link to go to the app. This is normal for a self-hosted server.
 
 Contrack asks for read-only access to your contacts, calendar events, email
-address, and Gmail headers, or whole messages with summaries. Each account has
-one Google connector. To add summaries later, connect again with **Generate AI
-summaries** on, and Contrack updates the connector you have. **Edit** sets
+address, and Gmail headers, or whole messages with summaries. Each Google
+account has its own connector: connect a second account and it gets a second
+connector, and the first keeps its own access. To add summaries later, connect
+the same account again with **Generate AI summaries** on, and Contrack updates
+its connector. When a sign-in does not finish, for example because you did not
+give access or it took too long, the Connectors page says why, and nothing
+changes. **Edit** sets
 **Synced data types** (**Google Contacts (People API)**, **Gmail messages**,
 **Google Calendar events**) and the options below. Google Contacts become
 untracked contacts, with their photos copied to your server.
@@ -231,7 +244,10 @@ The people Contrack counts are on **Settings → Correspondents**, most often
 seen first. The **Correspondents** button on the Connectors page shows how
 many wait. For each person:
 
-- **Add as contact** makes a contact with their name, email, and phone.
+- **Add as contact** makes a contact with their email or phone and the name
+  their mail or meeting gave, for example "Rowan Vale". When there was only
+  an address, it asks for the name first, filled in from the address, for
+  example "Rowan Vale" for `rowan.vale@example.com`.
 - **Ignore** hides them. They do not come back, and they never become a
   ghost.
 
@@ -282,8 +298,9 @@ only, never another account's on the instance.
 | **Everything (.json)** | Every contact, including archived and trashed ones, with interactions, lists, follow-ups, and merges     | A record of your contacts and notes                                                |
 
 The CSV has the columns Name, First Name, Last Name, Company, Role, Location,
-Industry, Website, Emails, Phones, and Tags. Then come Archived, Tracked,
-Cadence Days, Tracked At, Added At, and Last Contacted At.
+Industry, Website, Emails, Phones, Addresses, Social Links, Birthday, About,
+and Tags. Then come Archived, Tracked, Cadence Days, Tracked At, Added At, and
+Last Contacted At.
 
 The JSON file holds your contacts with every field, their notes and
 interactions, your lists and who is on them, your follow-ups, and the merges

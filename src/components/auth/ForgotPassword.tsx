@@ -3,17 +3,23 @@
  *
  * Has two shapes depending on whether outgoing mail is configured:
  * - With mail: email field to request a self-service password reset link.
- * - Without mail: explanation of operator recovery steps (admin reset or CLI script).
+ * - Without mail: ask an admin, and the server command behind "I run this
+ *   server".
  *
  * @module components/auth/ForgotPassword
  */
 
 import React, { useState } from "react";
-import { Mail, Loader2, ArrowLeft } from "lucide-react";
-import { AuthShell, AuthField, AuthSubmit, AuthError } from "./AuthShell";
+import { Mail, Loader2, ArrowLeft, ChevronDown } from "lucide-react";
+import {
+  AuthShell,
+  AuthField,
+  AuthSubmit,
+  AuthError,
+  authErrorText,
+} from "./AuthShell";
 import { requestPasswordReset } from "../../api/authLinks";
-import { isNetworkError } from "../../api/client";
-import { rateLimitMessage } from "../../lib/rateLimitMessage";
+import { touchFirst } from "../../lib/platform";
 
 export const ForgotPassword = ({
   onBack,
@@ -40,58 +46,54 @@ export const ForgotPassword = ({
       await requestPasswordReset(email.trim());
       setSent(true);
     } catch (err) {
-      setError(
-        isNetworkError(err)
-          ? "Can't reach the Contrack server. Is it running?"
-          : (rateLimitMessage(err) ??
-              (err instanceof Error
-                ? err.message
-                : "Could not request password reset")),
-      );
+      setError(authErrorText(err, "Could not request password reset"));
     } finally {
       setBusy(false);
     }
   };
 
+  // The pages with nothing to fill in have one way back: the button.
+  const backButton = (
+    <div className="pt-2">
+      <button type="button" onClick={onBack} className="btn-secondary w-full">
+        Back to sign in
+      </button>
+    </div>
+  );
+
   if (!mailConfigured) {
     return (
       <AuthShell
         title="Reset your password"
-        subtitle="This Contrack cannot send email"
+        subtitle="This Contrack cannot send email, so an admin resets it for you"
         onSubmit={handleSubmit}
-        footer={
-          <button
-            type="button"
-            onClick={onBack}
-            className="text-primary font-bold hover:underline inline-flex items-center gap-1.5"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Back to sign in
-          </button>
-        }
       >
-        <div className="space-y-3 text-sm text-on-surface-variant">
+        <div className="space-y-3 text-sm text-on-surface-variant text-pretty">
           <p>
-            This Contrack cannot send email. An administrator can reset your
-            password from Settings, Accounts
+            Ask an admin to reset your password in Settings → Accounts. You get
+            a temporary password to sign in with
           </p>
-          <p>
-            If you run the server,{" "}
-            <code className="px-1.5 py-0.5 rounded bg-surface-container font-mono text-xs text-on-surface">
-              node scripts/reset-password.ts &lt;username&gt;
-            </code>{" "}
-            prints a temporary password
-          </p>
+          {/* Closed, so a visitor does not get a server command first. */}
+          {/* A chevron says it opens: `flex` on a summary takes the
+              browser's own arrow away. */}
+          <details className="group/server">
+            <summary className="state-layer cursor-pointer list-none rounded-xl -mx-2 px-2 font-semibold text-on-surface min-h-[44px] flex items-center gap-2">
+              <ChevronDown
+                aria-hidden="true"
+                className="w-4 h-4 transition-transform duration-(--dur-fast) group-open/server:rotate-180"
+              />
+              I run this server
+            </summary>
+            <p>
+              Run{" "}
+              <code className="px-1.5 py-0.5 rounded bg-surface-container font-mono text-xs text-on-surface">
+                node scripts/reset-password.ts &lt;username&gt;
+              </code>{" "}
+              on the server. It prints a temporary password
+            </p>
+          </details>
         </div>
-        <div className="pt-2">
-          <button
-            type="button"
-            onClick={onBack}
-            className="btn-secondary w-full"
-          >
-            Back to sign in
-          </button>
-        </div>
+        {backButton}
       </AuthShell>
     );
   }
@@ -105,26 +107,8 @@ export const ForgotPassword = ({
           e.preventDefault();
           onBack();
         }}
-        footer={
-          <button
-            type="button"
-            onClick={onBack}
-            className="text-primary font-bold hover:underline min-h-[44px] inline-flex items-center gap-1.5 py-2"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            Back to sign in
-          </button>
-        }
       >
-        <div className="pt-2">
-          <button
-            type="button"
-            onClick={onBack}
-            className="btn-secondary w-full"
-          >
-            Back to sign in
-          </button>
-        </div>
+        {backButton}
       </AuthShell>
     );
   }
@@ -157,6 +141,8 @@ export const ForgotPassword = ({
           }}
           autoComplete="email"
           required
+          // eslint-disable-next-line jsx-a11y/no-autofocus
+          autoFocus={!touchFirst()}
         />
         {error && <AuthError>{error}</AuthError>}
       </div>

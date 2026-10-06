@@ -12,11 +12,16 @@
 import React, { useState } from "react";
 import { KeyRound, Loader2, LogOut } from "lucide-react";
 import { changePassword } from "../../api/auth";
-import { isNetworkError } from "../../api/client";
-import { rateLimitMessage } from "../../lib/rateLimitMessage";
-import { AuthShell, AuthField, AuthSubmit, AuthError } from "./AuthShell";
+import {
+  AuthShell,
+  AuthField,
+  AuthSubmit,
+  AuthError,
+  authErrorText,
+} from "./AuthShell";
 import { MIN_PASSWORD_LENGTH, passwordProblem } from "./accountForm";
 import { useAuth } from "./AuthGate";
+import { touchFirst } from "../../lib/platform";
 
 export const ForcedPasswordChange = ({
   onChanged,
@@ -54,18 +59,11 @@ export const ForcedPasswordChange = ({
       await changePassword({ currentPassword: current, newPassword: next });
       await onChanged();
     } catch (err) {
-      setFormError(
-        isNetworkError(err)
-          ? "Can't reach the Contrack server. Is it running?"
-          : // Sign-in, register, accept-invitation and this screen share one
-            // per-address budget on the server, so a few wrong attempts can
-            // produce a rate limit rather than a rejection. Saying which it
-            // is stops somebody retrying into a wall.
-            (rateLimitMessage(err) ??
-              (err instanceof Error
-                ? err.message
-                : "Could not change the password")),
-      );
+      // Sign-in, register, accept-invitation and this screen share one
+      // per-address budget on the server, so a few wrong attempts can
+      // produce a rate limit rather than a rejection. Saying which it is
+      // stops somebody retrying into a wall.
+      setFormError(authErrorText(err, "Could not change the password"));
       setCurrent("");
       setBusy(false);
     }
@@ -117,9 +115,10 @@ export const ForcedPasswordChange = ({
           required
           revealable
           capsLockHint
-          // The whole page has one thing to do on it.
+          // The whole page has one thing to do on it. Not on a touch screen,
+          // where focus opens the keyboard over the form.
           // eslint-disable-next-line jsx-a11y/no-autofocus
-          autoFocus
+          autoFocus={!touchFirst()}
         />
         <AuthField
           id="new-password"

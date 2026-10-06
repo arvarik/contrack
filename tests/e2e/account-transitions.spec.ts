@@ -52,7 +52,7 @@ test("first run creates the admin, and the account can sign out and back in", as
 
   await submitSignIn(page, ADMIN.email, "wrong");
   const alert = page.getByRole("alert");
-  await expect(alert).toHaveText("Incorrect username or password.");
+  await expect(alert).toHaveText("Incorrect username or password");
   await expect(page.getByLabel("Username or email")).toHaveValue(ADMIN.email);
   await expect(page.getByLabel("Password", { exact: true })).toHaveValue("");
   // The corvid beside the alert is decoration, so the alert is the whole of

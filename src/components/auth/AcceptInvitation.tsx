@@ -11,18 +11,23 @@
  * revoked or has expired is gone, and the screen says which, because "that
  * link does not work" leaves somebody retrying a link that never will.
  */
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Loader2, MailCheck } from "lucide-react";
-import { toast } from "sonner";
-import { acceptInvitation } from "../../api/auth";
-import { isNetworkError, ApiError } from "../../api/client";
-import { rateLimitMessage } from "../../lib/rateLimitMessage";
-import { AuthShell, AuthSubmit, AuthError } from "./AuthShell";
+import { acceptInvitation, checkInvitation } from "../../api/auth";
+import { ApiError } from "../../api/client";
+import { AuthShell, AuthSubmit, AuthError, authErrorText } from "./AuthShell";
 import {
   AccountFields,
   createAccountThenPhoto,
   useAccountForm,
 } from "./accountForm";
+
+/**
+ * 404 is a secret the server does not recognise, 410 is one it used to. Both
+ * are final: no amount of retrying makes a used link work again.
+ */
+const isDeadLink = (err: unknown): err is ApiError =>
+  err instanceof ApiError && (err.status === 404 || err.status === 410);
 
 export const AcceptInvitation = ({
   token,
@@ -43,6 +48,26 @@ export const AcceptInvitation = ({
   // there inviting a second attempt that will fail the same way.
   const [dead, setDead] = useState(false);
   const [busy, setBusy] = useState(false);
+  // The link is checked when it opens, so a dead one says so before anybody
+  // fills in the form.
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    checkInvitation(token)
+      .catch((err: unknown) => {
+        if (live && isDeadLink(err)) {
+          setDead(true);
+          setFormError(err.message);
+        }
+        // Anything else (the server is down, a rate limit) shows the form,
+        // and the submit says what is wrong.
+      })
+      .finally(() => live && setChecked(true));
+    return () => {
+      live = false;
+    };
+  }, [token]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -55,32 +80,29 @@ export const AcceptInvitation = ({
     setBusy(true);
     setFormError(null);
     try {
-      const { photoFailed } = await createAccountThenPhoto(
+      await createAccountThenPhoto(
         () => acceptInvitation({ token, ...form.payload() }),
         form.photo,
       );
-      if (photoFailed) {
-        toast.error(
-          "Your account is ready. The photo did not upload. Add it in Settings > Account",
-        );
-      }
       onAccepted();
     } catch (err) {
-      // 404 is a secret the server does not recognise, 410 is one it used to.
-      // Both are final: no amount of retrying makes a used link work again.
-      if (err instanceof ApiError && (err.status === 404 || err.status === 410))
-        setDead(true);
-      setFormError(
-        isNetworkError(err)
-          ? "Can't reach the Contrack server. Is it running?"
-          : (rateLimitMessage(err) ??
-              (err instanceof Error
-                ? err.message
-                : "Could not accept the invitation")),
-      );
+      if (isDeadLink(err)) setDead(true);
+      setFormError(authErrorText(err, "Could not accept the invitation"));
       setBusy(false);
     }
   };
+
+  if (!checked) {
+    return (
+      <AuthShell
+        title="You've been invited"
+        subtitle="Checking your invitation…"
+        onSubmit={(event) => event.preventDefault()}
+      >
+        <Loader2 className="w-5 h-5 animate-spin mx-auto text-primary" />
+      </AuthShell>
+    );
+  }
 
   if (dead) {
     return (
@@ -105,7 +127,7 @@ export const AcceptInvitation = ({
   return (
     <AuthShell
       title="You've been invited"
-      subtitle="Choose how you'll sign in. Your account starts empty — an invitation gives you a place on this Contrack, not access to anybody else's contacts"
+      subtitle="Choose how you'll sign in. Your account starts empty: an invitation gives you a place on this Contrack, not access to anyone else's contacts"
       onSubmit={handleSubmit}
       footer={
         <>

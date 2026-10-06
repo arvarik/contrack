@@ -37,7 +37,7 @@ Move the pointer into the card to use its buttons: **Open contact**, **Call** (w
 
 The card stays inside the part of the map that you can see. It opens away from the toolbar, the bottom line, the open contact and **Map insights**, and it changes side when the map moves. The pin of an open card has a halo.
 
-With the keyboard, move to a pin with `Tab` to see its card, and press `Space` to move into its buttons. `Esc` closes the card and puts the focus back on the pin. A second `Esc` closes the open contact.
+With the keyboard, move to a pin with `Tab` to see its card, and press `Space` to move into its buttons. `Esc` closes the card and puts the focus back on the pin. A second `Esc` closes the open contact, and the focus goes back to that contact's pin. After `Enter` on a cluster, the map zooms in and the focus moves to the pin nearest the cluster's place.
 
 On a phone, the first tap on a pin shows its card at the bottom of the map, with the same buttons. Tap the pin again, or tap **Open**, to open the contact. Tap the map to close the card.
 
@@ -52,26 +52,30 @@ To find the people around a place:
 1. Type `near:` and a place, for example `near:Paris` or `near:London/50km`. With no distance, the distance is 25 km.
 2. Type a space, or press `Enter`. The pill says "(resolving…)" while Contrack looks up the place. The pill turns red when Contrack finds no such place, and `Enter` tries again.
 
-**Clear all**, beside the pills, clears the whole filter and the overdue filter. It shows whenever a filter is on. When nobody matches, the toolbar also says, for example, "0 of 240 match". The **X** in the box clears the filter text and all its pills.
+**Clear all**, beside the pills, clears the whole filter and the overdue filter. It shows whenever a filter is on. When nobody matches, the toolbar also says, for example, "0 of 240 match". The **X** in the box, or `Esc` in the box, clears the filter text and all its pills. The list of facet values shows only while the box has the focus.
+
+On a narrow window, `/` opens **Filters** with the focus in the box.
 
 ### Go to a place
 
-1. Select **Go to**. The box becomes a place search.
+1. Select **Go to**. The box becomes a place search, and the focus moves into it.
 2. Type a place, for example "Lisbon", and press `Enter`.
 3. The map flies to the place, and a message names the place that the lookup found, for example "Showing Lisbon, Portugal". "Nothing found for that place" means the lookup found no match. "Place search is busy or unavailable" means the geocoder did not answer, so try again in a moment.
 
-Select **Filter**, or press `Esc`, to go back to the filter.
+Select **Filter**, or press `Esc`, to go back to the filter. After a place is found, the focus goes back to the filter box too.
 
 ### Fit all
 
 **Fit all** (`F`) fits the map to every contact that the filter keeps. When your network is wider than the map can show, it shows the part with the most people.
 
+The map flies to a contact, a place or a view. With **Reduced** in **Settings → Appearance → Motion**, or with reduced motion on your device, it jumps there instead.
+
 ## The bottom line
 
-The line in the bottom left corner says who is in view:
+The line in the bottom left corner says who is on the map and in view. Only people with a place are on the map, so its count can be lower than the count on the Network page.
 
-- "30 in view", or "12 of 30 in view" when some of the people who match are off the screen, or "No one in view".
-- While the contacts load, it says "Loading contacts…". When they do not load, it says "Could not load contacts", and the map offers **Retry**. With no pins at all, it says "No one is on the map yet".
+- "30 on the map" when all of them are in view, "12 in view, of 30 on the map" when some of the people who match are off the screen, or "No one in view".
+- While the contacts load, it says "Loading contacts…". When they do not load, it says "Could not load your contacts", and the map offers **Try again**. With no pins at all, it says "No one is on the map yet", and the middle of the map says how a contact gets a place, with **Go to Network**.
 - **4 overdue** counts the people in view whose follow-up day has passed. Select it to show only them, and select it again to show everyone. **Clear all** turns it off too.
 - **6 not on the map** counts the contacts with an address and no pin (see [Who is on the map](#who-is-on-the-map)).
 - **Fit all** shows when no one is in view.
@@ -123,11 +127,11 @@ Select people by area, then act on all of them at once.
 
 ![The map with a box selection, the selection bar and the bulk bar at the bottom](images/map-selection.png)
 
+- **All in view**: choose **Select** → **All in view**. On a phone, open **Filters** and select **Select all in view**. With the keyboard, move the map to the people with the arrow keys, `+` and `-`, then choose **All in view**.
 - **Box**: hold `Shift` and drag across the map. **Select** → **Box select** tells you how.
 - **Lasso**: press `L`, or choose **Select** → **Lasso select**. Then drag a shape around the people. The lasso ends when you let go. `Esc` cancels it.
-- **All in view**: choose **Select** → **All in view**. On a phone, open **Filters** and select **Select all in view**.
 
-Each selection adds to the people you already selected. It picks only people who match the filter. Box and lasso need a mouse or a trackpad. On a touch screen, use **Select all in view**.
+Each selection adds to the people you already selected. It picks only people who match the filter. Box and lasso need a mouse or a trackpad, so a touch screen shows only **All in view**.
 
 A selection stays when you change the filter. The bar then says how many are hidden, for example "12 selected (3 hidden by filter)". A cluster shows how many of its people you selected, for example "3 of 12 selected".
 
@@ -162,6 +166,7 @@ A contact's **Details** card shows where the person is, under their addresses.
 - The first address places the pin, and its row says **Map pin**. Move another address to the top to move the pin there.
 - A pin that you placed yourself shows **Placed by hand**.
 - When the contact is open over the Map page, the small map is hidden, and **Adjust pin** stays.
+- **Open in map** opens the contact beside the map when the window has room for both. On a phone or a tablet, the contact would cover the map, so **Open in map** shows the map with the person's pin and card instead.
 
 ## Move a pin by hand
 
@@ -171,8 +176,8 @@ The geocoder can put a pin in the wrong place, for example in another town with 
 2. Under the small map, select **Adjust pin**. For a contact with no pin, select **Set location**. On the map, the hover card's **Adjust pin** and **Set location** in **N not on the map** open the same dialog.
 3. Move the pin in one of four ways:
    - Type a place or an address in **Find a place** and press `Enter`. The pin and the map move there.
-   - Drag it.
-   - Tap or click the map where the pin belongs.
+   - Move it with the mouse or a finger.
+   - Choose the spot on the map where the pin belongs.
    - Move to the pin with `Tab` and press the arrow keys. `Shift` with an arrow key moves it five times as far.
 4. Check the coordinates under the map.
 5. Select **Save**. The button works only after the pin has moved.

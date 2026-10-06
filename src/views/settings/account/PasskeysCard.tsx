@@ -32,8 +32,9 @@ import { Badge } from "../../../components/ui/Badge";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ICON_BTN, TONE_WASH } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import { SETTINGS_CARD, SETTINGS_INPUT } from "../layout";
+import { LoadFailed } from "../../../components/ui/LoadFailed";
 
 function formatWhen(iso: string): string {
   const date = new Date(iso.includes("T") ? iso : `${iso.replace(" ", "T")}Z`);
@@ -60,7 +61,7 @@ export const PasskeysCard = () => {
   const [deleteTarget, setDeleteTarget] = useState<PasskeySummary | null>(null);
   const [isAdding, setIsAdding] = useState(false);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     ...passkeysQuery,
     enabled: isSupported,
   });
@@ -97,9 +98,7 @@ export const PasskeysCard = () => {
     } catch (err: unknown) {
       const errName = (err as { name?: string })?.name;
       if (errName !== "AbortError" && errName !== "NotAllowedError") {
-        toast.error(
-          err instanceof Error ? err.message : "Failed to add passkey",
-        );
+        toast.error(`Could not add the passkey: ${errorText(err)}`);
       }
     } finally {
       setIsAdding(false);
@@ -159,11 +158,17 @@ export const PasskeysCard = () => {
 
       {isLoading ? (
         <p className="text-sm text-on-surface-variant">Loading passkeys…</p>
+      ) : isError ? (
+        <LoadFailed
+          what="your passkeys"
+          onRetry={() => void refetch()}
+          level={3}
+        />
       ) : passkeys.length === 0 ? (
         <EmptyState
           icon={KeyRound}
           title="No passkeys yet"
-          body="No passkeys yet. Add one to sign in without typing a password"
+          body="Add one to sign in without typing a password"
           action={{
             label: isAdding ? "Waiting for device…" : "Add a passkey",
             onClick: handleAddPasskey,

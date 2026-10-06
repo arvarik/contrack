@@ -27,6 +27,7 @@ import {
   useBulkAddToList,
 } from "../../api";
 import type { Contact, ContactUpdateData } from "../../types";
+import { errorText } from "../../lib/utils";
 
 interface ContactLike {
   id: string;
@@ -50,10 +51,6 @@ export type SelectionTracked = "all" | "none" | "mixed";
 
 /** "1 contact", "3 contacts". */
 const say = (count: number) => `${count} contact${count === 1 ? "" : "s"}`;
-
-/** The words of an error, for the toast after "Could not …:". */
-const reason = (err: unknown) =>
-  err instanceof Error ? err.message : String(err);
 
 /** The list cache by id: what a write is about to replace. */
 const cachedById = (client: QueryClient) =>
@@ -98,12 +95,12 @@ export function useBulkActions({
           onUndo: () =>
             bulkRestore.mutate(ids, {
               onError: (err) =>
-                toast.error(`Could not restore: ${reason(err)}`),
+                toast.error(`Could not restore: ${errorText(err)}`),
             }),
         });
         onComplete?.();
       },
-      onError: (err) => toast.error(`Could not delete: ${reason(err)}`),
+      onError: (err) => toast.error(`Could not delete: ${errorText(err)}`),
     });
   }, [getIds, bulkDelete, bulkRestore, onComplete]);
 
@@ -177,7 +174,7 @@ export function useBulkActions({
                             : `Tracking ${say(undone)} again, at the default cadence`,
                         ),
                       onError: (err) =>
-                        toast.error(`Could not undo: ${reason(err)}`),
+                        toast.error(`Could not undo: ${errorText(err)}`),
                     },
                   ),
                 ),
@@ -187,7 +184,7 @@ export function useBulkActions({
           },
           onError: (err) =>
             toast.error(
-              `Could not ${next ? "track" : "stop tracking"}: ${reason(err)}`,
+              `Could not ${next ? "track" : "stop tracking"}: ${errorText(err)}`,
             ),
         },
       );
@@ -213,7 +210,7 @@ export function useBulkActions({
             onComplete?.();
           },
           onError: (err) =>
-            toast.error(`Could not change the cadence: ${reason(err)}`),
+            toast.error(`Could not change the cadence: ${errorText(err)}`),
         },
       );
     },
@@ -236,14 +233,14 @@ export function useBulkActions({
                 { ids, data: { isArchived: false } },
                 {
                   onError: (err) =>
-                    toast.error(`Could not undo: ${reason(err)}`),
+                    toast.error(`Could not undo: ${errorText(err)}`),
                 },
               ),
             ),
           );
           onComplete?.();
         },
-        onError: (err) => toast.error(`Could not archive: ${reason(err)}`),
+        onError: (err) => toast.error(`Could not archive: ${errorText(err)}`),
       },
     );
   }, [getIds, bulkUpdate, onComplete, queryClient]);
@@ -261,7 +258,7 @@ export function useBulkActions({
             onComplete?.();
           },
           onError: (err) =>
-            toast.error(`Could not add to the list: ${reason(err)}`),
+            toast.error(`Could not add to the list: ${errorText(err)}`),
         },
       );
     },
@@ -280,7 +277,7 @@ export function useBulkActions({
             onComplete?.();
           },
           onError: (err) =>
-            toast.error(`Could not change the colour: ${reason(err)}`),
+            toast.error(`Could not change the colour: ${errorText(err)}`),
         },
       );
     },
@@ -313,7 +310,7 @@ export function useBulkActions({
               data: { [field]: old } as ContactUpdateData,
             }),
           ),
-        ).catch((err) => toast.error(`Could not undo: ${reason(err)}`));
+        ).catch((err) => toast.error(`Could not undo: ${errorText(err)}`));
       bulkUpdate.mutate(
         { ids, data: { [field]: value } as ContactUpdateData },
         {
@@ -322,7 +319,7 @@ export function useBulkActions({
             setIsBulkEditOpen(false);
             onComplete?.();
           },
-          onError: (err) => toast.error(`Could not update: ${reason(err)}`),
+          onError: (err) => toast.error(`Could not update: ${errorText(err)}`),
         },
       );
     },

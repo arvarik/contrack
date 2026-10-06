@@ -33,7 +33,11 @@ import {
 } from "../utils/remoteImage.ts";
 import type { ContactMatcher } from "./matching.ts";
 import type { SyncEvent } from "./types.ts";
-import type { ConnectorKind, RunStats } from "../../shared/connectors.ts";
+import type {
+  ConnectorKind,
+  Participant,
+  RunStats,
+} from "../../shared/connectors.ts";
 
 export interface IngestOptions {
   ghostThreshold?: number;
@@ -53,6 +57,18 @@ export interface IngestResult {
 
 /** Events committed in one transaction. */
 const BATCH_SIZE = 100;
+
+/**
+ * The name a mail or a meeting gave a participant, such as "Rowan Vale" in
+ * "Rowan Vale <rowan@example.com>", or null when it gave only the address.
+ */
+function givenName(p: Participant): string | null {
+  const name = p.name?.trim();
+  if (!name) return null;
+  const same = (value?: string) =>
+    value?.trim().toLowerCase() === name.toLowerCase();
+  return same(p.email) || same(p.phone) ? null : name;
+}
 
 /** Contact avatars: 256 px square, the size processBase64Avatar writes. */
 const PHOTO_SIZE = 256;
@@ -429,6 +445,8 @@ export async function ingestStream(
 
           if (!rawId) continue;
           const externalId = rawId;
+          // Kept with the link, so "Add as contact" can use it.
+          const displayName = givenName(p);
 
           const row = sqlite
             .prepare(
@@ -449,10 +467,17 @@ export async function ingestStream(
             sqlite
               .prepare(
                 `UPDATE connector_links
-                 SET seenCount = ?, lastSeenAt = ?
+                 SET seenCount = ?, lastSeenAt = ?, displayName = COALESCE(?, displayName)
                  WHERE connectorId = ? AND ownerId = ? AND kind = 'correspondent' AND externalId = ?`,
               )
-              .run(newSeen, nowIso, connector.id, scope.ownerId, externalId);
+              .run(
+                newSeen,
+                nowIso,
+                displayName,
+                connector.id,
+                scope.ownerId,
+                externalId,
+              );
 
             if (!row.ignoredAt && !row.localId) {
               if (newSeen >= ghostThreshold) {
@@ -562,10 +587,17 @@ export async function ingestStream(
               sqlite
                 .prepare(
                   `INSERT INTO connector_links (
-                    connectorId, ownerId, kind, externalId, localId, seenCount, lastSeenAt
-                  ) VALUES (?, ?, 'correspondent', ?, ?, 1, ?)`,
+                    connectorId, ownerId, kind, externalId, localId, seenCount, lastSeenAt, displayName
+                  ) VALUES (?, ?, 'correspondent', ?, ?, 1, ?, ?)`,
                 )
-                .run(connector.id, scope.ownerId, externalId, ghostId, nowIso);
+                .run(
+                  connector.id,
+                  scope.ownerId,
+                  externalId,
+                  ghostId,
+                  nowIso,
+                  displayName,
+                );
 
               matcher.registerContact(
                 ghostId,
@@ -577,10 +609,16 @@ export async function ingestStream(
               sqlite
                 .prepare(
                   `INSERT INTO connector_links (
-                    connectorId, ownerId, kind, externalId, localId, seenCount, lastSeenAt
-                  ) VALUES (?, ?, 'correspondent', ?, NULL, 1, ?)`,
+                    connectorId, ownerId, kind, externalId, localId, seenCount, lastSeenAt, displayName
+                  ) VALUES (?, ?, 'correspondent', ?, NULL, 1, ?, ?)`,
                 )
-                .run(connector.id, scope.ownerId, externalId, nowIso);
+                .run(
+                  connector.id,
+                  scope.ownerId,
+                  externalId,
+                  nowIso,
+                  displayName,
+                );
               stats.correspondents = (stats.correspondents ?? 0) + 1;
             }
           }

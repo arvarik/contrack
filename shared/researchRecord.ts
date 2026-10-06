@@ -151,6 +151,12 @@ const researchAddedEntrySchema = z.object({
   detail: z.string().max(2000).optional(),
   /** A school's end date, or a job's start date. */
   date: z.string().max(20).optional(),
+  /**
+   * A field's whole value, hashed, so "Not this person" clears the field
+   * only while it holds exactly what the run wrote. `value` keeps the first
+   * 300 characters, which an About the person added to still starts with.
+   */
+  hash: z.string().max(64).optional(),
   /** The run that added it (`ResearchRun.at`). Absent on older records. */
   at: z.string().max(40).optional(),
 });

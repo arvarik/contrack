@@ -380,7 +380,7 @@ export function requireAuth(
   next(
     new AppError(
       sentToken
-        ? "This token is not valid. It may be revoked or expired. Create a new one in Settings, Account, API tokens."
+        ? "This token is not valid. It may be revoked or expired. Create a new one in Settings → Account → API tokens."
         : "Authentication required. Sign in, or send a token as Authorization: Bearer <token>.",
       401,
       { code: "UNAUTHORIZED" },
@@ -607,7 +607,7 @@ export function refuseCrossSiteWrites(
   next(
     new AppError(
       origin
-        ? `This request came from a page at ${origin}, which is not this server, so it was refused. If you opened Contrack at that address, set PUBLIC_URL to it.`
+        ? `This request came from a page at ${origin}, which is not the address of the server, so it was refused. If you opened Contrack at that address, set PUBLIC_URL to it.`
         : "This request came from a page on another site, so it was refused.",
       403,
       { code: "CROSS_SITE_REQUEST" },

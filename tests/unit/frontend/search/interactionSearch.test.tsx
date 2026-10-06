@@ -432,7 +432,7 @@ describe("InteractionSearchPanel", () => {
     mount("/search?mode=notes&q=hiring");
     const alert = await screen.findByRole("alert");
     expect(
-      within(alert).getByRole("heading", { name: "Search failed" }),
+      within(alert).getByRole("heading", { name: "Could not search" }),
     ).toBeTruthy();
     expect(alert.textContent).toContain("Index unavailable");
   });

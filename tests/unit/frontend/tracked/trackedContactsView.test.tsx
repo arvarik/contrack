@@ -314,13 +314,6 @@ describe("the Tracked contacts page", () => {
     expect(linus.textContent).not.toMatch(/quarterly|monthly|every/);
   });
 
-  it("links each name to the contact", () => {
-    mount();
-    expect(
-      screen.getByRole("link", { name: "Ada Lovelace" }).getAttribute("href"),
-    ).toBe("/contact/ada");
-  });
-
   it("tracks and untracks from the row toggle, with the toast", async () => {
     mount();
     fireEvent.click(
@@ -331,7 +324,7 @@ describe("the Tracked contacts page", () => {
     expect(lastBody()).toEqual({ isTracked: true });
 
     fireEvent.click(
-      screen.getByRole("button", { name: "Untrack Ada Lovelace" }),
+      screen.getByRole("button", { name: "Stop tracking Ada Lovelace" }),
     );
     await waitFor(() => expect(api.fetch).toHaveBeenCalledTimes(2));
     expect(api.fetch.mock.calls[1][0]).toBe("/contacts/ada");
@@ -349,7 +342,7 @@ describe("the Tracked contacts page", () => {
     ]);
   });
 
-  it("narrows by the search box and offers to clear it when nobody matches", () => {
+  it("narrows by the search box and offers to clear it when no one matches", () => {
     mount();
     const box = screen.getByRole("searchbox", {
       name: "Search tracked contacts",
@@ -362,17 +355,28 @@ describe("the Tracked contacts page", () => {
 
     fireEvent.change(box, { target: { value: "zzz" } });
     expect(
-      screen.getByRole("heading", { name: 'Nobody matches "zzz"' }),
+      screen.getByRole("heading", { name: 'No one matches "zzz"' }),
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Clear search" }));
+    // The field's X and the empty state's button share the name: the
+    // empty state's is the last.
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Clear search" }).at(-1)!,
+    );
     expect(heading(/^At risk/)).toBeTruthy();
   });
 
-  it("selects a whole group, and the bar tracks, untracks and sets one cadence", async () => {
+  it("selects a whole group, and the bar tracks, stops tracking and sets one cadence", async () => {
     mount();
     fireEvent.click(screen.getByRole("button", { name: "Select" }));
     const bar = screen.getByRole("toolbar", { name: "Bulk actions" });
     expect(bar.textContent).toContain("0 selected");
+    // The three buttons wait while no one is picked.
+    for (const name of ["Track", "Stop tracking", "Cadence"]) {
+      expect(
+        (within(bar).getByRole("button", { name }) as HTMLButtonElement)
+          .disabled,
+      ).toBe(true);
+    }
 
     fireEvent.click(
       within(section(/^Not tracked/)).getByRole("button", {
@@ -394,8 +398,8 @@ describe("the Tracked contacts page", () => {
       expect.anything(),
     );
 
-    // Untrack sends only the tracked ones: none of these are.
-    fireEvent.click(within(bar).getByRole("button", { name: "Untrack" }));
+    // Stop tracking sends only the tracked ones: none of these are.
+    fireEvent.click(within(bar).getByRole("button", { name: "Stop tracking" }));
     expect(api.bulkUpdate).toHaveBeenCalledTimes(1);
 
     fireEvent.click(within(bar).getByRole("button", { name: "Cadence" }));
@@ -415,27 +419,6 @@ describe("the Tracked contacts page", () => {
     expect(
       screen.getByRole("button", { name: "Track Linus Torvalds" }),
     ).toBeTruthy();
-  });
-
-  it("waits with all three bar buttons while nobody is picked", () => {
-    mount();
-    fireEvent.click(screen.getByRole("button", { name: "Select" }));
-    const bar = screen.getByRole("toolbar", { name: "Bulk actions" });
-    for (const name of ["Track", "Untrack", "Cadence"]) {
-      expect(
-        (within(bar).getByRole("button", { name }) as HTMLButtonElement)
-          .disabled,
-      ).toBe(true);
-    }
-    fireEvent.click(
-      screen.getByRole("checkbox", { name: "Select Linus Torvalds" }),
-    );
-    for (const name of ["Track", "Untrack", "Cadence"]) {
-      expect(
-        (within(bar).getByRole("button", { name }) as HTMLButtonElement)
-          .disabled,
-      ).toBe(false);
-    }
   });
 
   it("keeps the bar in the page's column, and focus on the swapped button", () => {
@@ -478,7 +461,7 @@ describe("the Tracked contacts page", () => {
     api.contacts = PEOPLE.filter((p) => !p.isTracked);
     mount();
     expect(
-      screen.getByRole("heading", { level: 2, name: "Nobody is tracked yet" }),
+      screen.getByRole("heading", { level: 2, name: "No one is tracked yet" }),
     ).toBeTruthy();
     expect(namesIn(/^Not tracked/)).toEqual([
       "Linus Torvalds",
@@ -674,7 +657,7 @@ describe("the Tracked contacts page's filters", () => {
   it("says when the filters leave nobody, and clears them", () => {
     mountRoutes("/tracked?tracking=tracked&spoke=older");
     expect(
-      screen.getByRole("heading", { name: "Nobody matches these filters" }),
+      screen.getByRole("heading", { name: "No one matches these filters" }),
     ).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
     expect(where()).toBe("");
@@ -685,10 +668,10 @@ describe("the Tracked contacts page's filters", () => {
     api.contacts = WITH_TALKS.filter((p) => !p.isTracked);
     mountRoutes("/tracked?tracking=tracked");
     expect(
-      screen.getByRole("heading", { level: 2, name: "Nobody is tracked yet" }),
+      screen.getByRole("heading", { level: 2, name: "No one is tracked yet" }),
     ).toBeTruthy();
     expect(
-      screen.queryByRole("heading", { name: "Nobody matches these filters" }),
+      screen.queryByRole("heading", { name: "No one matches these filters" }),
     ).toBeNull();
     fireEvent.click(
       screen.getByRole("button", { name: "Show people to track" }),

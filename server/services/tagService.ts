@@ -4,7 +4,8 @@
 // Tags belong to contacts, but a person thinks about tags as a vocabulary.
 // This service gives the vocabulary its counts and its mutating actions:
 //
-//   getSummary   distinct tags with contact counts over unarchived contacts
+//   getSummary   distinct tags, the contacts in the list that hold each, and
+//                every contact a rename or a delete changes
 //   renameTag    atomic rename and merge across the owner's contacts
 //   deleteTag    remove a tag from all contacts owned by this account
 //
@@ -19,17 +20,24 @@ import { scheduleSearchIndex } from "./search/indexQueue.ts";
 export interface TagSummaryItem {
   tag: string;
   count: number;
+  total: number;
 }
 
 const _stmts = {
+  // `count` is the contacts the Network list shows. A rename and a delete
+  // change every contact with the tag, archived and trashed ones too, and
+  // `total` counts those, so the dialogs can say so.
   summary: sqlite.prepare(`
-    SELECT ct.tag, COUNT(DISTINCT ct.contactId) AS count
+    SELECT ct.tag,
+           COUNT(DISTINCT CASE
+             WHEN (c.isArchived = 0 OR c.isArchived IS NULL) AND c.deletedAt IS NULL
+             THEN ct.contactId END) AS count,
+           COUNT(DISTINCT ct.contactId) AS total
       FROM contact_tags ct
       JOIN contacts c ON c.id = ct.contactId
      WHERE c.ownerId = ?
-       AND (c.isArchived = 0 OR c.isArchived IS NULL)
-       AND c.deletedAt IS NULL
      GROUP BY ct.tag
+    HAVING count > 0
      ORDER BY ct.tag COLLATE NOCASE ASC
   `),
 
@@ -73,11 +81,7 @@ const _stmts = {
 
 export const tagService = {
   getSummary(scope: Scope): TagSummaryItem[] {
-    const rows = _stmts.summary.all(scope.ownerId) as Array<{
-      tag: string;
-      count: number;
-    }>;
-    return rows;
+    return _stmts.summary.all(scope.ownerId) as TagSummaryItem[];
   },
 
   renameTag(

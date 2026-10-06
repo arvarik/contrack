@@ -11,7 +11,7 @@
 // leaving an open registration endpoint on the internet.
 // =============================================================================
 
-import { Router, type Request } from "express";
+import { Router, type Request, type Response } from "express";
 import { AppError, ValidationError } from "../utils/AppError.ts";
 import { log } from "../utils/logger.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
@@ -20,11 +20,15 @@ import { createRateLimiter } from "../middleware/rateLimit.ts";
 import { validateBody } from "../utils/validators.ts";
 import {
   acceptInvitationSchema,
+  authRoutes,
   registerSchema,
 } from "../../shared/contracts/auth.ts";
 import { tokenRoutes } from "../../shared/contracts/tokens.ts";
 import { auditService } from "../services/auditService.ts";
-import { acceptInvitation } from "../services/invitationService.ts";
+import {
+  acceptInvitation,
+  checkInvitation,
+} from "../services/invitationService.ts";
 import {
   createToken,
   listTokens,
@@ -51,7 +55,7 @@ import {
   storedPreferenceKeys,
   type PreferenceKey,
 } from "../services/userPreferencesService.ts";
-import { mailService } from "../services/mailService.ts";
+import { mailService, type SendMailOptions } from "../services/mailService.ts";
 import {
   requirePasswordCurrent,
   requireSession,
@@ -466,9 +470,78 @@ router.post(
   }),
 );
 
+/**
+ * Whether an invitation link can still make an account, asked when the link
+ * opens, so a dead link says so before anybody fills in the form. The same
+ * answers and the same per-address window as accepting it.
+ */
+router.post(
+  "/invitations/check",
+  credentialLimiter,
+  validateBody(authRoutes.invitationCheck.body),
+  asyncHandler(async (req, res) => {
+    checkInvitation((req.body as { token: string }).token);
+    res.json({ ok: true });
+  }),
+);
+
 // =============================================================================
 // Password reset and magic links
 // =============================================================================
+
+/**
+ * The mail that carries a reset or sign-in link to an address, or null when
+ * the address has no active account or its hourly cap is reached.
+ */
+function linkMail(
+  kind: "reset" | "magic",
+  email: string,
+  origin: string,
+  ip: string | null,
+): { userId: string; mail: SendMailOptions } | null {
+  const user = findUserByEmail(email);
+  if (!user || user.status === "disabled") return null;
+  const reset = kind === "reset";
+  const link = createAuthLink(
+    kind,
+    user.id,
+    reset ? RESET_LINK_TTL_SECONDS : MAGIC_LINK_TTL_SECONDS,
+    null,
+    ip,
+  );
+  if (!link) return null;
+  const template = reset
+    ? renderPasswordResetEmail({
+        instanceName: getInstanceName(),
+        link: `${origin}/reset-password?token=${link.token}`,
+        expiresHours: 1,
+      })
+    : renderMagicLinkEmail({
+        instanceName: getInstanceName(),
+        link: `${origin}/signin-link?token=${link.token}`,
+      });
+  return { userId: user.id, mail: { to: user.email, ...template } };
+}
+
+/**
+ * Answer 202, then send. An address with an account must answer as fast as
+ * one without, or the time to answer tells which addresses have accounts.
+ */
+function answerThenSend(
+  res: Response,
+  outgoing: ReturnType<typeof linkMail>,
+): void {
+  res.status(202).json({});
+  if (!outgoing) return;
+  void mailService.send(outgoing.mail).then((sent) => {
+    if (!sent) {
+      log.warn(
+        "Auth",
+        `Failed to send a link email for account ${outgoing.userId}`,
+      );
+    }
+  });
+}
 
 /**
  * Request a password reset link by email.
@@ -491,39 +564,12 @@ router.post(
         "A password reset was requested, and no link was sent: set PUBLIC_URL so mail can carry links",
       );
     }
-    if (email && origin && mailService.isConfigured()) {
-      const user = findUserByEmail(email);
-      if (user && user.status !== "disabled") {
-        const link = createAuthLink(
-          "reset",
-          user.id,
-          RESET_LINK_TTL_SECONDS,
-          null,
-          ipOf(req),
-        );
-        if (link) {
-          const resetUrl = `${origin}/reset-password?token=${link.token}`;
-          const template = renderPasswordResetEmail({
-            instanceName: getInstanceName(),
-            link: resetUrl,
-            expiresHours: 1,
-          });
-          const sent = await mailService.send({
-            to: user.email,
-            subject: template.subject,
-            text: template.text,
-            html: template.html,
-          });
-          if (!sent) {
-            log.warn(
-              "Auth",
-              `Failed to send the password reset email for account ${user.id}`,
-            );
-          }
-        }
-      }
-    }
-    res.status(202).json({});
+    answerThenSend(
+      res,
+      email && origin && mailService.isConfigured()
+        ? linkMail("reset", email, origin, ipOf(req))
+        : null,
+    );
   }),
 );
 
@@ -588,38 +634,10 @@ router.post(
       });
     }
     const email = bodyString(req, "email").trim().toLowerCase();
-    if (email) {
-      const user = findUserByEmail(email);
-      if (user && user.status !== "disabled") {
-        const link = createAuthLink(
-          "magic",
-          user.id,
-          MAGIC_LINK_TTL_SECONDS,
-          null,
-          ipOf(req),
-        );
-        if (link) {
-          const magicUrl = `${origin}/signin-link?token=${link.token}`;
-          const template = renderMagicLinkEmail({
-            instanceName: getInstanceName(),
-            link: magicUrl,
-          });
-          const sent = await mailService.send({
-            to: user.email,
-            subject: template.subject,
-            text: template.text,
-            html: template.html,
-          });
-          if (!sent) {
-            log.warn(
-              "Auth",
-              `Failed to send the sign-in link email for account ${user.id}`,
-            );
-          }
-        }
-      }
-    }
-    res.status(202).json({});
+    answerThenSend(
+      res,
+      email ? linkMail("magic", email, origin, ipOf(req)) : null,
+    );
   }),
 );
 

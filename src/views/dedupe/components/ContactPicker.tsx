@@ -1,14 +1,16 @@
 import { useDeferredValue, useMemo, useState } from "react";
-import { Search, Users, X } from "lucide-react";
+import { Users, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import type { Contact } from "../../../types";
 import { useContacts } from "../../../api";
 import { ContactMiniCard } from "./shared/ContactMiniCard";
-import { LABEL, SEARCH_INPUT, SELECTED_TINT } from "../../../lib/styles";
+import { LABEL, SELECTED_TINT } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
 import { VirtualRows } from "../../../components/ui/VirtualRows";
 import { roomAtTop } from "../utils/stickyRoom";
+import { useRovingFocus } from "../../search/useRovingFocus";
+import { SearchField } from "../../../components/ui/SearchField";
 
 // =============================================================================
 // ContactPicker — Searchable multi-select contact selector
@@ -17,6 +19,11 @@ import { roomAtTop } from "../utils/stickyRoom";
 // page's one scroller. It drew every contact before, and 5,824 of them took
 // 44 s to show. The search filters on a deferred copy of the query, so a
 // letter shows in the box before the list catches up.
+//
+// The list is one Tab stop (`useRovingFocus`): ↓ in the search box goes to
+// the first contact, the arrows walk the rest, and Space or Enter picks.
+// The search box does not take focus by itself: the tab that shows it is
+// chosen with the arrows, and the box took the next arrow as a caret move.
 // =============================================================================
 
 interface ContactPickerProps {
@@ -54,6 +61,7 @@ export const ContactPicker = ({
     [selected],
   );
   const atMax = selected.length >= maxSelection;
+  const roving = useRovingFocus(filteredContacts.length);
 
   const toggleContact = (contact: Contact) => {
     if (selectedIds.has(contact.id)) {
@@ -99,7 +107,7 @@ export const ContactPicker = ({
                 >
                   <img
                     src={c.avatarUrl || fallbackAvatarUrl(c.name)}
-                    alt={c.name}
+                    alt=""
                     className="w-5 h-5 rounded-full object-cover"
                   />
                   <span className="text-xs font-bold">{c.name}</span>
@@ -116,29 +124,19 @@ export const ContactPicker = ({
           )}
         </AnimatePresence>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant" />
-          <input
-            aria-label="Search contacts to merge"
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search contacts by name, email, company..."
-            className={SEARCH_INPUT}
-            // Search field in a picker the user just opened.
-            // eslint-disable-next-line jsx-a11y/no-autofocus
-            autoFocus
-          />
-          {query && (
-            <button
-              onClick={() => setQuery("")}
-              aria-label="Clear search"
-              className="hit-area state-layer absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full"
-            >
-              <X className="w-3.5 h-3.5 text-on-surface-variant" />
-            </button>
-          )}
-        </div>
+        <SearchField
+          aria-label="Search contacts to merge"
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key !== "ArrowDown") return;
+            e.preventDefault();
+            roving.focusAt(0);
+          }}
+          placeholder="Search contacts by name, email, company…"
+          onClear={() => setQuery("")}
+        />
       </div>
 
       {/* Selection status */}
@@ -163,20 +161,23 @@ export const ContactPicker = ({
           {query ? "No contacts match your search" : "No contacts available"}
         </div>
       ) : (
-        <VirtualRows
-          items={filteredContacts}
-          getKey={(contact) => contact.id}
-          estimateSize={64}
-          gap={4}
-          renderRow={(contact) => (
-            <ContactMiniCard
-              contact={contact}
-              selected={selectedIds.has(contact.id)}
-              onToggle={() => toggleContact(contact)}
-              disabled={atMax}
-            />
-          )}
-        />
+        <div ref={roving.listRef}>
+          <VirtualRows
+            items={filteredContacts}
+            getKey={(contact) => contact.id}
+            estimateSize={64}
+            gap={4}
+            renderRow={(contact, index) => (
+              <ContactMiniCard
+                contact={contact}
+                selected={selectedIds.has(contact.id)}
+                onToggle={() => toggleContact(contact)}
+                disabled={atMax}
+                itemProps={roving.itemProps(index)}
+              />
+            )}
+          />
+        </div>
       )}
     </div>
   );

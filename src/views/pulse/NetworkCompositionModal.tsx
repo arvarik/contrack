@@ -44,7 +44,7 @@ const CompositionColumn = ({
           </span>
           <span className="text-on-surface-variant font-medium shrink-0">
             {item.count}{" "}
-            <span className="opacity-50 text-[11px]">
+            <span className="text-[11px]">
               ({Math.round((item.count / totalCount) * 100)}%)
             </span>
           </span>

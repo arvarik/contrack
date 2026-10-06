@@ -16,15 +16,18 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { Eye, EyeOff } from "lucide-react";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { TONE_WASH } from "../../lib/styles";
 import { CorvidMark } from "../brand/CorvidMark";
 import { useCorvidControls } from "../../hooks/useCorvidLife";
 import { useCorvidLevel } from "../../hooks/useCorvidLevel";
 import { useAuth } from "./AuthGate";
+import { isNetworkError } from "../../api/client";
+import { rateLimitMessage } from "../../lib/rateLimitMessage";
 
 /**
  * What the server says when the credential is simply wrong.
@@ -46,6 +49,20 @@ export const WRONG_CREDENTIALS = "Incorrect username or password.";
  * cannot spread.
  */
 const ShakeContext = createContext<(() => void) | null>(null);
+
+/**
+ * What a sign-in screen says when its request fails: that the server is out
+ * of reach, the wait a rate limit asks for, or the server's own words. Nine
+ * screens wrote these three branches by hand.
+ *
+ * @param err - What the request rejected with.
+ * @param fallback - The words for a failure with nothing to say, starting
+ *   "Could not": "Could not sign in".
+ */
+export const authErrorText = (err: unknown, fallback: string): string =>
+  isNetworkError(err)
+    ? "Could not reach the server. Is it running?"
+    : (rateLimitMessage(err) ?? errorText(err, fallback));
 
 export const AuthShell = ({
   icon,
@@ -69,6 +86,14 @@ export const AuthShell = ({
 }) => {
   const level = useCorvidLevel();
   const bird = useCorvidControls();
+  const titleRef = useRef<HTMLHeadingElement>(null);
+
+  // A new screen ("Forgot your password?", back to sign-in) replaces the
+  // control that had focus. When no field took it, the title does, so focus
+  // does not fall to the page.
+  useEffect(() => {
+    if (document.activeElement === document.body) titleRef.current?.focus();
+  }, [title]);
 
   // The bird turns its head away and back: no. Only the bird moves; the
   // ring it sits in stays where it is.
@@ -133,7 +158,14 @@ export const AuthShell = ({
               </span>
             )}
             <InstanceName />
-            <h1 className="text-xl font-extrabold font-headline">{title}</h1>
+            <h1
+              ref={titleRef}
+              tabIndex={-1}
+              // A target for focus, not a control: no ring.
+              className="text-xl font-extrabold font-headline outline-none"
+            >
+              {title}
+            </h1>
             <p className="text-sm text-on-surface-variant text-pretty">
               {subtitle}
             </p>

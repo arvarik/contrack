@@ -15,9 +15,12 @@ import { useElementWidth } from "../../../hooks/useElementWidth";
 import { TONE_TEXT, type Tone } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { PULSE_TYPE } from "../lib/pulseStyles";
+import type { ActivityDay } from "../../../../shared/pulse";
 
 interface SparklineProps {
   weekTotals: number[];
+  /** The 84 days of the heatmap, oldest first, today last. */
+  days: ActivityDay[];
   thisWeek: {
     logged: number;
     byType: Record<string, number>;
@@ -39,14 +42,20 @@ function describeWeekByType(byType: Record<string, number>): string {
   return parts.length > 0 ? parts.join(", ") : "nothing logged yet";
 }
 
-/** The last four weeks against the four before, as words and a tone. */
-function compareFourWeeks(weekTotals: number[]): {
+/**
+ * The last 28 days against the 28 before, as words and a tone. Days, not the
+ * weekly totals: this week is not over, and a part week against four whole
+ * ones read as a drop every Monday.
+ */
+function compareFourWeeks(days: ActivityDay[]): {
   recent: number;
   words: string;
   tone: "up" | "down" | "flat";
 } {
-  const recent = weekTotals.slice(-4).reduce((sum, w) => sum + w, 0);
-  const before = weekTotals.slice(-8, -4).reduce((sum, w) => sum + w, 0);
+  const sum = (part: ActivityDay[]) =>
+    part.reduce((total, day) => total + day.count, 0);
+  const recent = sum(days.slice(-28));
+  const before = sum(days.slice(-56, -28));
   if (before === 0) {
     if (recent === 0)
       return { recent, words: "same as the four before", tone: "flat" };
@@ -67,13 +76,13 @@ const TREND_TONE: Record<ReturnType<typeof compareFourWeeks>["tone"], Tone> = {
   flat: "neutral",
 };
 
-export const Sparkline = ({ weekTotals, thisWeek }: SparklineProps) => {
+export const Sparkline = ({ weekTotals, days, thisWeek }: SparklineProps) => {
   const [box, setBox] = useState<HTMLDivElement | null>(null);
   // Whole pixels: the SVG is drawn at this width and a fractional viewBox
   // would put the line half a pixel off the grid.
   const width = Math.round(useElementWidth(box) ?? 0);
 
-  const comparison = useMemo(() => compareFourWeeks(weekTotals), [weekTotals]);
+  const comparison = useMemo(() => compareFourWeeks(days), [days]);
 
   const { pointsStr, areaStr, last } = useMemo(() => {
     if (!weekTotals || weekTotals.length === 0 || width <= 0) {

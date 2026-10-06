@@ -191,7 +191,9 @@ describe("startSearch", () => {
     const { latest } = mount();
     act(() => latest().startSearch(["c1"], { limitAs: "toast" }));
     act(() => lastCallbacks().onError(new Error("AI is not set up")));
-    expect(toastMock.error).toHaveBeenCalledWith("AI is not set up");
+    expect(toastMock.error).toHaveBeenCalledWith(
+      "Could not start the research: AI is not set up",
+    );
     expect(toastMock.info).not.toHaveBeenCalled();
     expect(latest().limitMessage).toBeNull();
   });

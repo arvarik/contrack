@@ -27,6 +27,7 @@ import {
   type ActionMenuItem,
 } from "../../../components/ui/ActionMenu";
 import { PULSE_TYPE } from "../lib/pulseStyles";
+import { COLUMN_NAMES, PULSE_COLUMNS } from "../lib/layout";
 import {
   useCardCustomize,
   type CardCustomizeContextValue,
@@ -99,25 +100,13 @@ const CustomizeControls = ({
     }
   }
   if (customize.column && customize.onMoveToColumn) {
-    if (customize.column !== "focus") {
+    // Each other column by the name customize mode shows over it.
+    for (const column of PULSE_COLUMNS) {
+      if (column === customize.column) continue;
       moveActions.push({
-        id: "move-focus",
-        label: "Move to Focus",
-        onSelect: () => customize.onMoveToColumn?.(cardId, "focus"),
-      });
-    }
-    if (customize.column !== "network") {
-      moveActions.push({
-        id: "move-network",
-        label: "Move to Network",
-        onSelect: () => customize.onMoveToColumn?.(cardId, "network"),
-      });
-    }
-    if (customize.column !== "intel") {
-      moveActions.push({
-        id: "move-intel",
-        label: "Move to Intelligence",
-        onSelect: () => customize.onMoveToColumn?.(cardId, "intel"),
+        id: `move-${column}`,
+        label: `Move to ${COLUMN_NAMES[column]}`,
+        onSelect: () => customize.onMoveToColumn?.(cardId, column),
       });
     }
   }

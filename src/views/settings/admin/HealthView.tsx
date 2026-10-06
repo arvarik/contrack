@@ -45,6 +45,7 @@ import { formatBytes, formatRelative, formatWhen } from "../../../lib/datetime";
 import { CARD, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { AdminPage } from "./AdminShell";
+import { LoadFailed } from "../../../components/ui/LoadFailed";
 
 // ---------------------------------------------------------------------------
 // The card, and the one row inside it
@@ -135,8 +136,9 @@ function formatUptime(seconds: number): string {
   return `${seconds}s`;
 }
 
+/** Whose job runs now, or that none does. */
 const account = (who: HealthAccount | null): string =>
-  who?.username ?? "Nobody";
+  who?.username ?? "Not running";
 
 /** The AI cache's tiers, in words. A tier added later reads from its key. */
 const CACHE_TIER_NAMES: Record<string, string> = {
@@ -376,7 +378,7 @@ const QueuesCard = ({ health }: { health: InstanceHealth }) => {
       <Row label="Waiting for it">
         {dedupe.pending.length > 0
           ? dedupe.pending.map((who) => who.username).join(", ")
-          : "Nobody"}
+          : "No one"}
       </Row>
       <Row label="Enrichment" tone={aiSearch.running ? "warning" : "normal"}>
         {account(aiSearch.running)}
@@ -479,7 +481,7 @@ const CacheCard = ({ health }: { health: InstanceHealth }) => {
     >
       {tiers.map(([tier, stats]) => (
         <Row key={tier} label={CACHE_TIER_NAMES[tier] ?? words(tier)}>
-          {Math.round(stats.hitRate * 100)}% of {stats.hits + stats.misses}
+          {stats.hits} of {stats.hits + stats.misses} from the cache
         </Row>
       ))}
     </Card>
@@ -646,12 +648,9 @@ export const HealthView = () => {
       )}
 
       {isError && (
-        <EmptyState
-          icon={AlertTriangle}
-          tone="error"
-          title="The instance could not be read"
-          body="That is itself worth knowing. Nothing here has changed"
-          action={{ label: "Try again", onClick: () => void refetch() }}
+        <LoadFailed
+          what="the instance's health"
+          onRetry={() => void refetch()}
         />
       )}
 

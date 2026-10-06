@@ -10,10 +10,8 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, MailCheck } from "lucide-react";
-import { AuthShell, AuthSubmit } from "./AuthShell";
+import { AuthShell, AuthSubmit, authErrorText } from "./AuthShell";
 import { completeMagicLink } from "../../api/authLinks";
-import { isNetworkError } from "../../api/client";
-import { rateLimitMessage } from "../../lib/rateLimitMessage";
 
 export const MagicLinkLanding = ({
   token,
@@ -43,14 +41,7 @@ export const MagicLinkLanding = ({
       .catch((err) => {
         if (!mounted) return;
         setDead(true);
-        setError(
-          isNetworkError(err)
-            ? "Can't reach the Contrack server. Is it running?"
-            : (rateLimitMessage(err) ??
-                (err instanceof Error
-                  ? err.message
-                  : "This sign-in link is no longer valid")),
-        );
+        setError(authErrorText(err, "This sign-in link is no longer valid"));
       });
 
     return () => {

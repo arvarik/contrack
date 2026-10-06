@@ -28,7 +28,7 @@ import { ImportModal } from "../../components/ImportModal";
 import { BulkModals } from "../../components/bulk/BulkModals";
 import { AnimatedSkeleton } from "../../components/ui/AnimatedSkeleton";
 import { FORM_INPUT, FORM_LABEL, formInputHighlight } from "../../lib/styles";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { CreateListModal } from "./CreateListModal";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 
@@ -147,9 +147,7 @@ export const ContactListModals = ({
       toast.success("Contact details found. Check them and save");
     } catch (err) {
       if (!smartPasteOpen.current) return;
-      toast.error(
-        `Could not read the text: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      toast.error(`Could not read the text: ${errorText(err)}`);
     }
   };
 
@@ -183,8 +181,7 @@ export const ContactListModals = ({
       toast.success(`Created "${data.name}"`);
       if (newContact?.id) onContactCreated(newContact.id);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : String(err);
-      toast.error(`Could not create the contact: ${message}`);
+      toast.error(`Could not create the contact: ${errorText(err)}`);
     }
   };
 

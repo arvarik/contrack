@@ -13,7 +13,8 @@ import {
   useSearchParams,
 } from "react-router-dom";
 import { addDays } from "date-fns";
-import { HeartPulse, Eye, EyeOff } from "lucide-react";
+import { toast } from "sonner";
+import { Eye, EyeOff } from "lucide-react";
 import {
   useDashboard,
   useDailyInsight,
@@ -23,19 +24,19 @@ import {
   useUpdateActionItem,
   useDedupeCount,
 } from "../../api";
-import { isTypingTarget } from "../../lib/keyboard";
 import { useAiAllowed } from "../../hooks/useAiAllowed";
 import { usePageTitle } from "../../hooks/usePageTitle";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import { useSingleKeyShortcuts } from "../../hooks/useSingleKeyShortcuts";
 import { NAMES } from "../../lib/names";
 import { openQuickNote } from "../../lib/appEvents";
+import { scrollBehavior } from "../../lib/a11y";
+import { withUndo } from "../../lib/undoToast";
 import {
   startPendingDelete,
   useHiddenPendingIds,
 } from "../../lib/pendingDeletes";
 import { PAGE_TOP, PAGE_X } from "../../lib/styles";
-import { EmptyState } from "../../components/ui/EmptyState";
 import { cn } from "../../lib/utils";
 import {
   resolveLayout,
@@ -49,7 +50,12 @@ import {
   type PulseCardId,
   type PulseLayoutAction,
 } from "./lib/layout";
-import { buildUpNextQueue, computeNextHighlightIndex } from "./lib/upNext";
+import {
+  buildUpNextQueue,
+  computeNextHighlightIndex,
+  type UpNextItem,
+} from "./lib/upNext";
+import { isPageKeyTaken } from "../../lib/keyboard";
 import { getUpcomingBirthdays } from "./lib/birthdays";
 import { jumpToGroup } from "./lib/jumpToGroup";
 import { Masthead, type JumpTarget } from "./components/Masthead";
@@ -64,6 +70,7 @@ import { ComingUpCard } from "./cards/ComingUpCard";
 import { ActivityCard } from "./cards/ActivityCard";
 import { KeepingUpCard } from "./cards/KeepingUpCard";
 import { CompositionCard } from "./cards/CompositionCard";
+import { LoadFailed } from "../../components/ui/LoadFailed";
 
 const DuplicatesPage = React.lazy(() =>
   import("./pages/DuplicatesPage").then((m) => ({ default: m.DuplicatesPage })),
@@ -88,9 +95,11 @@ const PulseOffice = () => {
   } = useDashboard();
 
   const aiAllowed = useAiAllowed();
-  const { data: insight, isLoading: isInsightLoading } = useDailyInsight({
-    enabled: aiAllowed,
-  });
+  const {
+    data: insight,
+    isLoading: isInsightLoading,
+    refetch: refetchInsight,
+  } = useDailyInsight({ enabled: aiAllowed });
 
   const { data: activity } = useDashboardActivity();
   const { data: contacts = [] } = useContacts();
@@ -101,7 +110,7 @@ const PulseOffice = () => {
   const singleKey = useSingleKeyShortcuts();
 
   const completeAction = useCompleteActionItem();
-  const updateAction = useUpdateActionItem();
+  const { mutate: updateFollowUp } = useUpdateActionItem();
   /** Follow-ups done this session, in their undo window or after it. */
   const hiddenIds = useHiddenPendingIds();
 
@@ -124,28 +133,66 @@ const PulseOffice = () => {
     [completeAsync],
   );
 
+  // S and the Snooze menu. The toast says the new day, and Undo puts the
+  // date back, as D's Undo brings a done follow-up back.
+  const handleSnooze = useCallback(
+    (item: UpNextItem, days: number) => {
+      const before = item.dueAt;
+      const dueAt = addDays(new Date(), days).toISOString();
+      updateFollowUp(
+        { id: item.id, data: { dueAt } },
+        {
+          onSuccess: () =>
+            toast.success(
+              `Follow-up snoozed to ${new Date(dueAt).toLocaleDateString(
+                undefined,
+                { weekday: "long", month: "short", day: "numeric" },
+              )}`,
+              before
+                ? withUndo(() =>
+                    updateFollowUp({ id: item.id, data: { dueAt: before } }),
+                  )
+                : undefined,
+            ),
+          onError: () => toast.error("Could not snooze the follow-up"),
+        },
+      );
+    },
+    [updateFollowUp],
+  );
+
   // Customize mode state
   const [isEditing, setIsEditing] = useState(false);
   const [announcement, setAnnouncement] = useState("");
   // True while a card is in the air (set by `PulseGrid`). The letter keys
   // wait: C would end customize mode under a keyboard drag.
   const draggingRef = useRef(false);
-  // The card a Move menu item just sent to another column. The card mounts
-  // again there, and its Move button takes focus back (see below).
-  const refocusRef = useRef<PulseCardId | null>(null);
+  /** The masthead's More menu, where Customize layout lives. */
+  const moreRef = useRef<HTMLButtonElement>(null);
+  /**
+   * Where focus goes after the next layout change. Hide, Show and a Move to
+   * another column each take away the button under focus, and focus fell to
+   * the page. The control that took its place takes it instead.
+   */
+  const refocusRef = useRef<(() => HTMLElement | null) | null>(null);
 
-  const handleToggleCustomize = useCallback(() => {
-    setIsEditing((prev) => {
-      const next = !prev;
-      setAnnouncement(next ? "Layout editing on" : "Layout editing off");
-      return next;
-    });
-  }, []);
+  const handleToggleCustomize = useCallback(
+    () => setIsEditing((prev) => !prev),
+    [],
+  );
+  const handleDone = useCallback(() => setIsEditing(false), []);
 
-  const handleDone = useCallback(() => {
-    setIsEditing(false);
-    setAnnouncement("Layout editing off");
-  }, []);
+  // Say the mode's change. Ending it takes away the bar and every card's
+  // controls, so focus that was on one of them goes to the More menu.
+  const wasEditingRef = useRef(false);
+  useEffect(() => {
+    if (wasEditingRef.current === isEditing) return;
+    wasEditingRef.current = isEditing;
+    setAnnouncement(isEditing ? "Layout editing on" : "Layout editing off");
+    if (!isEditing && document.activeElement === document.body) {
+      moreRef.current?.focus();
+    }
+  }, [isEditing]);
 
   // Layout resolution
   const resolvedLayout = useMemo(() => {
@@ -159,6 +206,10 @@ const PulseOffice = () => {
       setPreference("pulseLayout", next);
       const title = CARD_TITLES[cardId as PulseCardId] || cardId;
       setAnnouncement(`Hidden ${title}`);
+      refocusRef.current = () =>
+        document.querySelector(
+          `[data-testid="hidden-cards-tray"] [aria-label="Show ${title}"]`,
+        );
     },
     [preferences?.pulseLayout, setPreference],
   );
@@ -170,6 +221,10 @@ const PulseOffice = () => {
       setPreference("pulseLayout", next);
       const title = CARD_TITLES[cardId as PulseCardId] || cardId;
       setAnnouncement(`Restored ${title}`);
+      refocusRef.current = () =>
+        document.querySelector(
+          `[data-flip-id="${cardId}"] [aria-label="Hide ${title}"]`,
+        );
     },
     [preferences?.pulseLayout, setPreference],
   );
@@ -183,9 +238,13 @@ const PulseOffice = () => {
         targetColumn,
       });
       setPreference("pulseLayout", next);
-      refocusRef.current = cardId as PulseCardId;
       const title = CARD_TITLES[cardId as PulseCardId] || cardId;
       setAnnouncement(`Moved ${title} to ${COLUMN_NAMES[targetColumn]}`);
+      // The card mounts again in its new column. Its Move button takes focus.
+      refocusRef.current = () =>
+        document.querySelector(
+          `[data-flip-id="${cardId}"] [aria-label="Move ${title}"]`,
+        );
     },
     [preferences?.pulseLayout, setPreference],
   );
@@ -220,10 +279,17 @@ const PulseOffice = () => {
   );
 
   const handleResetLayout = useCallback(() => {
-    const raw = preferences?.pulseLayout ?? DEFAULT_PULSE_LAYOUT;
-    const next = pulseLayoutReducer(raw, { type: "reset" });
-    setPreference("pulseLayout", next);
-    setAnnouncement("Layout reset to default");
+    const previous = preferences?.pulseLayout;
+    setPreference(
+      "pulseLayout",
+      pulseLayoutReducer(previous ?? DEFAULT_PULSE_LAYOUT, { type: "reset" }),
+    );
+    toast.success(
+      "Layout reset to default",
+      previous
+        ? withUndo(() => setPreference("pulseLayout", previous))
+        : undefined,
+    );
   }, [preferences?.pulseLayout, setPreference]);
 
   // A drag's drop, as the one reducer action `PulseGrid` worked out from its
@@ -237,18 +303,12 @@ const PulseOffice = () => {
     [preferences?.pulseLayout, setPreference],
   );
 
-  // A card that the Move menu sent to another column mounts again there,
-  // and the focus that was on its Move button fell to the page. Put it on
-  // the same button in the card's new place, so a keyboard keeps its place.
+  // After the layout changed, focus goes where the handler asked.
   useEffect(() => {
-    const cardId = refocusRef.current;
-    if (!cardId) return;
+    const target = refocusRef.current;
+    if (!target) return;
     refocusRef.current = null;
-    document
-      .querySelector<HTMLElement>(
-        `[data-flip-id="${cardId}"] [aria-label="Move ${CARD_TITLES[cardId]}"]`,
-      )
-      ?.focus();
+    target()?.focus();
   }, [resolvedLayout]);
 
   // Map of contacts for fast lookup (e.g. meeting attendee avatars)
@@ -368,12 +428,9 @@ const PulseOffice = () => {
   // contact from anywhere on the page, the Customize button included.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (isTypingTarget(e)) return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      // A key pressed in a dialog belongs to the dialog: D on a button in
-      // the Log note dialog would complete the queue's row behind it.
-      if (e.target instanceof Element && e.target.closest('[role="dialog"]'))
-        return;
+      // A key in a field, a dialog or a menu is theirs: D on a button in the
+      // Log note dialog, or in an open Snooze menu, completed the row behind.
+      if (isPageKeyTaken(e)) return;
       // A card in the air owns the keyboard until it lands.
       if (draggingRef.current) return;
 
@@ -412,10 +469,7 @@ const PulseOffice = () => {
       } else if (key === "s") {
         if (item?.hasCheckAction) {
           e.preventDefault();
-          updateAction.mutate({
-            id: item.id,
-            data: { dueAt: addDays(new Date(), 1).toISOString() },
-          });
+          handleSnooze(item, 1);
         }
       } else if (key === "l") {
         if (item) {
@@ -427,7 +481,7 @@ const PulseOffice = () => {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [singleKey, handleComplete, updateAction, handleToggleCustomize]);
+  }, [singleKey, handleComplete, handleSnooze, handleToggleCustomize]);
 
   const upNextCardRef = useRef<HTMLDivElement>(null);
 
@@ -441,7 +495,7 @@ const PulseOffice = () => {
       target === "birthdays"
         ? document.querySelector('[data-card-id="coming-up"]')
         : upNextCardRef.current;
-    card?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+    card?.scrollIntoView?.({ behavior: scrollBehavior(), block: "start" });
   }, []);
 
   // Stable, so the card's element below survives a render that changed
@@ -466,6 +520,7 @@ const PulseOffice = () => {
           selectionShown={selectionShown}
           onSelectionShownChange={setSelectionShown}
           onComplete={handleComplete}
+          onSnooze={handleSnooze}
           onLog={logNote}
           onOpenContact={handleOpenContact}
         />
@@ -477,6 +532,7 @@ const PulseOffice = () => {
       selectedIndex,
       selectionShown,
       handleComplete,
+      handleSnooze,
       handleOpenContact,
     ],
   );
@@ -500,9 +556,10 @@ const PulseOffice = () => {
         insight={insight}
         isLoading={isInsightLoading}
         aiAllowed={aiAllowed}
+        onRetry={() => void refetchInsight()}
       />
     ),
-    [insight, isInsightLoading, aiAllowed],
+    [insight, isInsightLoading, aiAllowed, refetchInsight],
   );
   const ghosts = dashboard?.ghosts;
   const hygiene = dashboard?.hygiene;
@@ -558,12 +615,10 @@ const PulseOffice = () => {
   if (isError && !dashboard) {
     return (
       <div className="w-full h-full flex items-center justify-center p-8">
-        <EmptyState
-          icon={HeartPulse}
-          tone="error"
-          title="System disconnected"
-          body="Failed to load the relationship pulse dashboard"
-          action={{ label: "Try again", onClick: () => void refetch() }}
+        <LoadFailed
+          what="Pulse"
+          body="Check that the server is running, then try again"
+          onRetry={() => void refetch()}
         />
       </div>
     );
@@ -615,7 +670,46 @@ const PulseOffice = () => {
           onToggleCustomize={handleToggleCustomize}
           onJumpTo={handleJumpTo}
           quiet={isZeroContacts}
+          moreRef={moreRef}
         />
+
+        {/* The customize bar, under the masthead and stuck to the top while
+            the page scrolls. It used to float at the bottom, where the Undo
+            toast of a hidden card covered Reset layout and Done. */}
+        {isEditing && (
+          <div
+            role="region"
+            aria-label="Layout customize actions"
+            className="tile-enter sticky top-2 z-30 self-center w-fit max-w-full px-5 py-3 rounded-2xl bg-surface-container-highest/95 backdrop-blur-md shadow-lg border border-outline-variant flex flex-wrap items-center justify-center gap-x-4 gap-y-2"
+          >
+            <p className="text-xs sm:text-sm text-on-surface text-center sm:text-left">
+              <span className="font-semibold">Editing layout</span>
+              <span className="text-on-surface-variant">
+                {" · "}
+                <span>
+                  Move a card by its handle or its Move menu. Use the eye to
+                  hide one
+                </span>
+              </span>
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleResetLayout}
+                className="btn-secondary btn-sm"
+              >
+                Reset layout
+              </button>
+              <button
+                type="button"
+                onClick={handleDone}
+                className="btn-primary btn-sm"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Hidden Cards Tray in Customize Mode, only when a card is hidden */}
         {isEditing && resolvedLayout.hidden.length > 0 && (
@@ -675,53 +769,6 @@ const PulseOffice = () => {
             onDrop={handleDrop}
             draggingRef={draggingRef}
           />
-        )}
-
-        {/* Floating Bottom Bar in Customize Mode */}
-        {isEditing && (
-          <div
-            role="region"
-            aria-label="Layout customize actions"
-            className="tile-enter fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] md:bottom-6 left-4 right-4 mx-auto z-[60] w-fit px-5 py-3 rounded-2xl bg-surface-container-highest/95 backdrop-blur-md shadow-2xl border border-outline-variant flex flex-wrap items-center justify-center gap-x-4 gap-y-2"
-          >
-            {/* Anchored on both sides and centred with auto margins, so the
-                bar sizes itself against the whole width. At left 50% a fixed
-                box measures against the half that is left and squeezes its
-                buttons onto two lines on a phone. One sentence that wraps:
-                on a phone it takes the first lines and the two buttons the
-                last. The words follow the gesture at that width: a finger
-                holds the handle before the card lifts, a mouse drags it at
-                once. */}
-            <p className="text-xs sm:text-sm text-on-surface text-center sm:text-left">
-              <span className="font-semibold">Editing layout</span>
-              <span className="text-on-surface-variant">
-                {" · "}
-                <span className="hidden sm:inline">
-                  Drag a card by its handle to move it. Use the eye to hide one
-                </span>
-                <span className="sm:hidden">
-                  Hold a card&apos;s handle, then drag it. Use the eye to hide
-                  one
-                </span>
-              </span>
-            </p>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleResetLayout}
-                className="btn-secondary btn-sm"
-              >
-                Reset layout
-              </button>
-              <button
-                type="button"
-                onClick={handleDone}
-                className="btn-primary btn-sm"
-              >
-                Done
-              </button>
-            </div>
-          </div>
         )}
       </div>
     </div>

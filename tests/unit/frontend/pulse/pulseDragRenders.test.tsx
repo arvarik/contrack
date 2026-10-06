@@ -90,7 +90,6 @@ const DASHBOARD = {
 const ACTIVITY = {
   days: [],
   weekTotals: [],
-  prevWeekTotals: [],
   streak: { current: 0, best: 0, lastDay: null },
   today: { logged: 0, completed: 0, due: 0 },
   thisWeek: { logged: 0, byType: {} },

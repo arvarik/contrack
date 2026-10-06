@@ -165,6 +165,9 @@ than 5 contacts asks you to check each one.
 - **Merge all**, at the top of **Very likely**, merges every group in that
   part, each into its contact to keep. A pair with a caution never merges in
   a batch.
+- A group in **Check carefully** never merges from one press. On a phone, its
+  row offers **Compare**, which opens the comparison, and **Merge** is in
+  there. Its **Merge** is never the blue main button.
 
 Each decision shows a message with **Undo**. **Undo** after a merge brings the
 contacts back, and the pair waits in the list again. **Undo** after **Keep
@@ -180,10 +183,15 @@ separate** puts the pair back in the list. Focus then moves to the next group.
 | `←` or `H` | Keep them separate             |
 | `Z`        | Undo the last decision         |
 
+On a group in **Check carefully**, the first `→` or `L` opens its comparison
+and moves focus to **Merge**, and the line "Check the differences, then press
+L again or Enter" shows. A second `L` or `Enter` merges.
+
 The letter keys are single-key shortcuts. They stop when you turn off
 **Single-key shortcuts** in **Settings → Keyboard**. The arrows always work.
-In **Contact to keep**, the arrows choose the contact, and only the letters
-decide.
+The letters work with Caps Lock on, and they do nothing while a menu or a
+dialog is open. In **Contact to keep**, the arrows choose the contact, and
+only the letters decide.
 
 ## On a contact's page
 
@@ -200,7 +208,9 @@ message says so, with **Undo**.
 
 1. Open **Settings → Duplicates** and select **Manual merge**.
 2. Search for the contacts and choose 2 to 5 of them. Select **Compare**. The
-   button shows how many contacts you chose.
+   button shows how many contacts you chose. From the search box, `↓` goes to
+   the first contact. The list is one `Tab` stop: `↑`/`↓` move, and `Space`
+   or `Enter` chooses.
 3. Choose the contact to keep, and check **After the merge**. Select **Merge 2
    contacts**, or the number you chose.
 
@@ -249,7 +259,11 @@ group at once.
 
 If you changed a moved record after the merge, your change stays on the kept
 contact, and the restored contact gets the record as it was. The message after
-the undo says how many records this happened to.
+the undo says how many records this happened to. An email or phone that was
+the restored contact's primary is its primary again.
+
+An undo is all or nothing. If one step fails, nothing changes, the merge stays
+in **Merge history**, and you can try the undo again.
 
 After 90 days the entry leaves **Merge history**, and Contrack deletes the
 hidden contact and the files that only it used. The kept contact keeps

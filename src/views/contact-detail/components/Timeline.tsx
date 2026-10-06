@@ -289,7 +289,7 @@ const InteractionContent = React.memo(({ html }: { html: string }) => {
  * menu is open, and always on a touch screen, which has no hover.
  */
 const KEBAB_TRIGGER =
-  "opacity-0 transition group-hover/entry:opacity-100 group-focus-within/entry:opacity-100 aria-expanded:opacity-100 pointer-coarse:opacity-100";
+  "transition pointer-fine:opacity-0 pointer-fine:group-hover/entry:opacity-100 pointer-fine:group-focus-within/entry:opacity-100 pointer-fine:aria-expanded:opacity-100";
 
 const SOURCE_BADGE =
   "inline-flex items-center rounded-md bg-surface-container-high px-2 py-0.5 text-[11px] font-medium text-on-surface-variant";

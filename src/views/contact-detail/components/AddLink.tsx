@@ -36,6 +36,7 @@ import { Plus } from "lucide-react";
 import { cn } from "../../../lib/utils";
 import { ADD_BUTTON_SMALL, ADD_FIELD } from "../../../lib/styles";
 import { scrollBehavior } from "../../../lib/a11y";
+import { NO_AUTOCORRECT } from "../../../components/ui/SearchField";
 
 /**
  * A scheme: letters before the first colon, with no dot, so that
@@ -220,9 +221,7 @@ export const AddLink = ({
         aria-describedby={error ? errorId : undefined}
         placeholder="Paste a link"
         autoComplete="off"
-        autoCapitalize="none"
-        autoCorrect="off"
-        spellCheck={false}
+        {...NO_AUTOCORRECT}
         // Opens only after the person pressed "+ link".
         // eslint-disable-next-line jsx-a11y/no-autofocus
         autoFocus

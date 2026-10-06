@@ -177,9 +177,8 @@ describe("the Manual merge picker", () => {
     const rows = screen.getAllByRole("button", { name: /^Person \d+/ });
     expect(rows).toHaveLength(10);
     // Each avatar waits until it is near the screen.
-    expect(
-      screen.getAllByRole("img").every((img) => img.getAttribute("loading")),
-    ).toBe(true);
+    const avatars = Array.from(document.querySelectorAll("img"));
+    expect(avatars.every((img) => img.getAttribute("loading"))).toBe(true);
   });
 
   it("searches the whole list, and picks from the rows it finds", () => {

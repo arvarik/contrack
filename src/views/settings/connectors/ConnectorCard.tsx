@@ -27,7 +27,7 @@ import { ActionMenu } from "../../../components/ui/ActionMenu";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { formatRelative } from "../../../lib/datetime";
 import { CARD, TONE_WASH } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import {
   useDeleteConnector,
   useSyncConnector,
@@ -142,7 +142,7 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
       await sync.mutateAsync(connector.id);
       toast.success(`Sync started for ${connector.name}`);
     } catch (err) {
-      toast.error((err as Error).message || "Failed to start sync");
+      toast.error(`Could not sync ${connector.name}: ${errorText(err)}`);
     }
   };
 
@@ -160,7 +160,7 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
       );
     } catch (err) {
       toast.error(
-        (err as Error).message || "Failed to update connector status",
+        `Could not ${nextStatus === "paused" ? "pause" : "resume"} ${connector.name}: ${errorText(err)}`,
       );
     }
   };
@@ -174,7 +174,7 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
       toast.success(`Removed ${connector.name}`);
       setDeleteConfirmOpen(false);
     } catch (err) {
-      toast.error((err as Error).message || "Failed to delete connector");
+      toast.error(`Could not remove ${connector.name}: ${errorText(err)}`);
     }
   };
 

@@ -27,7 +27,7 @@ import { toast } from "sonner";
 import { useAddInteraction } from "../../api";
 import { BTN_QUIET, ICON_BTN, KBD_SM } from "../../lib/styles";
 import { DURATION, EASE } from "../../lib/motion";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { chordLabel, MOD_KEY } from "../../lib/platform";
 import {
   clearDraft,
@@ -129,9 +129,7 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
       toast.success(`${KIND[type].label} logged for ${contactName}`);
       onComplete();
     } catch (err: unknown) {
-      toast.error(
-        `Could not log the ${type}: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      toast.error(`Could not log the ${type}: ${errorText(err)}`);
     }
   }, [
     content,

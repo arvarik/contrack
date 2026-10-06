@@ -31,6 +31,8 @@ export const icsConfigSchema = z.object({
   lookbackDays: z.number().int().min(1).max(365).default(90).optional(),
   maxAttendees: z.number().int().min(1).max(500).default(25).optional(),
   includeDescription: z.boolean().default(false).optional(),
+  /** Meetings with a stranger before Contrack suggests them as a contact. */
+  ghostThreshold: z.coerce.number().int().min(1).max(10).default(3).optional(),
 });
 
 export type IcsConfig = z.infer<typeof icsConfigSchema>;
@@ -129,6 +131,18 @@ export async function fetchIcsContent(
   }
 
   return readCappedBody(res, signal);
+}
+
+/**
+ * When an event starts or ends, as stored. An all-day event (`VALUE=DATE`)
+ * is a day, written `2026-10-09`: node-ical builds it at the server's local
+ * midnight, so its local parts are the day. As an instant it was the
+ * evening before for every reader west of the server.
+ */
+function stamp(date: Date, allDay: boolean): string {
+  if (!allDay) return date.toISOString();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 function parseParticipants(event: VEvent): Participant[] {
@@ -340,9 +354,9 @@ export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
             : instance.start.toISOString();
 
           const externalId = `${event.uid}_${recId}`;
-          const startsAt = instance.start.toISOString();
+          const startsAt = stamp(instance.start, instance.isFullDay);
           const endsAt = instance.end
-            ? instance.end.toISOString()
+            ? stamp(instance.end, instance.isFullDay)
             : new Date(instance.start.getTime() + 3600000).toISOString();
 
           if (instance.end && instance.end <= now) {
@@ -380,8 +394,10 @@ export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
         }
 
         const externalId = String(event.uid);
-        const startsAt = startDate.toISOString();
-        const endsAt = endDate.toISOString();
+        const allDay =
+          (event.start as { dateOnly?: boolean }).dateOnly === true;
+        const startsAt = stamp(startDate, allDay);
+        const endsAt = stamp(endDate, allDay);
 
         if (endDate <= now) {
           yield {

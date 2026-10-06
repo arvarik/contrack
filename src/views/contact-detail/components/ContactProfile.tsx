@@ -34,10 +34,10 @@ import React, {
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDropzone } from "react-dropzone";
-import { AlertCircle, UserX } from "lucide-react";
+import { UserX } from "lucide-react";
 import { toast } from "sonner";
 import { toastUndoableDelete } from "../../../lib/undoToast";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import { CARD } from "../../../lib/styles";
 
 import { usePageTitle } from "../../../hooks/usePageTitle";
@@ -106,6 +106,7 @@ import { vibeTokens } from "../../../lib/theme";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { DupeBanner } from "./DupeBanner";
 import { useMergedRedirect } from "./useMergedRedirect";
+import { LoadFailed } from "../../../components/ui/LoadFailed";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Props
@@ -307,7 +308,7 @@ export const ContactProfile = ({
               onError: (err) => {
                 toast.dismiss(toastId);
                 toast.error(
-                  `Could not attach "${file.name}": ${err instanceof Error ? err.message : String(err)}`,
+                  `Could not attach "${file.name}": ${errorText(err)}`,
                 );
               },
             },
@@ -376,9 +377,7 @@ export const ContactProfile = ({
                 ? undefined
                 : () => navigate(`/contact/${id}`),
               onError: (err) =>
-                toast.error(
-                  `Could not restore: ${err instanceof Error ? err.message : String(err)}`,
-                ),
+                toast.error(`Could not restore: ${errorText(err)}`),
             });
           },
         });
@@ -386,10 +385,7 @@ export const ContactProfile = ({
         navigate("/");
         if (onClose) onClose();
       },
-      onError: (err) =>
-        toast.error(
-          `Could not delete: ${err instanceof Error ? err.message : String(err)}`,
-        ),
+      onError: (err) => toast.error(`Could not delete: ${errorText(err)}`),
     });
   }, [id, name, deleteContact, restoreContact, navigate, onClose, onDeleted]);
 
@@ -425,13 +421,7 @@ export const ContactProfile = ({
         {error instanceof ApiError && error.status === 404 ? (
           <EmptyState icon={UserX} title="Contact not found" />
         ) : (
-          <EmptyState
-            icon={AlertCircle}
-            tone="error"
-            title="The contact did not load"
-            body="Nothing has changed. Try again in a moment"
-            action={{ label: "Retry", onClick: () => void refetch() }}
-          />
+          <LoadFailed what="the contact" onRetry={() => void refetch()} />
         )}
       </div>
     );

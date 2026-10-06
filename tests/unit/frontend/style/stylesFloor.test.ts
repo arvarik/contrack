@@ -381,6 +381,19 @@ describe("the one look", () => {
     expect(css).not.toMatch(/box-shadow:\s*inset\s+\d+px\s+0\s+0/);
   });
 
+  it("hides a control until hover only for a mouse", () => {
+    // `opacity-0` with `pointer-coarse:opacity-100` hid the control on any
+    // screen that is not coarse. A control shows for keyboard focus too,
+    // which a tooltip on hover does not, so the focus reveal names it.
+    const hidden = /(?<![-:\w/])opacity-0(?![-\w])/;
+    const focusReveal =
+      /(?:group-)?focus(?:-within|-visible)?(?:\/\w+)?:opacity-100(?![-\w])/;
+    const offenders = everyClassString()
+      .filter(({ text }) => hidden.test(text) && focusReveal.test(text))
+      .map(({ file, line }) => `${file}:${line}`);
+    expect([...new Set(offenders)]).toEqual([]);
+  });
+
   it("lifts only through the two lift classes", () => {
     // A tile rises with `lift`, a card with `card-interactive` (STYLE.md,
     // "Elevation"). A hand-rolled translate or shadow on hover is a third
@@ -472,5 +485,59 @@ describe("the shared helpers", () => {
 
   it("closes every dialog with DialogCloseButton, the one X named Close dialog", () => {
     expect(usersOutside("components/ui/Modal.tsx", /Close dialog/)).toEqual([]);
+  });
+
+  it("turns a field's spelling help off through NO_AUTOCORRECT", () => {
+    expect(
+      usersOutside(
+        "components/ui/SearchField.tsx",
+        /spellCheck=|autoCorrect=|autoCapitalize="(?:off|none)"/,
+      ),
+    ).toEqual([]);
+  });
+
+  it("draws a search box with SearchField, and every search input takes NO_AUTOCORRECT", () => {
+    expect(
+      usersOutside("components/ui/SearchField.tsx", /\bSEARCH_INPUT\b/),
+    ).toEqual(["lib/styles.ts"]);
+    // A search by its type, its role, its Enter key or its name.
+    const search =
+      /type="search"|role="combobox"|enterKeyHint="search"|aria-label="(?:Search|Filter|Find)/;
+    const offenders: string[] = [];
+    for (const file of sourceFiles()) {
+      if (!file.endsWith(".tsx")) continue;
+      const source = fs.readFileSync(file, "utf8");
+      for (const input of source.matchAll(/<input\b[\s\S]*?\/>/g)) {
+        if (search.test(input[0]) && !input[0].includes("NO_AUTOCORRECT")) {
+          const line = source.slice(0, input.index).split("\n").length;
+          offenders.push(`${rel(file)}:${line}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("asks for a touch screen through TOUCH_QUERY or touchFirst", () => {
+    expect(
+      usersOutside("lib/platform.ts", /"\((?:pointer: coarse|hover: none)\)"/),
+    ).toEqual([]);
+  });
+
+  it("offers Undo through withUndo, so every Undo stays as long", () => {
+    // The pending delete keeps its own window: it writes when it ends.
+    expect(
+      usersOutside("lib/undoToast.ts", /label: "Undo"/).filter(
+        (file) => file !== "lib/pendingDeletes.ts",
+      ),
+    ).toEqual([]);
+  });
+
+  it("reads an error's words through errorText, which drops the closing period", () => {
+    expect(
+      usersOutside(
+        "lib/utils.ts",
+        /instanceof Error\s*(?:\?|&&)\s*\w+\.message|as Error\)\.message|Could not [^`]*\$\{(?:err|error|e)\.message\}/,
+      ),
+    ).toEqual([]);
   });
 });

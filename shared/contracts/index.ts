@@ -12,6 +12,7 @@
 // =============================================================================
 
 import { actionItemRoutes } from "./actionItems.ts";
+import { authRoutes } from "./auth.ts";
 import { contactRoutes } from "./contacts.ts";
 import { dedupeRoutes } from "./dedupe.ts";
 import { geoRoutes } from "./geo.ts";
@@ -23,6 +24,7 @@ import type { RouteContract } from "./route.ts";
 import { tagRoutes } from "./tags.ts";
 import { tokenRoutes } from "./tokens.ts";
 import { oauthRoutes } from "./oauth.ts";
+import { trashRoutes } from "./trash.ts";
 
 export {
   route,
@@ -35,6 +37,7 @@ export {
 /** Every contract, one for each contracted route. */
 export const CONTRACTS: readonly RouteContract[] = [
   ...Object.values(actionItemRoutes),
+  ...Object.values(authRoutes),
   ...Object.values(contactRoutes),
   ...Object.values(dedupeRoutes),
   ...Object.values(geoRoutes),
@@ -45,6 +48,7 @@ export const CONTRACTS: readonly RouteContract[] = [
   ...Object.values(tagRoutes),
   ...Object.values(tokenRoutes),
   ...Object.values(oauthRoutes),
+  ...Object.values(trashRoutes),
 ];
 
 /** The key the route manifest and `UNCONTRACTED` use for a route. */
@@ -65,6 +69,8 @@ export function contractFor(key: string): RouteContract | undefined {
  */
 export const UNCONTRACTED: readonly string[] = [
   "GET /api/admin/audit",
+  // A file, not JSON, like the other downloads.
+  "GET /api/admin/backups/:filename",
   "GET /api/admin/health",
   "GET /api/admin/integrations",
   "PUT /api/admin/integrations",
@@ -212,4 +218,4 @@ export const UNCONTRACTED: readonly string[] = [
  * it here instead means raising this number, which is a decision for the
  * review.
  */
-export const UNCONTRACTED_CEILING = 140;
+export const UNCONTRACTED_CEILING = 141;

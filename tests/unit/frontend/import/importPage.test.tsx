@@ -107,7 +107,7 @@ describe("ImportPage", () => {
     } as unknown as ReturnType<typeof importsApi.useImports>);
 
     renderComponent();
-    const retryBtn = screen.getByRole("button", { name: /Retry/i });
+    const retryBtn = screen.getByRole("button", { name: "Try again" });
     expect(retryBtn).toBeTruthy();
 
     fireEvent.click(retryBtn);

@@ -81,6 +81,32 @@ describe("a delete says how long the trash keeps the contact", () => {
   });
 });
 
+describe("the archive date", () => {
+  it("is set when a contact is archived and cleared when it comes back", async () => {
+    const id = await createContact({ name: "Archive Date Person" });
+    // An edit long after the archive must not move the archive date.
+    const archive = await request(app)
+      .patch(`/api/contacts/${id}`)
+      .send({ isArchived: true });
+    expect(archive.status).toBe(200);
+    expect(archive.body.archivedAt).toEqual(expect.any(String));
+    sqlite
+      .prepare(
+        "UPDATE contacts SET archivedAt = '2026-01-02 03:04:05' WHERE id = ?",
+      )
+      .run(id);
+    await request(app).patch(`/api/contacts/${id}`).send({ about: "Edited" });
+
+    const archived = await request(app).get("/api/contacts/archived");
+    const row = archived.body.find((c: { id: string }) => c.id === id);
+    expect(row.archivedAt).toBe("2026-01-02 03:04:05");
+
+    await request(app).patch(`/api/contacts/${id}`).send({ isArchived: false });
+    const back = await request(app).get(`/api/contacts/${id}`);
+    expect(back.body.archivedAt).toBeNull();
+  });
+});
+
 describe("trash: soft delete → restore", () => {
   it("DELETE moves a contact to trash instead of destroying it", async () => {
     const id = await createContact({
@@ -376,6 +402,12 @@ describe("full export", () => {
     await createContact({
       name: "Comma, Inc Person",
       company: 'Quotes "R" Us, LLC',
+      birthday: "1990-05-14",
+      about: "Met at the fair",
+      addresses: [{ address: "1 Main St, Springfield" }],
+      socialLinks: [
+        { platform: "linkedin", url: "https://www.linkedin.com/in/comma" },
+      ],
     });
 
     const res = await request(app).get("/api/export/csv");
@@ -384,8 +416,12 @@ describe("full export", () => {
 
     const lines = res.text.split("\r\n");
     expect(lines[0]).toContain("Name,First Name,Last Name,Company");
+    expect(lines[0]).toContain("Addresses,Social Links,Birthday,About");
     expect(res.text).toContain('"Comma, Inc Person"');
     expect(res.text).toContain('"Quotes ""R"" Us, LLC"');
+    expect(res.text).toContain(
+      '"1 Main St, Springfield",https://www.linkedin.com/in/comma,1990-05-14,Met at the fair',
+    );
   });
 
   it("leaves ghosts and merged-away contacts out of the CSV, like the vCard file", async () => {

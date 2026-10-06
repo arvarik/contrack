@@ -14,9 +14,23 @@
  * It uses `<Navigate>`, so it must live inside the router. AuthGate mounts
  * outside `BrowserRouter` and cannot host it.
  */
-import { type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Navigate } from "react-router-dom";
+import { toast } from "sonner";
 import { useAuth } from "./AuthGate";
+
+/**
+ * Back to the Settings list, with one toast that says why. Without it a
+ * member on an admin page, or anyone on an address Settings does not have,
+ * lands on the list and cannot tell what happened.
+ */
+export const SettingsRedirect = ({ notice }: { notice: string }) => {
+  useEffect(() => {
+    // One id, so a second render does not stack a second toast.
+    toast.info(notice, { id: "settings-redirect" });
+  }, [notice]);
+  return <Navigate to="/settings" replace />;
+};
 
 export const RequireAdmin = ({ children }: { children: ReactNode }) => {
   const { isAdmin, isResolved } = useAuth();
@@ -27,6 +41,8 @@ export const RequireAdmin = ({ children }: { children: ReactNode }) => {
   if (!isResolved) return null;
   // `replace`, so the browser's back button does not bounce off the redirect
   // and land here again.
-  if (!isAdmin) return <Navigate to="/settings" replace />;
+  if (!isAdmin) {
+    return <SettingsRedirect notice="Only an admin can open that page" />;
+  }
   return <>{children}</>;
 };

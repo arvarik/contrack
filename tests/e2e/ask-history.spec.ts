@@ -54,7 +54,7 @@ test.describe("desktop", () => {
 
     await page.goto("/search");
     const input = page.getByRole("textbox", {
-      name: "Ask anything about your network",
+      name: "Ask about your network",
     });
 
     const historyPane = page.getByRole("complementary", { name: "History" });
@@ -250,7 +250,7 @@ test.describe("desktop", () => {
     }
     await expectPanelOpen(page, true);
     const searchInput = page.getByRole("textbox", {
-      name: "Ask anything about your network",
+      name: "Ask about your network",
     });
     await searchInput.fill("who knows python");
     await searchInput.press("Enter");

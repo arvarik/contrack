@@ -29,7 +29,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { ICON_BTN, KBD } from "../../lib/styles";
 import { DURATION, EASE } from "../../lib/motion";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { CLOSE_PALETTE_EVENT, OPEN_PALETTE_EVENT } from "../../lib/appEvents";
 import type { SemanticMatch, ZeroStateInsight } from "../../types";
 import { formatFacet } from "../../../shared/facetQuery";
@@ -51,6 +51,7 @@ import { FacetAutocomplete } from "./FacetAutocomplete";
 import { ActionSubMenu } from "./ActionSubMenu";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import { useCloseRequest } from "../../hooks/useCloseRequest";
+import { NO_AUTOCORRECT } from "../ui/SearchField";
 
 /** The icon at the start of the input, swapped when the mode changes. */
 const ICON_SWAP = {
@@ -495,9 +496,7 @@ export const CommandPalette = () => {
       handleClose();
       toast.success(`Created contact ${newContact.name}`);
     } catch (e: unknown) {
-      toast.error(
-        `Could not create the contact: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      toast.error(`Could not create the contact: ${errorText(e)}`);
     }
   };
 
@@ -526,9 +525,7 @@ export const CommandPalette = () => {
       handleClose();
       toast.success(`Logged ${kind} for ${contact.name}`);
     } catch (e: unknown) {
-      toast.error(
-        `Could not log the interaction: ${e instanceof Error ? e.message : String(e)}`,
-      );
+      toast.error(`Could not log the interaction: ${errorText(e)}`);
     }
   };
 
@@ -1081,9 +1078,8 @@ export const CommandPalette = () => {
                       // The palette exists to be typed into the instant it opens.
                       // eslint-disable-next-line jsx-a11y/no-autofocus
                       autoFocus
-                      // cmdk turns spell check and auto-correct off. A
-                      // phone would still capitalize "tag:" into "Tag:".
-                      autoCapitalize="off"
+                      // A phone would capitalize "tag:" into "Tag:".
+                      {...NO_AUTOCORRECT}
                       // Short, so a phone shows it whole. The mode chips
                       // under it name `?` and `>`.
                       placeholder={

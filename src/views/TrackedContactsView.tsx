@@ -36,16 +36,16 @@
  * 4. A row: the ring, the name as a link, the company, the cadence in words
  *    ("quarterly", or "every 2 months" for a cadence off the four words),
  *    "3 weeks past due" when it is, "spoke 2 months ago" when there is
- *    an interaction, and a 44 px toggle named "Untrack Ada Lovelace" or
+ *    an interaction, and a 44 px toggle named "Stop tracking Ada Lovelace" or
  *    "Track Ada Lovelace".
  * 5. Select mode, as on the Archived page: Select, Select all in each
- *    group's heading, Done, and a bar with Track, Untrack, a Cadence menu
+ *    group's heading, Done, and a bar with Track, Stop tracking, a Cadence menu
  *    (the four cadences the app offers: Weekly, Monthly, Quarterly and
  *    Yearly) and the count. The same Undo toasts as the Network bar.
  * 6. Past 200 rows the list is virtualised, the way the Network list is:
  *    the groups flatten into one list of headings and rows.
- * 7. When nobody is tracked, an `EmptyState` says so, and the Not tracked
- *    group under it is the way in. When the filters leave nobody, an
+ * 7. When no one is tracked, an `EmptyState` says so, and the Not tracked
+ *    group under it is the way in. When the filters leave no one, an
  *    `EmptyState` offers to clear them.
  *
  * @module views/TrackedContactsView
@@ -71,7 +71,6 @@ import {
   Globe,
   History,
   Radar,
-  Search,
   SearchX,
   Square,
   Users,
@@ -114,7 +113,6 @@ import {
   BTN_QUIET,
   CARD,
   ICON_BTN,
-  SEARCH_INPUT,
   SECTION_HEADING,
   SELECTED_ROW,
   SELECTED_TINT,
@@ -124,6 +122,7 @@ import type { Contact } from "../types";
 import { SelectedCount } from "./contact-list/BulkActionToolbar";
 import { SettingsHeaderActions } from "./settings/SettingsHeader";
 import { SETTINGS_BOX } from "./settings/layout";
+import { SearchField } from "../components/ui/SearchField";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // The groups
@@ -379,8 +378,8 @@ const TrackedRow = React.memo(function TrackedRow({
       {!selectMode && (
         <button
           type="button"
-          aria-label={`${tracked ? "Untrack" : "Track"} ${contact.name}`}
-          title={tracked ? "Untrack" : "Track"}
+          aria-label={`${tracked ? "Stop tracking" : "Track"} ${contact.name}`}
+          title={tracked ? "Stop tracking" : "Track"}
           disabled={flipPending}
           onClick={() => onFlip(contact)}
           className={cn(
@@ -644,7 +643,7 @@ export const TrackedContactsView = () => {
       setBarRoom(0);
     };
   }, []);
-  /** Nobody picked, or a change on its way: the bar's buttons wait. */
+  /** No one picked, or a change on its way: the bar's buttons wait. */
   const nothingToAct = bulk.isPending || selectedCount === 0;
 
   // The four cadences, one word each. A cadence off the list (60 or 180
@@ -784,20 +783,15 @@ export const TrackedContactsView = () => {
             the number it would show, as on the Enrichment page. */}
         <div className={cn(CARD, "p-4 space-y-3")}>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 min-w-[12rem]">
-              <Search
-                aria-hidden="true"
-                className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-on-surface-variant"
-              />
-              <input
-                type="search"
-                aria-label="Search tracked contacts"
-                placeholder="Search by name, company or role"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className={SEARCH_INPUT}
-              />
-            </div>
+            <SearchField
+              className="flex-1 min-w-[12rem]"
+              type="search"
+              aria-label="Search tracked contacts"
+              placeholder="Search by name, company or role"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onClear={() => setQuery("")}
+            />
             <Segmented
               label="Order"
               value={order}
@@ -844,13 +838,13 @@ export const TrackedContactsView = () => {
           </div>
         )}
 
-        {/* Nobody tracked: the way in is the Not tracked group under it.
+        {/* No one tracked: the way in is the Not tracked group under it.
             With Tracked chosen that group is filtered out, so the button
             brings it back. */}
         {nobodyTracked && !query && tracking !== "not_tracked" && (
           <EmptyState
             icon={Radar}
-            title="Nobody is tracked yet"
+            title="No one is tracked yet"
             body={TRACKED_INTRO}
             action={
               tracking === "tracked"
@@ -871,8 +865,8 @@ export const TrackedContactsView = () => {
               icon={SearchX}
               title={
                 query
-                  ? `Nobody matches "${query}"`
-                  : "Nobody matches these filters"
+                  ? `No one matches "${query}"`
+                  : "No one matches these filters"
               }
               body={
                 query
@@ -959,7 +953,7 @@ export const TrackedContactsView = () => {
           </div>
         )}
 
-        {/* The bar: the count, Track, Untrack and the cadence. It is the
+        {/* The bar: the count, Track, Stop tracking and the cadence. It is the
             column's last child and sticks to the bottom of the scroller, so
             it is exactly as wide as the cards above it, beside the rail at
             every width. Fixed to the window, it was centred on the window
@@ -991,12 +985,12 @@ export const TrackedContactsView = () => {
                 />
                 <BarButton
                   icon={<CircleSlash className="w-4 h-4" aria-hidden="true" />}
-                  label="Untrack"
+                  label="Stop tracking"
                   onClick={() => bulk.handleBulkTrack(false)}
                   disabled={nothingToAct}
                 />
                 {/* Disabled with the other two. The menu cannot be, so a
-                    button with its look stands in while nobody is picked. */}
+                    button with its look stands in while no one is picked. */}
                 {nothingToAct ? (
                   <BarButton
                     icon={

@@ -1,84 +1,64 @@
 /**
- * ListDetailPanel — Slide-in right panel for editing and managing a single list.
+ * ListDetailPanel — one list: its icon and name, who is in it, and Delete.
  *
- * Features:
- *  - Inline icon picker + editable name with auto-save
- *  - Member roster: avatar chips with one-click removal
- *  - "View in Network" deep-link: navigates to /?list=<id>
- *  - Danger zone: delete list with inline confirmation
+ *  - The icon saves when chosen. The name saves when the field is left or on
+ *    Enter, and Escape puts the saved name back. It used to wait for a Save
+ *    button, and a name typed before another list opened was lost.
+ *  - "Add people" finds contacts by name and adds them (`AddPeople`).
+ *  - Remove takes a member out at once, with Undo in its toast.
+ *  - "View in Network" opens the Network page filtered to the list.
+ *  - Delete asks first, in a dialog.
  */
-import React, { useState, useRef } from "react";
-import { X, ExternalLink, Trash2, Check, UserMinus } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
+import { useMemo, useRef, useState } from "react";
+import { X, ExternalLink, Trash2, UserMinus } from "lucide-react";
+import { motion } from "motion/react";
 import { toast } from "sonner";
 import {
+  useAddToList,
   useUpdateList,
   useDeleteList,
   useListContacts,
   useRemoveFromList,
 } from "../../api";
 import { type ContactList } from "../../types";
+import type { ListMember } from "../../../shared/contracts/lists";
 import { ListIcon } from "../contact-list/CreateListModal";
 import { cn } from "../../lib/utils";
+import { withUndo } from "../../lib/undoToast";
 import {
   ICON_BTN,
   SECTION_HEADING,
   SELECTED_TINT,
   SWATCH_SELECTED,
 } from "../../lib/styles";
-import { DURATION, EASE } from "../../lib/motion";
+import { AddPeople } from "./AddPeople";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 
-// Icon options (same set as CreateListModal)
-import {
-  Star,
-  Heart,
-  Crown,
-  Flame,
-  Rocket,
-  Target,
-  Gem,
-  Award,
-  Briefcase,
-  Users,
-  Globe,
-  Zap,
-  Shield,
-  Coffee,
-  Music,
-  Camera,
-  BookOpen,
-  TrendingUp,
-  Anchor,
-  Flag,
-  Sparkles,
-  Sun,
-} from "lucide-react";
-
-const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
-  star: Star,
-  heart: Heart,
-  crown: Crown,
-  flame: Flame,
-  rocket: Rocket,
-  target: Target,
-  gem: Gem,
-  award: Award,
-  briefcase: Briefcase,
-  users: Users,
-  globe: Globe,
-  zap: Zap,
-  shield: Shield,
-  coffee: Coffee,
-  music: Music,
-  camera: Camera,
-  "book-open": BookOpen,
-  "trending-up": TrendingUp,
-  anchor: Anchor,
-  flag: Flag,
-  sparkles: Sparkles,
-  sun: Sun,
-};
-const ICON_OPTIONS = Object.keys(ICON_MAP);
+/** The icons a list can wear, by the names `ListIcon` draws. */
+const ICON_OPTIONS = [
+  "star",
+  "heart",
+  "crown",
+  "flame",
+  "rocket",
+  "target",
+  "gem",
+  "award",
+  "briefcase",
+  "users",
+  "globe",
+  "zap",
+  "shield",
+  "coffee",
+  "music",
+  "camera",
+  "book-open",
+  "trending-up",
+  "anchor",
+  "flag",
+  "sparkles",
+  "sun",
+];
 
 interface ListDetailPanelProps {
   list: ContactList;
@@ -89,6 +69,10 @@ interface ListDetailPanelProps {
   hideMobileHeader?: boolean;
 }
 
+/**
+ * The panel is keyed by the list it shows (`ListManagerView`), so a
+ * different list is a new panel and its fields start from that list.
+ */
 export const ListDetailPanel = ({
   list,
   onClose,
@@ -99,52 +83,42 @@ export const ListDetailPanel = ({
   const updateList = useUpdateList();
   const deleteList = useDeleteList();
   const removeFromList = useRemoveFromList();
+  const addToList = useAddToList();
   const { data: members = [], isLoading: membersLoading } = useListContacts(
     list.id,
   );
+  const memberIds = useMemo(() => new Set(members.map((m) => m.id)), [members]);
 
-  const [editName, setEditName] = useState(list.name);
-  const [editIcon, setEditIcon] = useState(list.icon);
-  const [isDirty, setIsDirty] = useState(false);
+  const [name, setName] = useState(list.name);
+  const [icon, setIcon] = useState(list.icon);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
-  const nameInputRef = useRef<HTMLInputElement>(null);
+  // The name last sent, so Enter and the blur that follows save it once.
+  const savedName = useRef(list.name);
 
-  // Reset the draft when a DIFFERENT list arrives — and only then. A refetch
-  // of the same list must not clobber an in-progress edit, which is why the
-  // trigger is the id and not the name/icon. Adjusting during render (the
-  // documented pattern for prop-keyed state) replaces the old effect: same
-  // semantics, one render earlier, no stale frame of the previous list.
-  const [lastListId, setLastListId] = useState(list.id);
-  if (lastListId !== list.id) {
-    setLastListId(list.id);
-    setEditName(list.name);
-    setEditIcon(list.icon);
-    setIsDirty(false);
-    setShowDeleteConfirm(false);
-  }
-
-  const handleNameChange = (v: string) => {
-    setEditName(v);
-    setIsDirty(true);
-  };
-  const handleIconChange = (icon: string) => {
-    setEditIcon(icon);
-    setIsDirty(true);
-  };
-
-  const handleSave = async () => {
-    if (!editName.trim()) return;
-    try {
-      await updateList.mutateAsync({
-        id: list.id,
-        data: { name: editName.trim(), icon: editIcon },
+  const save = (data: { name?: string; icon?: string }) =>
+    updateList
+      .mutateAsync({ id: list.id, data })
+      .then(() => true)
+      .catch(() => {
+        toast.error("Could not save the list");
+        return false;
       });
-      setIsDirty(false);
-      toast.success("List updated");
-    } catch {
-      toast.error("Failed to update list");
-    }
+
+  const saveName = () => {
+    const next = name.trim();
+    if (!next) return setName(savedName.current);
+    if (next === savedName.current) return;
+    const before = savedName.current;
+    savedName.current = next;
+    void save({ name: next }).then((ok) => {
+      if (!ok) savedName.current = before;
+    });
+  };
+
+  const handleIconChange = (next: string) => {
+    setIcon(next);
+    void save({ icon: next });
   };
 
   const handleDelete = async () => {
@@ -153,16 +127,29 @@ export const ListDetailPanel = ({
       toast.success(`Deleted "${list.name}"`);
       onDeleted();
     } catch {
-      toast.error("Failed to delete list");
+      toast.error("Could not delete the list");
     }
   };
 
-  const handleRemoveMember = async (contactId: string) => {
-    setRemovingId(contactId);
+  // Undo puts the member back. `mutateAsync`, so the Undo still works once
+  // this list is closed.
+  const handleRemoveMember = async (member: ListMember) => {
+    setRemovingId(member.id);
     try {
-      await removeFromList.mutateAsync({ listId: list.id, contactId });
+      await removeFromList.mutateAsync({
+        listId: list.id,
+        contactId: member.id,
+      });
+      toast.success(
+        `${member.name} removed from ${list.name}`,
+        withUndo(() =>
+          addToList
+            .mutateAsync({ listId: list.id, contactId: member.id })
+            .catch(() => toast.error(`Could not add ${member.name} back`)),
+        ),
+      );
     } catch {
-      toast.error("Failed to remove contact");
+      toast.error(`Could not remove ${member.name}`);
     } finally {
       setRemovingId(null);
     }
@@ -231,14 +218,13 @@ export const ListDetailPanel = ({
         {/* ── Icon Picker ──────────────────────────────────────────────────── */}
         <section className="p-5 space-y-4">
           <h4 className={cn(SECTION_HEADING, "flex items-center gap-2")}>
-            <ListIcon icon={editIcon} className="w-4 h-4 text-primary" />
+            <ListIcon icon={icon} className="w-4 h-4 text-primary" />
             Icon & name
           </h4>
 
           <div className="grid grid-cols-8 gap-1.5">
             {ICON_OPTIONS.map((key) => {
-              const Icon = ICON_MAP[key];
-              const active = editIcon === key;
+              const active = icon === key;
               return (
                 <button
                   key={key}
@@ -259,51 +245,37 @@ export const ListDetailPanel = ({
                       : "text-on-surface-variant hover:text-on-surface",
                   )}
                   title={key}
+                  aria-label={key}
                 >
-                  <Icon className="w-4 h-4" />
+                  <ListIcon icon={key} className="w-4 h-4" />
                 </button>
               );
             })}
           </div>
 
-          <div className="flex gap-2">
-            <input
-              aria-label="List name"
-              ref={nameInputRef}
-              type="text"
-              value={editName}
-              onChange={(e) => handleNameChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSave();
-              }}
-              className="flex-1 min-h-[44px] sm:min-h-0 bg-surface-container-low rounded-xl px-4 py-2.5 text-sm font-bold"
-              placeholder="List name"
-            />
-            <AnimatePresence>
-              {isDirty && (
-                // Opacity only. A scale here would make Motion write an
-                // inline transform, which cancels the button's own lift on
-                // hover and its sink on press.
-                <motion.button
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: DURATION.slow, ease: EASE }}
-                  onClick={handleSave}
-                  disabled={!editName.trim() || updateList.isPending}
-                  className="btn-primary shrink-0"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  Save
-                </motion.button>
-              )}
-            </AnimatePresence>
-          </div>
+          <input
+            aria-label="List name"
+            type="text"
+            value={name}
+            maxLength={60}
+            onChange={(e) => setName(e.target.value)}
+            onBlur={saveName}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") saveName();
+              else if (e.key === "Escape" && name !== savedName.current) {
+                e.preventDefault();
+                setName(savedName.current);
+              }
+            }}
+            className="w-full min-h-[44px] sm:pointer-fine:min-h-0 bg-surface-container-low rounded-xl px-4 py-2.5 text-sm font-bold"
+            placeholder="List name"
+          />
         </section>
 
         {/* ── Members ──────────────────────────────────────────────────────── */}
         <section className="px-5 pb-5 space-y-3">
           <h4 className={cn(SECTION_HEADING)}>Members · {members.length}</h4>
+          <AddPeople list={list} memberIds={memberIds} />
 
           {membersLoading ? (
             <div className="space-y-2">
@@ -315,10 +287,12 @@ export const ListDetailPanel = ({
               ))}
             </div>
           ) : members.length === 0 ? (
-            <div className="text-center py-8 text-on-surface-variant text-sm bg-surface-container-low rounded-2xl">
-              <p className="font-bold text-xs opacity-60">No members yet</p>
-              <p className="text-xs opacity-40 mt-1">
-                Add contacts from the Network page
+            <div className="text-center py-8 bg-surface-container-low rounded-2xl">
+              <p className="font-bold text-sm text-on-surface">
+                No members yet
+              </p>
+              <p className="text-xs text-on-surface-variant mt-1">
+                Find people with Add people
               </p>
             </div>
           ) : (
@@ -351,9 +325,11 @@ export const ListDetailPanel = ({
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-sm truncate">{contact.name}</p>
+                    <p className="font-bold text-sm break-words">
+                      {contact.name}
+                    </p>
                     {(contact.role || contact.company) && (
-                      <p className="text-xs text-on-surface-variant truncate">
+                      <p className="text-xs text-on-surface-variant break-words">
                         {[contact.role, contact.company]
                           .filter(Boolean)
                           .join(" · ")}
@@ -362,11 +338,13 @@ export const ListDetailPanel = ({
                   </div>
 
                   {/* Remove button */}
+                  {/* Hidden until hover only for a mouse: a tablet has no hover. */}
                   <button
-                    onClick={() => handleRemoveMember(contact.id)}
+                    type="button"
+                    onClick={() => handleRemoveMember(contact)}
                     disabled={removingId === contact.id}
                     aria-label={`Remove ${contact.name} from list`}
-                    className="hit-area state-layer p-1.5 rounded-lg text-on-surface-variant hover:text-error sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 transition-all disabled:opacity-50"
+                    className="hit-area state-layer p-1.5 rounded-lg text-on-surface-variant hover:text-error pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:focus-visible:opacity-100 transition-all disabled:opacity-50"
                     title="Remove from list"
                   >
                     {removingId === contact.id ? (
@@ -383,67 +361,27 @@ export const ListDetailPanel = ({
 
         {/* ── Delete List ──────────────────────────────────────────────────── */}
         <section className="px-5 pb-8">
-          <div className="bg-error/5 rounded-xl px-4 py-2.5 flex items-center gap-3 min-h-[44px]">
-            <Trash2 className="w-3.5 h-3.5 text-error shrink-0" />
-            <AnimatePresence mode="wait" initial={false}>
-              {!showDeleteConfirm ? (
-                <motion.div
-                  key="delete-trigger"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="flex items-center justify-between flex-1 gap-3"
-                >
-                  <span className="text-xs text-error font-medium">
-                    Delete this list
-                  </span>
-                  {/* Not final yet: it asks first, so it is the quiet
-                      destructive button. */}
-                  <button
-                    type="button"
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="btn-secondary btn-sm text-error shrink-0"
-                  >
-                    Delete
-                  </button>
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="delete-confirm"
-                  initial={{ opacity: 0, x: 8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0 }}
-                  className="flex items-center justify-between flex-1 gap-3"
-                >
-                  <span className="text-xs text-on-surface-variant">
-                    Remove{" "}
-                    <span className="font-bold text-on-surface">
-                      "{list.name}"
-                    </span>
-                    ? Contacts kept
-                  </span>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => setShowDeleteConfirm(false)}
-                      className="btn-secondary btn-sm"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleDelete}
-                      disabled={deleteList.isPending}
-                      className="btn-danger btn-sm"
-                    >
-                      {deleteList.isPending ? "…" : "Delete"}
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          {/* It asks first, in a dialog that names the list. The people on
+              it stay. The inline question that was here took the focus
+              away with the button that opened it. */}
+          <button
+            type="button"
+            onClick={() => setShowDeleteConfirm(true)}
+            className="btn-secondary btn-sm text-error"
+          >
+            <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
+            Delete list
+          </button>
         </section>
+        <ConfirmDialog
+          isOpen={showDeleteConfirm}
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={() => void handleDelete()}
+          title={`Delete the list "${list.name}"?`}
+          description="The people on it stay in your network. This cannot be undone"
+          confirmLabel="Delete list"
+          busy={deleteList.isPending}
+        />
       </div>
     </div>
   );

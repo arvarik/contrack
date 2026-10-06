@@ -25,6 +25,10 @@
  *    it has loaded, and then the map fades up through it. Nothing in between
  *    is shown: not the empty canvas, not the tiles painting in.
  *
+ * "Open in map" opens the contact beside the map where there is room for
+ * both. On a phone or a tablet the contact would cover the whole map, so it
+ * shows the pin and its card on the map instead.
+ *
  * @module views/map/LocationMiniMap
  */
 import { Suspense, lazy, useCallback, useEffect, useState } from "react";
@@ -40,6 +44,7 @@ import { Badge } from "../../components/ui/Badge";
 import { InfoTip } from "../../components/ui/InfoTip";
 import { cn } from "../../lib/utils";
 import { CONTACT_ZOOM } from "./mapMath";
+import { useMapLink } from "./mapLink";
 
 const ContactMap = lazy(() =>
   import("./ContactMap").then((m) => ({ default: m.ContactMap })),
@@ -76,7 +81,7 @@ const CAPTION_ROW = "flex flex-wrap items-center gap-x-3 gap-y-1 text-xs";
  * it is on a pointer.
  */
 const CAPTION_ACTION =
-  "inline-flex items-center min-h-[44px] sm:min-h-0 font-bold text-primary underline hover:text-on-surface transition-colors";
+  "inline-flex items-center min-h-[44px] sm:pointer-fine:min-h-0 font-bold text-primary underline hover:text-on-surface transition-colors";
 
 /**
  * How long one pin must hold still before its map is built, in ms.
@@ -104,8 +109,12 @@ export const LocationMiniMap = ({
 }: LocationMiniMapProps) => {
   const navigate = useNavigate();
   const placed = isValidLatLng(contact.lat, contact.lng);
-  const mapHref = `/map/contact/${contact.id}`;
-  const openInMap = useCallback(() => navigate(mapHref), [navigate, mapHref]);
+  // Beside the map where both fit, else the pin and its card on the map.
+  const mapLink = useMapLink(contact.id);
+  const openInMap = useCallback(
+    () => navigate(mapLink.to, { state: mapLink.state }),
+    [navigate, mapLink],
+  );
   const [adjusting, setAdjusting] = useState(false);
   const openAdjust = useCallback(() => setAdjusting(true), []);
   const closeAdjust = useCallback(() => setAdjusting(false), []);
@@ -215,7 +224,11 @@ export const LocationMiniMap = ({
       )}
       <div className={CAPTION_ROW}>
         {!overTheMap && (
-          <Link to={mapHref} className={CAPTION_ACTION}>
+          <Link
+            to={mapLink.to}
+            state={mapLink.state}
+            className={CAPTION_ACTION}
+          >
             Open in map
           </Link>
         )}

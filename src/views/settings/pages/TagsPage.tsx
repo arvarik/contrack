@@ -8,16 +8,15 @@
  *
  * @module views/settings/pages/TagsPage
  */
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  AlertCircle,
   Check,
+  ChevronRight,
   Hash,
   Loader2,
   Merge,
   Pencil,
-  Search,
   Tag,
   Trash2,
   X,
@@ -32,19 +31,30 @@ import {
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { Modal } from "../../../components/ui/Modal";
-import {
-  CARD,
-  FORM_INPUT,
-  FORM_LABEL,
-  SEARCH_INPUT,
-} from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { CARD, FORM_INPUT, FORM_LABEL } from "../../../lib/styles";
+import { cn, errorText, plural } from "../../../lib/utils";
 import { tagFilterPath } from "../../contact-list/hooks/useContactListFilters";
 import { SETTINGS_INPUT, SETTINGS_PAGE } from "../layout";
+import { LoadFailed } from "../../../components/ui/LoadFailed";
+import { SearchField } from "../../../components/ui/SearchField";
+import { NO_AUTOCORRECT } from "../../../components/ui/SearchField";
 
 /** A tag row's icon buttons: flat, with the one hover layer. */
 const ROW_ACTION =
   "hit-area state-layer p-2.5 rounded-xl text-on-surface-variant min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors";
+
+const contacts = (n: number) => plural(n, "contact", "contacts");
+
+/**
+ * Who a rename or a delete changes. It changes every contact with the tag,
+ * and the list shows only the ones not archived and not in the Trash.
+ */
+function reach(t: TagSummary): string {
+  const hidden = t.total - t.count;
+  return hidden > 0
+    ? `${contacts(t.total)}, ${hidden} of them archived or in the Trash`
+    : contacts(t.total);
+}
 
 export const TagsPage = () => {
   const { data: tags = [], isLoading, isError, refetch } = useTagSummary();
@@ -57,6 +67,18 @@ export const TagsPage = () => {
   const [mergeSource, setMergeSource] = useState<TagSummary | null>(null);
   const [mergeTarget, setMergeTarget] = useState("");
   const [tagToDelete, setTagToDelete] = useState<TagSummary | null>(null);
+  // The tag whose Rename button takes focus back once the list shows it, so
+  // focus does not fall to the page after a rename or its Esc.
+  const focusTag = useRef<string | null>(null);
+  useEffect(() => {
+    if (editingTag !== null || focusTag.current === null) return;
+    const button = document.querySelector<HTMLElement>(
+      `[data-rename-tag="${CSS.escape(focusTag.current)}"]`,
+    );
+    if (!button) return;
+    button.focus();
+    focusTag.current = null;
+  }, [editingTag, tags]);
 
   // Filter and sort alphabetically
   const filteredTags = useMemo(
@@ -75,27 +97,41 @@ export const TagsPage = () => {
   };
 
   const cancelEditing = () => {
+    focusTag.current = editingTag;
     setEditingTag(null);
     setEditValue("");
   };
 
-  const handleRenameSubmit = async (fromTag: string) => {
+  const handleRenameSubmit = async (item: TagSummary) => {
     const trimmed = editValue.trim();
-    if (!trimmed || trimmed === fromTag) {
+    if (!trimmed || trimmed === item.tag) {
       cancelEditing();
+      return;
+    }
+    // A name another tag has joins the two. That is a merge, so it asks
+    // first, in the merge dialog that says so.
+    const other = tags.find(
+      (t) =>
+        t.tag !== item.tag && t.tag.toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (other) {
+      cancelEditing();
+      setMergeSource(item);
+      setMergeTarget(other.tag);
       return;
     }
     try {
       const result = await renameMutation.mutateAsync({
-        from: fromTag,
+        from: item.tag,
         to: trimmed,
       });
       toast(
-        `Renamed "${fromTag}" to "${trimmed}" (${result.affected} contact${result.affected === 1 ? "" : "s"} updated)`,
+        `Renamed "${item.tag}" to "${trimmed}" (${contacts(result.affected)} updated)`,
       );
       cancelEditing();
+      focusTag.current = trimmed;
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Failed to rename tag");
+      toast(errorText(err, "Could not rename the tag"));
     }
   };
 
@@ -112,12 +148,13 @@ export const TagsPage = () => {
         to: trimmed,
       });
       toast(
-        `Merged "${mergeSource.tag}" into "${trimmed}" (${result.affected} contact${result.affected === 1 ? "" : "s"} updated)`,
+        `Merged "${mergeSource.tag}" into "${trimmed}" (${contacts(result.affected)} updated)`,
       );
+      focusTag.current = trimmed;
       setMergeSource(null);
       setMergeTarget("");
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Failed to merge tags");
+      toast(errorText(err, "Could not merge the tags"));
     }
   };
 
@@ -126,11 +163,11 @@ export const TagsPage = () => {
     try {
       const result = await deleteMutation.mutateAsync(tagToDelete.tag);
       toast(
-        `Deleted tag "${tagToDelete.tag}" from ${result.affected} contact${result.affected === 1 ? "" : "s"}`,
+        `Deleted tag "${tagToDelete.tag}" from ${contacts(result.affected)}`,
       );
       setTagToDelete(null);
     } catch (err: unknown) {
-      toast(err instanceof Error ? err.message : "Failed to delete tag");
+      toast(errorText(err, "Could not delete the tag"));
     }
   };
 
@@ -141,29 +178,21 @@ export const TagsPage = () => {
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
         </div>
       ) : isError ? (
-        <EmptyState
-          icon={AlertCircle}
-          tone="error"
-          title="Tags did not load"
-          body="Nothing has changed. Try again in a moment"
-          action={{ label: "Try again", onClick: () => void refetch() }}
-        />
+        <LoadFailed what="your tags" onRetry={() => void refetch()} />
       ) : tags.length === 0 ? (
         <EmptyState icon={Tag} title="No tags yet" />
       ) : (
         <div className="space-y-4">
           {tags.length > 5 && (
-            <div className="relative max-w-sm">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Filter tags"
-                className={SEARCH_INPUT}
-                aria-label="Filter tags"
-              />
-            </div>
+            <SearchField
+              className="max-w-sm"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Filter tags"
+              aria-label="Filter tags"
+              onClear={() => setSearchQuery("")}
+              clearLabel="Clear filter text"
+            />
           )}
 
           {/* One card, a row for each tag, spaced apart with no line. */}
@@ -182,7 +211,9 @@ export const TagsPage = () => {
                   className="flex items-center justify-between gap-3 px-4 sm:px-6 py-2.5"
                 >
                   <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <span className="p-2 rounded-lg bg-surface-container text-on-surface-variant shrink-0">
+                    {/* The mark steps aside on a phone, where the three
+                        buttons leave the name little room. */}
+                    <span className="hidden sm:block p-2 rounded-lg bg-surface-container text-on-surface-variant shrink-0">
                       <Hash className="w-4 h-4" />
                     </span>
 
@@ -190,7 +221,7 @@ export const TagsPage = () => {
                       <form
                         onSubmit={(e) => {
                           e.preventDefault();
-                          void handleRenameSubmit(item.tag);
+                          void handleRenameSubmit(item);
                         }}
                         className="flex items-center gap-2 flex-1 max-w-md"
                       >
@@ -230,16 +261,20 @@ export const TagsPage = () => {
                       // Network list showing the contacts with the tag.
                       <Link
                         to={tagFilterPath(item.tag)}
-                        aria-label={`${item.tag}, ${item.count} ${item.count === 1 ? "contact" : "contacts"}`}
+                        aria-label={`${item.tag}, ${contacts(item.count)}`}
                         title="See who has this tag"
                         className="hit-area group/tag flex items-center gap-3 min-w-0 rounded-md"
                       >
-                        <span className="font-semibold text-sm text-on-surface truncate underline-offset-2 group-hover/tag:underline">
+                        <span className="font-semibold text-sm text-on-surface break-words min-w-0 underline-offset-2 group-hover/tag:underline">
                           {item.tag}
                         </span>
                         <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-primary/10 text-on-primary-wash shrink-0">
                           {item.count}
                         </span>
+                        <ChevronRight
+                          aria-hidden="true"
+                          className="w-4 h-4 text-on-surface-variant shrink-0"
+                        />
                       </Link>
                     )}
                   </div>
@@ -249,6 +284,7 @@ export const TagsPage = () => {
                       <button
                         type="button"
                         onClick={() => startEditing(item)}
+                        data-rename-tag={item.tag}
                         className={cn(ROW_ACTION, "hover:text-on-surface")}
                         aria-label={`Rename ${item.tag}`}
                         title="Rename"
@@ -303,10 +339,9 @@ export const TagsPage = () => {
             className="space-y-4"
           >
             <p className="text-sm text-on-surface-variant">
-              All {mergeSource.count}{" "}
-              {mergeSource.count === 1 ? "contact" : "contacts"} tagged with{" "}
-              <strong>{mergeSource.tag}</strong> will be updated to the target
-              tag, and <strong>{mergeSource.tag}</strong> will be removed
+              The {reach(mergeSource)} tagged <strong>{mergeSource.tag}</strong>{" "}
+              get the tag below instead, and <strong>{mergeSource.tag}</strong>{" "}
+              goes. A contact with both keeps one
             </p>
 
             <div>
@@ -321,6 +356,7 @@ export const TagsPage = () => {
                 onChange={(e) => setMergeTarget(e.target.value)}
                 placeholder="Choose or enter tag name…"
                 className={FORM_INPUT}
+                {...NO_AUTOCORRECT}
               />
               <datalist id="existing-tags">
                 {tags
@@ -367,7 +403,7 @@ export const TagsPage = () => {
           onClose={() => setTagToDelete(null)}
           onConfirm={handleConfirmDelete}
           title={`Delete tag "${tagToDelete.tag}"?`}
-          description={`Removes "${tagToDelete.tag}" from ${tagToDelete.count} ${tagToDelete.count === 1 ? "contact" : "contacts"}. The contacts themselves will not be deleted`}
+          description={`Removes "${tagToDelete.tag}" from ${reach(tagToDelete)}. The contacts stay`}
           confirmLabel="Delete tag"
           tone="danger"
           busy={deleteMutation.isPending}

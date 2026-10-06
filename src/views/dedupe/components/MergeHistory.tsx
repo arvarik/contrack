@@ -27,25 +27,21 @@ import { formatDistanceToNowStrict } from "date-fns";
 import { Bot, Clock, Undo2, User } from "lucide-react";
 import { toast } from "sonner";
 import { useMergeLog, useUndoMerge } from "../../../api";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import { LABEL, TONE_WASH } from "../../../lib/styles";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { Badge } from "../../../components/ui/Badge";
 import type { MergeLogEntry } from "../../../types";
 import { guessMatchType, plainReason } from "../utils/reason";
+import { parseServerTime } from "../../../lib/datetime";
 
 /**
- * A time from the database. SQLite writes "2026-10-05 22:52:02" in UTC with
- * no zone, which `new Date` would read as local time, so a merge near
- * midnight landed under the wrong day.
+ * A merge's time. SQLite writes "2026-10-05 22:52:02" in UTC with no zone,
+ * which `new Date` would read as local time, so a merge near midnight landed
+ * under the wrong day. `parseServerTime` reads both forms.
  */
-export function parseDbTime(value: string): Date {
-  return new Date(
-    value.includes("T") || value.endsWith("Z")
-      ? value
-      : `${value.replace(" ", "T")}Z`,
-  );
-}
+const mergedAt = (entry: MergeLogEntry) =>
+  parseServerTime(entry.mergedAt) ?? new Date(0);
 
 const DAY_MS = 86_400_000;
 
@@ -65,7 +61,7 @@ export function groupByDay(
           : "Older";
   const groups = new Map<string, MergeLogEntry[]>();
   for (const entry of entries) {
-    const label = labelOf(parseDbTime(entry.mergedAt));
+    const label = labelOf(mergedAt(entry));
     groups.set(label, [...(groups.get(label) ?? []), entry]);
   }
   return ["Today", "Yesterday", "This week", "Older"]
@@ -82,7 +78,7 @@ function Entry({ entry }: { entry: MergeLogEntry }) {
   const [pending, setPending] = useState(false);
   const auto = entry.mergedBy === "auto";
   const undone = !!entry.undoneAt;
-  const at = parseDbTime(entry.mergedAt);
+  const at = mergedAt(entry);
   const duplicateHint = hintOf(entry.duplicateCompany, entry.duplicateLocation);
   const primaryHint = hintOf(entry.primaryCompany, entry.primaryLocation);
   const reason = entry.reasoning
@@ -101,9 +97,7 @@ function Entry({ entry }: { entry: MergeLogEntry }) {
             : "Contrack will not suggest the two again",
       });
     } catch (err) {
-      toast.error(
-        `Could not undo: ${err instanceof Error ? err.message.replace(/\.$/, "") : String(err)}`,
-      );
+      toast.error(`Could not undo: ${errorText(err)}`);
     } finally {
       setPending(false);
     }

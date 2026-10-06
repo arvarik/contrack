@@ -13,7 +13,7 @@ import { Upload, Check, RefreshCw } from "lucide-react";
 import { Modal } from "./ui/Modal";
 import { useUploadAvatar, useSetDicebearAvatar } from "../api";
 import { toast } from "sonner";
-import { cn } from "../lib/utils";
+import { cn, errorText } from "../lib/utils";
 import {
   BTN_QUIET,
   DROPZONE_INPUT,
@@ -178,9 +178,7 @@ export const AvatarPickerModal = ({
             handleClose();
           },
           onError: (err) =>
-            toast.error(
-              `Upload failed: ${err instanceof Error ? err.message : String(err)}`,
-            ),
+            toast.error(`Could not upload the photo: ${errorText(err)}`),
         },
       );
     } else if (tab === "avatar" && selectedUrl) {
@@ -192,9 +190,7 @@ export const AvatarPickerModal = ({
             handleClose();
           },
           onError: (err) =>
-            toast.error(
-              `Could not save the avatar: ${err instanceof Error ? err.message : String(err)}`,
-            ),
+            toast.error(`Could not save the avatar: ${errorText(err)}`),
         },
       );
     }

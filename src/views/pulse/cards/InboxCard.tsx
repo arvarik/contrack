@@ -4,8 +4,9 @@
  * Every row is a link to the place where the job is done: the duplicates
  * page, the list filtered to the people who miss a field, the connectors
  * page. The first row is the tracking action: "6 new this month, 2
- * untracked" opens the list at `tracked:no`, which is where a person decides
- * who to keep up with. It replaced the New people card, whose number was a
+ * untracked" opens the list at `added:<30d tracked:no`, the two people it
+ * counts, which is where a person decides who to keep up with. It opened
+ * every untracked contact. It replaced the New people card, whose number was a
  * vanity count with a modal behind it.
  *
  * With nothing to do the card is one line, "Nothing to clean up.", because
@@ -152,7 +153,11 @@ export const InboxCard = ({
       <ul className="flex flex-col gap-1.5">
         {/* The tracking action first: the new people nobody follows yet. */}
         {newPeople && untracked > 0 && (
-          <InboxRow to="/?q=tracked:no" icon={UserPlus} tone="success">
+          <InboxRow
+            to={`/?q=${encodeURIComponent("added:<30d tracked:no")}`}
+            icon={UserPlus}
+            tone="success"
+          >
             <N>{newPeople.total}</N> new this month, <N>{untracked}</N>{" "}
             untracked
           </InboxRow>

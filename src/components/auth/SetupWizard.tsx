@@ -17,10 +17,8 @@
  */
 import React, { useState } from "react";
 import { UserPlus, Loader2 } from "lucide-react";
-import { toast } from "sonner";
 import { setupAccount } from "../../api/auth";
-import { isNetworkError } from "../../api/client";
-import { AuthShell, AuthSubmit, AuthError } from "./AuthShell";
+import { AuthShell, AuthSubmit, AuthError, authErrorText } from "./AuthShell";
 import {
   AccountFields,
   createAccountThenPhoto,
@@ -57,24 +55,13 @@ export const SetupWizard = ({
     setBusy(true);
     setFormError(null);
     try {
-      const { photoFailed } = await createAccountThenPhoto(
+      await createAccountThenPhoto(
         () => setupAccount(form.payload()),
         form.photo,
       );
-      if (photoFailed) {
-        toast.error(
-          "Your account is ready. The photo did not upload. Add it in Settings > Account",
-        );
-      }
       onCreated();
     } catch (err) {
-      setFormError(
-        isNetworkError(err)
-          ? "Can't reach the Contrack server. Is it running?"
-          : err instanceof Error
-            ? err.message
-            : "Could not create the account",
-      );
+      setFormError(authErrorText(err, "Could not create the account"));
       setBusy(false);
     }
   };
@@ -100,14 +87,14 @@ export const SetupWizard = ({
             )}
           </>
         ) : (
-          "This instance is protected. Create the account you'll sign in with — you're the only one who can, and it becomes the admin"
+          "This instance asks everyone to sign in. Create the account you'll sign in with. It becomes the admin"
         )
       }
       onSubmit={handleSubmit}
       footer={
         localOwnerPresent
           ? "Nothing is moved or re-imported. The account that already owns this data becomes yours, keeping its id and everything attached to it"
-          : "You're the only one who can create this account. It becomes the admin"
+          : "The first person to open this page creates the admin account, so finish this now"
       }
     >
       <div className="space-y-4">

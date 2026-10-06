@@ -34,6 +34,7 @@ import React from "react";
 import { Search, X, type LucideIcon } from "lucide-react";
 import { CARD, ICON_BTN } from "../../lib/styles";
 import { cn } from "../../lib/utils";
+import { NO_AUTOCORRECT } from "../../components/ui/SearchField";
 
 interface AskSearchBoxProps {
   inputRef: React.RefObject<HTMLInputElement | null>;
@@ -112,6 +113,7 @@ export const AskSearchBox = ({
       }}
       placeholder={placeholder}
       aria-label={label}
+      {...NO_AUTOCORRECT}
       // 44 px tall on a phone, the touch floor, and the button's 40 px from
       // `sm`. 16 px type on a phone keeps iOS from zooming in on focus.
       className="flex-1 min-w-0 h-11 sm:h-10 bg-transparent border-none text-on-surface placeholder:text-on-surface-variant text-base sm:text-lg"

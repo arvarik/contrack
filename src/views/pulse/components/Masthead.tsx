@@ -47,6 +47,8 @@ interface MastheadProps {
   onJumpTo: (target: JumpTarget) => void;
   /** The welcome state: the line is left out. */
   quiet?: boolean;
+  /** The More menu's button, where focus goes when customize mode ends. */
+  moreRef?: React.Ref<HTMLButtonElement>;
 }
 
 /** The Tailwind `sm` breakpoint, where the counts become buttons. */
@@ -58,6 +60,7 @@ export const Masthead = ({
   onToggleCustomize,
   onJumpTo,
   quiet = false,
+  moreRef,
 }: MastheadProps) => {
   const navigate = useNavigate();
   const wide = useMediaQuery(SM_QUERY);
@@ -133,6 +136,7 @@ export const Masthead = ({
           <ActionMenu
             label="More"
             icon={Ellipsis}
+            triggerRef={moreRef}
             items={[
               {
                 id: "new-contact",

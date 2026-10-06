@@ -21,18 +21,21 @@ import { toast } from "sonner";
 import {
   Camera,
   Database,
+  Download,
   HardDriveDownload,
   ShieldAlert,
   ShieldCheck,
   ShieldQuestion,
 } from "lucide-react";
 import {
+  downloadFile,
   useBackups,
   useCreateBackup,
   type BackupVerification,
 } from "../../../api/admin";
 import { useConnectors } from "../../../api/connectors";
 import { Badge } from "../../../components/ui/Badge";
+import { IconButton } from "../../../components/ui/IconButton";
 import { formatBytes, formatRelative, formatWhen } from "../../../lib/datetime";
 import { SELECTED_ROW, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
@@ -44,7 +47,7 @@ import {
   AdminRow,
 } from "./AdminShell";
 
-const COLUMNS = "sm:grid-cols-[minmax(0,2fr)_140px_minmax(0,1fr)_110px]";
+const COLUMNS = "sm:grid-cols-[minmax(0,2fr)_140px_minmax(0,1fr)_110px_44px]";
 
 /** Every row of a snapshot's verification, as one hoverable string. */
 function verificationDetail(v: BackupVerification): string {
@@ -111,8 +114,10 @@ export const BackupsView = () => {
         <AdminButton
           busy={create.isPending}
           icon={<Camera className="w-4 h-4" />}
-          disabled={create.isPending}
+          // Not `disabled`: a disabled button drops focus to the page.
+          aria-disabled={create.isPending}
           onClick={() =>
+            !create.isPending &&
             create.mutate(undefined, {
               onSuccess: (backup) => {
                 setLatest(backup.filename);
@@ -146,7 +151,7 @@ export const BackupsView = () => {
         empty={{
           icon: Database,
           title: "No snapshots yet",
-          body: "Take one now, or turn on scheduled snapshots in General",
+          body: "Take one now, or turn on scheduled snapshots in Settings → General",
         }}
         header={
           <div className={cn("grid gap-4", COLUMNS)}>
@@ -154,6 +159,7 @@ export const BackupsView = () => {
             <span>Checked</span>
             <span>Taken</span>
             <span className="text-right">Size</span>
+            <span className="sr-only">Download</span>
           </div>
         }
         footer={
@@ -162,9 +168,8 @@ export const BackupsView = () => {
               A snapshot holds the whole database, every account&rsquo;s
               contacts included, and the oldest go on a schedule. Verified means
               it opened, passed SQLite&rsquo;s integrity check, and has rows in
-              every table. Snapshots stay in the server&rsquo;s data folder:
-              copy them somewhere else to make them a backup, which Contrack
-              cannot do for you
+              every table. A snapshot on the server&rsquo;s own disk is not a
+              backup yet: download it and keep the copy somewhere else
             </p>
             {connectors && connectors.length > 0 && (
               <p className="text-xs text-on-surface-variant text-pretty">
@@ -218,6 +223,21 @@ export const BackupsView = () => {
                 {formatBytes(backup.sizeBytes)}
               </span>
             </AdminCell>
+
+            <IconButton
+              aria-label={`Download ${backup.filename}`}
+              title="Download"
+              tone="subtle"
+              className="self-end sm:self-auto"
+              onClick={() =>
+                downloadFile(
+                  `/admin/backups/${encodeURIComponent(backup.filename)}`,
+                  backup.filename,
+                ).catch((error: Error) => toast.error(error.message))
+              }
+            >
+              <Download className="w-4 h-4" />
+            </IconButton>
 
             {/*
               The reason, in the row rather than in a tooltip. A hover is the

@@ -56,6 +56,18 @@ describe("Tags API", () => {
     expect(pioneer.count).toBeGreaterThanOrEqual(2); // Ada + Charles
   });
 
+  it("counts the archived contacts a rename changes in the total only", async () => {
+    for (const isArchived of [false, true]) {
+      await request(app)
+        .post("/api/contacts")
+        .send({ name: "Archive Tagged", tags: ["shelved"], isArchived });
+    }
+    const res = await request(app).get("/api/tags/summary");
+    expect(
+      res.body.tags.find((t: { tag: string }) => t.tag === "shelved"),
+    ).toEqual({ tag: "shelved", count: 1, total: 2 });
+  });
+
   it("PATCH /api/tags/:tag renames a tag and returns affected count", async () => {
     // Create contact with unique tag
     await request(app)

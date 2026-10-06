@@ -99,7 +99,7 @@ const SCREENS: Screen[] = [
     path: () => "/search",
     ready: async (page) => {
       await expect(
-        page.getByRole("textbox", { name: "Ask anything about your network" }),
+        page.getByRole("textbox", { name: "Ask about your network" }),
       ).toBeVisible();
     },
   },

@@ -131,9 +131,9 @@ Each row shows the name, the chip, what to do, and "Last spoke 12 days ago" when
 - On a birthday ("Wish Ada Lovelace a happy birthday"), the cake opens a note to log.
 - On a catch-up ("Check in with Ada Lovelace"), the button opens a note to log.
 
-A follow-up row also has a snooze button. It opens **Snooze until** with **Tomorrow**, **In 3 days**, **Next week** and **Next month**. On a computer, the button shows when you point at the row or focus it. On a touch screen, it always shows. Birthday and catch-up rows have no snooze.
+A follow-up row also has a snooze button. It opens **Snooze until** with **Tomorrow**, **In 3 days**, **Next week** and **Next month**. A toast says the new day, for example "Follow-up snoozed to Thursday, Oct 8", and **Undo** puts the old date back. On a computer, the button shows when you point at the row or focus it. On a touch screen, it always shows. Birthday and catch-up rows have no snooze.
 
-On a wider screen, **Up next** scrolls inside its card. When the queue is empty, it says "Nothing due today" and offers **Log note**. To add follow-ups, see [Follow-ups](contacts.md#follow-ups).
+On a wider screen, **Up next** scrolls inside its card. On a phone or a narrow window, it shows its first eight rows and **Show all**, so the other cards are not far down the page. When the queue is empty, it says "Nothing due today" and offers **Log note**. To add follow-ups, see [Follow-ups](contacts.md#follow-ups).
 
 ### Work through Up next with the keyboard
 
@@ -150,13 +150,14 @@ The first press of `J`, `K`, `D`, `S` or `L` only shows which row is highlighted
 
 `D`, or the check on a row, takes the follow-up out of the queue at once. The toast "Follow-up done" offers **Undo** for 10 seconds, and the follow-up is marked done when the toast closes.
 
-You can also press `Tab` to move into the list. Then:
+You can also press `Tab` to move into the list. The list is one `Tab` stop. Then:
 
 - `↑`/`↓` move between items in Up next.
 - `Enter` opens the highlighted contact.
 - `Space` does the row's action. It completes a follow-up, or it opens a note for a birthday or a catch-up.
+- `Tab` goes to the highlighted row's check, its name and its snooze, and then out of the list.
 
-The letter keys do nothing while a dialog is open or while you type in a field. The **Single-key shortcuts** switch in **Settings → Keyboard** turns them off. See [Keyboard shortcuts](keyboard-shortcuts.md).
+The letter keys do nothing while a dialog or a menu is open, or while you type in a field. The **Single-key shortcuts** switch in **Settings → Keyboard** turns them off. See [Keyboard shortcuts](keyboard-shortcuts.md).
 
 ### Completed
 
@@ -164,15 +165,15 @@ The **Completed** line says "Nothing completed yet", or for example "3 completed
 
 ### The cards
 
-**Keeping up** shows the people you track. A bar splits them into **Strong**, **Fading**, **At risk** and **No interactions yet**, and each part of the legend opens that group on the Tracked contacts page. The large number says how many are within their cadence, for example "31 of 42 within cadence". When anybody is past cadence, **11 to catch up** jumps to **Catch up**. After four weeks of weekly score records, **Rising** and **Cooling** each show up to three tracked contacts whose score moved by 3 or more in four weeks. **Manage** opens the Tracked contacts page. With nobody tracked, the card says "Nobody is tracked yet" and offers **Choose people**.
+**Keeping up** shows the people you track. A bar splits them into **Strong**, **Fading**, **At risk** and **No interactions yet**, and each part of the legend opens that group on the Tracked contacts page. The large number says how many are within their cadence, for example "31 of 42 within cadence". When anybody is past cadence, **11 to catch up** jumps to **Catch up**. After four weeks of weekly score records, **Rising** and **Cooling** each show up to three tracked contacts whose score moved by 3 or more in four weeks. **Manage** opens the Tracked contacts page. With no one tracked, the card says "No one is tracked yet" and offers **Choose people**.
 
 **Activity** shows the last 12 weeks as squares, one for each day. A stronger colour means more interactions. The columns start on the day that **Week starts on** sets in **Settings → Network and contacts**. Point at a square, or tap it, to read the day, for example "Wed, Sep 17: 2 notes, 1 call". Under the squares, a line shows the weekly totals, the last four weeks against the four before, and this week by type.
 
-**Daily insight** shows one observation that AI writes about your network. AI writes a new one each day, and again after your contacts change. Without AI, the card says what to do. An admin reads "Add an AI key to get one". A member reads "Your admin has not added an AI key yet". An account with AI off reads "AI is off for your account". See [Connect a provider](ai.md#connect-a-provider).
+**Daily insight** shows one observation that AI writes about your network. AI writes a new one each day, and again after your contacts change. Without an insight, the card says why. With no Fast model set up, an admin reads "Set up a Fast model to get one" and a member reads "Your admin has not set up AI yet". When the provider fails, the card reads "Could not write today's insight" and offers **Try again**. An account with AI off reads "AI is off for your account". See [Connect a provider](ai.md#connect-a-provider).
 
 **Inbox** lists clean-up jobs. Each row opens the place where you do the job:
 
-- "6 new this month, 2 untracked" opens the Network list at `tracked:no`.
+- "6 new this month, 2 untracked" opens the Network list at `added:<30d tracked:no`, the untracked people added in the last 30 days.
 - "Review 3 possible duplicates" opens **Possible duplicates**.
 - "2 contacts have stale data" opens the contacts that nobody updated in six months (`updated:>6m`).
 - "1 person is mentioned but not in your network" shows the names of the ghosts. Each name opens the ghost.
@@ -181,25 +182,25 @@ The **Completed** line says "Nothing completed yet", or for example "3 completed
 
 With nothing to do, the card says "Nothing to clean up".
 
-**Coming up** lists the birthdays eight to fourteen days away and the meetings in the next seven days from a connected calendar, in date order. Each row has a chip such as "Tomorrow", "Thursday" or "In 10 days". A birthday row says, for example, "Turns 34". A meeting row shows its title, its time and the people in it. With nothing to show, the card says "Nothing coming up." and offers **Connect a calendar**.
+**Coming up** lists the birthdays eight to fourteen days away and the meetings in the next seven days from a connected calendar, in date order. Each row has a chip such as "Tomorrow", "Thursday" or "In 10 days". A birthday row says, for example, "Turns 34". A meeting row shows its title, its time and the people in it. An all-day event shows its day and "all day". With nothing to show, the card says "Nothing coming up". When no calendar is connected, it also offers **Connect a calendar**.
 
 **Composition** is a ring chart of your network by **Industry**, **Role** or **Location**. It shows the six largest groups and **Other**. Each group opens the Network list filtered to it. **See all** or **Other** opens **Network composition** with every group.
 
 ### Customize the layout
 
-1. Open **More** and choose **Customize layout**, or press `C`.
+1. Open **More** and choose **Customize layout**, or press `C`. A bar with **Reset layout** and **Done** shows under the top line, and each column shows its name.
 2. Move a card in one of three ways:
    - Drag it by its handle. On a phone, hold the handle for a moment, then drag.
-   - Open the menu beside the eye and choose **Move up**, **Move down**, **Move to Focus**, **Move to Network** or **Move to Intelligence**.
+   - Open the menu beside the eye and choose **Move up**, **Move down**, **Move to Focus column**, **Move to Network column** or **Move to Intelligence column**.
    - Focus the handle and press `Space` to lift the card. Move it with the arrow keys, and press `Space` again to put it down. `Esc` returns it to its old place.
 3. To hide a card, select its eye button. A hidden card goes to the **Hidden cards** tray at the top. Select the eye in the tray to show the card again.
-4. Select **Done**. **Reset layout** puts every card back in its first place.
+4. Select **Done**. **Reset layout** puts every card back in its first place, and its toast offers **Undo**.
 
 Contrack saves your layout to your account, so it is the same on every device.
 
 ### Pulse on different screens
 
-- On a wide screen, Pulse has three columns: **Focus** (Up next and Completed), **Intelligence** (Daily insight, Inbox, Coming up and Composition) and **Network** (Keeping up and Activity).
+- On a wide screen, Pulse has three columns: the **Focus column** (Up next and Completed), the **Intelligence column** (Daily insight, Inbox, Coming up and Composition) and the **Network column** (Keeping up and Activity).
 - On a medium screen, Focus and Network share the first row. The Intelligence cards sit two across under them.
 - On a phone, the cards form one column in the order Focus, Network, Intelligence. The counts in the top line are plain text, not links.
 
@@ -231,12 +232,12 @@ Each row shows the ring, the name and the company. It also shows the cadence ("q
 
 1. Select **Select** in the page header.
 2. Choose the contacts, or select **Select all** in a group heading.
-3. Use the bar: **Track**, **Untrack**, or **Cadence** to give every selected contact one cadence.
+3. Use the bar: **Track**, **Stop tracking**, or **Cadence** to give every selected contact one cadence.
 4. Select **Done** to leave select mode.
 
 The bar shows the same toasts with **Undo** as the Network list. A new filter clears the selection, so the bar never acts on a contact you cannot see.
 
-With nobody tracked, the page says "Nobody is tracked yet". With **Tracked** chosen, **Show people to track** switches to **Not tracked**. When the filters leave nobody, **Clear filters** resets them.
+With no one tracked, the page says "No one is tracked yet". With **Tracked** chosen, **Show people to track** switches to **Not tracked**. When the filters leave no one, **Clear filters** resets them.
 
 ## Possible duplicates
 

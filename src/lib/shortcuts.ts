@@ -347,11 +347,11 @@ export const SHORTCUTS: readonly Shortcut[] = [
     page: "/",
   },
 
-  // Map
+  // Map. On a narrow window, or beside an open contact, / opens Filters.
   {
     group: NAMES.map.label,
     keys: ["/"],
-    description: "Focus search",
+    description: "Focus the filter box",
     bareLetter: true,
     page: "/map",
   },
@@ -379,7 +379,8 @@ export const SHORTCUTS: readonly Shortcut[] = [
   {
     group: NAMES.map.label,
     keys: ["Esc"],
-    description: "Close the contact, or clear the selection",
+    description:
+      "Clear the filter box, close the contact, or clear the selection",
     bareLetter: false,
     page: "/map",
   },
@@ -476,6 +477,14 @@ export const SHORTCUTS: readonly Shortcut[] = [
     bareLetter: false,
     page: "/search",
   },
+  // The results are one Tab stop. The arrows walk them from a focused result.
+  {
+    group: NAMES.ask.label,
+    keys: ["↑", "↓"],
+    description: "Move between results",
+    bareLetter: false,
+    page: "/search",
+  },
 
   // Possible duplicates, one group at a time. The arrow and the letter do
   // the same thing in one handler, so an entry with a letter in it is a bare
@@ -497,7 +506,8 @@ export const SHORTCUTS: readonly Shortcut[] = [
   {
     group: NAMES.possibleDuplicates.label,
     keys: ["→", "L"],
-    description: "Merge into the contact to keep",
+    description:
+      "Merge into the contact to keep. A Check carefully group takes two presses",
     bareLetter: true,
     page: "/pulse/duplicates",
   },

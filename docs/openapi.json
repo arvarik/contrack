@@ -416,6 +416,38 @@
         }
       }
     },
+    "/api/auth/invitations/check": {
+      "post": {
+        "summary": "Whether an invitation link can still make an account: 404 for one that never was, 410 for one used, revoked or expired",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "token": { "type": "string" } },
+                "required": ["token"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "ok": { "type": "boolean", "const": true } },
+                  "required": ["ok"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/oauth/requests/{id}": {
       "get": {
         "summary": "A sign-in waiting for the person's answer, for the consent page",
@@ -3942,7 +3974,7 @@
     },
     "/api/lists/{id}/contacts": {
       "get": {
-        "summary": "The contacts in a list, newest first",
+        "summary": "Who is in a list, newest first: each member's name, photo, role and company",
         "parameters": [
           {
             "name": "id",
@@ -3958,7 +3990,7 @@
               "application/json": {
                 "schema": {
                   "type": "array",
-                  "items": { "$ref": "#/components/schemas/Contact" }
+                  "items": { "$ref": "#/components/schemas/ListMember" }
                 }
               }
             }
@@ -4264,6 +4296,7 @@
                       },
                       "isTracked": { "type": "integer" },
                       "trackedAt": { "type": ["string", "null"] },
+                      "archivedAt": { "type": ["string", "null"] },
                       "aiResearch": { "type": ["string", "null"] },
                       "ownerId": {
                         "type": "string",
@@ -4385,9 +4418,10 @@
                         "type": "object",
                         "properties": {
                           "tag": { "type": "string" },
-                          "count": { "type": "integer" }
+                          "count": { "type": "integer" },
+                          "total": { "type": "integer" }
                         },
-                        "required": ["tag", "count"],
+                        "required": ["tag", "count", "total"],
                         "additionalProperties": false
                       }
                     }
@@ -4480,6 +4514,26 @@
                     ],
                     "additionalProperties": false
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/trash": {
+      "delete": {
+        "summary": "Delete every contact in the Trash forever, with their notes and files",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "count": { "type": "integer" } },
+                  "required": ["count"],
+                  "additionalProperties": false
                 }
               }
             }
@@ -4728,6 +4782,7 @@
           },
           "isTracked": { "type": "boolean" },
           "trackedAt": { "type": ["string", "null"] },
+          "archivedAt": { "type": ["string", "null"] },
           "aiResearch": { "type": ["string", "null"] },
           "ownerId": {
             "type": "string",
@@ -4988,6 +5043,7 @@
           "geoSource",
           "isTracked",
           "trackedAt",
+          "archivedAt",
           "aiResearch",
           "ownerId",
           "scoreDirty",
@@ -5082,6 +5138,18 @@
           "ownerId",
           "memberCount"
         ],
+        "additionalProperties": false
+      },
+      "ListMember": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "avatarUrl": { "type": ["string", "null"] },
+          "role": { "type": ["string", "null"] },
+          "company": { "type": ["string", "null"] }
+        },
+        "required": ["id", "name", "avatarUrl", "role", "company"],
         "additionalProperties": false
       },
       "MapContact": {

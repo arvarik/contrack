@@ -13,6 +13,7 @@ import { CATCH_UP_DAYS_SINCE, CATCH_UP_WHERE } from "./catchUp.ts";
 import { log } from "../utils/logger.ts";
 import type { Scope } from "../tenancy/scope.ts";
 import { getPendingClusterCount } from "./dedupe/suggestions.ts";
+import { actionItemService } from "./actionItemService.ts";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -36,26 +37,16 @@ export interface ZeroStatePayload {
 }
 
 // ─── Prepared Statements (cached on first call) ──────────────────────────────
-// Five statements, each taking the owner as its first bound parameter. The
-// dedupe count reads `dedupe_suggestions.ownerId` directly rather than joining
-// back to contacts, because a suggestion names two contacts and both share the
-// owner by the mismatch trigger.
+// Three statements, each taking the owner as its first bound parameter. The
+// follow-up count is the badge's (`actionItemService.getUrgentCount`) and the
+// duplicate count is the review's (`getPendingClusterCount`), so the palette
+// never disagrees with them.
 //
 // A catch-up is a tracked contact past its cadence: the same rule as the
 // Catch up group on Pulse, from `catchUp.ts`, so the two never disagree about
 // who needs a call. The two furthest past due are the palette's signal.
 
 const stmts = {
-  urgentCount: sqlite.prepare(`
-    SELECT COUNT(*) as count
-    FROM action_items ai
-    JOIN contacts c ON ai.contactId = c.id
-    WHERE ai.ownerId = ?
-      AND ai.completedAt IS NULL
-      AND date(ai.dueAt) <= date('now')
-      AND (c.isArchived = 0 OR c.isArchived IS NULL)
-  `),
-
   catchUp: sqlite.prepare(`
     SELECT c.id, c.name, c.avatarUrl,
            ${CATCH_UP_DAYS_SINCE} as daysSince,
@@ -97,20 +88,18 @@ export const zeroStateService = {
    * Compute the zero-state intelligence payload.
    * All queries are idempotent and read-only. Safe to call on every Cmd+K open.
    */
-  getPayload(scope: Scope): ZeroStatePayload {
+  getPayload(scope: Scope, timeZone?: string): ZeroStatePayload {
     const startMs = Date.now();
     const insights: ZeroStateInsight[] = [];
 
-    // 1. Action items (overdue + due today)
-    const urgent = stmts.urgentCount.get(scope.ownerId) as { count: number };
-    if (urgent.count > 0) {
+    // 1. Follow-ups due today or overdue: the badge's count, on the reader's
+    // calendar.
+    const urgent = actionItemService.getUrgentCount(scope, timeZone);
+    if (urgent > 0) {
       insights.push({
         type: "action_items",
-        label:
-          urgent.count === 1
-            ? "1 follow-up due"
-            : `${urgent.count} follow-ups due`,
-        count: urgent.count,
+        label: urgent === 1 ? "1 follow-up due" : `${urgent} follow-ups due`,
+        count: urgent,
       });
     }
 
@@ -144,7 +133,7 @@ export const zeroStateService = {
     if (ghost && ghost.mentionCount >= 2) {
       insights.push({
         type: "ghost",
-        label: `${ghost.name} mentioned ${ghost.mentionCount}× — not in your network`,
+        label: `${ghost.name}, mentioned ${ghost.mentionCount} times, is not a contact yet`,
         contact: { id: ghost.id, name: ghost.name, avatarUrl: ghost.avatarUrl },
         mentionCount: ghost.mentionCount,
       });

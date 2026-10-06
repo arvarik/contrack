@@ -151,6 +151,7 @@ export async function testConnector(
   kind: string,
   config: unknown,
   secret?: unknown,
+  connectorId?: string,
 ): Promise<{ ok: true; detail: string }> {
   const adapter = getAdapter(kind as ConnectorKind);
   if (!adapter) {
@@ -161,9 +162,67 @@ export async function testConnector(
   let parsedSecret: unknown = null;
   if (adapter.secretSchema && secret !== undefined && secret !== null) {
     parsedSecret = adapter.secretSchema.parse(secret);
+  } else if (connectorId) {
+    parsedSecret = savedSecret(
+      scope,
+      connectorId,
+      kind,
+      parsedConfig as Record<string, unknown>,
+    );
   }
 
   return adapter.test(parsedConfig, parsedSecret);
+}
+
+/** The config fields that say where a secret goes. */
+const DESTINATION_KEYS = ["host", "port", "secure", "username", "url"];
+
+/**
+ * The saved secret of one of the caller's connectors, for a test from its
+ * edit form, where an empty password field means "keep the saved one".
+ * Another account's connector is not found, so it lends no secret. The
+ * secret goes only where it went before: a test with another host, port,
+ * username or address must type it again, or a stolen session could send
+ * a saved mailbox password to a server of its choosing.
+ */
+function savedSecret(
+  scope: Scope,
+  id: string,
+  kind: string,
+  config: Record<string, unknown>,
+): unknown {
+  const row = sqlite
+    .prepare(
+      "SELECT kind, config, secret FROM connectors WHERE id = ? AND ownerId = ?",
+    )
+    .get(id, scope.ownerId) as
+    { kind: string; config: string | null; secret: string | null } | undefined;
+  if (!row || row.kind !== kind) {
+    throw new AppError("Connector not found", 404, { code: "NOT_FOUND" });
+  }
+  if (!row.secret) return null;
+  let saved: Record<string, unknown> = {};
+  try {
+    saved = JSON.parse(row.config || "{}");
+  } catch {
+    // An unreadable config matches nothing below.
+  }
+  if (DESTINATION_KEYS.some((key) => saved[key] !== config[key])) {
+    throw new AppError(
+      "Type the password again to test a changed server or username",
+      400,
+      { code: "SECRET_NEEDS_REENTRY" },
+    );
+  }
+  try {
+    return JSON.parse(secretBox.open(row.secret));
+  } catch {
+    throw new AppError(
+      "Could not read the saved password. Type it again to test",
+      400,
+      { code: "SECRET_UNREADABLE" },
+    );
+  }
 }
 
 export async function createConnector(
@@ -799,7 +858,8 @@ export function listCorrespondents(
          cl.localId,
          cl.seenCount,
          cl.lastSeenAt,
-         cl.ignoredAt
+         cl.ignoredAt,
+         cl.displayName
        FROM connector_links cl
        JOIN connectors c ON c.id = cl.connectorId
         WHERE cl.ownerId = ? AND cl.kind = 'correspondent' AND cl.ignoredAt IS NULL AND cl.localId IS NULL
@@ -821,6 +881,7 @@ export function listCorrespondents(
     seenCount: number;
     lastSeenAt: string;
     ignoredAt: string | null;
+    displayName: string | null;
   }>;
 
   return rows.map((row) => {
@@ -844,7 +905,8 @@ export function listCorrespondents(
       externalId: row.externalId,
       email,
       phone,
-      name,
+      // The name the mail or meeting gave, or the name the link is keyed by.
+      name: row.displayName ?? name,
       localId: row.localId,
       seenCount: row.seenCount,
       lastSeenAt: row.lastSeenAt,

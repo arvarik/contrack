@@ -3,8 +3,9 @@
  *
  * The geocoder reads an address and places a pin, and sometimes it reads
  * wrong: the other Springfield, the office instead of the house, a street
- * that two cities share. This dialog is the zero-API fix. A person drags the
- * pin, or clicks the map, or nudges the pin with the arrow keys, and saves.
+ * that two cities share. This dialog is the zero-API fix. A person moves the
+ * pin, or chooses a spot on the map, or nudges the pin with the arrow keys,
+ * and saves. The hint names the keys only where a keyboard is likely.
  * The server marks the row `geoSource = 'manual'` and the geocoder leaves it
  * alone from then on. "Use address again" hands the pin back.
  *
@@ -24,12 +25,13 @@ import { useContact, useSetContactLocation } from "../../api";
 import { searchPlace } from "../../api/geo";
 import { Modal } from "../../components/ui/Modal";
 import { FORM_INPUT } from "../../lib/styles";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { ContactMap } from "./ContactMap";
 import { contactPinLabel, pinAvatarSrc } from "./ContactMarker";
 import { flyToContact } from "./flyTo";
 import type { MiniMapContact } from "./LocationMiniMap";
 import { CONTACT_ZOOM } from "./mapMath";
+import { NO_AUTOCORRECT } from "../../components/ui/SearchField";
 
 /** Where a pin is, or is about to be. */
 interface PinPosition {
@@ -186,7 +188,7 @@ export const AdjustPinModal = ({
       setPin({ latitude: found.lat, longitude: found.lng });
       if (map) flyToContact(map, { longitude: found.lng, latitude: found.lat });
     } catch (error) {
-      setFindError(error instanceof Error ? error.message : String(error));
+      setFindError(errorText(error));
     } finally {
       setFinding(false);
     }
@@ -202,8 +204,13 @@ export const AdjustPinModal = ({
       <div className="space-y-4">
         <p id={hintId} className="text-sm text-on-surface-variant text-pretty">
           {pin
-            ? "Drag the pin, tap or click the map, or move the pin with the arrow keys"
-            : "Tap or click the map to place the pin"}
+            ? "Move the pin, or choose a spot on the map"
+            : "Choose a spot on the map to place the pin"}
+          {pin && (
+            <span className="hidden pointer-fine:inline">
+              . The arrow keys move it too
+            </span>
+          )}
         </p>
         <form
           role="search"
@@ -220,6 +227,7 @@ export const AdjustPinModal = ({
             }}
             placeholder="Find a place, for example Lisbon"
             aria-label="Find a place"
+            {...NO_AUTOCORRECT}
             maxLength={120}
             className={cn(FORM_INPUT, "min-w-0")}
           />

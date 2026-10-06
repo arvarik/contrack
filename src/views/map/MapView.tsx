@@ -12,6 +12,10 @@
  * one that remembers where it was left (`rememberView`). Both are what make
  * a return to this page instant.
  *
+ * A link can ask for one pin with `state: { pin: id }`: the map flies to it
+ * and opens its card, with no contact over the map. "Open in map" does so
+ * where an open contact would cover the whole map (`LocationMiniMap`).
+ *
  * @module views/map/MapView
  */
 import {
@@ -33,7 +37,7 @@ import {
 } from "react-router-dom";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { cubicBezier } from "motion/react";
-import { CalendarPlus, ZoomIn, X } from "lucide-react";
+import { CalendarPlus, MapPin, ZoomIn, X } from "lucide-react";
 import { toast } from "sonner";
 import { useMapContacts, useBulkAddToList } from "../../api";
 import {
@@ -53,10 +57,10 @@ import {
   SIDE_PANEL_OPEN_MS,
   SIDE_PANEL_WIDTH,
 } from "../../components/layout/SidePanel";
-import { EASE } from "../../lib/motion";
+import { EASE, prefersReducedMotion } from "../../lib/motion";
 import { ContactMap } from "./ContactMap";
 import type { CardAction } from "./MapHoverCard";
-import { flyToContact, prefersReducedMotion, settlePadding } from "./flyTo";
+import { flyToContact, settlePadding } from "./flyTo";
 import {
   HEAT_END_ZOOM,
   HEAT_FADE_ZOOM,
@@ -71,7 +75,7 @@ import {
   type Insets,
 } from "./insets";
 import { useMapFilter } from "./useMapFilter";
-import { MapToolbar } from "./MapToolbar";
+import { MapToolbar, type MapToolbarHandle } from "./MapToolbar";
 import { StatsStrip } from "./StatsStrip";
 import { NotOnMap } from "./NotOnMap";
 import type { MiniMapContact } from "./LocationMiniMap";
@@ -93,8 +97,9 @@ import { FollowUpModal } from "./FollowUpModal";
 import { SelectionOverlay } from "./SelectionOverlay";
 import { QuickInteractionModal } from "../../components/QuickInteractionModal";
 import { LiveStatus } from "../../components/ui/LiveStatus";
+import { EmptyState } from "../../components/ui/EmptyState";
 import { boundsOf, degreesAcross, densestSpan } from "./mapMath";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 
 // The dialog's chunk loads the first time a card asks for it.
 const AdjustPinModal = lazy(() =>
@@ -147,7 +152,8 @@ export const MapView = () => {
         ? "none"
         : undefined;
   const [searchParams, setSearchParams] = useSearchParams();
-  const { search } = useLocation();
+  const location = useLocation();
+  const { search } = location;
   const { preferences, setPreference } = usePreferences();
 
   const urlViewId = searchParams.get("view");
@@ -174,7 +180,7 @@ export const MapView = () => {
   const openId = openMatch?.params.id ?? null;
   const [map, setMap] = useState<MapLibreMap | null>(null);
   const pageRef = useRef<HTMLDivElement | null>(null);
-  const inputRef = useRef<HTMLInputElement | null>(null);
+  const toolbarRef = useRef<MapToolbarHandle | null>(null);
   const singleKeyShortcuts = useSingleKeyShortcuts();
   const isWide = useMediaQuery(WIDE_QUERY);
   const [mobilePaneOpen, setMobilePaneOpen] = useState(false);
@@ -334,7 +340,7 @@ export const MapView = () => {
             showView(view.id);
           },
           onError: (err) =>
-            toast.error(`Could not update "${view.name}": ${err.message}`),
+            toast.error(`Could not update "${view.name}": ${errorText(err)}`),
         },
       );
     },
@@ -482,7 +488,7 @@ export const MapView = () => {
             },
             onError: (err) => {
               toast.error(
-                `Failed: ${err instanceof Error ? err.message : String(err)}`,
+                `Could not add the contact to the list: ${errorText(err)}`,
               );
             },
           },
@@ -586,6 +592,24 @@ export const MapView = () => {
     },
     [map, isWide],
   );
+
+  // A link that asks for one pin: fly to it and open its card, once.
+  const askedPin = (location.state as { pin?: unknown } | null)?.pin;
+  const pinShown = useRef<string | null>(null);
+  useEffect(() => {
+    if (typeof askedPin !== "string" || !map || isPending) return;
+    if (pinShown.current === location.key) return;
+    pinShown.current = location.key;
+    const contact = contacts.find((c) => c.id === askedPin);
+    if (contact) handleSelectContactFromPane(contact);
+  }, [
+    askedPin,
+    contacts,
+    handleSelectContactFromPane,
+    isPending,
+    location.key,
+    map,
+  ]);
 
   /**
    * What covers the map at mount, measured before the map exists.
@@ -693,7 +717,7 @@ export const MapView = () => {
       if (event.key === "/") {
         if (!singleKeyShortcuts) return;
         event.preventDefault();
-        inputRef.current?.focus();
+        toolbarRef.current?.focusFilter();
         return;
       }
 
@@ -746,7 +770,12 @@ export const MapView = () => {
         ref={pageRef}
         className="relative flex-1 min-w-0 h-full overflow-hidden"
       >
-        <h1 className="sr-only">{NAMES.map.label}</h1>
+        {/* An open contact is the page's h1: the map steps down a level. */}
+        {openId ? (
+          <h2 className="sr-only">{NAMES.map.label}</h2>
+        ) : (
+          <h1 className="sr-only">{NAMES.map.label}</h1>
+        )}
         <LiveStatus label="Map selection" message={selection.announcement} />
         <SelectionOverlay
           map={map}
@@ -776,7 +805,7 @@ export const MapView = () => {
             onUpdateView: handleUpdateView,
             onMoveView: (view, to) => moveMapView.mutate({ view, to }),
           }}
-          inputRef={inputRef}
+          handleRef={toolbarRef}
           room={room}
           onFitAll={handleFitAll}
           onToggleInsights={() => toggleInsightsPane(true)}
@@ -852,16 +881,34 @@ export const MapView = () => {
           >
             <div className="pointer-events-auto glass-panel shadow-xl rounded-2xl border border-outline-variant/20 flex items-center gap-3 py-2 pl-4 pr-2">
               <p role="alert" className="text-sm font-semibold text-on-surface">
-                Could not load contacts
+                Could not load your contacts
               </p>
               <button
                 type="button"
                 onClick={() => void refetch()}
                 className="btn-secondary btn-sm"
               >
-                Retry
+                Try again
               </button>
             </div>
+          </div>
+        )}
+
+        {/* Nobody has a place yet: say how someone gets one. */}
+        {empty === "none" && (
+          <div
+            className={cn(
+              "absolute inset-0 z-[5] flex items-center justify-center p-4 pointer-events-none",
+              isPaneOpen && "lg:pr-80",
+            )}
+          >
+            <EmptyState
+              icon={MapPin}
+              title="No one is on the map yet"
+              body="A contact shows here once their address has a place"
+              action={{ label: "Go to Network", onClick: () => navigate("/") }}
+              className="pointer-events-auto glass-panel shadow-xl rounded-2xl max-w-sm"
+            />
           </div>
         )}
 

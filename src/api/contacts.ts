@@ -27,10 +27,12 @@ import {
 } from "../types";
 import { isValidLatLng, type MapContact } from "../../shared/geo";
 import { contactRoutes } from "../../shared/contracts/contacts";
+import { trashRoutes } from "../../shared/contracts/trash";
 import type { BodyOf } from "../../shared/contracts/route";
 import { apiFetch, apiJson, jsonBody } from "./client";
 import { GEO_STATUS_KEY } from "./geo";
 import { watchNewContact } from "../lib/mergeNotice";
+import { errorText } from "../lib/utils";
 
 /**
  * Canonical fetcher for the `['contacts']` query — the single source of truth
@@ -284,7 +286,8 @@ export const useUpdateContact = () => {
       if ("location" in data || "addresses" in data)
         followPin(queryClient, contact);
     },
-    onError: (error) => toast.error(`Could not save contact: ${error.message}`),
+    onError: (error) =>
+      toast.error(`Could not save contact: ${errorText(error)}`),
     // After an error too: a write that timed out may still have landed.
     onSettled: (contact, _error, { id }) =>
       refreshContact(queryClient, contact ?? id),
@@ -326,7 +329,8 @@ export const useSetContactLocation = () => {
       if ("regeocode" in data && !isValidLatLng(contact.lat, contact.lng))
         followPin(queryClient, contact);
     },
-    onError: (error) => toast.error(`Could not move the pin: ${error.message}`),
+    onError: (error) =>
+      toast.error(`Could not move the pin: ${errorText(error)}`),
   });
 };
 
@@ -350,7 +354,7 @@ export const useRejectResearchRun = () => {
       ),
     onSuccess: ({ contact }) => storeContact(queryClient, contact),
     onError: (error) =>
-      toast.error(`Could not take back that search: ${error.message}`),
+      toast.error(`Could not take back that search: ${errorText(error)}`),
   });
 };
 
@@ -406,7 +410,7 @@ export const useSetTracked = () => {
     },
     onError: (error, _input, rollback) => {
       rollback?.();
-      toast.error(`Could not change tracking: ${error.message}`);
+      toast.error(`Could not change tracking: ${errorText(error)}`);
     },
     onSettled: (contact, _error, { id }) =>
       refreshContact(queryClient, contact ?? id),
@@ -437,7 +441,7 @@ export const useSetCadence = () => {
       patchContactCaches(queryClient, id, { cadenceDays }),
     onError: (error, _input, rollback) => {
       rollback?.();
-      toast.error(`Could not change the cadence: ${error.message}`);
+      toast.error(`Could not change the cadence: ${errorText(error)}`);
     },
     onSettled: (contact, _error, { id }) =>
       refreshContact(queryClient, contact ?? id),
@@ -473,6 +477,17 @@ export const usePurgeTrashedContact = () => {
       const res = await apiFetch(`/trash/${id}`, { method: "DELETE" });
       return res.json();
     },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["trash"] });
+    },
+  });
+};
+
+/** Delete every contact in the Trash forever ("Empty trash"). */
+export const useEmptyTrash = () => {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => apiJson(trashRoutes.empty, "/trash"),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["trash"] });
     },

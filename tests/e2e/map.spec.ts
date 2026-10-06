@@ -121,6 +121,8 @@ test.describe("map", () => {
     await expect(
       overlay.getByRole("heading", { level: 1, name: /Ada Lovelace/ }),
     ).toBeVisible();
+    // The open contact is the page's one h1: the map's own steps down.
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
     // The map page owns the key, and it arrives with the map's own chunk, so
     // a pin is the proof that the page behind the contact is running.
     await expect(
@@ -146,6 +148,10 @@ test.describe("map", () => {
     await page.keyboard.press("Escape");
     await expect(page).toHaveURL(/\/map$/);
     await expect(overlay).toHaveCount(0);
+    // The focus comes back to her pin, not to the page.
+    await expect(
+      page.getByRole("button", { name: "Ada Lovelace, Babbage & Co" }),
+    ).toBeFocused();
   });
 
   test("zooms into a cluster until it splits", async ({ page }) => {
@@ -159,7 +165,9 @@ test.describe("map", () => {
       name: "3 contacts, zoom in",
     });
     await expect(cluster).toBeVisible();
-    await cluster.click();
+    // From the keyboard: the cluster's button goes with the zoom.
+    await cluster.focus();
+    await page.keyboard.press("Enter");
 
     // The cluster is gone and at least one more person has a pin of their own.
     await expect(cluster).toHaveCount(0);
@@ -168,6 +176,8 @@ test.describe("map", () => {
         message: "the cluster did not split into pins",
       })
       .toBe(true);
+    // The focus moves on to a pin near it, not to the page.
+    await expect(page.locator(".map-pin:focus")).toHaveCount(1);
   });
 
   // An insight bar writes a value with a space in quotes, such as
@@ -244,10 +254,20 @@ test.describe("map", () => {
       await insights.click();
       await expect(insights).toHaveAttribute("aria-expanded", "false");
 
-      await page
-        .getByRole("button", { name: "2 contacts at one place, list them" })
-        .click();
+      const stacked = page.getByRole("button", {
+        name: "2 contacts at one place, list them",
+      });
       const list = page.getByRole("list", { name: "People at this place" });
+      // From the keyboard, Escape closes the list and the focus goes back
+      // to its cluster, not to the page.
+      await stacked.focus();
+      await page.keyboard.press("Enter");
+      await expect(list).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(list).toHaveCount(0);
+      await expect(stacked).toBeFocused();
+
+      await stacked.click();
       await expect(list.getByRole("button")).toHaveCount(2);
       const alan = list.getByRole("button", {
         name: "Alan Turing, Same Place Ltd",

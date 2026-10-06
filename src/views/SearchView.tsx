@@ -1,9 +1,9 @@
 import { useState, useRef, useCallback, useEffect, useId } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { isTypingTarget } from "../lib/keyboard";
 import {
   Sparkles,
-  AlertTriangle,
+  Upload,
+  AlertCircle,
   ArrowRight,
   HistoryIcon,
   MapPin,
@@ -12,6 +12,10 @@ import {
 } from "lucide-react";
 import { useStarterDraw } from "../hooks/useStarterDraw";
 import { useRecordSearch } from "../api/searchHistory";
+import { useStarterQuestions } from "../api";
+import { isPageKeyTaken } from "../lib/keyboard";
+import { touchFirst } from "../lib/platform";
+import { useRovingFocus } from "./search/useRovingFocus";
 import { usePreferences } from "../contexts/PreferencesContext";
 import { useMediaQuery, WIDE_QUERY } from "../hooks/useMediaQuery";
 import { useSingleKeyShortcuts } from "../hooks/useSingleKeyShortcuts";
@@ -22,7 +26,7 @@ import {
   SECTION_HEADING,
   SUGGESTION_CHIP,
 } from "../lib/styles";
-import { cn } from "../lib/utils";
+import { cn, errorText } from "../lib/utils";
 import { FloatingContactCard } from "../components/FloatingContactCard";
 import { SynthesisBar } from "../components/command-palette/SynthesisBar";
 import { CorvidThinking } from "../components/brand/CorvidThinking";
@@ -113,9 +117,18 @@ export const SearchView = () => {
 
   usePageTitle(mode === "notes" ? "Search notes" : NAMES.ask.title);
 
-  // Focus input on mount
+  // The box takes focus on arrival on a desktop. On a touch screen that
+  // opened the keyboard over the page before a person chose to type.
   useEffect(() => {
+    if (touchFirst()) return;
     inputRef.current?.focus();
+  }, []);
+
+  /** A question under three letters was asked: the line under the box says why. */
+  const [tooShort, setTooShort] = useState(false);
+  const changeQuery = useCallback((value: string) => {
+    setQuery(value);
+    setTooShort(false);
   }, []);
 
   /**
@@ -138,7 +151,10 @@ export const SearchView = () => {
   const handleSearch = useCallback(
     (searchQuery?: string) => {
       const q = (searchQuery ?? query).trim();
-      if (q.length < 3) return;
+      if (q.length < 3) {
+        setTooShort(q.length > 0);
+        return;
+      }
       if (isPending && q === submittedQuery) return;
       lastRecordedPeopleQueryRef.current = null;
       setLastAISearchQuery(q);
@@ -230,31 +246,24 @@ export const SearchView = () => {
   const [draw, setDraw] = useState(0);
 
   const handleClear = useCallback(() => {
-    setQuery("");
+    changeQuery("");
     reset();
     setLastAISearchQuery("");
     setDraw((n) => n + 1);
     inputRef.current?.focus();
-  }, [reset, setLastAISearchQuery]);
+  }, [changeQuery, reset, setLastAISearchQuery]);
 
   // Global keydown for focusing search and toggling history
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (isTypingTarget(e)) return;
       if (!singleKeys) return;
-      // A key pressed in a dialog belongs to the dialog: H in the history's
-      // Clear confirmation would close the pane under it.
-      if (e.target instanceof Element && e.target.closest('[role="dialog"]'))
-        return;
+      // A key in a field, a dialog or a menu is theirs: H in the history's
+      // Clear confirmation, or in an open menu, closed the pane under it.
+      if (isPageKeyTaken(e)) return;
       if (e.key === "/") {
         e.preventDefault();
         inputRef.current?.focus();
-      } else if (
-        e.key.toLowerCase() === "h" &&
-        !e.metaKey &&
-        !e.ctrlKey &&
-        !e.altKey
-      ) {
+      } else if (e.key.toLowerCase() === "h") {
         e.preventDefault();
         // The sheet is a dialog, and a key pressed in it is its own, so
         // below `lg` H only opens it.
@@ -278,6 +287,10 @@ export const SearchView = () => {
   // a question that finds nobody is worse than no question. The palette's AI
   // mode draws four from the same pool through the same hook.
   const suggestions = useStarterDraw(SUGGESTION_COUNT, draw);
+  // The pool comes back empty only for a network with no one in it.
+  const starter = useStarterQuestions();
+  const nobodyToAsk =
+    starter.isSuccess && (starter.data?.questions.length ?? 0) === 0;
 
   const handleExampleClick = useCallback(
     (exampleQuery: string) => {
@@ -305,6 +318,7 @@ export const SearchView = () => {
   const refine = semanticSearch.data?.refine ?? [];
   const hasSearched =
     semanticSearch.isSuccess || semanticSearch.isError || results.length > 0;
+  const roving = useRovingFocus(results.length);
   const flight = useCorvidSearchFlight(isLoading && mode === "people");
 
   /**
@@ -409,12 +423,14 @@ export const SearchView = () => {
                   inputRef={inputRef}
                   formRef={flight.fieldRef}
                   value={query}
-                  onChange={setQuery}
+                  onChange={changeQuery}
                   onSubmit={() => handleSearch()}
                   onClear={handleClear}
                   canClear={query.length > 0}
+                  // A short question still submits, so the line under the
+                  // box can say why it was not asked.
                   canSubmit={
-                    query.trim().length >= 3 &&
+                    query.trim().length > 0 &&
                     !(isLoading && query.trim() === submittedQuery)
                   }
                   icon={Sparkles}
@@ -428,8 +444,16 @@ export const SearchView = () => {
                     ) : undefined
                   }
                   placeholder="Ask about your network…"
-                  label="Ask anything about your network"
+                  label="Ask about your network"
                 />
+                {tooShort && (
+                  <p
+                    role="status"
+                    className="px-1 text-sm text-on-surface-variant"
+                  >
+                    Type 3 or more letters to ask
+                  </p>
+                )}
                 <SearchCoverageBar variant="row" returnFocusRef={inputRef} />
               </div>
 
@@ -460,6 +484,29 @@ export const SearchView = () => {
                   </ul>
                 </div>
               )}
+
+              {/* No question to suggest: say what to ask, or, with no one
+                  in the network yet, how to bring people in. */}
+              {!hasSearched &&
+                !isLoading &&
+                suggestions.length === 0 &&
+                (starter.isSuccess || starter.isError) &&
+                (nobodyToAsk ? (
+                  <EmptyState
+                    icon={Upload}
+                    title="No one to ask about yet"
+                    body="Import your contacts, then ask about them here"
+                    action={{
+                      label: "Import contacts",
+                      onClick: () => navigate("/?import=1"),
+                    }}
+                  />
+                ) : (
+                  <p className="px-1 text-sm text-on-surface-variant">
+                    Ask in your own words, such as &ldquo;who works in
+                    design&rdquo; or &ldquo;who did I meet in Lisbon&rdquo;
+                  </p>
+                ))}
 
               {/*
                 Shimmer and results share one keyed slot and crossfade with
@@ -538,7 +585,7 @@ export const SearchView = () => {
                           >
                             {aiAllowed
                               ? "AI could not check these people this time, so some may not fit. They match your words or their meaning. Ask AI again to check them"
-                              : "AI is off for your account, so AI did not check these people. They match your words or their meaning. Turn on AI in Settings, Privacy"}
+                              : "AI is off for your account, so AI did not check these people. They match your words or their meaning. Turn on AI in Settings → Privacy and AI"}
                           </InfoTip>
                         </div>
                       )}
@@ -617,7 +664,7 @@ export const SearchView = () => {
                   )}
 
                   {/* Cards — CSS stagger, no per-card Framer Motion */}
-                  <div className="space-y-2">
+                  <div ref={roving.listRef} className="space-y-2">
                     {results.map((match, i) => (
                       <ResultCard
                         key={match.id}
@@ -625,6 +672,7 @@ export const SearchView = () => {
                         index={i}
                         isFallback={isFallback}
                         onClick={() => setFloatingContactId(match.id)}
+                        itemProps={roving.itemProps(i)}
                       />
                     ))}
                   </div>
@@ -649,7 +697,7 @@ export const SearchView = () => {
                 Error state. `role="alert"` so the failure is announced the
                 moment it appears (WCAG 4.1.3, technique ARIA19). The status
                 region above says nothing for an error, so it is spoken
-                once. The question that failed is kept by the hook, so Retry
+                once. The question that failed is kept by the hook, so Try again
                 asks it again without reading the input, which may have
                 moved on. Asking clears the error, so the button is gone
                 before a second press could send the question twice.
@@ -657,17 +705,14 @@ export const SearchView = () => {
               {semanticSearch.isError && (
                 <div role="alert" className="tile-enter">
                   <EmptyState
-                    icon={AlertTriangle}
+                    icon={AlertCircle}
                     tone="error"
-                    title="Search failed"
-                    body={
-                      (semanticSearch.error as Error)?.message ||
-                      "An unexpected error occurred"
-                    }
+                    title="Could not search"
+                    body={errorText(semanticSearch.error)}
                     action={
                       submittedQuery
                         ? {
-                            label: "Retry",
+                            label: "Try again",
                             onClick: handleRerun,
                             icon: RotateCw,
                           }

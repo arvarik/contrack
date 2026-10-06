@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { PartyPopper, PenLine } from "lucide-react";
 import confetti from "canvas-confetti";
 import { CardFrame } from "../components/CardFrame";
@@ -11,7 +12,8 @@ import { cn } from "../../../lib/utils";
 import { openQuickNote } from "../../../lib/appEvents";
 import { flyWhenClear } from "../../../lib/corvid";
 import { GROUP_TONE, PULSE_TYPE } from "../lib/pulseStyles";
-import { groupHeadingId } from "../lib/jumpToGroup";
+import { groupHeadingId, SHOW_ALL_UP_NEXT } from "../lib/jumpToGroup";
+import { prefersReducedMotion } from "../../../lib/motion";
 import type { UpNextGroupMeta, UpNextItem } from "../lib/upNext";
 
 interface UpNextCardProps {
@@ -28,9 +30,17 @@ interface UpNextCardProps {
   selectionShown: boolean;
   onSelectionShownChange: (shown: boolean) => void;
   onComplete: (id: string) => void;
+  onSnooze: (item: UpNextItem, days: number) => void;
   onLog: (contactId: string) => void;
   onOpenContact: (contactId: string) => void;
 }
+
+/**
+ * The rows a one-column page shows before "Show all". Up next came first
+ * and showed every row: 38 of them ran to 4,300 px on a phone before the
+ * next card.
+ */
+const FIRST_ROWS = 8;
 
 /** A theme colour for the confetti, read at the moment it fires. */
 const themeColor = (name: string, fallback: string) => {
@@ -53,6 +63,7 @@ export const UpNextCard = ({
   selectionShown,
   onSelectionShownChange,
   onComplete,
+  onSnooze,
   onLog,
   onOpenContact,
 }: UpNextCardProps) => {
@@ -65,7 +76,24 @@ export const UpNextCard = ({
   const [focusWithin, setFocusWithin] = useState(false);
   /** Below sm the rows take the phone anatomy. See `ActionRow`. */
   const compact = !useMediaQuery("(min-width: 640px)");
+  /** From lg the pane scrolls inside the card, so every row is drawn. */
+  const scrolls = useMediaQuery("(min-width: 1024px)");
+  const [showAll, setShowAll] = useState(false);
   const paneRef = useRef<HTMLDivElement>(null);
+
+  // A jump to a group past the first rows (the masthead's counts, Keeping
+  // up's "to catch up") shows them all before it looks for the heading.
+  useEffect(() => {
+    const show = () => flushSync(() => setShowAll(true));
+    window.addEventListener(SHOW_ALL_UP_NEXT, show);
+    return () => window.removeEventListener(SHOW_ALL_UP_NEXT, show);
+  }, []);
+
+  // J and K walk past the first rows: the rest come with them.
+  const limit = scrolls || showAll ? items.length : FIRST_ROWS;
+  useEffect(() => {
+    if (selectedIndex >= limit) setShowAll(true);
+  }, [selectedIndex, limit]);
 
   // A pointer press outside the list takes the tint away, as focus that
   // leaves the list does. A bare J or K shows the tint with focus anywhere
@@ -90,17 +118,20 @@ export const UpNextCard = ({
       items.length === 0
     ) {
       // Fire confetti when the last item is cleared, in the palette's own
-      // colours, so a rose accent gets rose confetti.
-      confetti({
-        particleCount: 120,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: [
-          themeColor("--color-primary", "#006a91"),
-          themeColor("--color-success", "#046b4e"),
-          themeColor("--color-warning", "#9a4c08"),
-        ],
-      });
+      // colours, so a rose accent gets rose confetti. Not when less motion
+      // is asked for, by the Motion setting or by the system.
+      if (!prefersReducedMotion()) {
+        confetti({
+          particleCount: 120,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: [
+            themeColor("--color-primary", "#006a91"),
+            themeColor("--color-success", "#046b4e"),
+            themeColor("--color-warning", "#9a4c08"),
+          ],
+        });
+      }
       // And the bird takes a lap of honour across the top of the page. The
       // overlay decides whether it actually flies: it runs the swoop only at
       // level "full", and reduced motion, from the account or the operating
@@ -131,7 +162,8 @@ export const UpNextCard = ({
           <Key>J</Key> <Key>K</Key> walk the rows. <Key>D</Key> done,{" "}
           <Key>S</Key> snooze a day, <Key>L</Key> log a note. Tab into the list,
           then <Key>↑</Key> <Key>↓</Key> move, <Key>Enter</Key> opens the
-          contact and <Key>Space</Key> does the row&apos;s action
+          contact, <Key>Space</Key> does the row&apos;s action and{" "}
+          <Key>Tab</Key> reaches its buttons
         </InfoTip>
       }
     >
@@ -187,7 +219,7 @@ export const UpNextCard = ({
             }
           }}
         >
-          {groups.map((group) => (
+          {visibleGroups(groups, limit).map((group) => (
             <section key={group.group} className="flex flex-col gap-1.5">
               <h3
                 id={groupHeadingId(group.group)}
@@ -232,6 +264,7 @@ export const UpNextCard = ({
                       looksSelected={isSelected && selectionShown}
                       onSelect={() => onSelectIndex(globalIdx)}
                       onComplete={onComplete}
+                      onSnooze={onSnooze}
                       onLog={onLog}
                       onOpenContact={onOpenContact}
                       onMove={(direction) => moveFrom(globalIdx, direction)}
@@ -243,8 +276,36 @@ export const UpNextCard = ({
               </div>
             </section>
           ))}
+          {limit < items.length && (
+            <button
+              type="button"
+              onClick={() => setShowAll(true)}
+              className="btn-secondary btn-sm self-start"
+            >
+              Show all {items.length}
+            </button>
+          )}
         </div>
       )}
     </CardFrame>
   );
 };
+
+/** The groups cut to their first `limit` rows in all, in order. */
+function visibleGroups(
+  groups: UpNextGroupMeta[],
+  limit: number,
+): UpNextGroupMeta[] {
+  let left = limit;
+  const shown: UpNextGroupMeta[] = [];
+  for (const group of groups) {
+    if (left <= 0) break;
+    shown.push(
+      left >= group.items.length
+        ? group
+        : { ...group, items: group.items.slice(0, left) },
+    );
+    left -= group.items.length;
+  }
+  return shown;
+}

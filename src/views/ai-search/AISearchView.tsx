@@ -40,7 +40,7 @@ import { useAISearch } from "../../contexts/AISearchContext";
 import { ContactRow } from "./components/AISearchContactList";
 import { AISearchConfirmModal } from "./components/AISearchConfirmModal";
 import { DepthCostTip } from "./DepthCostTip";
-import { CARD, SECTION_HEADING, SEARCH_INPUT } from "../../lib/styles";
+import { CARD, SECTION_HEADING } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { ChoiceGroup, type Choice } from "../../components/ui/ChoiceGroup";
@@ -64,6 +64,7 @@ import {
 import { NAMES } from "../../lib/names";
 import { ENGINE_HINT, engineName } from "../../lib/webSearchEngine";
 import type { ResearchDepth } from "../../../shared/researchDepth";
+import { SearchField } from "../../components/ui/SearchField";
 
 /**
  * The two depths as tiles: what each does, and its time and cost when the
@@ -334,17 +335,14 @@ export function AISearchView({
             <div className={cn(CARD, "p-0 overflow-hidden")}>
               {/* Search bar + filters */}
               <div className="px-4 py-2.5 bg-surface-container-low space-y-2">
-                <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant" />
-                  <input
-                    aria-label="Filter contacts"
-                    type="text"
-                    placeholder="Filter contacts…"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className={SEARCH_INPUT}
-                  />
-                </div>
+                <SearchField
+                  aria-label="Filter contacts"
+                  placeholder="Filter contacts…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onClear={() => setSearchQuery("")}
+                  clearLabel="Clear filter text"
+                />
 
                 {/*
                   Two rows of filter pills, one choice in each, and a contact

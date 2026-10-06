@@ -5,6 +5,7 @@ import { sqlite } from "../db.ts";
 import type { Scope } from "../tenancy/scope.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
 import { dispatchEvents, recordEvent } from "../events/index.ts";
+import type { ListMember } from "../../shared/contracts/lists.ts";
 
 interface ListRow {
   id: string;
@@ -154,19 +155,23 @@ export const listService = {
     return orderedIds.length;
   },
 
-  getListContacts(scope: Scope, id: string) {
+  /**
+   * Who is in a list, newest first, with only what the Lists page shows. It
+   * read every member as a whole contact, with their emails, phones, tags
+   * and lists, to draw a name and a photo.
+   */
+  getListContacts(scope: Scope, id: string): ListMember[] {
     requireOwnedList(scope, id);
-    const rows = sqlite
+    return sqlite
       .prepare(
         `
-      SELECT c.* FROM contacts c
+      SELECT c.id, c.name, c.avatarUrl, c.role, c.company FROM contacts c
       JOIN list_members lm ON c.id = lm.contactId
       WHERE lm.listId = ? AND c.ownerId = ? AND ${ACTIVE_CONTACT_SQL}
       ORDER BY c.addedAt DESC
     `,
       )
-      .all(id, scope.ownerId) as unknown[];
-    return contactRepo.hydrateMany(rows);
+      .all(id, scope.ownerId) as ListMember[];
   },
 
   deleteList(scope: Scope, id: string) {
