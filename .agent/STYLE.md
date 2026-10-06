@@ -69,7 +69,8 @@ not a border.
   `FORM_LABEL`). Never `tracking-widest`.
 - Use the class tokens in `styles.ts` (`LABEL`, `FIELD_LABEL`, `META_LINE`,
   `PAGE_TITLE`, `PAGE_DESCRIPTION`, `SEARCH_INPUT` and the others) instead of
-  ad hoc sizes.
+  ad hoc sizes. A link inside a sentence is `TEXT_LINK`, underlined at rest.
+  A value's field opened in its place is `INLINE_INPUT`.
 
 ### Radius
 
@@ -140,7 +141,11 @@ lift. The Network list is the one exception: its rows rise toward the pointer
 - `Switch` for every on/off setting. A setting off its default shows the
   `CHANGED_MARK` dot, and the page ends with one **Reset to defaults** button.
 - `Modal` renders as a bottom sheet below `sm`. `ConfirmDialog` for anything
-  irreversible. Never a hand-rolled overlay.
+  irreversible. Never a hand-rolled overlay. A dialog with a header of its
+  own ends it with `DialogCloseButton`, the one X named "Close dialog", and
+  its buttons sit in `DIALOG_ACTIONS`.
+- `ActionMenu` and `ContextMenu` draw the same rows (`MENU_ITEM`, `MENU_ICON`),
+  and a row that waits is dimmed by `MENU_ITEM` itself.
 - `EmptyState` for every empty screen: an icon or the corvid, a title, at most
   one sentence and one action.
 - `glass-panel` is for modals, the command palette and toasts.
@@ -176,8 +181,9 @@ touch screens. ❌ `hit-area` on a form field or inside `overflow-hidden`.
   for hover hides only for a mouse (`pointer-fine:opacity-0`,
   `sm:pointer-fine:w-0`), and every action shows at rest on a touch screen.
 - An icon-only control is labelled with `RailTooltip` (`side="bottom"` under
-  a header button). A mouse sees the label on hover and a finger on a long
-  press.
+  a header button, `bottom-end` at a header's right end). A mouse sees the
+  label on hover and a finger on a long press. An icon-only `ActionMenu`
+  passes `title`, and the menu draws the tooltip.
 - Key chips (`<kbd>`) hide below `sm`.
 - Inputs are 16 px on a phone, so iOS does not zoom.
 
