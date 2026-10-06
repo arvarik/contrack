@@ -22,7 +22,6 @@
  */
 import React, {
   useCallback,
-  useEffect,
   useImperativeHandle,
   useRef,
   useState,
@@ -147,11 +146,9 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
   const keyHint = useMediaQuery("(pointer: fine)");
   const isWide = useMediaQuery(WIDE_QUERY);
   // The filter box that mounts next takes the focus: back from Go to, or
-  // in the sheet that "/" opened below `lg`.
+  // in the sheet that "/" opened below `lg`. The box that takes it clears
+  // the ask. The sheet's box mounts a render later than the sheet.
   const [focusFilter, setFocusFilter] = useState(false);
-  useEffect(() => {
-    if (focusFilter) setFocusFilter(false);
-  }, [focusFilter]);
   // The facet suggestions show under the box that has the focus, and only
   // there: open under a box that had lost it, they took Enter from a pin.
   const [suggestIn, setSuggestIn] = useState<"bar" | "sheet" | null>(null);
@@ -277,7 +274,10 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
                   filter.setRawInput(e.target.value);
                   setSuggestIn(isMobile ? "sheet" : "bar");
                 }}
-                onFocus={() => setSuggestIn(isMobile ? "sheet" : "bar")}
+                onFocus={() => {
+                  setSuggestIn(isMobile ? "sheet" : "bar");
+                  setFocusFilter(false);
+                }}
                 onBlur={() => setSuggestIn(null)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {

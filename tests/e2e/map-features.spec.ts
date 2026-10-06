@@ -73,6 +73,23 @@ test.describe("map features - filters and place search", () => {
     await expect(filterInput).toBeFocused();
   });
 
+  // Below `lg` the box lives in the Filters sheet, and `/` did nothing.
+  test("/ opens the Filters sheet with the focus in its box on a narrow window", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 900, height: 800 });
+    await page.goto("/map");
+    await expect(
+      page.getByRole("region", { name: "Contact map" }),
+    ).toBeVisible();
+    await page.keyboard.press("/");
+    await expect(
+      page
+        .getByRole("dialog", { name: "Filters" })
+        .getByRole("textbox", { name: "Filter contacts" }),
+    ).toBeFocused();
+  });
+
   test("Go to place search navigates map using mock geo search", async ({
     page,
   }) => {
