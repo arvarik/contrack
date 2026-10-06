@@ -22,6 +22,7 @@ import React, { useState, useCallback, useRef, useEffect } from "react";
 import { Sparkles, X, AlertTriangle } from "lucide-react";
 import { CorvidThinking } from "../brand/CorvidThinking";
 import { LiveStatus } from "../ui/LiveStatus";
+import { useAiSetup } from "../../hooks/useAiSetup";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -71,6 +72,8 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
   compact = false,
 }) => {
   const [phase, setPhase] = useState<SynthesisPhase>("idle");
+  const setup = useAiSetup("briefings");
+  const blocked = setup !== null && setup.state !== "limited";
   const [synthesisText, setSynthesisText] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const abortRef = useRef<AbortController | null>(null);
@@ -179,7 +182,8 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
   }, []);
 
   // Don't render if not enough results (AFTER all hooks)
-  if (resultCount < MIN_RESULTS_FOR_SYNTHESIS) return null;
+  // No button that can only fail: with no model to write it, there is none.
+  if (resultCount < MIN_RESULTS_FOR_SYNTHESIS || blocked) return null;
 
   const px = compact ? "px-3 py-2" : "px-4 py-3";
   const textSize = compact ? "text-xs" : "text-sm";

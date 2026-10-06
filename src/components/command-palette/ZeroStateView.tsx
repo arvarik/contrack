@@ -331,7 +331,7 @@ export const GoToGroup = ({
   const destinations = typed
     ? NAV_ITEMS.filter((item) => matchesDestination(typed, item.label))
     : NAV_ITEMS;
-  // "settings privacy": the rows say "Settings: …", so people type the
+  // "settings privacy": the rows say "Settings → …", so people type the
   // word. It names the group, not the page, so the rest is matched.
   const [first = "", ...others] = typed.toLowerCase().split(/\s+/);
   const pageWords =
@@ -379,12 +379,12 @@ export const GoToGroup = ({
         return (
           <Command.Item
             key={`nav_${page.path}`}
-            value={`Settings: ${page.title}`}
+            value={`Settings → ${page.title}`}
             onSelect={() => onNavigate(page.path)}
             className={cn(ROW, NAV_ROW, ITEM_CURRENT)}
           >
             <Icon className="w-4 h-4 shrink-0" />
-            <span className="text-sm flex-1">Settings: {page.title}</span>
+            <span className="text-sm flex-1">Settings → {page.title}</span>
           </Command.Item>
         );
       })}

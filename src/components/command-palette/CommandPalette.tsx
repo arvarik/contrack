@@ -1080,6 +1080,9 @@ export const CommandPalette = () => {
                       // The palette exists to be typed into the instant it opens.
                       // eslint-disable-next-line jsx-a11y/no-autofocus
                       autoFocus
+                      // cmdk turns spell check and auto-correct off. A
+                      // phone would still capitalize "tag:" into "Tag:".
+                      autoCapitalize="off"
                       // Short, so a phone shows it whole. The mode chips
                       // under it name `?` and `>`.
                       placeholder={

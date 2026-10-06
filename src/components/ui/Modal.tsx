@@ -4,7 +4,9 @@ import {
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
   type RefObject,
+  useEffect,
   useRef,
+  useSyncExternalStore,
 } from "react";
 import { useCloseRequest } from "../../hooks/useCloseRequest";
 
@@ -23,6 +25,30 @@ const FIRST_FIELD = [
   "textarea:not(:disabled)",
   '[contenteditable="true"]',
 ].join(", ");
+
+/** How many dialogs are open, for `useDialogOpen`. */
+let openDialogs = 0;
+const dialogListeners = new Set<() => void>();
+const subscribeDialogs = (listener: () => void) => {
+  dialogListeners.add(listener);
+  return () => dialogListeners.delete(listener);
+};
+const countDialogs = (step: number) => {
+  openDialogs += step;
+  for (const listener of dialogListeners) listener();
+};
+
+/**
+ * Whether any `Modal` is open. On a phone the app moves its toasts to the
+ * top while one is: a toast at the foot covered a sheet's Save row.
+ */
+export function useDialogOpen(): boolean {
+  return useSyncExternalStore(
+    subscribeDialogs,
+    () => openDialogs > 0,
+    () => false,
+  );
+}
 
 /** A drag down this far, or this fast, closes the sheet. */
 const CLOSE_DISTANCE = 96;
@@ -75,6 +101,11 @@ export function Modal({
   const drag = useRef<{ y: number; at: number; dy: number } | null>(null);
 
   useCloseRequest(isOpen, onClose);
+  useEffect(() => {
+    if (!isOpen) return;
+    countDialogs(1);
+    return () => countDialogs(-1);
+  }, [isOpen]);
 
   // Where focus was before this opened, captured during the render that opens
   // it rather than in `onOpenAutoFocus`.

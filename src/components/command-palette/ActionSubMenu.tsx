@@ -193,7 +193,7 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
         ? [
             {
               id: "track",
-              label: isTracked ? "Untrack" : "Track",
+              label: isTracked ? "Stop tracking" : "Track",
               icon: <Radar className="w-4 h-4" />,
               shortcut: "T",
               handler: track,

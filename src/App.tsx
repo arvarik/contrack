@@ -31,6 +31,7 @@ import { NAMES } from "./lib/names";
 import { useToastFocusReturn } from "./lib/undoToast";
 import { usePreferences } from "./contexts/PreferencesContext";
 import { useMediaQuery, WIDE_QUERY } from "./hooks/useMediaQuery";
+import { useDialogOpen } from "./components/ui/Modal";
 
 // Route-level code splitting: secondary views load on demand so the initial
 // bundle only carries the ContactList/ContactDetail critical path. Each lazy
@@ -460,6 +461,10 @@ export default function App() {
   // `data-typing` and `--keyboard-inset` for the phone's CSS (index.css).
   useSoftKeyboard();
   const { mode } = usePreferences();
+  // A phone's dialog is a sheet from the bottom, with Save at its foot.
+  const dialogOpen = useDialogOpen();
+  const centredDialogs = useMediaQuery("(min-width: 640px)");
+  const sheetOpen = dialogOpen && !centredDialogs;
   useToastFocusReturn();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [quickNoteOpen, setQuickNoteOpen] = useState(false);
@@ -556,11 +561,12 @@ export default function App() {
           // The app's own palette, not the system's: a dark page drew dark
           // grey descriptions on the dark glass of a light-theme toast.
           theme={mode}
-          position="bottom-right"
+          position={sheetOpen ? "top-center" : "bottom-right"}
           // The mobile tab bar is fixed to the bottom of the viewport, so a
           // default-offset toast lands underneath it and the user never sees
           // the confirmation they just triggered.
           mobileOffset={{
+            top: "calc(env(safe-area-inset-top) + 12px)",
             bottom: "calc(var(--tabbar-space) + var(--keyboard-inset) + 12px)",
             left: "12px",
             right: "12px",
