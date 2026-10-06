@@ -629,9 +629,22 @@ test.describe("Pulse Office", () => {
     // The tracking action is the first row.
     await expect(inbox.getByRole("link").first()).toHaveAttribute("href", href);
 
+    // The list holds exactly the people the row counts.
+    const untracked = Number(
+      /(\d+) untracked$/.exec(
+        (await row.getAttribute("aria-label")) ?? (await row.innerText()),
+      )![1],
+    );
     await row.click();
     const searchInput = page.getByRole("textbox", { name: /search/i });
     await expect(searchInput).toHaveValue("added:<30d tracked:no");
+    await expect(
+      page
+        .locator("#contact-list")
+        .getByText(`${untracked} ${untracked === 1 ? "match" : "matches"}`, {
+          exact: true,
+        }),
+    ).toBeVisible();
   });
 
   test("the masthead holds no form, and the insight is one line with the next step", async ({
