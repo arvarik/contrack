@@ -141,13 +141,24 @@ lift. The Network list is the one exception: its rows rise toward the pointer
 - `Switch` for every on/off setting. A setting off its default shows the
   `CHANGED_MARK` dot, and the page ends with one **Reset to defaults** button.
 - `Modal` renders as a bottom sheet below `sm`. `ConfirmDialog` for anything
-  irreversible. Never a hand-rolled overlay. A dialog with a header of its
-  own ends it with `DialogCloseButton`, the one X named "Close dialog", and
-  its buttons sit in `DIALOG_ACTIONS`.
+  irreversible, an inline "are you sure" row included: it took the focus
+  away with the button that opened it. Never a hand-rolled overlay. A dialog
+  with a header of its own ends it with `DialogCloseButton`, the one X named
+  "Close dialog", and its buttons sit in `DIALOG_ACTIONS`. A dialog keeps
+  its title and body through its exit (`Modal` holds them), so a caller may
+  clear what it names as it closes.
 - `ActionMenu` and `ContextMenu` draw the same rows (`MENU_ITEM`, `MENU_ICON`),
   and a row that waits is dimmed by `MENU_ITEM` itself.
 - `EmptyState` for every empty screen: an icon or the corvid, a title, at most
-  one sentence and one action.
+  one sentence and one action. A place whose data did not load shows
+  `LoadFailed` instead: "Could not load <what>", nothing lost, **Try again**.
+  The word to ask again is "Try again", never "Retry".
+- `SearchField` for a search box: the glass, `SEARCH_INPUT`, `ClearButton`
+  (the one X) and `NO_AUTOCORRECT`. Any other field whose words are not prose
+  (a filter, an email, a username, a link) spreads `NO_AUTOCORRECT`.
+  `stylesFloor.test.ts` checks both.
+- A link inside a sentence is `TEXT_LINK`, underlined at rest, not on hover
+  only.
 - `glass-panel` is for modals, the command palette and toasts.
 
 ### Page layout
@@ -207,10 +218,14 @@ unknown>` and narrow. Cast a better-sqlite3 row once, to a narrow row type.
 - **Command palette**: a control inside it that is not a `Command.Item` needs
   `onMouseDown={(e) => e.preventDefault()}`, or cmdk closes the palette.
 - **Small helpers live once.** Reuse them before writing another:
-  `plural` and `errorText` (`src/lib/utils.ts`), `touchFirst`
-  (`src/lib/platform.ts`), `prefersReducedMotion` (`src/lib/motion.ts`),
-  `isPageKeyTaken` (`src/lib/keyboard.ts`), and `isPlainDay` and
-  `dayInZone` (`shared/dates.ts`).
+  `plural` and `errorText` (`src/lib/utils.ts`), `touchFirst` and
+  `TOUCH_QUERY` (`src/lib/platform.ts`), `prefersReducedMotion`
+  (`src/lib/motion.ts`), `isPageKeyTaken` (`src/lib/keyboard.ts`),
+  `withUndo` (`src/lib/undoToast.ts`), `authErrorText` for the sign-in
+  screens (`src/components/auth/AuthShell.tsx`), and `isPlainDay` and
+  `dayInZone` (`shared/dates.ts`). An error toast is "Could not <act>:
+  ${errorText(err)}". `stylesFloor.test.ts` checks `errorText`,
+  `TOUCH_QUERY`, `withUndo` and the `pointer-fine:` hover rule.
 
 ## 5. Anti-patterns
 

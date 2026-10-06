@@ -62,3 +62,37 @@ test("adds people to a list, takes one out with Undo, and moves a list up", asyn
     for (const id of made) await instance.api("DELETE", `/lists/${id}`);
   }
 });
+
+test("gives focus back to the list's row when its panel closes, and deletes a list through its dialog", async ({
+  page,
+  instance,
+}) => {
+  const { id } = await instance.api<{ id: string }>("POST", "/lists", {
+    name: "zz Lists to delete",
+    icon: "star",
+  });
+  try {
+    await page.goto("/settings/lists");
+    const row = page.getByRole("button", { name: /zz Lists to delete/ });
+    await row.click();
+    // The panel's X took the focus away with it: the row has it back.
+    await page.getByRole("button", { name: "Close list" }).click();
+    await expect(row).toBeFocused();
+
+    await row.click();
+    const remove = page.getByRole("button", { name: "Delete list" });
+    await remove.click();
+    const dialog = page.getByRole("dialog", {
+      name: 'Delete the list "zz Lists to delete"?',
+    });
+    await dialog.getByRole("button", { name: "Cancel" }).click();
+    await expect(remove).toBeFocused();
+    await remove.click();
+    await dialog.getByRole("button", { name: "Delete list" }).click();
+    await expect(row).toHaveCount(0);
+    // Focus lands on the lists, not on the page.
+    await expect(page.locator("[data-list-row]:visible").first()).toBeFocused();
+  } finally {
+    await instance.api("DELETE", `/lists/${id}`).catch(() => {});
+  }
+});
