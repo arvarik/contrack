@@ -32,8 +32,11 @@
  * Keys, with the single-key switch for the letters: J and K, or the down
  * and up arrows, move between groups, L or → merges the group into the
  * contact chosen in its comparison, H or ← keeps it separate, and Z undoes.
- * A key another control used first, an arrow in the radio group of the
- * contact to keep, is that control's.
+ * A Check carefully group never merges from one key: the first L opens its
+ * comparison and puts focus on Merge, which names the caution, and a second
+ * L or Enter merges. Below `lg` its row offers Compare, not Merge. A key
+ * another control used first, an arrow in the radio group of the contact to
+ * keep, is that control's. A letter counts with Caps Lock on.
  *
  * @module views/dedupe/components/DuplicateQueue
  */
@@ -48,6 +51,7 @@ import {
 import {
   AlertTriangle,
   CheckCircle2,
+  Columns2,
   GitMerge,
   Loader2,
   ScanSearch,
@@ -66,7 +70,7 @@ import {
 import { cn } from "../../../lib/utils";
 import { CARD, LABEL, SELECTED_ROW } from "../../../lib/styles";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
-import { isTypingTarget } from "../../../lib/keyboard";
+import { pageKeyTaken } from "../../pulse/lib/pageKeys";
 import { UNDO_DURATION_MS } from "../../../lib/undoToast";
 import { useSingleKeyShortcuts } from "../../../hooks/useSingleKeyShortcuts";
 import { useMediaQuery, WIDE_QUERY } from "../../../hooks/useMediaQuery";
@@ -101,6 +105,22 @@ function hint(contact: ReviewContact): string | null {
     contact.phones?.[0]?.phone ||
     null
   );
+}
+
+/**
+ * Put focus on the open group's Merge button once it is drawn: in the pane
+ * at once, in a sheet after the sheet has placed its own first focus.
+ */
+function focusMergeSoon() {
+  let frames = 0;
+  let held = 0;
+  const attempt = () => {
+    const button = document.querySelector<HTMLElement>("[data-merge]");
+    if (button && document.activeElement === button) held++;
+    else button?.focus();
+    if (held < 2 && ++frames < 20) requestAnimationFrame(attempt);
+  };
+  requestAnimationFrame(attempt);
 }
 
 /** An action Z or the message's Undo can take back. */
@@ -143,6 +163,8 @@ export const DuplicateQueue = () => {
   const [currentKey, setCurrentKey] = useState<string | null>(null);
   /** Below `lg`, the comparison opens in a sheet. */
   const [sheetOpen, setSheetOpen] = useState(false);
+  /** A Check carefully group the first L opened: the next L merges it. */
+  const [armedKey, setArmedKey] = useState<string | null>(null);
   const rowRefs = useRef(new Map<string, HTMLButtonElement>());
   const rootRef = useRef<HTMLDivElement>(null);
   /** After a group leaves, the one at this place in the list takes over. */
@@ -176,9 +198,21 @@ export const DuplicateQueue = () => {
       const group = groups[at];
       if (!group) return;
       setCurrentKey(group.key);
+      setArmedKey(null);
       if (focus) rowRefs.current.get(group.key)?.focus();
     },
     [groups],
+  );
+
+  /** Open a Check carefully group's comparison, with focus on its Merge. */
+  const openCareful = useCallback(
+    (group: DuplicateGroup) => {
+      setCurrentKey(group.key);
+      setArmedKey(group.key);
+      if (!isWide) setSheetOpen(true);
+      focusMergeSoon();
+    },
+    [isWide],
   );
 
   // A decided group leaves the list when the list reads the server again.
@@ -422,33 +456,31 @@ export const DuplicateQueue = () => {
   // ─── Keys ────────────────────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // A key another control used first is its own: an arrow that moved
-      // the radio of the contact to keep must not also merge the group.
-      if (e.defaultPrevented) return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (isTypingTarget(e)) return;
+      // A key another control used first is its own (an arrow that moved
+      // the radio of the contact to keep must not also merge the group), and
+      // so is a key in a field, a dialog or a menu.
+      if (pageKeyTaken(e)) return;
       const target = e.target instanceof Element ? e.target : null;
-      if (target?.closest('[role="dialog"], [role="menu"], [role="listbox"]')) {
-        return;
-      }
       // The arrows move the contact to keep. The letters still decide, so a
       // person who just chose the contact presses L from where they are.
       if (target?.closest('[role="radiogroup"]') && e.key.startsWith("Arrow")) {
         return;
       }
-      if (!singleKeys && /^[hjklz]$/.test(e.key)) return;
+      // Caps Lock makes "L" of l.
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      if (!singleKeys && /^[hjklz]$/.test(key)) return;
       // A decision is one press. A held key repeats, and a held L merged
       // each group in turn as focus moved on to it. Moving may repeat.
-      if (e.repeat && /^(l|h|z|ArrowRight|ArrowLeft)$/.test(e.key)) return;
+      if (e.repeat && /^(l|h|z|ArrowRight|ArrowLeft)$/.test(key)) return;
 
-      if (e.key === "z") {
+      if (key === "z") {
         if (!lastAction.current) return;
         e.preventDefault();
         void lastAction.current.run();
         return;
       }
       if (groups.length === 0) return;
-      switch (e.key) {
+      switch (key) {
         case "j":
         case "ArrowDown":
           e.preventDefault();
@@ -468,7 +500,11 @@ export const DuplicateQueue = () => {
         case "ArrowRight":
           if (!current) return;
           e.preventDefault();
-          void handleMerge(current);
+          if (current.level === "check" && armedKey !== current.key) {
+            openCareful(current);
+          } else {
+            void handleMerge(current);
+          }
           break;
         case "h":
         case "ArrowLeft":
@@ -488,6 +524,8 @@ export const DuplicateQueue = () => {
     select,
     handleMerge,
     handleKeepSeparate,
+    armedKey,
+    openCareful,
   ]);
 
   if (isLoading) {
@@ -524,6 +562,7 @@ export const DuplicateQueue = () => {
       onKeepSeparate={() => handleKeepSeparate(group)}
       onRemove={(contact) => handleRemove(group, contact)}
       isBusy={busy.has(group.key)}
+      confirming={armedKey === group.key}
       heading={heading}
       showKeys={singleKeys && isWide}
       actionsAt={isWide ? "top" : "bottom"}
@@ -567,9 +606,14 @@ export const DuplicateQueue = () => {
               isBusy={busy.has(group.key)}
               onOpen={() => {
                 setCurrentKey(group.key);
+                setArmedKey(null);
                 if (!isWide) setSheetOpen(true);
               }}
-              onMerge={() => void handleMerge(group)}
+              onMerge={() =>
+                group.level === "check"
+                  ? openCareful(group)
+                  : void handleMerge(group)
+              }
               onKeepSeparate={() => handleKeepSeparate(group)}
             />
           ))}
@@ -701,6 +745,7 @@ function DuplicateRow({
   const Icon = reasonIcon(lead.matchType);
   const ai = isAiReason(lead.matchType);
   const isPair = contacts.length === 2;
+  const careful = group.level === "check";
 
   return (
     <li className={cn(CARD, "p-0", isCurrent && SELECTED_ROW)}>
@@ -770,21 +815,32 @@ function DuplicateRow({
             <X className="w-3.5 h-3.5" aria-hidden="true" />
             Keep separate
           </button>
+          {/* A pair to check carefully opens its comparison first: its
+              Merge is in there, under the differences. */}
           <button
             type="button"
             onClick={onMerge}
             disabled={isBusy}
-            className="btn-primary btn-sm flex-1"
+            className={cn(
+              careful ? "btn-secondary" : "btn-primary",
+              "btn-sm flex-1",
+            )}
           >
             {isBusy ? (
               <Loader2
                 className="w-3.5 h-3.5 animate-spin"
                 aria-hidden="true"
               />
+            ) : careful ? (
+              <Columns2 className="w-3.5 h-3.5" aria-hidden="true" />
             ) : (
               <GitMerge className="w-3.5 h-3.5" aria-hidden="true" />
             )}
-            {isPair ? "Merge" : `Merge ${contacts.length}`}
+            {careful
+              ? "Compare"
+              : isPair
+                ? "Merge"
+                : `Merge ${contacts.length}`}
           </button>
         </div>
       )}

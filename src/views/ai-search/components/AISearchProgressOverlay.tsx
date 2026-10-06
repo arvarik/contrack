@@ -90,7 +90,8 @@ export function AISearchProgressOverlay({
       <motion.div
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        className="fixed bottom-6 right-6 z-50"
+        // Over the phone's tab bar, not on it.
+        className="fixed bottom-[calc(var(--tabbar-space)+0.75rem)] md:bottom-6 right-4 md:right-6 z-50"
       >
         <button
           onClick={() => setIsMinimized(false)}
@@ -127,7 +128,8 @@ export function AISearchProgressOverlay({
       initial={{ y: 40, opacity: 0, scale: 0.95 }}
       animate={{ y: 0, opacity: 1, scale: 1 }}
       transition={{ type: "spring", damping: 24, stiffness: 300 }}
-      className="fixed bottom-4 right-4 z-50 w-80 max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto"
+      // Over the phone's tab bar, not on it: the panel covered the tabs.
+      className="fixed bottom-[calc(var(--tabbar-space)+0.75rem)] md:bottom-4 right-4 z-50 w-80 max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-var(--tabbar-space)-1.5rem)] md:max-h-[calc(100dvh-2rem)] overflow-y-auto"
     >
       <div
         className={cn(
@@ -206,13 +208,13 @@ export function AISearchProgressOverlay({
                   <span className="font-bold text-success">{totalFields}</span>{" "}
                   field{totalFields !== 1 ? "s" : ""} enriched
                   {batch.totalTokens > 0 && (
-                    <span className="ml-1 opacity-60">
+                    <span className="ml-1">
                       · ~{(batch.totalTokens / 1000).toFixed(1)}k tokens
                     </span>
                   )}
                 </span>
               ) : (
-                <span className="opacity-60">
+                <span>
                   {batch.status === "cancelled"
                     ? "Research stopped"
                     : failed

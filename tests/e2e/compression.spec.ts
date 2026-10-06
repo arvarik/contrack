@@ -80,7 +80,7 @@ test("Ask's stream reaches the page as it is, and the answer shows", async ({
 }) => {
   await page.goto("/search");
   const input = page.getByRole("textbox", {
-    name: "Ask anything about your network",
+    name: "Ask about your network",
   });
   const answer = page.waitForResponse(
     (response) =>

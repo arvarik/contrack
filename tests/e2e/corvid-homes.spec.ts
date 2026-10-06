@@ -74,7 +74,7 @@ test.describe("the bird while the AI works", () => {
 
     await page.goto("/search");
     const input = page.getByRole("textbox", {
-      name: "Ask anything about your network",
+      name: "Ask about your network",
     });
     await input.fill("who works in maths");
     await input.press("Enter");

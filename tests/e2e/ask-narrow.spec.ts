@@ -43,7 +43,7 @@ test("a long answer offers chips that narrow it, and a press asks again", async 
       .getByRole("button", { name: "Narrow to Zinc Mining, 12 people" })
       .click();
     await expect(
-      page.getByRole("textbox", { name: "Ask anything about your network" }),
+      page.getByRole("textbox", { name: "Ask about your network" }),
     ).toHaveValue('tag:zircon industry:"Zinc Mining"');
     await expect(page.getByText("12 matches", { exact: true })).toBeVisible();
     // The narrowed list fits, so it has nothing more to narrow.

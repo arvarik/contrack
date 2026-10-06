@@ -53,10 +53,15 @@ export const DEFAULT_PULSE_LAYOUT: PulseLayout = {
   },
 };
 
+/**
+ * A column's name, as customize mode shows it over the column and as the
+ * Move menu and the live region say it. "Column" is part of the name:
+ * "Move to Network" read as the Network page.
+ */
 export const COLUMN_NAMES: Record<PulseColumn, string> = {
-  focus: "Focus",
-  network: "Network",
-  intel: "Intelligence",
+  focus: "Focus column",
+  network: "Network column",
+  intel: "Intelligence column",
 };
 
 export const CARD_TITLES: Record<PulseCardId, string> = {

@@ -204,6 +204,9 @@ export const HistoryPane = ({
             }}
             placeholder="Filter questions"
             aria-label="Filter history"
+            spellCheck={false}
+            autoCorrect="off"
+            autoCapitalize="off"
             className="w-full pl-9 pr-8 py-1.5 text-sm bg-surface-container-highest rounded-xl border-none text-on-surface placeholder:text-on-surface-variant"
           />
           {filterText.length > 0 && (

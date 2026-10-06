@@ -4,8 +4,12 @@
  * Animation strategy: CSS `result-card-enter` with `animation-delay` instead of
  * Framer Motion per-card stagger. CSS opacity animations are always GPU-composited
  * and never trigger layout recalculation.
+ *
+ * The list is one Tab stop (`useRovingFocus`): the card takes the stop's
+ * props, and so does its question mark, so Tab reaches the mark of the
+ * current card only.
  */
-import React from "react";
+import React, { useLayoutEffect, useRef } from "react";
 import {
   Sparkles,
   Briefcase,
@@ -36,6 +40,10 @@ interface ResultCardProps {
   /** The chunk's `fallback`. It decides the badge when the match has no `verified`. */
   isFallback: boolean;
   onClick: () => void;
+  /** The list's roving Tab stop, from `useRovingFocus`. */
+  itemProps?: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    "data-roving"?: number;
+  };
 }
 
 export const ResultCard = ({
@@ -43,9 +51,18 @@ export const ResultCard = ({
   index,
   isFallback,
   onClick,
+  itemProps,
 }: ResultCardProps) => {
   /** AI did not check this match. "Approximate" says more, so it wins. */
   const unverified = !match.approximate && isUnverified(match, isFallback);
+  // The question mark's button follows the card's Tab stop. `InfoTip` takes
+  // no tabIndex, so it is set on the element.
+  const tipRef = useRef<HTMLSpanElement>(null);
+  const tabIndex = itemProps?.tabIndex;
+  useLayoutEffect(() => {
+    const button = tipRef.current?.querySelector("button");
+    if (button && tabIndex !== undefined) button.tabIndex = tabIndex;
+  }, [tabIndex, unverified]);
   return (
     <div
       // The fade-in makes each card its own layer. The card whose question
@@ -54,6 +71,8 @@ export const ResultCard = ({
       style={{ animationDelay: `${index * 45}ms` }}
     >
       <button
+        type="button"
+        {...itemProps}
         onClick={onClick}
         className={cn(
           CARD_INTERACTIVE,
@@ -160,16 +179,17 @@ export const ResultCard = ({
         Escape or a press anywhere else (`InfoTip`).
       */}
       {unverified && (
-        <InfoTip
-          label={`${match.name}: not verified by AI`}
-          tone="warning"
-          align="end"
-          className="absolute top-3 right-3"
-        >
-          <strong className="block font-bold">Not verified by AI</strong>
-          {match.name} matches your words or their meaning, but AI did not check
-          the match
-        </InfoTip>
+        <span ref={tipRef} className="absolute top-3 right-3">
+          <InfoTip
+            label={`${match.name}: not verified by AI`}
+            tone="warning"
+            align="end"
+          >
+            <strong className="block font-bold">Not verified by AI</strong>
+            {match.name} matches your words or their meaning, but AI did not
+            check the match
+          </InfoTip>
+        </span>
       )}
     </div>
   );

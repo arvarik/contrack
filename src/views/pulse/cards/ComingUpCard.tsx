@@ -10,9 +10,10 @@
  * names no window of its own.
  *
  * With nothing to show the card is one line, and the line offers the one
- * thing that would fill it: a calendar.
+ * thing that would fill it: a calendar, unless one is connected already.
  */
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Cake, Video } from "lucide-react";
 import { differenceInCalendarDays } from "date-fns";
@@ -28,7 +29,11 @@ import {
   PULSE_TYPE,
 } from "../lib/pulseStyles";
 import { describeDueChip } from "../lib/upNext";
+import { parseServerTime } from "../../../lib/datetime";
 import type { UpcomingBirthday } from "../lib/birthdays";
+import { apiJson } from "../../../api/client";
+import { connectorKeys } from "../../../api/connectors";
+import type { ConnectorSummary } from "../../../../shared/connectors";
 
 interface MeetingItem {
   title: string;
@@ -45,21 +50,47 @@ interface ComingUpCardProps {
 /** Up next owns birthdays through day seven. This card starts at day eight. */
 const COMING_UP_FROM_DAY = 8;
 
+/**
+ * Whether a calendar is connected, asked only while the card is empty. The
+ * Connectors page polls the same list every 30 s. This page has no need to.
+ */
+function useCalendarConnected(enabled: boolean): boolean | undefined {
+  const { data } = useQuery({
+    queryKey: connectorKeys.lists(),
+    queryFn: ({ signal }) =>
+      apiJson<{ connectors: ConnectorSummary[] }>("/connectors", {
+        signal,
+      }).then((res) => res.connectors),
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+  return data?.some((c) => c.kind === "ics" || c.kind === "google");
+}
+
 type Entry =
   | { kind: "birthday"; key: string; when: Date; birthday: UpcomingBirthday }
   | { kind: "meeting"; key: string; when: Date; meeting: MeetingItem };
 
-/** "Thu 2 Oct, 3:00 PM" in the person's own locale. */
+/** An all-day event's start is a plain day ("2026-10-09"), with no time. */
+const isAllDay = (startsAt: string) => /^\d{4}-\d{2}-\d{2}$/.test(startsAt);
+
+/**
+ * "Thu 2 Oct, 3:00 PM" in the person's own locale, or "Thu 2 Oct, all day"
+ * for an all-day event. A plain day is that day on the local calendar
+ * (`parseServerTime`): read as UTC midnight it showed on the evening before
+ * west of Greenwich, at "5:00 PM".
+ */
 function formatMeetingTime(startsAt: string): string {
-  const date = new Date(startsAt);
-  if (Number.isNaN(date.getTime())) return startsAt;
-  return date.toLocaleString(undefined, {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const date = parseServerTime(startsAt);
+  if (!date) return startsAt;
+  const day = { weekday: "short", day: "numeric", month: "short" } as const;
+  return isAllDay(startsAt)
+    ? `${date.toLocaleDateString(undefined, day)}, all day`
+    : date.toLocaleString(undefined, {
+        ...day,
+        hour: "numeric",
+        minute: "2-digit",
+      });
 }
 
 export const ComingUpCard = ({
@@ -79,27 +110,32 @@ export const ComingUpCard = ({
       });
     }
     meetings.forEach((m, index) => {
-      const when = new Date(m.startsAt);
       list.push({
         kind: "meeting",
         key: `m-${index}-${m.startsAt}`,
-        when: Number.isNaN(when.getTime()) ? new Date(8640000000000000) : when,
+        when: parseServerTime(m.startsAt) ?? new Date(8640000000000000),
         meeting: m,
       });
     });
     return list.sort((a, b) => a.when.getTime() - b.when.getTime());
   }, [birthdays, meetings]);
+  const calendarConnected = useCalendarConnected(entries.length === 0);
 
   if (entries.length === 0) {
     return (
       <CardFrame cardId="coming-up" title="Coming up" count={0} variant="line">
-        Nothing coming up.{" "}
-        <Link
-          to="/settings/connectors"
-          className="hit-area inline-flex items-center font-medium text-primary hover:underline underline-offset-4"
-        >
-          Connect a calendar
-        </Link>
+        Nothing coming up
+        {calendarConnected === false && (
+          <>
+            .{" "}
+            <Link
+              to="/settings/connectors"
+              className="hit-area inline-flex items-center font-medium text-primary hover:underline underline-offset-4"
+            >
+              Connect a calendar
+            </Link>
+          </>
+        )}
       </CardFrame>
     );
   }

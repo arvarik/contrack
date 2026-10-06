@@ -202,7 +202,7 @@ describe("SearchView - the coverage row", () => {
     expect(within(region).queryByRole("button")).toBeNull();
 
     // Directly under the search box, above the suggested questions.
-    const input = screen.getByLabelText("Ask anything about your network");
+    const input = screen.getByLabelText("Ask about your network");
     const suggestions = await screen.findByRole("heading", {
       name: "Try asking",
     });
@@ -292,7 +292,7 @@ describe("SearchView - the coverage row", () => {
       screen.queryByRole("region", { name: "Search by meaning coverage" }),
     ).toBeNull();
     expect(document.activeElement).toBe(
-      screen.getByLabelText("Ask anything about your network"),
+      screen.getByLabelText("Ask about your network"),
     );
   });
 
@@ -322,10 +322,10 @@ describe("SearchView - the coverage row", () => {
     );
 
     const dialog = await screen.findByRole("dialog", {
-      name: "Confirm provider embeddings refresh",
+      name: "Update the search index",
     });
     expect(
-      within(dialog).getByRole("button", { name: "Confirm & refresh" }),
+      within(dialog).getByRole("button", { name: "Update the index" }),
     ).toBeTruthy();
     expect(refreshes(sent)).toHaveLength(0);
   });
@@ -364,10 +364,10 @@ describe("SearchView - the coverage row", () => {
     ).toBeNull();
 
     fireEvent.click(
-      within(region).getByRole("button", { name: "Inspect failed" }),
+      within(region).getByRole("button", { name: "Show failed" }),
     );
     const dialog = await screen.findByRole("dialog", {
-      name: "Failed search indexing tasks",
+      name: "Contacts not in the search index",
     });
     expect(within(dialog).getByText("Ada Lovelace")).toBeTruthy();
     expect(within(dialog).getByText("Model timed out")).toBeTruthy();

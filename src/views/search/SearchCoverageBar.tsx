@@ -144,7 +144,7 @@ export function SearchCoverageBar({
       if (e.data?.requiresExplicitConfirmation) {
         setShowProviderConfirm(true);
       } else {
-        toast.error(e.message || "Failed to refresh search index");
+        toast.error(e.message || "Could not update the search index");
       }
     }
   };
@@ -238,7 +238,7 @@ export function SearchCoverageBar({
                     onClick={() => setShowInspectModal(true)}
                     className={BTN_QUIET}
                   >
-                    Inspect failed
+                    Show failed
                   </button>
                 )}
                 {showQueue && (
@@ -325,7 +325,7 @@ export function SearchCoverageBar({
               onClick={() => setShowInspectModal(true)}
               className="btn-secondary"
             >
-              Inspect {coverage.failed} failed
+              Show {coverage.failed} failed
             </button>
           )}
 
@@ -383,7 +383,7 @@ function ProviderConfirmModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Confirm provider embeddings refresh"
+      title="Update the search index"
       size="md"
     >
       <div className="space-y-4 pt-2">
@@ -395,29 +395,27 @@ function ProviderConfirmModal({
         >
           <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
           <div className="text-xs space-y-1">
-            <p className="font-bold">Paid provider embeddings</p>
+            <p className="font-bold">This uses a paid provider</p>
             <p>
-              Your instance is configured to use{" "}
-              <strong className="underline">
-                {providerId ?? "external provider"}
+              Search reads your contacts through{" "}
+              <strong>{providerId ?? "an outside provider"}</strong>
+              {model && ` (${model})`}. An update sends{" "}
+              <strong>
+                {count > 0
+                  ? `${count} ${count === 1 ? "contact" : "contacts"}`
+                  : "every contact not in the index yet"}
               </strong>{" "}
-              ({model ?? "provider model"}).
-            </p>
-            <p>
-              Refreshing will generate embeddings for{" "}
-              <strong>{count > 0 ? count : "all missing"}</strong> contact(s),
-              which may consume API quota or incur usage costs with your
-              provider
+              to it, and the provider may charge for that
             </p>
           </div>
         </div>
 
         <p className="text-xs text-on-surface-variant">
-          Contrack keeps paid provider indexing explicit so you never incur
-          unexpected API costs after editing contacts
+          Contrack asks before it uses a paid provider, so an edit to a contact
+          never costs money without your say
         </p>
 
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-outline-variant/20">
+        <div className="flex items-center justify-end gap-2 pt-2">
           <button
             type="button"
             onClick={onClose}
@@ -433,7 +431,7 @@ function ProviderConfirmModal({
             className="btn-primary"
           >
             {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            <span>Confirm & refresh</span>
+            <span>Update the index</span>
           </button>
         </div>
       </div>
@@ -458,26 +456,26 @@ function FailedInspectModal({
     <Modal
       isOpen={isOpen}
       onClose={onClose}
-      title="Failed search indexing tasks"
+      title="Contacts not in the search index"
       size="lg"
     >
       <div className="space-y-4 pt-2">
         <p className="text-xs text-on-surface-variant">
-          The following contacts encountered errors while generating semantic
-          search embeddings. They have exceeded the maximum retry attempts and
-          require inspection
+          Search tried to index these contacts several times, and each try
+          failed. The error says why. Fix the contact or the provider, then try
+          again
         </p>
 
         {failedItems.length === 0 ? (
           <div className="p-6 text-center text-xs text-on-surface-variant bg-surface-container-low rounded-xl">
-            No failed tasks to inspect
+            No contact failed
           </div>
         ) : (
           <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
             {failedItems.map((item) => (
               <div
                 key={item.contactId}
-                className="p-3 bg-surface-container-low rounded-xl border border-outline-variant/20 space-y-1 text-xs"
+                className="p-3 bg-surface-container-low rounded-xl space-y-1 text-xs"
               >
                 <div className="flex items-center justify-between font-bold text-on-surface">
                   <span>{item.name}</span>
@@ -487,7 +485,7 @@ function FailedInspectModal({
                       "text-[11px] font-mono px-2 py-0.5 rounded-md",
                     )}
                   >
-                    {item.attempts} attempts
+                    {item.attempts} {item.attempts === 1 ? "try" : "tries"}
                   </span>
                 </div>
                 <p className="text-error font-mono text-[11px] break-words">
@@ -498,9 +496,9 @@ function FailedInspectModal({
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-2 pt-2 border-t border-outline-variant/20">
+        <div className="flex items-center justify-between gap-2 pt-2">
           <p className="text-[11px] text-on-surface-variant">
-            Clicking Retry will re-enqueue these contacts for indexing
+            Try again puts these contacts back in line for the index
           </p>
           <div className="flex items-center gap-2">
             <button type="button" onClick={onClose} className="btn-secondary">
@@ -516,7 +514,7 @@ function FailedInspectModal({
               className="btn-primary"
             >
               {isRetrying && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-              <span>Retry all failed</span>
+              <span>Try again</span>
             </button>
           </div>
         </div>

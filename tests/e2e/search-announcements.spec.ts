@@ -40,7 +40,7 @@ test.describe("people", () => {
     await expect(region).toHaveText("");
 
     const input = page.getByRole("textbox", {
-      name: "Ask anything about your network",
+      name: "Ask about your network",
     });
     await input.fill("who likes espresso");
     await input.press("Enter");
@@ -57,7 +57,7 @@ test.describe("people", () => {
     await answerPeopleSearch(page, []);
     await page.goto("/search");
     const input = page.getByRole("textbox", {
-      name: "Ask anything about your network",
+      name: "Ask about your network",
     });
     await input.fill("who collects stamps");
     await input.press("Enter");
@@ -86,7 +86,7 @@ test.describe("people", () => {
     );
     await page.goto("/search");
     const input = page.getByRole("textbox", {
-      name: "Ask anything about your network",
+      name: "Ask about your network",
     });
     await input.fill("Linus");
     await input.press("Enter");
@@ -107,7 +107,7 @@ test.describe("people", () => {
     await failPeopleSearch(page, "The provider is not answering.");
     await page.goto("/search");
     const input = page.getByRole("textbox", {
-      name: "Ask anything about your network",
+      name: "Ask about your network",
     });
     await input.fill("who likes espresso");
     await input.press("Enter");
@@ -129,7 +129,7 @@ test.describe("people", () => {
     ]);
     await page.goto("/search");
     const input = page.getByRole("textbox", {
-      name: "Ask anything about your network",
+      name: "Ask about your network",
     });
     await input.fill("who likes espresso");
     await input.press("Enter");

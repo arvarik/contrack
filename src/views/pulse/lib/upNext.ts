@@ -51,6 +51,8 @@ export interface UpNextItem {
   lastContactedAt: string | null;
   title: string;
   hasCheckAction: boolean;
+  /** A follow-up's due date as the server sent it. Snooze's Undo puts it back. */
+  dueAt?: string;
   dueChip: {
     text: string;
     variant: "urgent" | "today" | "upcoming" | "neutral";
@@ -163,83 +165,60 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
     };
   };
 
-  const overdueItems: UpNextItem[] = [...overdue]
-    .sort((a, b) => {
-      const timeA = parseServerTime(a.dueAt)?.getTime() ?? 0;
-      const timeB = parseServerTime(b.dueAt)?.getTime() ?? 0;
-      return timeA - timeB; // Oldest dueAt first
-    })
-    .map((item) => {
-      // The server put it in this bucket, so it is at least a day late
-      // whatever the browser's clock says. A date with no time is that day
-      // on the local calendar (`parseServerTime`), as the contact page's
-      // banner reads it: read as UTC midnight it was a day early west of
-      // Greenwich, "4 days overdue" beside the banner's "3 days".
-      const due = parseServerTime(item.dueAt);
-      const daysLate = due
-        ? Math.min(-1, differenceInCalendarDays(due, now))
-        : -1;
-      return {
-        id: item.id,
-        kind: "action_item",
-        group: "overdue",
-        contactId: item.contactId,
-        contactName: item.contactName ?? "",
-        contactAvatarUrl: item.contactAvatarUrl ?? null,
-        ...ringOf(item.contactId),
-        title: item.title,
-        hasCheckAction: true,
-        dueChip: {
-          text: describeDueChip(daysLate),
-          variant: "urgent",
-        },
-      };
-    });
-
-  const todayItems: UpNextItem[] = dueToday.map((item) => ({
+  /** A follow-up's row, in its group, with the words on its chip. */
+  const followUpRow = (
+    item: ActionItem,
+    group: UpNextGroup,
+    dueChip: UpNextItem["dueChip"],
+  ): UpNextItem => ({
     id: item.id,
     kind: "action_item",
-    group: "today",
+    group,
     contactId: item.contactId,
     contactName: item.contactName ?? "",
     contactAvatarUrl: item.contactAvatarUrl ?? null,
     ...ringOf(item.contactId),
     title: item.title,
     hasCheckAction: true,
-    dueChip: {
-      text: describeDueChip(0),
-      variant: "today",
-    },
-  }));
+    dueAt: item.dueAt,
+    dueChip,
+  });
 
-  const thisWeekItems: UpNextItem[] = [...upcoming]
-    .sort((a, b) => {
-      const timeA = parseServerTime(a.dueAt)?.getTime() ?? 0;
-      const timeB = parseServerTime(b.dueAt)?.getTime() ?? 0;
-      return timeA - timeB;
-    })
-    .map((item) => {
-      // In this bucket the date is after today, so at least a day out.
-      const due = parseServerTime(item.dueAt);
-      const label = due
-        ? describeDueChip(Math.max(1, differenceInCalendarDays(due, now)), due)
-        : "Upcoming";
-      return {
-        id: item.id,
-        kind: "action_item",
-        group: "thisWeek",
-        contactId: item.contactId,
-        contactName: item.contactName ?? "",
-        contactAvatarUrl: item.contactAvatarUrl ?? null,
-        ...ringOf(item.contactId),
-        title: item.title,
-        hasCheckAction: true,
-        dueChip: {
-          text: label,
-          variant: "upcoming",
-        },
-      };
+  /** Soonest due first. */
+  const byDue = (a: ActionItem, b: ActionItem) =>
+    (parseServerTime(a.dueAt)?.getTime() ?? 0) -
+    (parseServerTime(b.dueAt)?.getTime() ?? 0);
+
+  // The server put a row in Overdue, so it is at least a day late whatever
+  // the browser's clock says. A date with no time is that day on the local
+  // calendar (`parseServerTime`), as the contact page's banner reads it:
+  // read as UTC midnight it was a day early west of Greenwich, "4 days
+  // overdue" beside the banner's "3 days".
+  const overdueItems = [...overdue].sort(byDue).map((item) => {
+    const due = parseServerTime(item.dueAt);
+    const daysLate = due
+      ? Math.min(-1, differenceInCalendarDays(due, now))
+      : -1;
+    return followUpRow(item, "overdue", {
+      text: describeDueChip(daysLate),
+      variant: "urgent",
     });
+  });
+
+  const todayItems = dueToday.map((item) =>
+    followUpRow(item, "today", { text: describeDueChip(0), variant: "today" }),
+  );
+
+  // In this bucket the date is after today, so at least a day out.
+  const thisWeekItems = [...upcoming].sort(byDue).map((item) => {
+    const due = parseServerTime(item.dueAt);
+    return followUpRow(item, "thisWeek", {
+      text: due
+        ? describeDueChip(Math.max(1, differenceInCalendarDays(due, now)), due)
+        : "Upcoming",
+      variant: "upcoming",
+    });
+  });
 
   // Filter birthdays to next 7 days for Up Next
   const birthdayItems: UpNextItem[] = birthdays
