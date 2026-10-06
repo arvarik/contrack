@@ -24,7 +24,13 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../../lib/utils";
 import { DURATION, EASE } from "../../lib/motion";
-import { MENU_ITEM, MENU_PANEL, MENU_SEPARATOR } from "../../lib/styles";
+import {
+  MENU_ICON,
+  MENU_ITEM,
+  MENU_PANEL,
+  MENU_SEPARATOR,
+} from "../../lib/styles";
+import type { LucideIcon } from "lucide-react";
 import { focusOnPointer } from "../../lib/a11y";
 import { useCloseRequest } from "../../hooks/useCloseRequest";
 import { moveInMenu } from "./ActionMenu";
@@ -32,7 +38,8 @@ import { moveInMenu } from "./ActionMenu";
 interface ContextMenuItem {
   id: string;
   label: string;
-  icon?: React.ReactNode;
+  /** A 16 px glyph before the label, drawn as `ActionMenu` draws its own. */
+  icon?: LucideIcon;
   onClick?: () => void;
   disabled?: boolean;
   separator?: boolean;
@@ -151,14 +158,12 @@ export const ContextMenu = ({
                   item.onClick?.();
                 }}
                 // A long press opens this on a phone, so rows are 44 px
-                // tall there and 36 px under a pointer (MENU_ITEM).
-                className={cn(
-                  MENU_ITEM,
-                  "disabled:opacity-40 disabled:cursor-not-allowed",
-                )}
+                // tall there and 36 px under a pointer. The row, its glyph
+                // and its disabled look are `ActionMenu`'s (MENU_ITEM).
+                className={MENU_ITEM}
               >
                 {item.icon && (
-                  <span className="text-on-surface-variant">{item.icon}</span>
+                  <item.icon aria-hidden="true" className={MENU_ICON} />
                 )}
                 {item.label}
               </button>
