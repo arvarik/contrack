@@ -97,7 +97,7 @@ test.describe("the corvid's perch on a phone", () => {
   test("Settings ends with a mark that flies", async ({ page }, testInfo) => {
     await page.goto("/settings");
     await expect(
-      page.getByText("Everything here is stored on this machine"),
+      page.getByText("Everything here is stored on the server"),
     ).toBeVisible();
 
     const perch = page.getByRole("button", { name: "Contrack", exact: true });

@@ -5,6 +5,7 @@ import {
   beforeEach,
   afterEach,
   onTestFinished,
+  vi,
 } from "vitest";
 import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
@@ -16,6 +17,14 @@ import { __resetAdminRateLimits } from "../../server/routes/admin.ts";
 import { __resetAuthRateLimits } from "../../server/routes/auth.ts";
 import * as authService from "../../server/services/authService.ts";
 import { createAuthLink } from "../../server/services/authLinkService.ts";
+
+/** A link mail goes out after the 202 (so both answers take the same time). */
+const sentMessages = (count: number) =>
+  vi.waitFor(() => {
+    const messages = mailService.__getSentMessages();
+    expect(messages).toHaveLength(count);
+    return messages;
+  });
 
 const app = makeTestApp();
 
@@ -108,7 +117,7 @@ describe("API: Password reset and magic links", () => {
         .send({ email: admin.email });
       expect(res.status).toBe(202);
 
-      const [message] = mailService.__getSentMessages();
+      const [message] = await sentMessages(1);
       expect(message.text).toContain(`${PUBLIC_URL}/reset-password?token=`);
       expect(message.text).not.toContain("evil.example.net");
       expect(String(message.html)).not.toContain("evil.example.net");
@@ -204,8 +213,7 @@ describe("API: Password reset and magic links", () => {
         .send({ email: admin.email });
       expect(res.status).toBe(202);
 
-      const messages = mailService.__getSentMessages();
-      expect(messages).toHaveLength(1);
+      const messages = await sentMessages(1);
       expect(messages[0].text).toContain("/reset-password?token=");
 
       const link = sqlite
@@ -243,7 +251,7 @@ describe("API: Password reset and magic links", () => {
           .send({ email: admin.email });
         expect(res.status).toBe(202);
       }
-      expect(mailService.__getSentMessages()).toHaveLength(3);
+      await sentMessages(3);
 
       // 4th request within 1 hour: still 202, but no new message
       __resetAuthRateLimits();
@@ -453,8 +461,7 @@ describe("API: Password reset and magic links", () => {
         .send({ email: admin.email });
       expect(res.status).toBe(202);
 
-      const messages = mailService.__getSentMessages();
-      expect(messages).toHaveLength(1);
+      const messages = await sentMessages(1);
       expect(messages[0].text).toContain("/signin-link?token=");
 
       const link = sqlite
@@ -581,6 +588,32 @@ describe("API: Password reset and magic links", () => {
       );
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe("MAIL_NOT_CONFIGURED");
+    });
+
+    it("answers 502 and keeps no link when the mail does not go", async () => {
+      mailService.__useJsonTransport(true);
+      const admin = await freshAdmin();
+      const member = await authService.createUser({
+        username: "member3",
+        email: "member3@example.com",
+        password: PASSWORD,
+        role: "member",
+      });
+      const spy = vi
+        .spyOn(mailService, "sendOrThrow")
+        .mockRejectedValueOnce(new Error("Connection refused"));
+      onTestFinished(() => spy.mockRestore());
+
+      const res = await as(admin)(
+        request(app).post(`/api/admin/users/${member.id}/reset-link`),
+      );
+      expect(res.status).toBe(502);
+      expect(res.body.error.code).toBe("MAIL_SEND_FAILED");
+      expect(
+        sqlite
+          .prepare("SELECT id FROM auth_links WHERE userId = ?")
+          .get(member.id),
+      ).toBeUndefined();
     });
 
     it("sends 24-hour reset link when mail is configured and audits user.password.reset via email", async () => {

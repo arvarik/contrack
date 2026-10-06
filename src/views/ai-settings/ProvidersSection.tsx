@@ -33,6 +33,7 @@ import {
   useDeleteEndpoint,
   type AISettings,
 } from "../../api/aiSettings";
+import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Modal } from "../../components/ui/Modal";
 import { useHashTarget } from "../settings/SettingRow";
 import { ICON_BTN, LABEL } from "../../lib/styles";
@@ -45,7 +46,7 @@ import { SETTINGS_CARD, SETTINGS_SECTION_HEADING } from "../settings/layout";
  * as one that is filled.
  */
 const ADD_ROW =
-  "state-layer w-full min-h-[44px] sm:min-h-0 flex items-center gap-3 py-2.5 px-3 rounded-xl text-left text-sm font-semibold text-primary";
+  "state-layer w-full min-h-[44px] sm:pointer-fine:min-h-0 flex items-center gap-3 py-2.5 px-3 rounded-xl text-left text-sm font-semibold text-primary";
 
 export function ProvidersSection({ settings }: { settings: AISettings }) {
   const { ref, flashing } = useHashTarget<HTMLDivElement>("providers");
@@ -63,6 +64,26 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
   } | null>(null);
   const [keyInput, setKeyInput] = useState("");
   const [endpointModalOpen, setEndpointModalOpen] = useState(false);
+  // A key or a server waits for a yes before it goes: every feature that
+  // runs on it stops at once.
+  const [removing, setRemoving] = useState<{
+    kind: "key" | "server";
+    id: string;
+    label: string;
+  } | null>(null);
+  const remove = () => {
+    if (!removing) return;
+    const callbacks = {
+      onSuccess: () => {
+        toast.success(`${removing.label} removed`);
+        setRemoving(null);
+      },
+      onError: (error: Error) =>
+        toast.error(`Could not remove ${removing.label}: ${error.message}`),
+    };
+    if (removing.kind === "key") deleteKey.mutate(removing.id, callbacks);
+    else deleteEndpoint.mutate(removing.id, callbacks);
+  };
   const [endpointForm, setEndpointForm] = useState({
     id: "",
     label: "",
@@ -130,7 +151,7 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
           )}
         >
           <p className="text-sm text-on-surface-variant text-pretty">
-            Keys stay in this server's database, and each one goes only to its
+            Keys stay in the server's database, and each one goes only to its
             own provider
           </p>
 
@@ -218,9 +239,11 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
                 {provider.source === "settings" && (
                   <button
                     onClick={() =>
-                      deleteKey
-                        .mutateAsync(provider.id)
-                        .then(() => toast.success(`${provider.label} removed`))
+                      setRemoving({
+                        kind: "key",
+                        id: provider.id,
+                        label: provider.label,
+                      })
                     }
                     className={cn(ICON_BTN, "text-error")}
                     title="Remove key"
@@ -318,9 +341,11 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
                   </button>
                   <button
                     onClick={() =>
-                      deleteEndpoint
-                        .mutateAsync(endpoint.id)
-                        .then(() => toast.success("Server removed"))
+                      setRemoving({
+                        kind: "server",
+                        id: endpoint.id,
+                        label: endpoint.label,
+                      })
                     }
                     className={cn(ICON_BTN, "text-error")}
                     title="Remove server"
@@ -350,8 +375,8 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
       >
         <div className="space-y-4">
           <p className="text-sm text-on-surface-variant">
-            Your key is stored locally in this app's database and never leaves
-            your machine except to call {keyModalProvider?.label}
+            Your key stays in the server&rsquo;s database and goes only to{" "}
+            {keyModalProvider?.label}
           </p>
           <input
             type="password"
@@ -382,6 +407,24 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
         </div>
       </Modal>
 
+      <ConfirmDialog
+        isOpen={removing !== null}
+        onClose={() => setRemoving(null)}
+        onConfirm={remove}
+        busy={deleteKey.isPending || deleteEndpoint.isPending}
+        title={
+          removing?.kind === "key"
+            ? `Remove the ${removing.label} key?`
+            : `Remove ${removing?.label}?`
+        }
+        confirmLabel={removing?.kind === "key" ? "Remove key" : "Remove server"}
+        description={
+          <p>
+            Every AI feature that runs on it stops until you connect it again
+          </p>
+        }
+      />
+
       {/* ── Endpoint modal ────────────────────────────────────────────── */}
       <Modal
         isOpen={endpointModalOpen}
@@ -398,7 +441,7 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
               guessable from it. */}
           <ul className="text-xs text-on-surface-variant bg-surface-container-low rounded-lg px-3 py-2 space-y-1 list-disc list-inside">
             <li>
-              End the URL with <code className="font-mono">/v1</code> — Ollama
+              End the URL with <code className="font-mono">/v1</code>. Ollama
               serves its OpenAI API at{" "}
               <code className="font-mono">:11434/v1</code>, not at the root
             </li>
@@ -440,7 +483,7 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
                   }))
                 }
                 placeholder={field.placeholder}
-                className="w-full mt-1 min-h-[44px] sm:min-h-0 px-3 py-2 rounded-xl bg-surface-container-highest text-sm font-mono"
+                className="w-full mt-1 min-h-[44px] sm:pointer-fine:min-h-0 px-3 py-2 rounded-xl bg-surface-container-highest text-sm font-mono"
               />
             </label>
           ))}

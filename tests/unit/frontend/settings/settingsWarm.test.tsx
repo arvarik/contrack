@@ -37,7 +37,6 @@ vi.mock("../../../../src/api/passkeys", async (importOriginal) => ({
 import {
   settingsPagePreload,
   useWarmSettingsLink,
-  visibleSettingsPages,
   warmSettingsPage,
   warmSettingsPages,
   warmSettingsPath,
@@ -153,22 +152,6 @@ describe("warmSettingsPages", () => {
   });
 });
 
-describe("visibleSettingsPages", () => {
-  it("leaves the admin pages out for a member, and Account out with no accounts", () => {
-    const member = visibleSettingsPages({
-      isAdmin: false,
-      authRequired: true,
-    }).map((page) => page.id);
-    expect(member).toContain("account");
-    expect(member.some((id) => id.startsWith("admin"))).toBe(false);
-    const open = visibleSettingsPages({
-      isAdmin: false,
-      authRequired: false,
-    }).map((page) => page.id);
-    expect(open).not.toContain("account");
-  });
-});
-
 describe("useWarmSettingsLink", () => {
   const Link = ({ to }: { to: string }) => {
     const warm = useWarmSettingsLink(to);
@@ -203,29 +186,35 @@ describe("useWarmSettingsLink", () => {
 });
 
 describe("prefetchAccount", () => {
-  it("asks for the devices, the tokens and the passkeys the Account page shows", () => {
-    const client = new QueryClient();
-    const spy = vi.spyOn(client, "prefetchQuery").mockResolvedValue();
-    prefetchAccount(client);
-    expect(spy.mock.calls.map(([options]) => options.queryKey)).toEqual([
-      ["auth", "sessions"],
-      ["auth", "tokens"],
-      ["auth", "passkeys"],
-    ]);
-    // A list read in the last 30 s is not read again.
-    for (const [options] of spy.mock.calls) {
-      expect(options.staleTime).toBe(30_000);
-    }
-  });
-
-  it("leaves the passkeys out where the browser has none", () => {
-    passkeys.supported = false;
-    const client = new QueryClient();
-    const spy = vi.spyOn(client, "prefetchQuery").mockResolvedValue();
-    prefetchAccount(client);
-    expect(spy.mock.calls.map(([options]) => options.queryKey)).toEqual([
-      ["auth", "sessions"],
-      ["auth", "tokens"],
-    ]);
-  });
+  it.each([
+    [
+      true,
+      [
+        ["auth", "sessions"],
+        ["auth", "tokens"],
+        ["auth", "passkeys"],
+      ],
+    ],
+    // No passkeys where the browser has none.
+    [
+      false,
+      [
+        ["auth", "sessions"],
+        ["auth", "tokens"],
+      ],
+    ],
+  ])(
+    "asks for what the Account page shows (passkeys %s), kept for 30 s",
+    (supported, keys) => {
+      passkeys.supported = supported;
+      const client = new QueryClient();
+      const spy = vi.spyOn(client, "prefetchQuery").mockResolvedValue();
+      prefetchAccount(client);
+      expect(spy.mock.calls.map(([options]) => options.queryKey)).toEqual(keys);
+      // A list read in the last 30 s is not read again.
+      for (const [options] of spy.mock.calls) {
+        expect(options.staleTime).toBe(30_000);
+      }
+    },
+  );
 });

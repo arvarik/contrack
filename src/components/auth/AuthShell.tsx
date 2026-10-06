@@ -16,6 +16,7 @@ import React, {
   useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { Eye, EyeOff } from "lucide-react";
@@ -47,6 +48,16 @@ export const WRONG_CREDENTIALS = "Incorrect username or password.";
  */
 const ShakeContext = createContext<(() => void) | null>(null);
 
+/**
+ * True on a touch screen. A field that takes focus there opens the keyboard
+ * over the form, so these screens focus their first field only with a
+ * mouse or a trackpad.
+ */
+export const touchFirst = (): boolean =>
+  typeof window !== "undefined" &&
+  !!window.matchMedia &&
+  window.matchMedia("(pointer: coarse)").matches;
+
 export const AuthShell = ({
   icon,
   title,
@@ -69,6 +80,14 @@ export const AuthShell = ({
 }) => {
   const level = useCorvidLevel();
   const bird = useCorvidControls();
+  const titleRef = useRef<HTMLHeadingElement>(null);
+
+  // A new screen ("Forgot your password?", back to sign-in) replaces the
+  // control that had focus. When no field took it, the title does, so focus
+  // does not fall to the page.
+  useEffect(() => {
+    if (document.activeElement === document.body) titleRef.current?.focus();
+  }, [title]);
 
   // The bird turns its head away and back: no. Only the bird moves; the
   // ring it sits in stays where it is.
@@ -133,7 +152,14 @@ export const AuthShell = ({
               </span>
             )}
             <InstanceName />
-            <h1 className="text-xl font-extrabold font-headline">{title}</h1>
+            <h1
+              ref={titleRef}
+              tabIndex={-1}
+              // A target for focus, not a control: no ring.
+              className="text-xl font-extrabold font-headline outline-none"
+            >
+              {title}
+            </h1>
             <p className="text-sm text-on-surface-variant text-pretty">
               {subtitle}
             </p>

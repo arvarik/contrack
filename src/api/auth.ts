@@ -249,6 +249,19 @@ export function acceptInvitation(input: {
   );
 }
 
+/**
+ * Whether an invitation link can still make an account. Rejects with the
+ * `ApiError` that accepting it would: 404 for an unknown link, 410 for a
+ * used, revoked or expired one.
+ */
+export function checkInvitation(token: string): Promise<{ ok: true }> {
+  return authFetch(
+    "/invitations/check",
+    { method: "POST", body: JSON.stringify({ token }) },
+    "Could not check the invitation",
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Behind the gate — routed through the shared client
 // ---------------------------------------------------------------------------

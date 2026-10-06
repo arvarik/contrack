@@ -14,7 +14,13 @@ import { KeyRound, Loader2, LogOut } from "lucide-react";
 import { changePassword } from "../../api/auth";
 import { isNetworkError } from "../../api/client";
 import { rateLimitMessage } from "../../lib/rateLimitMessage";
-import { AuthShell, AuthField, AuthSubmit, AuthError } from "./AuthShell";
+import {
+  AuthShell,
+  AuthField,
+  AuthSubmit,
+  AuthError,
+  touchFirst,
+} from "./AuthShell";
 import { MIN_PASSWORD_LENGTH, passwordProblem } from "./accountForm";
 import { useAuth } from "./AuthGate";
 
@@ -117,9 +123,10 @@ export const ForcedPasswordChange = ({
           required
           revealable
           capsLockHint
-          // The whole page has one thing to do on it.
+          // The whole page has one thing to do on it. Not on a touch screen,
+          // where focus opens the keyboard over the form.
           // eslint-disable-next-line jsx-a11y/no-autofocus
-          autoFocus
+          autoFocus={!touchFirst()}
         />
         <AuthField
           id="new-password"

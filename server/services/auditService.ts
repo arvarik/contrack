@@ -64,6 +64,7 @@ export const AUDIT_ACTIONS = [
   "user.exported",
   "settings.changed",
   "backup.created",
+  "backup.downloaded",
   "mail.settings.changed",
   "mail.test.sent",
   "integrations.changed",

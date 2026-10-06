@@ -99,10 +99,10 @@ export const FeedItem = ({ item, index }: FeedItemProps) => {
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-bold text-on-surface">{opLabel}</span>
 
-          {/* Model badge or CACHED pill */}
+          {/* Model badge or the Reused pill */}
           {item.cached ? (
             <span className="text-[11px] font-bold uppercase tracking-[0.08em] px-1.5 py-0.5 rounded bg-success/10 text-success ring-1 ring-success/20">
-              Cached
+              Reused
             </span>
           ) : item.model ? (
             <span className="text-[11px] font-mono text-on-surface-variant bg-surface-container px-1.5 py-0.5 rounded">
@@ -110,14 +110,14 @@ export const FeedItem = ({ item, index }: FeedItemProps) => {
                 .replace("gemini-", "")
                 .replace("gpt-", "")
                 .replace("claude-", "")
-                .replace("-preview", " ⌘")}
+                .replace("-preview", " preview")}
             </span>
           ) : null}
 
           {/* Token + latency stats */}
           <span className="text-[11px] text-on-surface-variant ml-auto shrink-0 tabular-nums">
             {!item.cached && item.tokenCount
-              ? `${formatTokens(item.tokenCount)} tok · `
+              ? `${formatTokens(item.tokenCount)} tokens · `
               : ""}
             {item.latencyMs > 0 ? `${item.latencyMs}ms` : "<1ms"}
           </span>

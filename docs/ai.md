@@ -128,7 +128,7 @@ feature that uses it follows. Each row says which features use it.
 | **Fast model**      | Quick, frequent work: Ask Contrack, briefings, the daily insight, **Add from text**, people named in notes, mail summaries, and filling the fields of contact research | **Automatic**              |
 | **Strong model**    | Rarer, harder work: email file summaries, the AI duplicate checks, and reading [SearXNG](#web-search)'s pages                                                          | **Automatic**              |
 | **Embedding model** | Search by meaning, and close matches in duplicate checks                                                                                                               | **Built-in (recommended)** |
-| **Reranker**        | Puts Ask Contrack's best matches first. It runs on this server, and only `SEARCH_RERANK_MODEL` changes it                                                              | Built-in                   |
+| **Reranker**        | Puts Ask Contrack's best matches first. It runs on the server, and only `SEARCH_RERANK_MODEL` changes it                                                               | Built-in                   |
 
 The **Web search model** is under **Web search**, with the switch and SearXNG
 it works with.
@@ -331,9 +331,11 @@ Each provider bills its own key. The app shows estimates at list prices.
 - An admin opens **Settings → Administration → AI usage**. **Mine** shows the
   admin's own use, and **All users** adds a **By account** table.
 
-The page shows **Invocations**, **Tokens used** with an estimated cost, and
-**Cache hit rate**. A cached answer costs nothing. The **Activity feed** lists
-each call of the last 30 days. Admins also see **Research runs, last 24
+The page shows **AI calls**, **Tokens used** with an estimated cost, and
+**Reused answers**, the share of calls answered from saved answers. A reused
+answer costs nothing. The **Activity feed** lists each call of the last 30
+days, and **Saved answers by feature** shows the saved answers of each
+feature. The badge **Simulated calls** means that no call reached a provider. Admins also see **Research runs, last 24
 hours** on the **Contact enrichment** page.
 
 Limits and busy answers:
@@ -349,11 +351,11 @@ Limits and busy answers:
 
 ## Privacy
 
-### What leaves this machine
+### What leaves the server
 
 - A provider gets data only when an AI feature runs, and only for its own task.
   [What AI does](#what-ai-does) lists what each feature sends.
-- Full-text search and search by meaning run on this server, unless an admin
+- Full-text search and search by meaning run on the server, unless an admin
   picks a hosted embedding model.
 - For web search, the provider searches the web with the contact's details.
   With SearXNG, your SearXNG runs the searches, and Contrack reads the pages.
