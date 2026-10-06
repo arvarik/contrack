@@ -197,14 +197,19 @@ export function movesSentence(moves: Moves): string | null {
   return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
 }
 
+/** A name with an initial in it, such as "H. Ishikawa" or "Ada Q". */
+const INITIAL = /(^|\s)\p{L}\.?(\s|$)/u;
+
 /**
  * The contact to keep when nobody has chosen: the most complete one. An
  * uploaded photo counts most, because it is the one thing a person added
- * by hand that a merge cannot fill in.
+ * by hand that a merge cannot fill in. A full name beats an initial, since
+ * the name kept is the one the contact goes by.
  */
 export function suggestKeeper<T extends Contact>(contacts: T[]): T {
   const score = (c: Contact) =>
     (c.avatarUrl?.startsWith("/uploads/avatars/") ? 100 : c.avatarUrl ? 5 : 0) +
+    (INITIAL.test(c.name.trim()) ? 0 : 2) +
     (c.about ? 5 : 0) +
     (c.role ? 3 : 0) +
     (c.company ? 3 : 0) +

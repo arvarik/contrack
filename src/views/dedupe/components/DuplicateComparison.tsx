@@ -62,7 +62,7 @@ import {
 } from "../utils/mergeOutcome";
 
 /** The narrowest a comparison may be and still show columns, by how many it holds. */
-const TABLE_MIN_WIDTH: Record<number, number> = { 2: 520, 3: 720 };
+const TABLE_MIN_WIDTH: Record<number, number> = { 2: 500, 3: 600 };
 
 /** The first rows of a list a cell shows before "+2 more". */
 const LIST_LIMIT = 3;
@@ -111,9 +111,12 @@ const platformName = (platform: string) =>
       ? "GitHub"
       : platform.charAt(0).toUpperCase() + platform.slice(1);
 
+/** A cell's list, or nothing for an empty one, so the row knows it is empty. */
+const listCell = (items: string[]) =>
+  items.length === 0 ? null : <ListCell items={items} />;
+
 /** A cell's list: the first few, then how many more. */
 function ListCell({ items }: { items: string[] }) {
-  if (items.length === 0) return null;
   const shown = items.slice(0, LIST_LIMIT);
   return (
     <span className="flex flex-col gap-0.5 min-w-0">
@@ -162,13 +165,13 @@ const ROWS: Row[] = [
   {
     key: "emails",
     label: "Email",
-    render: (c) => <ListCell items={(c.emails ?? []).map((e) => e.email)} />,
+    render: (c) => listCell((c.emails ?? []).map((e) => e.email)),
     compare: (c) => listKey((c.emails ?? []).map((e) => e.email)),
   },
   {
     key: "phones",
     label: "Phone",
-    render: (c) => <ListCell items={(c.phones ?? []).map((p) => p.phone)} />,
+    render: (c) => listCell((c.phones ?? []).map((p) => p.phone)),
     compare: (c) =>
       listKey(
         (c.phones ?? []).map((p) => p.phone.replace(/\D/g, "").slice(-10)),
@@ -177,13 +180,12 @@ const ROWS: Row[] = [
   {
     key: "links",
     label: "Profile",
-    render: (c) => (
-      <ListCell
-        items={(c.socialLinks ?? []).map(
+    render: (c) =>
+      listCell(
+        (c.socialLinks ?? []).map(
           (l) => `${platformName(l.platform)} ${l.handle ?? l.url}`,
-        )}
-      />
-    ),
+        ),
+      ),
     compare: (c) =>
       listKey((c.socialLinks ?? []).map((l) => l.handle ?? l.url)),
   },
@@ -245,15 +247,16 @@ const ROWS: Row[] = [
   single("about", "About"),
 ];
 
-/** The row a caveat is about, from the words the server writes. */
-export function caveatRow(caveat: string): string | null {
-  if (/first names|\bjr\b|\bsr\b|one is /i.test(caveat)) return "name";
-  if (/compan/i.test(caveat)) return "company";
-  if (/\bcit(y|ies)\b/i.test(caveat)) return "location";
-  if (/phone/i.test(caveat)) return "phones";
-  if (/email|inbox/i.test(caveat)) return "emails";
-  if (/profile/i.test(caveat)) return "links";
-  return null;
+/** The rows a caveat is about, from the words the server writes. */
+export function caveatRows(caveat: string): string[] {
+  const rows: string[] = [];
+  if (/first names|\bjr\b|\bsr\b|one is /i.test(caveat)) rows.push("name");
+  if (/compan/i.test(caveat)) rows.push("company");
+  if (/\bcit(y|ies)\b/i.test(caveat)) rows.push("location");
+  if (/phone/i.test(caveat)) rows.push("phones");
+  if (/email|inbox/i.test(caveat)) rows.push("emails");
+  if (/profile/i.test(caveat)) rows.push("links");
+  return rows;
 }
 
 /** The header of one contact: the radio that keeps it, its face and name. */
@@ -422,15 +425,24 @@ export const DuplicateComparison = ({
   );
   const outcome = useMemo(() => mergeOutcome(keeper, others), [keeper, others]);
 
-  /** Each caveat, by the row it is about. */
+  // Each caveat marks every row it is about, and its words go under the
+  // first of them. One with no row, such as a shared inbox seen only by
+  // the engine, goes above the comparison ("").
   const flags = useMemo(() => {
     const byRow = new Map<string, string[]>();
     for (const caveat of caveats) {
-      const row = caveatRow(caveat) ?? "";
-      byRow.set(row, [...(byRow.get(row) ?? []), caveat]);
+      const rows = caveatRows(caveat);
+      for (const row of rows.length > 0 ? rows : [""]) {
+        byRow.set(row, [...(byRow.get(row) ?? []), caveat]);
+      }
     }
     return byRow;
   }, [caveats]);
+  /** The row a caveat's words go under: the first one it marks. */
+  const wordsUnder = (rowKey: string) =>
+    (flags.get(rowKey) ?? []).filter(
+      (caveat) => (caveatRows(caveat)[0] ?? "") === rowKey,
+    );
 
   // Rows nobody has a value in say nothing. The rest differ, or are the
   // same on every contact and fold into one line until asked for.
@@ -451,8 +463,11 @@ export const DuplicateComparison = ({
     };
   }, [contacts, flags, showAll]);
 
+  // Only a field that holds one value can lose one, so only it differs in a
+  // way that matters. Lists join, and counts add up.
   const differs = (row: Row) =>
-    !row.count && new Set(contacts.map(row.compare).filter(Boolean)).size > 1;
+    row.field !== undefined &&
+    new Set(contacts.map(row.compare).filter(Boolean)).size > 1;
   const dropped = (contact: ReviewContact, field?: SingleField) =>
     field !== undefined &&
     outcome.notKept.some(
@@ -547,16 +562,14 @@ export const DuplicateComparison = ({
                   <Value dropped={dropped(c, row.field)}>{row.render(c)}</Value>
                 </div>
               ))}
-              {(caveatsAbove ? [] : (flags.get(row.key) ?? [])).map(
-                (caveat) => (
-                  <div
-                    key={caveat}
-                    className="col-start-2 col-span-full px-3 pb-1"
-                  >
-                    <Caveat id={caveatId(caveat)}>{caveat}</Caveat>
-                  </div>
-                ),
-              )}
+              {(caveatsAbove ? [] : wordsUnder(row.key)).map((caveat) => (
+                <div
+                  key={caveat}
+                  className="col-start-2 col-span-full px-3 pb-1"
+                >
+                  <Caveat id={caveatId(caveat)}>{caveat}</Caveat>
+                </div>
+              ))}
             </Fragment>
           ))}
         </div>
@@ -613,12 +626,19 @@ export const DuplicateComparison = ({
   );
 };
 
-/** "role "Investor"" or, in a group, "role "Investor" (Elena Marchetti)". */
+/**
+ * "role "Investor"" or, in a group, "role "Investor" (Elena Marchetti)". A
+ * name names its own contact, so it goes without.
+ */
 const outcomePart = (
-  line: { label: string; value: string; from: string },
+  line: { field: SingleField; label: string; value: string; from: string },
   named: boolean,
-) =>
-  `${line.label.toLowerCase()} "${line.value.length > 40 ? `${line.value.slice(0, 40)}…` : line.value}"${named ? ` (${line.from})` : ""}`;
+) => {
+  const value =
+    line.value.length > 40 ? `${line.value.slice(0, 40)}…` : line.value;
+  const from = named && line.field !== "name" ? ` (${line.from})` : "";
+  return `${line.label.toLowerCase()} "${value}"${from}`;
+};
 
 /**
  * What the merge does, in three lines: what moves to the contact kept,

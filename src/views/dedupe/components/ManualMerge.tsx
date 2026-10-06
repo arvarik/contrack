@@ -8,6 +8,7 @@ import { usePreferences } from "../../../contexts/PreferencesContext";
 import { cn } from "../../../lib/utils";
 import { SELECTED_TINT } from "../../../lib/styles";
 import { withUndo } from "../../../lib/undoToast";
+import { suggestKeeper } from "../utils/mergeOutcome";
 import { SelectStage } from "./manual/SelectStage";
 import { CompareStage } from "./manual/CompareStage";
 
@@ -56,20 +57,13 @@ export const ManualMerge = () => {
     });
   }, [stage, smooth]);
 
-  // The first contact chosen is the one kept, until a person picks another.
-  const handleSelectionChange = useCallback(
-    (contacts: Contact[]) => {
-      setSelected(contacts);
-      if (contacts.length === 0) setPrimaryId(null);
-      else if (!primaryId || !contacts.some((c) => c.id === primaryId)) {
-        setPrimaryId(contacts[0].id);
-      }
-    },
-    [primaryId],
-  );
-
-  const primary = selected.find((c) => c.id === primaryId) ?? null;
-  const others = selected.filter((c) => c.id !== primaryId);
+  // The most complete contact is the one kept, as in Possible duplicates,
+  // until a person picks another.
+  const keeperId =
+    selected.find((c) => c.id === primaryId)?.id ??
+    (selected.length > 0 ? suggestKeeper(selected).id : null);
+  const primary = selected.find((c) => c.id === keeperId) ?? null;
+  const others = selected.filter((c) => c.id !== keeperId);
 
   const handleMerge = useCallback(async () => {
     if (!primary || others.length === 0 || mergeCluster.isPending) return;
@@ -154,13 +148,13 @@ export const ManualMerge = () => {
         {stage === "select" ? (
           <SelectStage
             selected={selected}
-            onSelectionChange={handleSelectionChange}
+            onSelectionChange={setSelected}
             onNext={() => setStage("compare")}
           />
         ) : (
           <CompareStage
             selected={selected}
-            primaryId={primaryId}
+            primaryId={keeperId}
             setPrimaryId={setPrimaryId}
             onBack={() => setStage("select")}
             onMerge={handleMerge}

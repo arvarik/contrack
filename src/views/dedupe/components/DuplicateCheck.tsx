@@ -31,7 +31,6 @@
 import { formatDistanceToNowStrict } from "date-fns";
 import {
   AlertCircle,
-  ArrowRight,
   CheckCircle2,
   Hourglass,
   Loader2,
@@ -272,19 +271,10 @@ export const DuplicateCheck = ({ variant = "card" }: DuplicateCheckProps) => {
                 </p>
               </div>
             </div>
+            {/* Review them is the page's own button, in the callout over
+                the card, so the card offers only to check again. */}
             {!inline && (
-              <div className="flex flex-wrap items-center gap-2 sm:pl-7">
-                {toReview > 0 && (
-                  <Link to="/pulse/duplicates" className="btn-primary btn-sm">
-                    Review{" "}
-                    {plural(
-                      toReview,
-                      "possible duplicate",
-                      "possible duplicates",
-                    )}
-                    <ArrowRight aria-hidden="true" className="w-3.5 h-3.5" />
-                  </Link>
-                )}
+              <div className="sm:pl-7">
                 <button
                   type="button"
                   onClick={start}
@@ -321,10 +311,15 @@ export const DuplicateCheck = ({ variant = "card" }: DuplicateCheckProps) => {
                 )}
               </div>
             </div>
+            {/* The page's main action, unless duplicates wait: then
+                reviewing them is, and a check comes second. */}
             <button
               type="button"
               onClick={start}
-              className="btn-primary max-sm:w-full shrink-0"
+              className={cn(
+                toReview > 0 ? "btn-secondary" : "btn-primary",
+                "max-sm:w-full shrink-0",
+              )}
             >
               <ScanSearch aria-hidden="true" className="w-4 h-4" />
               Check now

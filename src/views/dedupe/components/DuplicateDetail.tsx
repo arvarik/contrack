@@ -18,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { Keycap } from "../../../components/ui/ShortcutKeys";
+import { cn } from "../../../lib/utils";
 import type { DuplicateGroup } from "../utils/groups";
 import { isAiReason, plainReason, reasonIcon } from "../utils/reason";
 import type { ReviewContact } from "../utils/mergeOutcome";
@@ -26,12 +27,19 @@ import { DuplicateComparison } from "./DuplicateComparison";
 /** More than this many in one group, and the group asks for a careful look. */
 const LARGE_GROUP = 5;
 
-/** "Ada Quill and Ben Quill", or "Morgan Ellery and 5 others". */
+/**
+ * "Ada Quill and Ben Quill", "Morgan Ellery and 5 others", or, when every
+ * name is the same, "2 contacts named Elena Marchetti".
+ */
 export function groupName(contacts: ReviewContact[]): string {
-  if (contacts.length === 2) {
-    return `${contacts[0].name} and ${contacts[1].name}`;
+  const [first] = contacts;
+  if (contacts.every((c) => c.name === first.name)) {
+    return `${contacts.length} contacts named ${first.name}`;
   }
-  return `${contacts[0].name} and ${contacts.length - 1} others`;
+  if (contacts.length === 2) {
+    return `${first.name} and ${contacts[1].name}`;
+  }
+  return `${first.name} and ${contacts.length - 1} others`;
 }
 
 interface DuplicateDetailProps {
@@ -46,6 +54,12 @@ interface DuplicateDetailProps {
   heading?: boolean;
   /** The single-key shortcuts are on, so the buttons name their keys. */
   showKeys?: boolean;
+  /**
+   * Where the two buttons go. The pane beside the list puts them at its top,
+   * beside the group's name, where they are on screen as soon as the group
+   * opens. The phone's sheet puts them at its bottom, under the thumb.
+   */
+  actionsAt?: "top" | "bottom";
 }
 
 export const DuplicateDetail = ({
@@ -58,6 +72,7 @@ export const DuplicateDetail = ({
   isBusy,
   heading = true,
   showKeys = false,
+  actionsAt = "bottom",
 }: DuplicateDetailProps) => {
   const { lead, contacts, caveats } = group;
   const isPair = contacts.length === 2;
@@ -71,23 +86,73 @@ export const DuplicateDetail = ({
   const caveatPrefix = `caveat-${group.key.replace(/[^a-z0-9]/gi, "").slice(0, 16)}`;
   const caveatIds = caveats.map((_, i) => `${caveatPrefix}-${i}`).join(" ");
 
+  const actions = (
+    <>
+      <button
+        type="button"
+        onClick={onKeepSeparate}
+        disabled={isBusy}
+        className="btn-secondary max-sm:flex-1"
+      >
+        <X className="w-4 h-4" aria-hidden="true" />
+        Keep separate
+        {showKeys && (
+          <span aria-hidden="true" className="max-sm:hidden">
+            <Keycap>H</Keycap>
+          </span>
+        )}
+      </button>
+      <button
+        type="button"
+        onClick={onMerge}
+        disabled={isBusy}
+        aria-describedby={caveatIds || undefined}
+        className="btn-primary max-sm:flex-1"
+      >
+        {isBusy ? (
+          <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+        ) : (
+          <GitMerge className="w-4 h-4" aria-hidden="true" />
+        )}
+        {isPair ? "Merge" : `Merge ${contacts.length}`}
+        {showKeys && (
+          <span aria-hidden="true" className="max-sm:hidden">
+            <Keycap>L</Keycap>
+          </span>
+        )}
+      </button>
+    </>
+  );
+
   return (
     <div className="flex flex-col gap-4">
       {heading && (
-        <div className="space-y-1">
-          <h2 className="text-lg font-headline font-bold text-on-surface break-words">
-            {groupName(contacts)}
-          </h2>
-          {!ai && (
-            <p className="flex flex-wrap items-center gap-x-2 text-sm text-on-surface-variant">
-              <Icon aria-hidden="true" className="w-4 h-4 shrink-0" />
-              {reason}
-              {showValue && (
-                <span className="break-all text-on-surface">
-                  {lead.matchedField}
-                </span>
-              )}
-            </p>
+        <div
+          className={cn(
+            "flex flex-wrap items-start gap-3",
+            // The pane scrolls, and its name and buttons stay at its top.
+            actionsAt === "top" &&
+              "sticky top-0 z-10 -mx-4 sm:-mx-5 -mt-4 sm:-mt-5 px-4 sm:px-5 pt-4 sm:pt-5 pb-3 bg-surface-container-lowest",
+          )}
+        >
+          <div className="flex-1 min-w-[12rem] space-y-1">
+            <h2 className="text-lg font-headline font-bold text-on-surface break-words">
+              {groupName(contacts)}
+            </h2>
+            {!ai && (
+              <p className="flex flex-wrap items-center gap-x-2 text-sm text-on-surface-variant">
+                <Icon aria-hidden="true" className="w-4 h-4 shrink-0" />
+                {reason}
+                {showValue && (
+                  <span className="break-all text-on-surface">
+                    {lead.matchedField}
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+          {actionsAt === "top" && (
+            <div className="flex flex-wrap items-center gap-2">{actions}</div>
           )}
         </div>
       )}
@@ -156,41 +221,11 @@ export const DuplicateDetail = ({
         caveatIdPrefix={caveatPrefix}
       />
 
-      <div className="sticky bottom-0 z-10 -mx-1 px-1 py-3 bg-surface-container-lowest flex flex-wrap justify-end gap-2">
-        <button
-          type="button"
-          onClick={onKeepSeparate}
-          disabled={isBusy}
-          className="btn-secondary max-sm:flex-1"
-        >
-          <X className="w-4 h-4" aria-hidden="true" />
-          Keep separate
-          {showKeys && (
-            <span aria-hidden="true" className="max-sm:hidden">
-              <Keycap>H</Keycap>
-            </span>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={onMerge}
-          disabled={isBusy}
-          aria-describedby={caveatIds || undefined}
-          className="btn-primary max-sm:flex-1"
-        >
-          {isBusy ? (
-            <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
-          ) : (
-            <GitMerge className="w-4 h-4" aria-hidden="true" />
-          )}
-          {isPair ? "Merge" : `Merge ${contacts.length}`}
-          {showKeys && (
-            <span aria-hidden="true" className="max-sm:hidden">
-              <Keycap>L</Keycap>
-            </span>
-          )}
-        </button>
-      </div>
+      {actionsAt === "bottom" && (
+        <div className="sticky bottom-0 z-10 -mx-1 px-1 py-3 bg-surface-container-lowest flex flex-wrap justify-end gap-2">
+          {actions}
+        </div>
+      )}
     </div>
   );
 };

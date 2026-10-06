@@ -490,6 +490,7 @@ export const DuplicateQueue = () => {
       isBusy={busy.has(group.key)}
       heading={heading}
       showKeys={singleKeys && isWide}
+      actionsAt={isWide ? "top" : "bottom"}
     />
   );
 
@@ -569,7 +570,7 @@ export const DuplicateQueue = () => {
               role="region"
               className={cn(
                 CARD,
-                "p-4 sm:p-5 pb-0 sm:pb-0 sticky top-4 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain",
+                "p-4 sm:p-5 sticky top-4 max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain",
               )}
             >
               {detail(current, true)}
