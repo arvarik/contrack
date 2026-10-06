@@ -84,9 +84,12 @@ export function dayInZone(
 
 /**
  * One formatter per zone, made once. A dashboard reads hundreds of dates
- * per request, and making a formatter costs more than using one.
+ * per request, and making a formatter costs more than using one. The zone
+ * comes from a request, and Intl reads "UTC" and "utc" as one zone, so the
+ * cache is capped: many spellings cannot grow it without end.
  */
 const dayFormatters = new Map<string, Intl.DateTimeFormat>();
+const MAX_DAY_FORMATTERS = 32;
 
 function dayFormatter(timeZone?: string): Intl.DateTimeFormat {
   const key = timeZone ?? "";
@@ -104,6 +107,7 @@ function dayFormatter(timeZone?: string): Intl.DateTimeFormat {
     } catch {
       formatter = make();
     }
+    if (dayFormatters.size >= MAX_DAY_FORMATTERS) dayFormatters.clear();
     dayFormatters.set(key, formatter);
   }
   return formatter;
