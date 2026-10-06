@@ -206,6 +206,11 @@ unknown>` and narrow. Cast a better-sqlite3 row once, to a narrow row type.
   bare letters obey the **Single-key shortcuts** switch.
 - **Command palette**: a control inside it that is not a `Command.Item` needs
   `onMouseDown={(e) => e.preventDefault()}`, or cmdk closes the palette.
+- **Small helpers live once.** Reuse them before writing another:
+  `plural` and `errorText` (`src/lib/utils.ts`), `touchFirst`
+  (`src/lib/platform.ts`), `prefersReducedMotion` (`src/lib/motion.ts`),
+  `isPageKeyTaken` (`src/lib/keyboard.ts`), and `isPlainDay` and
+  `dayInZone` (`shared/dates.ts`).
 
 ## 5. Anti-patterns
 
