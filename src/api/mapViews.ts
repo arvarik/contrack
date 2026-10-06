@@ -2,13 +2,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiJson, jsonBody } from "./client";
 import { STALE_TIMES } from "../lib/queryConfig";
-import { UNDO_DURATION_MS } from "../lib/undoToast";
+import { withUndo } from "../lib/undoToast";
 import {
   mapBoundsSchema,
   type MapBounds,
   type MapLayer,
   type MapView,
 } from "../../shared/mapViews";
+import { errorText } from "../lib/errorText";
 
 export type { MapBounds, MapLayer, MapView };
 
@@ -114,7 +115,7 @@ export function useMoveMapView() {
         return rest;
       }),
     onError: (err, { view }) =>
-      toast.error(`Could not move "${view.name}": ${err.message}`),
+      toast.error(`Could not move "${view.name}": ${errorText(err)}`),
     onSettled: () => queryClient.invalidateQueries({ queryKey: ["map-views"] }),
   });
 }
@@ -128,20 +129,18 @@ export function useDeleteMapView() {
     mutationFn: (view: MapView) => deleteMapView(view.id),
     onSuccess: (_result, { name, query, layer, bounds }) => {
       refresh();
-      toast.success(`View "${name}" deleted`, {
-        duration: UNDO_DURATION_MS,
-        action: {
-          label: "Undo",
-          onClick: () =>
-            createMapView({ name, query, layer, bounds })
-              .then(refresh)
-              .catch((err: Error) =>
-                toast.error(`Could not restore "${name}": ${err.message}`),
-              ),
-        },
-      });
+      toast.success(
+        `View "${name}" deleted`,
+        withUndo(() =>
+          createMapView({ name, query, layer, bounds })
+            .then(refresh)
+            .catch((err: Error) =>
+              toast.error(`Could not restore "${name}": ${errorText(err)}`),
+            ),
+        ),
+      );
     },
     onError: (err, view) =>
-      toast.error(`Could not delete "${view.name}": ${err.message}`),
+      toast.error(`Could not delete "${view.name}": ${errorText(err)}`),
   });
 }

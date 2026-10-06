@@ -17,6 +17,7 @@
  */
 
 import { useEffect } from "react";
+import { isTouchScreen } from "../lib/platform";
 
 /** Input types that open no keyboard. */
 const NO_KEYBOARD = new Set([
@@ -44,7 +45,6 @@ const KEYBOARD_MIN = 120;
 export function useSoftKeyboard(): void {
   useEffect(() => {
     const root = document.documentElement;
-    const coarse = window.matchMedia?.("(pointer: coarse)");
     const viewport = window.visualViewport;
     // The page's full height at each width it has had. Android shrinks the
     // page for the keyboard, so a page well short of it has the keyboard up.
@@ -72,7 +72,7 @@ export function useSoftKeyboard(): void {
       // Android, or the iPad's hide key, puts the keyboard away and leaves
       // the field focused, and the tab bar must come back then.
       const typing =
-        Boolean(coarse?.matches) &&
+        isTouchScreen() &&
         opensKeyboard(document.activeElement) &&
         (covered >= KEYBOARD_MIN || shrunk);
       root.toggleAttribute("data-typing", typing);

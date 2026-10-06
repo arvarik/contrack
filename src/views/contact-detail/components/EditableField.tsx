@@ -4,6 +4,7 @@ import { cn } from "../../../lib/utils";
 import { EDITABLE_INPUT } from "../../../lib/styles";
 import { useMediaQuery } from "../../../hooks/useMediaQuery";
 import { errorText } from "../../../lib/errorText";
+import { TOUCH_QUERY } from "../../../lib/platform";
 
 /**
  * The pencil after an editable value.
@@ -86,7 +87,7 @@ export function EditableField({
   // A link only on a touch screen. With a mouse a click on the value edits
   // it, as it always has: a desktop's handler for `tel:` can be a softphone
   // prompt, or nothing at all.
-  const touch = useMediaQuery("(pointer: coarse)");
+  const touch = useMediaQuery(TOUCH_QUERY);
   const [draft, setDraft] = useState(value ?? "");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);

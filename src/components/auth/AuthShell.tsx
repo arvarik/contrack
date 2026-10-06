@@ -52,11 +52,6 @@ export const WRONG_CREDENTIALS = "Incorrect username or password.";
 const ShakeContext = createContext<(() => void) | null>(null);
 
 /**
- * True on a touch screen. A field that takes focus there opens the keyboard
- * over the form, so these screens focus their first field only with a
- * mouse or a trackpad.
- */
-/**
  * What a sign-in screen says when its request fails: that the server is out
  * of reach, the wait a rate limit asks for, or the server's own words. Nine
  * screens wrote these three branches by hand.
@@ -69,11 +64,6 @@ export const authErrorText = (err: unknown, fallback: string): string =>
   isNetworkError(err)
     ? "Could not reach the server. Is it running?"
     : (rateLimitMessage(err) ?? errorText(err, fallback));
-
-export const touchFirst = (): boolean =>
-  typeof window !== "undefined" &&
-  !!window.matchMedia &&
-  window.matchMedia("(pointer: coarse)").matches;
 
 export const AuthShell = ({
   icon,

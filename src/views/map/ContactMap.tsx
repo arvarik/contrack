@@ -83,6 +83,7 @@ import { WORLD_BOUNDS, minZoomFor } from "./mapMath";
 import { registerPmtilesProtocol, styleFor } from "./mapStyles";
 import { MAPLIBRE_WORKER_URL } from "./maplibreWorker";
 import { useClusterFeatures, type ClusterFeature } from "./useClusterFeatures";
+import { isTouchScreen } from "../../lib/platform";
 
 registerPmtilesProtocol();
 
@@ -489,7 +490,7 @@ export const ContactMap = ({
     asked.current = cardRequest;
     if (!hoverCard || !byId.has(cardRequest.id)) return;
     const from = document.activeElement;
-    const touch = window.matchMedia?.("(hover: none)").matches;
+    const touch = isTouchScreen();
     setCard({
       kind: "contact",
       id: cardRequest.id,

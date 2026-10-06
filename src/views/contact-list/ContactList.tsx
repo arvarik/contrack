@@ -925,7 +925,7 @@ export const ContactList = () => {
         `Archived ${contact.name}`,
         withUndo(() =>
           unarchiveContactMutate(contact.id, {
-            onError: (err) => toast.error(`Could not undo: ${err.message}`),
+            onError: (err) => toast.error(`Could not undo: ${errorText(err)}`),
           }),
         ),
       );

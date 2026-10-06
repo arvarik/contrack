@@ -35,6 +35,7 @@ import {
   type LogKind,
 } from "./actionMode";
 import { GROUP_HEADING_EMERALD, ITEM_CURRENT } from "./utils";
+import { isTouchScreen } from "../../lib/platform";
 
 interface LogContact {
   id: string;
@@ -162,7 +163,7 @@ export const LogMode = ({
         key={person.id}
         value={`logto_${person.id}_${person.name}`}
         onSelect={() =>
-          window.matchMedia?.("(pointer: coarse)").matches
+          isTouchScreen()
             ? onCompose({ kind: step.kind, contact: person, text })
             : onFill(`> ${step.kind} ${person.name}: ${text}`)
         }

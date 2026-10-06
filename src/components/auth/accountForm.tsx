@@ -16,9 +16,10 @@ import { uploadAccountAvatar } from "../../api/auth";
 import { signedOutAccountAvatarUrl } from "../../lib/avatar";
 import { AccountPhotoField } from "./AccountPhotoField";
 import { toast } from "sonner";
-import { AuthField, touchFirst } from "./AuthShell";
+import { AuthField } from "./AuthShell";
 import { PasswordStrengthMeter } from "../../lib/passwordStrength";
 import { NO_AUTOCORRECT } from "../ui/SearchField";
+import { isTouchScreen } from "../../lib/platform";
 
 /** Kept in step with USERNAME_PATTERN in server/services/authService.ts. */
 const USERNAME_PATTERN = /^[a-z0-9](?:[a-z0-9._-]{1,30}[a-z0-9])?$/;
@@ -269,7 +270,7 @@ export const AccountFields = ({
         onBlur={form.blur("displayName")}
         autoComplete="name"
         // eslint-disable-next-line jsx-a11y/no-autofocus
-        autoFocus={!touchFirst()}
+        autoFocus={!isTouchScreen()}
       />
       <AuthField
         id="email"

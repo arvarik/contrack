@@ -78,6 +78,7 @@ import {
   INTERACTION_LABELS,
   type InteractionKind,
 } from "../lib/interactionKinds";
+import { isTouchScreen } from "../lib/platform";
 
 /** The type control's options, in the order they are shown. */
 const INTERACTION_TYPES: readonly SegmentedOption<InteractionKind>[] = [
@@ -663,7 +664,7 @@ const Composer = ({
                   event.key === "Enter" &&
                   !event.metaKey &&
                   !event.ctrlKey &&
-                  window.matchMedia?.("(pointer: coarse)").matches
+                  isTouchScreen()
                 ) {
                   event.currentTarget.blur();
                 }

@@ -17,11 +17,11 @@ import {
   AuthField,
   AuthSubmit,
   AuthError,
-  touchFirst,
   authErrorText,
 } from "./AuthShell";
 import { MIN_PASSWORD_LENGTH, passwordProblem } from "./accountForm";
 import { useAuth } from "./AuthGate";
+import { isTouchScreen } from "../../lib/platform";
 
 export const ForcedPasswordChange = ({
   onChanged,
@@ -118,7 +118,7 @@ export const ForcedPasswordChange = ({
           // The whole page has one thing to do on it. Not on a touch screen,
           // where focus opens the keyboard over the form.
           // eslint-disable-next-line jsx-a11y/no-autofocus
-          autoFocus={!touchFirst()}
+          autoFocus={!isTouchScreen()}
         />
         <AuthField
           id="new-password"

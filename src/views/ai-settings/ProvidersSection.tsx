@@ -80,7 +80,7 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
         setRemoving(null);
       },
       onError: (error: Error) =>
-        toast.error(`Could not remove ${removing.label}: ${error.message}`),
+        toast.error(`Could not remove ${removing.label}: ${errorText(error)}`),
     };
     if (removing.kind === "key") deleteKey.mutate(removing.id, callbacks);
     else deleteEndpoint.mutate(removing.id, callbacks);

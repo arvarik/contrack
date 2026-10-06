@@ -341,7 +341,7 @@ export const MapView = () => {
             showView(view.id);
           },
           onError: (err) =>
-            toast.error(`Could not update "${view.name}": ${err.message}`),
+            toast.error(`Could not update "${view.name}": ${errorText(err)}`),
         },
       );
     },

@@ -49,6 +49,7 @@ import { useAISearchSession } from "../contexts/SessionContext";
 import type { HistoryEntry } from "../../shared/searchHistory";
 import { useAiAllowed } from "../hooks/useAiAllowed";
 import { errorText } from "../lib/errorText";
+import { isTouchScreen } from "../lib/platform";
 
 // =============================================================================
 // SearchView — Dedicated full-page "Ask Contrack" semantic search
@@ -120,7 +121,7 @@ export const SearchView = () => {
   // The box takes focus on arrival on a desktop. On a touch screen that
   // opened the keyboard over the page before a person chose to type.
   useEffect(() => {
-    if (window.matchMedia?.("(pointer: coarse)").matches) return;
+    if (isTouchScreen()) return;
     inputRef.current?.focus();
   }, []);
 

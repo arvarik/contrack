@@ -71,7 +71,7 @@ import { cn } from "../../../lib/utils";
 import { CARD, LABEL, SELECTED_ROW } from "../../../lib/styles";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
 import { pageKeyTaken } from "../../pulse/lib/pageKeys";
-import { UNDO_DURATION_MS } from "../../../lib/undoToast";
+import { withUndo } from "../../../lib/undoToast";
 import { useSingleKeyShortcuts } from "../../../hooks/useSingleKeyShortcuts";
 import { useMediaQuery, WIDE_QUERY } from "../../../hooks/useMediaQuery";
 import { EmptyState } from "../../../components/ui/EmptyState";
@@ -261,8 +261,7 @@ export const DuplicateQueue = () => {
       const options = {
         id: UNDO_TOAST,
         description,
-        duration: UNDO_DURATION_MS,
-        action: { label: "Undo", onClick: () => void action.run() },
+        ...withUndo(() => void action.run()),
       };
       if (kind === "success") toast.success(message, options);
       else if (kind === "warning") toast.warning(message, options);

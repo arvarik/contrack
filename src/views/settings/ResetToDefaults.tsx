@@ -28,7 +28,7 @@ import { RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import type { Preferences } from "../../api/preferences";
-import { UNDO_DURATION_MS } from "../../lib/undoToast";
+import { withUndo } from "../../lib/undoToast";
 
 type PrefKey = keyof Preferences;
 
@@ -109,10 +109,10 @@ export const ResetToDefaults = ({ entries }: { entries: readonly Entry[] }) => {
       )[0];
     keys.forEach(resetPreference);
     first?.focus({ preventScroll: true });
-    toast.success(resetMessage(keys.length), {
-      duration: UNDO_DURATION_MS,
-      action: { label: "Undo", onClick: () => setPreferences(previous) },
-    });
+    toast.success(
+      resetMessage(keys.length),
+      withUndo(() => setPreferences(previous)),
+    );
   };
 
   return (
