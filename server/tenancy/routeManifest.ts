@@ -268,6 +268,12 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     isolated: false,
   },
   {
+    method: "GET",
+    path: "/api/admin/backups/:filename",
+    class: "admin",
+    isolated: false,
+  },
+  {
     method: "POST",
     path: "/api/admin/users/:id/reset-password",
     class: "admin",
@@ -331,6 +337,12 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
   {
     method: "POST",
     path: "/api/auth/accept-invitation",
+    class: "public",
+    isolated: false,
+  },
+  {
+    method: "POST",
+    path: "/api/auth/invitations/check",
     class: "public",
     isolated: false,
   },

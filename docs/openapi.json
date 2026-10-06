@@ -416,6 +416,38 @@
         }
       }
     },
+    "/api/auth/invitations/check": {
+      "post": {
+        "summary": "Whether an invitation link can still make an account: 404 for one that never was, 410 for one used, revoked or expired",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "token": { "type": "string" } },
+                "required": ["token"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "ok": { "type": "boolean", "const": true } },
+                  "required": ["ok"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/oauth/requests/{id}": {
       "get": {
         "summary": "A sign-in waiting for the person's answer, for the consent page",

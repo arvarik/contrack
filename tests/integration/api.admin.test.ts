@@ -806,6 +806,11 @@ describe("invitations", () => {
   it("refuses a second use with INVITATION_USED", async () => {
     const created = await invite();
     const token = tokenFrom(created.link);
+    // The join screen asks first, and gets what accepting would get.
+    const check = (t: string) =>
+      request(app).post("/api/auth/invitations/check").send({ token: t });
+    expect((await check(token)).body).toEqual({ ok: true });
+    expect((await check("junk")).status).toBe(404);
     const first = await request(app).post("/api/auth/accept-invitation").send({
       token,
       email: "once@example.com",
@@ -822,6 +827,7 @@ describe("invitations", () => {
     });
     expect(second.status).toBe(410);
     expect(second.body.error.code).toBe("INVITATION_USED");
+    expect((await check(token)).body.error.code).toBe("INVITATION_USED");
     // The refused attempt left no account behind.
     expect(
       sqlite.prepare("SELECT id FROM users WHERE username = 'twiceover'").get(),
@@ -1622,7 +1628,17 @@ describe("the audit log", () => {
     await as(admin)(
       request(app).put("/api/admin/settings").send({ sessionTtlDays: 14 }),
     );
-    await as(admin)(request(app).post("/api/backups"));
+    const snapshot = await as(admin)(request(app).post("/api/backups"));
+    // A snapshot downloads as a file, and only a name the list shows does.
+    const download = await as(admin)(
+      request(app).get(`/api/admin/backups/${snapshot.body.filename}`),
+    );
+    expect(download.status).toBe(200);
+    expect(download.headers["content-disposition"]).toContain("attachment");
+    const outside = await as(admin)(
+      request(app).get("/api/admin/backups/..%2Fcurator.db"),
+    );
+    expect(outside.status).toBe(404);
 
     // A sign-in that works, one that does not, and a sign-out.
     __resetAuthRateLimits();
@@ -1661,6 +1677,7 @@ describe("the audit log", () => {
       "user.exported",
       "settings.changed",
       "backup.created",
+      "backup.downloaded",
     ]) {
       expect(actions, action).toContain(action);
     }

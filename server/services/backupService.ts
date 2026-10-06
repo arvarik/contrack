@@ -230,6 +230,16 @@ export function listBackups(): BackupInfo[] {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
+/**
+ * The file of a listed snapshot, for a download. Null for any other name, so
+ * a name with a path in it, a partial file or a sidecar is never served.
+ */
+export function snapshotFile(filename: string): string | null {
+  return listBackups().some((backup) => backup.filename === filename)
+    ? path.join(BACKUPS_DIR, filename)
+    : null;
+}
+
 /** Delete backups beyond the rotation depth (oldest first). */
 function rotateBackups(): void {
   const excess = listBackups().slice(keepCount());
