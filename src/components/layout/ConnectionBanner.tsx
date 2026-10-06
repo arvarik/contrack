@@ -11,6 +11,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { CloudOff, Loader2, RefreshCw, WifiOff } from "lucide-react";
 import { useConnectionStatus } from "../../hooks/useConnectionStatus";
+import { DURATION, EASE } from "../../lib/motion";
 
 export const ConnectionBanner = () => {
   const { status, isDown, retry, isRetrying } = useConnectionStatus();
@@ -31,7 +32,8 @@ export const ConnectionBanner = () => {
           initial={{ height: 0 }}
           animate={{ height: "auto" }}
           exit={{ height: 0 }}
-          transition={{ type: "spring", bounce: 0, duration: 0.35 }}
+          // An arrival: the slow duration on the one curve.
+          transition={{ duration: DURATION.slow, ease: EASE }}
           className="shrink-0 overflow-hidden bg-surface-container-high"
         >
           <div className="mx-auto flex max-w-xl items-center gap-3 px-4 py-2">
