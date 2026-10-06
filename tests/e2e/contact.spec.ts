@@ -1176,7 +1176,7 @@ test.describe("the composer", () => {
     await page.keyboard.press("Meta+Shift+KeyI");
     const dialog = page.getByRole("dialog", { name: "Log an interaction" });
     await expect(dialog).toBeVisible();
-    const picker = dialog.getByRole("textbox", {
+    const picker = dialog.getByRole("combobox", {
       name: "Search for a contact",
     });
     await expect(picker).toBeFocused();

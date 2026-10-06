@@ -39,9 +39,10 @@
  * - A Save with only a follow-up saves only the follow-up. It used to write
  *   an empty note as well, and that note counted as talking to the person:
  *   their "last contacted" and their score moved for a reminder.
- * - On the contact page the draft is on disk within a moment of typing, per
- *   account and contact (`lib/composerDrafts`). The compact composer keeps no
- *   draft: the dialog opens empty, and its contact can change under the text.
+ * - The draft is on disk within a moment of typing, per account and contact
+ *   (`lib/composerDrafts`). The dialog's compact composer keeps one draft of
+ *   its own, whoever it is for, so Escape, a tap outside or Back closes the
+ *   dialog without losing the note: it is there on the next open.
  * - One request at a time, however Save is pressed.
  *
  * @module components/InteractionComposer
@@ -101,6 +102,9 @@ const COMPOSER_MESSAGES = {
 } as const;
 
 type Problem = keyof typeof COMPOSER_MESSAGES;
+
+/** The quick interaction dialog's draft, in place of a contact's id. */
+const QUICK_DRAFT = "quick-interaction";
 
 /** How long after the last keystroke the draft is written to storage. */
 const DRAFT_WRITE_DELAY_MS = 300;
@@ -230,8 +234,9 @@ interface InteractionComposerProps {
    */
   contactId: string | null;
   /**
-   * The dialog's form: no card around it, and no draft on disk. Everything
-   * else, the editor, mentions, the follow-up line and the keys, is the same.
+   * The dialog's form: no card around it, and one draft for the dialog.
+   * Everything else, the editor, mentions, the follow-up line and the keys,
+   * is the same.
    */
   compact?: boolean;
   /**
@@ -257,21 +262,16 @@ interface InteractionComposerProps {
 
 export const InteractionComposer = (props: InteractionComposerProps) => {
   const { user } = useAuth();
-  const storageKey =
-    !props.compact && props.contactId
+  const storageKey = props.compact
+    ? draftKey(user?.id, QUICK_DRAFT)
+    : props.contactId
       ? draftKey(user?.id, props.contactId)
       : null;
   // Keyed on the draft, so a change of contact or of account replaces the
   // editor rather than carrying one person's half-written note onto another
   // page. The unmount flushes the old draft, the mount reads the new one.
   // The compact composer keeps one editor while its contact is chosen.
-  return (
-    <Composer
-      key={storageKey ?? "compact"}
-      {...props}
-      storageKey={storageKey}
-    />
-  );
+  return <Composer key={storageKey} {...props} storageKey={storageKey} />;
 };
 
 const Composer = ({

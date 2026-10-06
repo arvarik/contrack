@@ -415,7 +415,19 @@ describe("the compact composer", () => {
     expect(saves).toHaveLength(0);
   });
 
-  it("saves for the chosen contact, reports the save, and keeps no draft", async () => {
+  it("keeps a note it did not save for the next opening", async () => {
+    // Escape or a tap outside closed the dialog, and the note was gone.
+    stubServer();
+    const first = mountCompact();
+    await type(await editorElement(), "Lunch at the usual place");
+    first.unmount();
+    mountCompact();
+    expect((await editorElement()).textContent).toBe(
+      "Lunch at the usual place",
+    );
+  });
+
+  it("saves for the chosen contact, reports the save, and keeps no draft once saved", async () => {
     account.current = { id: "user-a" };
     const saves = stubServer();
     const saved = vi.fn();
@@ -476,7 +488,7 @@ describe("the quick interaction dialog", () => {
       name: "Log an interaction",
     });
     expect(
-      within(dialog).queryByRole("textbox", { name: "Search for a contact" }),
+      within(dialog).queryByRole("combobox", { name: "Search for a contact" }),
     ).toBeNull();
     await waitFor(() =>
       expect(within(dialog).getByText("Katherine Johnson")).toBeTruthy(),
@@ -507,7 +519,7 @@ describe("the quick interaction dialog", () => {
     const dialog = await screen.findByRole("dialog", {
       name: "Log an interaction",
     });
-    const picker = within(dialog).getByRole("textbox", {
+    const picker = within(dialog).getByRole("combobox", {
       name: "Search for a contact",
     });
     // Wait for the names, then search. Ghosts are not offered.
@@ -530,7 +542,7 @@ describe("the quick interaction dialog", () => {
       expect(within(dialog).getByText("Grace Kelly")).toBeTruthy(),
     );
     expect(
-      within(dialog).queryByRole("textbox", { name: "Search for a contact" }),
+      within(dialog).queryByRole("combobox", { name: "Search for a contact" }),
     ).toBeNull();
     // Choosing a contact hands focus to the editor.
     const pm = await editorElement();
@@ -539,7 +551,7 @@ describe("the quick interaction dialog", () => {
     fireEvent.click(
       within(dialog).getByRole("button", { name: "Change contact" }),
     );
-    const again = within(dialog).getByRole("textbox", {
+    const again = within(dialog).getByRole("combobox", {
       name: "Search for a contact",
     });
     await waitFor(() => expect(document.activeElement).toBe(again));
@@ -604,7 +616,7 @@ describe("the quick interaction dialog", () => {
     const dialog = await screen.findByRole("dialog", {
       name: "Log an interaction",
     });
-    const picker = within(dialog).getByRole("textbox", {
+    const picker = within(dialog).getByRole("combobox", {
       name: "Search for a contact",
     });
     const pm = await editorElement();
