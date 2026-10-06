@@ -173,13 +173,15 @@ function facetSql(
       if (needle === "no" || needle === "false" || needle === "0")
         return "COALESCE(c.isTracked, 0) = 0";
       return NONE;
-    case "updated": {
+    case "updated":
+    case "added": {
       const cutoff = facetCutoff(filter.value);
       if (!cutoff) return NONE;
       params.push(cutoff.getTime());
+      const column = filter.field === "added" ? "c.addedAt" : "c.updatedAt";
       return (filter.operator || ">") === ">"
-        ? "facet_time(c.updatedAt) < ?"
-        : "facet_time(c.updatedAt) >= ?";
+        ? `facet_time(${column}) < ?`
+        : `facet_time(${column}) >= ?`;
     }
     case "contacted": {
       if (needle === "never") return "facet_time(c.lastContactedAt) IS NULL";

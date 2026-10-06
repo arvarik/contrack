@@ -43,6 +43,7 @@ interface Row {
   relationshipScore?: number | null;
   isTracked?: number | null;
   updatedAt?: string | null;
+  addedAt?: string;
   lastContactedAt?: string | null;
   lat?: number | null;
   lng?: number | null;
@@ -62,6 +63,7 @@ const ROWS: Row[] = [
     relationshipScore: 95,
     isTracked: 1,
     updatedAt: iso(5),
+    addedAt: iso(400),
     lastContactedAt: iso(3),
     lat: 47.37,
     lng: 8.54,
@@ -79,6 +81,7 @@ const ROWS: Row[] = [
     relationshipScore: 80,
     isTracked: 0,
     updatedAt: sqliteTime(200),
+    addedAt: sqliteTime(10),
     lastContactedAt: sqliteTime(200),
     lat: 51.5,
     lng: -0.12,
@@ -182,7 +185,7 @@ function readContacts(): (FacetContact & { id: string })[] {
   const rows = sqlite
     .prepare(
       `SELECT id, role, company, location, industry, relationshipScore, isTracked,
-              updatedAt, lastContactedAt, lat, lng
+              updatedAt, addedAt, lastContactedAt, lat, lng
        FROM contacts WHERE ownerId = ?`,
     )
     .all(owner) as {
@@ -194,6 +197,7 @@ function readContacts(): (FacetContact & { id: string })[] {
     relationshipScore: number | null;
     isTracked: number | null;
     updatedAt: string | null;
+    addedAt: string | null;
     lastContactedAt: string | null;
     lat: number | null;
     lng: number | null;
@@ -252,8 +256,8 @@ beforeAll(() => {
     sqlite
       .prepare(
         `INSERT INTO contacts (id, ownerId, name, role, company, location, industry,
-           relationshipScore, isTracked, updatedAt, lastContactedAt, lat, lng)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           relationshipScore, isTracked, updatedAt, addedAt, lastContactedAt, lat, lng)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -266,6 +270,7 @@ beforeAll(() => {
         row.relationshipScore ?? null,
         row.isTracked ?? null,
         row.updatedAt ?? null,
+        row.addedAt ?? iso(60),
         row.lastContactedAt ?? null,
         row.lat ?? null,
         row.lng ?? null,
@@ -350,6 +355,8 @@ const CASES: [string, FacetFilter][] = [
   ["updated older than 1 year", { field: "updated", value: "1y" }],
   ["updated within 2 weeks", { field: "updated", value: "2w", operator: "<" }],
   ["updated, not a duration", { field: "updated", value: "soon" }],
+  ["added within 30 days", { field: "added", value: "30d", operator: "<" }],
+  ["added over a year ago", { field: "added", value: "1y" }],
   [
     "contacted over 90 days ago",
     { field: "contacted", value: "90d", operator: ">" },

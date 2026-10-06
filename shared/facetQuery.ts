@@ -2,7 +2,8 @@
  * Facet tokens in a search query, as pure data.
  *
  * GitHub-style filters: role:founder, company:stripe, location:london,
- * industry:fintech, tag:investor, score:>80, updated:>6m, contacted:>90d,
+ * industry:fintech, tag:investor, score:>80, updated:>6m, added:<30d,
+ * contacted:>90d,
  * missing:email, list:investors, near:London/50km, tracked:yes.
  *
  * The palette's tokenizer hook (`src/hooks/useQueryTokenizer.ts`) and the
@@ -53,7 +54,7 @@ export function parseFilterValue(
     };
   }
 
-  if (field === "updated" || field === "contacted") {
+  if (field === "updated" || field === "added" || field === "contacted") {
     if (field === "contacted" && /^never$/i.test(rawValue))
       return { field, value: "never" };
     const opMatch = rawValue.match(/^([><]?)(\d+[dwmy])$/i);
