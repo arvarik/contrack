@@ -57,10 +57,6 @@ export function useDedupe() {
   return ctx;
 }
 
-export function useDedupeOptional() {
-  return useContext(DedupeContext);
-}
-
 /**
  * Failed polls in a row before the wait is abandoned.
  *
@@ -238,7 +234,6 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
               totalPairs: 0,
               autoMerged: 0,
               pendingSuggestions: 0,
-              clusters: [],
               startedAt: new Date().toISOString(),
             });
             setScanId(result.scanId);

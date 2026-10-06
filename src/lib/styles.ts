@@ -321,10 +321,6 @@ export const TAG_PILL =
 export const STATUS_BADGE_SUCCESS =
   "text-[11px] uppercase tracking-[0.08em] bg-success/10 text-success px-1.5 py-0.5 rounded font-bold";
 
-/** Source badge */
-export const SOURCE_BADGE =
-  "text-[11px] text-on-surface-variant bg-surface-container-low px-2 py-0.5 rounded-md";
-
 // ─── Inputs ──────────────────────────────────────────────────────────────────
 
 /**
@@ -413,10 +409,6 @@ export const TIMELINE_CARD = "card p-4 sm:p-5";
 export const COMPOSER = "card focus-frame p-4 z-20";
 
 // ─── Empty States ────────────────────────────────────────────────────────────
-
-/** Empty state hero — large centered content with icon + heading */
-export const EMPTY_HERO =
-  "flex flex-col items-center justify-center h-full text-center max-w-md mx-auto";
 
 // ─── Menus and dropdowns ─────────────────────────────────────────────────────
 //

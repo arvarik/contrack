@@ -33,7 +33,7 @@ export type UndoMergeResponse = ResponseOf<typeof dedupeRoutes.undo>;
 // Query Keys
 // =============================================================================
 
-export const suggestionKeys = {
+const suggestionKeys = {
   count: ["dedupe-suggestions-count"] as const,
   pending: ["dedupe-suggestions"] as const,
   /** Every contact page's banner: one key to refresh them all. */

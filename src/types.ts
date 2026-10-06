@@ -33,9 +33,7 @@ import type {
 export type {
   ContactAddress,
   ContactEducation,
-  ContactEmail,
   ContactExperience,
-  ContactPhone,
   ContactSocialLink,
 };
 export type { ContactList } from "../shared/contracts/lists";
@@ -244,40 +242,6 @@ export interface MergeLogEntry {
   duplicateLocation?: string | null;
 }
 
-/** A single piece of evidence connecting two contacts within a cluster. */
-export interface ClusterPair {
-  contactIdA: string;
-  contactIdB: string;
-  matchType:
-    | "email"
-    | "phone"
-    | "name"
-    | "name_company"
-    | "nickname"
-    | "middle_name"
-    | "cross_source"
-    | "fuzzy"
-    | "ai";
-  confidence: number;
-  reasoning: string;
-  matchedField?: string;
-}
-
-/** A group of contacts that the engine believes represent the same person. */
-export interface DedupeCluster {
-  id: string;
-  contacts: Contact[];
-  suggestedPrimaryId: string;
-  pairs: ClusterPair[];
-  aggregateConfidence: number;
-  summary: string;
-  size: number;
-  hasWeakLink: boolean;
-  minConfidence: number;
-  /** True for clusters with >10 contacts — requires explicit confirmation before merge */
-  requiresConfirmation: boolean;
-}
-
 export type DedupeScanMode = "quick" | "deep" | "full";
 export type DedupeScanPhase =
   | "starting"
@@ -309,7 +273,6 @@ export interface DedupeScanProgress {
   totalPairs: number;
   autoMerged: number;
   pendingSuggestions: number;
-  clusters: DedupeCluster[];
   error?: string;
   startedAt: string;
   completedAt?: string;

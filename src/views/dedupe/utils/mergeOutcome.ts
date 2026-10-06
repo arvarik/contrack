@@ -25,7 +25,7 @@ import type { Contact, SuggestedContact } from "../../../types";
 export type ReviewContact = SuggestedContact;
 
 /** A field that holds one value, and its name on screen. */
-export const SINGLE_FIELDS = [
+const SINGLE_FIELDS = [
   { key: "name", label: "Name" },
   { key: "company", label: "Company" },
   { key: "role", label: "Role" },
@@ -38,7 +38,7 @@ export const SINGLE_FIELDS = [
 export type SingleField = (typeof SINGLE_FIELDS)[number]["key"];
 
 /** One value the merge drops or takes from another contact. */
-export interface OutcomeLine {
+interface OutcomeLine {
   field: SingleField;
   label: string;
   value: string;
@@ -77,21 +77,6 @@ const phoneKey = (phone: string) => {
 
 const value = (contact: Contact, field: SingleField): string =>
   (contact[field] ?? "").trim();
-
-/**
- * The fields where the contacts hold different values. A field one of them
- * has empty is not a difference: the merge fills it.
- */
-export function differingFields(contacts: Contact[]): Set<SingleField> {
-  const differing = new Set<SingleField>();
-  for (const { key } of SINGLE_FIELDS) {
-    const values = new Set(
-      contacts.map((c) => norm(value(c, key))).filter(Boolean),
-    );
-    if (values.size > 1) differing.add(key);
-  }
-  return differing;
-}
 
 /** What merging `others` into `keeper`, in that order, keeps and moves. */
 export function mergeOutcome(

@@ -248,7 +248,7 @@ const ROWS: Row[] = [
 ];
 
 /** The rows a caveat is about, from the words the server writes. */
-export function caveatRows(caveat: string): string[] {
+function caveatRows(caveat: string): string[] {
   const rows: string[] = [];
   if (/first names|\bjr\b|\bsr\b|one is /i.test(caveat)) rows.push("name");
   if (/compan/i.test(caveat)) rows.push("company");
@@ -644,7 +644,7 @@ const outcomePart = (
  * What the merge does, in three lines: what moves to the contact kept,
  * what it drops, and that Undo brings it all back.
  */
-export function MergeOutcomeSummary({
+function MergeOutcomeSummary({
   keeper,
   others,
 }: {

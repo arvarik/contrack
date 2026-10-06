@@ -36,18 +36,6 @@ export const LEVEL_LABEL: Record<MatchLevel, string> = {
   check: "Check carefully",
 };
 
-/**
- * Each level's tone, from the one map in `lib/styles`: green for a strong
- * match, the warning amber for a pair to look at twice, and nothing for the
- * middle, which is most of them.
- */
-export const LEVEL_TONE: Record<MatchLevel, "success" | "neutral" | "warning"> =
-  {
-    "very-likely": "success",
-    likely: "neutral",
-    check: "warning",
-  };
-
 /** The order a review list shows its levels in: the easy decisions first. */
 export const LEVEL_ORDER: Record<MatchLevel, number> = {
   "very-likely": 0,
