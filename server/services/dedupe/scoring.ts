@@ -1,18 +1,11 @@
-// =============================================================================
-// Dedupe Scoring Engine — Multi-Signal Composite Contact Scoring
-// =============================================================================
-// Computes a weighted composite score from multiple independent match signals
-// between two NormalizedContacts. This replaces the old single-dimension
-// `nameSimilarity` check with a proper multi-signal scoring model.
+// Dedupe scoring: a weighted composite score from independent match signals
+// between two NormalizedContacts.
 //
-// Architecture:
-// 1. computeMatchSignals()   — extract raw signals from two contacts
-// 2. computeCompositeScore() — weighted combination with hard vetoes
-// 3. classifyPair()          — route to auto-merge, AI queue, or discard
+// 1. computeMatchSignals()   extract the raw signals from two contacts
+// 2. computeCompositeScore() combine them with weights and hard vetoes
+// 3. classifyPair()          route to auto-merge, the AI queue, or discard
 //
-// The scoring weights are calibrated per the DEDUPE_STRATEGIES.md spec
-// (Section 2.7) and tuned for a personal CRM with ~1,000 contacts.
-// =============================================================================
+// The weights are tuned for a personal CRM of about 1,000 contacts.
 
 import {
   jaroWinkler,
@@ -34,29 +27,22 @@ import type {
   ValueFrequency,
 } from "./types.ts";
 
-// =============================================================================
-// Types
-// =============================================================================
-
-// =============================================================================
-// Signal Computation
-// =============================================================================
+// Signals
 
 /**
- * Compute all match signals between two NormalizedContacts.
- *
- * This is a **pure function** — no database access, no side effects.
- * All data must be pre-loaded into the NormalizedContact structures.
+ * Every match signal between two NormalizedContacts. Pure: no database, no side
+ * effects; everything must already be in the records.
  *
  * @param a                   - First contact (normalized)
  * @param b                   - Second contact (normalized)
- * @param embeddingSimilarity - Pre-computed cosine similarity (0–1), or 0 if unavailable
- * @param isKnownDistinct     - Whether this pair is in the negative constraint set
+ * @param embeddingSimilarity - Pre-computed cosine similarity (0–1), or 0 if
+ *   unavailable
+ * @param isKnownDistinct     - Whether this pair is in the negative constraint
+ *   set
  * @param socialUrlsA         - Pre-loaded social link URLs for contact A
  * @param socialUrlsB         - Pre-loaded social link URLs for contact B
  * @param frequency           - How widely each value is shared in the account,
- *                              from `countValues`. Absent means every shared
- *                              value is treated as the pair's alone.
+ *   from `countValues`. Absent means every shared value is the pair's alone.
  */
 export function computeMatchSignals(
   a: NormalizedContact,
@@ -67,12 +53,10 @@ export function computeMatchSignals(
   socialUrlsB: string[] = [],
   frequency?: ValueFrequency,
 ): MatchSignals {
-  // --- Identity anchors ---
-  //
-  // A shared address is only an anchor when it names a person. Two contacts
-  // recorded against `team.northwind@example.net` are colleagues, and merging
-  // them loses one of them. `isSharedMailbox` splits the two cases, and the
-  // shared alias is scored below as an employer signal instead.
+  // Identity anchors. A shared address is an anchor only when it names a
+  // person: two contacts on `team.northwind@example.net` are colleagues, and
+  // merging them loses one. `isSharedMailbox` splits the cases, and a shared
+  // alias scores below as an employer signal instead.
   const sharedEmails = a.emailsNorm.filter((e) => b.emailsNorm.includes(e));
   const personalEmails = sharedEmails.filter((e) => !isSharedMailbox(e));
   const emailOverlap = personalEmails.length > 0;
@@ -86,11 +70,9 @@ export function computeMatchSignals(
     socialUrlsB.length > 0 &&
     socialUrlsA.some((u) => socialUrlsB.includes(u));
 
-  // --- Name signals ---
-  //
-  // "Robert Hale Sr." and "Robert Hale Jr." normalize to one name and are
-  // two people, so a generation conflict is not an exact match. The pair
-  // still scores on the similarity below, which is what a near miss gets.
+  // Name signals. "Robert Hale Sr." and "Robert Hale Jr." normalize to one name
+  // and are two people, so a generation conflict is not an exact match. The
+  // pair still scores on the similarity below, like any near miss.
   const nameExactMatch =
     a.nameNorm.length > 0 &&
     a.nameNorm === b.nameNorm &&
@@ -111,10 +93,9 @@ export function computeMatchSignals(
     b.lastNameNorm.length > 1 &&
     a.lastNameNorm === b.lastNameNorm;
 
-  // The full-name sound is four codes long, so it is mostly the first name:
-  // "Priyanka Narayan" and "Priyanka Desai" both sound PRNK. The last names
-  // must agree too, by sound or by a near spelling, before the pair counts as
-  // sounding alike.
+  // The full-name sound is four codes long, so mostly the first name: "Priyanka
+  // Narayan" and "Priyanka Desai" both sound PRNK. The last names must agree
+  // too, by sound or near spelling, before the pair sounds alike.
   const lastNamesAgree =
     a.lastNameNorm.length > 1 &&
     b.lastNameNorm.length > 1 &&
@@ -127,7 +108,7 @@ export function computeMatchSignals(
     a.phoneticHash === b.phoneticHash &&
     lastNamesAgree;
 
-  // --- Context signals ---
+  // Context signals
   const companyMatch =
     a.companyNorm.length > 1 &&
     b.companyNorm.length > 1 &&
@@ -174,19 +155,15 @@ export function computeMatchSignals(
   };
 }
 
-// =============================================================================
-// Composite Score
-// =============================================================================
+// Composite score
 
 /**
- * Compute a weighted composite score from match signals.
- *
- * Scoring weights calibrated per DEDUPE_STRATEGIES.md Section 2.7:
- * - Identity anchors are immediate high-confidence returns
- * - Name signals carry primary weight (0.45–0.60)
- * - Context signals are boosters (0.05–0.12)
- * - Embedding adds up to 0.15 additional signal
- * - Known-distinct is a hard veto (returns 0)
+ * A weighted composite score from the match signals:
+ * - identity anchors return at once with high confidence
+ * - name signals carry the main weight (0.45 to 0.60)
+ * - context signals are boosters (0.05 to 0.12)
+ * - the embedding adds up to 0.15
+ * - known-distinct is a hard veto (0)
  *
  * @returns Score in [0.0, 1.0]
  */
@@ -194,12 +171,10 @@ export function computeCompositeScore(signals: MatchSignals): number {
   // Hard veto — physically impossible (co-occurred in same interaction, or user dismissed)
   if (signals.isKnownDistinct) return 0;
 
-  // Identity anchors — near-certain, return immediately.
-  //
-  // Near-certain when the pair owns the value and the names agree. A number
-  // three contacts carry, or an address between "ada" and "ben", is weighed
-  // down by the policy: each extra carrier costs a little, and a
-  // contradiction caps the pair below every auto-merge preset.
+  // Identity anchors: near-certain when the pair owns the value and the names
+  // agree. The policy weighs down a value three contacts carry, a little per
+  // extra carrier, and caps a contradiction ("ada" and "ben") below every
+  // auto-merge preset.
   if (signals.emailOverlap) {
     return weighClaim(
       ANCHOR_CONFIDENCE.email,
@@ -218,15 +193,13 @@ export function computeCompositeScore(signals: MatchSignals): number {
     return weighClaim(ANCHOR_CONFIDENCE.social, 2, signals.namesContradict);
   }
 
-  // With no shared identifier, two different first names are two people.
-  // The name and the context below were enough to put "Josh Marlow" beside
-  // "Sam Marlow" at one company in front of a person, and every such pair a
-  // person was shown turned out to be two people.
+  // With no shared identifier, two different first names are two people: pairs
+  // like "Josh Marlow" and "Sam Marlow" at one company always turned out to be.
   if (signals.namesContradict) return 0;
 
   let score = 0;
 
-  // --- Name signals (primary weight) ---
+  // Name signals (primary weight)
   if (signals.nameExactMatch) {
     // A common name is worth less. Same rule as the anchors, applied to the
     // weight rather than to the whole score.
@@ -239,9 +212,8 @@ export function computeCompositeScore(signals: MatchSignals): number {
 
   if (signals.nameMetaphoneMatch) score += 0.08;
 
-  // --- Context boosters ---
-  // A shared mailbox makes the same claim a matching company does, said a
-  // different way, so it earns the same booster and never more than once.
+  // Context boosters. A shared mailbox claims what a matching company claims,
+  // so it earns the same booster, once.
   if (signals.companyMatch || signals.sharedMailboxOverlap) {
     score += 0.12;
   } else if (signals.companyFuzzy > 0.7) {
@@ -251,7 +223,7 @@ export function computeCompositeScore(signals: MatchSignals): number {
   if (signals.locationOverlap) score += 0.05;
   if (signals.isCrossSource) score += 0.08;
 
-  // --- Embedding signal (if available) ---
+  // Embedding signal (if available)
   if (signals.embeddingSimilarity > 0) {
     score += signals.embeddingSimilarity * 0.15;
   }
@@ -259,30 +231,23 @@ export function computeCompositeScore(signals: MatchSignals): number {
   return Math.min(1.0, score);
 }
 
-// =============================================================================
-// Pair Classification
-// =============================================================================
+// Pair classification
 
 /**
- * Score thresholds for pair routing.
- *
- * Exported so `tests/eval/dedupe.eval.test.ts` can pin them. Moving either
- * number changes which pairs reach a person and which are merged without one
- * being asked, and a preset change that nobody wrote down is exactly what the
- * dedupe eval exists to refuse.
+ * Score thresholds for routing a pair, exported so
+ * `tests/eval/dedupe.eval.test.ts` pins them: moving either changes which pairs
+ * reach a person and which merge without asking.
  */
 export const THRESHOLD_AUTO = 0.93; // ≥ 0.93 → auto-merge quality (or send straight to cluster)
 export const THRESHOLD_AI = 0.6; // 0.60–0.93 → needs AI verification
 // < 0.60 → discard (too different)
 
 /**
- * Classify a pair based on its composite score.
- *
- * - "auto":    score ≥ 0.93 — high enough confidence. For now, we still send
- *              these to the cluster as "deterministic" quality. In Phase 4 these
- *              become candidates for background auto-merge.
- * - "ai":      0.60 ≤ score < 0.93 — genuinely ambiguous, send to AI
- * - "discard": score < 0.60 — too different, not worth AI tokens
+ * Classify a pair by its composite score:
+ * - "auto":    score ≥ 0.93, high confidence, sent to the cluster as
+ *   "deterministic"
+ * - "ai":      0.60 ≤ score < 0.93, ambiguous, sent to the model
+ * - "discard": score < 0.60, too different to spend tokens on
  */
 export function classifyPair(score: number): PairClassification {
   if (score >= THRESHOLD_AUTO) return "auto";
@@ -297,14 +262,12 @@ export const UNVERIFIED_FLOOR = 0.75;
 export const UNVERIFIED_WEIGHT = 0.7;
 
 /**
- * A funnel pair's confidence when no model checks it, or null to drop it.
- *
- * Three paths score pairs with nobody to ask: a scan without a provider, the
- * check after an import, and the check after a contact is added. A pair in
- * the auto band keeps its score. An unclear pair is kept only from 0.75, at
- * 0.7 of its score, so it waits for a person below every preset. The import
- * check used to keep every unclear pair at its full score, from 0.60, and
- * one LinkedIn import filled the review list with people who only shared an
+ * A funnel pair's confidence when no model checks it, or null to drop it. A
+ * scan without a provider, the check after an import and the check after a
+ * contact is added all score pairs with nobody to ask. A pair in the auto band
+ * keeps its score. An unclear pair is kept only from 0.75, at 0.7 of its score,
+ * so it waits for a person below every preset. Kept at full score from 0.60, a
+ * LinkedIn import would fill the review list with people who only share an
  * employer.
  */
 export function unverifiedConfidence(score: number): number | null {
@@ -317,11 +280,8 @@ export function unverifiedConfidence(score: number): number | null {
 }
 
 /**
- * Convert embedding L2 distance (from sqlite-vec) to a 0–1 similarity score.
- * sqlite-vec returns L2 distance for FLOAT vectors: lower = more similar.
- *
- * For L2-normalized vectors (which ours are), L2² distance and cosine similarity
- * are related: cosine_sim = 1 - (L2_dist² / 2).
+ * Convert sqlite-vec's L2 distance to a 0 to 1 similarity. For L2-normalized
+ * vectors, cosine_sim = 1 - (L2_dist² / 2).
  */
 export function distanceToSimilarity(distance: number): number {
   // Clamp to [0, 2] range for normalized vectors

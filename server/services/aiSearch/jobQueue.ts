@@ -1,22 +1,13 @@
-// =============================================================================
-// AI Search — Job Queue
-// =============================================================================
-// In-memory batch queue managing the AI Search lifecycle. Uses EventEmitter
-// to push real-time status updates to SSE clients.
+// The research batch queue, in memory, pushing status to SSE clients through an
+// EventEmitter. Jobs are lost on restart, which is fine for a discrete user
+// action.
 //
-// Jobs are ephemeral (lost on server restart). This is acceptable because
-// AI Search is a discrete user action, not persistent state.
+// One contact at a time, to stay inside rate limits, and one batch at a time on
+// the instance, because the limits belong to the API key the instance shares. A
+// second start by the same account joins the running batch.
 //
-// Concurrency: strictly sequential (1 contact at a time) to avoid rate
-// limits. One batch runs at a time on the instance, because the provider's
-// limits belong to the API key the instance shares. A second start by the
-// same account joins the running batch instead of being refused.
-//
-// There is no cooldown. It was five minutes after every batch, so enriching
-// one contact and then another answered 429 "Please wait 187s" without a
-// request reaching the provider (2026-09-26). A real 429 from the provider
-// pauses that model in the adapter, and the router moves to another.
-// =============================================================================
+// No cooldown between batches: a real 429 from the provider pauses that model
+// in the adapter, and the router moves to another.
 
 import { EventEmitter } from "events";
 import crypto from "crypto";
@@ -50,9 +41,7 @@ import {
   type ResearchDepth,
 } from "../../../shared/researchDepth.ts";
 
-// =============================================================================
 // Error Classification
-// =============================================================================
 
 function classifyError(error: unknown): AISearchErrorType {
   // An AI switch said no: AI is off for the instance or the account, or
@@ -119,16 +108,12 @@ function classifyError(error: unknown): AISearchErrorType {
   return "unknown";
 }
 
-// =============================================================================
 // Job Queue
-// =============================================================================
 
 /**
- * A batch and the account that started it.
- *
- * The owner is held beside the batch rather than inside it, so the shape the
- * SSE stream and the status endpoint send stays exactly the contract in
- * `shared/aiSearchContract.ts`.
+ * A batch and the account that started it. The owner sits beside the batch, so
+ * what the SSE stream and the status endpoint send stays exactly the contract
+ * in `shared/aiSearchContract.ts`.
  */
 interface OwnedBatch {
   batch: AISearchBatch;
@@ -147,14 +132,11 @@ class AISearchJobQueue extends EventEmitter {
   private controllers = new Map<string, AbortController>();
 
   /**
-   * Check whether this account can start research now.
-   *
-   * The run lock is global: provider rate limits are a property of the API
-   * key, which the whole instance shares, so two accounts researching at once
-   * would spend one quota twice as fast. While this account's own batch runs,
-   * a new start joins it: `appendTo` names the batch. Only another account's
-   * batch refuses, and `yours: false` says so, so the UI can say "somebody
-   * else is researching right now" rather than blaming the reader.
+   * Whether this account can start research now. The run lock is global:
+   * provider rate limits belong to the API key the instance shares. While this
+   * account's batch runs, a new start joins it (`appendTo` names the batch).
+   * Only another account's batch refuses, and `yours: false` lets the UI say
+   * somebody else is researching.
    */
   canStartBatch(scope: Scope): {
     allowed: boolean;
@@ -178,17 +160,14 @@ class AISearchJobQueue extends EventEmitter {
   }
 
   /**
-   * Add contacts to this account's running batch.
+   * Add contacts to this account's running batch. The loop reads the job list
+   * as it goes, so new jobs run after the queued ones. A contact already queued
+   * or running is not added twice; a finished one can run again, as a second
+   * round. Each job keeps its own depth and technique, so a SearXNG start can
+   * join a batch that searches with the research model.
    *
-   * The batch loop reads the job list as it goes, so a job added here runs
-   * after the ones already queued. A contact already queued or running in
-   * the batch is not added twice; one that finished can run again, which is
-   * a second research round. Each job keeps the depth and the technique it
-   * was started with, so a start with SearXNG can join a batch that searches
-   * with the research model.
-   *
-   * @returns The batch and how many jobs joined it, or null when the batch
-   *   is not this account's or has finished.
+   * @returns The batch and how many jobs joined it, or null when the batch is
+   *   not this account's or has finished.
    */
   appendToBatch(
     scope: Scope,
@@ -227,8 +206,8 @@ class AISearchJobQueue extends EventEmitter {
   }
 
   /**
-   * Create a new batch from selected contacts.
-   * Runs lazy GC before allocating to keep memory bounded.
+   * Create a batch from the selected contacts, after a lazy cleanup that keeps
+   * memory bounded.
    */
   createBatch(
     scope: Scope,
@@ -270,18 +249,17 @@ class AISearchJobQueue extends EventEmitter {
   }
 
   /**
-   * Process all jobs in a batch sequentially.
-   * One contact at a time. Individual failures never block the batch.
+   * Run a batch's jobs one contact at a time. One failure never blocks the
+   * rest.
    */
   async processBatch(batchId: string, _adapter?: AIProvider): Promise<void> {
     if (this.processing)
       throw new Error("An AI Search batch is already in progress");
     const owned = this.batches.get(batchId);
     if (!owned || owned.batch.status !== "processing") return;
-    // The whole run happens in the starter's context, so every AI invocation
-    // row it writes and every cache key it builds names that account. The
-    // route returned long ago, so nothing is inherited: rule 7 makes the owner
-    // an argument the job carries rather than an ambient value it hopes for.
+    // The whole run is in the starter's context, so every invocation row and
+    // cache key names that account. The route returned long ago, so the job
+    // carries its owner as an argument instead of inheriting one.
     return runWithContext(
       {
         requestId: `job-ai-search-${batchId.slice(0, 8)}`,
@@ -426,12 +404,9 @@ class AISearchJobQueue extends EventEmitter {
   }
 
   /**
-   * One of this account's batches, or null.
-   *
-   * A batch id another account started is null here, which the routes turn
-   * into the same 404 an id that never existed gets. Batch ids are random
-   * UUIDs, so this is not about guessing them: it is about a leaked or shared
-   * id not becoming a live view of somebody else's research.
+   * One of this account's batches, or null. Another account's batch id gets the
+   * same 404 as an id that never existed, so a leaked or shared id never
+   * becomes a live view of somebody else's research.
    */
   getBatch(scope: Scope, batchId: string): AISearchBatch | null {
     const owned = this.batches.get(batchId);
@@ -453,11 +428,9 @@ class AISearchJobQueue extends EventEmitter {
   }
 
   /**
-   * Who is enriching and how much is left, across the whole instance.
-   *
-   * For the admin health panel. Unlike the dedupe queue this one has no line:
-   * a second account's batch is refused rather than booked, so there is a
-   * running owner and nothing behind it.
+   * Who is enriching and how much is left, across the instance, for the admin
+   * health panel. There is no line: another account's batch is refused, not
+   * booked.
    */
   instanceState(): {
     running: OwnerId | null;

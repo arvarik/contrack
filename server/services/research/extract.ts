@@ -1,9 +1,6 @@
-// =============================================================================
 // Research — the extraction: fact lines into contact fields
-// =============================================================================
 // Every technique ends in fact lines, and this one step reads them into the
 // output schema. No technique parses fields itself.
-// =============================================================================
 
 import { resolveCapability } from "../../ai/capabilities.ts";
 import {
@@ -19,16 +16,12 @@ import { CHARS_PER_TOKEN, contextWindowFor } from "./evidence.ts";
 import type { ResearchRequest, TechniqueContext } from "./types.ts";
 
 /**
- * Read fact lines into the output schema. No searching: the facts are
- * already on the page.
- *
- * The quick model reads them: it has read research since 2026-09-26. A stack
- * with a web search and one local model may have no quick model, and then
- * the deep one reads.
- *
- * Field by field: a value that fails its schema is left out, and the rest of
- * the answer is kept. The rules a model follows only some of the time are
- * applied in code (`tidyExtraction`).
+ * Read fact lines into the output schema, with no searching: the facts are
+ * already on the page. The quick model reads them; a stack with a web search
+ * and one local model may have no quick model, and then the deep one reads.
+ * Field by field: a value that fails its schema is left out and the rest kept.
+ * The rules a model follows only some of the time are applied in code
+ * (`tidyExtraction`).
  *
  * @param label - The technique's name, for the log.
  */

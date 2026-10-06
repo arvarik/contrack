@@ -1,21 +1,17 @@
-// =============================================================================
-// Research — the search-and-read technique
-// =============================================================================
-// A web search service, such as a self-hosted SearXNG, runs the searches,
-// and a model reads the pages. Research then does not wait on a model's
-// choice to search, and it works with a purely local stack (an Ollama or vLLM
-// chat model with SearXNG).
+// Research by search and read: a web search service, such as a self-hosted
+// SearXNG, runs the searches, and a model reads the pages. Research then does
+// not wait on a model's choice to search, and works on a purely local stack (an
+// Ollama or vLLM chat model with SearXNG).
 //
-// Retrieval: run the searches the provider research would run through the
+// Retrieval: run the searches provider research would run, through the
 //            request's web search (`WebSearch`), then read the result pages
 //            that name the person (`pages.ts`). No model involved.
 // Reading:   the "deep" model reads the pages and the other results'
 //            snippets into fact lines, with the search pass's rules and form
 //            (`buildReadingPrompt`), so each fact keeps its page.
 //
-// The extraction then reads the lines into fields (`extract.ts`). The
-// combined technique runs this beside the research model's own search.
-// =============================================================================
+// The extraction then reads the lines into fields (`extract.ts`). The combined
+// technique runs this beside the research model's own search.
 
 import { NEEDS_STRONG_MODEL } from "../needs.ts";
 import { toCitations } from "../../../ai/citations.ts";
@@ -104,10 +100,10 @@ function namesPerson(result: WebResult, names: string[][]): boolean {
 }
 
 /**
- * Results tried for each page read in full. A site that turns robots away,
- * such as LinkedIn with its status 999, gives its place to the next result
- * that names the person. On one contact, four of the first five such
- * results were LinkedIn pages, and one page of five was read (2026-10-02).
+ * Results tried for each page read in full. A site that turns robots away, such
+ * as LinkedIn with its status 999, gives its place to the next result that
+ * names the person: on one contact, four of the first five such results were
+ * LinkedIn pages.
  */
 const TRIES_PER_PAGE = 3;
 
@@ -172,10 +168,10 @@ export interface ReadingSize {
 }
 
 /**
- * The size of one reading call for a deep model with this window. A window
- * that holds the whole reading gets one call, as before. A smaller one gets
- * a quarter of it for the answer, the instructions, and the rest for pages,
- * in up to MAX_READING_PARTS calls.
+ * The size of one reading call for a deep model with this window. A window that
+ * holds the whole reading gets one call. A smaller one gets a quarter for the
+ * answer, the instructions, and the rest for pages, in up to MAX_READING_PARTS
+ * calls.
  *
  * @param window - The model's context window in tokens, or undefined for a
  *   hosted model.
@@ -238,21 +234,19 @@ export function partsOf(
 const MIN_PAGE_SHARE = 1_500;
 
 /**
- * The pages read in full and the snippets, in the order the reading sees
- * them, within what it holds.
+ * The pages read in full and the snippets, in the order the reading sees them,
+ * within what it holds.
  *
- * A snippet is often all that a site that turns robots away gives, and on
- * one contact the only facts were in a LinkedIn profile's snippet. Read in
- * three parts of 5,664 characters on a local model, three pages read in
- * full, each about somebody else of the same name, filled every part, and
- * the snippets were left out (2026-10-02). So:
+ * A snippet is often all a site that turns robots away gives, and on one
+ * contact the only facts were in a LinkedIn snippet. In three parts of 5,664
+ * characters on a local model, three full pages about namesakes filled every
+ * part and left the snippets out. So:
  *
- * - In parts, the snippets come first. They are short, and a page fills a
- *   part by itself, so after the pages no part had room for them. The pages
- *   fill the room that is left (`partsOf`).
- * - In one call, the pages come first. When the two do not fit, each page
- *   is shortened alike, to no less than MIN_PAGE_SHARE, so the snippets fit
- *   too, and what still does not fit is cut from the end.
+ * - In parts, the snippets come first. They are short, and a page fills a part
+ *   by itself. The pages fill the room left (`partsOf`).
+ * - In one call, the pages come first. When both do not fit, each page is
+ *   shortened alike, to no less than MIN_PAGE_SHARE, so the snippets fit too,
+ *   and what still does not fit is cut from the end.
  */
 function documentsFor(
   read: ReadonlyArray<{ result: WebResult; text: string }>,
@@ -316,11 +310,11 @@ function linkedInHandle(url: string): string | null {
 }
 
 /**
- * The results that are not another person's LinkedIn profile. A person has
- * one, so while the records hold the contact's own, a profile with another
- * handle is somebody else of the same name. On one contact, a local model
- * read two such profiles as the contact's, and the extraction added a job
- * from one (2026-10-02). Without a profile in the records, all are kept.
+ * The results that are not another person's LinkedIn profile. A person has one,
+ * so while the records hold the contact's own, a profile with another handle is
+ * a namesake: a local model read two such profiles as the contact's, and the
+ * extraction added a job from one. Without a profile in the records, all are
+ * kept.
  */
 function withoutOtherProfiles(
   results: WebResult[],
@@ -380,14 +374,11 @@ export function recordDetails(contact: HydratedContact): string[] {
 }
 
 /**
- * True when a result shares a detail with the records, in its address, its
- * title, its snippet or the page's text, or when the records have none.
- *
- * The rule of the reading's prompt, applied in code: a page counts only when
- * it is about this person, the same name and at least one detail of the
- * records. A local 7B model read pages about others of the same name as the
- * contact's, and the extraction saved a city and a job from them; Gemini,
- * reading the same results, did not (2026-10-02).
+ * True when a result shares a detail with the records, in its address, title,
+ * snippet or page text, or when the records have none. The reading prompt's
+ * rule, applied in code: a page counts only when it has the same name and at
+ * least one detail of the records. A local 7B model read namesakes' pages as
+ * the contact's, and the extraction saved a city and a job from them.
  */
 function sharesDetail(
   result: WebResult,
@@ -407,19 +398,19 @@ const block = (result: WebResult, text: string) =>
 /**
  * Search with the request's web search, read the pages, and write fact lines.
  *
- * It never throws for what it found. It says what came of it: fact lines
- * with their pages, a no-match after the search returned results, or the
- * error that explains why there is neither. Only a run that stops throws.
+ * It never throws for what it found. It reports fact lines with their pages, a
+ * no-match after the search returned results, or the error that explains why
+ * there is neither. Only a run that stops throws.
  *
- * - The searches are the provider research's own (`suggestedSearches`): 3 at
+ * - The searches are provider research's own (`suggestedSearches`): 3 at
  *   Standard, 6 at Deep, all at once.
- * - Results are taken in turn from each search, so one search cannot fill
- *   every slot. Only the results whose title or snippet names the person are
- *   read: up to 5 pages in full at Standard and 10 at Deep, and up to 20
- *   more by their snippet. When none names the person, the reading sees the
- *   first snippets and says whether any is about them.
- * - The web search's searches are not the model's, so the meter counts the
- *   reading's tokens and no search. SearXNG's are not billed.
+ * - Results are taken in turn from each search, so one search cannot fill every
+ *   slot. Only results whose title or snippet names the person are read: up to
+ *   5 pages in full at Standard and 10 at Deep, and up to 20 more by their
+ *   snippet. When none names the person, the reading sees the first snippets
+ *   and says whether any is about them.
+ * - These searches are not the model's, so the meter counts the reading's
+ *   tokens and no search. SearXNG's are not billed.
  */
 async function searchAndReadPages(
   request: ResearchRequest,
@@ -436,7 +427,7 @@ async function searchAndReadPages(
     const startMs = Date.now();
     const limits = READ_LIMITS[request.depth];
 
-    // ── Retrieval (no model) ────────────────────────────────────────────
+    // Retrieval (no model)
     const queries = suggestedSearches(contact).slice(0, limits.queries);
     const errors: unknown[] = [];
     const lists = await Promise.all(
@@ -509,7 +500,7 @@ async function searchAndReadPages(
       `${contact.id}: ${results.length} results from ${queries.length} searches, ${found.length - results.length} other people's LinkedIn profiles left out, ${naming.length} name the person; read ${read.length} of ${tried} pages tried in ${Date.now() - startMs}ms`,
     );
 
-    // ── Reading (pages → fact lines) ────────────────────────────────────
+    // Reading (pages → fact lines)
     // In parts when the deep model's window cannot hold the pages at once.
     const size = readingSize(contact, contextWindowFor("deep"));
     const parts = partsOf(documentsFor(read, snippets, size), size);

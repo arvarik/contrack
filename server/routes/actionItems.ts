@@ -16,7 +16,7 @@ import { scopeOf } from "../tenancy/scope.ts";
 
 const router = Router();
 
-// ─── Global endpoints ────────────────────────────────────────────────────────
+// Global endpoints
 
 router.get(
   "/action-items",
@@ -71,7 +71,7 @@ router.post(
   }),
 );
 
-// ─── Item-level endpoints ────────────────────────────────────────────────────
+// Item-level endpoints
 
 router.patch(
   "/action-items/:id",
@@ -126,7 +126,7 @@ router.delete(
   }),
 );
 
-// ─── Per-contact endpoints ───────────────────────────────────────────────────
+// Per-contact endpoints
 
 router.get(
   "/contacts/:id/action-items",

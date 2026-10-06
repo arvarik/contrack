@@ -1,10 +1,6 @@
-// =============================================================================
-// Routes — MCP: the MCP endpoint, and the query routes a token reads
-// =============================================================================
-// Mounted in server/app.ts at /api, before contactsRouter so that
-// GET /api/contacts/action-items reaches this file rather than
-// GET /api/contacts/:id. Every handler takes the caller's scope.
-// =============================================================================
+// The MCP endpoint, and the query routes a token reads, mounted at /api before
+// the contacts router so GET /api/contacts/action-items reaches this file and
+// not GET /api/contacts/:id. Every handler takes the caller's scope.
 
 import { Router } from "express";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -117,12 +113,9 @@ router.get(
 );
 
 /**
- * The note search, in the array shape this route has always answered with.
- *
- * Same engine as GET /api/search/interactions: ranked FTS5 over the note
- * index, with the date phrase in the question applied as a filter. The
- * envelope is flattened to the hits, and each hit carries `contactName`, so
- * an MCP client that read `title` and `contactName` before still can.
+ * The note search as an array of hits, each with `contactName`, the shape MCP
+ * clients read. The same engine as GET /api/search/interactions: ranked FTS5
+ * over the note index, with the question's date phrase applied as a filter.
  */
 router.get(
   "/interactions/search",

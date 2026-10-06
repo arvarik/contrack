@@ -1,16 +1,9 @@
-// =============================================================================
-// Jobs: relationship scores
-// =============================================================================
-// Two sweeps, both per owner and both yielding between batches, so requests
-// are never starved by a long scoring pass.
-//
-// The stale sweep reads `contacts.scoreDirty`, which triggers set, so it does
-// work in proportion to what changed. It runs at start, when the first boot
-// after an upgrade has marked every row, and every hour after. Each run then
-// makes sure this week's score snapshot exists, which is a no-op once it
-// does. The full sweep runs daily, because recency decays with the clock and
-// no trigger can see that.
-// =============================================================================
+// Relationship score jobs. Both sweeps go owner by owner and yield between
+// batches, so requests are never starved. The stale sweep reads
+// `contacts.scoreDirty`, which triggers set, so its work follows what changed.
+// It runs at start and every hour, and each run makes sure this week's score
+// snapshot exists. The full sweep runs daily, because recency decays with the
+// clock and no trigger sees that.
 
 import { defineJob } from "./runner.ts";
 import {

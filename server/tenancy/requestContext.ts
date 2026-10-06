@@ -1,17 +1,11 @@
-// =============================================================================
-// Request context — AsyncLocalStorage for attribution
-// =============================================================================
-// The context carries who is asking so an insert can stamp ownerId without
-// threading a parameter through every signature. It is NOT the isolation
-// mechanism. Reads and writes of owned data take an explicit Scope, because
-// a context can be lost across a library boundary and a lost context must
-// never widen what a query returns.
-//
-// One rule matters most. An EventEmitter listener runs in the async context
-// of whoever calls emit(), not the context that subscribed. Every SSE and
-// NDJSON handler therefore captures its Scope in the closure before it
-// subscribes, and never calls currentScopeOrNull() inside a listener.
-// =============================================================================
+// AsyncLocalStorage for attribution: who is asking, so an insert can stamp
+// ownerId without a parameter in every signature. It is NOT the isolation
+// mechanism: reads and writes of owned data take an explicit Scope, because a
+// context can be lost across a library boundary, and a lost context must never
+// widen what a query returns. An EventEmitter listener runs in the context of
+// whoever calls emit(), not the subscriber's, so every SSE and NDJSON handler
+// captures its Scope before it subscribes and never calls currentScopeOrNull()
+// inside a listener.
 
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Request, Response, NextFunction } from "express";
@@ -53,16 +47,11 @@ export function attachRequestContext(
 }
 
 /**
- * The owner to stamp on a row being written now.
- *
- * Inside a request this is the caller. Outside one — a scheduled dedupe scan,
- * an embedding backfill, a seed script — it is the primary admin, which on an
- * auth-off instance is the local owner.
- *
- * Phase 0 wrote NULL here because no account was guaranteed to exist. Phase 1
- * creates one on every instance and forbids NULL with a trigger, so the
- * fallback is now both possible and necessary. Phase 2 wraps every background
- * job in runWithContext, after which a multi-user instance stops reaching it.
+ * The owner to stamp on a row being written now: the caller inside a request,
+ * and outside one (a scheduled scan, a backfill, a seed script) the primary
+ * admin, which on an auth-off instance is the local owner. Background jobs run
+ * inside runWithContext, so a multi-user instance does not normally reach the
+ * fallback.
  */
 export function currentOwnerId(): string {
   return currentScopeOrNull()?.ownerId ?? primaryAdminId();

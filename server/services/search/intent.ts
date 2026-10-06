@@ -1,12 +1,8 @@
-// =============================================================================
-// Query intent: what kind of question this is, before any model runs
-// =============================================================================
-// Deterministic and under a millisecond. Names, emails, phone numbers and
-// quoted phrases are "local" kinds: local retrieval is the final answer and
-// no model runs. Everything else shows the local list first and then asks
-// the model. The weights are the reciprocal rank fusion weights for each
-// kind: `localRetrieval` gives the keyword and vector lists these weights.
-// =============================================================================
+// Query intent: what kind of question this is, before any model runs, in under
+// a millisecond. Names, emails, phone numbers and quoted phrases are "local"
+// kinds: local retrieval is the final answer and no model runs. Everything else
+// shows the local list first and then asks the model. Each kind's weights are
+// what `localRetrieval` gives the keyword and vector lists in the fusion.
 
 import { searchTokens } from "./lexical.ts";
 import { STRONG_APPROXIMATE_SCORE } from "./approximateName.ts";
@@ -86,14 +82,9 @@ const QUOTED = /^(?:"[^"]+"|“[^“”]+”)$/;
 
 const NICKNAMES = new Set(NICKNAME_GROUPS.flat());
 
-/** Lower case, accents folded, so "José" and "jose" are one token. */
-function fold(text: string): string {
-  return foldName(text);
-}
-
 /** The word tokens of a name or a query, folded. */
 function wordTokens(text: string): string[] {
-  return fold(text).match(/[\p{L}\p{N}]+/gu) ?? [];
+  return foldName(text).match(/[\p{L}\p{N}]+/gu) ?? [];
 }
 
 /**
@@ -138,25 +129,24 @@ export function nameSignals(
 }
 
 /**
- * Classify a query.
- *
+ * Classify a query:
  * - `email`: the query is an email address.
  * - `phone`: at least 7 digits, and digits plus `+()-. ` make up the query.
  * - `quoted`: the query is one quoted phrase.
  * - `name`: at most 4 tokens, no question word, and a name signal.
- * - `conceptual`: starts with a question word or has 5 or more tokens, and
- *   has no name signal.
+ * - `conceptual`: starts with a question word or has 5 or more tokens, and no
+ *   name signal.
  * - `mixed`: everything else.
  *
- * Without `signals` a query can only be one of the first three kinds or
- * `conceptual` or `mixed`.
+ * Without `signals` a query can only be one of the first three, `conceptual` or
+ * `mixed`.
  */
 export function classifyQuery(
   query: string,
   signals: NameSignals = NO_SIGNALS,
 ): QueryIntent {
   const text = query.trim();
-  const tokens = searchTokens(text).map(fold);
+  const tokens = searchTokens(text).map(foldName);
   const result = (kind: QueryKind): QueryIntent => {
     const local = kind !== "conceptual" && kind !== "mixed";
     const weights = local ? WEIGHTS.local : WEIGHTS[kind];

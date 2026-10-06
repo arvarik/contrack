@@ -1,29 +1,20 @@
-// =============================================================================
-// The main thread's side of the CPU worker
-// =============================================================================
-// Spawns the worker when something first needs it, runs one job at a time,
-// and reports progress. The queue here acts as a run lock:
-// two accounts asking for an embedding backfill at once take turns on one
-// thread rather than fighting for the event loop on the main one.
+// The main thread's side of the CPU worker. It spawns the worker when first
+// needed, runs one job at a time and reports progress. The queue is a run lock:
+// two accounts backfilling at once take turns on one thread instead of fighting
+// for the main event loop.
 //
-// ONE WORKER PER PROCESS, AND IT IS NEVER REPLACED. onnxruntime-node's native
-// addon registers itself with whichever Node environment loads it first, and
-// every later load anywhere in the process fails with "Module did not
-// self-register" — in another worker, in the main thread, and after the
-// original thread has been terminated. Measured on linux/x64; `cpuWorker.ts`
-// has the table.
+// ONE WORKER PER PROCESS, NEVER REPLACED. onnxruntime-node's native addon
+// registers with the first Node environment that loads it, and every later load
+// anywhere in the process fails with "Module did not self-register": in another
+// worker, in the main thread, even after the first thread ended (`cpuWorker.ts`
+// has the table). So a dead worker cannot be replaced, and the in-process
+// fallback cannot work once the worker loaded the model. The host falls back
+// only when the worker never started, and otherwise says plainly that
+// embeddings are gone for the life of the process.
 //
-// So a worker that dies cannot be replaced by one that works, and the
-// in-process fallback cannot work either once the worker has loaded the
-// model. The host does not pretend otherwise: it falls back only when the
-// worker never started, and says plainly when embeddings have been lost for
-// the life of the process rather than retrying into a second failure.
-//
-// A worker that will not spawn at all — an unusual Node build, a sandbox with
-// no thread support, a packaging mistake — is the case the fallback is for.
-// There the model was never loaded, so the main thread can still load it.
-// The failure is logged once, not per call.
-// =============================================================================
+// A worker that never spawns (an unusual Node build, a sandbox without threads,
+// a packaging mistake) is what the fallback is for: the model was never loaded,
+// so the main thread can load it. The failure is logged once.
 
 import { Worker } from "worker_threads";
 import { log } from "../utils/logger.ts";
@@ -46,10 +37,9 @@ interface Pending {
 }
 
 /**
- * How long to wait for the worker to say it is up.
- *
- * Generous: the first spawn pays for module resolution through the
- * TypeScript loader. It is a ceiling on a startup failure, not a budget.
+ * How long to wait for the worker to say it is up. Generous, because the first
+ * spawn resolves modules through the TypeScript loader. A ceiling on a startup
+ * failure, not a budget.
  */
 const READY_TIMEOUT_MS = 30_000;
 
@@ -59,20 +49,16 @@ let nextId = 1;
 const pending = new Map<number, Pending>();
 
 /**
- * True once the worker has failed and the host has stopped trying.
- *
- * One failure is enough. A worker that cannot spawn will not start spawning
- * later, and retrying per call would turn one logged warning into one per
+ * True once the worker failed and the host stopped trying. A worker that cannot
+ * spawn will not start later, and retrying per call would log one warning per
  * contact of a backfill.
  */
 let disabled = false;
 
 /**
- * True once a worker has reported a job that loaded the model.
- *
- * After that the process has spent its single onnxruntime load, so neither a
- * replacement worker nor the main thread can embed anything. Falling back
- * would fail a second time and report the wrong reason.
+ * True once a worker reported a job that loaded the model. The process has then
+ * spent its single onnxruntime load, so neither a new worker nor the main
+ * thread can embed, and a fallback would fail again with the wrong reason.
  */
 let modelSpent = false;
 
@@ -86,23 +72,16 @@ let forceFallback = process.env.DISABLE_CPU_WORKER === "true";
 let tail: Promise<unknown> = Promise.resolve();
 
 /**
- * Jobs the caller has asked to stop.
- *
- * Cancelling has to work in two places, because a job spends most of its life
- * in neither. A job still in the queue is dropped here and never reaches the
- * worker at all; a job already running is forwarded, and the worker notices
- * between batches. Only forwarding would have meant that cancelling a
- * backfill queued behind another one did nothing.
+ * Jobs the caller asked to stop before they reached the worker. Such a job is
+ * dropped here, so canceling a backfill queued behind another works. A
+ * running job is sent a cancel, which the worker ignores (cpuWorker.ts).
  */
-const cancelledJobs = new Set<number>();
+const canceledJobs = new Set<number>();
 
 /**
- * The most jobs that were ever posted to the worker at the same time.
- *
- * One, if the queue works. Recorded rather than sampled because sampling a
- * queue of fast jobs measures the timer rather than the queue: this is
- * incremented where the job is posted, so a host that stopped serializing
- * shows up whatever the jobs cost.
+ * The most jobs ever posted to the worker at once: one, if the queue works.
+ * Counted where a job is posted, not sampled, so a host that stopped
+ * serializing shows up whatever the jobs cost.
  */
 let maxInFlight = 0;
 
@@ -143,10 +122,9 @@ function ensureWorker(): Promise<Worker> {
         settled = true;
         clearTimeout(timer);
         worker = spawned;
-        // Now, and not before. Until the worker says it is up there is
-        // nothing else holding the event loop open, and a worker unref'd from
-        // the moment it was constructed let the process exit while it was
-        // still resolving its own imports.
+        // Ref the worker now, not before: until it is up nothing else holds the
+        // event loop open, and an unref'd worker let the process exit while it
+        // was still resolving its imports.
         refIfBusy();
         resolve(spawned);
         return;
@@ -175,15 +153,11 @@ function ensureWorker(): Promise<Worker> {
       }
     });
 
-    // Nothing is unref'd here. The reference is managed by `refIfBusy`, which
-    // runs once the worker is up and after every job settles: held while a job
-    // is running, released when the queue is empty.
-    //
-    // Getting that wrong was a real failure rather than a theoretical one.
-    // With the worker unref'd from construction, the main thread awaited a
-    // result only the worker could produce, Node saw nothing keeping the loop
-    // alive, and the process exited mid-backfill with "Detected unsettled
-    // top-level await".
+    // Nothing is unref'd here. `refIfBusy` holds the reference while a job runs
+    // and releases it when the queue is empty. With the worker unref'd from the
+    // start, the main thread awaited a result only the worker could give, Node
+    // saw nothing keeping the loop alive, and the process exited mid-backfill
+    // with "Detected unsettled top-level await".
   });
 
   return ready;
@@ -223,11 +197,8 @@ function failAll(err: Error): void {
 }
 
 /**
- * Run one job on the worker.
- *
- * Queued behind whatever is already running. Rejects rather than falling back
- * — the fallback decision belongs to the caller, which is the only place that
- * knows what running in process would cost.
+ * Run one job on the worker, queued behind whatever runs. Rejects rather than
+ * falling back: only the caller knows what running in process would cost.
  */
 function submit(
   job: WorkerJob,
@@ -239,7 +210,7 @@ function submit(
       new Promise<JobResult>((resolve, reject) => {
         void ensureWorker().then(
           (active) => {
-            if (cancelledJobs.delete(id)) {
+            if (canceledJobs.delete(id)) {
               reject(new Error(CANCELLED));
               return;
             }
@@ -262,14 +233,12 @@ function submit(
 }
 
 /**
- * Stop a job, whether it has started or not.
- *
- * A job still in the queue never reaches the worker. A job already running is
- * told, and stops at the next batch boundary.
+ * Stop a job. A queued job never reaches the worker. A running job is sent a
+ * cancel, which the worker ignores, so it runs to the end.
  */
 export function cancelJob(id: number): void {
   if (!pending.has(id)) {
-    cancelledJobs.add(id);
+    canceledJobs.add(id);
     return;
   }
   const message: HostMessage = { type: "cancel", id };
@@ -277,12 +246,10 @@ export function cancelJob(id: number): void {
 }
 
 /**
- * Run `job` on the worker, or `fallback` in process when it cannot.
- *
- * The fallback is not a retry. If the worker is unavailable the work still
- * has to happen, and doing it on the event loop is worse than not doing it at
- * all only in theory: a product that stops embedding because a thread would
- * not start is a product that silently stops finding anything.
+ * Run `job` on the worker, or `fallback` in process when it cannot. The
+ * fallback is not a retry: a product that stops embedding because a thread
+ * would not start silently stops finding anything, which is worse than the
+ * event-loop cost.
  */
 export async function runOnWorker<T>(
   job: WorkerJob,
@@ -339,11 +306,9 @@ export function startJob(
 }
 
 /**
- * The most jobs the host ever had on the worker at once. Tests only.
- *
- * The queue acts as a run lock, and a run lock that does not
- * lock is the kind of thing that passes every test and then corrupts an ONNX
- * session under two accounts backfilling at the same time.
+ * The most jobs the host ever had on the worker at once, for tests: a run lock
+ * that does not lock passes every test and then corrupts an ONNX session when
+ * two accounts backfill together.
  */
 export function __maxInFlight(): number {
   return maxInFlight;
@@ -355,10 +320,8 @@ export function isWorkerActive(): boolean {
 }
 
 /**
- * True once this process has spent its single onnxruntime load.
- *
- * Exported for the health panel and for tests. There is no way back from it
- * short of restarting.
+ * True once this process has spent its single onnxruntime load, for the health
+ * panel and tests. Only a restart undoes it.
  */
 export function isModelSpent(): boolean {
   return modelSpent;
@@ -379,23 +342,18 @@ export async function stopCpuWorker(): Promise<void> {
 }
 
 /**
- * Put the host back to its starting state.
- *
- * Tests only. `disabled` is sticky on purpose in production, and a test that
- * exercised the fallback would otherwise leave every later test in this file
- * running in process.
+ * Put the host back to its starting state, for tests. `disabled` is sticky on
+ * purpose in production, and a test of the fallback would otherwise leave every
+ * later test in the file running in process.
  */
 export async function __resetCpuWorker(
   options: { fallbackOnly?: boolean } = {},
 ): Promise<void> {
   await stopCpuWorker();
-  cancelledJobs.clear();
+  canceledJobs.clear();
   maxInFlight = 0;
-  // Tests only, and the reason this is not something production does: a
-  // process that has loaded the model cannot start over, and pretending it
-  // can is how a test passes on a machine where the model was never loaded
-  // and fails on the one where it was. Every test that resets uses jobs with
-  // no texts, which never reach the model.
+  // Tests only: a process that loaded the model cannot start over. Every test
+  // that resets uses jobs with no texts, which never reach the model.
   modelSpent = false;
   everSpawned = false;
   disabled = false;

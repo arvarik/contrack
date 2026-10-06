@@ -1,15 +1,11 @@
-// =============================================================================
-// Research — the techniques
-// =============================================================================
 // The ways a run can find facts, by name:
 //
 //   provider-search  the research model's own web search
 //   search-and-read  a web search, whose pages the deep model reads
 //   combined         both at once, with the facts of both kept
 //
-// A new technique is one entry here. Its `needs()` says what a start needs
-// set up, so the start checks it with the others (`choice.ts`).
-// =============================================================================
+// A new technique is one entry here. Its `needs()` says what a start needs set
+// up, so the start checks it with the others (`choice.ts`).
 
 import { AppError } from "../../utils/AppError.ts";
 import type { Technique } from "./types.ts";

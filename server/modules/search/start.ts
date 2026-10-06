@@ -1,9 +1,5 @@
-// =============================================================================
-// Search: start-up work
-// =============================================================================
-// Moved from server.ts as it was. The search module's onStart runs it once,
-// after the server listens, when background jobs are on.
-// =============================================================================
+// The search module's start-up work, run once by its onStart after the server
+// listens, when background jobs are on.
 
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
@@ -22,10 +18,9 @@ import {
 
 /** The starter questions, the index queue, the local model and the backfills. */
 export function startSearch(): void {
-  // ── Ask Contrack starter questions ───────────────────────────────────────
-  // Every account's pool of "Try asking" questions, built one account per
-  // turn of the event loop, so the first open of Ask after a deploy reads
-  // a pool that is ready. A request that comes first builds its own.
+  // Every account's "Try asking" pool, built one account per turn of the event
+  // loop, so Ask opens on a ready pool after a deploy. A request that comes
+  // first builds its own.
   warmStarterQuestions().catch((err) =>
     log.warn("Server", `Starter questions failed: ${getErrorMessage(err)}`),
   );
@@ -33,15 +28,13 @@ export function startSearch(): void {
   // Initialize search index queue to recover any ungracefully interrupted jobs
   initSearchIndexQueue();
 
-  // ── Local embedding model for Ask Contrack v3 ───────────────────────────
-  // Load the Transformers.js model, then backfill search embeddings.
-  // Non-blocking — the server is fully usable while this runs.
+  // Load the local embedding model, then backfill search embeddings. Nothing
+  // waits on it: the server is usable meanwhile.
   initBuiltinEmbedder()
     .then(() => {
-      // The search cross-encoder loads on the same worker, once, so no
-      // person's first question pays for it. Its job takes its turn beside
-      // the backfill's, and a failure only logs: search keeps its fused
-      // order without it.
+      // The cross-encoder loads on the same worker, once, so no first question
+      // pays for it. Its job takes its turn beside the backfill's, and a
+      // failure only logs: search keeps its fused order without it.
       void initCrossEncoder();
       log.info(
         "Server",
@@ -58,10 +51,9 @@ export function startSearch(): void {
           `Search embedding backfill complete: ${count} contacts embedded locally`,
         );
       initSearchIndexQueue();
-      // Dedupe shares the embeddings capability, so it can only run once a
-      // backend is ready. Reconcile it (rebuilding if the model changed) and
-      // fill any gaps — previously this only ran when the store was entirely
-      // empty, so a partial index could never repair itself.
+      // Dedupe shares the embeddings capability, so it runs once a backend is
+      // ready: reconcile the store (rebuilding if the model changed), then fill
+      // any gaps, so a partial index repairs itself.
       return ensureDedupeEmbeddingStore().then(() => backfillEmbeddings());
     })
     .then((count) => {

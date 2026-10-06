@@ -14,9 +14,8 @@ import { getErrorMessage } from "../../utils/helpers.ts";
 
 export function registerEmbeddingRoutes(router: Router) {
   // Instance-wide on purpose: an operator repairing the dedupe index must not
-  // stop at their own rows. The sweep behind it runs one account at a time
-  // inside that account's context, so it covers the instance while attributing
-  // provider spend accurately. Guarded by requireAdmin.
+  // stop at their own rows. The sweep runs one account at a time in that
+  // account's context, so provider spend is attributed correctly. Admin only.
   router.post(
     "/dedupe/backfill-embeddings",
     requireAdmin,
@@ -54,9 +53,9 @@ export function registerEmbeddingRoutes(router: Router) {
   router.get(
     "/dedupe/embedding-status",
     asyncHandler(async (req, res) => {
-      // Coverage the caller can act on: their own contacts and their own
-      // vectors. An instance-wide percentage told a new account its index was
-      // 98% complete while none of its own contacts were embedded at all.
+      // Coverage the caller can act on: their own contacts and vectors. An
+      // instance-wide percentage could say 98% while none of the caller's
+      // contacts were embedded.
       const scope = scopeOf(req);
       const embedded = getEmbeddingCount(scope);
       const total = (

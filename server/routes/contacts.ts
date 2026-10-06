@@ -27,7 +27,7 @@ import { contactRoutes } from "../../shared/contracts/contacts.ts";
 import { z } from "zod";
 import { AppError, NotFoundError, ValidationError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
-import { startStream } from "../utils/stream.ts";
+import { abortOnDisconnect, startStream } from "../utils/stream.ts";
 import { scopeOf } from "../tenancy/scope.ts";
 import { runWithContext } from "../tenancy/requestContext.ts";
 import { importService, type ImportRecord } from "../services/importService.ts";
@@ -55,13 +55,12 @@ import {
 import { contactRepo } from "../repositories/contactRepository.ts";
 import { AVATAR_MIME_EXTENSIONS } from "../utils/avatarProcessor.ts";
 
-// Avatars go to uploads/u/<ownerId>/avatars/ now, so there is no one directory
-// to create at import time. The destination callback creates the caller's.
+// Avatars go to uploads/u/<ownerId>/avatars/, so the destination callback
+// creates the caller's folder.
 
 const avatarStorage = multer.diskStorage({
-  // The owner comes off req.principal, not the async context. multer hands
-  // this callback the request, so it is the shortest path to the answer and
-  // it cannot be broken by a stream boundary the context does not cross.
+  // The owner comes from req.principal, which multer hands this callback, so no
+  // stream boundary can lose it the way it can lose the async context.
   destination: (req, _file, cb) => {
     const owner = req.principal?.user.id;
     if (!owner) return cb(new Error("No principal for an avatar upload"), "");
@@ -88,17 +87,12 @@ const uploadAvatar = multer({
 });
 
 /**
- * Refuse an `avatarUrl` under `/uploads/` that is outside the caller's own
- * folder, `uploads/u/<ownerId>/`.
- *
- * The client writes `avatarUrl` for a picked face or a photo on the web. A
- * value under `/uploads/` names a file on this server, though, and the code
- * that replaces a contact's photo deletes the old one. Another account's
- * file, a shared logo, and a `..` path out of the folder are refused here,
- * and `updateAvatar` deletes only from the owner's own avatars folder.
- *
- * After `validateBody`, so the body has its contract's shape: one contact,
- * an array of them for an import, or `{ ids, data }` for a bulk edit.
+ * Refuse an `avatarUrl` under `/uploads/` outside the caller's own folder,
+ * `uploads/u/<ownerId>/`. Replacing a contact's photo deletes the old file, so
+ * another account's file, a shared logo and a `..` path are refused here, and
+ * `updateAvatar` deletes only from the owner's avatars folder. Runs after
+ * `validateBody`, so the body has its contract's shape: one contact, an array
+ * for an import, or `{ ids, data }` for a bulk edit.
  */
 function refuseForeignUploads(
   req: Request,
@@ -126,11 +120,8 @@ function refuseForeignUploads(
 }
 
 /**
- * How long the non-stream import waits before its dedupe sweep.
- *
- * Long enough for the inserts and the embedding pass to settle, and named so a
- * test can shorten it. Three seconds of real waiting in the suite proves
- * nothing that fifty milliseconds does not.
+ * How long the non-stream import waits before its dedupe sweep, for the inserts
+ * and the embedding pass to settle. A setting, so tests can shorten it.
  */
 const IMPORT_SETTLE_MS = Number(process.env.IMPORT_SETTLE_MS ?? 3000);
 
@@ -195,19 +186,16 @@ router.get(
 );
 
 /**
- * Why a contact scores what it scores.
- *
- * Separate from the contact payload rather than folded into it: computing the
- * breakdown runs an aggregate query per contact, which is fine on demand for
- * one contact and wasteful on a list of four hundred.
+ * Why a contact scores what it scores. Apart from the contact payload, because
+ * the breakdown runs an aggregate query per contact: fine for one, wasteful for
+ * a list of four hundred.
  */
 router.get(
   "/contacts/:id/score",
   asyncHandler(async (req, res) => {
     const id = String(req.params.id);
-    // The owner check happens here, so explainScore keeps taking an id alone.
-    // It reads and writes `contacts` by that id, which is safe only because
-    // this line ran first.
+    // The owner check is here, so explainScore takes an id alone; it reads and
+    // writes `contacts` by that id, which is safe only after this line.
     contactRepo.requireOwned(scopeOf(req), id);
     const breakdown = relationshipService.explainScore(id);
     // Only a tracked contact has a score. The client never asks for an
@@ -247,12 +235,10 @@ router.post(
 );
 
 /**
- * The import id a request carries, or a fresh one.
- *
- * The browser makes the id when a file is chosen and sends it in
- * `X-Import-Id`, so a second request for the same file is recognised as the
- * same import. A caller that sends none gets one made here and returned, and
- * its import is recorded the same way.
+ * The import id a request carries, or a fresh one. The browser makes the id
+ * when a file is chosen and sends it in `X-Import-Id`, so a second request for
+ * the same file is recognized as the same import. A caller that sends none gets
+ * one made here and returned.
  */
 function importIdOf(req: Request): string {
   const header = req.get("x-import-id");
@@ -283,17 +269,17 @@ router.post(
   refuseForeignUploads,
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    // Captured once, before the SSE stream starts and before any background
-    // work is scheduled. A handler that reads the context after the response
-    // has been written is reading whatever async context it happens to be in.
+    // Read once, before the stream starts and before any background work is
+    // scheduled: after the response is written, the async context can be
+    // anyone's.
     const scope = scopeOf(req);
     const wantsStream = req.headers.accept?.includes("text/event-stream");
     const contacts = req.body as NewContactPayload[];
     const importId = importIdOf(req);
 
-    // The record first. A known id is answered from the record and nothing
-    // is written again, which is what makes a retry after a dropped
-    // connection safe. A run this process is still on answers 409.
+    // The record first. A known id is answered from the record and nothing is
+    // written again, which makes a retry after a dropped connection safe. A run
+    // this process is still on answers 409.
     const { record, repeated } = importService.begin(
       scope,
       importId,
@@ -308,13 +294,8 @@ router.post(
     }
 
     if (wantsStream) {
-      // =====================================================================
-      // SSE Multi-Phase Import Pipeline
-      // Phase 1: Import contacts
-      // Phase 2: Generate embeddings (if available)
-      // Phase 3: Run dedupe scan against imported contacts
-      // Phase 4: Stream results summary
-      // =====================================================================
+      // The streamed import: the contacts, then embeddings (when available),
+      // then a dedupe scan of the imported contacts, then the summary.
       startStream(res, "text/event-stream");
 
       const send = (data: Record<string, unknown>) => {
@@ -406,22 +387,16 @@ router.post(
         `[${rid}] POST /api/contacts/bulk → ${written.count} imported, ${written.failed} failed (import ${importId})`,
       );
 
-      // The tail outlives the response, and waits out the settle delay
-      // before it starts. AsyncLocalStorage does carry the request's scope
-      // through a timer, so this ran attributed before the wrapper as well as
-      // after it. The wrapper makes the owner an argument rather than an
-      // inheritance: the day this work moves behind a queue, the context it
-      // runs in belongs to whoever drained the queue.
-      //
-      // One scan for the whole import, not one check per contact. The loop
-      // that was here called `incrementalDedupeCheck` once per created
-      // contact, and every one of those normalized the account's whole
-      // corpus. `runImportScan`, inside `finish`, builds the corpus once.
+      // The tail outlives the response and waits out the settle delay first.
+      // The wrapper makes the owner an argument rather than an inheritance, so
+      // it stays right if this work ever moves behind a queue. One scan for the
+      // whole import (`runImportScan`, inside `finish`), which builds the
+      // corpus once instead of once per contact.
       runWithContext(
         { requestId: `imp-${rid}`, principal: null, scope },
         () => {
-          // The fingerprints start now, while the settle delay runs, as they
-          // always have on this path. `finish` is told not to run them again.
+          // The fingerprints start now, during the settle delay, and `finish`
+          // is told not to run them again.
           generateAndStoreBulkEmbeddings(written.createdIds).catch((err) =>
             log.warn(
               "API",
@@ -591,10 +566,10 @@ router.delete(
 /**
  * PATCH /api/contacts/:id/location
  *
- * The pin, by hand. `{ lat, lng }` puts it where a person dropped it and
- * marks the row `geoSource = 'manual'`, which the geocoder then leaves alone
- * until the address text changes. `{ regeocode: true }` hands the pin back:
- * the coordinates are cleared and the geocoder reads the address again.
+ * The pin, by hand. `{ lat, lng }` puts it where a person dropped it and marks
+ * the row `geoSource = 'manual'`, which the geocoder leaves alone until the
+ * address text changes. `{ regeocode: true }` hands the pin back: the
+ * coordinates are cleared and the geocoder reads the address again.
  */
 router.patch(
   "/contacts/:id/location",
@@ -643,23 +618,20 @@ router.post(
 );
 
 /**
- * POST /api/contacts/:id/enrich
- *
- * Single-contact enrichment, through the research layer that runs the batch
- * jobs too, for an individual contact.
- *
- * Quota-aware: Returns 429 if grounding RPD is exhausted.
- * Returns 503 if AI provider is not configured.
- */
-/**
  * The single enrichment's body: nothing, or the depth, the technique and the
  * web search. The contract gives the shape, and the technique and the web
- * search are then checked against the registries this server holds.
+ * search are then checked against this server's registries.
  */
 const enrichBodySchema = contactRoutes.enrich.body.pipe(
   researchChoiceSchema.extend({ depth: researchDepthSchema.optional() }),
 );
 
+/**
+ * POST /api/contacts/:id/enrich
+ *
+ * Research one contact through the research layer the batch jobs use. 429
+ * when the grounding quota is spent, 503 when no AI provider is configured.
+ */
 router.post(
   "/contacts/:id/enrich",
   requireContact,
@@ -679,11 +651,7 @@ router.post(
     );
     const contact = enrichmentContact(scope, id);
     const release = lockEnrichment(id);
-    const controller = new AbortController();
-    const onClose = () => {
-      if (!res.writableEnded) controller.abort();
-    };
-    res.on("close", onClose);
+    const client = abortOnDisconnect(res);
     try {
       const startMs = Date.now();
       // The research provider is named for the log only: the technique
@@ -699,14 +667,14 @@ router.post(
           contact,
           depth,
           history: researchHistory(contact),
-          signal: controller.signal,
+          signal: client.signal,
           ...choice,
           // The allowance a batch job has at this depth, under Node's own
           // request timeout of 300 s (server.ts sets no shorter one).
           timeoutMs: Math.min(RESEARCH_TIMEOUT_MS[depth], 290_000),
         }),
       );
-      controller.signal.throwIfAborted();
+      client.signal.throwIfAborted();
       const fieldsUpdated = mergeSearchResult(
         scope,
         id,
@@ -736,7 +704,7 @@ router.post(
       });
     } finally {
       release();
-      res.off("close", onClose);
+      client.release();
     }
   }),
 );

@@ -1,10 +1,7 @@
 /**
- * server/mcp/tools/index.ts — Registry aggregator for every MCP tool.
- *
- * Each feature module lists its tool groups (`mcpTools` in
- * server/modules/), and this registers every group of every module, in the
- * order of server/modules/index.ts. A new tool group is a line in its
- * module, not an edit here.
+ * Registers every MCP tool group of every module (`mcpTools` in
+ * server/modules/), in the order of server/modules/index.ts. A new tool group
+ * is a line in its module, not an edit here.
  *
  * @module server/mcp/tools
  */

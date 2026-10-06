@@ -1,10 +1,8 @@
 /**
- * server/mcp/tool.ts — How an MCP tool is registered, and how it answers.
- *
- * Every tool goes through the `tool` function a module gets in its
- * McpToolContext. That function:
- * - takes the title, the description and the hints from shared/mcpTools.ts,
- *   so the server, the settings page and the docs cannot drift;
+ * How an MCP tool is registered and how it answers. Every tool goes through the
+ * `tool` function in a module's McpToolContext, which:
+ * - takes the title, description and hints from shared/mcpTools.ts, so the
+ *   server, the settings page and the docs agree;
  * - leaves out every tool that writes when the token is read-only, so that
  *   token's client never sees one;
  * - turns a thrown error into a result with `isError`, which the model reads

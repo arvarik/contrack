@@ -1,28 +1,17 @@
-// =============================================================================
-// The merge policy — one answer to "how sure is sure enough"
-// =============================================================================
-// Three paths decide whether two contacts are one person with nobody asked: a
-// scan somebody starts, the check every import runs, and the check that runs
-// a few seconds after a contact is added by hand. Each of them used to carry
-// its own numbers. The import path scored a shared phone number 0.99 where
-// the scan scored it 0.95, scored an exact name across two sources 0.95 where
-// the scan scored it 0.92, and ran at a fixed 0.93 whatever the account had
-// chosen in Settings. So the same two records merged during an import and
-// asked during a scan, and the sensitivity preset only reached one of the
-// three.
+// The merge policy: one answer to "how sure is sure enough".
 //
-// This module is the one place the numbers live. Every path reads its
-// threshold from the account and its confidences from the tables below.
+// Three paths merge two contacts with nobody asked: a scan somebody starts, the
+// check every import runs, and the check a few seconds after a contact is added
+// by hand. This module is the one place their numbers live, so the same two
+// records get the same answer on every path. Each path reads its threshold from
+// the account's preset and its confidences from the tables below.
 //
-// Two rules weaken a match, and both are about what a shared value is
-// evidence OF. A phone number on three contacts is a household line more
-// often than one person recorded three times, and a name on three contacts
-// is a common name. Splink calls the first idea term-frequency adjustment: a
-// match on a value many records carry proves less than a match on a value
-// two records carry. The second rule is a contradiction: a shared number
-// between "Ada Twin" and "Ben Twin" is a family, not a duplicate, and the
-// pair goes to a person rather than merging.
-// =============================================================================
+// Two rules weaken a match, both about what a shared value is evidence of. A
+// match on a value many records carry proves less than one on a value two
+// records carry (Splink's term-frequency adjustment): a phone number on three
+// contacts is more often a household line, and a name on three is a common
+// name. And a contradiction: a shared number between "Ada Twin" and "Ben Twin"
+// is a family, so the pair goes to a person instead of merging.
 
 import {
   areNicknameEquivalent,
@@ -33,19 +22,13 @@ import { getPreferences } from "../userPreferencesService.ts";
 import type { Scope } from "../../tenancy/scope.ts";
 import type { NormalizedContact, ValueFrequency } from "./types.ts";
 
-// ---------------------------------------------------------------------------
 // The threshold
-// ---------------------------------------------------------------------------
 
 export type MergePreset = "conservative" | "default" | "aggressive";
 
 /**
- * The confidence a pair needs before it merges with nobody asked, per preset.
- *
- * The browser used to hold a copy of this table and send the number with
- * every scan request. Two copies drift, and the copy the import path read
- * was neither of them. The server reads the account's preset and this is the
- * only table.
+ * The confidence a pair needs to merge with nobody asked, per preset. The
+ * server reads the account's preset, and this is the only table.
  */
 export const PRESET_THRESHOLDS: Record<MergePreset, number> = {
   aggressive: 0.88,
@@ -54,13 +37,10 @@ export const PRESET_THRESHOLDS: Record<MergePreset, number> = {
 };
 
 /**
- * The threshold with nothing chosen.
- *
- * A different number from `THRESHOLD_AUTO` in scoring.ts, which routes a pair
- * to the auto bucket rather than to the model. They have been equal since
- * they were written and they are still two decisions: one is "stop spending
- * tokens on this pair", the other is "change somebody's data without telling
- * them". Named and exported so the dedupe eval pins it.
+ * The threshold with nothing chosen. Not `THRESHOLD_AUTO` in scoring.ts,
+ * although equal: that one means "stop spending tokens on this pair", this one
+ * "change somebody's data without telling them". Exported so the dedupe eval
+ * pins it.
  */
 export const DEFAULT_AUTO_MERGE_THRESHOLD = PRESET_THRESHOLDS.default;
 
@@ -70,19 +50,15 @@ export function thresholdForPreset(preset: MergePreset): number {
 }
 
 /**
- * The threshold this account has chosen.
- *
- * One read of `user_settings`. Every path that merges resolves its threshold
- * through here when the caller did not name one, so a preset set in Settings
- * reaches the scan, the import, and the single-contact check alike.
+ * The threshold this account has chosen, from `user_settings`. Every merging
+ * path that was not given a threshold reads it here, so the Settings preset
+ * reaches the scan, the import and the single-contact check alike.
  */
 export function autoMergeThresholdFor(scope: Scope): number {
   return thresholdForPreset(getPreferences(scope.ownerId).dedupePreset);
 }
 
-// ---------------------------------------------------------------------------
 // The confidences
-// ---------------------------------------------------------------------------
 
 /** What a shared identifier is worth when nothing argues against it. */
 export const ANCHOR_CONFIDENCE = {
@@ -104,12 +80,10 @@ export const NAME_CONFIDENCE = {
 } as const;
 
 /**
- * The most a contradicted match may score.
- *
- * Below the aggressive preset, so no preset merges a pair whose first names
- * disagree, or a pair matched on the name alone whose employers or cities
- * disagree. Above `THRESHOLD_AI`, so the pair is still a suggestion rather
- * than nothing.
+ * The most a contradicted match may score: below the aggressive preset, so no
+ * preset merges a pair whose first names disagree, or a name-only pair whose
+ * employers or cities disagree, and above `THRESHOLD_AI`, so it stays a
+ * suggestion.
  */
 export const REVIEW_CEILING = 0.85;
 
@@ -117,12 +91,11 @@ export const REVIEW_CEILING = 0.85;
 export const SHARED_VALUE_LIMIT = 2;
 
 /**
- * What each contact beyond the pair costs a match on a shared value.
- *
- * Small on purpose. A personal address on three records is usually one
- * person exported three times, and 0.98 less 0.03 still merges at the
- * default preset. A phone number on three records is a household as often
- * as not, and 0.95 less 0.03 asks. Four records of either ask.
+ * What each contact beyond the pair costs a match on a shared value. Small on
+ * purpose: a personal address on three records is usually one person exported
+ * three times, and 0.98 less 0.03 still merges at the default preset. A phone
+ * number on three records is a household as often as not, and 0.95 less 0.03
+ * asks. Four records of either ask.
  */
 export const CARRIER_PENALTY = 0.03;
 
@@ -135,16 +108,15 @@ function round(n: number): number {
 }
 
 /**
- * A number, once the corpus and the names have spoken.
- *
- * Works on a weight as well as on a whole confidence, so it has no floor of
- * its own. `weighClaim` adds the floor for a whole pair.
+ * A number, once the corpus and the names have spoken. Works on a weight as
+ * well as a whole confidence, so it has no floor; `weighClaim` adds one for a
+ * whole pair.
  *
  * @param base         - What the match is worth on its own, from the tables.
  * @param carriers     - How many contacts in the account carry the value.
  * @param contradicted - Whether anything in the two records says two people:
- *                       first names, generations, or for a name-only match
- *                       the employer or the city.
+ *   first names, generations, or for a name-only match the employer or the
+ *   city.
  */
 export function weaken(
   base: number,
@@ -158,10 +130,9 @@ export function weaken(
 }
 
 /**
- * The confidence one shared identifier gives a pair.
- *
- * Floored at `WEAKEST_CLAIM`. A shared address is still a reason to ask,
- * however many contacts carry it, so the pair stays a suggestion.
+ * The confidence one shared identifier gives a pair, floored at
+ * `WEAKEST_CLAIM`: a shared address is still a reason to ask, however many
+ * contacts carry it.
  */
 export function weighClaim(
   base: number,
@@ -171,16 +142,12 @@ export function weighClaim(
   return Math.max(WEAKEST_CLAIM, weaken(base, carriers, contradicted));
 }
 
-// ---------------------------------------------------------------------------
 // How many contacts carry a value
-// ---------------------------------------------------------------------------
 
 /**
- * Count, per value, the active contacts that carry it.
- *
- * Built once from the normalized corpus, so a scan and an import count the
- * same rows the same way. Names are counted on the normalized name, which is
- * what the exact-name matchers compare.
+ * Count, per value, the active contacts that carry it. Built once from the
+ * normalized corpus, so a scan and an import count the same way. Names are
+ * counted on the normalized name, which the exact-name matchers compare.
  */
 export function countValues(contacts: NormalizedContact[]): ValueFrequency {
   const emails = new Map<string, number>();
@@ -199,10 +166,8 @@ export function countValues(contacts: NormalizedContact[]): ValueFrequency {
 }
 
 /**
- * The widest sharing among the values two contacts have in common.
- *
- * Two when the map does not know a value, because the pair itself is two
- * carriers and the count can never be lower.
+ * The widest sharing among the values two contacts have in common. Two when the
+ * map does not know a value: the pair itself is two carriers.
  */
 export function carriersOf(
   counts: Map<string, number> | undefined,
@@ -215,21 +180,16 @@ export function carriersOf(
   return most;
 }
 
-// ---------------------------------------------------------------------------
 // The contradiction
-// ---------------------------------------------------------------------------
 
 /**
- * Whether two first names say two different people.
- *
- * Deliberately narrow. Everything the duplicate matchers already accept as
- * one person is accepted here too: the same name, a nickname of it, an
- * initial of it, a spelling within Jaro-Winkler 0.9, or the same sound. What
- * remains is "ada" beside "ben", and a shared phone number between those two
- * is a household.
- *
- * Last names are not consulted. A married name changes the surname and not
- * the person, and that pair must keep merging on its shared address.
+ * Whether two first names say two different people. Narrow on purpose: whatever
+ * the duplicate matchers accept as one person passes here too (the same name, a
+ * nickname or initial of it, a spelling within Jaro-Winkler 0.9, the same
+ * sound). What remains is "ada" beside "ben", and a shared phone between those
+ * two is a household. Last names are not read: a married name changes the
+ * surname, not the person, and that pair must keep merging on its shared
+ * address.
  */
 export function firstNamesContradict(
   a: NormalizedContact,
@@ -268,12 +228,9 @@ export function firstNamesContradict(
 }
 
 /**
- * Whether two names carry two different generational suffixes.
- *
- * "Robert Hale Sr." and "Robert Hale Jr." tokenize to one name, and they are
- * two people by definition. One side without a suffix says nothing: "Robert
- * Hale" beside "Robert Hale Jr." may well be one record with the suffix left
- * off.
+ * Whether two names carry two different generational suffixes. "Robert Hale
+ * Sr." and "Robert Hale Jr." tokenize to one name and are two people. One side
+ * without a suffix says nothing: it may be one record with the suffix left off.
  */
 export function generationsContradict(
   a: NormalizedContact,
@@ -324,14 +281,12 @@ export interface ContextConflict {
 
 /**
  * Whether two records with one name work at two different places, or live in
- * two different cities.
- *
- * A name is all the exact-name family has to go on, so a record that says
- * otherwise outweighs it: "Chris Navarro, Adatum, Boston" and "Chris Navarro,
- * Woodgrove Bank, Miami" are two people far more often than one person who
+ * two different cities. A name is all the exact-name family has, so a record
+ * that says otherwise outweighs it: "Chris Navarro, Adatum, Boston" and "Chris
+ * Navarro, Woodgrove Bank, Miami" are two people far more often than one who
  * moved and changed jobs. A field only one record carries says nothing. The
- * company is compared after `normalizeCompany`, so "Contoso Ltd" is
- * "contoso", and the city by its first part, so "Austin" is "Austin, TX".
+ * company is compared after `normalizeCompany` ("Contoso Ltd" is "contoso"),
+ * and the city by its first part ("Austin" is "Austin, TX").
  */
 export function contextConflict(
   a: NormalizedContact,
@@ -348,17 +303,15 @@ export function contextConflict(
   return { company, city };
 }
 
-// ---------------------------------------------------------------------------
 // One match, weighed
-// ---------------------------------------------------------------------------
 
 export interface WeighedMatch {
   confidence: number;
   /**
    * Why a person should look twice before merging, in words a reviewer reads:
    * "First names differ: Ada and Ben", "3 contacts share this phone number".
-   * Null when nothing argues against the match. Stored beside the reason, not
-   * inside it, so the review screen can show it on the row.
+   * Null when nothing argues against the match. Kept apart from the reason so
+   * the review screen can show it on the row.
    */
   caveat: string | null;
 }
@@ -405,10 +358,8 @@ export function weighAnchor(
 }
 
 /**
- * Weigh the same name at the same company.
- *
- * Only the count applies. The names and the employer agree by definition,
- * so there is no contradiction to look for.
+ * Weigh the same name at the same company. Only the count applies: the names
+ * and the employer agree by definition.
  */
 export function weighName(base: number, carriers: number): WeighedMatch {
   return weigh(base, "name", carriers, null, null, false);
@@ -416,12 +367,10 @@ export function weighName(base: number, carriers: number): WeighedMatch {
 
 /**
  * Weigh a match on the name alone: the same name, the same name from two
- * imports, a nickname, or a middle name added.
- *
- * Nothing but the name says one person, so anything the two records say
- * against it counts: two generations, two employers, two cities. Any of them
- * caps the pair at `REVIEW_CEILING`, below every preset, so a namesake waits
- * for a person instead of merging. The name at one company is `weighName`.
+ * imports, a nickname, or a middle name added. Anything the records say against
+ * it counts (two generations, employers or cities) and caps the pair at
+ * `REVIEW_CEILING`, below every preset, so a namesake waits for a person. The
+ * name at one company is `weighName`.
  */
 export function weighNameOnly(
   base: number,

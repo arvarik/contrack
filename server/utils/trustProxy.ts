@@ -1,16 +1,9 @@
-// =============================================================================
-// TRUST_PROXY_HOPS — how many reverse proxies sit in front of the server
-// =============================================================================
-// Express believes the X-Forwarded-For, -Proto and -Host headers only from as
-// many hops as it is told to trust. The server used to trust one hop always.
-// With no proxy in front, that one "hop" is the client itself, so a client
-// could send its own X-Forwarded-For and pick the address that the login,
-// reset-link and AI rate limits count, and that the audit log records.
-//
-// The default is now 0: believe no forwarded header. An operator with a
-// reverse proxy sets the number of proxies, which is 1 for the common case of
-// one Caddy, nginx or Traefik in front.
-// =============================================================================
+// TRUST_PROXY_HOPS: how many reverse proxies sit in front of the server.
+// Express believes X-Forwarded-For, -Proto and -Host only from that many hops.
+// The default is 0, because with no proxy in front a trusted "hop" is the
+// client itself, which could then pick the address the login, reset-link and AI
+// rate limits count and the audit log records. With one Caddy, nginx or Traefik
+// in front, set 1.
 
 /** The most hops anybody runs. A larger number is a typo, not a topology. */
 const MAX_HOPS = 10;

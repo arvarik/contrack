@@ -1,10 +1,6 @@
-// =============================================================================
-// The local owner and the primary admin
-// =============================================================================
-// Moved from server/db.ts (§2z-4), with the connection as a parameter. The
-// baseline migration creates the local owner, and the auth code asks for both
-// at runtime through the wrappers in server/db.ts.
-// =============================================================================
+// The local owner and the primary admin, taking the connection as a parameter.
+// The baseline migration creates the local owner, and the auth code reads both
+// through the wrappers in server/db.ts.
 
 import type Database from "better-sqlite3";
 import crypto from "crypto";
@@ -18,10 +14,8 @@ function countUsers(sqlite: Database.Database): number {
 }
 
 /**
- * The admin that instance-wide work acts as.
- *
- * Throws only if called before ensureLocalOwner has ever run, which the boot
- * order makes impossible.
+ * The admin that instance-wide work acts as. Throws only if called before
+ * ensureLocalOwner ever ran, which the boot order prevents.
  */
 export function primaryAdminId(sqlite: Database.Database): string {
   const row = sqlite
@@ -36,15 +30,11 @@ export function primaryAdminId(sqlite: Database.Database): string {
 
 /**
  * The account that owns this device's data when nobody has signed in.
- *
- * `passwordHash = 'none$'` can never verify: parseHash splits on `$`, returns
- * null unless it gets six parts, and this has two. Nobody can sign in as this
- * account. It is an admin because in auth-off mode the person at the keyboard
- * is the operator.
- *
- * On an instance that already has real accounts this creates nothing and
- * returns the primary admin, so a local owner that became an account is not
- * made again.
+ * `passwordHash = 'none$'` never verifies (parseHash wants six `$` parts and
+ * this has two), so nobody can sign in as it. It is an admin, because in
+ * auth-off mode the person at the keyboard is the operator. On an instance with
+ * real accounts this creates nothing and returns the primary admin, so a local
+ * owner that became an account is not made again.
  */
 export function ensureLocalOwner(sqlite: Database.Database): string {
   const existing = sqlite

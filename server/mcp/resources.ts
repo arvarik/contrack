@@ -1,9 +1,6 @@
 /**
- * server/mcp/resources.ts — MCP Resources for Contrack.
- *
- * Implements:
- * - contrack://pulse (the dashboard payload)
- * - contrack://contacts/{id} (JSON profile and score explanation)
+ * MCP resources: contrack://pulse (the dashboard payload) and
+ * contrack://contacts/{id} (the profile and its score explanation).
  *
  * @module server/mcp/resources
  */

@@ -257,7 +257,7 @@ describe("the search prompt", () => {
       "location",
       "public profiles",
       "a professional summary",
-      "awards, publications, talks or licences",
+      "awards, publications, talks or licenses",
       "interests",
     ]);
     expect(

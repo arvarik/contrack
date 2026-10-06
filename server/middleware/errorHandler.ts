@@ -1,17 +1,15 @@
 /**
- * Centralized Express error middleware.
+ * The central Express error middleware:
+ *   1. Turns every known thrown shape (AppError, ZodError, Express's parse
+ *      error, SQLite errors) into one JSON shape.
+ *   2. Puts `requestId` in the body, so the client can quote it (it is in the
+ *      access log too).
+ *   3. Leaves `stack` out in production and `cause` out always; only the
+ *      server log sees them.
+ *   4. Logs operational errors at info or warn, and unexpected ones with the
+ *      full stack at error.
  *
- * Responsibilities:
- *  1. Translate every known thrown shape (AppError, ZodError, native Express
- *     parse error, SQLite errors) into a canonical JSON response.
- *  2. Carry `requestId` into the response body so the client can quote it
- *     when reporting an issue (it is already in the access log).
- *  3. Strip `stack` from the response in production. Always strip `cause`
- *     from the response — only the server log sees it.
- *  4. Distinguish operational errors (logged at info/warn) from unexpected
- *     errors (logged with the full stack at error level).
- *
- * Canonical error response shape:
+ * The response shape:
  *   {
  *     error: { code: "NOT_FOUND", message: "Contact xyz not found",
  *              details?: any, requestId: "ab12cd34", stack?: "..." }
@@ -125,12 +123,10 @@ function translate(err: unknown): {
     e?.code?.startsWith("SQLITE_BUSY") ||
     e?.code?.startsWith("SQLITE_LOCKED")
   ) {
-    // Counted here and nowhere else. This is the one place that knows a
-    // request was actually turned away, rather than a lock better-sqlite3
-    // waited out inside its five second busy timeout and nobody noticed. The
-    // admin health panel reports the count, because "it told me to try again"
-    // is the symptom people report and one unlucky moment looks exactly like
-    // a pattern until somebody can see how many there have been.
+    // Counted here, the one place that knows a request was turned away rather
+    // than waited out inside better-sqlite3's five second busy timeout. The
+    // admin health panel shows the count, because one unlucky "try again" looks
+    // like a pattern until somebody can see how many there were.
     recordBusyError();
     return {
       statusCode: 503,
@@ -190,18 +186,16 @@ export function errorHandler(
   }
 
   if (res.headersSent) {
-    // The handler already started writing (e.g. SSE). We cannot send a JSON
-    // error body now; the best we can do is destroy the connection so the
-    // client knows the stream is dead.
+    // The handler already started writing (SSE, say), so no JSON body can
+    // follow: end the connection so the client knows the stream is dead.
     res.end();
     return;
   }
 
-  // Every 429 that knows when to come back says so, and this is the only
-  // place that writes the header. A limiter knows because it holds the
-  // window; a queue lock knows when it has an estimate and not otherwise. The
-  // value travels in `details.retryAfterSeconds`, and a 429 without one sends
-  // no header, which is better than a guess a client would sleep on.
+  // Every 429 that knows when to come back says so, and only here is the header
+  // written. A limiter knows from its window; a queue lock only when it has an
+  // estimate. The value travels in `details.retryAfterSeconds`, and a 429
+  // without one sends no header rather than a guess a client would sleep on.
   if (t.statusCode === 429 && !res.getHeader("Retry-After")) {
     const seconds = (t.details as { retryAfterSeconds?: unknown } | undefined)
       ?.retryAfterSeconds;
@@ -230,13 +224,11 @@ export function errorHandler(
 }
 
 /**
- * 404 catch-all for unknown API routes. Mount this AFTER all route routers
- * but BEFORE the error middleware. Without it, unknown `/api/*` paths fall
- * through to the SPA index.html which is confusing for API clients.
- *
- * `/.well-known/*` is for programs too. An MCP client looks there for the
- * OAuth metadata, and the SPA's HTML in place of a 404 makes it fail on a
- * parse error rather than move on.
+ * 404 for unknown API routes. Mount it after every router and before the error
+ * middleware, or unknown `/api/*` paths fall through to the SPA's index.html.
+ * `/.well-known/*` is for programs too: an MCP client looks there for the OAuth
+ * metadata, and HTML in place of a 404 makes it fail on a parse error instead
+ * of moving on.
  */
 export function notFoundHandler(
   req: Request,

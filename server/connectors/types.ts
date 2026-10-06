@@ -1,10 +1,9 @@
 /**
- * server/connectors/types.ts — Core interfaces for Contrack connectors and adapters.
- *
- * Every source implements `ConnectorAdapter`: `test` proves credentials,
- * `sync` yields normalized events and returns a cursor. The framework owns
- * scheduling, retries, matching people, writing rows, idempotency, and run history.
- * An adapter never touches SQL.
+ * The connector and adapter interfaces. Every source implements
+ * `ConnectorAdapter`: `test` proves credentials, and `sync` yields normalized
+ * events and returns a cursor. The framework does scheduling, retries, matching
+ * people, writing rows, idempotency and run history; an adapter never touches
+ * SQL.
  *
  * @module server/connectors/types
  */

@@ -22,8 +22,8 @@ IMPORTANT REASONING GUIDELINES:
 - If both contacts share similar professional context (industry, location, network), weigh that as evidence`;
 
 /**
- * Evaluate a batch of candidate pairs via AI.
- * Enhanced with source platform info and embedding similarity context.
+ * Ask the model about a batch of candidate pairs, with their source platforms
+ * and embedding similarity.
  */
 export async function evaluateBatchWithAI(
   candidates: {

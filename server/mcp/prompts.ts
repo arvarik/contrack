@@ -1,10 +1,8 @@
 /**
- * server/mcp/prompts.ts — MCP Prompts for Contrack.
- *
- * Implements:
- * - catch_me_up(contact): Briefing prompt with timeline inlined. The
- *   argument is a name or a contact ID, and a client completes the name.
- * - weekly_review(): Overdue, due this week, at-risk, and activity review
+ * MCP prompts:
+ * - catch_me_up(contact): a briefing with the timeline inlined. The argument is
+ *   a name or a contact ID, and a client completes the name.
+ * - weekly_review(): overdue, due this week, at-risk, and activity.
  *
  * @module server/mcp/prompts
  */

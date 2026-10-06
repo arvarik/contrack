@@ -1,9 +1,6 @@
 /**
- * Zero-State Service — Deterministic CRM intelligence for the Cmd+K zero-state.
- *
- * All queries are pure SQLite with prepared statements. No AI calls, no external
- * APIs. Target latency: < 10ms total. The payload powers the "intelligent
- * zero-state" that appears when the command palette opens with an empty input.
+ * The command palette's empty state: read-only SQLite with prepared statements,
+ * no AI and no outside calls, under 10 ms.
  *
  * @module server/services/zeroStateService
  */
@@ -15,7 +12,7 @@ import type { Scope } from "../tenancy/scope.ts";
 import { getPendingClusterCount } from "./dedupe/suggestions.ts";
 import { actionItemService } from "./actionItemService.ts";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+// Types
 
 export interface ZeroStateInsight {
   type: "action_items" | "catch_up" | "ghost" | "stale_data" | "dedupe";
@@ -36,15 +33,12 @@ export interface ZeroStatePayload {
   insights: ZeroStateInsight[];
 }
 
-// ─── Prepared Statements (cached on first call) ──────────────────────────────
-// Three statements, each taking the owner as its first bound parameter. The
+// Prepared statements, each taking the owner as its first parameter. The
 // follow-up count is the badge's (`actionItemService.getUrgentCount`) and the
-// duplicate count is the review's (`getPendingClusterCount`), so the palette
-// never disagrees with them.
-//
-// A catch-up is a tracked contact past its cadence: the same rule as the
-// Catch up group on Pulse, from `catchUp.ts`, so the two never disagree about
-// who needs a call. The two furthest past due are the palette's signal.
+// duplicate count the review's (`getPendingClusterCount`), so the palette
+// agrees with both. A catch-up is a tracked contact past its cadence, the rule
+// of Pulse's Catch up group (`catchUp.ts`); the two furthest past due are the
+// palette's signal.
 
 const stmts = {
   catchUp: sqlite.prepare(`
@@ -81,7 +75,7 @@ const stmts = {
   `),
 };
 
-// ─── Service ─────────────────────────────────────────────────────────────────
+// Service
 
 export const zeroStateService = {
   /**

@@ -1,9 +1,7 @@
 /**
- * server/connectors/adapters/imap.ts — IMAP email connector adapter.
- *
- * Connects to any standard IMAP server (Gmail, Fastmail, iCloud, Dovecot, etc.)
- * using app passwords. Pulls message headers, normalizes them into interactions,
- * and optionally fetches bodies to generate AI summaries for matched contacts.
+ * The IMAP connector: any standard IMAP server (Gmail, Fastmail, iCloud,
+ * Dovecot) with an app password. It pulls message headers into interactions,
+ * and fetches bodies for AI summaries of matched contacts when asked.
  *
  * @module server/connectors/adapters/imap
  */

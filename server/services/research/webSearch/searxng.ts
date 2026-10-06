@@ -1,14 +1,8 @@
-// =============================================================================
-// Research — SearXNG, a self-hosted web search
-// =============================================================================
-// A SearXNG instance answers each query through its JSON API. The admin sets
-// its address in Settings → Administration → AI → Web search, or with
-// SEARXNG_URL.
-//
-// The instance is the admin's own and often has a private address, so this
-// call does not go through the public-URL guard. The result pages do: the
-// technique that reads them fetches each one with safeFetch.
-// =============================================================================
+// SearXNG, a self-hosted web search, through its JSON API. The admin sets its
+// address in Settings → Administration → AI → Web search, or with SEARXNG_URL.
+// It is the admin's own instance and often on a private address, so this call
+// skips the public-URL guard. The result pages do not: the technique that reads
+// them fetches each with safeFetch.
 
 import { readBodyCapped } from "../../../utils/urlSafety.ts";
 import { AppError } from "../../../utils/AppError.ts";

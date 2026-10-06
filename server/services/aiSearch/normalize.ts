@@ -1,6 +1,3 @@
-// =============================================================================
-// AI Search — Normalization
-// =============================================================================
 // How research output is compared and tidied, in one place for the parser
 // and the merge engine:
 //
@@ -14,7 +11,6 @@
 //                     a page cuts or numbers it
 //   researchDate      a date as the dossier stores it: "YYYY" or "YYYY-MM"
 //   linkedInHandle    the profile a LinkedIn address names
-// =============================================================================
 
 /**
  * One employer or school, however a page writes it: "Northwind Partners, LP"
@@ -226,13 +222,11 @@ const MONTHS: Record<string, number> = {
 };
 
 /**
- * A research date as the dossier stores it, or undefined.
- *
- * "2018", "2018-1", "2018-01-15", "2018-01-15T00:00:00Z", "Jan 2018",
- * "January 2018" and "1/2018" all read; "Present" and anything else do not,
- * because the dossier would print it as written. A model wrote
- * "2023-08-01T00:00:00.000Z-05:00 to 2025-05-01…" into one field, and
- * "2023-08" followed by a stray character into another (2026-09-26).
+ * A research date as the dossier stores it, or undefined. "2018", "2018-1",
+ * "2018-01-15", "2018-01-15T00:00:00Z", "Jan 2018", "January 2018" and "1/2018"
+ * all read; "Present" and anything else do not, because the dossier would print
+ * it as written. A model wrote "2023-08-01T00:00:00.000Z-05:00 to 2025-05-01…"
+ * into one field, and "2023-08" followed by a stray character into another.
  */
 export function researchDate(
   value: string | null | undefined,
@@ -300,11 +294,10 @@ function itemKey(item: string): string {
 }
 
 /**
- * True when two items of a list value are one: the same words, or one a
- * cut-off copy of the other. A page wrote "572 Tidal Patterns in Harbor
- * Sediment" for "Tidal Patterns in Harbor Sediment", and another cut a title
- * short (2026-10-05). Short items must match whole, so "Award" and "Awards
- * dinner" stay two.
+ * True when two items of a list value are one: the same words, or one a cut-off
+ * copy of the other. A page wrote "572 Tidal Patterns in Harbor Sediment" for
+ * "Tidal Patterns in Harbor Sediment", and another cut a title short. Short
+ * items must match whole, so "Award" and "Awards dinner" stay two.
  */
 export function sameItem(a: string, b: string): boolean {
   const x = itemKey(a);

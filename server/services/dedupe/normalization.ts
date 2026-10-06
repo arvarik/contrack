@@ -1,16 +1,7 @@
-// =============================================================================
-// Dedupe Normalization Pipeline — Contact Pre-Processing for Entity Resolution
-// =============================================================================
-// Transforms raw database contacts into comparison-ready NormalizedContact
-// structures. This is the Tier 0 layer of the dedupe funnel — all subsequent
-// matching tiers operate on NormalizedContact, never raw DB rows.
-//
-// Design principles:
-// - Batch SQL loading: emails, phones, sources loaded in 3 queries, not N+1
-// - Pure computation after SQL: normalizeContact() is side-effect-free
-// - Idempotent: calling normalizeContacts() twice yields identical results
-// - Embedding-ready: embeddingText is pre-formatted for Gemini API
-// =============================================================================
+// Dedupe normalization: raw contacts into comparison-ready NormalizedContact
+// records, the first tier of the dedupe funnel. Every later tier reads
+// NormalizedContact, never raw rows. Emails, phones and sources load in 3
+// queries, not N+1, and normalizeContact() is pure after that.
 
 import { sqlite } from "../../db.ts";
 import { scopeForOwnerId, type Scope } from "../../tenancy/scope.ts";
@@ -22,13 +13,11 @@ import {
   tokenizeName,
 } from "../../utils/nlp/index.ts";
 
-// =============================================================================
 // Types
-// =============================================================================
 
 /**
- * Raw contact row from the database — the minimal shape needed for normalization.
- * Uses `any` for optional fields since SQLite returns null for missing columns.
+ * The raw contact row normalization needs. Optional fields are null when the
+ * column is empty.
  */
 export interface RawContactRow {
   id: string;
@@ -45,9 +34,8 @@ export interface RawContactRow {
 }
 
 /**
- * Fully normalized contact record ready for dedupe comparison.
- * Every string field is lowercase/trimmed. Phonetic codes and blocking keys
- * are pre-computed so matching passes never recompute them.
+ * A contact ready for dedupe comparison: string fields lowercased and trimmed,
+ * phonetic codes and blocking keys computed once.
  */
 export interface NormalizedContact {
   id: string;
@@ -82,22 +70,18 @@ export interface NormalizedContact {
 
 // tokenizeName is imported directly from nlp.ts (pure-functional string utility)
 
-// =============================================================================
-// Blocking Key Generation
-// =============================================================================
+// Blocking keys
 
 /**
- * Generate multi-key blocking keys for a normalized contact.
- * Each key becomes an entry in an inverted index — contacts sharing a key
- * become candidate pairs for comparison.
- *
- * Key prefixes ensure no collisions between key types:
- * - LN:  Last name exact
- * - LNM: Last name Metaphone
- * - FL3: First 3 chars of first name + last name (catches "Jonathan/John")
- * - CF:  Company + first initial (same company, same first letter)
- * - EM:  Normalized email (already catches exact matches, but useful for blocking)
- * - PH:  Normalized phone (ditto)
+ * Blocking keys for a contact. Each key is an entry in an inverted index, and
+ * contacts sharing a key become candidate pairs. The prefixes keep key types
+ * apart:
+ * - LN:  last name
+ * - LNM: last name Metaphone
+ * - FL3: first 3 letters of the first name + last name ("Jonathan" and "John")
+ * - CF:  company + first initial
+ * - EM:  normalized email
+ * - PH:  normalized phone
  */
 export function generateBlockKeys(contact: NormalizedContact): string[] {
   const keys: string[] = [];
@@ -140,17 +124,12 @@ export function generateBlockKeys(contact: NormalizedContact): string[] {
   return keys;
 }
 
-// =============================================================================
-// Embedding Text Generation
-// =============================================================================
+// Embedding text
 
 /**
- * Format a contact's key fields into a string suitable for embedding via
- * Gemini's `gemini-embedding-2-preview` model.
- *
- * Uses the `task: clustering | query: ...` prompt format required by the
- * new embedding model (it uses prompt-based task instructions, not the old
- * `task_type` enum).
+ * A contact's key fields as one embedding text, in the `task: clustering |
+ * query: ...` form that gemini-embedding-2-preview reads as its task
+ * instruction.
  */
 export function contactToEmbeddingString(
   contact: NormalizedContact,
@@ -196,12 +175,10 @@ export function contactToEmbeddingString(
   return `task: clustering | query: ${content}`;
 }
 
-// =============================================================================
-// Single Contact Normalization
-// =============================================================================
+// One contact
 
 /**
- * Normalize a single contact row with pre-loaded child data.
+ * Normalize one contact row with its child data already loaded.
  *
  * @param raw         - The contact row from the contacts table
  * @param emails      - Pre-loaded email rows for this contact
@@ -279,18 +256,12 @@ export function normalizeContact(
   return contact;
 }
 
-// =============================================================================
-// Batch Normalization (Performance-Optimized)
-// =============================================================================
+// All contacts
 
 /**
- * Normalize all active contacts in a single efficient pass.
- *
- * Instead of N+1 queries (1 per contact for emails, phones, sources),
- * this loads ALL child data in 3 bulk queries and builds lookup maps.
- * For 1,082 contacts, this takes ~20ms instead of ~3,000ms.
- *
- * Only active, non-ghost, non-archived contacts are normalized.
+ * Normalize every active, non-ghost, non-archived contact of the owner. All
+ * child data loads in 3 bulk queries into lookup maps, not one query per
+ * contact: about 20 ms for 1,082 contacts instead of about 3 s.
  *
  * @returns Array of NormalizedContact ready for dedupe matching.
  */
@@ -305,10 +276,9 @@ export function normalizeContacts(scope: Scope): NormalizedContact[] {
 
   if (allContacts.length === 0) return [];
 
-  // 2. Batch-load the owner's emails → Map<contactId, emails[]>
-  // The child tables carry no owner of their own, so each batch load joins
-  // back to contacts. Without the join these maps would hold every owner's
-  // rows on a shared instance, which is a memory cost as well as a leak risk.
+  // 2. The owner's emails → Map<contactId, emails[]>. Child tables carry no
+  //    owner, so each load joins back to contacts, or the maps would hold every
+  //    owner's rows.
   const allEmails = sqlite
     .prepare(
       `SELECT ce.contactId, ce.email FROM contact_emails ce
@@ -401,19 +371,15 @@ export function normalizeContacts(scope: Scope): NormalizedContact[] {
   return normalized;
 }
 
-// =============================================================================
 // Profile links
-// =============================================================================
 
 /**
  * A profile link reduced to what names the page: host and path, lowercased,
- * with no protocol, no `www.` or mobile host, no query, no fragment and no
- * trailing slash. A LinkedIn profile is `linkedin.com/in/<handle>`, whatever
- * country host or extra path it was saved with.
- *
- * Two exports of one person write their link a little differently, and a
- * comparison of the raw strings missed "linkedin.com/in/priya-raman-42"
- * beside the same link with a slash at the end.
+ * with no protocol, `www.` or mobile host, query, fragment or trailing slash. A
+ * LinkedIn profile is `linkedin.com/in/<handle>`, whatever country host or
+ * extra path it was saved with. Two exports of one person write a link a little
+ * differently, such as "linkedin.com/in/priya-raman-42" with and without a
+ * trailing slash.
  */
 export function normalizeProfileUrl(url: string): string {
   const raw = url
@@ -440,11 +406,9 @@ export function normalizeProfileUrl(url: string): string {
 }
 
 /**
- * Whether a normalized link names one person rather than a group or a site.
- *
- * A company page, a school or a group is shared by everybody who works or
- * studied there, so two colleagues who both saved it are not one person. A
- * bare host, such as a site's front page, names nobody.
+ * Whether a normalized link names one person rather than a group or a site. A
+ * company page, a school or a group is shared by everyone there, so two
+ * colleagues who saved it are not one person. A bare host names nobody.
  */
 export function isPersonalProfile(normalized: string): boolean {
   const slash = normalized.indexOf("/");
@@ -480,13 +444,11 @@ export function loadProfileUrls(scope: Scope): Map<string, string[]> {
   return byContact;
 }
 
-// =============================================================================
-// Utility: Normalize a Single Contact by ID (for incremental checks)
-// =============================================================================
+// One contact by id, for incremental checks
 
 /**
- * Load and normalize a single contact by ID.
- * Used for incremental dedup checks after contact create/edit.
+ * Load and normalize one contact, for the incremental dedupe check after a
+ * create or edit.
  */
 export function normalizeContactById(
   scope: Scope,
@@ -534,22 +496,12 @@ export function normalizeContactById(
 }
 
 /**
- * The scope a background path should use when all it has is a contact id.
- *
- * A fire-and-forget embedding or a debounced dedupe check runs with no request
- * behind it, so the owner comes from the row itself rather than from the
- * async context, which a stream or a timer can lose. Returns null when the
- * contact is gone, which is the "nothing to do" every caller already handles.
- *
- * `incrementalDedupeCheck` is the settled use: it is handed a contact id and
- * nothing else, so this is where its scope comes from, and it opens a
- * `runWithContext` around the rest of the check.
- *
- * The two embedding callers in `dedupe/embeddings.ts` kept this form in 2h.
- * Each is a fire-and-forget promise started inside a request handler, so the
- * caller's context is still attached when its provider call records an
- * invocation, and the row it reads answers the owner when it is not. The two
- * sweeps that had no context at all became per-owner loops instead.
+ * The scope a background path uses when all it has is a contact id. A
+ * fire-and-forget embedding or a debounced dedupe check has no request behind
+ * it, so the owner comes from the row, not from the async context, which a
+ * stream or a timer can lose. Null when the contact is gone, which every caller
+ * treats as nothing to do. `incrementalDedupeCheck` takes its scope from here
+ * and opens a `runWithContext` around the rest of the check.
  */
 export function scopeOfContact(contactId: string): Scope | null {
   const row = sqlite

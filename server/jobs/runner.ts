@@ -1,31 +1,29 @@
-// =============================================================================
-// The job runner: background work from one durable table
-// =============================================================================
-// Every piece of background work is a row in `jobs` with a kind, an owner (or
-// none, for the instance's own work), a payload and a time to run. A kind is
-// declared once in code (`defineJob`) and registered in the process that runs
-// it. The runner:
+// The job runner: background work from one durable table.
+//
+// Every piece of background work is a row in `jobs` with a kind, an owner (none
+// for the instance's own work), a payload and a time to run. A kind is declared
+// once in code (`defineJob`) and registered in the process that runs it. The
+// runner:
 //
 // - polls once a second while background jobs are on, and runs at most
 //   JOB_CONCURRENCY jobs at once (default 2);
 // - takes turns between owners, so one account's backlog never holds up
-//   another's. Instance jobs, which have no owner, take their turn as one;
+//   another's. Instance jobs take their turn as one owner;
 // - runs an owner's job inside runWithContext with that owner's scope;
 // - retries a job that throws, with backoff, until its `maxAttempts`, then
 //   leaves it `failed` with the error;
-// - at boot puts every `running` row back in the queue, because the process
-//   that ran it is gone;
+// - at boot queues every `running` row again, because the process that ran it
+//   is gone;
 // - keeps one queued row for each recurring kind (`every`) through its
-//   `dedupeKey`. A run that ends, done or failed, schedules the next one, and
-//   the finished row stays for the admin route until maintenance removes it.
+//   `dedupeKey`. A run that ends schedules the next, and the finished row stays
+//   for the admin route until maintenance removes it.
 //
-// `runJobNow` runs a job in the calling process and records it. It works with
-// DISABLE_BACKGROUND_JOBS=true, which is how every test runs. `pollJobs` is
-// what the poll calls, and a test calls it too, with background jobs off.
+// `runJobNow` runs a job in the calling process and records it, even with
+// DISABLE_BACKGROUND_JOBS=true, as every test runs. A test also calls
+// `pollJobs`, the poll's own step.
 //
 // `jobs` is not an owned table (an instance job has no owner), so its
 // statements say why they name no owner.
-// =============================================================================
 
 import crypto from "node:crypto";
 import type { ZodType } from "zod";
@@ -52,14 +50,14 @@ export interface JobContext {
 }
 
 /**
- * One kind of background work.
- *
- * `every` and `atStart` declare when it runs by itself:
- * - `every` makes it recurring: the gap in milliseconds from the end of one
- *   run to the start of the next. A function is read each time a run is
- *   scheduled, for a gap that a setting can change. Null or 0 turns it off.
+ * One kind of background work. `every` and `atStart` say when it runs by
+ * itself:
+ * - `every` makes it recurring: the gap in milliseconds from the end of one run
+ *   to the start of the next. A function is read at each scheduling, for a gap
+ *   a setting can change. Null or 0 turns it off.
  * - `atStart` runs it when the runner starts: `true` at once, a number that
  *   many milliseconds later. Without `every`, that is the only time it runs.
+ *
  * A kind with neither runs when something enqueues it, or through runJobNow.
  */
 export interface JobDefinition<P = Record<string, unknown>> {
@@ -171,9 +169,7 @@ function startDelayOf(definition: JobDefinition<unknown>): number | null {
   return null;
 }
 
-// -----------------------------------------------------------------------------
 // Writing rows
-// -----------------------------------------------------------------------------
 
 /**
  * Put a row in the queue, or move the queued row that holds `dedupeKey`.
@@ -237,12 +233,12 @@ export interface EnqueueOptions {
 }
 
 /**
- * Queue a job. It runs when it is due, in the process that polls, which is
- * the server with background jobs on.
+ * Queue a job. It runs when due, in the process that polls (the server, with
+ * background jobs on).
  *
  * @returns the row's id, or null when a running row holds `dedupeKey`. The
- *   running job read its input when it started, so a change that lands while
- *   it runs waits for the next enqueue.
+ *   running job read its input when it started, so a change that lands
+ *   meanwhile waits for the next enqueue.
  */
 export function enqueueJob(
   kind: string,
@@ -293,9 +289,7 @@ export function nextRunOf(kind: string): string | null {
   return row?.runAt ?? null;
 }
 
-// -----------------------------------------------------------------------------
 // Running rows
-// -----------------------------------------------------------------------------
 
 interface JobRow {
   id: string;
@@ -490,10 +484,9 @@ function takeTurns(due: JobRow[], free: number): JobRow[] {
 }
 
 /**
- * Start the jobs that are due at `now`, as many as JOB_CONCURRENCY allows
- * beside the ones running already. Resolves when the jobs it started have
- * ended. The poll calls it every second, and it works with background jobs
- * off, so a test can call it.
+ * Start the jobs due at `now`, as many as JOB_CONCURRENCY allows beside those
+ * running. Resolves when the jobs it started have ended. The poll calls it
+ * every second, and it works with background jobs off, so a test can call it.
  */
 export async function pollJobs(now: number = Date.now()): Promise<void> {
   if (stopping) return;
@@ -561,9 +554,7 @@ export async function runJobNow(
   return row.id;
 }
 
-// -----------------------------------------------------------------------------
 // Boot and shutdown
-// -----------------------------------------------------------------------------
 
 /**
  * Put every `running` row back in the queue: the process that ran it has
@@ -595,10 +586,10 @@ export function requeueInterruptedJobs(): number {
 
 /**
  * Give every declared kind its queued run: a start-up job its one run, and a
- * recurring job its next one. `atStart` runs now, or after its delay, even
- * when a previous process left a later run queued. A recurring job without
- * it keeps the run a previous process queued, brought forward when its gap
- * has since shrunk. A recurring job that is switched off loses its queued run.
+ * recurring job its next. `atStart` runs now or after its delay, even when a
+ * previous process queued a later run. A recurring job without it keeps the run
+ * a previous process queued, brought forward when its gap has shrunk. A
+ * recurring job that is switched off loses its queued run.
  */
 export function scheduleDeclaredJobs(now: number = Date.now()): void {
   for (const definition of kinds.values()) {
@@ -686,9 +677,7 @@ export async function stopJobRunner(deadlineMs = 5_000): Promise<void> {
   ]);
 }
 
-// -----------------------------------------------------------------------------
 // The admin view
-// -----------------------------------------------------------------------------
 
 /**
  * Every recurring kind with its last run and its next, and the jobs that

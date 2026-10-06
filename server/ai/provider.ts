@@ -1,10 +1,5 @@
-// =============================================================================
-// AI Layer — Abstract Provider Interface
-// =============================================================================
-// The single contract that every LLM provider adapter must implement.
-// Business logic in aiService.ts programs against this interface,
-// never against SDK-specific classes.
-// =============================================================================
+// The contract every LLM provider adapter implements. Business code programs
+// against it, never against an SDK.
 
 import type {
   AIGenerateOptions,
@@ -15,14 +10,11 @@ import type { ModelClass } from "./routing/registry.ts";
 import type { EmbedUse } from "./embedder.ts";
 
 /**
- * Which capabilities a discovered model can serve.
- *
- * "grounding" is deliberately separate from "chat": every provider that can
- * ground answers in live web search only supports it on a *subset* of its
- * chat models, and offering the rest as web-research options produces a
- * setting that saves fine and then fails at call time. No provider reports
- * this in its list-models response, so each adapter derives it from the
- * documented model families — see `listModels` in each adapter.
+ * Which capabilities a discovered model can serve. "grounding" is apart from
+ * "chat" because every provider grounds in live web search on only some of its
+ * chat models, and offering the rest for research makes a setting that saves
+ * and then fails. No provider reports it, so each adapter derives it from the
+ * model families (`listModels`).
  */
 export type ModelCapability = "chat" | "embeddings" | "grounding";
 
@@ -35,13 +27,12 @@ export interface ModelInfo {
   /** What this model can be used for. */
   capabilities: ModelCapability[];
   /**
-   * How chat/embeddings capability was determined:
+   * How chat and embeddings capability was found:
    * - "declared": the provider's API states it (Gemini, Anthropic)
-   * - "guessed":  inferred from the id (OpenAI, compat servers) — the UI
-   *               lets the user override.
+   * - "guessed":  inferred from the id (OpenAI, compatible servers); the UI
+   *   lets the user override it
    *
-   * Note this does NOT describe "grounding", which is always inferred from
-   * the model family regardless of provider.
+   * "grounding" is always inferred from the model family.
    */
   capabilityConfidence: "declared" | "guessed";
   /** Optional context-window size, when the provider reports it. */
@@ -59,45 +50,34 @@ export interface ModelInfo {
 }
 
 /**
- * Abstract interface for an LLM provider.
- *
- * Each concrete adapter (Gemini, OpenAI, Anthropic, Ollama, etc.) implements
- * this interface, translating the provider-agnostic `AIGenerateOptions` into
- * the SDK-specific API call and normalizing the response into `AIGenerateResult`.
+ * An LLM provider. Each adapter (Gemini, OpenAI, Anthropic, OpenAI-compatible)
+ * translates `AIGenerateOptions` into its SDK call and normalizes the answer
+ * into `AIGenerateResult`.
  */
 export interface AIProvider {
   /** Human-readable provider name for logging (e.g., "Gemini", "OpenAI"). */
   readonly name: string;
 
   /**
-   * Send a prompt to the LLM and return the response.
-   *
-   * Implementations should:
-   * 1. Translate `options.jsonSchema` into their native schema format
-   * 2. Handle model fallbacks / retries internally
-   * 3. Measure and report latency in the result
-   * 4. Extract token counts from provider-specific response metadata
+   * Send a prompt and return the answer. An adapter translates
+   * `options.jsonSchema` to its native format, handles model fallbacks and
+   * retries, and reports latency and token counts.
    *
    * @throws Error if all models / retries are exhausted
    */
   generate(options: AIGenerateOptions): Promise<AIGenerateResult>;
 
   /**
-   * Optional: the same generation, streamed.
+   * Optional: the same generation, streamed. `onDelta` gets each new piece of
+   * text in order, then the call resolves with what `generate` returns, `text`
+   * being the pieces joined. The Ask brief uses it so the text grows word by
+   * word.
    *
-   * Calls `onDelta` with each new piece of text, in order, as the provider
-   * sends it, then resolves with the result `generate` would return: `text`
-   * is the whole answer, the pieces joined. The Ask brief uses it so the
-   * text grows word by word.
-   *
-   * Implementations follow the rules of `generate` for `signal`, `timeoutMs`
-   * and model routing. A request that asks for JSON or for search grounding
-   * is not streamed: the adapter runs `generate` and sends the text as one
-   * piece. A retry is allowed only before the first piece, because a piece
-   * already sent cannot be taken back.
-   *
-   * `streamFor` in the gateway calls `generate` and sends one piece when an
-   * adapter has no stream.
+   * The rules of `generate` hold for `signal`, `timeoutMs` and routing. A JSON
+   * or grounded request is not streamed: the adapter runs `generate` and sends
+   * one piece. A retry is allowed only before the first piece, because a sent
+   * piece cannot be taken back. For an adapter without a stream, `streamFor` in
+   * the gateway calls `generate` and sends one piece.
    */
   generateStream?(
     options: AIGenerateOptions,
@@ -105,44 +85,31 @@ export interface AIProvider {
   ): Promise<AIGenerateResult>;
 
   /**
-   * Optional: Return routing diagnostics and quota state.
-   *
-   * Only meaningful for providers with built-in quota tracking (Gemini).
-   * Non-Gemini providers may omit this — callers should use the
-   * `getQuotaSnapshot()` helper on the barrel export which returns a
-   * safe empty snapshot as fallback.
+   * Optional: routing diagnostics and quota state, for providers that track
+   * quota (Gemini). The `getQuotaSnapshot()` helper on the barrel export
+   * returns an empty snapshot for the rest.
    */
   getQuotaSnapshot?(): DiagnosticsSnapshot;
 
   /**
-   * Optional: whether this provider can ground responses in live web search.
-   * Defaults to true for the three native adapters; the generic
-   * OpenAI-compatible adapter sets it false.
+   * Optional: whether this provider can ground answers in live web search. True
+   * by default for the three native adapters; the OpenAI-compatible adapter
+   * sets it false.
    */
   readonly supportsSearchGrounding?: boolean;
 
   /**
-   * Optional: enumerate models available to these credentials.
-   * Used by the settings UI for discovery + key validation. Providers
-   * without a list API omit it.
+   * Optional: the models these credentials can use, for discovery and key
+   * validation in Settings. Omitted by providers without a list API.
    */
   listModels?(): Promise<ModelInfo[]>;
 
   /**
-   * Optional: the model id this provider would actually use for a routing
-   * class, with no pin in effect.
-   *
-   * Settings previously described unpinned capabilities as "chosen
-   * automatically", which is true and useless — it tells the user nothing
-   * about what will run or what it costs. Adapters that can name their pick
-   * ahead of the call implement this so the UI can show the model instead of
-   * the word "automatically".
-   *
-   * Returns undefined when the choice genuinely cannot be known in advance
-   * (a compat endpoint whose model set is arbitrary).
-   *
-   * `grounding` asks for a model that can search the web, which research
-   * needs and the class alone does not say.
+   * Optional: the model this provider would use for a routing class with no
+   * pin, so Settings can name the model instead of "automatically". Undefined
+   * when the choice cannot be known in advance (a compatible endpoint with an
+   * arbitrary model set). `grounding` asks for a model that can search the web,
+   * which research needs.
    */
   defaultModelFor?(
     modelClass: ModelClass,
@@ -150,12 +117,10 @@ export interface AIProvider {
   ): string | undefined;
 
   /**
-   * Optional: generate embedding vectors. Only implemented by providers whose
-   * models are selectable for the embeddings capability.
-   *
-   * `use` says what the texts are for. An adapter whose models embed by task
-   * reads it (Gemini's task types), and an adapter that does not ignores it.
-   * A call with no use gets the model's default.
+   * Optional: embedding vectors, from providers whose models can serve the
+   * embeddings capability. `use` says what the texts are for: an adapter whose
+   * models embed by task reads it (Gemini's task types), others ignore it, and
+   * a call without one gets the model's default.
    */
   embed?(texts: string[], model: string, use?: EmbedUse): Promise<number[][]>;
 }

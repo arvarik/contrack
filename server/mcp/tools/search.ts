@@ -1,9 +1,5 @@
 /**
- * server/mcp/tools/search.ts — Search MCP tools for people and notes.
- *
- * Implements:
- * - search_people
- * - search_notes
+ * Search MCP tools: search_people and search_notes.
  *
  * @module server/mcp/tools/search
  */

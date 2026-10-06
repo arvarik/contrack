@@ -7,13 +7,10 @@ import { AppError } from "../../utils/AppError.ts";
 import type { Scope } from "../../tenancy/scope.ts";
 
 /**
- * Read one of this account's active contacts before enriching it.
- *
- * The owner is in the same statement as the id, so a contact another account
- * owns is not found here. It keeps the 409 a deleted or archived id has
- * always taken rather than becoming a 404: the two answers are identical
- * either way, which is what the rule about not distinguishing "gone" from
- * "not yours" is for, and the endpoint's existing contract is unchanged.
+ * Read one of this account's active contacts before enriching it. The owner is
+ * in the same statement as the id, so another account's contact is not found.
+ * Not found answers 409, like a deleted or archived contact, so "gone" and "not
+ * yours" look the same.
  */
 export function enrichmentContact(scope: Scope, id: string): HydratedContact {
   const row = sqlite

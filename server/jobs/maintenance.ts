@@ -1,9 +1,5 @@
-// =============================================================================
-// Jobs: the daily maintenance sweep
-// =============================================================================
-// Removes the rows nothing else removes (maintenanceService), at start and
-// every day after.
-// =============================================================================
+// The daily maintenance sweep of rows nothing else removes
+// (maintenanceService), at start and every day after.
 
 import { defineJob } from "./runner.ts";
 import { runDailyMaintenance } from "../services/maintenanceService.ts";

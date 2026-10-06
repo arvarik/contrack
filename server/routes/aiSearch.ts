@@ -1,10 +1,7 @@
-// =============================================================================
-// AI Search — API Routes
-// =============================================================================
-// POST /api/ai-search        — Start a new batch
-// GET  /api/ai-search/status — Poll batch status (fallback for SSE)
-// GET  /api/ai-search/stream — SSE stream for real-time batch updates
-// =============================================================================
+// AI Search routes:
+// POST /api/ai-search        start a batch
+// GET  /api/ai-search/status poll batch status (fallback for SSE)
+// GET  /api/ai-search/stream SSE stream of batch updates
 
 import { Router } from "express";
 import { z } from "zod";
@@ -28,15 +25,13 @@ import { researchDepthSchema } from "../../shared/researchDepth.ts";
 
 export const aiSearchRouter = Router();
 
-// =============================================================================
 // Validation
-// =============================================================================
 
-/** Caps batch size at 100 to prevent accidental mega-batches */
-// NOTE: There is no rate limit of our own here. A 5-minute cooldown refused a
-// second enrichment with 429 while the provider had capacity to spare, and
-// the provider's own 429 already pauses a model in the adapter. One batch
-// runs at a time, and a second start by the same account joins it.
+/**
+ * At most 100 contacts a batch. No rate limit of its own: the provider's 429
+ * pauses a model in the adapter, one batch runs at a time, and a second
+ * start by the same account joins it.
+ */
 const aiSearchBodySchema = researchChoiceSchema
   .extend({
     contactIds: z
@@ -49,10 +44,10 @@ const aiSearchBodySchema = researchChoiceSchema
       ),
     /**
      * How to search, in the app's words: the research model's own search
-     * ("two-pass"), SearXNG alone ("searxng"), or both ("combined"). It
-     * names a technique and a web search (`STRATEGY_CHOICE`), so a body
-     * names it or `technique` and `webSearch`, not both. When all are
-     * absent, the account's web search engine.
+     * ("two-pass"), SearXNG alone ("searxng"), or both ("combined"). It names a
+     * technique and a web search (`STRATEGY_CHOICE`), so a body names it or
+     * `technique` and `webSearch`, not both. With none, the account's web
+     * search engine.
      */
     strategy: z.enum(["two-pass", "searxng", "combined"]).optional(),
     /** How thoroughly to research each contact. Default "standard". */
@@ -63,9 +58,7 @@ const aiSearchBodySchema = researchChoiceSchema
     "Name a strategy, or a technique and a web search, not both",
   );
 
-// =============================================================================
 // POST /ai-search — Start a new batch
-// =============================================================================
 
 aiSearchRouter.post(
   "/ai-search",
@@ -85,10 +78,8 @@ aiSearchRouter.post(
     // own running batch does not refuse; the new contacts join it below.
     const check = jobQueue.canStartBatch(scope);
     if (!check.allowed) {
-      // This used to be a bare `res.status(429).json({ error: string })`,
-      // which is the one place in the API that did not send the standard
-      // envelope. `details.yours` is false: somebody else's batch holds the
-      // shared provider lock.
+      // The standard error envelope. `details.yours` is false: somebody else's
+      // batch holds the shared provider lock.
       return next(
         new RateLimitedError(check.reason ?? "Please try again shortly.", {
           yours: check.yours,
@@ -145,9 +136,7 @@ aiSearchRouter.post(
   }),
 );
 
-// =============================================================================
 // GET /ai-search/status — Poll batch status (fallback for SSE)
-// =============================================================================
 
 aiSearchRouter.get(
   "/ai-search/status",
@@ -163,9 +152,7 @@ aiSearchRouter.get(
   }),
 );
 
-// =============================================================================
 // GET /ai-search/stream — SSE stream for real-time batch updates
-// =============================================================================
 
 aiSearchRouter.get("/ai-search/stream", (req, res) => {
   const batchId = z.string().min(1).max(100).parse(req.query.batchId);

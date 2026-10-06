@@ -1,24 +1,12 @@
-// =============================================================================
-// Server Helpers — Lightweight Utilities
-// =============================================================================
-// This file is intentionally minimal. Domain logic lives in:
-//   - server/repositories/contactRepository.ts  (hydration + child persistence)
-//   - server/utils/nlp/index.ts                  (name similarity, nicknames, etc.)
-//   - server/utils/AppError.ts                   (typed application errors)
-//   - server/middleware/errorHandler.ts          (Express error translation)
-//
-// URL utilities (detectPlatformFromUrl, extractHandleFromUrl) live in
-// contactRepository.ts — the sole consumer.
-// =============================================================================
+// Small server helpers. Domain logic lives in contactRepository.ts (hydration
+// and child rows, URL utilities), utils/nlp/ (names), AppError.ts and
+// middleware/errorHandler.ts.
 
 /**
- * Whitelist of contact-table columns this server accepts in PATCH /api/contacts/:id
- * payloads. New scalar contact columns MUST be added here or they will be
- * silently dropped. Relations (emails, phones, etc.) are persisted separately
- * by {@link ContactRepository.insertChildRecords}.
- *
- * Kept as `const` so callers and tests get the exact tuple type rather than
- * a generic `readonly string[]`.
+ * The contact columns PATCH /api/contacts/:id may set. A new scalar contact
+ * column must be added here or it is dropped. Relations (emails, phones and the
+ * rest) go through {@link ContactRepository.insertChildRecords}. `const` keeps
+ * the exact tuple type.
  */
 const UPDATABLE_CONTACT_FIELDS = [
   "name",
@@ -54,30 +42,21 @@ const UPDATABLE_CONTACT_FIELDS = [
 ] as const;
 
 /**
- * Build a Drizzle/SQL UPDATE payload from an arbitrary request body.
+ * Build an SQL UPDATE payload from a request body:
+ * - Only fields in {@link UPDATABLE_CONTACT_FIELDS} pass; anything else (a
+ *   typo, a computed column like `relationshipScore`) is dropped. The caller's
+ *   Zod schema decides what is accepted, and this is the second filter.
+ * - `boolean` becomes `0` / `1`, because better-sqlite3 cannot bind booleans.
+ * - `undefined` is skipped, so a partial update leaves other columns alone.
+ *   Pass `null` to clear one.
+ * - `updatedAt` is always stamped.
  *
- * Rules:
- * - Only fields enumerated in {@link UPDATABLE_CONTACT_FIELDS} are forwarded.
- *   Unknown fields (typos, frontend mistakes, attempts to set computed columns
- *   like `relationshipScore`) are silently dropped — the caller's Zod schema
- *   is the source of truth for what's accepted.
- * - JavaScript `boolean` values are coerced to integer `0` / `1` because
- *   SQLite (via better-sqlite3) refuses to bind native booleans.
- * - `undefined` values are skipped so partial updates don't blow away
- *   existing columns. To explicitly null a column, pass `null`.
- * - `updatedAt` is ALWAYS stamped to `new Date().toISOString()` so the
- *   column reflects the most recent successful write.
- *
- * @param body - Untrusted request body. The caller is expected to have run
- *   Zod validation already; this function is the second filter (allow-list).
- * @returns A SQLite-bind-safe object containing only the columns to update,
- *   plus `updatedAt`. Always at minimum `{ updatedAt: string }`.
+ * @param body - Untrusted request body, already validated by Zod.
+ * @returns The columns to update plus `updatedAt`, safe to bind.
  *
  * @example
- * ```ts
- * buildContactUpdate({ name: "Alex", isArchived: true, hackerField: 1 });
- * // → { name: "Alex", isArchived: 1, updatedAt: "2026-05-14T…Z" }
- * ```
+ *   buildContactUpdate({ name: "Alex", isArchived: true, hackerField: 1 });
+ *   // → { name: "Alex", isArchived: 1, updatedAt: "2026-05-14T…Z" }
  */
 export function buildContactUpdate(
   body: Record<string, unknown>,
@@ -95,27 +74,12 @@ export function buildContactUpdate(
 }
 
 /**
- * Extract a human-readable error message from an unknown thrown value.
+ * The message of an unknown thrown value: `err.message` for an `Error`, else
+ * `String(err)`.
  *
- * TypeScript's `catch` clauses receive `unknown` by default (the safer
- * alternative to the legacy `any` typing). This helper is a one-liner
- * replacement for the boilerplate `err instanceof Error ? err.message :
- * String(err)` pattern that previously appeared at every call site.
- *
- * @param err - Anything `throw`n: an `Error` instance, a string, an object,
- *   `null`, `undefined`, or arbitrary JS values.
- * @returns The error's `message` when `err` is an `Error`; otherwise
- *   `String(err)` (which yields `"undefined"`, `"null"`, `"[object Object]"`,
- *   numeric string representations, etc.).
- *
- * @example
- * ```ts
- * try {
- *   await callExternalApi();
- * } catch (err: unknown) {
- *   log.error("contactService", getErrorMessage(err));
- * }
- * ```
+ * @param err - Anything thrown: an `Error`, a string, an object, `null`,
+ *   `undefined`.
+ * @returns The error's message, or `String(err)`.
  */
 export function getErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
@@ -123,15 +87,11 @@ export function getErrorMessage(err: unknown): string {
 }
 
 /**
- * A URL safe to write to a log: the path alone, with no query string.
- *
- * The query string carries the secrets and the personal text. An invitation,
- * a password reset and a sign-in link put their token there
- * (`/join?token=<secret>`), and the invitee's browser sends it to this server
- * as an ordinary page request. The palette search sends what a person typed
- * (`/api/search?q=<name>`), a link preview the URL a person pasted, and a
- * failed Google sign-in its `code` and `state`. The access log and the error
- * log keep the path, which names the route and the ids.
+ * A URL safe to log: the path alone, with no query string. The query string
+ * carries secrets and personal text: invitation, password reset and sign-in
+ * tokens (`/join?token=<secret>`), what a person typed in the palette
+ * (`/api/search?q=<name>`), a pasted link preview URL, and a failed Google
+ * sign-in's `code` and `state`. The path still names the route and the ids.
  */
 export function redactUrlForLog(url: string): string {
   const cut = url.search(/[?#]/);

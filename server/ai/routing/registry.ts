@@ -1,19 +1,13 @@
-// =============================================================================
-// AI Layer — Gemini Model Registry
-// =============================================================================
-// The Gemini models the router may pick when a capability is on Auto, with
-// what each is for. There is no free or paid profile here any more. Google
-// decides a key's limits from its Cloud project's billing, publishes no
-// free-tier numbers, and changes them without notice, so a table of guessed
-// limits either throttled paid keys or let free keys run into 429s. The
-// router now learns a limit from the 429 itself (see SmartRouter and the
-// Gemini adapter's circuit breaker).
+// The Gemini models the router may pick when a capability is on Auto, with what
+// each is for. There are no free or paid limits here: Google sets a key's
+// limits from its Cloud project's billing, publishes no free-tier numbers and
+// changes them without notice, so the router learns a limit from the 429 itself
+// (SmartRouter and the Gemini adapter's circuit breaker).
 //
-// MAINTENANCE: add a model when Google ships one. Models the key can see but
-// this list lacks are added from discovery (getActiveGeminiRegistry), so a new
-// generation is picked up without a release.
-// Prices: https://ai.google.dev/gemini-api/docs/pricing (September 2026).
-// =============================================================================
+// Add a model when Google ships one. Models the key can see that this list
+// lacks are added from discovery (getActiveGeminiRegistry), so a new generation
+// works without a release. Prices:
+// https://ai.google.dev/gemini-api/docs/pricing (September 2026).
 
 import {
   isChatModel,
@@ -27,16 +21,16 @@ import {
 /**
  * Stability tier for a model.
  * - "stable": GA model
- * - "preview": may change behaviour or be withdrawn; sorts after stable
+ * - "preview": may change behavior or be withdrawn; sorts after stable
  */
 export type ModelStability = "stable" | "preview";
 
 /**
- * Functional model class — describes what tier of capability the model offers.
- * Used by consumers to express a preference via `routing.prefer`.
- * - "lite":  Cheapest, fastest — good for simple extraction/classification
- * - "flash": Mid-tier — reasoning, summarisation, structured output, research
- * - "pro":   Most capable, slowest and dearest
+ * The model class, for `routing.prefer`:
+ * - "lite":  cheapest and fastest, for simple extraction and classification
+ * - "flash": the middle tier, for reasoning, summarization, structured output
+ *   and research
+ * - "pro":   the most capable, slowest and dearest
  */
 export type ModelClass = "lite" | "flash" | "pro";
 
@@ -63,14 +57,9 @@ export interface ModelConfig {
   supportsGrounding: boolean;
 }
 
-// =============================================================================
-// Model Registry
-// =============================================================================
-// No 2.5 models. Google serves them to existing projects only, and a new key
+// No 2.5 models: Google serves them to existing projects only, and a new key
 // gets 404 "This model models/gemini-2.5-flash is no longer available to new
-// users" (tested 2026-09-26). As the router's last fallback they failed every
-// time they were reached.
-// =============================================================================
+// users", so as the router's last fallback they would fail every time.
 
 export const GEMINI_REGISTRY: ModelConfig[] = [
   {
@@ -138,14 +127,11 @@ const DISCOVERED_COST: Record<ModelClass, number> = {
   pro: 12.0,
 };
 
-// =============================================================================
-// Registry Helpers
-// =============================================================================
+// Registry helpers
 
 /**
- * Return the active Gemini registry, enriched with models discovery found
- * that the list above lacks, so a newer generation is available without a
- * code change.
+ * The registry, plus models discovery found that the list lacks, so a newer
+ * generation works without a code change.
  */
 export function getActiveGeminiRegistry(): ModelConfig[] {
   const base = [...GEMINI_REGISTRY];
@@ -202,8 +188,7 @@ export function compareForClass(
 }
 
 /**
- * Which model the router would pick for a class with nothing paused — the
- * answer to "what does Auto actually run?".
+ * The model the router picks for a class with nothing paused: what Auto runs.
  *
  * @returns the model id, or undefined if nothing in the registry qualifies
  */

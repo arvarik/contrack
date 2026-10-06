@@ -1,29 +1,18 @@
-// =============================================================================
-// Admin Service — the operator's view of the accounts on this instance
-// =============================================================================
-// One admin looks after the instance: they create accounts, change roles,
-// reset passwords, disable people who have left, and eventually delete them
-// and everything they own. Every function here writes an audit row.
+// The operator's view of the accounts on this instance: create accounts, change
+// roles, reset passwords, disable and delete people. Every function here writes
+// an audit row. Three rules hold across the file.
 //
-// Three rules hold across the whole file.
-//
-//   • An admin never reads another account's rows. `exportUserData` is the
-//     single exception, it exists for offboarding, and it writes an audit row
-//     naming the account it read. The account list
-//     reports how many contacts each account holds, which is a number rather
-//     than a row, and it is the only cross-account read besides that one.
-//   • Three guards stand between an admin and an instance nobody can
-//     administer, and they run in this order: the local owner is protected
-//     while authentication is off, the last active admin cannot be removed,
-//     and no admin may aim at their own account. The last of those covers a
-//     password reset as well as a disable and a delete: a reset ends every
-//     session of its target, so aiming it at yourself signs you out holding
-//     neither the old password nor the new one. On an unsecured instance all
-//     three are true at once, and only the first names a fix.
-//   • Deleting an account is two steps. The first answers `409 USER_HAS_DATA`
-//     with what the account owns; only a request that says `decision: "purge"`
-//     removes anything.
-// =============================================================================
+// - An admin never reads another account's rows. `exportUserData` is the one
+//   exception, for offboarding, and its audit row names the account it read.
+//   The account list shows contact counts, which are numbers, not rows.
+// - Three guards stand between an admin and an instance nobody can administer,
+//   in this order: the local owner is protected while auth is off, the last
+//   active admin cannot be removed, and no admin may aim at their own account.
+//   On an unsecured instance all three are true at once, and only the first
+//   names a fix.
+// - Deleting an account takes two steps. The first answers `409 USER_HAS_DATA`
+//   with what the account owns. Only a request with `decision: "purge"` removes
+//   anything.
 
 import crypto from "crypto";
 import fs from "fs";
@@ -73,11 +62,9 @@ export interface AdminUserSummary {
 }
 
 /**
- * What an account owns, as the delete confirmation reports it.
- *
- * `contacts` counts every row, trashed ones included, because every row goes.
- * That is deliberately not `AdminUserSummary.contactCount`, which counts what
- * the account can see and so leaves the trash out.
+ * What an account owns, as the delete confirmation reports it. `contacts`
+ * counts every row, trashed ones included, because every row goes. That is not
+ * `AdminUserSummary.contactCount`, which leaves the trash out.
  */
 export interface OwnedCounts {
   contacts: number;
@@ -86,9 +73,7 @@ export interface OwnedCounts {
   files: number;
 }
 
-// =============================================================================
 // Reading
-// =============================================================================
 
 const USER_LIST_SQL = `SELECT id, email, username, displayName, role, status,
                               credentialState, mustChangePassword, createdAt,
@@ -111,10 +96,8 @@ interface UserListRow {
 }
 
 /**
- * Every account, oldest first, with the three numbers the list screen shows.
- *
- * The counts come from three grouped queries rather than three sub-selects per
- * row, so the cost is constant in the number of accounts.
+ * Every account, oldest first, with the three numbers the list shows. The
+ * counts come from three grouped queries, so the cost does not grow per row.
  */
 export function listUsers(ctx: AdminContext): AdminUserSummary[] {
   const rows = sqlite
@@ -122,18 +105,16 @@ export function listUsers(ctx: AdminContext): AdminUserSummary[] {
     .all() as UserListRow[];
 
   const contacts = countByOwner(
-    // Every account's count in one grouped read. The statement names ownerId
-    // and does not filter by it, which is the one shape tenant-lint cannot
-    // tell apart from a scoped read, so the reason is written out here.
+    // Every account's count in one grouped read. tenant-lint cannot tell a
+    // statement that names ownerId without filtering on it from a scoped read.
     // tenant-lint: allow admin cross-user
     `SELECT ownerId AS k, COUNT(*) AS n FROM contacts
       WHERE deletedAt IS NULL GROUP BY ownerId`,
   );
   const sessions = countByOwner(
-    // `datetime(expiresAt)`, because `createSession` writes an ISO string
-    // while `datetime('now')` renders a space-separated one, and a `T` sorts
-    // after a space. Without it a session that expired earlier today counts
-    // as live until the UTC date rolls over.
+    // `datetime(expiresAt)`: `createSession` writes an ISO string and
+    // `datetime('now')` a space-separated one, and a `T` sorts after a space,
+    // so a session that expired earlier today would count as live.
     `SELECT userId AS k, COUNT(*) AS n FROM sessions
       WHERE datetime(expiresAt) > datetime('now') GROUP BY userId`,
   );
@@ -202,9 +183,8 @@ export function ownedCounts(ownerId: string): OwnedCounts {
       ownerId,
     ),
     lists: scalar(`SELECT COUNT(*) AS n FROM lists WHERE ownerId = ?`, ownerId),
-    // An upload is a file on disk that a row points at: an interaction
-    // attachment, or a contact avatar this instance stores itself. An avatar
-    // URL that points at somebody else's server is not a file we hold.
+    // An upload is a file on disk a row points at: a note attachment, or an
+    // avatar this instance stores. An avatar URL on another server is not ours.
     files:
       scalar(
         `SELECT COUNT(*) AS n FROM interactions
@@ -219,9 +199,7 @@ export function ownedCounts(ownerId: string): OwnedCounts {
   };
 }
 
-// =============================================================================
 // Guards
-// =============================================================================
 
 /** How many admins can still sign in and act. */
 function countActiveAdmins(): number {
@@ -238,16 +216,11 @@ function loadTarget(id: string): UserListRow {
 }
 
 /**
- * Refuse an action an admin aimed at their own account.
- *
- * Disabling or deleting yourself ends the session you are holding, and on a
- * one-admin instance it leaves nobody who can undo it.
- *
- * Checked after the last-admin guard, not before. Both are true when the only
- * admin on the instance aims at themselves, and "you are the last
- * administrator, promote another account first" is the sentence that tells
- * them what to do. "Ask another administrator" is advice with nobody to
- * follow it to.
+ * Refuse an action an admin aimed at their own account: disabling, deleting or
+ * resetting yourself ends the session you hold, and on a one-admin instance
+ * nobody is left to undo it. Checked after the last-admin guard, because when
+ * the only admin aims at themselves, "promote another account first" is the
+ * message that tells them what to do.
  */
 function assertNotSelf(ctx: AdminContext, id: string): void {
   if (ctx.actor.id === id) {
@@ -271,15 +244,11 @@ function assertNotLastAdmin(target: UserListRow): void {
 }
 
 /**
- * Refuse to disable or delete the account that owns this device's data.
- *
- * While authentication is off, the local owner is the principal behind every
- * request and the owner of every row. Disabling it locks the instance out of
- * its own data with no way back in, because nobody can sign in as it.
- *
- * Checked before the other two, because on that instance every guard is true
- * at once: the local owner is the last admin and it is also the caller. This
- * is the message that names the fix, which is to secure the instance first.
+ * Refuse to disable or delete the account that owns this device's data. While
+ * auth is off, the local owner is behind every request and owns every row, and
+ * nobody can sign in as it, so disabling it locks the instance out of its own
+ * data. Checked first, because on that instance every guard is true at once,
+ * and this message names the fix: secure the instance first.
  */
 function assertNotProtectedLocalOwner(target: UserListRow): void {
   if (target.credentialState !== "none") return;
@@ -291,9 +260,7 @@ function assertNotProtectedLocalOwner(target: UserListRow): void {
   );
 }
 
-// =============================================================================
 // Creating an account
-// =============================================================================
 
 /** Letters and digits only. A temporary password gets read aloud and typed. */
 const TEMPORARY_ALPHABET =
@@ -301,12 +268,10 @@ const TEMPORARY_ALPHABET =
 const TEMPORARY_LENGTH = 20;
 
 /**
- * A password the admin hands over once.
- *
- * 20 characters from a 62-character alphabet is about 119 bits, which is far
- * past anything the sign-in limiter would let somebody guess. `randomInt`
- * rather than `randomBytes` with a modulo, because 256 does not divide 62 and
- * the bias would be real even if small.
+ * A password the admin hands over once: 20 characters from 62 is about 119
+ * bits, far past what the sign-in limiter lets anybody guess. `randomInt`, not
+ * `randomBytes` with a modulo, because 256 is not a multiple of 62 and the bias
+ * would be real.
  */
 export function generateTemporaryPassword(): string {
   let out = "";
@@ -360,9 +325,7 @@ export async function createUser(
   };
 }
 
-// =============================================================================
 // Changing an account
-// =============================================================================
 
 export function updateUser(
   ctx: AdminContext,
@@ -404,22 +367,19 @@ export function updateUser(
 }
 
 /**
- * Give an account a new temporary password.
- *
- * Every session and every token of that account stops working. That is the
- * point: a reset happens because the old credential is not trusted any more,
- * and a live token would outlive the password it was created under.
+ * Give an account a new temporary password. Every session and token of the
+ * account stops working: a reset means the old credential is not trusted, and a
+ * live token would outlive the password it was created under.
  */
 export async function resetPassword(
   ctx: AdminContext,
   id: string,
 ): Promise<{ temporaryPassword: string }> {
   const target = loadTarget(id);
-  // Not your own. A reset deletes every session of the account, this one
-  // included, so an admin who reset themselves was signed out mid-request and
-  // the new password went out in a response their browser was already
-  // throwing away. They then held neither password. Changing your own is
-  // `POST /api/auth/change-password`, which keeps the session it is made on.
+  // Not your own: a reset deletes every session of the account, this one
+  // included, so the new password would go out in a response the browser is
+  // throwing away. Changing your own is `POST /api/auth/change-password`, which
+  // keeps the session it is made on.
   assertNotSelf(ctx, id);
   if (target.credentialState === "none") {
     throw new ValidationError(
@@ -462,12 +422,9 @@ export async function resetPassword(
 }
 
 /**
- * Stop an account from being used, reversibly.
- *
- * Sessions go immediately. Tokens stay in the table and are refused while the
- * account is disabled, so enabling the account brings them back rather than
- * making the person mint new ones. This is the step the docs recommend before
- * a delete: it is instant, complete, and undoable.
+ * Stop an account from being used, reversibly. Sessions go at once. Tokens stay
+ * and are refused while the account is disabled, so enabling it brings them
+ * back. The docs recommend this before a delete: instant, complete, undoable.
  */
 export function disableUser(ctx: AdminContext, id: string): AdminUserSummary {
   const target = loadTarget(id);
@@ -521,16 +478,12 @@ export function enableUser(ctx: AdminContext, id: string): AdminUserSummary {
   return summaryOf(id, ctx);
 }
 
-// =============================================================================
 // Offboarding
-// =============================================================================
 
 /**
- * One account's whole export, for handing to the person who is leaving.
- *
- * The only place an admin reads another account's rows. It is audit-logged
- * with the account name, so the read is visible to everybody who can see the
- * audit log, including the person it was about.
+ * One account's whole export, for the person who is leaving. The only place an
+ * admin reads another account's rows, so it is audit-logged with the account
+ * name, visible to everybody who can see the audit log.
  */
 export function exportUserData(
   ctx: AdminContext,
@@ -551,12 +504,10 @@ export function exportUserData(
 }
 
 /**
- * Delete an account and everything it owns.
- *
- * Two steps by design. Without `decision: "purge"` this answers
- * `409 USER_HAS_DATA` and changes nothing, so the admin sees the four numbers
- * before they agree to lose them. The export endpoint sits next to this one
- * for exactly that moment.
+ * Delete an account and everything it owns. Without `decision: "purge"` this
+ * answers `409 USER_HAS_DATA` and changes nothing, so the admin sees the four
+ * numbers before agreeing to lose them. The export endpoint sits next to this
+ * one for that moment.
  */
 export function deleteUser(
   ctx: AdminContext,
@@ -586,10 +537,9 @@ export function deleteUser(
     action: "user.deleted",
     targetType: "user",
     targetId: id,
-    // `uploadsRemoved` is only present when it is false. The audit row is the
-    // record an operator answers a deletion request from, so a purge that
-    // left files on disk has to say so rather than report the count it
-    // intended to remove.
+    // `uploadsRemoved` is present only when false: the audit row is what an
+    // operator answers a deletion request from, so a purge that left files on
+    // disk says so.
     details: {
       username: target.username,
       ...counts,
@@ -608,17 +558,15 @@ export function deleteUser(
 /**
  * Remove every row this owner has, in one transaction.
  *
- * The order is not a preference. Four tables carry no foreign key to
- * `contacts` or `users` at all — the two vector tables, the embedding meta
- * table, and the merge log — so nothing removes their rows for us. Everything
- * else is deleted parent-last so that a cascade never has to walk a table the
- * statement above it already emptied.
+ * The order matters. Four tables have no foreign key to `contacts` or `users`
+ * (the two vector tables, the embedding meta table and the merge log), so
+ * nothing else removes their rows. Everything else is deleted parent-last, so a
+ * cascade never walks a table a statement above already emptied.
  *
- * Measured between 147ms and 160ms for 10,000 contacts and 10,000 emails,
- * against a budget of two seconds. The recommended fallback, if a much larger account
- * ever exceeds that, is to chunk the contacts delete at 1,000 rows per
- * transaction: a crash between chunks leaves a partly deleted but consistent
- * account that the next call finishes.
+ * 10,000 contacts and 10,000 emails take 147 to 160 ms, against a budget of two
+ * seconds. If a much larger account ever exceeds it, chunk the contacts delete
+ * at 1,000 rows per transaction: a crash between chunks leaves a partly deleted
+ * but consistent account that the next call finishes.
  */
 export function purgeOwner(ownerId: string): void {
   sqlite.transaction(() => {
@@ -651,9 +599,8 @@ export function purgeOwner(ownerId: string): void {
       "interactions",
       "lists",
       "map_views",
-      // Cascades import_rows. Placed with the others rather than after
-      // contacts because a row's contactId carries no foreign key: an import
-      // record outlives the contacts it made, on purpose.
+      // Cascades import_rows. Here rather than after contacts because a row's
+      // contactId has no foreign key: an import record outlives its contacts.
       "imports",
       "search_history",
       "upcoming_events",
@@ -661,47 +608,39 @@ export function purgeOwner(ownerId: string): void {
       "connector_runs",
       "connectors",
       "oauth_states",
-      // What the account's writes recorded, and the background work done for
-      // it. `jobs` is not an owned table, because an instance job has no
-      // owner, but an account's jobs name it, and both keys restrict.
+      // What the account's writes recorded, and its background work. `jobs` is
+      // not an owned table, since an instance job has no owner, but an
+      // account's jobs name it, and both keys restrict.
       "events",
       "jobs",
     ]) {
       sqlite.prepare(`DELETE FROM ${table} WHERE ownerId = ?`).run(ownerId);
     }
 
-    // 3. Contacts, which cascade the ten child tables and list membership.
-    //    The search index needs no statement of its own: `contacts_ad` fires
-    //    per row here and deletes the FTS row by rowid, which FTS5 pushes
-    //    down (PR #18).
+    // 3. Contacts, which cascade the ten child tables and list membership. The
+    //    search index needs no statement: `contacts_ad` fires per row and
+    //    deletes the FTS row by rowid.
     sqlite.prepare(`DELETE FROM contacts WHERE ownerId = ?`).run(ownerId);
 
     // 4. The account. Cascades sessions, tokens, per-user settings and every
-    //    invitation it issued, accepted ones included. `invitations.invitedBy`
-    //    is NOT NULL with ON DELETE CASCADE, so an accepted invitation cannot
-    //    keep its row with the inviter set to NULL the way an audit row does.
-    //    What survives is the `user.invitation.accepted` audit row, which
-    //    names the account that joined, so how somebody joined is still on
-    //    record after the person who invited them is gone.
+    //    invitation it issued, accepted ones included (`invitations.invitedBy`
+    //    is NOT NULL with ON DELETE CASCADE). The `user.invitation.accepted`
+    //    audit row survives, so how somebody joined stays on record.
     //
-    //    This statement is also the check on everything above it. Every
-    //    `ownerId` column references `users(id)` with ON DELETE RESTRICT, so
-    //    one owned row left behind anywhere makes this throw and rolls the
-    //    whole transaction back. A purge that misses a table cannot half
-    //    succeed.
+    // This statement also checks everything above it: every `ownerId`
+    // references `users(id)` with ON DELETE RESTRICT, so one owned row left
+    // behind makes it throw and rolls the whole transaction back.
     sqlite.prepare(`DELETE FROM users WHERE id = ?`).run(ownerId);
   })();
 }
 
 /**
- * Remove the account's upload directory after the transaction commits.
+ * Remove the account's upload directory after the transaction commits: a file
+ * removal cannot be rolled back, so doing it first could delete the files of an
+ * account the database still has.
  *
- * After, not inside: a filesystem removal cannot be rolled back, so doing it
- * first would delete the files of an account the database still has.
- *
- * @returns false when the directory is still there, so the audit row can say
- *   so. A read-only volume, or a directory owned by another uid, is the case
- *   this covers.
+ * @returns false when the directory is still there (a read-only volume, a
+ *   directory owned by another uid), so the audit row can say so.
  */
 function removeUploads(ownerId: string): boolean {
   try {
@@ -720,10 +659,9 @@ function removeUploads(ownerId: string): boolean {
     fs.rmSync(path.dirname(avatars), { recursive: true, force: true });
     return true;
   } catch (err) {
-    // The rows are already gone and no principal can ever match this owner
-    // segment again, so `guardUploads` refuses every path under it. A file
-    // left behind is a disk-space problem rather than an exposure one, which
-    // is why this does not fail the delete. It does have to be recorded.
+    // The rows are gone and no principal can match this owner segment again, so
+    // `guardUploads` refuses every path under it. A file left behind costs
+    // disk, not privacy, so the delete stands, but it is logged.
     log.warn(
       "Admin",
       `Removed account ${ownerId} but its upload directory did not go: ${String(err)}`,
@@ -732,9 +670,7 @@ function removeUploads(ownerId: string): boolean {
   }
 }
 
-// =============================================================================
 // Shared
-// =============================================================================
 
 /** One account's row as the admin API returns it, counts included. */
 function summaryOf(id: string, ctx: AdminContext): AdminUserSummary {

@@ -1,14 +1,10 @@
-// =============================================================================
-// Derived structures and their versions
-// =============================================================================
-// The FTS tables, the vec0 stores, the passage index and the triggers that
-// feed them are built from other tables, so they are rebuilt, not migrated.
-// Each has an `index` row in schema_migrations with the version it is built
-// at. installIndexes runs every installer on every boot, after the
-// migrations, in the order below, which is the order the boot ran them in
-// before the ledger. An installer creates what is missing, catches up rows
-// that are missing, and creates its triggers again. The version decides only
-// whether it rebuilds:
+// Derived structures and their versions. The FTS tables, the vec0 stores, the
+// passage index and their triggers are built from other tables, so they are
+// rebuilt, not migrated. Each has an `index` row in schema_migrations with the
+// version it is built at. installIndexes runs every installer on every boot,
+// after the migrations, in the order below. An installer creates what is
+// missing, catches up missing rows and recreates its triggers. The version
+// decides only whether it rebuilds:
 //
 //   contacts_fts          FTS_SCHEMA_VERSION. A different recorded version
 //                         drops and refills contacts_fts and interactions_fts
@@ -19,10 +15,9 @@
 //   search_passages_fts   1. installPassageIndex
 //   search_index_queue    1. installSearchVectorTriggers
 //
-// Only contacts_fts rebuilds when its version changes. A later change that
-// needs another structure rebuilt raises that version here and gives its
-// installer the rebuild.
-// =============================================================================
+// Only contacts_fts rebuilds on a version change. A change that needs another
+// structure rebuilt raises that version here and gives its installer the
+// rebuild.
 
 import type Database from "better-sqlite3";
 import {

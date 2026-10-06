@@ -1,16 +1,8 @@
-// =============================================================================
-// AI Layer — Concrete Anthropic Adapter
-// =============================================================================
-// This is the ONLY file in the codebase that imports from `@anthropic-ai/sdk`.
-// All Anthropic SDK coupling is contained here.
-//
-// Resiliency (Phase 2 backend refactor) — see `ai/resilience.ts`:
-//   - Per-attempt AbortSignal-backed timeout (default 60s).
-//   - Exponential backoff with jitter on transient failures.
-//   - Caller-cancellation via options.signal.
-//   - Tolerant JSON validation for responseFormat === "json", normalised so
-//     the text callers get back always parses.
-// =============================================================================
+// The Anthropic adapter, the only file that imports `@anthropic-ai/sdk`.
+// Retries go through `ai/resilience.ts`: a per-attempt timeout (60 s by
+// default), exponential backoff with jitter on transient failures, and caller
+// cancellation through options.signal. JSON answers are validated and
+// normalized, so the text callers get always parses.
 
 import Anthropic from "@anthropic-ai/sdk";
 import type { AIProvider, ModelInfo, ModelCapability } from "../provider.ts";
@@ -27,13 +19,14 @@ import {
 import { contentHash } from "../../utils/aiCache.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
-import { AppError } from "../../utils/AppError.ts";
 import { toCitations, type RawSource } from "../citations.ts";
 import {
   withTimeout,
   withRetry,
   parseAIJson,
   AI_DEFAULTS,
+  inOnePiece,
+  streamWithFallback,
 } from "../resilience.ts";
 import {
   translateSchemaNode as translateSchema,
@@ -41,9 +34,7 @@ import {
   type TranslateOptions,
 } from "../schemaTranslation.ts";
 
-// ---------------------------------------------------------------------------
-// Model Class Mapping
-// ---------------------------------------------------------------------------
+// Model classes
 
 // The fallback when discovery has not run. Discovery overrides each with the
 // newest model of its family the key can see.
@@ -85,14 +76,12 @@ const EFFORT_FOR_CLASS: Record<ModelClass, "low" | "medium"> = {
 };
 
 /**
- * Whether a Claude model supports the server-side `web_search` tool.
- *
- * Anthropic's list-models endpoint does not report tool support, so this is
- * a family rule: web search shipped with Claude 3.5 and is available on every
- * family since. The pre-3.5 models (`claude-2*`, `claude-instant*`, and the
- * original `claude-3-{opus,sonnet,haiku}`) predate it. Claude 3.5 and 3.7 are
- * spelled `claude-3-5-*` / `claude-3-7-*`, so the exclusion below matches only
- * a bare major-3 family segment.
+ * Whether a Claude model supports the server-side `web_search` tool. The models
+ * endpoint does not report tools, so this is a family rule: every family since
+ * Claude 3.5 has it, and the pre-3.5 models (`claude-2*`, `claude-instant*`,
+ * the original `claude-3-{opus,sonnet,haiku}`) do not. Claude 3.5 and 3.7 are
+ * spelled `claude-3-5-*` / `claude-3-7-*`, so the exclusion matches only a bare
+ * major-3 family segment.
  */
 function supportsWebSearch(modelId: string): boolean {
   if (/^claude-(2|instant)/i.test(modelId)) return false;
@@ -155,12 +144,9 @@ function sourcesOf(content: ContentBlock[]): RawSource[] {
   return [...cited, ...results];
 }
 
-// ---------------------------------------------------------------------------
-// Schema Translation — shared translator, Anthropic dialect
-// ---------------------------------------------------------------------------
-// Claude's grammar compiler accepts the JSON-Schema type union directly and
-// wants additionalProperties:false on every object node, declared properties
-// or not.
+// Schema translation, Anthropic dialect: Claude's grammar compiler takes the
+// JSON Schema type union directly and wants additionalProperties:false on every
+// object node.
 
 const SCHEMA_DIALECT: TranslateOptions = {
   nullableStyle: "type-array",
@@ -172,9 +158,9 @@ function translateSchemaNode(node: JsonSchemaNode): Record<string, unknown> {
 }
 
 /**
- * True when Claude refused the schema itself rather than the request. These
- * are deterministic — retrying the same schema always fails — so the caller
- * must change approach instead of backing off.
+ * True when Claude refused the schema itself rather than the request. Retrying
+ * the same schema always fails, so the caller must change approach instead of
+ * backing off.
  */
 function isSchemaComplexityError(error: unknown): boolean {
   const msg = getErrorMessage(error).toLowerCase();
@@ -193,9 +179,7 @@ function isEffortRejection(error: unknown): boolean {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Anthropic Adapter
-// ---------------------------------------------------------------------------
+// The adapter
 
 export class AnthropicAdapter implements AIProvider {
   readonly name = "Anthropic";
@@ -216,13 +200,10 @@ export class AnthropicAdapter implements AIProvider {
   }
 
   /**
-   * Enumerate models. Anthropic reports ids, display names, release dates,
-   * context windows and capabilities; every listed model is a chat model
-   * (Anthropic ships no first-party embedding models).
-   *
-   * The server-side `web_search` tool this adapter uses for research is a
-   * Claude 3.5-and-later feature, so the legacy families are excluded from
-   * the grounding capability rather than offered and left to fail.
+   * List models. Anthropic reports ids, display names, release dates, context
+   * windows and capabilities, and every listed model is a chat model. The
+   * families without the `web_search` tool are left out of grounding rather
+   * than offered to fail.
    */
   async listModels(): Promise<ModelInfo[]> {
     const models: ModelInfo[] = [];
@@ -284,10 +265,9 @@ export class AnthropicAdapter implements AIProvider {
   }
 
   /**
-   * Anthropic's `output_config.format` takes the schema directly:
-   *   { type: "json_schema", schema: {...} }
-   * NOT OpenAI's nested `json_schema: { name, schema }` wrapper, which the
-   * API rejects with a 400.
+   * Anthropic's `output_config.format` takes the schema directly, `{ type:
+   * "json_schema", schema: {...} }`, not OpenAI's nested `json_schema: { name,
+   * schema }`, which the API refuses with a 400.
    */
   translateSchema(schema: JsonSchemaNode): {
     type: "json_schema";
@@ -311,8 +291,8 @@ export class AnthropicAdapter implements AIProvider {
         const startMs = Date.now();
         const schemaKey = `${model}:${contentHash(JSON.stringify(options.jsonSchema ?? {}))}`;
         // Claude caps a schema at 24 optional parameters and 16 union-typed
-        // ones. Contrack's contact and research schemas are legitimately
-        // wider, so they go to prompt-guided JSON without a failed request.
+        // ones. Contrack's contact and research schemas are wider, so they go
+        // to prompt-guided JSON without a failed request.
         let useSchema =
           !!options.jsonSchema &&
           !exceedsAnthropicSchemaLimits(options.jsonSchema) &&
@@ -379,54 +359,34 @@ export class AnthropicAdapter implements AIProvider {
   }
 
   /**
-   * The same call, streamed: `onDelta` gets each piece of text as Claude
-   * sends it. A JSON or grounded call is not streamed. It runs `generate`
-   * and sends the text as one piece.
-   *
-   * A stream that fails before its first piece falls back to `generate`,
-   * which has the retries. After the first piece a failure is thrown,
-   * because a piece already sent cannot be taken back.
+   * The same call, streamed: `onDelta` gets each piece of text as Claude sends
+   * it. A JSON or grounded call is not streamed: it runs `generate` and sends
+   * the text as one piece. A stream that fails before its first piece falls
+   * back to `generate`, which has the retries. After the first piece a failure
+   * is thrown, because a sent piece cannot be taken back.
    */
   async generateStream(
     options: AIGenerateOptions,
     onDelta: (text: string) => void,
   ): Promise<AIGenerateResult> {
     if (options.responseFormat !== "text" || options.enableSearchGrounding)
-      return this.generateInOnePiece(options, onDelta);
+      return inOnePiece(() => this.generate(options), onDelta);
     const model = options.model ?? this.resolveModel(options.routing?.prefer);
-    let sent = false;
-    try {
-      return await withTimeout(
-        (signal) =>
-          this.streamMessages(options, model, signal, (piece) => {
-            sent = true;
-            onDelta(piece);
-          }),
-        options.timeoutMs ?? AI_DEFAULTS.perAttemptTimeoutMs,
-        options.signal,
-      );
-    } catch (error) {
-      if (options.signal?.aborted)
-        throw new AppError("AI call cancelled by caller", 499, {
-          code: "CANCELLED",
-        });
-      if (sent) throw error;
-      log.warn(
-        "AnthropicAdapter",
-        `${model} stream failed before its first piece (will run generate): ${getErrorMessage(error).slice(0, 200)}`,
-      );
-      return this.generateInOnePiece(options, onDelta);
-    }
-  }
-
-  /** Run `generate` and send its text as one piece. */
-  private async generateInOnePiece(
-    options: AIGenerateOptions,
-    onDelta: (text: string) => void,
-  ): Promise<AIGenerateResult> {
-    const result = await this.generate(options);
-    if (result.text) onDelta(result.text);
-    return result;
+    return streamWithFallback(
+      (onPiece) =>
+        withTimeout(
+          (signal) => this.streamMessages(options, model, signal, onPiece),
+          options.timeoutMs ?? AI_DEFAULTS.perAttemptTimeoutMs,
+          options.signal,
+        ),
+      () => this.generate(options),
+      onDelta,
+      {
+        signal: options.signal,
+        area: "AnthropicAdapter",
+        subject: `${model} stream`,
+      },
+    );
   }
 
   /** The effort to send `model`, or undefined when it takes none. */
@@ -464,12 +424,11 @@ export class AnthropicAdapter implements AIProvider {
     const tools = options.enableSearchGrounding
       ? [
           {
-            // The basic tool on every model, though Sonnet and Opus 4.5 and
-            // later also take `web_search_20260209`. That variant filters
-            // results with code first, and on Contrack's research prompt it
-            // was five times slower for the same answer: 75 s, 90K input
-            // tokens and 5 searches, against 14 s, 50K and 3 (Sonnet 5,
-            // 2026-09-26). The research budget is 60 s.
+            // The basic tool on every model. Sonnet and Opus 4.5 and later also
+            // take `web_search_20260209`, which filters results with code
+            // first, but on the research prompt it was five times slower for
+            // the same answer: 75 s, 90K input tokens and 5 searches, against
+            // 14 s, 50K and 3 (Sonnet 5). The research budget is 60 s.
             type: "web_search_20250305",
             name: "web_search",
             max_uses: MAX_SEARCHES,
@@ -530,7 +489,7 @@ export class AnthropicAdapter implements AIProvider {
 
     // With a server tool, the server runs its own loop and may hand the turn
     // back unfinished (`pause_turn`). Sending the partial answer back resumes
-    // it; the adapter used to keep whatever text had arrived by then.
+    // it.
     const content: ContentBlock[] = [...(response.content ?? [])];
     let inputTokens = response.usage?.input_tokens ?? 0;
     let outputTokens = response.usage?.output_tokens ?? 0;

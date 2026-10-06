@@ -1,11 +1,7 @@
 import { withTimeout } from "../ai/resilience.ts";
-// =============================================================================
-// URL safety — SSRF guards for user/AI-supplied URLs
-// =============================================================================
-// Any URL that reaches fetch() from user input, AI output, or a web search
-// result goes through here first: http(s) only, no private/loopback/metadata
+// SSRF guards. Any URL from user input, AI output or a web search result goes
+// through here before fetch(): http(s) only, no private, loopback or metadata
 // addresses (checked again on every redirect hop), and a hard response cap.
-// =============================================================================
 
 import net from "net";
 import dns from "dns/promises";
@@ -21,9 +17,9 @@ import { AppError, ValidationError } from "./AppError.ts";
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024; // 2 MB of HTML is plenty for <head>
 
 /**
- * True when the address is loopback, link-local, or RFC1918/ULA private.
- * Blocking these prevents the unfurl endpoint from being used as an SSRF
- * proxy into localhost services or cloud metadata (169.254.169.254).
+ * True when the address is loopback, link-local, or RFC 1918 / ULA private, so
+ * the unfurl endpoint cannot be an SSRF proxy into localhost services or cloud
+ * metadata (169.254.169.254).
  */
 export function isPrivateAddress(address: string): boolean {
   if (net.isIPv4(address)) {
@@ -41,13 +37,12 @@ export function isPrivateAddress(address: string): boolean {
   }
   const lower = address.toLowerCase();
 
-  // An IPv6 address that EMBEDS an IPv4 address is exactly as private as the
-  // IPv4 it embeds. The previous check hardcoded three ::ffff: prefixes and
-  // missed the rest — ::ffff:169.254.169.254 (cloud metadata) walked past
-  // the guard. Extract the embedded IPv4 and reuse the full IPv4 policy.
-  //   ::ffff:a.b.c.d      — IPv4-mapped (RFC 4291), dotted form
-  //   ::ffff:aabb:ccdd    — IPv4-mapped, hex form
-  //   64:ff9b::a.b.c.d    — NAT64 well-known prefix (RFC 6052)
+  // An IPv6 address that embeds an IPv4 address is as private as the IPv4 it
+  // embeds (::ffff:169.254.169.254 is cloud metadata), so the IPv4 is
+  // extracted and checked with the full IPv4 policy:
+  //   ::ffff:a.b.c.d      IPv4-mapped (RFC 4291), dotted form
+  //   ::ffff:aabb:ccdd    IPv4-mapped, hex form
+  //   64:ff9b::a.b.c.d    NAT64 well-known prefix (RFC 6052)
   const embedded = extractEmbeddedIPv4(lower);
   if (embedded) return isPrivateAddress(embedded);
 
@@ -77,10 +72,9 @@ function extractEmbeddedIPv4(lowerIPv6: string): string | null {
 
 /**
  * The message assertPublicHttpUrl gives when the name does not resolve.
- *
  * Exported so a caller can tell "the network is down" from "this URL is not
- * allowed". Both are ValidationErrors, but only the first one is worth trying
- * again later (server/utils/remoteImage.ts marks it transient).
+ * allowed": both are ValidationErrors, but only the first is worth retrying
+ * (server/utils/remoteImage.ts marks it transient).
  */
 export const UNRESOLVABLE_HOST_MESSAGE = "Could not resolve URL host";
 
@@ -160,17 +154,12 @@ export async function readBodyCapped(
 }
 
 /**
- * Read a binary body, and refuse it once it passes `maxBytes`.
- *
- * readBodyCapped truncates, which suits HTML: the <head> is at the top, and
- * the rest of the page can go. A truncated image is a corrupt image, so this
- * reader throws instead of returning the part that fit. It stops reading at
- * the first chunk over the cap, so a hostile server cannot make it buffer
- * more than `maxBytes` plus one chunk.
- *
- * The read has its own time budget, like readBodyCapped. A server that sends
- * headers quickly and then trickles the body would otherwise hold the request
- * open for as long as it likes.
+ * Read a binary body, and refuse it once it passes `maxBytes`. readBodyCapped
+ * truncates, which suits HTML, but a truncated image is corrupt, so this throws
+ * instead. It stops at the first chunk over the cap, so a hostile server cannot
+ * make it buffer more than `maxBytes` plus one chunk. Like readBodyCapped it
+ * has its own time budget, so a server that trickles the body cannot hold the
+ * request open.
  */
 export async function readBytesCapped(
   res: globalThis.Response,
@@ -217,15 +206,12 @@ export async function readBytesCapped(
 }
 
 /**
- * DNS lookup that refuses private addresses AT CONNECT TIME.
- *
- * `assertPublicHttpUrl` resolves the hostname, checks the address, and then
- * fetch() resolves the name AGAIN to open the socket. Those are two separate
- * queries, which is a rebinding hole: an attacker's DNS server answers the
- * check with a public address and the connect with 127.0.0.1, and the guard
- * passes a request it exists to block. Enforcing inside the resolver the
- * socket actually uses closes the gap — the address that passed the check IS
- * the address dialed, on the first request and on every redirect hop.
+ * DNS lookup that refuses private addresses at connect time.
+ * `assertPublicHttpUrl` resolves and checks the name, and then fetch() resolves
+ * it again to open the socket: two queries, a rebinding hole where an
+ * attacker's DNS answers the check with a public address and the connect with
+ * 127.0.0.1. Checking inside the resolver the socket uses makes the checked
+ * address the dialed one, on the first request and every redirect hop.
  *
  * Exported for tests only.
  */
@@ -247,11 +233,9 @@ export function guardedLookup(
       family?: number,
     ) => {
       if (err) return callback(err, result, family);
-      // net asks with all:true (Happy Eyeballs) and dials ITS pick from the
-      // set, so every member is validated — one clean address in the answer
-      // proves nothing about the one the socket chooses. A name that mixes
-      // public and private addresses fails closed: that mix is the rebinding
-      // shape, not a legitimate host.
+      // net asks with all:true (Happy Eyeballs) and dials its own pick, so
+      // every address is checked. A name that mixes public and private
+      // addresses fails closed: that mix is the rebinding shape.
       const addresses = Array.isArray(result)
         ? result.map((entry) => entry.address)
         : [String(result)];
@@ -268,9 +252,8 @@ export function guardedLookup(
 }
 
 /**
- * One shared dispatcher for every outbound unfurl/research fetch. The custom
- * lookup enforces the private-address policy; sharing the agent also pools
- * connections across calls instead of dialing fresh each time.
+ * One shared dispatcher for every outbound unfurl and research fetch: its
+ * lookup enforces the private-address policy, and it pools connections.
  */
 const pinnedAgent = new Agent({ connect: { lookup: guardedLookup } });
 
@@ -295,10 +278,9 @@ export async function safeFetch(
   try {
     let currentUrl = targetUrl;
     for (let hop = 0; hop <= maxRedirects; hop++) {
-      // undici's own fetch, not the global: the global accepts no dispatcher
-      // in its published types, and the dispatcher is where the rebinding
-      // guard lives. The returned Response implements the same WHATWG shape
-      // the callers consume, so only the nominal type needs the cast.
+      // undici's own fetch, not the global, whose types accept no dispatcher,
+      // and the dispatcher holds the rebinding guard. The Response has the same
+      // WHATWG shape, so only the nominal type needs the cast.
       const response = (await undiciFetch(currentUrl, {
         signal: options.signal
           ? AbortSignal.any([controller.signal, options.signal])

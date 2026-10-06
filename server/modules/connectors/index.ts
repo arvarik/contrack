@@ -1,9 +1,5 @@
-// =============================================================================
-// Module: connectors
-// =============================================================================
-// Connectors: calendar, mailbox, Google, messages, and their sync. Its jobs
-// are the scheduler tick every minute and the stored photo sweep at start.
-// =============================================================================
+// Connectors: calendar, mailbox, Google, messages, and their sync. Its jobs are
+// the scheduler tick every minute and the stored photo sweep at start.
 
 import { defineModule } from "../module.ts";
 import { connectorsRouter } from "../../routes/connectors.ts";

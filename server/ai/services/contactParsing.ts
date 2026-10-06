@@ -1,10 +1,5 @@
 import { AppError } from "../../utils/AppError.ts";
-// =============================================================================
-// AI Services — Contact Parsing (Magic Paste, bulk import)
-// =============================================================================
-// Extracted verbatim from aiService.ts in the domain split; the barrel there
-// re-exports this module, so import sites are unchanged.
-// =============================================================================
+// Contact parsing, for Magic Paste and bulk import. aiService.ts re-exports it.
 
 import type { ParsedContact } from "../types.ts";
 import { log } from "../../utils/logger.ts";
@@ -48,9 +43,9 @@ function cleanText(value: unknown, maxLength = 2_000): string | undefined {
 }
 
 /**
- * Model output is untrusted input: it may echo injected instructions or, on a
- * bad generation, spill reasoning text into a field. Everything the parser
- * returns passes through here before it can reach a contact record.
+ * Model output is untrusted: it may echo injected instructions or spill
+ * reasoning text into a field. Everything the parser returns passes through
+ * here before it can reach a contact.
  */
 function normalizeParsedContact(parsed: ParsedContact): ParsedContact {
   const clean: ParsedContact = {
@@ -115,10 +110,8 @@ function normalizeParsedContact(parsed: ParsedContact): ParsedContact {
 }
 
 /**
- * Parses raw, unstructured text to extract contact fields accurately.
- * Returns a structured object compatible with the normalized schema —
- * emails, phones, socialLinks, education, experience are returned as
- * arrays that the server will insert into child tables.
+ * Parse unstructured text into contact fields. Emails, phones, social links,
+ * education and experience come back as arrays for the child tables.
  */
 export async function parseContactRecord(text: string): Promise<ParsedContact> {
   if (isMockMode()) {

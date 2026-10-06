@@ -15,12 +15,10 @@ import { getErrorMessage } from "../../utils/helpers.ts";
 import { autoMergeThresholdFor } from "../../services/dedupe/policy.ts";
 
 /**
- * Start one scan, now or when the run lock frees up.
- *
- * The scope is captured here and carried into the run rather than read from
- * the async context inside it. A queued scan starts from the finishing scan's
- * callback, where the context belongs to the other account, and even the
- * immediate path outlives the response it was started from.
+ * Start one scan, now or when the run lock frees. The scope is captured here
+ * and carried into the run, not read from the async context inside it: a queued
+ * scan starts from the finishing scan's callback, in the other account's
+ * context, and even an immediate run outlives its response.
  */
 function startScan(
   scope: Scope,
@@ -60,20 +58,14 @@ export function registerScanRoutes(router: Router) {
         );
       }
 
-      // The account's preset, unless the request names a number.
-      //
-      // The browser used to send its own copy of the preset table with every
-      // scan, and the fixed 0.93 here was what every other caller got. The
-      // preset lives on the account now, so the server reads it and the
-      // request field is an override for a client that wants one scan at a
-      // different sensitivity.
+      // The account's preset, unless the request names a number for one scan.
       let threshold = autoMergeThresholdFor(scope);
       let thresholdSource = "account preset";
       if (autoMergeThreshold !== undefined) {
         threshold = Number(autoMergeThreshold);
-        // From the eager preset up. At 0.85, the ceiling a contradicted pair
-        // is held to, a request could merge two people the policy had
-        // stopped for review, such as a household on one phone line.
+        // From the eager preset up. At 0.85, the ceiling for a contradicted
+        // pair, a request could merge two people the policy stopped for review,
+        // such as a household on one phone line.
         if (isNaN(threshold) || threshold < 0.88 || threshold > 0.99) {
           throw new AppError(
             "autoMergeThreshold must be between 0.88 and 0.99",
@@ -85,11 +77,9 @@ export function registerScanRoutes(router: Router) {
 
       const check = dedupeQueue.canStartScan(scope);
       if (!check.allowed) {
-        // This used to be a bare `res.status(429).json({ error: string })`,
-        // the one answer in the API that skipped the error envelope, so it
-        // carried no code and no request id. `details.yours` says whether the
-        // caller is already scanning or somebody else holds the lock, and
-        // `details.queued` says whether a turn was booked.
+        // The standard error envelope: `details.yours` says whether the caller
+        // is already scanning or somebody else holds the lock, and
+        // `details.queued` whether a turn was booked.
         let queued = false;
         if (!check.yours) {
           const scan = dedupeQueue.createScan(scope, mode);
@@ -118,10 +108,9 @@ export function registerScanRoutes(router: Router) {
   );
 
   router.get("/dedupe/stream", (req, res) => {
-    // Read the owner before a byte of the stream is written. The listener
-    // below runs in the async context of whoever calls emit(), which is the
-    // scan, so the owner has to be settled in this closure while the request
-    // context is still the request's.
+    // Read the owner before the stream starts. The listener below runs in the
+    // async context of whoever calls emit(), which is the scan, so the owner is
+    // settled in this closure while the context is still the request's.
     const scope = scopeOf(req);
     const scanId = req.query.scanId as string;
     if (!scanId) {

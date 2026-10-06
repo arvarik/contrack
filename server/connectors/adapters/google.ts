@@ -1,15 +1,12 @@
 /**
- * server/connectors/adapters/google.ts — Google Workspace connector adapter.
- *
- * Connects to Google Workspace / Gmail using OAuth 2.0 with PKCE.
- * Syncs:
- *   1. Contacts via Google People API (connections.list with syncToken)
- *   2. Emails via Gmail API (messages.list / history.list, metadata headers by default,
- *      full bodies only for matched contacts when summaries are enabled)
- *   3. Events via Google Calendar API (events.list with syncToken, meetings for past,
- *      upcoming_events for future)
- *
- * Maps invalid_grant and 401s to ConnectorAuthError to trigger needs_reauth.
+ * The Google Workspace connector, with OAuth 2.0 and PKCE. It syncs:
+ *   1. Contacts through the People API (connections.list with syncToken)
+ *   2. Email through the Gmail API (messages.list / history.list, metadata
+ *      headers by default, full bodies only for matched contacts when
+ *      summaries are on)
+ *   3. Events through the Calendar API (events.list with syncToken: past ones
+ *      as meetings, future ones as upcoming_events)
+ * invalid_grant and 401s become ConnectorAuthError, which sets needs_reauth.
  *
  * @module server/connectors/adapters/google
  */
@@ -89,13 +86,11 @@ export function isAuthError(err: unknown): boolean {
 }
 
 /**
- * How long one call to Google may take, from the request to the last byte.
- *
- * gaxios sets no timeout unless asked, so a connection that went half-open
- * held a sync for ever: its scheduler slot and its owner's slot stayed taken
- * until a restart, and two such syncs stopped every connector. Every call
- * carries this timeout and the sync's signal, and the OAuth client gives the
- * same timeout to the token refresh, which no call site makes itself.
+ * How long one call to Google may take, from request to last byte. gaxios sets
+ * no timeout unless asked, so a half-open connection would hold a sync forever,
+ * with its scheduler and owner slots taken until a restart. Every call carries
+ * this timeout and the sync's signal, and the OAuth client gives the token
+ * refresh, which no call site makes itself, the same timeout.
  */
 export const GOOGLE_CALL_TIMEOUT_MS = 60_000;
 
@@ -250,7 +245,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
     let totalFetched = 0;
     let summaryCount = 0;
 
-    // ─── 1. Contacts (People API) ──────────────────────────────────────────
+    // 1. Contacts (People API)
     if (config.syncContacts !== false) {
       const people = google.people({ version: "v1", auth });
       let pageToken: string | undefined;
@@ -369,7 +364,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
       }
     }
 
-    // ─── 2. Email (Gmail API) ──────────────────────────────────────────────
+    // 2. Email (Gmail API)
     if (config.syncEmail !== false) {
       const gmail = google.gmail({ version: "v1", auth });
       const maxMessages = config.maxMessagesPerRun ?? 5000;
@@ -589,7 +584,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
       }
     }
 
-    // ─── 3. Calendar (Google Calendar API) ─────────────────────────────────
+    // 3. Calendar (Google Calendar API)
     if (config.syncCalendar !== false) {
       const calendar = google.calendar({ version: "v3", auth });
       let pageToken: string | undefined;
@@ -643,9 +638,9 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
             const endDate = endStr
               ? new Date(endStr)
               : new Date(startDate.getTime() + 60 * 60 * 1000);
-            // An all-day event has a day and no time. It is kept as the day
-            // (`2026-10-09`), which every reader's calendar reads as that
-            // day. As midnight UTC it was the evening before west of UTC.
+            // An all-day event has a day and no time, and is kept as the day
+            // (`2026-10-09`), which every reader's calendar reads as that day.
+            // Midnight UTC would be the evening before west of UTC.
             const allDay = !event.start?.dateTime;
             const startsAt = allDay ? startStr : startDate.toISOString();
             const endsAt =

@@ -1,9 +1,7 @@
-// =============================================================================
-// Implicit facets: filters read from the words of a question
-// =============================================================================
-// "people in Lisbon" and "who works at Northwind Logistics" are filters, and
-// a model adds nothing to them. This module reads such phrases as facets,
-// deterministically and conservatively:
+// Implicit facets: filters read from the words of a question. "people in
+// Lisbon" and "who works at Northwind Logistics" are filters, and a model adds
+// nothing to them, so they are read as facets, deterministically and
+// conservatively:
 //
 //   "at X", "works at X"                 a company facet, when X is a company
 //                                        in the owner's data
@@ -11,17 +9,15 @@
 //   "around X"                           in the owner's data
 //   "in X"                               an industry facet, when X is an
 //                                        industry in the owner's data
-//   a general question                   the facets in shared/generalQuestions.ts,
-//                                        when the whole query is one of them
+//   a general question                   its facets, when the whole query is
+//                                        one (shared/generalQuestions.ts)
 //
 // X must equal a known value, not merely contain one. A place followed by a
 // comma and another place ("Paris, Texas"), by "and" or "or" ("New York and
-// London"), by a word such as "State", or by another known place is left to
-// the planner, which knows which Paris is meant. A value that is both a
-// place and an industry is left to it as well.
-//
-// The known values are read once per owner and search revision.
-// =============================================================================
+// London"), by a word such as "State", or by another known place is left to the
+// planner, which knows which Paris is meant, and so is a value that is both a
+// place and an industry. Known values are read once per owner and search
+// revision.
 
 import { sqlite } from "../../db.ts";
 import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";

@@ -1,6 +1,4 @@
-// =============================================================================
-// Nickname Dictionary & Matcher
-// =============================================================================
+// Nickname groups and matching.
 import { tokenizeName } from "./names.ts";
 
 export const NICKNAME_GROUPS: string[][] = [
@@ -147,11 +145,10 @@ export function areNicknameEquivalent(a: string, b: string): boolean {
 }
 
 /**
- * Structured nickname match: exact last name + nickname-equivalent first name.
- *
- * "Robert Johnson" vs "Bob Johnson" → true  (Bob ↔ Robert, Johnson = Johnson)
- * "Robert Johnson" vs "Bob Smith"   → false (different last names)
- * "Robert" vs "Bob"                 → true  (single-token names, nickname match)
+ * A nickname match: the same last name and nickname-equivalent first names.
+ *   "Robert Johnson" vs "Bob Johnson" → true  (Bob ↔ Robert, Johnson = Johnson)
+ *   "Robert Johnson" vs "Bob Smith"   → false (different last names)
+ *   "Robert" vs "Bob"                 → true  (single names, nickname match)
  */
 export function isNicknameMatch(nameA: string, nameB: string): boolean {
   if (!nameA || !nameB) return false;

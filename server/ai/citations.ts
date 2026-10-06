@@ -1,12 +1,8 @@
-// =============================================================================
-// AI Layer — Research sources, as the enrichment pipeline stores them
-// =============================================================================
-// Every provider reports the pages a grounded answer used in its own shape:
-// Gemini's groundingChunks, OpenAI's web_search_call sources and url_citation
-// annotations, Anthropic's web_search_tool_result blocks and text citations.
-// Each adapter collects its own and hands them here, so the list the
-// pipeline sees has one shape and one set of rules.
-// =============================================================================
+// Research sources as the enrichment pipeline stores them. Each provider
+// reports a grounded answer's pages in its own shape (Gemini's groundingChunks,
+// OpenAI's web_search_call sources and url_citation annotations, Anthropic's
+// web_search_tool_result blocks and text citations); each adapter hands its own
+// here, so the pipeline sees one shape and one set of rules.
 
 /** A page a provider says it read, in whatever fields it gave. */
 export interface RawSource {
@@ -61,14 +57,12 @@ function isGroundingRedirect(uri: string): boolean {
 }
 
 /**
- * The page each Gemini grounding redirect points to.
- *
- * Gemini names a source by a vertexaisearch.cloud.google.com link and the
- * bare domain. The link says nothing about the page, and it stops working
- * after a while. So each one is resolved once, while the research runs: a
- * HEAD request to Google, whose `Location` header is the page. The page itself
- * is never requested. A link that does not answer in time is left out of the
- * map, so its caller keeps the redirect.
+ * The page each Gemini grounding redirect points to. Gemini names a source by a
+ * vertexaisearch.cloud.google.com link, which says nothing about the page and
+ * stops working after a while. So each is resolved once, while research runs,
+ * with a HEAD request to Google whose `Location` header is the page; the page
+ * itself is never requested. A link that does not answer in time is left out,
+ * so its caller keeps the redirect.
  *
  * @param uris - Addresses as a provider gave them; others are ignored.
  * @param options.signal - The research job's abort signal.

@@ -34,9 +34,8 @@ export function registerSuggestionRoutes(router: Router) {
   router.get(
     "/dedupe/suggestions/count",
     asyncHandler(async (req, res) => {
-      // `count` drives the sidebar badge, so it reports clusters: the number
-      // of cards the review queue will actually show. `pairs` is the raw
-      // pending row count, kept for anything that needs the finer number.
+      // `count` drives the sidebar badge, so it counts clusters, the cards the
+      // review shows. `pairs` is the raw pending row count.
       const scope = scopeOf(req);
       res.json({
         count: getPendingClusterCount(scope),
@@ -108,11 +107,9 @@ export function registerSuggestionRoutes(router: Router) {
         throw new AppError(`Suggestion is already ${suggestion.status}`, 400);
       }
 
-      // The primary must be one of the pair. The old ternary defaulted any
-      // OTHER id to "contactIdA is the duplicate" — so a caller merging a
-      // cluster pair-by-pair under the cluster's primary silently re-merged
-      // the wrong contact, then failed on the tombstone. Guessing with a
-      // merge is never acceptable; cluster merges have their own endpoint.
+      // The primary must be one of the pair. Merging under any other id would
+      // re-merge the wrong contact, and a merge must never guess; cluster
+      // merges have their own endpoint.
       if (
         primaryId !== suggestion.contactIdA &&
         primaryId !== suggestion.contactIdB

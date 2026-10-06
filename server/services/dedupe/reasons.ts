@@ -1,13 +1,9 @@
-// =============================================================================
-// The reasons a pair gives, in plain words
-// =============================================================================
-// Every rule that finds a pair writes why, and the review screen shows it as
-// written. So the words are a person's: "Same phone number", "Nickname: Bob
-// for Robert", "Similar names, same company and city". No percentages, no
-// engine terms such as "embedding" or "score", and no lowercased normalized
-// names. The matched value travels in `matchedField`, and anything that argues
-// against the match is the pair's caveat (policy.ts), not part of its reason.
-// =============================================================================
+// The reasons a pair gives, in plain words. The review screen shows each rule's
+// reason as written, so the words are a person's: "Same phone number",
+// "Nickname: Bob for Robert", "Similar names, same company and city". No
+// percentages, no engine terms ("embedding", "score"), no normalized names. The
+// matched value travels in `matchedField`, and whatever argues against the
+// match is the pair's caveat (policy.ts), not its reason.
 
 import type { MatchSignals } from "./types.ts";
 
@@ -58,10 +54,9 @@ export function nicknameReason(firstA: string, firstB: string): string {
 }
 
 /**
- * Why the funnel thinks two contacts are one person, in plain words.
- *
- * No numbers and no engine terms: "Similar names, same company and city".
- * A shared inbox is not a reason here, it is a caveat (`scoringCaveat`).
+ * Why the funnel thinks two contacts are one person, in plain words, such as
+ * "Similar names, same company and city". A shared inbox is a caveat
+ * (`scoringCaveat`), not a reason.
  */
 export function buildScoringReasoning(signals: MatchSignals): string {
   if (signals.emailOverlap) return REASON.email;

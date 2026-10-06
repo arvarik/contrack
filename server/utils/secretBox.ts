@@ -44,9 +44,8 @@ export function __resetSecretKeyCache(): void {
 }
 
 /**
- * Resolves or initializes the 32-byte master encryption key.
- * If CONTRACK_SECRET_KEY is set in environment, it is validated and used.
- * Otherwise, DATA_DIR/secret.key is loaded or generated with file mode 0600.
+ * The 32-byte master key: CONTRACK_SECRET_KEY, validated, when set; else
+ * DATA_DIR/secret.key, loaded or created with mode 0600.
  */
 export function getOrInitSecretKey(dataDir: string = DATA_DIR): Buffer {
   if (process.env.CONTRACK_SECRET_KEY) {

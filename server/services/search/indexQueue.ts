@@ -76,12 +76,10 @@ export interface DrainResult {
 }
 
 /**
- * Drain pending indexing tasks from the persistent SQLite queue.
- *
- * Automatic refreshes run with the built-in local model. Provider embeddings
- * are kept explicit unless `allowProvider: true` is passed. Temporary failures
- * are retried with exponential backoff up to MAX_ATTEMPTS. Outdated results
- * (where the contact changed during embedding generation) are rejected.
+ * Drain pending indexing tasks from the durable queue. Automatic refreshes use
+ * the built-in local model; provider embeddings need `allowProvider: true`.
+ * Temporary failures retry with exponential backoff up to MAX_ATTEMPTS. A
+ * result for a contact that changed while it was embedded is dropped.
  */
 export async function drainIndexQueue(
   options: DrainOptions = {},
@@ -289,19 +287,17 @@ export async function drainIndexQueue(
 }
 
 /**
- * Coalesce local indexing after edits. FTS updates in the contact transaction.
- *
- * Saves pending indexing work durably into SQLite. If a previous indexing job
- * for this contact was pending, processing, or failed, it resets it with the new
- * contact timestamp so newer edits supersede older attempts.
+ * Queue a contact for local indexing after an edit (FTS updates inside the
+ * contact's transaction). A pending, running or failed job for the contact is
+ * reset with the new timestamp, so newer edits supersede older attempts.
  */
 export function scheduleSearchIndex(id: string): void {
   sqlite
     .prepare(
-      // Three callers, and each has already proved the caller owns this
+      // Each of the three callers has already proved the caller owns this
       // contact: contactService after a create or update, mergeEngine after a
-      // scoped batch applies, and dedupe/merging after loadMergePair. The
-      // column is a derived cache, and clearing it queues a re-index.
+      // scoped batch, and dedupe/merging after loadMergePair. The column is a
+      // derived cache.
       // tenant-lint: allow owner-checked by caller
       "UPDATE contacts SET searchExpansion = NULL WHERE id = ? AND searchExpansion IS NOT NULL",
     )

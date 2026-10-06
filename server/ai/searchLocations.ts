@@ -270,10 +270,10 @@ export function extractQueryLocations(
         (matcher) =>
           matcher.trim() && contains(normalize(part), normalize(matcher)),
       );
-      // A phrase that is a place only because a planner matcher sits inside
-      // it ends where the matcher ends. The phrase pattern stops at "who",
-      // "with" and "at", not at a verb, so "who in Lisbon goes rock
-      // climbing" read "Lisbon goes rock climbing", which matched nobody.
+      // A phrase that is a place only because a planner matcher sits inside it
+      // ends where the matcher ends: the phrase pattern stops at "who", "with"
+      // and "at", not at a verb, so "who in Lisbon goes rock climbing" would
+      // read "Lisbon goes rock climbing" and match nobody.
       if (grounded)
         phrases.push(matcherSpan(part, legacyMatchers)?.trim() || part.trim());
     }
@@ -295,8 +295,8 @@ export function extractQueryLocations(
 
 /**
  * Contact locations already parsed. A location filter reads every contact's
- * location, and parsing 5,000 of them took 45 ms on each question. The
- * parse is a pure function of the text, so a repeat is free.
+ * location (45 ms for 5,000 on each question), and the parse is a pure function
+ * of the text, so a repeat is free.
  */
 const parsedContactPlaces = new Map<
   string,

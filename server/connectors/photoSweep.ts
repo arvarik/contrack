@@ -1,22 +1,13 @@
-// =============================================================================
-// Stored Google photo URLs, copied into uploads once
-// =============================================================================
-// Until connector photos were copied locally (see saveContactPhoto in
-// ingest.ts), a Google contact stored its photo as a googleusercontent.com
-// URL, and the browser asked Google for it every time somebody opened the
-// contact. A sync rewrites the avatar only for a contact that Google sends
-// again, and an incremental sync sends only the contacts that changed, so
-// most of those URLs would stay for good.
-//
-// This sweep runs once per boot, a few seconds after the start, as the
-// start-up job `connectors.photoSweep` (server/jobs/connectors.ts). It copies each
-// stored Google photo into the owner's uploads and points the contact at the
-// copy. A photo that Google no longer serves (an expired URL, a 404) is
-// cleared, and the contact shows its generated avatar, rather than keep a
-// URL the browser would load on every view. A failure that may pass (the
-// network, a 5xx) leaves the row for the next boot. An avatar the person
-// changed while the download ran is left alone.
-// =============================================================================
+// Copy stored Google photo URLs into uploads, once. A Google contact can still
+// hold a googleusercontent.com photo URL, which the browser fetches from Google
+// on every view, and an incremental sync rewrites only contacts that changed.
+// This sweep runs once per boot, a few seconds after start, as the start-up job
+// `connectors.photoSweep` (server/jobs/connectors.ts): it copies each stored
+// Google photo into the owner's uploads and points the contact at the copy. A
+// photo Google no longer serves (expired, 404) is cleared, so the contact shows
+// its generated avatar. A failure that may pass (the network, a 5xx) leaves the
+// row for the next boot. An avatar the person changed during the download is
+// left alone.
 
 import { sqlite } from "../db.ts";
 import { scopeForOwnerId } from "../tenancy/scope.ts";

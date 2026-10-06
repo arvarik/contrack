@@ -1,8 +1,5 @@
 /**
- * server/mcp/tools/pulse.ts — Pulse dashboard MCP tool.
- *
- * Implements:
- * - get_pulse
+ * The Pulse MCP tool: get_pulse.
  *
  * @module server/mcp/tools/pulse
  */

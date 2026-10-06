@@ -1,11 +1,6 @@
 /**
- * server/mcp/tools/actions.ts — Action items and follow-up MCP tools.
- *
- * Implements:
- * - list_action_items
- * - create_action_item
- * - update_action_item
- * - complete_action_item
+ * Follow-up MCP tools: list_action_items, create_action_item,
+ * update_action_item, complete_action_item.
  *
  * @module server/mcp/tools/actions
  */

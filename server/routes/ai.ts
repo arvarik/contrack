@@ -1,13 +1,7 @@
-// =============================================================================
-// Routes — AI Diagnostics
-// =============================================================================
-// What each kind of AI work runs on right now, and what this process has sent
-// to Gemini: per-model usage, grounded requests today, and the models a
-// circuit breaker has paused. Also whether an admin turned AI off for the
-// whole instance, which every account may read.
-//
-// Usage: GET /api/ai/diagnostics, GET /api/ai/instance
-// =============================================================================
+// AI diagnostics: what each kind of AI work runs on now, and what this process
+// sent to Gemini (per-model usage, grounded requests today, models a circuit
+// breaker paused). Also whether an admin turned AI off for the instance, which
+// every account may read. GET /api/ai/diagnostics, GET /api/ai/instance.
 
 import { Router } from "express";
 import { getProvider } from "../ai/providerRegistry.ts";
@@ -26,10 +20,9 @@ import { instanceAiState } from "../ai/instanceSwitch.ts";
 
 const router = Router();
 
-// The first two routes report the instance's shared routing state: usage and circuit
-// breakers that every account draws on. They describe the operator's provider
-// account, not the caller's data, which is why the manifest classes them
-// `admin` and Phase 3 guards them.
+// The first two routes report the instance's shared routing state (usage and
+// circuit breakers every account draws on), which describes the operator's
+// provider account, not the caller's data, so they are admin routes.
 
 const EMPTY_SNAPSHOT: DiagnosticsSnapshot = {
   models: {},
@@ -70,12 +63,10 @@ router.get(
 /**
  * GET /api/ai/grounding-capacity
  *
- * Whether web research can run right now, for the command palette's enrich
- * action, and how many research calls the instance made in the last 24 hours,
- * for the Enrichment page. It used to answer from Gemini's local grounding
- * pool, and only when AI_PROVIDER was gemini, so it was wrong whenever
- * research ran elsewhere. Now: research resolves to a provider (or SearXNG is
- * set and research is not "Off"), and when that provider is Gemini, at least
+ * Whether web research can run now, for the palette's enrich action, and how
+ * many research calls the instance made in the last 24 hours, for the
+ * Enrichment page. It can when research resolves to a provider (or SearXNG is
+ * set and research is not "Off"), and, when that provider is Gemini, at least
  * one of its search models is not paused.
  */
 router.get(

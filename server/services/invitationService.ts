@@ -1,22 +1,12 @@
-// =============================================================================
-// Invitation Service — how a second person gets an account
-// =============================================================================
-// An admin creates an invitation and copies the link. There is no mail: this
-// is a self-hosted app with no outbound mail configured, and adding one would
-// be a deployment requirement rather than a feature. The admin sends the link
-// however they already talk to the person.
-//
-// The database holds only the SHA-256 of the secret, so the invitations table
-// is useless to anybody who reads it, including anybody who finds one of the
-// rotating backups on disk. The secret exists in plaintext exactly once, in
-// the response to the request that created it.
-//
-// An invitation is single use, expires (7 days by default), and can be
-// revoked. Those three states each answer `410` with their own code so the
-// person holding a dead link is told which kind of dead it is. An unknown or
-// malformed token answers `404` with one body for both, so the endpoint
-// cannot be used to test whether a token exists.
-// =============================================================================
+// How a second person gets an account. An admin creates an invitation and sends
+// the link: copied by hand, or by mail when mail and PUBLIC_URL are set. The
+// database holds only the SHA-256 of the secret, so the table and its backups
+// hold no usable link; the plaintext exists once, in the response to the
+// request that created it. An invitation is single use, expires (7 days by
+// default) and can be revoked, and each of those answers `410` with its own
+// code, so the holder of a dead link learns why. An unknown or malformed token
+// answers `404` with one body for both, so the endpoint cannot test whether a
+// token exists.
 
 import crypto from "crypto";
 import { sqlite } from "../db.ts";
@@ -70,11 +60,9 @@ function tokenHash(secret: string): string {
 }
 
 /**
- * The status the row is in right now.
- *
- * `expired` is derived from `expiresAt` rather than stored, so an invitation
- * that ages out needs no sweep to become unusable. The daily maintenance
- * interval removes long-dead rows, but the state changes on its own.
+ * The row's status now. `expired` is derived from `expiresAt`, not stored, so
+ * an invitation ages out with no sweep; the daily maintenance only removes
+ * long-dead rows.
  */
 function statusOf(row: {
   acceptedAt: string | null;
@@ -93,13 +81,10 @@ import { getInstanceName } from "./authService.ts";
 import { mailLinkOrigin } from "../utils/publicOrigin.ts";
 
 /**
- * Create an invitation and return its one-time link.
- *
- * `origin` comes from the request (`publicOrigin`), and the link in the
- * answer goes back to the admin who asked for it. A link sent by mail uses
- * PUBLIC_URL instead, and with no PUBLIC_URL the invitation is not mailed:
- * a mailed link built from the request would carry whatever host the request
- * claimed.
+ * Create an invitation and return its one-time link. The answer's link uses the
+ * request's `origin` (`publicOrigin`) and goes back to the admin who asked. A
+ * mailed link uses PUBLIC_URL, and with no PUBLIC_URL nothing is mailed: a link
+ * built from the request would carry whatever host it claimed.
  */
 export async function createInvitation(
   ctx: { actor: User; ip: string | null },
@@ -223,13 +208,11 @@ export function revokeInvitation(
 }
 
 /**
- * Turn a link into an account.
- *
- * The person chooses their own email, username and password. The invitation
- * decides only the role, which is why an admin can invite an admin. The email
- * on the invitation is a hint the admin typed and is not enforced: a person
- * whose work address differs from the one the admin guessed would otherwise
- * be locked out by a typo they cannot see.
+ * Turn a link into an account. The person chooses their own email, username and
+ * password; the invitation decides only the role, which is how an admin invites
+ * an admin. The invitation's email is a hint and not enforced, or a person
+ * whose address differs from the admin's guess would be locked out by a typo
+ * they cannot see.
  */
 export async function acceptInvitation(
   input: {
@@ -254,9 +237,8 @@ export async function acceptInvitation(
   });
 
   // Claimed after the account exists, and conditionally, so two people racing
-  // the same link produce one account rather than two. The second UPDATE
-  // changes nothing, and the account it created is left without an invitation
-  // — which is why the check runs before the response is built.
+  // one link make one account: the second UPDATE changes nothing, so the
+  // account it made is deleted and the link answers as accepted.
   const claimed = sqlite
     .prepare(
       `UPDATE invitations

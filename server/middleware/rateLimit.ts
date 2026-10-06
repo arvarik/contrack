@@ -1,20 +1,14 @@
-// =============================================================================
-// Rate limiting — lightweight fixed-window limiter (no external dependency)
-// =============================================================================
-// Protects endpoints that trigger billable LLM calls or outbound fetches from
-// runaway loops and abuse. State is in-memory, which matches the single-process
-// deployment model of this app.
+// A fixed-window rate limiter with no dependency, for endpoints that make
+// billable LLM calls or outbound fetches. State is in memory, which fits the
+// single-process deployment.
 //
-// Two limiters sit on the AI-cost routes, and they answer different questions.
-// The per-IP one asks "is one machine hammering this instance", and it runs
-// before anybody is identified, so it also protects the sign-in path from a
-// caller with no account. The per-user one asks "is one account spending more
-// than its share of a shared provider key", and it can only run once
-// `attachPrincipal` has said who is asking. Neither replaces the other: on a
-// multi-user instance behind one office address, the per-IP limiter alone
-// would let one person exhaust everybody's budget, and the per-user limiter
-// alone would let an unidentified caller retry forever.
-// =============================================================================
+// The AI-cost routes have two limiters. The per-IP one ("is one machine
+// hammering this instance") runs before anybody is identified, so it also
+// covers callers with no account. The per-user one ("is one account spending
+// more than its share of a shared key") runs once `attachPrincipal` has said
+// who is asking. Behind one office address, per-IP alone would let one person
+// spend everybody's budget, and per-user alone would let an unidentified caller
+// retry forever.
 
 import type { Request, Response, NextFunction } from "express";
 import { RateLimitedError } from "../utils/AppError.ts";
@@ -26,13 +20,11 @@ interface WindowState {
 }
 
 /**
- * A limiter middleware with its counters exposed for testing.
- *
- * `reset` exists because a fixed window is shared state across every request
- * in a process: a test file that exercises sign-in a dozen times would trip a
- * limiter meant for real clients, and the alternative — an env var that
- * loosens the limit under test — means the thing being tested is not the thing
- * that ships.
+ * A limiter middleware with its counters exposed for tests. `reset` exists
+ * because a fixed window is shared by every request in a process: a test file
+ * that signs in a dozen times would trip a limiter meant for real clients, and
+ * a test-only env var that loosens the limit would test something that does not
+ * ship.
  */
 export interface RateLimiter {
   (req: Request, res: Response, next: NextFunction): void;
@@ -41,15 +33,11 @@ export interface RateLimiter {
 }
 
 /**
- * Create a fixed-window rate limiter.
- *
- * `keyBy` decides what a window belongs to, and defaults to the client IP. A
- * key of `null` skips the limiter for that request, which is what lets a
- * per-user limiter ignore a caller nobody has identified rather than lumping
- * every such caller into one window.
- *
- * Windows are pruned lazily on access, so memory stays bounded by the number
- * of distinct keys seen within one window.
+ * Create a fixed-window rate limiter. `keyBy` names the window a request
+ * belongs to, the client IP by default. A `null` key skips the limiter, so a
+ * per-user limiter ignores an unidentified caller instead of lumping them all
+ * into one window. Windows are pruned on access, so memory is bounded by the
+ * keys seen within one window.
  */
 export function createRateLimiter(options: {
   windowMs: number;
@@ -87,10 +75,9 @@ export function createRateLimiter(options: {
         1,
         Math.ceil((state.resetAt - now) / 1000),
       );
-      // The wait goes in `details` and the error handler turns it into the
-      // `Retry-After` header, which is the one place that does so for every
-      // 429 in the app. Setting it here as well would be a second mechanism
-      // doing the same job, and the one that could quietly stop being tested.
+      // The wait goes in `details`, and the error handler turns it into the
+      // `Retry-After` header for every 429 in the app; a second mechanism here
+      // could quietly stop being tested.
       return next(
         new RateLimitedError(
           `Too many requests to ${name} — retry in ${retryAfterSeconds}s`,
@@ -106,12 +93,9 @@ export function createRateLimiter(options: {
 }
 
 /**
- * Paths that trigger billable AI calls or outbound network fetches.
- *
- * `GET /api/dashboard/insight` and `POST /api/dedupe/scan` were added in
- * Phase 3 (risks document Q16). Both call a provider and neither was listed.
- * `POST /api/contacts/bulk` is deliberately still out: the import is rare, is
- * already capped at 50 MB, and does its AI work after the response.
+ * Paths that make billable AI calls or outbound fetches. `POST
+ * /api/contacts/bulk` is left out on purpose: an import is rare, capped at 50
+ * MB, and does its AI work after the response.
  */
 const AI_COST_PATTERNS: RegExp[] = [
   /^\/api\/search\/semantic/,
@@ -127,19 +111,11 @@ const AI_COST_PATTERNS: RegExp[] = [
 ];
 
 /**
- * True when this path is one the two limiters below cover.
- *
- * The path is lowercased first. Express routes case-insensitively unless the
- * app sets `case sensitive routing`, and this one does not, so
- * `GET /API/Dashboard/Insight` reaches the same handler and makes the same
- * billable provider call as the lower-case spelling. Matching the patterns
- * against the path as it arrived let one capital letter escape both limiters
- * entirely: measured at forty requests with no refusal, against ten refusals
- * for the same forty spelled in lower case.
- *
- * Trailing slashes go too, for the same reason: Express routes
- * `POST /api/ai-search/` to the handler of `/api/ai-search`, and the one
- * pattern that ends in `$` let all thirty-five such requests through.
+ * True for a path the two limiters below cover. Express routes ignore case and
+ * a trailing slash, so `GET /API/Dashboard/Insight` and `POST /api/ai-search/`
+ * reach the same billable handlers as their plain spellings. The path is
+ * lowercased and trimmed first, or one capital letter or a trailing slash would
+ * slip past both limiters.
  */
 export function isAiCostPath(path: string): boolean {
   const normalized = trimTrailingSlashes(path.toLowerCase());
@@ -153,12 +129,10 @@ const aiLimiter = createRateLimiter({
 });
 
 /**
- * Per account, at half the per-IP allowance.
- *
- * Keyed by the account rather than the address, so one person cannot spend
- * the instance's provider budget while their colleagues on the same office
- * address are refused for it. A request nobody has identified yet returns a
- * `null` key and is left to the per-IP limiter, which has already seen it.
+ * Per account, at half the per-IP allowance, so one person cannot spend the
+ * instance's provider budget while colleagues on the same office address are
+ * refused for it. An unidentified request gets a `null` key and is left to the
+ * per-IP limiter, which has already seen it.
  */
 const aiUserLimiter = createRateLimiter({
   windowMs: 60_000,
@@ -168,9 +142,8 @@ const aiUserLimiter = createRateLimiter({
 });
 
 /**
- * Router-level middleware: applies the per-IP AI limiter only to requests
- * whose path matches a known AI/outbound-cost endpoint. Mounted before
- * `attachPrincipal`, so it runs for callers with no account at all.
+ * The per-IP AI limiter, for the paths that cost. Mounted before
+ * `attachPrincipal`, so it covers callers with no account.
  */
 export function aiEndpointRateLimit(
   req: Request,

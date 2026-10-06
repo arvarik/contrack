@@ -1,8 +1,4 @@
-// =============================================================================
-// Module: interactions
-// =============================================================================
 // Notes, meetings, calls and attachments on a contact's timeline.
-// =============================================================================
 
 import { defineModule } from "../module.ts";
 import { interactionsRouter } from "../../routes/interactions.ts";

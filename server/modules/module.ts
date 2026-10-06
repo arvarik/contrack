@@ -1,22 +1,18 @@
-// =============================================================================
-// Feature modules
-// =============================================================================
-// Each area of the server is one module: a folder under server/modules/ whose
-// index.ts exports `defineModule({ ... })`. A module lists its routers, its
-// MCP tools, its background jobs, its event subscribers and its start-up
-// work. The core reads the ordered list in server/modules/index.ts:
+// Feature modules. Each area of the server is a folder under server/modules/
+// whose index.ts exports `defineModule({ ... })`, listing its routers, MCP
+// tools, background jobs, event subscribers and start-up work. The core reads
+// the ordered list in server/modules/index.ts:
 //
 //   - createApp() mounts every router, in list order (server/app.ts).
 //   - registerAllTools() registers every MCP tool (server/mcp/tools/index.ts).
 //   - server.ts registers every job and subscriber, starts the job runner,
 //     and runs each module's start-up work.
 //
-// So a new feature is a folder and one line in that list, with no edit to the
-// boot code. Three things stay central, because they hold for every module:
-// the route manifest (server/tenancy/routeManifest.ts), the migration list
-// (server/db/migrations/index.ts), and the auth router and middleware that
-// run before every module (server/app.ts).
-// =============================================================================
+// So a new feature is a folder and one line in that list. Three things stay
+// central, because they hold for every module: the route manifest
+// (server/tenancy/routeManifest.ts), the migration list
+// (server/db/migrations/index.ts), and the auth router and middleware that run
+// before every module (server/app.ts).
 
 import type { Request, Router } from "express";
 import type { Scope } from "../tenancy/scope.ts";

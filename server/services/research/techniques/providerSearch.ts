@@ -1,40 +1,35 @@
-// =============================================================================
-// Research — the provider-search technique
-// =============================================================================
-// The research model searches the web with its own search tool and reports
-// what it found. It returns the answers, the pages they cite and the
-// searches that ran. The extraction then reads the answers into fields
-// (`extract.ts`): Gemini cannot search and fill a response schema in one
-// request, and the split keeps the pages beside the facts.
+// Research by provider search: the research model searches the web with its own
+// tool and reports the answers, the pages they cite and the searches that ran.
+// The extraction then reads the answers into fields (`extract.ts`): Gemini
+// cannot search and fill a response schema in one request, and the split keeps
+// the pages beside the facts.
 //
 // Every run asks one plain sentence first (`buildQuickSearchPrompt`). A deep
-// run asks the long prompt beside it (`buildSearchPrompt`), and keeps what
-// both cite. Both ask at thinking "medium". Measured on 36 contacts imported
-// from LinkedIn, 20 of them checked by hand (2026-10-05):
+// run asks the long prompt beside it (`buildSearchPrompt`) and keeps what both
+// cite. Both ask at thinking "medium". On 36 contacts imported from LinkedIn,
+// 20 checked by hand:
 //
-//   - The plain ask searched for 19 of 20 on its first try. The long prompt
-//     ended "If no page is about this person, reply with exactly: NO MATCHING
-//     PAGES", and Gemini 3.8 Flash took that exit without a search for 10 of
-//     16. Neither ask now has a reply for nobody found.
-//   - Once it searches, the long prompt reads further, so the two together
-//     found 268 right facts where the plain ask alone found 128.
-//   - A third ask, for a complete profile at thinking "high", came back
-//     empty for 13 of 64 contacts and wrote a namesake's facts into 3. It
-//     is gone.
+// - The plain ask searched for 19 of 20 on its first try. Offered "reply with
+//   exactly: NO MATCHING PAGES", Gemini 3.8 Flash took that exit without a
+//   search for 10 of 16, so neither ask offers a reply for nobody found.
+// - Once it searches, the long prompt reads further: together the two found 268
+//   right facts where the plain ask alone found 128.
+// - A third ask, for a complete profile at thinking "high", came back empty for
+//   13 of 64 contacts and wrote a namesake's facts into 3, so there is none.
 //
-// Whether an ask searched is read from the search metadata (the searches it
-// reports, or the pages it cites), never from its words: without a search, a reply still says "no matching pages were found
-// in the search results". When no ask searched, or one searched and said
-// nothing, the plain one is asked once more. When none searched then
-// either, the run fails as AI_NO_SEARCH, or AI_NO_ANSWER when nothing was
-// said, and records nothing. When an ask searched and its pages hold nothing about the
-// person, the run records no public information.
+// Whether an ask searched is read from the search metadata (its searches, or
+// the pages it cites), never from its words: without a search a reply can still
+// say "no matching pages were found in the search results". When no ask
+// searched, or one searched and said nothing, the plain one is asked once more.
+// When none searched then either, the run fails as AI_NO_SEARCH, or
+// AI_NO_ANSWER when nothing was said, and records nothing. When an ask searched
+// and its pages hold nothing about the person, the run records no public
+// information.
 //
 // Before the extraction, pages that can only mislead are left out, with the
-// passages of the answer they alone back: the pages of a run the person
-// marked "Not this person", and job boards, whose posting describes a role,
-// not the person in it.
-// =============================================================================
+// passages of the answer they alone back: the pages of a run the person marked
+// "Not this person", and job boards, whose posting describes a role, not the
+// person in it.
 
 import { NEEDS_FAST_MODEL, NEEDS_WEB_SEARCH_MODEL } from "../needs.ts";
 import type { AIGenerateResult } from "../../../ai/gateway.ts";
@@ -120,12 +115,10 @@ function withoutPassages(
 }
 
 /**
- * The research model's own web search, for one contact.
- *
- * It never throws for what the model answered. It says what came of it:
- * the answers of every ask that cited pages, a no-match from asks that
- * searched, or the error that explains why there is neither. Only a run
- * that stops throws.
+ * The research model's own web search, for one contact. It never throws for
+ * what the model answered: it reports the answers of every ask that cited
+ * pages, a no-match from asks that searched, or the error that explains why
+ * there is neither. Only a run that stops throws.
  */
 async function searchWithProvider(
   request: ResearchRequest,
@@ -145,11 +138,10 @@ async function searchWithProvider(
   /** The ask searched and said something: an answer to read. */
   const answered = (answer: AIGenerateResult) =>
     searched(answer) && !!answer.text.trim();
-  // Every ask is a paid call, so every ask is counted in AI usage, and one
-  // that ran no search is counted apart, so the usage page shows it.
-  // Thinking counts against the token budget, and a person with a long
-  // record took 6,000 thinking tokens before 800 of answer, hence the
-  // 16,384.
+  // Every ask is a paid call, so each is counted in AI usage, and one that ran
+  // no search is counted apart. Thinking counts against the token budget: a
+  // person with a long record took 6,000 thinking tokens before 800 of answer,
+  // hence 16,384.
   const asked = async ({ text, thinkingLevel }: Ask) => {
     const result = await ctx.generate("research", {
       prompt: text(),

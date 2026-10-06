@@ -1,25 +1,21 @@
-// =============================================================================
-// OAuth Service — sign-in for MCP clients
-// =============================================================================
-// An MCP client such as Claude, ChatGPT or an editor adds Contrack by its
-// address. It finds this server's OAuth metadata, sends the person here to
-// sign in and approve it, and then holds a token for /api/mcp alone.
+// OAuth sign-in for MCP clients. A client such as Claude, ChatGPT or an editor
+// adds Contrack by its address, finds this server's OAuth metadata, sends the
+// person here to sign in and approve it, and then holds a token for /api/mcp
+// alone.
 //
-// The flow, and where each step lives:
 // 1. Discovery: the routes in server/routes/oauth.ts, from `oauthIssuer()`.
 // 2. The client: a registered one (RFC 7591, `registerClient`) or one that
 //    publishes a metadata document at an https URL (`resolveClient`).
-// 3. `beginAuthorization` checks the request and stores it. The person
-//    approves or denies it on the consent page (`describeRequest`,
-//    `decideRequest`), which gives the client a one-time code.
-// 4. `exchangeCode` turns the code into a grant, an access token and a
-//    refresh token. `refreshGrant` rotates the refresh token.
+// 3. `beginAuthorization` checks the request and stores it. The person approves
+//    or denies it on the consent page (`describeRequest`, `decideRequest`),
+//    which gives the client a one-time code.
+// 4. `exchangeCode` turns the code into a grant, an access token and a refresh
+//    token. `refreshGrant` rotates the refresh token.
 // 5. `resolveAccessToken` is how attachPrincipal reads an access token.
 //
 // A grant is an api_tokens row with `kind = 'oauth'`, so the account's token
 // list shows it and revoking it ends every token it issued. Every secret is
-// stored as its SHA-256 only, as personal tokens are.
-// =============================================================================
+// stored as its SHA-256 only.
 
 import crypto from "crypto";
 import { z } from "zod";
@@ -106,9 +102,7 @@ export class OAuthError extends Error {
   }
 }
 
-// -----------------------------------------------------------------------------
 // The issuer
-// -----------------------------------------------------------------------------
 
 function isLoopbackName(hostname: string): boolean {
   return (
@@ -166,9 +160,7 @@ function checkResource(issuer: string, resource: string | undefined): void {
   }
 }
 
-// -----------------------------------------------------------------------------
 // Secrets
-// -----------------------------------------------------------------------------
 
 const sha256 = (value: string) =>
   crypto.createHash("sha256").update(value).digest("hex");
@@ -182,9 +174,7 @@ function sameText(a: string, b: string): boolean {
   return left.length === right.length && crypto.timingSafeEqual(left, right);
 }
 
-// -----------------------------------------------------------------------------
 // Clients
-// -----------------------------------------------------------------------------
 
 interface Client {
   id: string;
@@ -473,9 +463,7 @@ export function registerClient(body: unknown): RegisteredClient {
   };
 }
 
-// -----------------------------------------------------------------------------
 // Authorization requests
-// -----------------------------------------------------------------------------
 
 /** Where `GET /oauth/authorize` sends the browser next. */
 export type AuthorizeOutcome =
@@ -513,14 +501,13 @@ function callback(
  * Check an authorization request and store it for the consent page.
  *
  * The client and the redirect URI come first: until both are known good,
- * nothing redirects anywhere, so this cannot be used to send a browser to an
- * address of an attacker's choice. After that, a bad parameter goes back to
- * the client as an error only when the address is the document's own host,
- * or this computer. Anyone can register a client or publish a document, so
- * any other error stays on this server's error page: a redirect there would
- * make this server a redirector to any site. This step never reads the
- * session: the cookie is SameSite=Strict, and a link from claude.ai does not
- * carry it.
+ * nothing redirects anywhere, so this cannot send a browser to an attacker's
+ * address. After that, a bad parameter goes back to the client as an error only
+ * when the address is the document's own host or this computer. Anyone can
+ * register a client or publish a document, so any other error stays on this
+ * server's error page, or this server would redirect to any site. This step
+ * never reads the session: the cookie is SameSite=Strict, and a link from
+ * claude.ai does not carry it.
  */
 export async function beginAuthorization(
   issuer: string,
@@ -607,9 +594,9 @@ export async function beginAuthorization(
       `UPDATE oauth_clients SET lastUsedAt = CURRENT_TIMESTAMP WHERE id = ?`,
     )
     .run(client.id);
-  // One address that opens sign-in after sign-in keeps only its newest few.
-  // Counted per address, as many people share one client such as Claude: a
-  // stranger's requests must not push out the owner's.
+  // One address that keeps opening sign-in keeps only its newest few requests.
+  // Counted per address, because many people share one client such as Claude,
+  // and a stranger's requests must not push out the owner's.
   sqlite
     .prepare(
       `DELETE FROM oauth_requests WHERE id IN (
@@ -743,9 +730,7 @@ export function decideRequest(
   };
 }
 
-// -----------------------------------------------------------------------------
 // Tokens
-// -----------------------------------------------------------------------------
 
 export interface TokenResponse {
   access_token: string;
@@ -885,10 +870,9 @@ export function exchangeCode(
       .run(row.id).changes;
     if (claimed === 0) throw badGrant();
     const grantId = crypto.randomUUID();
-    // What the token list shows as where the app signs in from. A document
-    // client is known by its host. A registered client is known only by
-    // where it sends the browser back, so that is what the list shows: a
-    // lookalike "Claude" that returns to evil.example says so.
+    // Where the token list says the app signs in from. A document client is
+    // known by its host, a registered client only by where it sends the browser
+    // back, so a lookalike "Claude" that returns to evil.example says so.
     const back = describeRedirect(row.redirectUri);
     const host = isDocumentUrl(row.clientId)
       ? new URL(row.clientId).host
@@ -936,14 +920,12 @@ export function exchangeCode(
 }
 
 /**
- * Rotate a refresh token: the old one stops, and a new pair replaces it.
- *
- * A refresh token that comes back after it was used is a retry, or a second
- * process of the same app (two terminals that share one login), when it
- * comes within a minute: it gets a fresh pair of its own. Later, two parties
- * hold the grant, and one of them stole it, so the grant ends for both.
- * A scope asking for more than the grant gets the grant's own scope, which
- * the answer names.
+ * Rotate a refresh token: the old one stops and a new pair replaces it. A used
+ * refresh token that comes back within a minute is a retry or a second process
+ * of the same app (two terminals sharing a login), and gets a fresh pair of its
+ * own. Later, two parties hold the grant and one stole it, so the grant ends
+ * for both. A scope asking for more than the grant gets the grant's own scope,
+ * which the answer names.
  */
 export function refreshGrant(
   issuer: string,

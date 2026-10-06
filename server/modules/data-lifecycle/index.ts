@@ -1,11 +1,7 @@
-// =============================================================================
-// Module: data-lifecycle
-// =============================================================================
-// The trash, the exports and the database backups. Its jobs are the startup
-// and scheduled snapshots and the daily trash purge. At start it says when
-// the newest verified snapshot is too old, which is the only place an
-// operator finds out that the backups they think they have stopped.
-// =============================================================================
+// The trash, the exports and the database backups. Its jobs are the startup and
+// scheduled snapshots and the daily trash purge. At start it warns when the
+// newest verified snapshot is too old, which is where an operator learns the
+// backups stopped.
 
 import { defineModule } from "../module.ts";
 import { dataLifecycleRouter } from "../../routes/dataLifecycle.ts";

@@ -1,8 +1,4 @@
-// =============================================================================
-// Module: action-items
-// =============================================================================
 // Follow-ups: tasks with a due date on a contact.
-// =============================================================================
 
 import { defineModule } from "../module.ts";
 import { actionItemsRouter } from "../../routes/actionItems.ts";

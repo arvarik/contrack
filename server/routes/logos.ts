@@ -1,24 +1,17 @@
-// =============================================================================
-// Company logos — fetched once from Google's favicon service, served from disk
-// =============================================================================
-// The browser asks GET /api/logos/<domain> and never talks to Google itself,
-// so Google does not learn which companies are in somebody's contact list.
-// The source is Google's S2 favicon service.
-//
-// Each domain is in one of three states on disk, in the shared LOGOS_DIR:
+// Company logos, fetched once from Google's S2 favicon service and served from
+// disk. The browser asks GET /api/logos/<domain> and never talks to Google, so
+// Google does not learn which companies are in somebody's contacts. Each domain
+// is in one of three states in the shared LOGOS_DIR:
 //   <domain>.png   The logo, validated and re-encoded here. Served forever.
 //   <domain>.miss  Google answered "no" (a 4xx, or a body that is not an
 //                  image). The file holds the time of that answer, and the
 //                  domain is asked again after 30 days.
 //   neither        Never asked, or the last attempt failed for a reason that
 //                  says nothing about the domain: the network, a timeout, a
-//                  5xx. Those failures back off for 10 minutes in memory only,
-//                  so a restart, or the end of the backoff, asks again.
-//
-// Concurrent requests for one domain share one outbound fetch. A contact list
-// renders many rows with the same employer at once, and before this each of
-// them asked Google separately.
-// =============================================================================
+//                  5xx. Those back off for 10 minutes in memory only, so a
+//                  restart, or the end of the backoff, asks again.
+// Concurrent requests for one domain share one fetch, because a contact list
+// renders many rows with the same employer at once.
 
 import { Router, type Request, type Response } from "express";
 import fs from "fs";
@@ -128,8 +121,8 @@ async function fillLogo(
     try {
       await writeFileAtomically(missPath, new Date().toISOString());
     } catch (writeErr) {
-      // The answer is still a miss. Without the marker the next request asks
-      // Google again, which is the old behaviour and not a failure.
+      // Still a miss. Without the marker the next request asks Google again,
+      // which is harmless.
       log.warn(
         "Logo",
         `Could not record the logo miss for ${domain}: ${getErrorMessage(writeErr)}`,
@@ -184,11 +177,10 @@ router.get("/:domain", async (req: Request, res: Response) => {
   try {
     const outcome = await resolveLogo(sanitizedDomain, filePath, missPath);
     if (outcome === "found") return res.sendFile(filePath);
-    // A permanent miss keeps the 30-day header: the disk marker gives the
-    // same answer for the same 30 days. 204, not 404: a company with no logo
-    // is an answer, not an error, and a 404 put a red line in the browser's
-    // console for every such row of the Network list. The image fails to
-    // draw either way, and the row shows its initial.
+    // A permanent miss keeps the 30-day header, like the disk marker. 204, not
+    // 404: a company with no logo is an answer, and a 404 would put a red line
+    // in the browser's console for every such row of the Network list. The
+    // image fails to draw either way, and the row shows its initial.
     if (outcome === "missing") return res.status(204).end();
     // A transient failure says nothing about the domain, so the browser must
     // not keep this answer.

@@ -8,14 +8,9 @@ import { isValidTimeZone } from "../../shared/contracts/common.ts";
 // where the client, the MCP tools and the OpenAPI file read them too. This
 // file holds the middleware and the readers that run them.
 
-// ============================================================================
-// Middleware Factories
-// ============================================================================
-//
-// All three throw `ValidationError` (which the central error handler renders
-// as a 400 with `code: "VALIDATION_ERROR"` and the Zod issue list as
-// `details`). Routes therefore never reach into `res` from inside a
-// validator — that responsibility belongs to the error middleware.
+// Middleware factories. Each throws `ValidationError`, which the error handler
+// renders as a 400 with `code: "VALIDATION_ERROR"` and the Zod issues in
+// `details`, so no validator writes to `res` itself.
 
 function runOrThrow<S extends z.ZodType>(
   schema: S,
@@ -49,9 +44,7 @@ export function parseQuery<S extends z.ZodType>(
   return runOrThrow(schema, raw, "query");
 }
 
-// ============================================================================
 // Interaction search — GET /api/search/interactions and /api/interactions/search
-// ============================================================================
 
 type InteractionSearchQuery = z.output<typeof interactionSearchQuerySchema>;
 

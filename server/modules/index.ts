@@ -1,12 +1,7 @@
-// =============================================================================
-// Every module, in mount order
-// =============================================================================
-// The order of this list is the order createApp() mounts the routers in, and
-// Express matches a request against them in that order. So the order is part
-// of the behaviour: the mcp module stays before the contacts module (see
-// server/modules/mcp/index.ts). A new feature adds its folder and one line
-// here. See server/modules/module.ts for what a module holds.
-// =============================================================================
+// Every module, in mount order. createApp() mounts the routers in this order,
+// and Express matches in it, so the order is behavior: the mcp module stays
+// before the contacts module (server/modules/mcp/index.ts). A new feature adds
+// its folder and one line here (see server/modules/module.ts).
 
 import type { Express } from "express";
 import { log } from "../utils/logger.ts";

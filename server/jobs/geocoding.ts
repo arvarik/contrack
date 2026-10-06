@@ -1,10 +1,6 @@
-// =============================================================================
-// Jobs: geocoding
-// =============================================================================
-// Once, two seconds after boot: every contact with an address and no pin goes
-// into the geocoder's queue, which the shared cache deduplicates. Daily: the
-// cached lookups that no contact uses any more are deleted.
-// =============================================================================
+// Geocoding jobs. Once, two seconds after boot, every contact with an address
+// and no pin goes into the geocoder's queue, which the shared cache dedupes.
+// Daily, cached lookups no contact uses are deleted.
 
 import { defineJob } from "./runner.ts";
 import {

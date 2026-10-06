@@ -1,31 +1,25 @@
-// =============================================================================
-// AI Layer — Capability-Based Routing
-// =============================================================================
-// Users configure *capabilities* ("what runs my search understanding?"), not
-// providers. This module maps each capability to a concrete provider + model
-// at call time, using (in priority order):
+// Capability-based routing. People configure capabilities ("what runs my search
+// understanding?"), not providers. This maps each capability to a provider and
+// model at call time, in priority order:
 //
-//   1. An explicit pin from the settings store (Settings → Administration → AI).
+//   1. A pin saved in Settings → Administration → AI.
 //   2. An env override (AI_QUICK_MODEL / AI_DEEP_MODEL / AI_RESEARCH_MODEL).
-//   3. Auto: the legacy AI_PROVIDER first (so existing deployments behave
-//      identically), then a documented preference order over whatever
-//      providers have credentials.
+//   3. Auto: AI_PROVIDER first, then a fixed preference order over the
+//      providers that have credentials.
 //
 // Capabilities:
-//   quick      — Magic Paste, mentions, query planning, verification,
-//                daily insight  (internal class: lite)
-//   deep       — briefings, email summaries, dedupe adjudication, extraction
-//                (internal class: flash)
-//   research   — grounded web research for AI Search  (internal class: flash)
-//   embeddings — semantic search + duplicate similarity  (see embeddings.ts)
+//   quick      Magic Paste, mentions, query planning, verification,
+//              daily insight  (internal class: lite)
+//   deep       briefings, email summaries, dedupe adjudication, extraction
+//              (internal class: flash)
+//   research   grounded web research for AI Search  (internal class: flash)
+//   embeddings semantic search and duplicate similarity  (see embeddings.ts)
 //
-// Research runs on the middle class, not the top one. The job is to read a
-// few pages about a person and fill a form, which Sonnet 5, GPT-6 Sol and
-// Gemini 3.8 Flash do well. On the top class the same run cost twice as much
-// on Anthropic (Opus 5.5: 44 s, about $0.30 a contact, against Sonnet 5's
-// 36 s and $0.15) and five times as much on OpenAI (Astra). A person who
-// wants the flagship pins it.
-// =============================================================================
+// Research runs on the middle class, not the top one: reading a few pages about
+// a person and filling a form is what Sonnet 5, GPT-6 Sol and Gemini 3.8 Flash
+// do well. The top class cost twice as much on Anthropic (Opus 5.5: 44 s, about
+// $0.30 a contact, against Sonnet 5's 36 s and $0.15) and five times as much on
+// OpenAI (Astra). Somebody who wants the flagship pins it.
 
 import type { AIProvider } from "./provider.ts";
 import type { ModelClass } from "./routing/registry.ts";
@@ -86,9 +80,8 @@ const CAPABILITY_CLASS: Record<
 };
 
 /**
- * Auto-mode preference order per capability, applied after the legacy
- * AI_PROVIDER. Ordering reflects price/quality fit as of August 2026 and is
- * data, not logic — see docs/recommendations for the rationale.
+ * Auto-mode preference order per capability, after AI_PROVIDER. The order
+ * reflects price and quality fit, and is data, not logic.
  */
 const AUTO_ORDER: Record<Exclude<AICapability, "embeddings">, string[]> = {
   quick: ["gemini", "openai", "anthropic"],
@@ -141,9 +134,8 @@ export function getCapabilityAssignment(
 
 /**
  * True when an admin turned "Allow web search" off (webSearchPolicy.ts).
- *
- * Research through SearXNG resolves no provider, so `resolveCapability`
- * alone cannot stop it. Every research path asks this as well.
+ * Research through SearXNG resolves no provider, so `resolveCapability` alone
+ * cannot stop it, and every research path asks this too.
  */
 export function isResearchOff(): boolean {
   return getWebSearchPolicy().off;
@@ -172,25 +164,21 @@ export function parseEnvOverride(
 }
 
 /**
- * The model auto mode should use on a provider with no internal router.
+ * The model auto mode uses on a provider with no router of its own.
  *
- * The three native adapters own a model map: given a model class they pick a
- * concrete model themselves, so auto mode passes them no model and they
- * decide. An OpenAI-compatible endpoint has no such map — its model ids are
- * whatever the operator happens to have pulled — so auto mode has to name one
- * itself. Naming nothing means the adapter is called with no model at all,
- * which fails every request on an endpoint the user has correctly connected.
+ * The three native adapters map a model class to a model themselves, so auto
+ * mode passes them none. An OpenAI-compatible endpoint has no such map (its
+ * models are whatever the operator pulled), so auto mode must name one, or
+ * every request on a correctly connected endpoint fails.
  *
- * The source is the catalog discovered when the endpoint was saved. Order
- * follows the endpoint's own listing, so the same model is chosen on every
- * call. Quick and deep therefore land on the same model: nothing in the compat
- * catalog says which model is the cheaper one, and inventing a ranking from
- * model names would be a guess the user cannot see. Pin the capabilities on
- * Settings → Administration → AI to split them.
+ * The source is the catalog discovered when the endpoint was saved, in the
+ * endpoint's own order, so every call picks the same model. Quick and deep land
+ * on the same model: nothing in the catalog says which is cheaper, and a
+ * ranking guessed from names would be invisible to the user. Pin the
+ * capabilities in Settings → Administration → AI to split them.
  *
- * Returns undefined for native providers (they route themselves) and when no
- * chat model is cached, which `resolveCapability` treats as "this provider
- * cannot serve the capability" rather than calling it and failing.
+ * Undefined for native providers, and when no chat model is cached, which
+ * `resolveCapability` treats as "this provider cannot serve it".
  */
 function autoModelFor(config: ProviderConfig): string | undefined {
   if (config.kind !== "openai-compatible") return undefined;
@@ -200,10 +188,9 @@ function autoModelFor(config: ProviderConfig): string | undefined {
 }
 
 /**
- * Resolve a generation capability to a concrete provider + model.
- * Returns null when nothing is configured (callers fall back to mock mode),
- * when the capability is explicitly disabled, or while AI is off for the
- * instance.
+ * Resolve a generation capability to a provider and model. Null when nothing is
+ * configured (callers fall back to mock mode), when the capability is disabled,
+ * or while AI is off for the instance.
  */
 export function resolveCapability(
   capability: Exclude<AICapability, "embeddings">,
@@ -258,8 +245,8 @@ export function resolveCapability(
     }
   }
 
-  // 3. Auto — legacy AI_PROVIDER first so existing deployments are unchanged,
-  //    then the documented preference order, then anything configured at all.
+  // 3. Auto: AI_PROVIDER first, then the preference order, then anything
+  //    configured.
   const configured = getProviderConfigs();
   const candidates = [
     defaultProviderId(),
@@ -307,8 +294,8 @@ export function resolveCapability(
 }
 
 /**
- * Which providers could serve a capability right now — powers the settings UI
- * and the "no provider configured" empty states.
+ * Which providers could serve each capability now, for Settings and the "no
+ * provider configured" empty states.
  */
 export function capabilityAvailability(): Record<
   Exclude<AICapability, "embeddings">,

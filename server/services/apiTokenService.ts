@@ -1,20 +1,9 @@
-// =============================================================================
-// API Token Service — the credential a script carries
-// =============================================================================
-// A person signs in and gets a cookie. A script cannot, so it carries a
-// personal token instead: `Authorization: Bearer ctk_...`. The token acts as
-// its owner for every scoped endpoint and for nothing else, which is what
-// makes an MCP client read one account's contacts rather than the instance's.
-//
-// The same rule as sessions and invitations: the database holds only the
-// SHA-256 of the token. It is a 256-bit random value, so there is no
-// dictionary to attack and nothing a slow KDF would buy. The plaintext exists
-// once, in the response that created it.
-//
-// `attachPrincipal` has resolved these since Phase 1, because the principal
-// shape had to be final before Phase 2 scoped every read. Phase 3 moves that
-// lookup here and adds the endpoints that mint them.
-// =============================================================================
+// Personal API tokens: the credential a script carries (`Authorization: Bearer
+// ctk_...`). A token acts as its owner for every scoped endpoint and nothing
+// else, so an MCP client reads one account's contacts, not the instance's. As
+// with sessions and invitations, the database holds only the token's SHA-256:
+// it is 256 random bits, so there is no dictionary for a slow KDF to defend
+// against. The plaintext exists once, in the response that created it.
 
 import crypto from "crypto";
 import { sqlite } from "../db.ts";
@@ -23,7 +12,7 @@ import { NotFoundError, ValidationError } from "../utils/AppError.ts";
 import { auditService } from "./auditService.ts";
 import { getUserById, type User } from "./authService.ts";
 
-/** The prefix every personal token carries, so a leaked one is recognisable. */
+/** The prefix every personal token carries, so a leaked one is recognizable. */
 export const TOKEN_PREFIX = "ctk_";
 
 /** How much of a token is shown in a list, enough to tell two apart. */
@@ -138,11 +127,9 @@ export function listTokens(userId: string): TokenSummary[] {
 }
 
 /**
- * Revoke one of the caller's own tokens.
- *
- * The owner is in the same statement as the id, so a token belonging to
- * somebody else is a `404` rather than a `403`: telling the two apart would
- * say which token ids exist.
+ * Revoke one of the caller's own tokens. The owner is in the same statement as
+ * the id, so somebody else's token is a `404`, not a `403`, which would say
+ * which token ids exist.
  */
 export function revokeToken(
   user: User,
@@ -177,34 +164,26 @@ export function revokeToken(
 }
 
 /**
- * Resolve a presented token to its user.
- *
- * Rejects a revoked token, an expired one, and one whose account is disabled.
- * `lastUsedAt` is stamped at most once an hour: the write is not worth a page
- * dirtied on every request a script makes.
- *
- * The hourly comparison is one SQL statement, not a read followed by a
- * JavaScript comparison. `lastUsedAt` holds `CURRENT_TIMESTAMP`, which is
- * `2026-09-10 05:33:50`, and comparing that against
- * `new Date(...).toISOString()` compares a space against a `T`. A space sorts
- * first, so the stored value looked older than any cut-off from the same day
- * and the row was dirtied on every single request. Both sides are now
- * SQLite's own format, and the `WHERE` clause is also what removes the race
- * between the read and the write.
+ * Resolve a presented token to its user, refusing a revoked or expired token
+ * and a disabled account. `lastUsedAt` is stamped at most once an hour, so a
+ * script's requests do not each dirty a page. The hourly check is in the SQL
+ * statement: `lastUsedAt` holds `CURRENT_TIMESTAMP` (`2026-09-10 05:33:50`),
+ * and comparing it in JavaScript with `toISOString()` compares a space against
+ * a `T`, which would dirty the row on every request. In SQL both sides share
+ * SQLite's format, and the `WHERE` clause removes the race between read and
+ * write.
  */
 export function resolveToken(
   presented: string,
 ): { user: User; tokenId: string; readOnly: boolean } | null {
   const row = sqlite
     .prepare(
-      // `datetime(expiresAt)` and not the bare column. `createToken` writes an
-      // ISO string and `datetime('now')` renders a space-separated one, and
-      // SQLite compares TEXT byte by byte: a `T` sorts after a space, so an
-      // expiry from earlier today looked later than now and the token kept
-      // working until the UTC date rolled over. `datetime()` reads both
-      // formats, and a value it cannot read becomes NULL, which makes the
-      // comparison false and refuses the token. That is the safe direction
-      // for a credential.
+      // `datetime(expiresAt)`, not the bare column: `createToken` writes an
+      // ISO string and `datetime('now')` a space-separated one, and a `T`
+      // sorts after a space, so a token that expired earlier today would keep
+      // working until the UTC date rolled over. A value `datetime()` cannot
+      // read becomes NULL, which refuses the token, the safe direction for a
+      // credential.
       // An app's grant is never a personal token, whatever is presented.
       `SELECT id, userId, readOnly FROM api_tokens
         WHERE tokenHash = ? AND revokedAt IS NULL AND kind = 'personal'

@@ -1,9 +1,5 @@
-// =============================================================================
-// Module: dedupe
-// =============================================================================
 // Duplicates: scans, suggestions, merges and undo. Its job is the duplicate
 // check for one contact, which the contact subscribers queue.
-// =============================================================================
 
 import { defineModule } from "../module.ts";
 import { dedupeRouter } from "../../routes/dedupe/index.ts";
