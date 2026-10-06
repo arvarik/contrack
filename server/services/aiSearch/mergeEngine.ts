@@ -19,6 +19,7 @@
 // reduces WAL sync overhead but does not collapse trigger count.
 // =============================================================================
 
+import crypto from "node:crypto";
 import { sqlite } from "../../db.ts";
 import { sanitizeAiOutputValue } from "../../ai/promptSafety.ts";
 import { contactRepo } from "../../repositories/contactRepository.ts";
@@ -231,6 +232,11 @@ function entryText(entry: unknown, key: string): string {
   if (typeof entry === "string") return entry;
   const value = (entry as Record<string, unknown> | null)?.[key];
   return typeof value === "string" ? value : "";
+}
+
+/** A short fingerprint of a field's whole value. */
+function valueHash(text: string): string {
+  return crypto.createHash("sha256").update(text).digest("hex").slice(0, 16);
 }
 
 /** An entry as the record keeps it, each part cut to the schema's length. */
@@ -694,9 +700,10 @@ export function mergeSearchResult(
       addedEntry("addresses", entryText(a, "address")),
     ),
     // A field's value too, so "Not this person" can take it back.
-    ...Object.entries(scalarUpdate).map(([field, value]) =>
-      addedEntry(field, String(value)),
-    ),
+    ...Object.entries(scalarUpdate).map(([field, value]) => ({
+      ...addedEntry(field, String(value)),
+      hash: valueHash(String(value)),
+    })),
   ]
     .filter((entry) => entry.value)
     .map((entry) => ({ ...entry, at: runAt }));
@@ -955,11 +962,15 @@ export function rejectResearchRun(
           );
         continue;
       }
+      // A field is cleared only while it holds exactly what the run wrote.
+      // An About the person added to still starts the same, and cutting it
+      // cleared their words too. An entry from before the hash was kept
+      // matches only a value short enough to be whole in `value`.
       const value = contact[entry.field as keyof HydratedContact];
       if (
         (RESEARCH_SCALARS as readonly string[]).includes(entry.field) &&
         typeof value === "string" &&
-        value.slice(0, 300) === entry.value
+        (entry.hash ? valueHash(value) === entry.hash : value === entry.value)
       )
         cleared.push(entry.field);
     }
