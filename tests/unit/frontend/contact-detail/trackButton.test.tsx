@@ -220,12 +220,13 @@ describe("TrackButton", () => {
     expect(visibleWord(button)).toBe("45 days");
   });
 
-  it("draws the glyph and the chevron alone when compact, with the words in the name and the tooltip", () => {
+  it("draws the glyph, the cadence and the chevron when compact, with the words in the name and the tooltip", () => {
     mount(<TrackButton contact={TRACKED} compact />);
     const button = screen.getByRole("button", {
       name: "Tracking quarterly, change or stop",
     });
-    expect(button.textContent).toBe("");
+    // A phone saw no cadence.
+    expect(button.textContent).toBe("Quarterly");
     expect(button.getAttribute("title")).toBe(
       "Tracking quarterly, change or stop",
     );
@@ -246,6 +247,7 @@ describe("the menu before the contact is tracked", () => {
       "Monthly",
       "QuarterlyDefault",
       "Yearly",
+      "Custom…",
     ]);
     // The hint is heard too, after a pause.
     expect(
@@ -269,6 +271,7 @@ describe("the menu before the contact is tracked", () => {
       "Quarterly",
       "Every 6 monthsDefault",
       "Yearly",
+      "Custom…",
     ]);
   });
 
@@ -318,7 +321,10 @@ describe("the menu while tracked", () => {
       "false",
     ]);
     const actions = within(menu).getAllByRole("menuitem");
-    expect(actions.map((item) => item.textContent)).toEqual(["Stop tracking"]);
+    expect(actions.map((item) => item.textContent)).toEqual([
+      "Custom…",
+      "Stop tracking",
+    ]);
     // Last in the menu, after the cadences.
     expect(
       rows[3].compareDocumentPosition(actions[0]) &

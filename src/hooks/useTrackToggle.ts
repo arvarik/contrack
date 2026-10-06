@@ -23,7 +23,7 @@ import { useCallback } from "react";
 import { toast } from "sonner";
 import { describeCadence } from "../../shared/cadence";
 import { useSetTracked } from "../api/contacts";
-import { UNDO_DURATION_MS } from "../lib/undoToast";
+import { withUndo } from "../lib/undoToast";
 
 /** What the toggle needs to know about the contact it flips. */
 export interface TrackableContact {
@@ -42,13 +42,7 @@ export function useTrackToggle() {
     (id: string, name: string, cadenceDays: number) =>
       toast.success(
         `Tracking ${name}, ${describeCadence(cadenceDays, { sentence: true })}`,
-        {
-          duration: UNDO_DURATION_MS,
-          action: {
-            label: "Undo",
-            onClick: () => mutate({ id, isTracked: false }),
-          },
-        },
+        withUndo(() => mutate({ id, isTracked: false })),
       ),
     [mutate],
   );
@@ -61,13 +55,10 @@ export function useTrackToggle() {
           { id, isTracked: false },
           {
             onSuccess: () =>
-              toast.success(`Stopped tracking ${name}`, {
-                duration: UNDO_DURATION_MS,
-                action: {
-                  label: "Undo",
-                  onClick: () => mutate({ id, isTracked: true, cadenceDays }),
-                },
-              }),
+              toast.success(
+                `Stopped tracking ${name}`,
+                withUndo(() => mutate({ id, isTracked: true, cadenceDays })),
+              ),
           },
         );
         return;

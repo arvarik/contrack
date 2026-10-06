@@ -668,7 +668,11 @@
                   "website": { "type": ["string", "null"] },
                   "cadenceDays": {
                     "anyOf": [
-                      { "type": "integer", "exclusiveMinimum": 0 },
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 3650
+                      },
                       { "type": "null" }
                     ]
                   },
@@ -1039,7 +1043,11 @@
                   "website": { "type": ["string", "null"] },
                   "cadenceDays": {
                     "anyOf": [
-                      { "type": "integer", "exclusiveMinimum": 0 },
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 3650
+                      },
                       { "type": "null" }
                     ]
                   },
@@ -1386,7 +1394,11 @@
                   "website": { "type": ["string", "null"] },
                   "cadenceDays": {
                     "anyOf": [
-                      { "type": "integer", "exclusiveMinimum": 0 },
+                      {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 3650
+                      },
                       { "type": "null" }
                     ]
                   },
@@ -2327,7 +2339,11 @@
                     "website": { "type": ["string", "null"] },
                     "cadenceDays": {
                       "anyOf": [
-                        { "type": "integer", "exclusiveMinimum": 0 },
+                        {
+                          "type": "integer",
+                          "exclusiveMinimum": 0,
+                          "maximum": 3650
+                        },
                         { "type": "null" }
                       ]
                     },
@@ -2827,7 +2843,11 @@
                       "website": { "type": ["string", "null"] },
                       "cadenceDays": {
                         "anyOf": [
-                          { "type": "integer", "exclusiveMinimum": 0 },
+                          {
+                            "type": "integer",
+                            "exclusiveMinimum": 0,
+                            "maximum": 3650
+                          },
                           { "type": "null" }
                         ]
                       },

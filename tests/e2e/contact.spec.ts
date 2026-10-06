@@ -829,6 +829,7 @@ test.describe("tracking", () => {
       // The hint is spoken too: "Quarterly, Default".
       /^Quarterly,?\s*Default$/,
       "Yearly",
+      "Custom…",
     ]);
     await expect(menu.getByRole("menuitemradio")).toHaveCount(0);
     await menu.getByRole("menuitem", { name: /^Quarterly/ }).click();
@@ -879,7 +880,10 @@ test.describe("tracking", () => {
     await expect(
       menu.getByRole("menuitemradio", { name: "Quarterly" }),
     ).toHaveAttribute("aria-checked", "true");
-    await expect(menu.getByRole("menuitem")).toHaveText(["Stop tracking"]);
+    await expect(menu.getByRole("menuitem")).toHaveText([
+      "Custom…",
+      "Stop tracking",
+    ]);
     await menu.getByRole("menuitemradio", { name: "Monthly" }).click();
     const monthly = page.getByRole("button", {
       name: "Tracking monthly, change or stop",

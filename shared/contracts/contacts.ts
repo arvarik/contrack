@@ -14,6 +14,7 @@
 
 import { z } from "zod";
 import { researchDepthSchema } from "../researchDepth.ts";
+import { MAX_CADENCE_DAYS } from "../cadence.ts";
 import { route } from "./route.ts";
 import {
   childRecordsSchema,
@@ -54,7 +55,13 @@ export const contactCreateSchema = z
     birthday: z.string().nullable().optional(),
     pronouns: z.string().nullable().optional(),
     website: z.string().nullable().optional(),
-    cadenceDays: z.number().int().positive().nullable().optional(),
+    cadenceDays: z
+      .number()
+      .int()
+      .positive()
+      .max(MAX_CADENCE_DAYS)
+      .nullable()
+      .optional(),
     isGhost: stringToBool,
     isArchived: stringToBool,
     /** A person chose to keep up with this contact. See server/db.ts §2z-0. */
