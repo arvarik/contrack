@@ -291,8 +291,9 @@ only, never another account's on the instance.
 | **Everything (.json)** | Every contact, including archived and trashed ones, with interactions, lists, follow-ups, and merges     | A record of your contacts and notes                                                |
 
 The CSV has the columns Name, First Name, Last Name, Company, Role, Location,
-Industry, Website, Emails, Phones, and Tags. Then come Archived, Tracked,
-Cadence Days, Tracked At, Added At, and Last Contacted At.
+Industry, Website, Emails, Phones, Addresses, Social Links, Birthday, About,
+and Tags. Then come Archived, Tracked, Cadence Days, Tracked At, Added At, and
+Last Contacted At.
 
 The JSON file holds your contacts with every field, their notes and
 interactions, your lists and who is on them, your follow-ups, and the merges

@@ -376,6 +376,12 @@ describe("full export", () => {
     await createContact({
       name: "Comma, Inc Person",
       company: 'Quotes "R" Us, LLC',
+      birthday: "1990-05-14",
+      about: "Met at the fair",
+      addresses: [{ address: "1 Main St, Springfield" }],
+      socialLinks: [
+        { platform: "linkedin", url: "https://www.linkedin.com/in/comma" },
+      ],
     });
 
     const res = await request(app).get("/api/export/csv");
@@ -384,8 +390,12 @@ describe("full export", () => {
 
     const lines = res.text.split("\r\n");
     expect(lines[0]).toContain("Name,First Name,Last Name,Company");
+    expect(lines[0]).toContain("Addresses,Social Links,Birthday,About");
     expect(res.text).toContain('"Comma, Inc Person"');
     expect(res.text).toContain('"Quotes ""R"" Us, LLC"');
+    expect(res.text).toContain(
+      '"1 Main St, Springfield",https://www.linkedin.com/in/comma,1990-05-14,Met at the fair',
+    );
   });
 
   it("leaves ghosts and merged-away contacts out of the CSV, like the vCard file", async () => {
