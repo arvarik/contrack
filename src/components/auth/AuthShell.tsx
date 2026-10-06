@@ -1,15 +1,7 @@
 /**
- * AuthShell — the frame shared by the sign-in and first-run screens.
- *
- * Both are full-screen, single-purpose, and the only thing on the page, so
- * they get the same treatment: a centered card, a mark, a title, and one
- * obvious action. Keeping the frame here means the two screens differ only
- * where they should — in their fields.
- *
- * Mobile-first. On a phone the card fills the width and loses its shadow
- * (there is nothing to float above); from `sm` it becomes a contained card.
- * Inputs are 16px on small screens because anything smaller makes iOS Safari
- * zoom the viewport on focus, which is disorienting mid-password.
+ * The frame of the sign-in and first-run screens: a centered card, a mark, a
+ * title and one action. On a phone the card fills the width with no shadow.
+ * Inputs are 16px on small screens, or iOS Safari zooms on focus.
  */
 import React, {
   createContext,
@@ -30,32 +22,19 @@ import { isNetworkError } from "../../api/client";
 import { rateLimitMessage } from "../../lib/rateLimitMessage";
 
 /**
- * What the server says when the credential is simply wrong.
- *
- * `server/routes/auth.ts` throws this sentence, and it reaches the card as
- * plain text. It is named here because it is the one form error the bird
- * answers: a shake of the head means "no, that is not it", which is true of
- * a wrong password and untrue of a network failure or a rate limit, and
- * those two arrive through the same component.
+ * The server's sentence for a wrong credential (`server/routes/auth.ts`). The
+ * bird shakes its head at this error only, not at a network failure or a
+ * rate limit.
  */
 export const WRONG_CREDENTIALS = "Incorrect username or password.";
 
-/**
- * A way for the form error below to reach the mark above it.
- *
- * The two are siblings in the same card, with the fields between them, and
- * neither is worth lifting into a prop on every screen that renders a shell.
- * The context is created and consumed inside this file, so the coupling
- * cannot spread.
- */
+/** Lets the form error reach the mark above it. Used only in this file. */
 const ShakeContext = createContext<(() => void) | null>(null);
 
 /**
- * What a sign-in screen says when its request fails: that the server is out
- * of reach, the wait a rate limit asks for, or the server's own words. Nine
- * screens wrote these three branches by hand.
+ * What a sign-in screen says when its request fails: the server is out of
+ * reach, the wait a rate limit asks for, or the server's own words.
  *
- * @param err - What the request rejected with.
  * @param fallback - The words for a failure with nothing to say, starting
  *   "Could not": "Could not sign in".
  */
@@ -88,9 +67,8 @@ export const AuthShell = ({
   const bird = useCorvidControls();
   const titleRef = useRef<HTMLHeadingElement>(null);
 
-  // A new screen ("Forgot your password?", back to sign-in) replaces the
-  // control that had focus. When no field took it, the title does, so focus
-  // does not fall to the page.
+  // A new screen replaces the control that had focus. When no field takes
+  // it, the title does.
   useEffect(() => {
     if (document.activeElement === document.body) titleRef.current?.focus();
   }, [title]);
@@ -109,10 +87,8 @@ export const AuthShell = ({
       <main className="w-full sm:max-w-md">
         <form
           onSubmit={onSubmit}
-          // `noValidate` hands validation to us: the browser's native bubbles
-          // are unstyled, appear one at a time, and vanish on blur. The fields
-          // still carry `type` and `required` so autofill and screen readers
-          // read them correctly.
+          // Our validation, not the browser's bubbles. The fields keep `type`
+          // and `required` for autofill and screen readers.
           noValidate
           className={cn(
             "bg-surface-container-low p-6 sm:p-8 space-y-6",
@@ -122,13 +98,8 @@ export const AuthShell = ({
         >
           <header className="space-y-3 text-center">
             {/*
-            The mark first, then whose Contrack this is.
-
-            Somebody arriving from an invitation link has never seen this
-            instance. "Join my Contrack" and a hostname is not enough to know
-            you are in the right place, and this is the one screen where the
-            answer has to come before the question. The instance name is
-            absent when nobody has named the instance, which is the default.
+            The mark, then whose Contrack this is, for somebody arriving from
+            an invitation link. No name when nobody has named the instance.
           */}
             {icon ? (
               <span
@@ -140,10 +111,8 @@ export const AuthShell = ({
                 {icon}
               </span>
             ) : (
-              // The card's bird lives, calmly: it blinks and looks about, and
-              // shakes its head at a wrong password. Nothing bigger. It does
-              // not hear the typing the sidebar's bird waits for, and a bird
-              // that preened while you typed a password would be in the way.
+              // The card's bird blinks, looks about, and shakes its head at a
+              // wrong password. Nothing bigger: it does not react to typing.
               <span
                 data-testid="auth-corvid"
                 className="block mx-auto w-10 text-primary"
@@ -173,12 +142,7 @@ export const AuthShell = ({
           <ShakeContext.Provider value={shake}>
             {children}
           </ShakeContext.Provider>
-          {/*
-          Inside the card rather than below it. On a phone the card fills the
-          viewport, so a footer placed after it starts exactly one pixel below
-          the fold — visible only to someone who scrolls a page that gives no
-          indication there is anything to scroll to.
-        */}
+          {/* Inside the card: on a phone a footer below it is below the fold. */}
           {footer && (
             <p className="text-xs text-on-surface-variant text-center text-pretty">
               {footer}
@@ -201,13 +165,7 @@ const InstanceName = () => {
   );
 };
 
-/**
- * A labeled text input.
- *
- * The label is a real `<label>` rather than a placeholder: placeholder-only
- * fields lose their name the moment you type, which is exactly when a form
- * with four fields needs it most.
- */
+/** A labeled text input. A real `<label>`: a placeholder vanishes on typing. */
 interface AuthFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
   id: string;
   label: string;
@@ -291,9 +249,8 @@ export const AuthField = React.forwardRef<HTMLInputElement, AuthFieldProps>(
             ref={ref}
             id={id}
             type={inputType}
-            // Errors are announced by pointing the field at its own message rather
-            // than by a live region, so a screen reader reaching the field hears
-            // what is wrong with it.
+            // The field points at its message, so a screen reader reaching it
+            // hears what is wrong.
             aria-invalid={error ? true : undefined}
             aria-describedby={describedBy}
             onKeyDown={handleKeyDown}
@@ -367,18 +324,11 @@ export const AuthSubmit = ({
   </button>
 );
 
-/**
- * Form-level error — the one that is about the submission rather than a field.
- *
- * `role="alert"` so it is announced when it appears; a wrong password is not
- * something to discover by re-reading the page.
- */
+/** An error about the submission, not a field. `role="alert"` announces it. */
 export const AuthError = ({ children }: { children: React.ReactNode }) => {
   const shake = useContext(ShakeContext);
 
-  // Once per message. A re-render that leaves the sentence alone must not
-  // restart the shake, or a card that re-renders while the error is on
-  // screen twitches for as long as the error is up.
+  // Once per message, so a re-render does not restart the shake.
   useEffect(() => {
     if (children === WRONG_CREDENTIALS) shake?.();
   }, [children, shake]);

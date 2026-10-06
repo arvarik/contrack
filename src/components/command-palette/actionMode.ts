@@ -1,14 +1,7 @@
 /**
- * The palette's `>` mode, one step at a time.
- *
- * `> note Julian: Left a voicemail` logs a note in one line. Typed in one
- * go it still works, but each part is also a step the palette helps with:
- * after `>` it lists the kinds, after a kind it lists the contacts, and
- * after the colon it shows the row that logs. The mode used to show the
- * same block of syntax help for every partial input, and it picked the
- * first contact whose name held the typed words anywhere.
- *
- * @module components/command-palette/actionMode
+ * The palette's `>` mode. `> note Rowan: Left a voicemail` logs a note in one
+ * line, and each part is a step the palette helps with: after `>` the kinds,
+ * after a kind the contacts, after the colon the row that logs.
  */
 
 import type { InteractionKind } from "../../lib/interactionKinds";

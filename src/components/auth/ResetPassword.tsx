@@ -1,11 +1,6 @@
 /**
- * ResetPassword — screen where `/reset-password?token=` lands.
- *
- * Allows a user holding a valid one-time reset link to choose a new password.
- * When the link is dead (expired or already used), shows a dead-link state
- * with a button to request a new link.
- *
- * @module components/auth/ResetPassword
+ * Where `/reset-password?token=` lands: choose a new password. A spent or
+ * expired link says so, with a way to ask for a new one.
  */
 
 import React, { useState } from "react";

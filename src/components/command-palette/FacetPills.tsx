@@ -1,10 +1,6 @@
 /**
- * FacetPills — Visual pill components for locked facet filters.
- *
- * Renders inline in the search input area:
+ * The facet pills in the search box:
  *   [role:founder ×] [company:stripe ×] | Search text here...
- *
- * @module components/command-palette/FacetPills
  */
 import React from "react";
 import { X } from "lucide-react";
@@ -14,15 +10,11 @@ import { DURATION, EASE } from "../../lib/motion";
 import { TONE_WASH, type Tone } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 /**
- * A pill's tone, from the one map (`.agent/STYLE.md`, "Tones"). A facet that
- * describes a person (a role, a company, a place, a tag) means nothing good
- * or bad, so it is neutral. `tracked` takes the primary wash, the one the
- * Track button wears when it is on. A facet that failed, such as a place that
- * did not resolve, takes the error. It used to be a color per field, eleven
- * hues that meant nothing and fell to 2.3:1 on the dark panel.
+ * A pill's tone (`.agent/STYLE.md`, "Tones"). A facet that describes a
+ * person is neutral. `tracked` takes the primary wash, as the Track button
+ * does. A facet that failed, such as a place that did not resolve, takes
+ * the error.
  */
 const pillTone = (filter: FacetFilter): Tone =>
   filter.error ? "error" : filter.field === "tracked" ? "primary" : "neutral";
@@ -34,8 +26,6 @@ const pillValue = (filter: FacetFilter): string => {
   if (filter.resolving) return `${filter.value} (resolving…)`;
   return filter.km ? `${filter.value}/${filter.km}km` : filter.value;
 };
-
-// ─── Component ────────────────────────────────────────────────────────────────
 
 interface FacetPillsProps {
   filters: FacetFilter[];

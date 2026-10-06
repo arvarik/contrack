@@ -1,42 +1,22 @@
 /**
- * ActionMenu: a kebab button that opens a short list of actions.
+ * A button that opens a short list of actions, with the behavior
+ * `role="menu"` promises:
  *
- * The contact page had four hand-written menus: the header kebab, the social
- * link menu, the add-to-list dropdown and the context menu. Each closed on an
- * outside click, and none of them followed the menu pattern a screen reader
- * announces. `role="menu"` promises arrow keys, Home and End, Escape back to
- * the button, and focus inside the menu when it opens. A menu that carries
- * the role without that behavior tells a keyboard user something false.
+ * 1. The trigger has `aria-haspopup="menu"` and `aria-expanded`. Click,
+ *    Enter or Space opens on the first item. ArrowDown opens on the first
+ *    item, ArrowUp on the last.
+ * 2. Inside, the arrows move and wrap, Home and End jump, and a letter moves
+ *    to the next item that starts with it. Every letter is the menu's, so
+ *    none reaches a page shortcut behind it.
+ * 3. Escape closes and returns focus to the trigger. Tab closes and lets
+ *    focus move on. A click outside closes.
+ * 4. Choosing an item closes the menu, returns focus to the trigger, then
+ *    runs the item, so a dialog it opens has a trigger to return focus to.
  *
- * So the behavior lives here once:
- *
- * 1. The trigger is a button with `aria-haspopup="menu"` and
- *    `aria-expanded`. Click, Enter or Space opens the menu and focuses the
- *    first item. ArrowDown opens on the first item, ArrowUp on the last.
- * 2. Inside the menu, ArrowDown and ArrowUp move and wrap, Home and End jump,
- *    and a letter moves to the next item that starts with it. Every letter
- *    is the menu's, a letter that matches no item too, so J or D never
- *    reaches a page shortcut behind the open menu.
- * 3. Escape closes the menu and returns focus to the trigger. Tab closes it
- *    and lets focus move on. A click outside closes it.
- * 4. Choosing an item closes the menu, returns focus to the trigger, and then
- *    runs the item. An item that opens a dialog therefore hands the dialog a
- *    trigger to return focus to.
- *
- * Items are 44 px tall on a phone and 36 px from `sm`. A `danger` item
- * (Delete) sits last, under a hairline.
- *
- * The panel is solid (`.menu-panel`): the sort menu used to be glass over
- * the contact list, and rows showed through the items. It opens in the
- * browser's top layer through `usePanelPlacement`, so nothing later in the
- * page can paint over it: the same sort menu once opened under the selected
- * contact row, because the Network header and the row were both `z-10`. It
- * opens where it fits. It drops up when the space below runs out, and it
- * slides in from the window's edge when the trigger sits closer to that
- * edge than the menu is wide, so a menu on the last column of a page is
- * never cut off.
- *
- * @module components/ui/ActionMenu
+ * Items are 44 px tall on a phone, 36 px from `sm`. A `danger` item sits
+ * last, under a hairline. The panel is solid (`.menu-panel`) and opens in
+ * the top layer (`usePanelPlacement`), where it fits: up when the space
+ * below runs out, and in from the window's edge near it.
  */
 import { useCloseRequest } from "../../hooks/useCloseRequest";
 import React, {
@@ -92,9 +72,8 @@ export interface ActionMenuItem {
    */
   speakHint?: boolean;
   /**
-   * A hairline before the item, to set it apart from the rows above it that
-   * are not destructive: Stop tracking under the cadences. A `danger` item
-   * gets one of its own.
+   * A hairline before the item, to set it apart from the rows above (Stop
+   * tracking under the cadences). A `danger` item gets one of its own.
    */
   separatorBefore?: boolean;
 }
@@ -125,21 +104,17 @@ interface ActionMenuProps {
   /** Custom trigger content replacing the default icon-only trigger. */
   triggerContent?: React.ReactNode;
   /**
-   * The trigger's label for the eye. A trigger that is a glyph alone shows
-   * it in the shared tooltip (`RailTooltip`), on hover and on a long press,
-   * as every icon-only control does. A trigger with words of its own keeps
-   * it as the browser's tooltip, for a sentence such as why it waits.
+   * The trigger's label for the eye. A glyph-only trigger shows it in
+   * `RailTooltip`. A trigger with words keeps it as the browser's tooltip.
    */
   title?: string;
   /** A heading over the rows, for example "Snooze until". */
   heading?: string;
   /**
-   * The trigger's look. `ghost` (the default) is the flat icon button with
-   * the hover layer. `primary` is the page's call to action, a small
-   * pressable `.btn-primary` with its edge, such as the Network list's New.
-   * `primaryLarge` and `secondary` are the full-size buttons, for a menu
-   * that stands where a button would: the dossier's Enrich contact and
-   * Enrich again, which open the two research depths.
+   * The trigger's look. `ghost` (the default) is the flat icon button.
+   * `primary` is a small `.btn-primary`, such as the Network list's New.
+   * `primaryLarge` and `secondary` are full-size buttons, for a menu that
+   * stands where a button would (the dossier's Enrich contact).
    */
   variant?: "ghost" | "primary" | "primaryLarge" | "secondary";
   /** The trigger waits: the thing its rows start is already under way. */
@@ -346,8 +321,8 @@ export const ActionMenu = ({
     // A row that waits is dimmed by `MENU_ITEM` itself (`aria-disabled`).
     const classes = cn(MENU_ITEM, item.danger && MENU_ITEM_DANGER);
     // A spoken hint joins the name after a comma: "Quarterly, Default".
-    // Written out, because the hint is a flex item, a block of its own to
-    // the name, and text in its box was read with a space before the comma.
+    // Written out: as a flex item the hint would read with a space before
+    // the comma.
     const spokenName =
       item.speakHint && item.hint && !isChecked
         ? `${item.label}, ${item.hint}`

@@ -1,16 +1,7 @@
 /**
- * MetaDot: the middle dot between two items on one line of facts.
- *
- * "Sydney · 2:45 AM · 13°C" under a contact's name. The dot sits at the
- * height of the letters' middle, not on the line like a period, and it is
- * decoration: a screen reader skips it.
- *
- * The caller puts the dot between items, never first or last. A line that
- * can wrap uses `DotLine`, so that no line of it starts or ends with a dot.
- * Pulse's line of counts is text, and draws its dots the same way
- * (`Masthead`).
- *
- * @module components/ui/MetaDot
+ * The middle dot between items on a line of facts ("Sydney · 2:45 AM ·
+ * 13°C"), at the letters' middle height and skipped by a screen reader. The
+ * caller puts it between items only. A line that can wrap uses `DotLine`.
  */
 import type { Key, ReactNode } from "react";
 import { cn } from "../../lib/utils";

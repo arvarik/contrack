@@ -1,18 +1,7 @@
 /**
- * Who is signed in, and the two places that says so.
- *
- * Before 2.0 the app had one user and never had to name them. Now it can have
- * several, and the single most useful thing the chrome can tell someone is
- * which account they are looking at — because the answer decides whose
- * contacts are on the screen. Getting that wrong is not a cosmetic mistake.
- *
- * Two placements, one component set. The sidebar is `hidden md:flex`, so on a
- * phone it renders nothing at all; the same identity therefore appears at the
- * top of Settings, which is the one destination every screen size shares.
- *
- * Everything here hides when `authRequired` is false. On an un-gated instance
- * the principal is a local owner nobody signs in as, so an avatar, a name and
- * a "Sign out" that cannot sign anyone out would all be fiction.
+ * Who is signed in, which decides whose contacts are on screen. Shown in the
+ * sidebar, and at the top of Settings on a phone, where there is no sidebar.
+ * Hidden when `authRequired` is false: nobody signs in as the local owner.
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -33,13 +22,7 @@ import { useAuth } from "./AuthGate";
 import type { AccountUser } from "../../api/auth";
 import { usePreferences } from "../../contexts/PreferencesContext";
 
-/**
- * The account's role, as a pill.
- *
- * Only "admin" is drawn in the primary tint. A member badge in the same
- * color would give equal weight to the ordinary case, and the whole point of
- * the badge is that one of the two is worth noticing.
- */
+/** The account's role, as a pill. Only "admin" takes the primary tint. */
 export const RoleBadge = ({
   role,
   className,
@@ -67,9 +50,8 @@ export const AccountAvatar = ({
   user: Pick<AccountUser, "username" | "displayName" | "avatarUrl">;
   size?: number;
 }) => {
-  // The monogram is a served image, so it cannot inherit the page's palette.
-  // It answers `prefers-color-scheme` on its own, which covers the default
-  // `system` theme; a theme chosen explicitly has to travel in the URL.
+  // The monogram is a served image, so a chosen theme travels in its URL.
+  // The default `system` theme it reads from `prefers-color-scheme`.
   const { preferences, mode } = usePreferences();
   const theme = preferences.theme === "system" ? undefined : mode;
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
@@ -91,9 +73,7 @@ export const AccountAvatar = ({
       alt=""
       width={size}
       height={size}
-      // Decorative: every place this appears also carries the name in text or
-      // in an accessible label, and a screen reader announcing the same account
-      // twice is noise.
+      // Decorative: the name is always in text or a label beside it.
       aria-hidden="true"
       onError={() => {
         if (user.avatarUrl && user.avatarUrl !== failedUrl) {
@@ -111,25 +91,17 @@ function accountLabel(user: AccountUser): string {
   return user.displayName?.trim() || user.username;
 }
 
-// ---------------------------------------------------------------------------
 // Desktop: the sidebar avatar and its menu
-// ---------------------------------------------------------------------------
 
 /**
- * The signed-in account at the foot of the sidebar.
- *
- * Renders nothing on an un-gated instance and nothing before `/status` has
- * answered, rather than a placeholder: the sidebar is 64 px of icons and a
- * gray circle that turns into a face is worse than a gap that fills.
+ * The account at the foot of the sidebar. Nothing on an un-gated instance or
+ * before `/status` answers: a gap that fills beats a placeholder that changes.
  */
 export const SidebarIdentity = () => {
   const { user, authRequired, isAdmin, instanceName, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const trigger = useRef<HTMLButtonElement>(null);
-  // Closing puts focus back on the avatar. Without it, dismissing with Escape
-  // unmounts the focused element and the browser resets to <body>, so the
-  // next Tab restarts from the top of the document — the keyboard user's
-  // place in the page is destroyed by the act of closing a menu.
+  // Closing puts focus back on the avatar, or it falls to <body>.
   const close = useCallback(() => {
     setOpen(false);
     trigger.current?.focus({ preventScroll: true });
@@ -156,11 +128,8 @@ export const SidebarIdentity = () => {
       </button>
 
       {/*
-          A disclosure, not a menu. `role="menu"` promises arrow-key movement,
-          Home and End, and a roving tabindex, and it also forbids the
-          non-menuitem content this panel exists to show — the name, the email
-          and the role. Two ordinary controls in a labeled panel are read
-          correctly by everything and behave the way Tab already works.
+          A disclosure, not a menu: `role="menu"` promises arrow keys and
+          forbids the name, email and role this panel shows.
         */}
       {open && (
         <div
@@ -174,11 +143,7 @@ export const SidebarIdentity = () => {
           )}
         >
           <div className="px-3 py-2">
-            {/*
-              Which instance, above who. Somebody with an account on two
-              Contracks has two identical menus otherwise, and the account
-              name is the half that is the same on both.
-            */}
+            {/* Which instance, above who: one account can be on two Contracks. */}
             {instanceName && (
               <p className={cn(LABEL_PRIMARY, "truncate mb-1")}>
                 {instanceName}
@@ -218,15 +183,11 @@ export const SidebarIdentity = () => {
   );
 };
 
-// ---------------------------------------------------------------------------
 // Mobile: the row at the top of Settings
-// ---------------------------------------------------------------------------
 
 /**
- * The same identity, for the screen sizes the sidebar does not reach.
- *
- * `md:hidden` mirrors the sidebar's `hidden md:flex` exactly, so the account
- * is named once at every width and never twice.
+ * The identity where the sidebar is hidden. `md:hidden` mirrors the
+ * sidebar's `hidden md:flex`, so the account shows once at every width.
  */
 export const SettingsIdentityRow = () => {
   const { user, authRequired, isAdmin, signOut } = useAuth();

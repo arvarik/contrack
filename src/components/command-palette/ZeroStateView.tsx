@@ -1,15 +1,9 @@
 /**
- * ZeroStateView — Intelligent zero-state for the Cmd+K command palette.
- *
- * Rendered when the search input is empty and mode is 'normal'. Shows:
+ * The palette with an empty box, in Search mode:
  *   1. Start here, until there is anything recent: ask AI, or log
- *   2. Recent: the contacts last opened, then the last searches, six rows
- *      at most (useRecentContacts, useSearchHistory)
- *   3. CRM intelligence insights (from useZeroState API hook)
- *   4. The five destinations (`GoToGroup`, which also lists the pages a
- *      typed word matches)
- *
- * All items are Command.Item elements — fully keyboard-navigable with ↑/↓/Enter.
+ *   2. Recent: contacts last opened, then searches, six rows at most
+ *   3. Insights (`useZeroState`)
+ *   4. The five destinations (`GoToGroup`)
  */
 import { Command } from "cmdk";
 import {
@@ -46,8 +40,6 @@ import { useAuth } from "../auth/AuthGate";
 import type { SearchHistoryEntry } from "../../hooks/useSearchHistory";
 import type { ZeroStateInsight } from "../../types";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
 interface ZeroStateViewProps {
   recentContacts: { id: string; name: string; avatarUrl: string | null }[];
   historyEntries: SearchHistoryEntry[];
@@ -62,8 +54,7 @@ interface ZeroStateViewProps {
 
 /**
  * For a person with nothing recent yet: the two things the palette does
- * besides finding people, as rows a keyboard reaches. Filters are taught
- * in one place, the Filter chip: a row and a footer tip said it again.
+ * besides finding people. The Filter chip teaches filters.
  */
 const START_ROWS = [
   { what: "ai", label: "Ask AI about your network", icon: Sparkles, hint: "?" },
@@ -80,7 +71,7 @@ const RECENT_ROWS = 6;
 
 /**
  * A recent search as it reads in the list. A question keeps its `?` and a
- * notes search says so: the three kinds only differed by a 12 px icon.
+ * notes search says so, beyond the icon.
  */
 const historyLabel = (entry: SearchHistoryEntry) =>
   entry.mode === "ai"
@@ -88,8 +79,6 @@ const historyLabel = (entry: SearchHistoryEntry) =>
     : entry.mode === "notes"
       ? `Notes: ${stripModePrefix(entry.query)}`
       : stripModePrefix(entry.query);
-
-// ─── Sub-components ──────────────────────────────────────────────────────────
 
 const modeIcon = (mode: string) => {
   switch (mode) {
@@ -106,14 +95,10 @@ const modeIcon = (mode: string) => {
 };
 
 /**
- * An insight's glyph and tone. The tones come from the one map
- * (`.agent/STYLE.md`, "Tones") and match Pulse's rows: follow-ups due are an
- * action to take, a catch-up is past due, a possible duplicate is the
- * warning, and a ghost or stale data is neutral. The server finds these by
- * rule, not with a model, so none of them wears the AI color.
- *
- * The tone sits on the glyph's tile and the row stays plain. The rows used to
- * rest on five raw washes, and a primary one would look like the current row.
+ * An insight's glyph and tone, as on Pulse's rows (`.agent/STYLE.md`,
+ * "Tones"). Found by rule, not by a model, so none wears the AI color. The
+ * tone sits on the glyph's tile: a primary row would look like the current
+ * row.
  */
 const insightLook = (type: string): { icon: LucideIcon; tone: Tone } => {
   switch (type) {
@@ -178,8 +163,6 @@ export const NAV_ITEMS = [
   },
 ] as const;
 
-// ─── Main Component ──────────────────────────────────────────────────────────
-
 export const ZeroStateView = ({
   recentContacts,
   historyEntries,
@@ -215,8 +198,7 @@ export const ZeroStateView = ({
         </Command.Group>
       )}
 
-      {/* ── Recent: contacts, then searches, six rows at most. They were
-          two groups of up to eight rows. ── */}
+      {/* Recent: contacts, then searches, six rows at most */}
       {(hasRecent || hasHistory) && (
         <Command.Group heading="Recent" className={GROUP_HEADING_DEFAULT}>
           {recentContacts.slice(0, RECENT_ROWS).map((c) => (
@@ -239,10 +221,8 @@ export const ZeroStateView = ({
             .map((entry, i) => (
               <Command.Item
                 key={`history_${i}_${entry.timestamp}`}
-                // With the mode: a people search and a notes search can hold
-                // the same words, and two rows with one value are both
-                // highlighted at once, which stops the arrow keys between
-                // them.
+                // With the mode: a people and a notes search can share words,
+                // and two rows with one value confuse the highlight.
                 value={`history_${entry.mode}_${entry.query}`}
                 onSelect={() => onSelectHistory(entry.query, entry.mode)}
                 className={cn(ROW, "py-2 text-on-surface", ITEM_CURRENT)}
@@ -259,7 +239,7 @@ export const ZeroStateView = ({
         </Command.Group>
       )}
 
-      {/* ── CRM Insights ── */}
+      {/* Insights */}
       {hasInsights && (
         <Command.Group heading="Insights" className={GROUP_HEADING_PRIMARY}>
           {insights.map((insight, i) => {
@@ -287,8 +267,8 @@ export const ZeroStateView = ({
         </Command.Group>
       )}
 
-      {/* ── Navigation: the five destinations. Settings pages come up
-          when their name is typed (`GoToGroup`). ── */}
+      {/* The five destinations. Settings pages come up when their name is
+          typed (`GoToGroup`). */}
       <GoToGroup query="" onNavigate={onNavigate} />
     </>
   );
@@ -316,8 +296,7 @@ export function matchesDestination(
 
 /**
  * The "Go to" rows. With no words, the five destinations. With words, the
- * destinations and the Settings pages they match, or nothing. Typing
- * "pulse" used to offer only to create a contact named "pulse".
+ * destinations and the Settings pages they match, or nothing.
  */
 export const GoToGroup = ({
   query,
@@ -344,8 +323,7 @@ export const GoToGroup = ({
         if (page.needsAccount && !authRequired) return false;
         if (page.id === "ai-usage" && isAdmin) return false;
         // Three characters for these: they are many, and below the people.
-        // The title and keywords, not the word "Settings" every row
-        // starts with: "set" listed all 26 pages.
+        // Not the word "Settings" every row starts with.
         return matchesDestination(pageWords, page.title, page.keywords, 3);
       }).slice(0, 5)
     : [];

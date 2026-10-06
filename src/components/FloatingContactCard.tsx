@@ -1,24 +1,13 @@
 /**
- * FloatingContactCard — a contact's profile over the page that found it.
+ * A contact's profile over the search results that found it. Most of the
+ * viewport, not the shared `Modal`: a profile is a page of content.
  *
- * Opened from a search result, so the reader can see who was found without
- * leaving the results. It fills most of the viewport rather than using the
- * shared `Modal`, because a profile is a page's worth of content and the
- * centered card would scroll inside a scrolling page.
- *
- * It is a dialog all the same, and it carries what a dialog owes a keyboard
- * or screen-reader user: the role and name, focus moved into it when it
- * opens, Tab kept inside it while it is open, Escape to close, and focus
- * returned to the result that opened it when it closes. Before this it had
- * Escape and nothing else, so a keyboard user who opened a result was left
- * tabbing through the results underneath an overlay they could not reach.
- *
- * - An Escape a menu or a confirmation inside the card used is theirs: it
- *   closed the whole card as well.
+ * Still a dialog: role and name, focus in on open, Tab kept inside, Escape
+ * to close, and focus back to the result on close.
+ * - An Escape a menu or a confirmation inside the card used is theirs.
  * - Android's Back closes it (`useCloseRequest`).
- * - One way to close at each width: below `lg` the contact's own Back bar,
- *   from `lg` the round X. Below `lg` the X sat on the Back bar's search
- *   button, beside a second Back.
+ * - One close at each width: the contact's Back bar below `lg`, the round X
+ *   from `lg`.
  * - A delete closes the card and leaves the person on the page under it.
  */
 import React, { useEffect, useCallback, useRef } from "react";
@@ -43,9 +32,8 @@ export const FloatingContactCard: React.FC<FloatingContactCardProps> = ({
   showNetworkButton = false,
 }) => {
   const panel = useRef<HTMLDivElement>(null);
-  // Where focus was before this opened, captured during the render that
-  // opens it — the same moment the shared Modal reads it, and for the same
-  // reason: after the commit, focus may already have moved.
+  // Where focus was, read during the render that opens this, as `Modal`
+  // does: after the commit, focus may have moved.
   const previousFocus = useRef<HTMLElement | null>(null);
   const wasOpen = useRef(false);
   if (isOpen && !wasOpen.current) {
@@ -73,9 +61,8 @@ export const FloatingContactCard: React.FC<FloatingContactCardProps> = ({
   useFocusTrap(panel, isOpen);
   useCloseRequest(isOpen, onClose);
 
-  // Focus moves in on open, onto the card itself, as a dialog with no field
-  // takes it, and back out on close. `preventScroll` keeps the results list
-  // where it was, so the reader lands on the same row they left.
+  // Focus moves onto the card on open and back on close. `preventScroll`
+  // keeps the results list where it was.
   useEffect(() => {
     if (isOpen) {
       panel.current?.focus({ preventScroll: true });

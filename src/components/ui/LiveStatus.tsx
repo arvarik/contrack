@@ -1,28 +1,12 @@
 /**
- * LiveStatus — one polite live region that says what just happened.
+ * One polite live region (`role="status"`, WCAG 4.1.3) for results and
+ * progress: "Searching…", "12 matches". Errors take `role="alert"` beside
+ * their visible text instead.
  *
- * WCAG 2.2 success criterion 4.1.3 (Status Messages) asks that a change a
- * sighted person notices without looking for it — "Searching…", "12 matches",
- * "Nothing found" — reach a screen reader without moving focus. The
- * technique for results and progress is `role="status"` (ARIA22). Errors
- * take `role="alert"` (ARIA19) and live beside the visible error text, not
- * here: an alert interrupts, and only a failure has earned that.
- *
- * Two rules make a region reliable, and both are enforced here rather than
- * at each call site:
- *
- *   The region is in the DOM before it has anything to say. A region that
- *   appears with text already in it is announced by some screen readers and
- *   skipped by others, so the element is always mounted and only its text
- *   changes.
- *
- *   The first value is not announced. A page that mounts over results it
- *   already had (Back to the search page) would otherwise speak a count the
- *   reader did not ask for. Only a change after mount is spoken, which is
- *   the definition of a status message.
- *
- * `aria-atomic` makes each change read as one sentence rather than as the
- * words that differ from the last one.
+ * The region is always mounted and only its text changes: a region that
+ * appears with text is skipped by some screen readers. The first value is not
+ * spoken, so Back to a page does not read its old count. `aria-atomic` reads
+ * each change as one sentence.
  */
 import { useEffect, useRef, useState } from "react";
 
@@ -32,10 +16,7 @@ export const LiveStatus = ({
 }: {
   /** The current status. "" clears the region and says nothing. */
   message: string;
-  /**
-   * Names the region for assistive technology and for tests, so a page with
-   * more than one status region stays unambiguous. Not read on each update.
-   */
+  /** Names the region, for a page with more than one. Not read on updates. */
   label: string;
 }) => {
   const [text, setText] = useState("");

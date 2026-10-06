@@ -1,25 +1,12 @@
 /**
- * Switch: the on/off control.
+ * The on/off control for every on/off setting.
  *
- * One switch for every on/off setting: "Local time and weather", "Anyone can
- * create an account", "Send it by email". It used to be a 56 by 32 px pill
- * whose knob was the card color, so in the dark palette the off state was
- * a gray blob with a knob nobody could see, and it sat in a 44 px square of
- * its own that pushed it off the row's right edge.
+ * A 44 by 24 px track. Off: the highest container tone in a hairline, with a
+ * 16 px knob in the variant ink, visible in either palette. On: the accent,
+ * with a 20 px on-accent knob holding a check, so the state shows three ways.
  *
- * The track is 44 by 24 px. Off, it is the highest container tone inside a
- * hairline, with a 16 px knob in the variant text color, so it reads as a
- * control on any surface in either palette. On, the track is the accent and
- * the knob grows to 20 px in the on-accent color with a check inside it,
- * so the state is told three ways: the knob's side, its color and the
- * glyph. A press swells the knob a little under the thumb, and the move
- * takes 200 ms on the standard curve.
- *
- * The button is the track. `hit-area` gives it the 44 px tap box
- * `.agent/STYLE.md` requires without a box of its own, so the track lines
- * up with the other controls on a row's right edge.
- *
- * @module components/ui/Switch
+ * The button is the track, and `hit-area` gives it the 44 px tap box, so it
+ * lines up with the other controls on a row's right edge.
  */
 import { Check } from "lucide-react";
 import { cn } from "../../lib/utils";

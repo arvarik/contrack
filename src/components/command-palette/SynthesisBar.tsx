@@ -2,21 +2,14 @@ import { apiFetch } from "../../api/client";
 import { readNdjson } from "../../api/ndjson";
 import { z } from "zod";
 /**
- * SynthesisBar — Opt-in executive brief for AI search results (Feature 6).
- *
- * States: idle → loading → streaming → complete (or error)
- * Visible when ≥3 AI results are present in either Cmd+K or SearchView.
- *
+ * An opt-in brief over three or more AI results, in the palette and on Ask.
  * Streams NDJSON from POST /api/search/synthesize:
  *   { phase: "start" }                   keep the skeleton
  *   { phase: "delta", text: "..." }      add the next piece of the text
  *   { phase: "complete", text: "..." }   show the final text, which replaces it
  *   { phase: "error", error: "..." }     show the error state
  *
- * A cache hit sends start and complete with no deltas. The skeleton stays
- * until the first delta or the complete arrives.
- *
- * @module components/command-palette/SynthesisBar
+ * A cache hit sends start and complete with no deltas.
  */
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import { Sparkles, X, AlertTriangle } from "lucide-react";
@@ -24,8 +17,6 @@ import { CorvidThinking } from "../brand/CorvidThinking";
 import { LiveStatus } from "../ui/LiveStatus";
 import { useBlockedAi } from "../../hooks/useAiSetup";
 import { errorText } from "../../lib/utils";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface SynthesisContact {
   id: string;
@@ -46,8 +37,6 @@ interface SynthesisBarProps {
 
 type SynthesisPhase = "idle" | "loading" | "streaming" | "complete" | "error";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const MIN_RESULTS_FOR_SYNTHESIS = 3;
 
 /** The longest summary, whole or as the sum of its deltas. */
@@ -63,8 +52,6 @@ const synthesisChunkSchema = z.discriminatedUnion("phase", [
   }),
   z.object({ phase: z.literal("error"), error: z.string() }),
 ]);
-
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export const SynthesisBar: React.FC<SynthesisBarProps> = ({
   query,
@@ -186,21 +173,15 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
   const showsText = streaming || phase === "complete";
 
   /*
-   * One slot, one keyed crossfade — deliberately NOT `<AnimatePresence
-   * mode="wait">` with height 0 ↔ auto. That combination collapsed the bar to
-   * zero on every phase change before re-expanding, so each transition shoved
-   * the entire result list up and back down. Phases still change height (a
-   * button is shorter than a paragraph), but now it happens once, in one
-   * direction, instead of twice.
-   *
-   * Streaming and complete share one key. The final text replaces the
-   * streamed text in place, so the crossfade does not run again and the
-   * text does not flash.
+   * One slot, one keyed crossfade. Not `<AnimatePresence mode="wait">` with
+   * height 0 ↔ auto, which collapses the bar on each phase and shoves the
+   * results up and down. Streaming and complete share one key, so the final
+   * text replaces the streamed text with no flash.
    */
   return (
     <div>
       <div key={showsText ? "text" : phase} className="fade-enter">
-        {/* ── Idle: Show synthesize button ── */}
+        {/* Idle: Show synthesize button */}
         {phase === "idle" && (
           <div className={compact ? "px-1" : ""}>
             <button
@@ -222,17 +203,14 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
           </div>
         )}
 
-        {/* ── Loading: Shimmer skeleton ── */}
+        {/* Loading: Shimmer skeleton */}
         {phase === "loading" && (
           <div
             className={`${compact ? "mx-1" : ""} rounded-xl bg-primary/5 ${px} space-y-2`}
             style={{ minHeight: compact ? "60px" : "80px" }}
           >
             <div className={`flex items-center gap-2 ${textSize} text-primary`}>
-              {/*
-                Decorative: "Synthesizing…" is right beside it and says the
-                same thing, so a screen reader should hear it once.
-              */}
+              {/* Decorative: "Synthesizing…" beside it says the same. */}
               <CorvidThinking decorative size={compact ? 14 : 16} />
               <span className="font-semibold">Synthesizing…</span>
             </div>
@@ -244,11 +222,9 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
         )}
 
         {/*
-          ── Streaming and complete: Show synthesis text ──
-          A model wrote the summary, so it sits on the AI color's wash with
-          the AI glyph. The button that asked for it is a control and stays
-          primary. While the text streams, the box is busy and has no
-          dismiss button.
+          Streaming and complete. A model wrote the summary, so it sits on the
+          AI color's wash with the AI glyph. While the text streams, the box
+          is busy and has no dismiss button.
         */}
         {showsText && synthesisText && (
           <div
@@ -278,7 +254,7 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
           </div>
         )}
 
-        {/* ── Error state ── */}
+        {/* Error state */}
         {phase === "error" && (
           <div
             className={`${compact ? "mx-1" : ""} rounded-xl bg-error/5 ${px}`}

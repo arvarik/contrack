@@ -1,39 +1,22 @@
 /**
- * AuthGate — decides which screen the app is, before the app exists.
- *
- * It answers one question on every load: given this instance and this
- * browser, what should the person be looking at? Eight answers:
+ * Decides which screen the app shows, before the app exists:
  *
  *   checking         nothing yet, /status has not replied
- *   setup            gated, nobody can sign in — create the first account
+ *   setup            gated, nobody can sign in: create the first account
  *   join             arrived on an invitation link
  *   signin           gated, signed out
  *   register         signed out, and this instance takes new accounts
  *   password-change  signed in with a password somebody else chose
  *   open             render the app
- *   unreachable      the server is not answering; render the app anyway
+ *   unreachable      the server is not answering: render the app anyway
  *
- * It also publishes the answer through `useAuth`, so the rest of the tree can
- * name the signed-in account and its role without asking the server again.
- * That is why the gate owns the state rather than each screen fetching its
- * own: the sidebar, the account page and the admin area all need the current
- * user, and three independent `/status` calls would be three chances to
- * disagree.
+ * `useAuth` publishes the account, so the tree does not ask `/status` again.
+ * The provider wraps every state, because the screens before the app need
+ * `refresh()` and `user` too. The gate listens for the credential failures
+ * the API client announces (lib/appEvents).
  *
- * The provider wraps every state, not just `open`. The screens above the app
- * need `refresh()` and `user` too, and a provider that covered only the open
- * state handed them the default context — a `refresh` that silently did
- * nothing.
- *
- * Credential failures from anywhere are handled here. The API client
- * announces them on the window (see lib/appEvents) and this is what listens:
- * without it, a session that expires while the tab is open answers with a
- * screenful of identical error toasts and no way to sign back in.
- *
- * This component mounts OUTSIDE BrowserRouter (main.tsx wraps App, and App
- * owns the router), so nothing it renders may use `useLocation`, `Link`, or
- * `Navigate`. The invitation link is read from `window.location` for exactly
- * that reason.
+ * It mounts outside BrowserRouter, so nothing here may use `useLocation`,
+ * `Link` or `Navigate`. The invitation link comes from `window.location`.
  */
 import React, {
   Suspense,
@@ -94,12 +77,7 @@ interface AuthContextValue {
   publicUrl: string | null;
   /** An MCP client can sign in here with OAuth instead of a token. */
   mcpOAuth: boolean;
-  /**
-   * What this instance calls itself, or "" when nobody has named it.
-   *
-   * Available before anybody signs in, because the two screens that most need
-   * it — sign in and join — are the two a person sees without a credential.
-   */
+  /** The instance's name, or "". Known before sign-in, for sign in and join. */
   instanceName: string;
   /**
    * The basemap style URL for each palette, or null until `/status` answers.
@@ -107,12 +85,9 @@ interface AuthContextValue {
    */
   mapStyles: MapStyleUrls | null;
   /**
-   * `/api/auth/status` has answered at least once.
-   *
-   * False while the server is unreachable, where nothing is known. Anything
-   * that redirects on what it believes about the account has to wait for
-   * this, or an unreachable server bounces an admin out of the page they
-   * were on and the address is gone by the time it comes back.
+   * `/api/auth/status` has answered at least once. A redirect based on the
+   * account waits for this, or an unreachable server bounces an admin off
+   * their page.
    */
   isResolved: boolean;
   /** Re-read /status — call after anything that changes the account. */
@@ -135,13 +110,10 @@ const AuthContext = createContext<AuthContextValue>({
 });
 
 /**
- * The current account and the actions that change it.
- *
- * Safe to call anywhere under AuthGate, on any screen. On an un-gated
- * instance `authRequired` is false, which is the one signal account UI uses
- * to hide itself rather than offer a sign-out that does nothing. `user` is
- * still set there — it is the local owner the instance runs as — so a check
- * for "is there an account" must read `authRequired`, never `user`.
+ * The current account and the actions that change it, anywhere under
+ * AuthGate. On an un-gated instance `authRequired` is false and `user` is the
+ * local owner, so "is there an account" must read `authRequired`, never
+ * `user`.
  */
 export const useAuth = () => useContext(AuthContext);
 
@@ -160,23 +132,17 @@ type GateState =
   | "unreachable";
 
 /**
- * A keyed wrapper whose only job is to be replaced.
- *
- * Changing the key unmounts everything under it, which drops every piece of
- * `useState` in the tree: the recent-contact list, the AI Search session, the
- * dedupe scan, the last query someone typed. Clearing the React Query cache
- * removes what the server sent; this removes what the components remembered.
- * Both are needed, because signing in as somebody else must not leave one
- * trace of the previous account on screen.
+ * A keyed wrapper whose only job is to be replaced. A new key drops every
+ * component's state, as clearing the query cache drops the server's data, so
+ * a new account sees no trace of the previous one.
  */
 const AppScope = ({ children }: { children: React.ReactNode }) => (
   <>{children}</>
 );
 
 /*
- * PreferencesProvider is mounted INSIDE AppScope, so the identity key drops it
- * too. The account's settings — theme, accent, density, search history — must
- * not survive a change of account for even one render.
+ * PreferencesProvider sits inside AppScope, so the identity key drops it too:
+ * one account's settings never show for the next, even for a render.
  */
 
 export const AuthGate = ({ children }: { children: React.ReactNode }) => {
@@ -192,23 +158,19 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   const [localOwnerPresent, setLocalOwnerPresent] = useState(false);
   const [mailConfigured, setMailConfigured] = useState(false);
   const [magicLinkSignIn, setMagicLinkSignIn] = useState(false);
-  // Why the sign-in screen is showing. Null when the user asked for it
-  // (sign-out) or simply arrived signed-out; "expired" when a credential we
-  // had stopped being accepted; "disabled" when the account itself is closed,
-  // which is the one case where trying the password again cannot help.
+  // Why the sign-in screen shows. Null for a sign-out or a signed-out
+  // arrival, "expired" for a credential no longer accepted, "disabled" for a
+  // closed account.
   const [signInReason, setSignInReason] = useState<
     "expired" | "disabled" | null
   >(null);
-  // Read once, at first render, and removed from the address bar in the same
-  // breath. A credential in a URL reaches the history, the tab title, and any
-  // screenshot; the form keeps its own copy until it is submitted.
+  // Read once, and removed from the address bar at once: a credential in a
+  // URL reaches the history and any screenshot.
   const [invitation, setInvitation] = useState<string | null>(
     takeInvitationToken,
   );
-  // `check` reads the ref, not the state. Accepting an invitation clears it
-  // and re-checks in the same handler, and a `check` closed over the previous
-  // render's state would send the freshly-created account straight back to
-  // the join form it just submitted.
+  // `check` reads the ref, not the state: accepting an invitation clears it
+  // and re-checks in one handler, and stale state would reopen the join form.
   const invitationRef = useRef(invitation);
   const clearInvitation = useCallback(() => {
     invitationRef.current = null;
@@ -239,15 +201,9 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     try {
       status = await fetchAuthStatus();
     } catch {
-      // The status endpoint is unreachable, which means the server is down —
-      // not that we are locked out. Rendering the app lets its own connection
-      // banner explain what is happening, which is the accurate story.
-      //
-      // Only on the first check. Once /status has answered we know who this
-      // is, and a blip during a later `refresh()` must not throw that away:
-      // forgetting the account would hide the identity row, hide the admin
-      // area and tell the account page there is no account, for a dropped
-      // packet. The effect below keeps asking until the server answers.
+      // The server is down, not refusing, so the app renders and its
+      // connection banner explains. Only on the first check: a blip in a later
+      // `refresh()` must not forget the account. The effect below keeps asking.
       setState((current) => (current === "checking" ? "unreachable" : current));
       return;
     }
@@ -266,8 +222,8 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
 
     // Order matters, and each rung rules out the ones below it.
     if (status.setupRequired) {
-      // Nobody can sign in yet, so no invitation can exist: issuing one needs
-      // an admin. Setup outranks a stale link in the address bar.
+      // Nobody can sign in, so no invitation can exist. Setup outranks a
+      // stale link in the address bar.
       setState("setup");
       return;
     }
@@ -288,8 +244,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
       return;
     }
     if (status.user?.mustChangePassword) {
-      // The credential works. It is just one somebody else chose, and the
-      // server refuses every data route until it is replaced.
+      // A password somebody else chose. Data routes refuse until it changes.
       setState("password-change");
       return;
     }
@@ -301,16 +256,9 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   }, [check]);
 
   /**
-   * Keep asking while the server is not answering.
-   *
-   * Without this, `unreachable` was a state with no way out: one failed
-   * `/status` at load and the tab rendered an un-gated app until somebody
-   * reloaded it — including on a gated instance, where the sign-in screen was
-   * what should have appeared once the server came back.
-   *
-   * Five seconds, and only in this state. It stops the moment `check`
-   * succeeds, because a successful check leaves `unreachable` and unmounts
-   * the interval with it.
+   * Asks every five seconds while the server is not answering, so
+   * `unreachable` has a way out. A successful check leaves the state and
+   * ends the interval.
    */
   useEffect(() => {
     if (state !== "unreachable") return;
@@ -318,9 +266,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     return () => window.clearInterval(timer);
   }, [state, check]);
 
-  /**
-   * Re-check after signing in.
-   */
+  /** Re-checks after signing in. */
   const handleAuthenticated = useCallback(async () => {
     queryClient.clear();
     setSignInReason(null);
@@ -331,9 +277,8 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   }, [check, clearInvitation, clearResetToken, clearMagicToken, queryClient]);
 
   /**
-   * Post-creation flow: setup, join, or register.
-   * If passkeys are supported and the user has none registered and has not dismissed
-   * the nudge, present the passkey nudge interstitial.
+   * After setup, join or register: offers the passkey nudge when the browser
+   * supports passkeys and the account has none and has not dismissed it.
    */
   const handleAccountCreated = useCallback(async () => {
     queryClient.clear();
@@ -359,9 +304,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     try {
       await signOut();
     } catch {
-      // Best effort. The cookie is cleared server-side or it is not, but the
-      // local state must end up signed out either way — leaving someone
-      // staring at a "Sign out" button that did nothing is worse.
+      // Best effort. The local state signs out either way.
     }
     queryClient.clear();
     // A deliberate sign-out leaves no note draft and no map view behind for
@@ -373,16 +316,14 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     setState(authRequired ? "signin" : "open");
   }, [authRequired, queryClient, user?.id]);
 
-  // A 401 from anywhere means the credential stopped being accepted. A
-  // 403 ACCOUNT_DISABLED means it was accepted and the account behind it is
-  // closed, which needs different words on the same screen.
+  // A 401 from anywhere: the credential stopped working. A 403
+  // ACCOUNT_DISABLED: the account is closed, which needs different words.
   useEffect(() => {
     const onExpired = (event: Event) => {
       const reason =
         (event as CustomEvent<AuthExpiredDetail>).detail?.reason ?? "expired";
       setState((current) => {
-        // Only meaningful while the app is up. During setup, sign-in or the
-        // join form a 401 is the expected state, not news.
+        // Only while the app is up. Before it, a 401 is expected.
         if (
           current !== "open" &&
           current !== "password-change" &&
@@ -400,9 +341,8 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, onExpired);
   }, [queryClient]);
 
-  // The server refused a data route until this account changes its password.
-  // Reached when an admin resets a password in another tab, or on any request
-  // made before /status has caught up.
+  // A data route refused until this account changes its password, as after
+  // an admin's reset in another tab.
   useEffect(() => {
     const onForced = () =>
       setState((current) => (current === "open" ? "password-change" : current));
@@ -412,8 +352,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   // Something changed what this account may do, or what the instance allows.
-  // The status endpoint is read into state and cached nowhere, so nothing
-  // else would notice.
+  // `/status` lives in state, not in a cache, so only this re-reads it.
   useEffect(() => {
     const onStale = () => void check();
     window.addEventListener(AUTH_STATUS_STALE_EVENT, onStale);
@@ -421,12 +360,8 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   }, [check]);
 
   /**
-   * Warm the contacts cache the moment the gate opens.
-   *
-   * This used to run at module load in main.tsx, before React rendered at
-   * all, which on a gated instance meant the first request of every page load
-   * was a 401. It runs here instead, keyed to the identity, so it also warms
-   * again for the next account after a sign-out and sign-in.
+   * Warms the contacts cache once the gate opens (before it, a gated instance
+   * answers 401), and again for each new identity.
    */
   useEffect(() => {
     if (state !== "open") return;
@@ -446,11 +381,8 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
 
   const context: AuthContextValue = {
     user,
-    // While the server is unreachable nothing is known, and `authRequired`
-    // decides whether account UI exists at all. `false` is the safe answer:
-    // it hides a sign-out that cannot work and an admin area whose every
-    // request would fail, and it is what the state meant before it could be
-    // re-entered.
+    // Unreachable: `false` hides a sign-out that cannot work and an admin
+    // area whose every request would fail.
     authRequired: state === "unreachable" ? false : authRequired,
     isAdmin: user?.role === "admin",
     publicUrl,
@@ -464,9 +396,8 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
 
   function renderScreen(): React.ReactNode {
     switch (state) {
-      // Nothing is rendered while checking. The call is same-origin and
-      // typically resolves in a few milliseconds; a spinner for that long is
-      // a flash of chrome, not feedback.
+      // Nothing while checking: the call takes milliseconds, and a spinner
+      // would only flash.
       case "checking":
         return null;
       case "setup":
@@ -552,9 +483,8 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
           />
         );
       default:
-        // `open` and `unreachable` both render the app. The key is the whole
-        // point: a change of identity replaces the tree rather than reusing
-        // the previous account's component state.
+        // `open` and `unreachable` both render the app. A new identity
+        // replaces the tree (the key).
         return (
           <AppScope key={user?.id ?? "anon"}>
             <PreferencesProvider>

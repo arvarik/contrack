@@ -1,15 +1,7 @@
 /**
- * The four fields that create an account, and the rules they follow.
- *
- * Three screens create an account: first-run setup, open registration, and
- * accepting an invitation. They differ in their title, their copy, and which
- * endpoint they call. They do not differ in what an account is, so the fields,
- * the validation, the blur behavior and the error wording live here once.
- *
- * The rules mirror the server's (`server/services/authService.ts`) and run on
- * blur rather than on every keystroke: telling someone their email is invalid
- * while they are still typing the domain is noise, not help. The server is
- * still the authority; this only saves a round trip.
+ * The fields that create an account and their rules, shared by setup,
+ * registration and accepting an invitation. The rules mirror the server's
+ * (`server/services/authService.ts`) and run on blur, not on each keystroke.
  */
 import React, { useCallback, useMemo, useState } from "react";
 import { uploadAccountAvatar } from "../../api/auth";
@@ -39,10 +31,8 @@ const EMPTY: Values = {
 };
 
 /**
- * Suggest a username from an email address.
- *
- * Takes the local part, lowercases it, replaces characters outside USERNAME_PATTERN
- * with '.', collapses consecutive dots, trims non-alphanumeric edges, and clips to 32 characters.
+ * A username from an email's local part: lowercased, characters outside
+ * USERNAME_PATTERN as '.', dots collapsed, edges trimmed, 32 characters.
  */
 export function suggestUsername(email: string): string {
   if (!email) return "";
@@ -59,12 +49,7 @@ export function suggestUsername(email: string): string {
   return s;
 }
 
-/**
- * Why a new password is not acceptable, or undefined when it is.
- *
- * Shared with the forced-change screen, which has no email or username but
- * the same password fields and ways to get them wrong.
- */
+/** Why a new password is not acceptable, or undefined. Forced change uses it too. */
 export function passwordProblem(
   password: string,
   confirm?: string,
@@ -195,11 +180,8 @@ export function useAccountForm(): AccountForm {
 }
 
 /**
- * Run account creation followed by photo upload when a photo was selected.
- *
- * A failure during photo upload does not block account creation: the account
- * is already created and authenticated, so a toast tells the person where to
- * add the photo later.
+ * Creates the account, then uploads the chosen photo. A failed upload only
+ * toasts where to add the photo later: the account already exists.
  */
 export async function createAccountThenPhoto(
   submit: () => Promise<unknown>,
@@ -217,22 +199,15 @@ export async function createAccountThenPhoto(
 }
 
 /**
- * The fields that create an account, in the order they are filled in.
- *
- * `autoFocus` is on the first field because each of the three screens is the
- * whole page with one thing to do on it. Not on a touch screen, where focus
- * opens the keyboard over the form.
+ * The fields, in the order they are filled in. The first takes the focus,
+ * except on a touch screen, where focus opens the keyboard over the form.
  */
 export const AccountFields = ({
   form,
   mailConfigured = false,
 }: {
   form: AccountForm;
-  /**
-   * True when the instance can email links. The email hint tells the truth
-   * about it: with outgoing mail set up, Contrack sends the links somebody
-   * asks for, a reset or a sign-in.
-   */
+  /** True when the instance can email links, which the email hint says. */
   mailConfigured?: boolean;
 }) => {
   const emailHint = mailConfigured

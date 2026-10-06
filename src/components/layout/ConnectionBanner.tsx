@@ -1,12 +1,7 @@
 /**
- * ConnectionBanner — the app's single, honest answer to "why is nothing here?".
- *
- * Mounted once, at the top of the layout, above every view. It replaces the
- * three contradictory local stories the app used to tell when the server went
- * away, and it is deliberately not a modal: the cached data underneath is
- * still real and still worth reading, so nothing gets blocked.
- *
- * @see hooks/useConnectionStatus
+ * The app's one answer to "why is nothing here?" when the server is out of
+ * reach (`hooks/useConnectionStatus`). Mounted once, above every view. Not a
+ * modal: the cached data underneath is still worth reading.
  */
 import { AnimatePresence, motion } from "motion/react";
 import { CloudOff, Loader2, RefreshCw, WifiOff } from "lucide-react";
@@ -19,14 +14,12 @@ export const ConnectionBanner = () => {
   const offline = status === "offline";
   const Icon = offline ? WifiOff : CloudOff;
 
-  // A bar in the page's flow, above every view: it pushes the page down
-  // rather than floating over its title, as it once did.
+  // In the page's flow: it pushes the page down, not over its title.
   return (
     <AnimatePresence initial={false}>
       {isDown && (
         <motion.div
-          // `role="status"` rather than "alert": this is important but not an
-          // emergency, so it should not interrupt a screen reader mid-sentence.
+          // `status`, not `alert`: it should not interrupt a screen reader.
           role="status"
           aria-live="polite"
           initial={{ height: 0 }}

@@ -1,16 +1,8 @@
 /**
- * Badge — a short status word beside the thing it describes.
- *
- * 2.0 introduced a lot of state that a row has to carry: an account is active
- * or disabled, an invitation is pending or accepted or revoked or expired, a
- * token is live or revoked, an account is an admin or a member. Before this
- * every such pill was written out where it was used, which is how a codebase
- * ends up with four shades of "warning".
- *
- * The tones map onto the semantic colors in `.agent/STYLE.md` and nothing
- * else. `neutral` is deliberately the dullest: most rows are in their
- * ordinary state, and a badge that shouts on every row stops meaning
- * anything.
+ * A short status word beside what it describes: active or disabled,
+ * pending or revoked, admin or member. The tones are the semantic colors in
+ * `.agent/STYLE.md`. `neutral` is the dullest, for the ordinary state most
+ * rows are in.
  */
 import { type ReactNode } from "react";
 import { cn } from "../../lib/utils";

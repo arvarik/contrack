@@ -1,8 +1,4 @@
-/**
- * PasskeyButton — secondary button to sign in with a WebAuthn passkey.
- *
- * @module components/auth/PasskeyButton
- */
+/** The secondary button that signs in with a passkey. */
 import { KeyRound, Loader2 } from "lucide-react";
 
 export const PasskeyButton = ({

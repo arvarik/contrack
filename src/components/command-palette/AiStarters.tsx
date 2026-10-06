@@ -1,17 +1,8 @@
 /**
- * The questions under the palette's AI mode, before anything is typed.
- *
- * Four of the account's own starter questions, the same pool and the same
- * draw as "Try asking" on the Ask page (`useStarterDraw`). Each is a row of
- * the palette's list, so `↓` reaches it and `Enter` picks it, as a click
- * does. Picking one puts the question in the input after the `?`, where the
- * palette asks it as it asks anything typed there. They were buttons: the
- * arrow keys passed them by, and cmdk took the `Enter` on a focused one.
- *
- * It draws when it appears, which is each time the palette enters AI mode
- * with an empty question, and keeps those four while it stays on screen.
- *
- * @module components/command-palette/AiStarters
+ * Four starter questions under AI mode before anything is typed, drawn as
+ * "Try asking" on Ask draws them (`useStarterDraw`). Each is a list row, so
+ * `↓` and `Enter` reach it. Picking one puts it after the `?`. A new draw
+ * comes each time the mode opens empty.
  */
 import { Command } from "cmdk";
 import { Sparkles } from "lucide-react";

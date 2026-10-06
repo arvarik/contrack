@@ -62,11 +62,8 @@ export class ErrorBoundary extends Component<Props, State> {
               <RefreshCw className="w-4 h-4" />
               Reload the page
             </button>
-            {/*
-              The red circle above stays: a mascot on a crash reads as a joke
-              at the wrong time. The mark sits small in the footer, as the
-              only brand on the screen.
-            */}
+            {/* The mark small in the footer, not as a mascot: on a crash it
+                would read as a joke. */}
             <div className="mt-6 flex justify-center text-on-surface-variant">
               <CorvidMark size={20} />
             </div>

@@ -1,13 +1,7 @@
 /**
- * ImportPanel — The inline import workbench.
- *
- * Extracted from ImportModal so it can be mounted inline on the Import settings
- * page (/settings/import) or inside the ImportModal opened from the contact list.
- *
- * Supports Apple (vCard), LinkedIn (CSV), Google Contacts (CSV), and Facebook (JSON).
- * Handles streaming progress, polling reconnection, error reporting, and retry.
- *
- * @module components/ImportPanel
+ * The import workbench, on the Import settings page and in ImportModal. Apple
+ * (vCard), LinkedIn (CSV), Google Contacts (CSV) and Facebook (JSON), with
+ * streamed progress, polling after a lost connection, errors and retry.
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -173,9 +167,8 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
       setError(null);
       invalidate();
       onComplete?.(done);
-      // The network grew: the corvid takes a turn round the room for it,
-      // once the import's dialog is out of the way. The overlay decides
-      // whether it actually flies.
+      // The network grew: the corvid swoops once the dialog is gone, if the
+      // overlay lets it.
       if (done.imported > 0) flyWhenClear({ kind: "swoop" });
       if (done.failed > 0) {
         try {

@@ -4,8 +4,6 @@
  *
  * The ranges are [start, end) offsets into `text`, sorted. A range that
  * overlaps the one before it, or runs past the text, is skipped.
- *
- * @module components/ui/Highlighted
  */
 import React from "react";
 import type { HighlightRange } from "../../types";

@@ -1,17 +1,7 @@
 /**
- * ScoreBreakdown — makes the relationship score inspectable.
- *
- * A number out of 100 attached to a person is a judgment, and a judgment you
- * cannot interrogate is one you either over-trust or ignore. Neither is what
- * the score is for. This turns "42" into the five things that produced it,
- * each with the measurement behind it, so the answer to "why is this low" is
- * one click rather than a guess.
- *
- * The breakdown is fetched on open rather than with the contact: computing it
- * runs an aggregate query per contact, which is fine for one and wasteful for
- * a list of four hundred.
- *
- * @module components/ScoreBreakdown
+ * Turns the relationship score into the five signals behind it, so "why is
+ * this low" is one click. Fetched on open, not with the contact: it runs an
+ * aggregate query per contact, too much for a list.
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -114,12 +104,9 @@ const Panel = ({
 };
 
 /**
- * A button that reveals the score's reasoning.
- *
- * Click rather than hover: the content is a paragraph per signal, and hover
- * panels that size are unreadable on touch and hostile to anyone whose pointer
- * drifts. Escape and outside-click both close it, and focus returns to the
- * trigger, which is the disclosure pattern people already know.
+ * A button that shows the score's reasoning. Click, not hover: a paragraph
+ * per signal is too much for a hover panel. Escape and a click outside close
+ * it, and focus returns to the trigger.
  */
 export const ScoreBreakdown = ({
   contactId,
@@ -146,14 +133,9 @@ export const ScoreBreakdown = ({
   });
 
   /**
-   * Where the panel opens, measured from the trigger.
-   *
-   * The panel used to hang from the trigger's right edge inside the page.
-   * On the contact header the ring sits at the pane's left edge, so the
-   * panel ran about 150 px past the pane and the pane clipped it. In the
-   * top layer nothing clips it, and it lines up with whichever edge of the
-   * trigger keeps it inside the window. The breakdown loads after the panel
-   * opens and makes it taller, so the answer measures it again.
+   * Where the panel opens, in the top layer, lined up with whichever trigger
+   * edge keeps it in the window. Measured again when the breakdown loads and
+   * makes it taller.
    */
   const placement = usePanelPlacement({
     open,
@@ -172,8 +154,7 @@ export const ScoreBreakdown = ({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       setOpen(false);
-      // Send focus back where it came from, or a keyboard user is stranded at
-      // the top of the document.
+      // Focus back to the trigger, or it falls to the document's top.
       triggerRef.current?.focus();
     };
     document.addEventListener("pointerdown", onPointerDown);

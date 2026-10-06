@@ -1,16 +1,7 @@
 /**
- * Sidebar — Vertical icon nav with styled tooltips.
- *
- * Each nav item wraps with a `RailTooltip` that appears to the right of the
- * icon after a 250 ms hover delay, in place of the browser's `title`
- * tooltip. The right-hand panel's button (`SidePanel`) uses the same one,
- * opening to the left.
- *
- * That tooltip is a hover-rendered <div>, so it is worth nothing to a screen
- * reader or to a keyboard user tabbing through: every link here is an icon
- * with no text. Each one therefore carries its own `aria-label`, duplicating
- * the tooltip's label. Both read the destination's name from `lib/names`, so
- * the sidebar says what the tab bar, the palette and the page heading say.
+ * The vertical icon rail. Each icon has a `RailTooltip` and, because the
+ * tooltip is hover-only, an `aria-label` with the same name from
+ * `lib/names`.
  */
 import { Link, useLocation } from "react-router-dom";
 import {
@@ -42,27 +33,16 @@ import { markPendingNavOnClick, usePendingNav } from "../../lib/pendingNav";
 import { RailTooltip } from "../ui/RailTooltip";
 import { NAV_SHORTCUTS } from "../../hooks/useGlobalNavShortcuts";
 
-// ---------------------------------------------------------------------------
-// CorvidPerch — the mark, as the one button that navigates nowhere
-// ---------------------------------------------------------------------------
-
 /**
- * The corvid's perch.
- *
- * The app's own bird lives here: it blinks, looks about, preens, answers the
- * app, watches the pointer when it comes near and dozes when the person goes
- * quiet (see `useCorvidLife`). Hovering or focusing the button gets it ready
- * to go, weight down and head up, which is the button saying what a press
- * will do. A press is `flyCorvid()`: at level "full" the bird leaves its
- * ring for a flight of its own choosing, at "subtle" it flutters where it
- * sits, at "off" nothing moves. The overlay decides which.
+ * The corvid's perch, the one button that navigates nowhere. The bird lives
+ * here (`useCorvidLife`). Hover or focus readies it, and a press calls
+ * `flyCorvid()`, which flies, flutters or does nothing by the motion level.
  */
 const CorvidPerch = () => {
   const level = useCorvidLevel();
   const bird = useCorvidControls();
 
-  // Enter and Space already reach this through the button's own click, so
-  // there is no key handler here to get out of step with the pointer.
+  // Enter and Space reach this through the button's own click.
   const onClick = useCallback(() => {
     if (level === "off") return;
     flyCorvid({ kind: "loop" });
@@ -77,26 +57,17 @@ const CorvidPerch = () => {
       onFocus={() => bird.hover(true)}
       onBlur={() => bird.hover(false)}
       /*
-        The nav link's shape and the focus ring every control gets from
-        `index.css`, but not its hover layer: while the bird is away this
-        button holds only the empty ring, and a gray box round it reads as
-        something still loading.
-      */
-      /*
-        The mark is the brand, so it is the one stop in the rail that is
-        bigger than a nav glyph: 40 px against their 24. The padding is `p-2`
-        where a nav link's is `p-3`, to pay for it, so the button stays the
-        56 px box it was and the rail's spacing does not move.
+        No hover layer: with the bird away, a gray box round the empty ring
+        reads as loading. The mark is 40 px against the glyphs' 24, so the
+        padding is `p-2`, not `p-3`, and the button stays 56 px.
       */
       className="mb-1 p-2 rounded-xl text-primary"
       aria-label="Contrack"
       title="Let the corvid fly"
     >
       {/*
-        The perch attribute sits on this wrapper, not on the svg. The overlay
-        hides only the bird inside it while the bird is out, never the ring,
-        and never the button's own box, so the sidebar does not shift by a
-        pixel.
+        The perch attribute is on this wrapper, not the svg: the overlay hides
+        only the bird while it is out, so the sidebar never shifts.
       */}
       <span {...perchProps} className="flex">
         <CorvidMark size={40} idPrefix="corvid" alive primary controls={bird} />
@@ -105,15 +76,9 @@ const CorvidPerch = () => {
   );
 };
 
-// ---------------------------------------------------------------------------
-// Sidebar
-// ---------------------------------------------------------------------------
-
 export const Sidebar = () => {
   const location = useLocation();
-  // Narrow context read: this hook is now isolated from AI-search keystroke
-  // updates, so the sidebar no longer re-renders when the user types in the
-  // global search bar.
+  // A narrow context, so a keystroke in Ask's search does not redraw this.
   const { lastContactId } = useRecent();
   // The page a person pressed is marked at once, before it can draw: the
   // location changes only when the new page is on screen (`pendingNav`).
@@ -139,9 +104,8 @@ export const Sidebar = () => {
   const urgentCount = badge?.count || 0;
 
   /**
-   * The dot is an `aria-hidden` graphic, so what it says is in the link's
-   * accessible name too: otherwise a screen-reader user gets "Pulse" and no
-   * hint that anything is due. A comma reads as a short pause.
+   * The dot is `aria-hidden`, so the link's name says it too. A comma reads
+   * as a short pause.
    */
   const urgent =
     urgentCount > 0 &&
@@ -160,30 +124,17 @@ export const Sidebar = () => {
     <aside
       className={cn(
         SECTION_BG,
-        // The height its parent leaves, which pads for the status bar, and
-        // a scroll of its own on a short touch screen: a phone on its side
-        // is 393 px tall. Only there, since a scroll box clips the labels
-        // that stand out to its right, and a short laptop window needs them.
-        // There the rail packs tight too, so Settings is on screen and not
-        // below a fold that nothing marks.
+        // A scroll of its own only on a short touch screen (a phone on its
+        // side): a scroll box clips the labels that stand out to its right.
+        // A short window packs the rail tight, so Settings stays on screen.
         "w-16 h-full min-h-0 [@media(max-height:40rem)_and_(pointer:coarse)]:overflow-y-auto [@media(max-height:30rem)]:gap-1 [@media(max-height:30rem)]:pt-2 [@media(max-height:30rem)]:pb-1 scrollbar-hide hidden md:flex flex-col items-center pt-6 pb-3 gap-6 shrink-0 relative z-20",
       )}
     >
       {/*
-        The corvid, on its perch, and the only control here that goes nowhere.
-
-        It was a decorative span until the bird learned to fly. A click sends
-        it round the window and back, so it is a real button with a real name:
-        the drawing stays `aria-hidden`, and "Contrack" comes from the button
-        instead. That adds one Tab stop in front of the content, which is why
-        the budgets in `keyboard.spec.ts` went up by one.
-
-        The title says what the button does rather than what it is. "Contrack"
-        is already the accessible name, and a tooltip that repeats it would
-        tell a mouse user nothing they cannot see.
-
-        `idPrefix="corvid"` and the perch attribute make this the one mark the
-        flight overlay measures, hides and gives back.
+        The corvid, a real button named "Contrack" (the drawing is
+        `aria-hidden`). It adds one Tab stop, counted in `keyboard.spec.ts`.
+        Its title says what it does. It is the one mark the flight overlay
+        measures, hides and gives back.
       */}
       <CorvidPerch />
 
@@ -216,12 +167,9 @@ export const Sidebar = () => {
             <Activity className="w-6 h-6" />
 
             {/*
-              Urgent follow-ups are about time, so a dot and not a count: a
-              count invites comparison ("only 3") when any number above zero
-              needs attention today. The icon used to carry the number of
-              possible duplicates too, on the other corner, and the two read
-              as one smudge. Duplicates show their count where they are
-              decided: Pulse's inbox, Settings and the palette.
+              Urgent follow-ups get a dot, not a count: any number above zero
+              needs attention today. Duplicates show their count where they
+              are decided: Pulse's inbox, Settings and the palette.
             */}
             {urgentCount > 0 && (
               <span
@@ -270,18 +218,9 @@ export const Sidebar = () => {
       <div className="flex-1" />
 
       {/*
-        The utility group: the two actions that are about the app rather than
-        about your contacts, and who is signed in. It sits at the rail's foot,
-        on the rail's own surface, with the same glyphs and the same hover as
-        the destinations above. Its place and its tighter spacing are what
-        set it apart. It used to sit in a box of its own, a shade darker with
-        rounded top corners, which read as a separate panel docked under the
-        nav.
-
-        Keyboard shortcuts previously had no visible entry point at all — the
-        overlay existed but you had to already know to press `?`. Discoverable
-        shortcuts are the difference between a keyboard-first app and an app
-        with keyboard shortcuts.
+        The utility group at the rail's foot: the palette, the keyboard
+        shortcuts, Settings and who is signed in. Its place and tighter
+        spacing set it apart, not a box.
       */}
       <div className="flex flex-col items-center gap-2 w-full">
         {/* Not on a device with no mouse or trackpad, such as a tablet on its
@@ -332,11 +271,7 @@ export const Sidebar = () => {
           </Link>
         </RailTooltip>
 
-        {/*
-          Who is signed in, last, below the app's own controls. It is the one
-          item here that is about the person rather than the app, and on an
-          un-gated instance it renders nothing at all.
-        */}
+        {/* Who is signed in, last. Nothing on an un-gated instance. */}
         <SidebarIdentity />
       </div>
     </aside>

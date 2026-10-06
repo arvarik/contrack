@@ -1,15 +1,8 @@
 /**
- * ShortcutKeys: the keys of one shortcut, as keycaps.
+ * The keys of one shortcut, as keycaps:
  *
- * The shortcuts dialog and the Keyboard settings page drew the same caps
- * with two copies of the same markup. One component draws them now:
- *
- * 1. Keys with a modifier are one combination, pressed together. Their caps
- *    sit side by side, the way a menu prints ⌘ K.
- * 2. Keys without one are alternatives, and "or" sits between them and is
- *    read out, because "right arrow L" does not say which it is.
- *
- * @module components/ui/ShortcutKeys
+ * 1. Keys with a modifier are one combination, side by side, as ⌘ K.
+ * 2. Keys without one are alternatives, with a spoken "or" between them.
  */
 import React from "react";
 import { isCombination } from "../../lib/shortcuts";

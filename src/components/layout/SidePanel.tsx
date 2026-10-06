@@ -13,31 +13,20 @@
  *   │         page             │         │     page     │ content   ║│
  *   └──────────────────────────┘         └──────────────┴───────────┘
  *
- *   - The button is a pressable `.btn-secondary`, the family of the page's
- *     call to action: a square with the panel's glyph, named for the panel
- *     and titled with its key by `RailTooltip`. It is a disclosure
- *     (`aria-expanded`, `aria-controls`), and while the panel is open it
- *     stays pressed in (`.btn-latch`), so the one control that opened the
- *     panel reads as the one that closes it. There is no second close
- *     button.
- *   - The panel, 320 px, wears the left nav's surface and a soft shadow on
- *     its open edge. Its heading row starts level with the button and
- *     keeps the button's box free at its end. A panel whose content says
- *     what it is can keep its heading for a screen reader and give the row
- *     to a control instead (`titleHidden`, `lead`). Under the heading row
- *     the content takes the panel's full width, and a scroller in it runs
- *     to the window's edge, so its bar sits on the edge
+ *   - The button is a square `.btn-secondary` with the panel's glyph, a
+ *     disclosure (`aria-expanded`, `aria-controls`). While the panel is open
+ *     it stays pressed in (`.btn-latch`), and it is the only close button.
+ *   - The panel, 320 px, has its heading row level with the button, the
+ *     button's box kept free at its end. `titleHidden` and `lead` give the
+ *     row to a control. A scroller in the content reaches the window's edge
  *     (`SIDE_PANEL_SCROLLER`).
  *
- * However the panel closes (the button, Escape inside it, a page's own
- * shortcut), a keyboard inside it lands on the button. A closed panel is
- * `inert`: nothing in it takes focus or is read, and it takes no pointer.
- * The button comes first in the source, so Tab goes from it into the panel.
+ * However the panel closes, a keyboard inside it lands on the button. A
+ * closed panel is `inert`. The button comes first in the source, so Tab
+ * goes from it into the panel.
  *
- * From `lg` only. Below it a page opens the same content in a bottom sheet
- * from a button of its own. The slide and the content's fade are CSS
- * transitions on the app's curve, so both reduced-motion settings collapse
- * them like every other transition.
+ * From `lg` only: below it a page opens the content in a bottom sheet. The
+ * slide and fade are CSS transitions, so reduced motion collapses them.
  */
 import React, { useLayoutEffect, useRef } from "react";
 import type { LucideIcon } from "lucide-react";
@@ -51,9 +40,8 @@ import { RailTooltip } from "../ui/RailTooltip";
 export const SIDE_PANEL_WIDTH = 320;
 
 /**
- * How long the panel takes to open and to close, in ms: the slow and the
- * base durations, the classes below. A page that moves something with it
- * (the map eases its padding) reads them, so the two arrive together.
+ * How long the panel takes to open and to close, in ms, for a page that
+ * moves something with it (the map eases its padding).
  */
 export const SIDE_PANEL_OPEN_MS = DURATION.slow * 1000;
 export const SIDE_PANEL_CLOSE_MS = DURATION.base * 1000;
@@ -133,10 +121,9 @@ export const SidePanel = ({
   const button = useRef<HTMLButtonElement>(null);
   const panel = useRef<HTMLElement>(null);
 
-  // A panel that closes with focus inside it gives the keyboard to the
-  // button that opens it again. Chrome leaves focus on an element that turns
-  // inert, where Tab and the screen reader would be lost, so this runs on
-  // every close, whoever closed it. Focus anywhere else stays put.
+  // A panel that closes with focus inside it gives the focus to its button:
+  // Chrome leaves focus on an element that turns inert. Focus anywhere else
+  // stays put.
   useLayoutEffect(() => {
     if (!open && panel.current?.contains(document.activeElement)) {
       button.current?.focus();
@@ -172,9 +159,8 @@ export const SidePanel = ({
         </button>
       </RailTooltip>
 
-      {/* The panel, from the window's edge. Escape from any control in it
-          bubbles up to the panel, which listens the way a dialog does: the
-          landmark is not a control. */}
+      {/* The panel. Escape from any control in it bubbles up to the panel,
+          which listens as a dialog does. */}
       {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
       <aside
         {...panelProps}
@@ -203,9 +189,8 @@ export const SidePanel = ({
           panelProps?.className,
         )}
       >
-        {/* The heading row starts level with the button. Its last box is
-            the button's own face, drawn invisible, so the title and the
-            actions end where the button begins at any word length. */}
+        {/* The heading row's last box is an invisible copy of the button's
+            face, so the title and actions end where the button begins. */}
         <div className="flex items-center gap-2 px-4 pt-(--panel-top) shrink-0">
           <div className="flex items-center gap-2 min-w-0 flex-1 min-h-10">
             <h2

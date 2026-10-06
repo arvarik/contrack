@@ -1,18 +1,7 @@
 /**
- * useBulkActions — shared bulk action handlers for Contact List and Map views.
- *
- * Manages all bulk mutation side-effects:
- * - Soft delete (with undo toast)
- * - Track and untrack (with undo toast), and the cadence, in the words
- *   `describeCadence` gives it ("3 contacts, quarterly")
- * - Archive (with undo toast)
- * - Add to list
- * - Color / vibe update
- * - Field edit (with undo toast)
- * - CSV export to clipboard
- * - Add-to-list and bulk-edit modal open/close states
- *
- * @module components/bulk/useBulkActions
+ * The bulk actions of the contact list and the map: delete, track, archive
+ * and field edits (each with Undo), the cadence, lists, color, and CSV to the
+ * clipboard, plus the add-to-list and bulk-edit dialogs' open state.
  */
 import { useState, useCallback, useMemo } from "react";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
@@ -42,10 +31,9 @@ interface ContactLike {
 }
 
 /**
- * Whether the selection is tracked: every one, none, or some. The bulk bar
- * reads Untrack when it is `all` and Track otherwise. With nothing selected
- * yet, the answer is about the rows on screen, so the bar under the Tracked
- * chip reads Untrack before the first row is chosen.
+ * Whether the selection is tracked: all, none or some. The bulk bar reads
+ * Untrack for `all`. With nothing selected, it answers for the rows on
+ * screen.
  */
 export type SelectionTracked = "all" | "none" | "mixed";
 
@@ -105,9 +93,8 @@ export function useBulkActions({
   }, [getIds, bulkDelete, bulkRestore, onComplete]);
 
   /**
-   * The tracked flag by id: from the contacts the caller passed, else from
-   * the contact cache for an id the caller did not describe. The list and
-   * the map both pass the rows on screen, which is where the selection is.
+   * The tracked flag by id: from the contacts the caller passed (the rows on
+   * screen), else from the contact cache.
    */
   const trackedById = useMemo(() => {
     const flags = new Map<string, boolean>();
@@ -136,14 +123,9 @@ export function useBulkActions({
   }, [getIds, contacts, trackedById]);
 
   /**
-   * Track (`next: true`) or untrack the selection.
-   *
-   * Only the ids that differ are sent: Track leaves a tracked contact's
-   * cadence alone, and Stop tracking leaves an untracked one untouched. The
-   * toast names the count that changed, says how many already were, and
-   * offers Undo, which flips the same ids back. An undone stop tracks them
-   * again at the default cadence, and the toast says so, because the
-   * cadence each one had is gone.
+   * Tracks (`next: true`) or untracks the selection, sending only the ids
+   * that differ. Undo flips the same ids back. An undone stop tracks them at
+   * the default cadence, and the toast says so: their own cadence is gone.
    */
   const handleBulkTrack = useCallback(
     (next: boolean) => {
@@ -286,9 +268,8 @@ export function useBulkActions({
 
   /**
    * One value for one field on every selected contact. Undo puts back each
-   * contact's own value: the ids are grouped by the value the edit replaced,
-   * one request a group. A contact the list cache does not hold keeps the
-   * new value, rather than lose the old one to a guess.
+   * one's own value, one request per old value. A contact the list cache
+   * does not hold keeps the new value rather than a guess.
    */
   const handleBulkEditApply = useCallback(
     (field: string, value: string | number) => {

@@ -1,18 +1,7 @@
 /**
- * Segmented — the app's tab-in-a-trough toggle.
- *
- * It lived as a private component inside SettingsHome, which is where every
- * second copy of a control comes from: the next page that needs one either
- * imports from a page (wrong) or writes its own that drifts. AI usage needs
- * exactly this control for "Mine / All users", so it moved out.
- *
- * A radiogroup rather than a set of buttons, so a screen reader announces one
- * control with a selected option instead of three unrelated buttons.
- *
- * The role promises keyboard behavior, so the behavior is here: the arrows
- * move between options and select as they go, and only the selected option is
- * in the tab order. A radiogroup without that is a role that lies about what
- * the control does.
+ * A tab-in-a-trough toggle: a radiogroup, so a screen reader hears one
+ * control with a selected option. The arrows move and select as they go, and
+ * only the selected option is in the Tab order.
  */
 import { useRef } from "react";
 import type { LucideIcon } from "lucide-react";
@@ -49,11 +38,8 @@ export const Segmented = <T extends string | number>({
   const labeled = useMediaQuery("(min-width: 640px)");
 
   /**
-   * Arrows move the selection, and take focus with it.
-   *
-   * On each radio rather than on the container: that is where focus actually
-   * is, and a container carrying a key handler has to be focusable itself,
-   * which a radiogroup is not.
+   * Arrows move the selection and the focus. On each radio, where focus is,
+   * not on the container, which is not focusable.
    */
   const onKeyDown = (event: React.KeyboardEvent) => {
     const step =
@@ -67,8 +53,7 @@ export const Segmented = <T extends string | number>({
     const index = options.findIndex((option) => option.value === value);
     const next = options[(index + step + options.length) % options.length];
     onChange(next.value);
-    // Focus follows the selection, which is what makes the next arrow press
-    // continue from where the last one left off.
+    // Focus follows the selection, so the next arrow continues from it.
     const buttons = container.current?.querySelectorAll("button");
     buttons?.[options.indexOf(next)]?.focus();
   };
@@ -94,8 +79,7 @@ export const Segmented = <T extends string | number>({
             type="button"
             role="radio"
             aria-checked={value === option.value}
-            // Only the selected option is a tab stop, so Tab moves past the
-            // whole control rather than through every option in it.
+            // Only the selected option is a Tab stop.
             tabIndex={value === option.value ? 0 : -1}
             onKeyDown={onKeyDown}
             onClick={() => onChange(option.value)}

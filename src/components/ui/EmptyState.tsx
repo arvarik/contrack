@@ -1,10 +1,5 @@
 /**
- * EmptyState — what a screen shows when it has nothing to show.
- *
- * The review counted seven empty-state styles: a tinted square with a Users
- * icon, a party icon in a 96 px circle, a green check, a gray card, a faint
- * icon, a gray square with "No matches found", a waveform, and a brain hero.
- * Each said the same thing a different way. This is the one way.
+ * What a screen shows when it has nothing to show.
  *
  *   ┌────┐
  *   │ ◇  │   icon tile, 48 px, primary wash (or the illustration)
@@ -17,13 +12,9 @@
  * place ("No lists yet", with New list under it) says it in the title and
  * takes no sentence.
  *
- * One action at most, so the prop is one object and not a node: a second
- * button cannot be passed in. The `illustration` slot replaces the icon tile
- * and is what the corvid plan fills with the mark where it fits.
- *
- * The title is an h2 by default, which is right for a page whose h1 is the
- * page name. Inside a card whose own title is an h2, pass `level={3}` so the
- * heading order does not skip or repeat.
+ * One action at most, so the prop is one object, not a node. `illustration`
+ * replaces the icon tile. The title is an h2. Inside a card titled with an
+ * h2, pass `level={3}`.
  */
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";

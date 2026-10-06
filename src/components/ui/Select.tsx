@@ -1,43 +1,28 @@
 /**
- * Select: the app's one control for choosing a value from a short list.
+ * The app's control for choosing a value from a short list, in place of the
+ * native `<select>`, whose popup is the system's and on a phone a wheel. It
+ * opens a `.menu-panel`, like every other list under a control.
  *
- * It replaces the native `<select>`. A native select draws the operating
- * system's popup: a different surface, a different type, no icons, no
- * second line, and on a phone a wheel that hides the page. Every other list
- * that opens under a control in this app is a `.menu-panel`, so the select
- * is one too, and the label chip on a contact's email, the model picker in
- * AI settings and the field picker in the bulk edit dialog now open the same
- * panel with the same rows.
- *
- * It is the select-only combobox pattern, with focus on the rows:
+ * The select-only combobox pattern, with focus on the rows:
  *
  * 1. The trigger is a button with `role="combobox"`, `aria-haspopup="listbox"`
- *    and `aria-expanded`. It shows the chosen option and a chevron, and it
- *    carries the control's name. Click, Enter or Space opens the list on the
- *    chosen option. ArrowDown and ArrowUp open it too.
- * 2. The list is `role="listbox"`, its rows `role="option"` with
- *    `aria-selected` on the chosen one. ArrowDown and ArrowUp move and wrap,
- *    Home and End jump, a letter moves to the next option that starts with
- *    it, Enter or Space chooses, Escape closes and returns focus to the
- *    trigger, Tab closes and lets focus move on, and a click outside closes.
- * 3. Choosing closes the list, returns focus to the trigger, and then calls
+ *    and `aria-expanded`, showing the chosen option and carrying the name.
+ *    Click, Enter, Space, ArrowDown or ArrowUp opens on the chosen option.
+ * 2. The list is `role="listbox"`, its rows `role="option"`. The arrows move
+ *    and wrap, Home and End jump, a letter moves to the next option with it,
+ *    Enter or Space chooses, Escape closes back to the trigger, Tab closes
+ *    and moves on, and a click outside closes.
+ * 3. Choosing closes the list, returns focus to the trigger, then calls
  *    `onChange` when the value changed.
  *
- * The list opens in the browser's top layer through `usePanelPlacement`, so
- * nothing on the page can paint over it and no scroller can clip it, and it
- * drops up or slides in from the window's edge when it would not fit.
- *
- * Three forms of the trigger, one panel:
+ * The list opens in the top layer (`usePanelPlacement`), where it fits.
  *
  *   field  a full-width box on the form surface, in a dialog or a settings row
  *   chip   the small uppercase label on a value ("WORK", "MOBILE")
  *   ghost  text and a chevron with no fill, for a toolbar
  *
- * Options may carry a `group`. Options of one group sit together under a
- * heading, in the order the group first appears. That is what a native
- * `<optgroup>` did for the model picker.
- *
- * @module components/ui/Select
+ * Options of one `group` sit together under a heading, in the order the
+ * group first appears.
  */
 import { useCloseRequest } from "../../hooks/useCloseRequest";
 import React, {

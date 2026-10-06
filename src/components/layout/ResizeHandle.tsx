@@ -1,27 +1,16 @@
 /**
- * ResizeHandle: the edge a person drags to make a pane wider or narrower.
+ * The edge a person drags to resize a pane: a zero-width box on the pane's
+ * edge, inside the pane, its grip reaching over the neighbor. The pane must
+ * paint over its neighbor for the grip to take the pointer. Nothing at rest,
+ * a hairline on hover, the primary while dragging.
  *
- * It sits on the seam between the pane and the content beside it: a
- * zero-width box on the pane's edge, inside the pane (and its landmark), with
- * its grip reaching over the neighbor's edge. The pane is the element the
- * handle is placed in, and it must paint over its neighbor for the grip to
- * take the pointer. It draws nothing at rest. A pointer over
- * it shows a hairline, and a drag shows the line in the primary. Keyboard
- * focus draws the one focus ring, inset, as a 4 px bar on the seam.
+ * A focusable separator (the WAI-ARIA window splitter): the arrows move it by
+ * `RESIZE_STEP`, Shift by `RESIZE_STEP_LARGE`, Home and End go to the bounds,
+ * and a double click restores the default. A press that does not move swaps
+ * the default for the widest width, for one pointer and no drag (WCAG 2.5.7).
  *
- * It is a focusable separator (the WAI-ARIA window splitter): the arrow keys
- * move it by `RESIZE_STEP`, Shift by `RESIZE_STEP_LARGE`, Home and End go to
- * the bounds, and a double click restores the default width. A press that
- * does not move swaps between the default width and the widest the window
- * allows: the way to resize with one pointer and no drag (WCAG 2.5.7).
- *
- * A drag writes one custom property per frame and nothing else. The pointer
- * is captured, so the moves keep arriving as it leaves the handle, and the
- * moves are gathered into one write per animation frame. React hears about
- * the drag once, when it ends. A press does not move focus: a person typing
- * a note can widen the list and keep typing.
- *
- * @module components/layout/ResizeHandle
+ * A drag writes one custom property per animation frame, with the pointer
+ * captured, and tells React once, when it ends. A press does not move focus.
  */
 import React, {
   useEffect,
@@ -38,9 +27,8 @@ export const RESIZE_STEP = 16;
 /** Shift and an arrow key move it this far, in px. */
 export const RESIZE_STEP_LARGE = 64;
 /**
- * A press that does not move waits this long for a second press before it
- * swaps the width. The swap moves the handle from under the pointer, so
- * done at once it would send a double click's second press past the handle.
+ * A still press waits this long for a second press before it swaps the
+ * width: the swap moves the handle from under the pointer.
  */
 export const DOUBLE_PRESS_MS = 300;
 
@@ -56,9 +44,8 @@ interface ResizeHandleProps extends PaneWidthBounds {
 }
 
 /**
- * Keep the resize cursor and stop text selection on the whole page while a
- * drag runs. The pointer leaves the handle as soon as it moves, and every
- * row and link under it has its own cursor. Returns the undo.
+ * Keeps the resize cursor and stops text selection on the whole page while
+ * a drag runs, since the pointer leaves the handle. Returns the undo.
  */
 function holdPage(): () => void {
   const style = document.createElement("style");
@@ -88,10 +75,8 @@ export const ResizeHandle = ({
 }: ResizeHandleProps) => {
   const { initial, min } = bounds;
   const box = useRef<HTMLDivElement>(null);
-  // The pane is the element the handle sits in. A ref on the pane would
-  // not do: React attaches a parent's ref after its children's layout
-  // effects, so on the first commit the width hook would find no pane and
-  // draw no width. The box's own ref is attached by then.
+  // The pane is the handle's parent. Not a ref on the pane: React attaches
+  // a parent's ref after its children's layout effects.
   const paneRef = useMemo<RefObject<HTMLElement | null>>(
     () => ({
       get current() {
@@ -230,16 +215,13 @@ export const ResizeHandle = ({
           cancelSwap();
           commit(initial);
         }}
-        // 4 px just past the seam, and a 12 px grip from the `::after` box
-        // that reaches outward only: the list's letter rail runs to the
-        // seam, and none of its letters is under the grip. The ring is drawn
-        // inset, so it fills the 4 px as one bar.
+        // 4 px past the seam, and a 12 px `::after` grip reaching outward
+        // only, clear of the list's letter rail. The ring is inset.
         className="group absolute inset-y-0 left-0 w-1 cursor-col-resize touch-none select-none focus-visible:-outline-offset-2 after:absolute after:inset-y-0 after:left-0 after:-right-2"
       >
-        {/* The line. A pointer that only crosses the seam shows nothing:
-            the hairline waits one base duration before it fades in. Under
-            the focus ring it takes the ring's color, so the bar stays one
-            bar when the pointer rests on it too. */}
+        {/* The line waits one base duration before it fades in, so a
+            pointer crossing the seam shows nothing. Under the focus ring it
+            takes the ring's color. */}
         <span
           aria-hidden="true"
           className="pointer-events-none absolute inset-y-0 left-1/2 w-0.5 -translate-x-1/2 transition-colors group-hover:bg-outline-variant group-hover:delay-(--dur-base) group-focus-visible:bg-primary group-data-dragging:bg-primary group-data-dragging:delay-0"

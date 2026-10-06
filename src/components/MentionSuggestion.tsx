@@ -116,9 +116,8 @@ const MentionList = forwardRef<
 });
 
 /**
- * The people an @ query names: each typed word starts a word of the name,
- * so "@smi" finds Ada Smith and "@ada s" finds her too. It matched only the
- * start of the full name, so a surname found no one. Eight at most.
+ * The people an @ query names, eight at most: each typed word starts a word
+ * of the name, so "@smi" finds Ada Smith and "@ada s" finds her too.
  */
 export function mentionMatches<T extends { name: string }>(
   people: readonly T[],
@@ -134,22 +133,14 @@ export function mentionMatches<T extends { name: string }>(
 }
 
 /**
- * The @mention suggestion for a tiptap editor.
+ * The @mention suggestion for a tiptap editor. `contacts` is read each time
+ * somebody types @: the editor is created once, maybe before names load.
  *
- * `contacts` is read each time somebody types @, not when the editor is
- * created. An editor is created once, and a list captured then stays empty
- * when the names had not loaded yet.
+ * Inside a dialog the list is placed in the dialog, since a modal makes the
+ * rest of the page inert and a click outside closes it.
  *
- * The list is placed inside the dialog when the editor is in one. A modal
- * dialog makes everything outside it inert: the rest of the page takes no
- * pointer events and is hidden from assistive tech. A list appended to
- * `document.body` could be seen and not clicked, and a click on it counted as
- * a click outside, which closed the dialog.
- *
- * Floating UI places the list under the caret, above it when there is no
- * room below, and follows the caret while the page scrolls. TipTap's
- * suggestion plugin uses the same library. tippy.js did this before. Its
- * last release was in 2021, and its Popper engine's in 2023.
+ * Floating UI places the list under the caret, or above it when there is no
+ * room, and follows the caret as the page scrolls.
  */
 export const getMentionSuggestion = (contacts: () => ContactSlim[]) => ({
   // A space may be part of the query: "@Ada Lo".
@@ -229,8 +220,7 @@ export const getMentionSuggestion = (contacts: () => ContactSlim[]) => ({
           return true;
         }
 
-        // `?? false` matches the old behavior: an undefined return (null ref)
-        // was already treated as falsy by TipTap.
+        // A null ref answers false: the key is not handled.
         return (
           (
             component.ref as {

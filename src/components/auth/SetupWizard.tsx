@@ -1,19 +1,8 @@
 /**
- * SetupWizard — the first-run screen that creates the administrator account.
- *
- * Shown once, on a gated instance nobody can sign in to. Everything else is
- * locked until this is done, so it has to be self-explanatory with no way
- * back and no documentation to hand.
- *
- * It has two stories to tell, and which one depends on `localOwnerPresent`.
- * A fresh install is being set up. An instance that has been running without
- * sign-in is being *secured*: its contacts already exist, they belong to an
- * account nobody can sign in to, and this screen converts that account rather
- * than creating a second one. Nothing is claimed, moved, or lost, and saying
- * so is the difference between confidence and a support question.
- *
- * The fields, their validation and their wording are shared with the register
- * and accept-invitation screens — see `accountForm.tsx`.
+ * The first-run screen that creates the administrator, on a gated instance
+ * nobody can sign in to. With `localOwnerPresent`, the instance ran without
+ * sign-in and is being secured: this converts the account that owns its
+ * contacts, and nothing moves. The fields come from `accountForm.tsx`.
  */
 import React, { useState } from "react";
 import { UserPlus, Loader2 } from "lucide-react";

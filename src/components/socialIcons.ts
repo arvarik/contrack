@@ -1,13 +1,8 @@
-// =============================================================================
-// Social platform icons
-// =============================================================================
-// Lucide 1.0 removed its brand icons. These are the same six drawings from
-// lucide-react 0.546, built with Lucide's own factory, so they take the same
-// props and look exactly as they did.
+// Social platform icons. Lucide 1.0 has no brand icons, so these are its six
+// drawings from lucide-react 0.546, built with Lucide's own factory.
 //
 // The drawings are Lucide's: ISC License, copyright Lucide Contributors, with
 // portions copyright Cole Bemis 2013-2023 as part of Feather (MIT).
-// =============================================================================
 
 import { createLucideIcon } from "lucide-react";
 

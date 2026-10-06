@@ -1,11 +1,6 @@
 /**
- * AccountPhotoField — A round profile photo preview and dropzone.
- *
- * Used in Account settings to choose or change an account photo, and during
- * account creation (wizard, register, join) to stage an optional photo before
- * the first sign-in.
- *
- * @module components/auth/AccountPhotoField
+ * A round photo preview and drop zone, in Account settings and in account
+ * creation, where it stages an optional photo before the first sign-in.
  */
 import React, { useCallback, useEffect, useState } from "react";
 import { useDropzone, type FileRejection } from "react-dropzone";
@@ -145,9 +140,8 @@ export const AccountPhotoField = ({
             className="w-full h-full object-cover rounded-full bg-surface-container-high"
             onError={() => setImgFailed(true)}
           />
-          {/* The camera says the photo is a button. A pointer shows it on
-              hover and the keyboard on focus. A finger has no hover, so on
-              a touch screen it shows at rest. */}
+          {/* The camera marks the photo as a button: on hover, on focus, and
+              at rest on a touch screen. */}
           <div
             className={cn(
               "absolute inset-0 bg-black/25 flex items-center justify-center",

@@ -1,8 +1,4 @@
-/**
- * PullIndicator — Visual feedback component rendered during a pull-to-refresh gesture.
- * Animates the spinner's rotation based on pull progress, and spins continuously
- * while the refresh is in progress.
- */
+/** The pull-to-refresh spinner: it turns with the pull, then spins while refreshing. */
 import { RefreshCw } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -37,8 +33,7 @@ export const PullIndicator = ({
               ? { duration: 0.8, repeat: Infinity, ease: "linear" }
               : { duration: 0 }
           }
-          // A raised circle on the list's near-white pane: the low surface
-          // and a 40 percent icon were all but invisible.
+          // A raised circle, visible on the list's near-white pane.
           className="p-2 rounded-full bg-surface-container-highest shadow-md"
         >
           <RefreshCw

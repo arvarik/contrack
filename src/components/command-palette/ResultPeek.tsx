@@ -1,20 +1,10 @@
 /**
- * ResultPeek — Shift-hold tooltip for deep profile preview in Cmd+K results.
+ * The peek at a highlighted result while Shift is held (after 200 ms): the
+ * score bar, the last interaction, the top three tags and the open
+ * follow-ups, from data the result already has.
  *
- * Appears after 200ms of holding Shift when a search result is focused.
- * Shows enriched metadata that goes beyond what's visible in the result card:
- *   - Relationship score bar (visual gauge)
- *   - Last interaction title + date
- *   - Top 3 tags
- *   - Pending action item count
- *
- * A portal on `document.body`, fixed to the right of the palette. Inside the
- * palette's panel it was clipped: the panel's backdrop filter and its entry
- * transform make it the containing block of anything `fixed` in it, and its
- * `overflow: hidden` cut the card to its last 56 px.
- * Uses data already present in the Contact/SemanticMatch payload (no API calls).
- *
- * @module src/components/command-palette/ResultPeek
+ * A portal on `document.body`: the panel's backdrop filter and transform make
+ * it the containing block of anything `fixed`, and it clips.
  */
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
@@ -24,8 +14,6 @@ import { NOT_TRACKED_TEXT, scoreView } from "../../../shared/scoreBand";
 import { TONE_DOT } from "../../lib/styles";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 import { DURATION, EASE } from "../../lib/motion";
-
-// ─── Types ───────────────────────────────────────────────────────────────────
 
 export interface PeekContact {
   id: string;
@@ -44,13 +32,9 @@ interface ResultPeekProps {
   visible: boolean;
 }
 
-// ─── Component ───────────────────────────────────────────────────────────────
-
 export const ResultPeek = ({ contact, visible }: ResultPeekProps) => {
-  // The same reader as the ring, so the peek and the ring always agree. A
-  // contact nobody tracks has no bar, and neither has one with nothing
-  // logged yet. The bar takes its band's tone (`SCORE_BANDS`), the token the
-  // ring strokes with, so the two agree on the color too.
+  // The ring's reader, so the two agree. No bar for an untracked contact or
+  // one with nothing logged. The bar takes its band's tone (`SCORE_BANDS`).
   const view = contact ? scoreView(contact) : null;
   return createPortal(
     <AnimatePresence>

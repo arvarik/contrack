@@ -6,21 +6,14 @@
  * CONTACTS   (All 5824) (Tracked 79) (Has links 824) (Has email 3270)
  * ```
  *
- * The Enrichment page has two rows (who, and how their research stands),
- * and the Tracked contacts page has two (tracking, and the last talk). A
- * pill counts what it would show beside the other row's choice, so a person
- * sees how big a list is before they press it.
+ * A page may stack rows. A pill counts what it would show beside the other
+ * row's choice.
  *
- * 1. The row is a `role="group"` named by its label, and each pill is a
- *    toggle button with `aria-pressed`, so a screen reader hears the row's
- *    name and which pill is pressed.
- * 2. The pressed pill wears the selected tint (`filterPill`), not a filled
- *    button, like every filter pill in the app. The count is in the pill's
- *    ink at a lighter weight.
- * 3. The label sits above the pills on a phone, where the pills need the
- *    width, and before them from `sm`, level with their first line.
- *
- * @module components/ui/FilterRow
+ * 1. The row is a `role="group"` named by its label, and each pill a toggle
+ *    button with `aria-pressed`.
+ * 2. The pressed pill wears the selected tint (`filterPill`). The count is
+ *    in the pill's ink at a lighter weight.
+ * 3. The label sits above the pills on a phone, and before them from `sm`.
  */
 import React from "react";
 import { filterPill } from "../../lib/styles";
@@ -82,8 +75,7 @@ export function FilterRow<T extends string>({
           >
             {pill.icon}
             {pill.label}
-            {/* The count in the pill's own ink, at a lighter weight than its
-                words. At 70 percent opacity, a pressed pill's count measured
+            {/* The pill's own ink, lighter weight: an opacity would fall
                 under 4.5 to 1 on a card. */}
             <span className="font-medium tabular-nums">
               {counts.get(pill.id) ?? 0}

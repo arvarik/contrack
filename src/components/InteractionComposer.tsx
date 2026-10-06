@@ -1,51 +1,27 @@
 /**
- * InteractionComposer: the one place a note, a call, a meeting or an email is
- * written.
+ * The one place a note, a call, a meeting or an email is written, on the
+ * contact page and, in its `compact` form, in the quick interaction dialog.
  *
- * There used to be two. The contact page had a rich tiptap editor with
- * @mentions and a follow-up line. The quick interaction dialog had a plain
- * textarea with no mentions and no follow-up. The same act behaved two ways,
- * depending on where a person started it. Now both places draw this
- * component, and the dialog asks for its `compact` form.
- *
- * What it draws, top to bottom:
- *
- * 1. The editor. A tiptap instance named "Note", described by the
- *    placeholder for the chosen type, with @mentions of the people in the
- *    network.
+ * Top to bottom:
+ * 1. The editor (tiptap, named "Note"), with @mentions.
  * 2. The follow-up line. A date in it ("next Tuesday at 2pm") becomes a
- *    follow-up on save, and the parsed date shows beside the field. A
- *    weekday is always the next one: on a Monday, "Friday" is this Friday.
- *    The "⌘ Enter to save" hint sits at the end of the line, from `sm`.
- * 3. A message line, only after a Save that cannot go ahead: "Write something
- *    first", a follow-up with no date, or in the dialog "Choose a contact
- *    first".
- * 4. The action bar: the type control (a radiogroup, text from `sm` and
- *    glyphs below) and Save.
+ *    follow-up on save. A weekday is always the next one.
+ * 3. A message line, only after a Save that cannot go ahead.
+ * 4. The action bar: the type control and Save.
  *
- * In the narrow contact layout the composer is `collapsible`: one line, the
- * editor alone, until it takes focus. The page opens on the timeline, not on
- * an empty form.
+ * `collapsible` (the narrow contact layout) shows the editor alone until it
+ * takes focus. Save is always enabled: a Save with nothing to send says what
+ * is missing and puts focus where it can be fixed.
  *
- * Save is always enabled. A disabled button said nothing about why it could
- * not be pressed, and a keyboard user could not reach it to find out. A Save
- * with nothing to send now says what is missing and puts focus where it can
- * be fixed.
- *
- * The rules a save keeps, from the composer this replaces:
- *
+ * A save's rules:
  * - Nothing is cleared until the server has the note, and then only the part
  *   that was sent (`lib/composerSubmission`).
- * - A Save with only a follow-up saves only the follow-up. It used to write
- *   an empty note as well, and that note counted as talking to the person:
- *   their "last contacted" and their score moved for a reminder.
- * - The draft is on disk within a moment of typing, per account and contact
- *   (`lib/composerDrafts`). The dialog's compact composer keeps one draft of
- *   its own, whoever it is for, so Escape, a tap outside or Back closes the
- *   dialog without losing the note: it is there on the next open.
+ * - A Save with only a follow-up saves only the follow-up: an empty note
+ *   would count as talking to the person and move their score.
+ * - The draft is on disk a moment after typing, per account and contact
+ *   (`lib/composerDrafts`). The compact composer keeps one draft of its own,
+ *   so closing the dialog never loses the note.
  * - One request at a time, however Save is pressed.
- *
- * @module components/InteractionComposer
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
@@ -119,11 +95,9 @@ function parseFollowUp(text: string, now = new Date()) {
 }
 
 /**
- * The follow-up in a follow-up line, or null when it names no date.
- *
- * The date is what chrono found. The title is the rest of the line with the
- * date and the small words around it removed, so "Send slides next Tuesday"
- * becomes "Send slides", and a line that is only a date becomes "Follow up".
+ * The follow-up in a follow-up line, or null when it names no date. The
+ * title is the line without the date and its small words: "Send slides next
+ * Tuesday" is "Send slides", and a bare date is "Follow up".
  */
 export function followUpFromText(
   text: string,
@@ -147,11 +121,9 @@ export function followUpFromText(
 }
 
 /**
- * What is left of the follow-up line once the submitted part is removed.
- *
- * The same rule the editor follows. A line that was not touched while the
- * save was out is cleared. A line the person kept typing into keeps only what
- * they added. A line rewritten from scratch is theirs and stays whole.
+ * What is left of the follow-up line once the submitted part goes, by the
+ * editor's rule: an untouched line clears, a line typed into keeps only the
+ * addition, and a rewritten line stays whole.
  */
 function followUpRemainder(current: string, submitted: string): string {
   if (current === submitted) return "";
@@ -177,8 +149,7 @@ const mentions = (contacts: Parameters<typeof getMentionSuggestion>[0]) =>
 
 /**
  * The editor alone, for a note already saved: the timeline's overlay edits
- * with it, so a note keeps its paragraphs and its @mentions. Its text used
- * to open as raw HTML in a plain box.
+ * with it, so a note keeps its paragraphs and its @mentions.
  */
 export const NoteEditor = ({
   html,
@@ -224,17 +195,12 @@ interface InteractionComposerProps {
    * a contact is chosen, and a Save then asks for one.
    */
   contactId: string | null;
-  /**
-   * The dialog's form: no card around it, and one draft for the dialog.
-   * Everything else, the editor, mentions, the follow-up line and the keys,
-   * is the same.
-   */
+  /** The dialog's form: no card around it, and one draft for the dialog. */
   compact?: boolean;
   /**
-   * True when something outside asks the editor to take focus: "Log
-   * interaction" in the contact header, or the dialog once it has a contact.
-   * The composer focuses the editor as soon as it exists and calls
-   * `onFocusHandled`, and the caller sets this back to false.
+   * True when something outside asks the editor to take focus. The composer
+   * focuses it once it exists and calls `onFocusHandled`, and the caller
+   * sets this back to false.
    */
   focusRequested?: boolean;
   onFocusHandled?: () => void;
@@ -243,10 +209,8 @@ interface InteractionComposerProps {
   /** Called when Save is pressed with no contact. The dialog focuses its picker. */
   onContactMissing?: () => void;
   /**
-   * The narrow contact page's form. The composer is one line, the editor
-   * alone, until something in it takes focus. Then the follow-up line,
-   * the type control and Save open under it. It closes again when focus
-   * leaves and there is nothing written.
+   * The narrow contact page's form: the editor alone until something in it
+   * takes focus, and again when focus leaves with nothing written.
    */
   collapsible?: boolean;
 }
@@ -258,10 +222,9 @@ export const InteractionComposer = (props: InteractionComposerProps) => {
     : props.contactId
       ? draftKey(user?.id, props.contactId)
       : null;
-  // Keyed on the draft, so a change of contact or of account replaces the
-  // editor rather than carrying one person's half-written note onto another
-  // page. The unmount flushes the old draft, the mount reads the new one.
-  // The compact composer keeps one editor while its contact is chosen.
+  // Keyed on the draft, so a new contact or account replaces the editor and
+  // a half-written note stays with its person. The compact composer keeps
+  // one editor while its contact is chosen.
   return <Composer key={storageKey} {...props} storageKey={storageKey} />;
 };
 
@@ -279,22 +242,17 @@ const Composer = ({
   const [type, setType] = useState<InteractionKind>(draft?.type ?? "note");
   /**
    * Whether the whole composer shows. Always true unless `collapsible`. A
-   * draft that comes back from disk opens it, so half-written text never
-   * hides behind one line.
+   * draft from disk opens it, so half-written text never hides.
    */
   const [opened, setOpened] = useState(() => !!draft && !isEmptyDraft(draft));
   const expanded = !collapsible || opened;
   const rootRef = useRef<HTMLDivElement>(null);
-  /**
-   * Mirrors `type` for the Placeholder callback and for the submit path, both
-   * of which run outside React's render cycle and so cannot close over state.
-   */
+  /** `type`, for the placeholder and the submit path, which run outside render. */
   const typeRef = useRef<InteractionKind>(type);
   const { data: allContacts = [] } = useContactNames();
   /**
-   * The people @ can mention, read at the moment somebody types @. The
-   * editor is created once, so a list captured then would stay empty when
-   * the names had not loaded yet.
+   * The people @ can mention, read when somebody types @. The editor is
+   * created once, maybe before the names load.
    */
   const contactsRef = useRef(allContacts);
   useEffect(() => {
@@ -311,13 +269,9 @@ const Composer = ({
   const messageId = React.useId();
 
   /**
-   * Refs for everything the submit path reads.
-   *
-   * The Mod-Enter shortcut is registered once, when the editor is created,
-   * with whatever closures the first render had. Read through state, it sent
-   * a "note" with no follow-up whatever the screen showed. Read through refs
-   * it sends what is there. `pendingRef` is the duplicate guard for the same
-   * reason: the button reads state, the shortcut cannot.
+   * Refs for everything the submit path reads: the Mod-Enter shortcut is
+   * registered once, with the first render's closures. `pendingRef` is the
+   * duplicate guard for the same reason.
    */
   const editorRef = useRef<Editor | null>(null);
   const pendingRef = useRef(false);
@@ -330,11 +284,9 @@ const Composer = ({
   /** The editor's HTML as of its last update, readable after it is gone. */
   const lastHtmlRef = useRef(draft?.html ?? "");
 
-  // ── The draft ──────────────────────────────────────────────────────────
-  // Written a moment after the last keystroke, and at once when the page is
-  // hidden, unloaded, or this composer leaves the tree. A session that
-  // expires while a save is out ends with the gate replacing the whole app,
-  // and the unmount flush is what puts the note on disk before that.
+  // The draft: written a moment after the last keystroke, and at once when
+  // the page hides or unloads or this composer unmounts. An expired session
+  // replaces the whole app, and the unmount flush keeps the note.
   const writeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const persistNow = useCallback(() => {
     if (writeTimer.current) {
@@ -394,7 +346,7 @@ const Composer = ({
       editor.commands.focus();
       return;
     }
-    // A follow-up needs a date: a line with none used to vanish on Save.
+    // A follow-up needs a date, or a line with none would vanish on Save.
     const followUpItem = followUpFromText(followUp);
     if (followUp.trim() && !followUpItem) {
       setProblem("date");
@@ -463,9 +415,8 @@ const Composer = ({
     submitRef.current = submit;
   }, [submit]);
 
-  // Created once. The shortcut reaches the current submit through the ref,
-  // so it does not matter that the editor keeps the first render's copy. It
-  // also has to win over StarterKit's hard break, which binds the same keys.
+  // Created once: the shortcut reaches the current submit through the ref.
+  // It must win over StarterKit's hard break, which binds the same keys.
   const [SubmitExtension] = useState(() =>
     Extension.create({
       name: "submitShortcut",
@@ -484,9 +435,7 @@ const Composer = ({
     extensions: [
       StarterKit,
       Placeholder.configure({
-        // A function, not a string: it is re-evaluated whenever the
-        // placeholder decoration is recomputed, so switching interaction type
-        // needs no reach into the editor's internals.
+        // A function, re-read whenever decorations are recomputed.
         placeholder: () => PLACEHOLDERS[typeRef.current],
         showOnlyWhenEditable: false,
       }),
@@ -502,15 +451,11 @@ const Composer = ({
     },
     editorProps: {
       /**
-       * A name and a description for the contenteditable.
+       * A name and a description for the contenteditable. The placeholder is
+       * a CSS decoration a screen reader skips, so the description points at
+       * a hidden copy. Set once, so the id must not change.
        *
-       * Without them a screen reader lands on an unnamed, empty region. The
-       * placeholder is a CSS decoration, so it is not read either, and the
-       * description points at a hidden copy of it. These attributes are set
-       * once, when the editor is created, so the id must not change.
-       *
-       * 16 px text on a phone: iOS zooms the page when a smaller field takes
-       * focus, which in the dialog's bottom sheet moves Save off the screen.
+       * 16 px text on a phone, or iOS zooms on focus.
        */
       attributes: {
         role: "textbox",
@@ -535,12 +480,9 @@ const Composer = ({
   }, [focusRequested, editor, onFocusHandled]);
 
   /*
-   * Refresh the placeholder when the interaction type changes.
-   *
-   * The placeholder is a function (see Placeholder.configure above), so all
-   * this has to do is ask ProseMirror to recompute decorations. It used to
-   * reach into `editor.extensionManager`, which is null until the editor has
-   * finished initializing, and that crashed the contact page.
+   * Refreshes the placeholder when the type changes, by asking ProseMirror
+   * to recompute decorations. Not through `editor.extensionManager`, which
+   * is null until the editor finishes initializing.
    */
   useEffect(() => {
     typeRef.current = type;
@@ -564,8 +506,7 @@ const Composer = ({
 
   /**
    * Focus leaving a collapsible composer closes it, when nothing is written
-   * and no save is out. Focus moving between the editor, the next-action
-   * line, the type control and Save keeps it open.
+   * and no save is out. Focus moving inside it keeps it open.
    */
   const onBlur = (event: React.FocusEvent) => {
     if (!collapsible) return;
@@ -594,16 +535,14 @@ const Composer = ({
           : cn(
               COMPOSER,
               "p-0 flex flex-col",
-              // `clip` and not `hidden` when the bar can stick: an overflow
-              // that hides makes the card the bar's scroller, and the bar
-              // would never move.
+              // `clip`, not `hidden`, when the bar can stick: `hidden` makes
+              // the card the bar's scroller.
               collapsible ? "overflow-clip" : "overflow-hidden",
             ),
       )}
     >
-      {/* Editor area. While collapsed, a tap anywhere on the line focuses the
-          editor, not only a tap on its text. The editor is the keyboard's way
-          in, so the area needs no key handler and no role of its own. */}
+      {/* While collapsed, a tap anywhere on the line focuses the editor. The
+          editor is the keyboard's way in, so the area needs no key handler. */}
       {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
       <div
         className={cn(
@@ -654,9 +593,8 @@ const Composer = ({
             <input
               ref={followUpInput}
               aria-label="Follow-up"
-              // The phone keyboard's return key reads Done and puts the
-              // keyboard away, so Save is in view. On a desktop, Enter here
-              // still does nothing and ⌘ Enter saves.
+              // A phone's return key reads Done and puts the keyboard away,
+              // so Save is in view.
               enterKeyHint="done"
               onKeyDown={(event) => {
                 if (
@@ -673,8 +611,7 @@ const Composer = ({
                 setFollowUpText(e.target.value);
                 setProblem(null);
               }}
-              // Short enough for a phone's field: the long example was cut
-              // mid-word at 390 px.
+              // Short enough for a phone's field.
               placeholder="Follow-up, like call back Tuesday"
               // A field draws no `::after`, so the 44 px tap floor on a phone
               // has to be the field's own height. 16 px there stops iOS
@@ -687,9 +624,7 @@ const Composer = ({
               </span>
             )}
           </div>
-          {/* Here and not beside Save: in the dialog the type control and
-              Save already fill the bar. Phones have no keyboard to press it
-              with. */}
+          {/* Not beside Save: in the dialog the bar is full. */}
           <span className="hidden sm:inline-flex items-center gap-1 shrink-0 text-xs text-on-surface-variant whitespace-nowrap">
             <kbd className={KBD_SM}>{MOD_KEY}</kbd>
             <kbd className={KBD_SM}>Enter</kbd>
@@ -715,10 +650,8 @@ const Composer = ({
           compact
             ? "px-5 py-3.5 mt-4 bg-surface-container-low sticky bottom-0 sm:static"
             : "bg-surface-container-low/40 px-5 py-3",
-          // On a phone a long note pushes Save down the page. The bar then
-          // sticks right on top of the tab bar, which is `md:hidden`, so Save
-          // stays in reach while the note is written. While the keyboard is
-          // up the tab bar steps aside, and the bar sits on the keyboard
+          // On a phone the bar sticks on top of the tab bar, or on the
+          // keyboard while it is up, so Save stays in reach
           // (`--tabbar-space` and `--keyboard-inset` in index.css).
           collapsible &&
             "sticky bottom-[calc(var(--tabbar-space)+var(--keyboard-inset))] md:static z-10 bg-surface-container-low",
