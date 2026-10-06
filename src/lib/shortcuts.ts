@@ -81,7 +81,6 @@ export const SHORTCUT_GROUP_ORDER: readonly string[] = [
   NAMES.map.label,
   "Contact",
   NAMES.ask.label,
-  NAMES.duplicates.label,
   NAMES.possibleDuplicates.label,
 ];
 
@@ -424,63 +423,27 @@ export const SHORTCUTS: readonly Shortcut[] = [
     page: "/search",
   },
 
-  // Duplicates, in the swipe view. The arrow and the letter do the same
-  // thing in one handler, so an entry with a letter in it is a bare letter.
+  // Possible duplicates, one group at a time. The arrow and the letter do
+  // the same thing in one handler, so an entry with a letter in it is a bare
+  // letter.
   {
-    group: NAMES.duplicates.label,
-    keys: ["→", "L"],
-    description: "Merge into the primary",
-    bareLetter: true,
-    page: "/settings/duplicates",
-  },
-  {
-    group: NAMES.duplicates.label,
-    keys: ["←", "H"],
-    description: "Keep separate",
-    bareLetter: true,
-    page: "/settings/duplicates",
-  },
-  {
-    group: NAMES.duplicates.label,
+    group: NAMES.possibleDuplicates.label,
     keys: ["↓", "J"],
     description: "Next group",
     bareLetter: true,
-    page: "/settings/duplicates",
-  },
-  {
-    group: NAMES.duplicates.label,
-    keys: ["↑", "K"],
-    description: "Previous group",
-    bareLetter: true,
-    page: "/settings/duplicates",
-  },
-  {
-    group: NAMES.duplicates.label,
-    keys: [MOD_KEY, "Z"],
-    description: "Undo the last skip",
-    bareLetter: false,
-    page: "/settings/duplicates",
-  },
-
-  // The Possible duplicates queue, one pair of rows at a time.
-  {
-    group: NAMES.possibleDuplicates.label,
-    keys: ["↓", "J"],
-    description: "Next pair",
-    bareLetter: true,
     page: "/pulse/duplicates",
   },
   {
     group: NAMES.possibleDuplicates.label,
     keys: ["↑", "K"],
-    description: "Previous pair",
+    description: "Previous group",
     bareLetter: true,
     page: "/pulse/duplicates",
   },
   {
     group: NAMES.possibleDuplicates.label,
     keys: ["→", "L"],
-    description: "Merge the pair",
+    description: "Merge into the contact to keep",
     bareLetter: true,
     page: "/pulse/duplicates",
   },
@@ -493,9 +456,9 @@ export const SHORTCUTS: readonly Shortcut[] = [
   },
   {
     group: NAMES.possibleDuplicates.label,
-    keys: ["Space"],
-    description: "Select the pair",
-    bareLetter: false,
+    keys: ["Z"],
+    description: "Undo the last decision",
+    bareLetter: true,
     page: "/pulse/duplicates",
   },
 ];

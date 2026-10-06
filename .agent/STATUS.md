@@ -57,10 +57,14 @@
   path is closed (future interaction dates are refused, and
   `lastContactedAt` is clamped to now). The formula is unchanged, because
   smoothing it moves every score and no eval shows which numbers are better.
-- **Large components.** `src/views/dedupe/DedupeView.tsx` (842 lines),
-  `src/views/dedupe/components/SuggestionReviewQueue.tsx` (1,089) and
-  `src/components/command-palette/CommandPalette.tsx` (1,269) each need a
-  refactor of their own.
+- **Large components.** `src/components/command-palette/CommandPalette.tsx`
+  (1,269 lines) needs a refactor of its own. The duplicates screens were
+  rebuilt as one review list, and their largest file is now
+  `src/views/dedupe/components/DuplicateQueue.tsx` (about 750).
+- **Undo of a merge.** It still sets `isPrimary` off on an email or a phone
+  that moved, and an undo that fails halfway in the snapshot restore still
+  counts as done. Both were found in the duplicates review and left for a
+  change of their own.
 - **Test-only seams.** The ones PR #147 listed are gone. A few exports still
   exist only so a test can reset module state, such as `resetPendingDeletes`
   in `src/lib/pendingDeletes.ts`, and the `__reset*` functions of the rate

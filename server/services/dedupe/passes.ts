@@ -21,14 +21,22 @@ import {
   NAME_CONFIDENCE,
   weighAnchor,
   weighName,
-  withCaveat,
+  weighNameOnly,
 } from "./policy.ts";
 import {
   computeMatchSignals,
   computeCompositeScore,
   classifyPair,
+  unverifiedConfidence,
 } from "./scoring.ts";
 import { evaluateBatchWithAI } from "./ai.ts";
+import {
+  REASON,
+  buildScoringReasoning,
+  crossSourceReason,
+  nicknameReason,
+  scoringCaveat,
+} from "./reasons.ts";
 import type {
   RawPair,
   PassContext,
@@ -39,6 +47,10 @@ import type {
 import { getErrorMessage } from "../../utils/helpers.ts";
 
 const MEGA_BLOCK_THRESHOLD = 100;
+
+/** The progress line while a model checks the unclear pairs. */
+const askingAi = (count: number): string =>
+  `Asking AI about ${count} ${count === 1 ? "pair" : "pairs"}`;
 const AI_BATCH_SIZE = 12;
 const AI_BATCH_TIMEOUT_MS = 30_000;
 
@@ -59,38 +71,6 @@ async function withTimeout<T>(
   } finally {
     clearTimeout(timer!);
   }
-}
-
-export function buildScoringReasoning(
-  signals: MatchSignals,
-  score: number,
-  rawA: ContactRow | undefined,
-  rawB: ContactRow | undefined,
-): string {
-  const parts: string[] = [];
-
-  if (signals.nameExactMatch) parts.push(`exact name match`);
-  else if (signals.nicknameMatch)
-    parts.push(`nickname match ("${rawA?.name}" ↔ "${rawB?.name}")`);
-  else if (signals.nameJaroWinkler >= 0.85)
-    parts.push(
-      `high name similarity (${(signals.nameJaroWinkler * 100).toFixed(0)}%)`,
-    );
-
-  if (signals.nameMetaphoneMatch) parts.push("phonetically similar");
-  if (signals.companyMatch) parts.push("same company");
-  if (signals.locationOverlap) parts.push("same location");
-  if (signals.isCrossSource) parts.push("different import sources");
-  if (signals.embeddingSimilarity > 0.5)
-    parts.push(
-      `embedding similarity ${(signals.embeddingSimilarity * 100).toFixed(0)}%`,
-    );
-
-  const reasoning =
-    parts.length > 0
-      ? parts.join(", ")
-      : `composite score ${(score * 100).toFixed(0)}%`;
-  return `${reasoning.charAt(0).toUpperCase()}${reasoning.slice(1)} (score: ${(score * 100).toFixed(0)}%)`;
 }
 
 export function runDeterministicPass(ctx: PassContext): RawPair[] {
@@ -195,8 +175,9 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
       idB: m.id2,
       matchType: "email",
       confidence: weighed.confidence,
-      reasoning: withCaveat(`Shared email address: ${m.matchedField}`, weighed),
+      reasoning: REASON.email,
       matchedField: m.matchedField,
+      caveat: weighed.caveat,
     });
   }
 
@@ -243,8 +224,51 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
           idB: unique[j],
           matchType: "phone",
           confidence: weighed.confidence,
-          reasoning: withCaveat(`Shared phone number: ${origPhone}`, weighed),
+          reasoning: REASON.phone,
           matchedField: origPhone,
+          caveat: weighed.caveat,
+        });
+      }
+    }
+  }
+
+  // D2b: The same personal profile link.
+  //
+  // One LinkedIn page on two records is one person written down twice,
+  // whatever the two names say, and no name rule sees "Priya R." beside
+  // "Priya Raman". The context loaded the links normalized and kept only
+  // personal profiles (`profileUrlsByContact`), so a trailing slash or a
+  // country subdomain is the same link, and a company page is no identity.
+  // Weighed like the other anchors: a link on three records is worth a
+  // little less, and two different first names cap the pair for review.
+  const bySocial = new Map<string, string[]>();
+  for (const [contactId, urls] of ctx.socialUrlsByContact) {
+    if (!contactMap.has(contactId)) continue;
+    for (const url of new Set(urls)) {
+      if (!bySocial.has(url)) bySocial.set(url, []);
+      bySocial.get(url)!.push(contactId);
+    }
+  }
+  for (const [url, contactIds] of bySocial) {
+    const unique = [...new Set(contactIds)].sort();
+    if (unique.length < 2) continue;
+    for (let i = 0; i < unique.length; i++) {
+      for (let j = i + 1; j < unique.length; j++) {
+        const pk = pairKey(unique[i], unique[j]);
+        if (skip(pk)) continue;
+        const nA = normalizedMap.get(unique[i]);
+        const nB = normalizedMap.get(unique[j]);
+        if (!nA || !nB) continue;
+        seenPairs.add(pk);
+        const weighed = weighAnchor("social", nA, nB, unique.length);
+        pairs.push({
+          idA: unique[i],
+          idB: unique[j],
+          matchType: "social",
+          confidence: weighed.confidence,
+          reasoning: REASON.social,
+          matchedField: url,
+          caveat: weighed.caveat,
         });
       }
     }
@@ -340,7 +364,12 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
 
     // A name three contacts carry is a common name, and each carrier beyond
     // the pair costs the match a little. Same table and same weighing as the
-    // import path.
+    // import path. Without the company, the name is the whole claim, so a
+    // different employer or city on the two records caps it for review.
+    const nameOnly = (base: number) =>
+      nA && nB
+        ? weighNameOnly(base, m.carriers, nA, nB)
+        : weighName(base, m.carriers);
     if (sameCompany) {
       const weighed = weighName(NAME_CONFIDENCE.nameCompany, m.carriers);
       pairs.push({
@@ -348,31 +377,28 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
         idB: m.id2,
         matchType: "name_company",
         confidence: weighed.confidence,
-        reasoning: withCaveat(
-          `Exact name match "${m.name1}" with same company`,
-          weighed,
-        ),
+        reasoning: REASON.nameCompany,
+        caveat: weighed.caveat,
       });
     } else if (isCrossSource) {
-      const weighed = weighName(NAME_CONFIDENCE.crossSource, m.carriers);
+      const weighed = nameOnly(NAME_CONFIDENCE.crossSource);
       pairs.push({
         idA: m.id1,
         idB: m.id2,
         matchType: "cross_source",
         confidence: weighed.confidence,
-        reasoning: withCaveat(
-          `Exact name match "${m.name1}" from different sources (${[...srcA!].join(", ")} ↔ ${[...srcB!].join(", ")})`,
-          weighed,
-        ),
+        reasoning: crossSourceReason([...srcA!].sort(), [...srcB!].sort()),
+        caveat: weighed.caveat,
       });
     } else {
-      const weighed = weighName(NAME_CONFIDENCE.name, m.carriers);
+      const weighed = nameOnly(NAME_CONFIDENCE.name);
       pairs.push({
         idA: m.id1,
         idB: m.id2,
         matchType: "name",
         confidence: weighed.confidence,
-        reasoning: withCaveat(`Exact name match: "${m.name1}"`, weighed),
+        reasoning: REASON.name,
+        caveat: weighed.caveat,
       });
     }
   }
@@ -399,14 +425,14 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
 
         if (isNicknameMatch(a.nameTokens.join(" "), b.nameTokens.join(" "))) {
           seenPairs.add(pk);
-          const rawA = contactMap.get(a.id);
-          const rawB = contactMap.get(b.id);
+          const weighed = weighNameOnly(NAME_CONFIDENCE.nickname, 2, a, b);
           pairs.push({
             idA: a.id,
             idB: b.id,
             matchType: "nickname",
-            confidence: NAME_CONFIDENCE.nickname,
-            reasoning: `Nickname match: "${rawA?.name}" ↔ "${rawB?.name}"`,
+            confidence: weighed.confidence,
+            reasoning: nicknameReason(a.firstNameNorm, b.firstNameNorm),
+            caveat: weighed.caveat,
           });
           continue;
         }
@@ -426,14 +452,14 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
         // this much.
         if (isMiddleNameExtension(a.nameTokens, b.nameTokens)) {
           seenPairs.add(pk);
-          const rawA = contactMap.get(a.id);
-          const rawB = contactMap.get(b.id);
+          const weighed = weighNameOnly(NAME_CONFIDENCE.middleName, 2, a, b);
           pairs.push({
             idA: a.id,
             idB: b.id,
             matchType: "middle_name",
-            confidence: NAME_CONFIDENCE.middleName,
-            reasoning: `Same name with a middle name added: "${rawA?.name}" ↔ "${rawB?.name}"`,
+            confidence: weighed.confidence,
+            reasoning: REASON.middleName,
+            caveat: weighed.caveat,
           });
         }
       }
@@ -441,7 +467,10 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
   }
 
   const d1d2 = pairs.filter(
-    (p) => p.matchType === "email" || p.matchType === "phone",
+    (p) =>
+      p.matchType === "email" ||
+      p.matchType === "phone" ||
+      p.matchType === "social",
   ).length;
   const d3d6 = pairs.length - d1d2;
   log.info(
@@ -465,7 +494,7 @@ export async function runFunnelPass(
   if (scanId) {
     dedupeQueue.update(scanId, {
       phase: "blocking",
-      phaseName: "Building candidate blocks…",
+      phaseName: "Comparing close pairs",
     });
   }
 
@@ -515,7 +544,7 @@ export async function runFunnelPass(
   if (scanId) {
     dedupeQueue.update(scanId, {
       blockingCandidates: allCandidates.length,
-      phaseName: `Scoring ${allCandidates.length} candidate pairs…`,
+      phaseName: "Comparing close pairs",
       phase: "scoring",
     });
   }
@@ -570,14 +599,13 @@ export async function runFunnelPass(
 
     if (classification === "auto") {
       seenPairs.add(pairKey(candidate.idA, candidate.idB));
-      const rawA = ctx.contactMap.get(candidate.idA);
-      const rawB = ctx.contactMap.get(candidate.idB);
       pairs.push({
         idA: candidate.idA,
         idB: candidate.idB,
         matchType: "fuzzy",
         confidence: score,
-        reasoning: buildScoringReasoning(signals, score, rawA, rawB),
+        reasoning: buildScoringReasoning(signals),
+        caveat: scoringCaveat(signals),
       });
       autoCount++;
     } else if (classification === "ai") {
@@ -600,7 +628,7 @@ export async function runFunnelPass(
     if (scanId) {
       dedupeQueue.update(scanId, {
         phase: "ai",
-        phaseName: `Verifying ${aiQueue.length} ambiguous pairs via AI…`,
+        phaseName: askingAi(aiQueue.length),
       });
     }
 
@@ -624,7 +652,7 @@ export async function runFunnelPass(
 
       if (scanId) {
         dedupeQueue.update(scanId, {
-          phaseName: `AI verification batch ${batchIdx + 1}/${totalBatches}…`,
+          phaseName: askingAi(aiCandidates.length),
           aiEvaluated: start,
         });
       }
@@ -666,26 +694,28 @@ export async function runFunnelPass(
               idB: candidate.b.id,
               matchType: "fuzzy",
               confidence: candidate.score * 0.85,
-              reasoning: `High composite score (${(candidate.score * 100).toFixed(0)}%). AI unavailable.`,
+              reasoning: buildScoringReasoning(candidate.signals),
+              caveat: scoringCaveat(candidate.signals),
             });
           }
         }
       }
     }
   } else if (aiQueue.length > 0) {
+    // No model to ask: the strongest pairs stay as suggestions, weighed down,
+    // by the same rule the import check and the new-contact check use.
     for (const item of aiQueue) {
-      if (item.score >= 0.75) {
-        const rawA = ctx.contactMap.get(item.pair.idA);
-        const rawB = ctx.contactMap.get(item.pair.idB);
-        seenPairs.add(pairKey(item.pair.idA, item.pair.idB));
-        pairs.push({
-          idA: item.pair.idA,
-          idB: item.pair.idB,
-          matchType: "fuzzy",
-          confidence: item.score * 0.7,
-          reasoning: `${buildScoringReasoning(item.signals, item.score, rawA, rawB)} (AI unavailable)`,
-        });
-      }
+      const confidence = unverifiedConfidence(item.score);
+      if (confidence === null) continue;
+      seenPairs.add(pairKey(item.pair.idA, item.pair.idB));
+      pairs.push({
+        idA: item.pair.idA,
+        idB: item.pair.idB,
+        matchType: "fuzzy",
+        confidence,
+        reasoning: buildScoringReasoning(item.signals),
+        caveat: scoringCaveat(item.signals),
+      });
     }
   }
 

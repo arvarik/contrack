@@ -16,30 +16,56 @@ import {
   REVIEW_CEILING,
   WEAKEST_CLAIM,
   carriersOf,
+  contextConflict,
   countValues,
   firstNamesContradict,
   generationsContradict,
   namesContradict,
+  reasonWithCaveat,
   thresholdForPreset,
   weaken,
   weighAnchor,
   weighClaim,
   weighName,
-  withCaveat,
+  weighNameOnly,
 } from "../../../../server/services/dedupe/policy.ts";
-import { normalizeContact } from "../../../../server/services/dedupe/normalization.ts";
+import {
+  isPersonalProfile,
+  normalizeContact,
+  normalizeProfileUrl,
+} from "../../../../server/services/dedupe/normalization.ts";
 import { generationOf } from "../../../../server/utils/nlp/names.ts";
-import { THRESHOLD_AI } from "../../../../server/services/dedupe/scoring.ts";
+import {
+  THRESHOLD_AI,
+  computeCompositeScore,
+  computeMatchSignals,
+  unverifiedConfidence,
+} from "../../../../server/services/dedupe/scoring.ts";
+import {
+  buildScoringReasoning,
+  crossSourceReason,
+  nicknameReason,
+} from "../../../../server/services/dedupe/reasons.ts";
 
-/** A normalized contact from a name and, optionally, a company. */
+/** A normalized contact from a name and, optionally, a company and a city. */
 function person(
   name: string,
-  extra: { company?: string; emails?: string[]; phones?: string[] } = {},
+  extra: {
+    company?: string;
+    location?: string;
+    emails?: string[];
+    phones?: string[];
+  } = {},
 ) {
   // Tags and interests are passed empty rather than left out: absent, the
   // normalizer reads them from the database, and the unit project has none.
   return normalizeContact(
-    { id: name, name, company: extra.company ?? null },
+    {
+      id: name,
+      name,
+      company: extra.company ?? null,
+      location: extra.location ?? null,
+    },
     (extra.emails ?? []).map((email) => ({ email })),
     (extra.phones ?? []).map((phone) => ({ phone })),
     [],
@@ -184,25 +210,36 @@ describe("weighAnchor and weighName", () => {
     expect(weighAnchor("phone", a, b, 2).confidence).toBe(
       ANCHOR_CONFIDENCE.phone,
     );
-    expect(
-      withCaveat("Shared email address", weighAnchor("email", a, b, 2)),
-    ).toBe("Shared email address");
+    expect(reasonWithCaveat("Same email address", null)).toBe(
+      "Same email address",
+    );
   });
 
-  it("counts the carriers, and names both reasons when both apply", () => {
+  it("counts the carriers, and names both cautions when both apply", () => {
     const a = person("Ada Twin", { phones: ["+1 555 0142"] });
     const b = person("Ben Twin", { phones: ["+1 555 0142"] });
     const shared = weighAnchor("phone", a, b, 3);
     expect(shared.confidence).toBe(REVIEW_CEILING);
     expect(shared.caveat).toBe(
-      '3 contacts carry this number, and the first names differ ("ada" ↔ "ben"), so review this pair',
+      "First names differ: Ada and Ben. 3 contacts share this phone number",
     );
 
     const same = weighAnchor("phone", a, person("A. Twin"), 3);
     expect(same.confidence).toBe(0.92);
-    expect(same.caveat).toBe(
-      "3 contacts carry this number, so review this pair",
+    expect(same.caveat).toBe("3 contacts share this phone number");
+    expect(reasonWithCaveat("Same phone number", same.caveat)).toBe(
+      "Same phone number. 3 contacts share this phone number",
     );
+  });
+
+  it("names the two generations as people write them", () => {
+    const caveat = weighAnchor(
+      "email",
+      person("Robert Hale Sr.", { emails: ["r@example.com"] }),
+      person("Robert Hale Jr.", { emails: ["r@example.com"] }),
+      2,
+    ).caveat;
+    expect(caveat).toBe("One is Jr. and the other Sr.");
   });
 
   it("weighs a name by how many contacts carry it", () => {
@@ -212,9 +249,198 @@ describe("weighAnchor and weighName", () => {
     });
     expect(weighName(NAME_CONFIDENCE.nameCompany, 3)).toEqual({
       confidence: 0.92,
-      caveat: "3 contacts carry this name, so review this pair",
+      caveat: "3 contacts share this name",
     });
     expect(weighName(NAME_CONFIDENCE.name, 2).confidence).toBe(0.9);
+  });
+});
+
+describe("a match on the name alone", () => {
+  const nurse = person("Chris Navarro", {
+    company: "Adatum",
+    location: "Boston, MA",
+  });
+
+  it("waits for a person when the companies and the cities differ", () => {
+    const banker = person("Chris Navarro", {
+      company: "Woodgrove Bank",
+      location: "Miami, FL",
+    });
+    expect(weighNameOnly(NAME_CONFIDENCE.name, 2, nurse, banker)).toEqual({
+      confidence: REVIEW_CEILING,
+      caveat: "Different companies and cities",
+    });
+    // Below the eager preset, so no preset merges it.
+    expect(REVIEW_CEILING).toBeLessThan(PRESET_THRESHOLDS.aggressive);
+  });
+
+  it("names the one fact that differs", () => {
+    expect(
+      weighNameOnly(
+        NAME_CONFIDENCE.name,
+        2,
+        nurse,
+        person("Chris Navarro", { company: "Woodgrove Bank" }),
+      ).caveat,
+    ).toBe("Different companies");
+    expect(
+      weighNameOnly(
+        NAME_CONFIDENCE.crossSource,
+        2,
+        nurse,
+        person("Chris Navarro", { location: "Miami" }),
+      ),
+    ).toEqual({ confidence: REVIEW_CEILING, caveat: "Different cities" });
+  });
+
+  it("keeps its number when a fact is missing on one side or says the same", () => {
+    for (const other of [
+      person("Chris Navarro"),
+      person("Chris Navarro", { company: "Adatum Ltd", location: "Boston" }),
+      person("Chris Navarro", {
+        company: "Adatum Group",
+        location: "Greater Boston Area",
+      }),
+    ]) {
+      expect(weighNameOnly(NAME_CONFIDENCE.name, 2, nurse, other)).toEqual({
+        confidence: NAME_CONFIDENCE.name,
+        caveat: null,
+      });
+    }
+  });
+
+  it("stops a nickname between two generations", () => {
+    const weighed = weighNameOnly(
+      NAME_CONFIDENCE.nickname,
+      2,
+      person("Robert Hale Sr."),
+      person("Bob Hale Jr."),
+    );
+    expect(weighed.confidence).toBe(REVIEW_CEILING);
+    expect(weighed.caveat).toBe("One is Jr. and the other Sr.");
+  });
+});
+
+describe("contextConflict", () => {
+  it("reads a near spelling and the city part as the same place", () => {
+    expect(
+      contextConflict(
+        person("Ada Quill", { company: "Northwind", location: "Milan, Italy" }),
+        person("Ada Quill", { company: "Northwinds", location: "Milano" }),
+      ),
+    ).toEqual({ company: false, city: false });
+    expect(
+      contextConflict(
+        person("Ada Quill", { location: "Austin" }),
+        person("Ada Quill", { location: "Austin, TX" }),
+      ),
+    ).toEqual({ company: false, city: false });
+  });
+
+  it("finds two employers and two cities", () => {
+    expect(
+      contextConflict(
+        person("Ada Quill", { company: "Fabrikam", location: "Boston" }),
+        person("Ada Quill", { company: "Contoso", location: "Austin" }),
+      ),
+    ).toEqual({ company: true, city: true });
+  });
+});
+
+describe("profile links", () => {
+  it("reduces one page written several ways to one link", () => {
+    const forms = [
+      "https://www.linkedin.com/in/priya-raman-42",
+      "https://www.linkedin.com/in/priya-raman-42/",
+      "http://uk.linkedin.com/in/Priya-Raman-42?trk=profile",
+      "linkedin.com/in/priya-raman-42/en",
+      "https://m.linkedin.com/in/priya%2Draman%2D42#about",
+    ];
+    for (const form of forms) {
+      expect(normalizeProfileUrl(form), form).toBe(
+        "linkedin.com/in/priya-raman-42",
+      );
+    }
+    expect(normalizeProfileUrl("https://github.com/RowanVale/")).toBe(
+      "github.com/rowanvale",
+    );
+    expect(
+      normalizeProfileUrl("https://www.facebook.com/profile.php?id=1234&ref=x"),
+    ).toBe("facebook.com/profile.php?id=1234");
+  });
+
+  it("counts a person's page and not a company's or a site's", () => {
+    expect(isPersonalProfile("linkedin.com/in/priya-raman-42")).toBe(true);
+    expect(isPersonalProfile("github.com/rowanvale")).toBe(true);
+    expect(isPersonalProfile("linkedin.com/company/northwind")).toBe(false);
+    expect(isPersonalProfile("uk.linkedin.com/school/example")).toBe(false);
+    expect(isPersonalProfile("facebook.com/pages/northwind")).toBe(false);
+    expect(isPersonalProfile("medium.com")).toBe(false);
+  });
+});
+
+describe("the funnel's score", () => {
+  /** Signals for two contacts at one company with alike profiles. */
+  function signals(nameA: string, nameB: string, embedding = 0.95) {
+    return computeMatchSignals(
+      person(nameA, { company: "Northwind" }),
+      person(nameB, { company: "Northwind" }),
+      embedding,
+      false,
+    );
+  }
+
+  it("gives two different first names nothing without a shared identifier", () => {
+    const twoPeople = signals("Josh Marlow", "Sam Marlow");
+    expect(twoPeople.namesContradict).toBe(true);
+    expect(computeCompositeScore(twoPeople)).toBe(0);
+    // A near spelling of one name still scores.
+    expect(
+      computeCompositeScore(signals("Jonathan Smyth", "Jonathon Smith")),
+    ).toBeGreaterThan(THRESHOLD_AI);
+  });
+
+  it("hears a shared first name as alike only when the last names agree", () => {
+    expect(
+      signals("Priyanka Narayan", "Priyanka Desai").nameMetaphoneMatch,
+    ).toBe(false);
+    expect(signals("Jonathan Smith", "Jonathon Smyth").nameMetaphoneMatch).toBe(
+      true,
+    );
+  });
+
+  it("keeps an unclear pair no model checked from 0.75, at 0.7 of its score", () => {
+    expect(unverifiedConfidence(0.95)).toBe(0.95);
+    expect(unverifiedConfidence(0.8)).toBeCloseTo(0.56, 5);
+    expect(unverifiedConfidence(0.74)).toBeNull();
+    expect(unverifiedConfidence(0.5)).toBeNull();
+  });
+});
+
+describe("the reasons", () => {
+  it("say what matched in plain words, with no numbers", () => {
+    expect(crossSourceReason(["linkedin"], ["google"])).toBe(
+      "Same name, from Google and LinkedIn",
+    );
+    expect(crossSourceReason(["csv"], ["apple"])).toBe(
+      "Same name, from Apple and a CSV file",
+    );
+    expect(nicknameReason("robert", "bob")).toBe("Nickname: Bob for Robert");
+    const reason = buildScoringReasoning(
+      computeMatchSignals(
+        person("Jonathan Smyth", {
+          company: "Litware",
+          location: "Denver, CO",
+        }),
+        person("Jonathon Smith", { company: "Litware", location: "Denver" }),
+        0.94,
+        false,
+      ),
+    );
+    expect(reason).toBe(
+      "Similar names, same company and city, profiles that read alike",
+    );
+    expect(reason).not.toMatch(/\d|%|embedding|score/);
   });
 });
 

@@ -35,6 +35,7 @@ import {
 } from "../lib/importers";
 import { useQueryClient } from "@tanstack/react-query";
 import { ApiError, NetworkError, apiFetch } from "../api/client";
+import { refreshDuplicates } from "../api/suggestions";
 import { flyWhenClear } from "../lib/corvid";
 import {
   fetchImport,
@@ -163,9 +164,7 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
   const invalidate = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["contacts"] });
     queryClient.invalidateQueries({ queryKey: ["imports"] });
-    queryClient.invalidateQueries({ queryKey: ["dedupe-suggestions-count"] });
-    queryClient.invalidateQueries({ queryKey: ["dedupe-suggestions"] });
-    queryClient.invalidateQueries({ queryKey: ["dedupe-merge-log"] });
+    refreshDuplicates(queryClient);
   }, [queryClient]);
 
   const finish = useCallback(
@@ -615,10 +614,12 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-bold text-on-surface">
-                      {summary.autoMerged} duplicates auto-merged
+                      Merged {summary.autoMerged}{" "}
+                      {summary.autoMerged === 1 ? "duplicate" : "duplicates"}{" "}
+                      automatically
                     </p>
                     <p className="text-xs text-on-surface-variant">
-                      Exact matches combined automatically
+                      Each can be undone in Merge history
                     </p>
                   </div>
                 </div>
@@ -631,10 +632,12 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
                   </div>
                   <div className="flex-1">
                     <p className="text-sm font-bold text-on-surface">
-                      {summary.needsReview} likely matches need review
+                      {summary.needsReview} possible{" "}
+                      {summary.needsReview === 1 ? "duplicate" : "duplicates"}{" "}
+                      to review
                     </p>
                     <p className="text-xs text-on-surface-variant">
-                      Possible duplicates for you to check
+                      Contacts that may be the same person
                     </p>
                   </div>
                 </div>
@@ -724,7 +727,8 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
                     summary.failed > 0 ? "btn-secondary" : "btn-primary",
                   )}
                 >
-                  Review {summary.needsReview} suggestions
+                  Review {summary.needsReview} possible{" "}
+                  {summary.needsReview === 1 ? "duplicate" : "duplicates"}
                   <ArrowRight className="w-4 h-4" />
                 </button>
               )}

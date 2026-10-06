@@ -1,7 +1,10 @@
 import { Router } from "express";
+import type { z } from "zod";
 import { AppError } from "../../utils/AppError.ts";
 import { asyncHandler } from "../../utils/asyncHandler.ts";
 import { log } from "../../utils/logger.ts";
+import { validateBody } from "../../utils/validators.ts";
+import { dedupeRoutes } from "../../../shared/contracts/dedupe.ts";
 import {
   getPendingSuggestions,
   getPendingCount,
@@ -9,8 +12,10 @@ import {
   getSuggestionById,
   getSuggestionForContact,
   dismissSuggestion,
+  restoreSuggestion,
   markSuggestionMerged,
   getMergeLog,
+  getMergedInto,
   undoSoftMerge,
   dedupeService,
 } from "../../services/dedupe/index.ts";
@@ -64,6 +69,29 @@ export function registerSuggestionRoutes(router: Router) {
     }),
   );
 
+  // The Undo of "Keep separate": the pair is back in the review, and scans
+  // see it again.
+  router.post(
+    "/dedupe/suggestions/:id/restore",
+    asyncHandler(async (req, res) => {
+      const rid = req.requestId;
+      const id = String(req.params.id);
+      restoreSuggestion(scopeOf(req), id, rid);
+      log.info("API", `[${rid}] POST /api/dedupe/suggestions/${id}/restore`);
+      res.json({ success: true });
+    }),
+  );
+
+  // Where a merged-away contact lives now: its old page sends a person on,
+  // and a contact just added that merged into one that existed says so.
+  router.get(
+    "/dedupe/merged-into/:contactId",
+    asyncHandler(async (req, res) => {
+      const merge = getMergedInto(scopeOf(req), String(req.params.contactId));
+      res.json({ merge });
+    }),
+  );
+
   router.post(
     "/dedupe/suggestions/:id/merge",
     asyncHandler(async (req, res) => {
@@ -100,7 +128,7 @@ export function registerSuggestionRoutes(router: Router) {
           ? suggestion.contactIdB
           : suggestion.contactIdA;
 
-      const merged = dedupeService.mergeContacts(
+      const { contact, mergeLogId } = dedupeService.mergeContacts(
         scope,
         primaryId,
         duplicateId,
@@ -113,7 +141,7 @@ export function registerSuggestionRoutes(router: Router) {
         "API",
         `[${rid}] POST /api/dedupe/suggestions/${id}/merge → merged ${duplicateId} into ${primaryId}`,
       );
-      res.json({ success: true, contact: merged });
+      res.json({ success: true, contact, mergeLogId });
     }),
   );
 
@@ -128,11 +156,15 @@ export function registerSuggestionRoutes(router: Router) {
 
   router.post(
     "/dedupe/merge-log/:id/undo",
+    validateBody(dedupeRoutes.undo.body),
     asyncHandler(async (req, res) => {
       const rid = req.requestId;
       const id = String(req.params.id);
+      const body = req.body as z.output<typeof dedupeRoutes.undo.body>;
 
-      const result = undoSoftMerge(scopeOf(req), id, rid);
+      const result = undoSoftMerge(scopeOf(req), id, rid, {
+        keepSeparate: body?.keepSeparate,
+      });
       log.info("API", `[${rid}] POST /api/dedupe/merge-log/${id}/undo`);
       res.json({ success: true, ...result });
     }),

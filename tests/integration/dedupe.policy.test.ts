@@ -37,13 +37,14 @@ interface SuggestionRow {
   matchType: string;
   confidence: number;
   reasoning: string;
+  caveat: string | null;
   status: string;
 }
 
 function suggestions(): SuggestionRow[] {
   return sqlite
     .prepare(
-      `SELECT contactIdA, contactIdB, matchType, confidence, reasoning, status
+      `SELECT contactIdA, contactIdB, matchType, confidence, reasoning, caveat, status
          FROM dedupe_suggestions WHERE ownerId = ?
         ORDER BY confidence DESC, matchType`,
     )
@@ -258,11 +259,32 @@ describe("the import and the scan agree on what a match is worth", () => {
     return { existing, imported };
   }
 
-  function byPair(): Map<string, { matchType: string; confidence: number }> {
-    const out = new Map<string, { matchType: string; confidence: number }>();
+  function byPair(): Map<
+    string,
+    {
+      matchType: string;
+      confidence: number;
+      reasoning: string;
+      caveat: string | null;
+    }
+  > {
+    const out = new Map<
+      string,
+      {
+        matchType: string;
+        confidence: number;
+        reasoning: string;
+        caveat: string | null;
+      }
+    >();
     for (const row of suggestions()) {
       const key = [row.contactIdA, row.contactIdB].sort().join("|");
-      out.set(key, { matchType: row.matchType, confidence: row.confidence });
+      out.set(key, {
+        matchType: row.matchType,
+        confidence: row.confidence,
+        reasoning: row.reasoning,
+        caveat: row.caveat,
+      });
     }
     return out;
   }
@@ -290,10 +312,25 @@ describe("the import and the scan agree on what a match is worth", () => {
     const confidences = [...fromImport.values()]
       .map((v) => `${v.matchType}:${v.confidence}`)
       .sort();
+    // The same words on both paths, plain, and a caution apart from them.
+    const said = [...fromImport.values()]
+      .map((v) => `${v.matchType}: ${v.reasoning} | ${v.caveat ?? "-"}`)
+      .sort();
+    expect(said).toEqual([
+      "cross_source: Same name, from Apple and LinkedIn | -",
+      "email: Same email address | -",
+      "name: Same name | Different companies",
+      "name_company: Same name and company | -",
+      "nickname: Nickname: Maggie for Margaret | -",
+      "phone: Same phone number | -",
+    ]);
+
+    // "David Lee" at two employers is a name match the records argue
+    // against, so it waits at 0.85 on both paths.
     expect(confidences).toEqual([
       "cross_source:0.92",
       "email:0.98",
-      "name:0.9",
+      "name:0.85",
       "name_company:0.95",
       "nickname:0.88",
       "phone:0.95",
@@ -319,9 +356,8 @@ describe("a shared number between two different first names", () => {
     const [row] = suggestions();
     expect(row.matchType).toBe("phone");
     expect(row.confidence).toBeCloseTo(REVIEW_CEILING, 5);
-    expect(row.reasoning).toBe(
-      'Shared phone number. the first names differ ("ada" ↔ "ben"), so review this pair',
-    );
+    expect(row.reasoning).toBe("Same phone number");
+    expect(row.caveat).toBe("First names differ: Ada and Ben");
   });
 
   it("is reviewed in a scan, under every preset", async () => {
@@ -337,7 +373,7 @@ describe("a shared number between two different first names", () => {
       const [row] = suggestions();
       expect(row.status, preset).toBe("pending");
       expect(row.confidence, preset).toBeCloseTo(REVIEW_CEILING, 5);
-      expect(row.reasoning).toContain('the first names differ ("ada" ↔ "ben")');
+      expect(row.caveat).toBe("First names differ: Ada and Ben");
     }
   });
 
@@ -380,7 +416,7 @@ describe("a father and a son", () => {
     expect(anyMerged(ids)).toBe(false);
     const [row] = suggestions();
     expect(row.confidence).toBeCloseTo(REVIEW_CEILING, 5);
-    expect(row.reasoning).toContain('one is "jr" and the other "sr"');
+    expect(row.caveat).toBe("One is Jr. and the other Sr.");
   });
 
   it("are not an exact name match on the import path either", async () => {
@@ -417,6 +453,110 @@ describe("a father and a son", () => {
   });
 });
 
+describe("one name at two employers in two cities", () => {
+  // "Chris Navarro", a nurse in Boston and a banker in Miami. The eager
+  // preset merged them at 0.90 on every path, because nothing but the name
+  // was compared.
+  const nurse = {
+    name: "Chris Navarro",
+    company: "Adatum",
+    role: "Nurse",
+    location: "Boston, MA",
+  };
+  const banker = {
+    name: "Chris Navarro",
+    company: "Woodgrove Bank",
+    role: "Banker",
+    location: "Miami, FL",
+  };
+
+  it("waits for a person in a scan, under every preset", async () => {
+    const ids = await seed([nurse, banker]);
+    for (const preset of ["aggressive", "default", "conservative"] as const) {
+      choose(preset);
+      await scan();
+      expect(anyMerged(ids), preset).toBe(false);
+      const [row] = suggestions();
+      expect(row).toMatchObject({
+        matchType: "name",
+        status: "pending",
+        reasoning: "Same name",
+        caveat: "Different companies and cities",
+      });
+      expect(row.confidence).toBeCloseTo(REVIEW_CEILING, 5);
+    }
+  });
+
+  it("waits in an import and after a contact is added, under the eager preset", async () => {
+    choose("aggressive");
+    const [existing] = await seed([nurse]);
+    const [imported] = await seed([banker]);
+
+    const result = await dedupeService.runImportScan(scope, [imported], "test");
+    expect(result.autoMerged).toBe(0);
+    expect(result.pending).toBe(1);
+
+    sqlite.exec("DELETE FROM dedupe_suggestions");
+    await dedupeService.incrementalDedupeCheck(imported, "test");
+    expect(anyMerged([existing, imported])).toBe(false);
+    expect(suggestions()[0].caveat).toBe("Different companies and cities");
+  });
+
+  it("still merges under the eager preset when nothing disagrees", async () => {
+    choose("aggressive");
+    const ids = await seed([
+      nurse,
+      { name: "Chris Navarro", location: "Boston" },
+    ]);
+    await scan();
+    expect(anyMerged(ids)).toBe(true);
+  });
+});
+
+describe("one profile link written two ways", () => {
+  const link = "https://www.linkedin.com/in/priya-raman-42";
+
+  it("is one person to a scan and to the check after a contact is added", async () => {
+    choose("conservative");
+    const ids = await seed([
+      {
+        name: "Priya Raman",
+        socialLinks: [{ url: link, platform: "linkedin" }],
+      },
+      {
+        name: "Priya R.",
+        socialLinks: [{ url: `${link}/?trk=public`, platform: "linkedin" }],
+      },
+    ]);
+    await scan();
+    const [row] = suggestions();
+    expect(row).toMatchObject({
+      matchType: "social",
+      reasoning: "Same profile link",
+      caveat: null,
+    });
+    expect(row.confidence).toBeCloseTo(0.93, 5);
+
+    sqlite.exec("DELETE FROM dedupe_suggestions");
+    choose("default");
+    await dedupeService.incrementalDedupeCheck(ids[1], "test");
+    expect(anyMerged(ids)).toBe(true);
+  });
+
+  it("is no identity when it is a company's page", async () => {
+    const page = "https://www.linkedin.com/company/northwind";
+    await seed([
+      { name: "Chris Lee", socialLinks: [{ url: page, platform: "linkedin" }] },
+      {
+        name: "Chris Park",
+        socialLinks: [{ url: page, platform: "linkedin" }],
+      },
+    ]);
+    await scan();
+    expect(suggestions().filter((s) => s.matchType === "social")).toEqual([]);
+  });
+});
+
 describe("a value many contacts carry", () => {
   it("weakens a shared number by three points per extra carrier, on both paths", async () => {
     // A household of three on one landline, with three names that do not
@@ -432,7 +572,7 @@ describe("a value many contacts carry", () => {
     expect(result.pending).toBe(2);
     for (const row of suggestions()) {
       expect(row.confidence).toBeCloseTo(0.92, 5);
-      expect(row.reasoning).toContain("3 contacts carry this number");
+      expect(row.caveat).toBe("3 contacts share this phone number");
     }
     expect(anyMerged([a, b, c])).toBe(false);
 
@@ -459,7 +599,7 @@ describe("a value many contacts carry", () => {
     expect(result.autoMerged).toBe(2);
     for (const row of suggestions()) {
       expect(row.confidence).toBeCloseTo(0.95, 5);
-      expect(row.reasoning).toContain("3 contacts carry this address");
+      expect(row.caveat).toBe("3 contacts share this email address");
     }
   });
 
@@ -477,7 +617,7 @@ describe("a value many contacts carry", () => {
     for (const row of suggestions()) {
       expect(row.matchType).toBe("name_company");
       expect(row.confidence).toBeCloseTo(0.92, 5);
-      expect(row.reasoning).toContain("3 contacts carry this name");
+      expect(row.caveat).toBe("3 contacts share this name");
     }
   });
 });

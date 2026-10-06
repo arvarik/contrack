@@ -1,12 +1,15 @@
 /**
- * DedupeContext — Global state for the Dedupe Engine.
+ * DedupeContext — Global state for a check for duplicates.
  *
  * Provides:
- * - startScan(mode): kicks off an async scan and connects SSE
- * - scan: current scan progress (live-updated via SSE)
- * - clusters: final cluster results when scan is complete
- * - isScanning: whether a scan is in progress
- * - reset(): clear state for a new scan
+ * - startScan(mode): starts a check and connects SSE
+ * - scan: the check's progress (live-updated via SSE), and its counts once
+ *   it finishes
+ * - isScanning: whether a check is in progress
+ * - reset(): clear state for a new check
+ *
+ * A check fills Possible duplicates on the server, and the review list reads
+ * it from there, so nothing here holds what a check found.
  *
  * State persists across route changes because this provider is mounted
  * at the App root, allowing the user to navigate away and return.
@@ -31,17 +34,11 @@ import {
 } from "../api/dedupe";
 import { toast } from "sonner";
 import { rateLimitFacts } from "../api/client";
-import type {
-  DedupeScanMode,
-  DedupeScanProgress,
-  DedupeCluster,
-} from "../types";
+import type { DedupeScanMode, DedupeScanProgress } from "../types";
 
 interface DedupeContextValue {
   startScan: (mode: DedupeScanMode) => void;
   scan: DedupeScanProgress | null;
-  /** Cluster-based results from the latest scan. */
-  clusters: DedupeCluster[];
   isScanning: boolean;
   isStarting: boolean;
   /**
@@ -50,10 +47,6 @@ interface DedupeContextValue {
    */
   isQueued: boolean;
   reset: () => void;
-  /** Remove a cluster from the local list (after merge or dismiss) */
-  removeCluster: (id: string) => void;
-  showActivity: boolean;
-  setShowActivity: (show: boolean) => void;
 }
 
 const DedupeContext = createContext<DedupeContextValue | null>(null);
@@ -62,10 +55,6 @@ export function useDedupe() {
   const ctx = useContext(DedupeContext);
   if (!ctx) throw new Error("useDedupe must be used within DedupeProvider");
   return ctx;
-}
-
-export function useDedupeOptional() {
-  return useContext(DedupeContext);
 }
 
 /**
@@ -81,8 +70,6 @@ const QUEUE_POLL_MAX_FAILURES = 10;
 export function DedupeProvider({ children }: { children: React.ReactNode }) {
   const [scan, setScan] = useState<DedupeScanProgress | null>(null);
   const [scanId, setScanId] = useState<string | null>(null);
-  const [clusters, setClusters] = useState<DedupeCluster[]>([]);
-  const [showActivity, setShowActivity] = useState(false);
   // The run lock is global for 2.0, so one account at a time scans and the
   // rest wait. `queued` is that wait, and it is deliberately not a scan: the
   // scan record exists on the server but nothing is happening in it.
@@ -160,7 +147,6 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
       setQueued(false);
       setScan(adopted);
       setScanId(adopted.scanId);
-      if (adopted.phase === "complete") setClusters(adopted.clusters ?? []);
     };
 
     const tick = async () => {
@@ -217,10 +203,6 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
   // SSE stream hook — updates scan state in real-time
   const handleUpdate = useCallback((updatedScan: DedupeScanProgress) => {
     setScan(updatedScan);
-    // When complete, capture the final clusters
-    if (updatedScan.phase === "complete") {
-      setClusters(updatedScan.clusters ?? []);
-    }
   }, []);
 
   useDedupeStream(scanId, handleUpdate);
@@ -238,7 +220,7 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
               scanId: result.scanId,
               mode: result.mode,
               phase: "starting",
-              phaseName: "Initializing scan…",
+              phaseName: "Starting",
               contactsScanned: 0,
               totalContacts: 0,
               deterministicFound: 0,
@@ -252,21 +234,10 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
               totalPairs: 0,
               autoMerged: 0,
               pendingSuggestions: 0,
-              clusters: [],
               startedAt: new Date().toISOString(),
             });
             setScanId(result.scanId);
-            setClusters([]);
             setQueued(false);
-            const modeLabels: Record<string, string> = {
-              quick: "Exact scan",
-              deep: "AI scan",
-              full: "Full AI scan",
-              deterministic: "Exact scan",
-              ai: "AI scan",
-              both: "AI scan",
-            };
-            toast.success(`${modeLabels[mode] || "Scan"} started`);
           },
           onError: (err) => {
             // A 429 whose `details.yours` is false means another account
@@ -281,7 +252,9 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
               // id comes from the next poll of `/dedupe/active`.
               queuedScanId.current = null;
               setQueued(true);
-              toast("Another user's scan is running — yours is queued");
+              toast(
+                "Another account is checking for duplicates. Yours starts after it",
+              );
               return;
             }
             toast.error(err instanceof Error ? err.message : String(err));
@@ -295,13 +268,8 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
   const reset = useCallback(() => {
     setScan(null);
     setScanId(null);
-    setClusters([]);
     setQueued(false);
     queuedScanId.current = null;
-  }, []);
-
-  const removeCluster = useCallback((id: string) => {
-    setClusters((prev) => prev.filter((c) => c.id !== id));
   }, []);
 
   const isScanning =
@@ -316,27 +284,12 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
     () => ({
       startScan,
       scan,
-      clusters,
       isScanning,
       isStarting: startMutation.isPending,
       isQueued: queued,
       reset,
-      removeCluster,
-      showActivity,
-      setShowActivity,
     }),
-    [
-      startScan,
-      scan,
-      clusters,
-      isScanning,
-      startMutation.isPending,
-      queued,
-      reset,
-      removeCluster,
-      showActivity,
-      setShowActivity,
-    ],
+    [startScan, scan, isScanning, startMutation.isPending, queued, reset],
   );
 
   return (

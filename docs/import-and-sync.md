@@ -83,7 +83,7 @@ import saved nothing, import the file again.
 The import's duplicate check compares the new contacts with your other
 contacts and with each other. A pair at or above your auto-merge sensitivity
 merges by itself. Every other pair waits in **Possible duplicates**. The
-summary's button with the count, such as **Review 3 suggestions**, goes there,
+summary's button with the count, such as **Review 3 possible duplicates**, goes there,
 see [Review possible duplicates](duplicates.md#review-possible-duplicates).
 
 ## Connectors

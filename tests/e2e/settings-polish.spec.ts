@@ -140,16 +140,15 @@ test.describe("the Duplicates page", () => {
     instance,
   }) => {
     await page.goto("/settings/duplicates");
-    const scan = page.getByRole("radiogroup", { name: "Scan" });
+    const check = page.getByRole("button", { name: "Check now" });
     const automatic = page.getByRole("heading", {
       level: 2,
       name: "Automatic merging",
     });
-    await expect(scan).toBeVisible();
-    const scanBox = (await scan.boundingBox())!;
+    await expect(check).toBeVisible();
+    const checkBox = (await check.boundingBox())!;
     const automaticBox = (await automatic.boundingBox())!;
-    expect(scanBox.y).toBeLessThan(automaticBox.y);
-    await expect(page.getByRole("button", { name: "Scan now" })).toBeVisible();
+    expect(checkBox.y).toBeLessThan(automaticBox.y);
 
     const reset = page.getByRole("button", { name: "Reset to defaults" });
     await expect(reset).toHaveCount(0);

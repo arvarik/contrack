@@ -105,6 +105,7 @@ import { TimelineTab } from "./TimelineTab";
 import { vibeTokens } from "../../../lib/theme";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { DupeBanner } from "./DupeBanner";
+import { useMergedRedirect } from "./useMergedRedirect";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Props
@@ -167,6 +168,8 @@ export const ContactProfile = ({
 
   // ── Data queries ──────────────────────────────────────────────────────
   const { data: contact, error, isFetching, refetch } = useContact(id);
+  // A merged contact's old link goes on to the contact it merged into.
+  const redirecting = useMergedRedirect(contact, id, isFetching);
   const { data: timeline = [], isLoading: timelineLoading } = useTimeline(id);
   /**
    * The contact as far as it is known: the full one, or else its row in the
@@ -385,7 +388,17 @@ export const ContactProfile = ({
     ),
   ) as React.CSSProperties;
 
-  // ── Error, and loading ────────────────────────────────────────────────
+  // ── Merged, error, and loading ────────────────────────────────────────
+  // A merged contact's page is on its way to the contact it merged into,
+  // and draws nothing a person could edit in the meantime.
+  if (redirecting)
+    return (
+      <div className={ROOT}>
+        <p role="status" className="p-8 text-sm text-on-surface-variant">
+          Opening the contact this one merged into
+        </p>
+      </div>
+    );
   // A retry that is out shows the loading page, not the error it may clear.
   if (!contact && error && !isFetching)
     return (

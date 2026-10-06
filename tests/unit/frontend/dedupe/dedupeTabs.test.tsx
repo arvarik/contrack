@@ -3,20 +3,17 @@
 // The Duplicates tool's two tabs, and the Manual merge picker's long list
 // =============================================================================
 // With 5,824 contacts, Manual merge drew every contact and took 44 s to show,
-// and going back to Scan kept the merge list on screen while the Scan tab
+// and going back to the scan kept the merge list on screen while the scan
 // waited for it to slide out (`AnimatePresence` in "wait" mode). The tabs
 // now swap at once, and the picker draws only the rows near the screen.
 // jsdom has no layout, so the virtualizer asks for the first ten rows.
+//
+// The Check tab is one button. It used to offer three scans, and the one
+// with AI off said why the other two could not run.
 // =============================================================================
-import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  within,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Contact } from "../../../../src/types";
 
 vi.mock("@tanstack/react-virtual", async (importOriginal) => {
@@ -51,28 +48,19 @@ const stub = vi.hoisted(() => () => ({
 vi.mock("../../../../src/api", () => ({
   useContacts: () => ({ data: state.contacts, isLoading: false }),
   useMergeCluster: stub,
-  useMergeClusters: stub,
-  useMergeContacts: stub,
-  useMergeLog: () => ({ data: [], isLoading: false }),
-  useUndoMerge: stub,
-  usePendingSuggestions: () => ({ data: [], isLoading: false }),
-  useMergeSuggestion: stub,
-  useDismissSuggestion: stub,
+  useDedupeCount: () => ({ data: { count: 0 } }),
+  undoMerges: vi.fn(),
 }));
 
 const startScan = vi.hoisted(() => vi.fn());
 vi.mock("../../../../src/contexts/DedupeContext", () => ({
   useDedupe: () => ({
     scan: null,
-    clusters: [],
     isScanning: false,
     isStarting: false,
     startScan,
     reset: vi.fn(),
-    removeCluster: vi.fn(),
     isQueued: false,
-    showActivity: false,
-    setShowActivity: vi.fn(),
   }),
 }));
 
@@ -117,12 +105,17 @@ function mount() {
   const scroller = document.createElement("div");
   scroller.style.overflowY = "auto";
   document.body.appendChild(scroller);
-  return render(<DedupeView />, { container: scroller });
+  return render(
+    <QueryClientProvider client={new QueryClient()}>
+      <DedupeView />
+    </QueryClientProvider>,
+    { container: scroller },
+  );
 }
 
 const search = () =>
   screen.queryByRole("textbox", { name: "Search contacts to merge" });
-const exactScan = () => screen.queryByRole("radio", { name: /^Exact scan/ });
+const checkNow = () => screen.queryByRole("button", { name: /Check now/ });
 
 beforeEach(() => {
   state.contacts = people(3);
@@ -137,44 +130,26 @@ afterEach(() => {
 });
 
 describe("the Duplicates tabs", () => {
-  it("swaps Scan and Manual merge at once, with nothing of the other tab left", () => {
+  it("swaps Check and Manual merge at once, with nothing of the other tab left", () => {
     mount();
-    expect(exactScan()).toBeTruthy();
+    expect(checkNow()).toBeTruthy();
 
     fireEvent.click(screen.getByRole("radio", { name: "Manual merge" }));
-    // In the same frame: the merge tab is here and the scans are gone.
+    // In the same frame: the merge tab is here and the check is gone.
     expect(search()).toBeTruthy();
-    expect(exactScan()).toBeNull();
+    expect(checkNow()).toBeNull();
 
-    fireEvent.click(screen.getByRole("radio", { name: "Scan" }));
-    expect(exactScan()).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "Check" }));
+    expect(checkNow()).toBeTruthy();
     expect(search()).toBeNull();
-  });
-
-  it("keeps the scan chosen before a trip to Manual merge", () => {
-    mount();
-    fireEvent.click(exactScan()!);
-    expect(exactScan()!.getAttribute("aria-checked")).toBe("true");
-    fireEvent.click(screen.getByRole("radio", { name: "Manual merge" }));
-    fireEvent.click(screen.getByRole("radio", { name: "Scan" }));
-    expect(exactScan()!.getAttribute("aria-checked")).toBe("true");
-    expect(
-      screen
-        .getByRole("radio", { name: /^AI scan/ })
-        .getAttribute("aria-checked"),
-    ).toBe("false");
   });
 });
 
-describe("the scans with AI off", () => {
-  const aiScan = () => screen.getByRole("radio", { name: /^AI scan/ });
-  const fullScan = () => screen.getByRole("radio", { name: /^Full AI scan/ });
-
-  it("offers the three scans while AI is on, and starts the one chosen", () => {
+describe("the one check", () => {
+  it("asks AI about the unclear pairs while AI is on", () => {
     mount();
-    const picker = screen.getByRole("radiogroup", { name: "Scan" });
-    expect(within(picker).getAllByRole("radio")).toHaveLength(3);
-    fireEvent.click(screen.getByRole("button", { name: "Scan now" }));
+    expect(screen.queryAllByRole("radiogroup")).toHaveLength(1);
+    fireEvent.click(checkNow()!);
     expect(startScan).toHaveBeenCalledWith("deep");
   });
 
@@ -182,21 +157,12 @@ describe("the scans with AI off", () => {
     ["account", "AI is off for your account"],
     ["instance", "AI is off on this instance"],
   ] as const) {
-    it(`keeps the AI scans in sight, disabled with the reason, and starts the Exact scan while AI is off for the ${off}`, () => {
+    it(`says why and finds exact matches only while AI is off for the ${off}`, () => {
       if (off === "account") ai.account = false;
       else ai.instanceOff = true;
       mount();
-      // The AI scans stay, so the choice is still there to see, and say why
-      // they cannot run.
-      for (const tile of [aiScan(), fullScan()]) {
-        expect(tile.getAttribute("aria-disabled")).toBe("true");
-        expect(tile.textContent).toContain(why);
-      }
-      expect(exactScan()!.getAttribute("aria-checked")).toBe("true");
-      // A press on an AI scan does nothing.
-      fireEvent.click(aiScan());
-      expect(aiScan().getAttribute("aria-checked")).toBe("false");
-      fireEvent.click(screen.getByRole("button", { name: "Scan now" }));
+      expect(screen.getByText(new RegExp(why))).toBeTruthy();
+      fireEvent.click(checkNow()!);
       expect(startScan).toHaveBeenCalledWith("quick");
     });
   }

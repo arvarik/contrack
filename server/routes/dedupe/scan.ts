@@ -71,9 +71,12 @@ export function registerScanRoutes(router: Router) {
       let thresholdSource = "account preset";
       if (autoMergeThreshold !== undefined) {
         threshold = Number(autoMergeThreshold);
-        if (isNaN(threshold) || threshold < 0.85 || threshold > 0.99) {
+        // From the eager preset up. At 0.85, the ceiling a contradicted pair
+        // is held to, a request could merge two people the policy had
+        // stopped for review, such as a household on one phone line.
+        if (isNaN(threshold) || threshold < 0.88 || threshold > 0.99) {
           throw new AppError(
-            "autoMergeThreshold must be between 0.85 and 0.99",
+            "autoMergeThreshold must be between 0.88 and 0.99",
             400,
           );
         }

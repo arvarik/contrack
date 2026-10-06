@@ -25,14 +25,12 @@ import {
   within,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
 import {
   DedupeProvider,
   useDedupe,
 } from "../../../../src/contexts/DedupeContext";
-import { SuggestionReviewQueue } from "../../../../src/views/dedupe/components/SuggestionReviewQueue";
 import { ManualMerge } from "../../../../src/views/dedupe/components/ManualMerge";
-import { useUndoClusterMerge } from "../../../../src/api/suggestions";
+import { undoMerges } from "../../../../src/api/suggestions";
 
 /** The account's Motion row. Nothing else here reads the preferences. */
 let mockMotion: "system" | "reduced" = "system";
@@ -152,7 +150,7 @@ describe("a scan booked behind another account's", () => {
     // `getActiveScan` skips terminal scans, so a short scan leaves
     // `{ active: false, queued: false }` behind it. Treating that as "the
     // wait is over, nothing to adopt" made the waiting card vanish and the
-    // pre-scan page return, with the clusters it found never shown.
+    // idle card return, with what the scan found never reported.
     stubEventSource();
     const fetchMock = vi.fn().mockImplementation((url: string) => {
       if (String(url).includes("/dedupe/status")) {
@@ -188,7 +186,6 @@ describe("a scan booked behind another account's", () => {
     });
     await waitFor(() => expect(result.current.isQueued).toBe(false));
     expect(result.current.scan?.phase).toBe("complete");
-    expect(result.current.clusters).toEqual([{ id: "c1" }]);
   });
 
   it("keeps waiting through a run of failed polls", async () => {
@@ -271,137 +268,6 @@ describe("a scan booked behind another account's", () => {
 // =============================================================================
 // The review list on Pulse: the keeper's card keeps its values
 // =============================================================================
-describe("an open pair in the review list", () => {
-  it("marks the keeper's differing values Kept and the duplicate's Discarded", async () => {
-    // Ada has more on file, so she is the keeper. The two roles differ.
-    const person = (id: string, name: string, extra: object) => ({
-      id,
-      name,
-      emails: [],
-      phones: [],
-      tags: [],
-      sources: [],
-      socialLinks: [],
-      ...extra,
-    });
-    const ada = person("c-1", "Ada Lovelace", {
-      role: "Engineer",
-      company: "Analytical Engines",
-    });
-    const augusta = person("c-2", "Augusta King", { role: "Countess" });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        Response.json({
-          suggestions: [
-            {
-              id: "s-1",
-              contactIdA: ada.id,
-              contactIdB: augusta.id,
-              matchType: "email",
-              confidence: 0.97,
-              reasoning: "Same email.",
-              matchedField: null,
-              status: "pending",
-              createdAt: "2026-09-01T00:00:00.000Z",
-              reviewedAt: null,
-              reviewedBy: null,
-              contactA: ada,
-              contactB: augusta,
-            },
-          ],
-        }),
-      ),
-    );
-
-    render(
-      <QueryClientProvider client={client}>
-        <MemoryRouter>
-          <SuggestionReviewQueue />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-    fireEvent.click(await screen.findByText("Ada Lovelace"));
-
-    const card = (label: string) =>
-      within(screen.getByText(label).parentElement!.parentElement!);
-    const keeper = card("Primary (keeper)");
-    const duplicate = card("Duplicate (merges in)");
-    expect(keeper.getAllByText("Kept").length).toBeGreaterThan(0);
-    expect(keeper.queryByText("Discarded")).toBeNull();
-    expect(duplicate.getAllByText("Discarded").length).toBeGreaterThan(0);
-    expect(duplicate.queryByText("Kept")).toBeNull();
-  });
-
-  it("shows both names of a pair in full, with the badge and the actions on a line of their own", async () => {
-    // Two people with the same first name. Cut to "Elizabeth …" at 87 px,
-    // the two rows could not be told apart.
-    const person = (id: string, name: string, company: string) => ({
-      id,
-      name,
-      company,
-      emails: [],
-      phones: [],
-      tags: [],
-      sources: [],
-      socialLinks: [],
-    });
-    const a = person("c-3", "Elizabeth Rodriguez", "Black Mesa");
-    const b = person("c-4", "Elizabeth Walker", "Bluth Company");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue(
-        Response.json({
-          suggestions: [
-            {
-              id: "s-2",
-              contactIdA: a.id,
-              contactIdB: b.id,
-              matchType: "email",
-              confidence: 0.84,
-              reasoning: "Same email pattern.",
-              matchedField: null,
-              status: "pending",
-              createdAt: "2026-09-01T00:00:00.000Z",
-              reviewedAt: null,
-              reviewedBy: null,
-              contactA: a,
-              contactB: b,
-            },
-          ],
-        }),
-      ),
-    );
-    client.clear();
-
-    render(
-      <QueryClientProvider client={client}>
-        <MemoryRouter>
-          <SuggestionReviewQueue />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-    const first = await screen.findByText("Elizabeth Rodriguez");
-    const second = screen.getByText("Elizabeth Walker");
-    for (const name of [first, second]) {
-      // The name and the company wrap rather than truncate.
-      expect(name.className).not.toContain("truncate");
-      expect(name.parentElement!.className).toContain("break-words");
-    }
-    expect(screen.getByText("Black Mesa").className).not.toContain("truncate");
-
-    // The badge, Merge and the dismiss fill the row's width below lg, so
-    // they take a line under the pair, and share the row from lg.
-    const actions = screen
-      .getByRole("button", { name: "Merge" })
-      .closest(".w-full")!;
-    expect(actions).not.toBeNull();
-    expect(actions.className).toContain("lg:w-auto");
-    expect(actions.contains(first)).toBe(false);
-    expect(within(actions as HTMLElement).getByText(/84%/)).toBeDefined();
-  });
-});
-
 // =============================================================================
 // The manual merge: a new stage opens at its top
 // =============================================================================
@@ -452,21 +318,32 @@ describe("the manual merge", () => {
     );
   }
 
-  async function pickTwoAndCompare() {
+  /**
+   * The list for the picker, and each contact in full for the comparison,
+   * which reads them by id.
+   */
+  function stubContacts() {
+    const people = [
+      person("c-1", "Ada Lovelace"),
+      person("c-2", "Augusta King"),
+    ];
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockImplementation((url: string) =>
-          Promise.resolve(
-            Response.json(
-              String(url).includes("/contacts")
-                ? [person("c-1", "Ada Lovelace"), person("c-2", "Augusta King")]
-                : {},
-            ),
+      vi.fn().mockImplementation((url: string) => {
+        const byId = people.find((p) =>
+          String(url).endsWith(`/contacts/${p.id}`),
+        );
+        return Promise.resolve(
+          Response.json(
+            byId ?? (String(url).includes("/contacts") ? people : {}),
           ),
-        ),
+        );
+      }),
     );
+  }
+
+  async function pickTwoAndCompare() {
+    stubContacts();
     client.clear();
     render(
       <QueryClientProvider client={client}>
@@ -499,24 +376,11 @@ describe("the manual merge", () => {
 
   it("keeps the sticky blocks' room as scroll padding on the page's scroller", async () => {
     // The chips and the search stick to the top, Compare to the bottom. A
-    // row that Tab reaches stops clear of both, and the padding goes with
-    // the picker.
+    // row that Tab reaches stops clear of both, and the top padding goes
+    // with the picker.
     stubFullMotion();
     stubScrollIntoView();
-    vi.stubGlobal(
-      "fetch",
-      vi
-        .fn()
-        .mockImplementation((url: string) =>
-          Promise.resolve(
-            Response.json(
-              String(url).includes("/contacts")
-                ? [person("c-1", "Ada Lovelace"), person("c-2", "Augusta King")]
-                : {},
-            ),
-          ),
-        ),
-    );
+    stubContacts();
     client.clear();
     render(
       <QueryClientProvider client={client}>
@@ -531,9 +395,11 @@ describe("the manual merge", () => {
     expect(scroller.style.scrollPaddingTop).toMatch(/px$/);
     expect(scroller.style.scrollPaddingBottom).toMatch(/px$/);
 
+    // The comparison has no sticky top, and its own Merge bar sticks to the
+    // bottom, so Tab through it stops clear of the bar.
     fireEvent.click(screen.getByRole("button", { name: /Compare 2 contacts/ }));
     await waitFor(() => expect(scroller.style.scrollPaddingTop).toBe(""));
-    expect(scroller.style.scrollPaddingBottom).toBe("");
+    expect(scroller.style.scrollPaddingBottom).toMatch(/px$/);
   });
 
   it("jumps without motion when the Motion row asks for less", async () => {
@@ -550,48 +416,35 @@ describe("the manual merge", () => {
 });
 
 // =============================================================================
-// Undo of a cluster merge
+// Undo of a merge of several contacts
 // =============================================================================
-// → merges a whole cluster with one key, one merge per duplicate. Undo reads
-// the merges from the log, whose times are to the second, and undoes them
-// last first: each merge changed the primary the next one started from.
+// A group merges one contact at a time, and the merge answers with each
+// merge-log id in order. Undo takes them back last first: each merge
+// changed the contact the next one started from.
 // =============================================================================
 
-describe("Undo of a cluster merge", () => {
-  it("undoes each duplicate's open merge, the last merge first", async () => {
-    const undone: string[] = [];
-    const log = (id: string, duplicateId: string, undoneAt: string | null) => ({
-      id,
-      primaryId: "p",
-      duplicateId,
-      undoneAt,
-    });
+describe("Undo of a merge of several contacts", () => {
+  it("undoes each merge, the last first, and keeps the pairs open", async () => {
+    const undone: { url: string; body: unknown }[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, init?: RequestInit) => {
-        if (init?.method === "POST") undone.push(url);
-        if (url.startsWith("/api/dedupe/merge-log?"))
-          return Response.json({
-            // Merged in the same second, so the log lists a before b.
-            entries: [
-              log("old-a", "a", "2026-09-01T00:00:00.000Z"),
-              log("log-a", "a", null),
-              log("log-b", "b", null),
-              { ...log("log-c", "c", null), primaryId: "q" },
-            ],
-          });
+        if (init?.method === "POST") {
+          undone.push({ url, body: JSON.parse(String(init.body)) });
+        }
         return Response.json({ success: true, conflicts: [] });
       }),
     );
-    const { result } = renderHook(() => useUndoClusterMerge(), {
-      wrapper: ({ children }) => (
-        <QueryClientProvider client={client}>{children}</QueryClientProvider>
-      ),
-    });
-    await act(() => result.current("p", ["a", "b"]));
+    await undoMerges(client, ["log-a", "log-b"], false);
     expect(undone).toEqual([
-      "/api/dedupe/merge-log/log-b/undo",
-      "/api/dedupe/merge-log/log-a/undo",
+      {
+        url: "/api/dedupe/merge-log/log-b/undo",
+        body: { keepSeparate: false },
+      },
+      {
+        url: "/api/dedupe/merge-log/log-a/undo",
+        body: { keepSeparate: false },
+      },
     ]);
   });
 });

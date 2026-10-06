@@ -3,8 +3,8 @@
  *
  * Checks:
  * 1. /settings/duplicates:
- *    - Full-width Segmented control ("Scan" and "Manual merge") unclipped and unwrapped.
- *    - "Merge activity" is the square button in the header's corner.
+ *    - Full-width Segmented control ("Check" and "Manual merge") unclipped and unwrapped.
+ *    - "Merge history" is a labelled link in the header's corner.
  *    - expectPageAccessible and expectFloors hold.
  * 2. /search:
  *    - The coverage row is shown under the search box before a search when < 100%.
@@ -43,7 +43,7 @@ test.describe("phone pages (390 px)", () => {
     await ensureScreenshotDir();
   });
 
-  test("duplicates on phone: segmented tabs unclipped, the header button opens merge activity, accessible", async ({
+  test("duplicates on phone: segmented tabs unclipped, the header links Merge history, accessible", async ({
     page,
   }, testInfo) => {
     await page.goto("/settings/duplicates");
@@ -52,7 +52,7 @@ test.describe("phone pages (390 px)", () => {
     ).toBeVisible();
 
     // Segmented tab controls
-    const autoScan = page.getByRole("radio", { name: "Scan", exact: true });
+    const autoScan = page.getByRole("radio", { name: "Check", exact: true });
     const manualMerge = page.getByRole("radio", { name: "Manual merge" });
 
     await expect(autoScan).toBeVisible();
@@ -80,24 +80,14 @@ test.describe("phone pages (390 px)", () => {
     );
     expect(scrollers).toBe(1);
 
-    // Merge activity is the square button in the header's corner, at
-    // every width, as Ask Contrack's History is.
-    const activityButton = page.getByRole("button", {
-      name: "Merge activity",
-    });
-    await expect(activityButton).toBeVisible();
-    await activityButton.click();
-
-    // Merge activity slide-out opens
-    await expect(
-      page.getByRole("heading", { name: "Merge activity", exact: true }),
-    ).toBeVisible();
-
-    // Close merge activity slide-out
-    await page.getByRole("button", { name: "Close merge activity" }).click();
-    await expect(
-      page.getByRole("heading", { name: "Merge activity", exact: true }),
-    ).not.toBeVisible();
+    // Merge history is a link with its name on it, in the header's corner.
+    // It opens on Possible duplicates, where the Undo of every merge lives.
+    const history = page.getByRole("link", { name: "Merge history" });
+    await expect(history).toBeVisible();
+    await expect(history).toHaveAttribute(
+      "href",
+      "/pulse/duplicates?view=merged",
+    );
 
     // Accessibility and floor checks
     await expectPageAccessible(page, testInfo, "duplicates-phone");

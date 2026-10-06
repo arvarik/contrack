@@ -46,8 +46,8 @@ const lastToast = () =>
     ][]
   ).at(-1)![1];
 
-vi.mock("../../../../src/views/dedupe/components", () => ({
-  SuggestionReviewQueue: () => (
+vi.mock("../../../../src/views/dedupe/components/DuplicateQueue", () => ({
+  DuplicateQueue: () => (
     <div data-testid="suggestion-review-queue">Mock Dedupe Queue</div>
   ),
 }));

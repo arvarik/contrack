@@ -95,9 +95,10 @@ returns to the same place in the list.
   [how the score works](pulse.md#how-the-score-works).
 - **Follow-up band**: a band across the top shows a follow-up that is late,
   due today or due within 7 days, such as "Follow-up due Friday".
-- **Duplicate band**: shows when another contact looks like the same person.
-  Press **Review match**, then **Merge contacts** or **Keep separate**. See
-  [Review possible duplicates](duplicates.md#review-possible-duplicates).
+- **Duplicate band**: shows when another contact may be the same person,
+  with the reason and any caution. Press **Compare** to see the two side by
+  side and choose the contact to keep, then **Merge** or **Keep separate**.
+  See [Review possible duplicates](duplicates.md#review-possible-duplicates).
 - **Quick actions**: in the narrow layout, a row of buttons ends the header.
   **Call** and **Message** use the first phone, **Email** the first email,
   and **Log note** opens the quick note dialog. A button shows only when the

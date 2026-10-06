@@ -107,6 +107,7 @@ export const NAME_CONFIDENCE = {
  * The most a contradicted match may score.
  *
  * Below the aggressive preset, so no preset merges a pair whose first names
+ * disagree, or a pair matched on the name alone whose employers or cities
  * disagree. Above `THRESHOLD_AI`, so the pair is still a suggestion rather
  * than nothing.
  */
@@ -141,7 +142,9 @@ function round(n: number): number {
  *
  * @param base         - What the match is worth on its own, from the tables.
  * @param carriers     - How many contacts in the account carry the value.
- * @param contradicted - Whether the two first names disagree.
+ * @param contradicted - Whether anything in the two records says two people:
+ *                       first names, generations, or for a name-only match
+ *                       the employer or the city.
  */
 export function weaken(
   base: number,
@@ -291,6 +294,60 @@ export function namesContradict(
   return firstNamesContradict(a, b) || generationsContradict(a, b);
 }
 
+/**
+ * The city part of a location, lowercased: "Austin, TX" is "austin", and
+ * "Greater Boston Area" stays whole, so it still contains "boston".
+ */
+function cityOf(location: string | null): string {
+  return (location ?? "")
+    .toLowerCase()
+    .split(",")[0]
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+/**
+ * Whether two values of one field can name the same thing: equal, one inside
+ * the other ("contoso" in "contoso group", "boston" in "greater boston
+ * area"), or a near spelling ("milan" and "milano").
+ */
+function sameThing(a: string, b: string, nearSpelling: number): boolean {
+  if (a === b || a.includes(b) || b.includes(a)) return true;
+  return jaroWinkler(a, b) >= nearSpelling;
+}
+
+/** Which of the two records' facts disagree, when both carry the fact. */
+export interface ContextConflict {
+  company: boolean;
+  city: boolean;
+}
+
+/**
+ * Whether two records with one name work at two different places, or live in
+ * two different cities.
+ *
+ * A name is all the exact-name family has to go on, so a record that says
+ * otherwise outweighs it: "Chris Navarro, Adatum, Boston" and "Chris Navarro,
+ * Woodgrove Bank, Miami" are two people far more often than one person who
+ * moved and changed jobs. A field only one record carries says nothing. The
+ * company is compared after `normalizeCompany`, so "Contoso Ltd" is
+ * "contoso", and the city by its first part, so "Austin" is "Austin, TX".
+ */
+export function contextConflict(
+  a: NormalizedContact,
+  b: NormalizedContact,
+): ContextConflict {
+  const company =
+    a.companyNorm.length > 1 &&
+    b.companyNorm.length > 1 &&
+    !sameThing(a.companyNorm, b.companyNorm, 0.9);
+  const cityA = cityOf(a.location);
+  const cityB = cityOf(b.location);
+  const city =
+    cityA.length > 1 && cityB.length > 1 && !sameThing(cityA, cityB, 0.85);
+  return { company, city };
+}
+
 // ---------------------------------------------------------------------------
 // One match, weighed
 // ---------------------------------------------------------------------------
@@ -298,18 +355,37 @@ export function namesContradict(
 export interface WeighedMatch {
   confidence: number;
   /**
-   * Why the confidence is lower than the table says, in words a reviewer
-   * reads. Null when nothing weakened it.
+   * Why a person should look twice before merging, in words a reviewer reads:
+   * "First names differ: Ada and Ben", "3 contacts share this phone number".
+   * Null when nothing argues against the match. Stored beside the reason, not
+   * inside it, so the review screen can show it on the row.
    */
   caveat: string | null;
 }
 
 const VALUE_NOUN = {
-  email: "address",
-  phone: "number",
+  email: "email address",
+  phone: "phone number",
   social: "profile link",
   name: "name",
 } as const;
+
+/** A generational suffix as people write it. */
+const GENERATION_LABEL: Record<string, string> = {
+  jr: "Jr.",
+  sr: "Sr.",
+  ii: "II",
+  iii: "III",
+  iv: "IV",
+};
+
+/** A normalized first name with its capitals back: "ada" is "Ada". */
+function capitalized(name: string): string {
+  return name.replace(
+    /(^|[\s'-])(\p{L})/gu,
+    (_, lead: string, letter: string) => `${lead}${letter.toUpperCase()}`,
+  );
+}
 
 /**
  * Weigh a shared identifier between two contacts.
@@ -325,17 +401,35 @@ export function weighAnchor(
   b: NormalizedContact,
   carriers: number,
 ): WeighedMatch {
-  return weigh(ANCHOR_CONFIDENCE[kind], kind, carriers, a, b);
+  return weigh(ANCHOR_CONFIDENCE[kind], kind, carriers, a, b, false);
 }
 
 /**
- * Weigh an exact-name match.
+ * Weigh the same name at the same company.
  *
- * Only the count applies. The names agree by definition, so there is no
- * contradiction to look for.
+ * Only the count applies. The names and the employer agree by definition,
+ * so there is no contradiction to look for.
  */
 export function weighName(base: number, carriers: number): WeighedMatch {
-  return weigh(base, "name", carriers, null, null);
+  return weigh(base, "name", carriers, null, null, false);
+}
+
+/**
+ * Weigh a match on the name alone: the same name, the same name from two
+ * imports, a nickname, or a middle name added.
+ *
+ * Nothing but the name says one person, so anything the two records say
+ * against it counts: two generations, two employers, two cities. Any of them
+ * caps the pair at `REVIEW_CEILING`, below every preset, so a namesake waits
+ * for a person instead of merging. The name at one company is `weighName`.
+ */
+export function weighNameOnly(
+  base: number,
+  carriers: number,
+  a: NormalizedContact,
+  b: NormalizedContact,
+): WeighedMatch {
+  return weigh(base, "name", carriers, a, b, true);
 }
 
 function weigh(
@@ -344,33 +438,54 @@ function weigh(
   carriers: number,
   a: NormalizedContact | null,
   b: NormalizedContact | null,
+  checkContext: boolean,
 ): WeighedMatch {
-  const contradicted = a !== null && b !== null && namesContradict(a, b);
+  const generations = a !== null && b !== null && generationsContradict(a, b);
+  const firstNames =
+    a !== null && b !== null && !generations && firstNamesContradict(a, b);
+  const context =
+    checkContext && a !== null && b !== null
+      ? contextConflict(a, b)
+      : { company: false, city: false };
+  const contradicted =
+    generations || firstNames || context.company || context.city;
   const confidence = weighClaim(base, carriers, contradicted);
-  const reasons: string[] = [];
-  if (carriers > SHARED_VALUE_LIMIT) {
-    reasons.push(`${carriers} contacts carry this ${VALUE_NOUN[kind]}`);
+
+  const caveats: string[] = [];
+  if (generations && a && b) {
+    // Sorted, so the same pair reads the same way whichever side was the new
+    // contact.
+    const [x, y] = [a.generation!, b.generation!]
+      .sort()
+      .map((g) => GENERATION_LABEL[g] ?? g);
+    caveats.push(`One is ${x} and the other ${y}`);
+  } else if (firstNames && a && b) {
+    const [x, y] = [a.firstNameNorm, b.firstNameNorm].sort().map(capitalized);
+    caveats.push(`First names differ: ${x} and ${y}`);
   }
-  if (a && b && generationsContradict(a, b)) {
-    // Sorted, so the same pair reads the same way whichever side was the
-    // new contact.
-    const [x, y] = [a.generation, b.generation].sort();
-    reasons.push(`one is "${x}" and the other "${y}"`);
-  } else if (contradicted && a && b) {
-    reasons.push(
-      `the first names differ ("${[a.firstNameNorm, b.firstNameNorm].sort().join('" ↔ "')}")`,
-    );
+  if (context.company && context.city) {
+    caveats.push("Different companies and cities");
+  } else if (context.company) {
+    caveats.push("Different companies");
+  } else if (context.city) {
+    caveats.push("Different cities");
+  }
+  if (carriers > SHARED_VALUE_LIMIT) {
+    caveats.push(`${carriers} contacts share this ${VALUE_NOUN[kind]}`);
   }
   return {
     confidence,
-    caveat:
-      reasons.length === 0
-        ? null
-        : `${reasons.join(", and ")}, so review this pair`,
+    caveat: caveats.length === 0 ? null : caveats.join(". "),
   };
 }
 
-/** A base reasoning line with the caveat appended, when there is one. */
-export function withCaveat(reasoning: string, match: WeighedMatch): string {
-  return match.caveat ? `${reasoning}. ${match.caveat}` : reasoning;
+/**
+ * A reason and its caveat as one line, for the merge history, which keeps a
+ * single line for each merge.
+ */
+export function reasonWithCaveat(
+  reasoning: string,
+  caveat: string | null | undefined,
+): string {
+  return caveat ? `${reasoning}. ${caveat}` : reasoning;
 }

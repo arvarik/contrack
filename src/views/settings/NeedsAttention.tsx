@@ -2,7 +2,7 @@
  * NeedsAttention — Landing page strip highlighting items requiring user attention.
  *
  * Displays up to two action links:
- * - "Review N possible duplicates" -> /settings/duplicates
+ * - "Review N possible duplicates" -> /pulse/duplicates
  * - "Retry N failed imports" in the last 30 days -> /settings/import
  *
  * Completely omitted when both counts are zero. The contacts never enriched
@@ -65,7 +65,7 @@ export const NeedsAttention = () => {
 
   if (duplicates > 0) {
     items.push({
-      path: "/settings/duplicates",
+      path: "/pulse/duplicates",
       label: `Review ${plural(duplicates, "possible duplicate", "possible duplicates")}`,
       icon: Copy,
     });

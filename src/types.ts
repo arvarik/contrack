@@ -33,9 +33,7 @@ import type {
 export type {
   ContactAddress,
   ContactEducation,
-  ContactEmail,
   ContactExperience,
-  ContactPhone,
   ContactSocialLink,
 };
 export type { ContactList } from "../shared/contracts/lists";
@@ -195,15 +193,24 @@ export interface PersistedDedupeSuggestion {
   contactIdB: string;
   matchType: string;
   confidence: number;
+  /** Why the two look like one person, in plain words. */
   reasoning: string;
+  /**
+   * Why a person should look twice, or null: "First names differ: Ada and
+   * Ben". Older rows kept it at the end of `reasoning`.
+   */
+  caveat?: string | null;
   matchedField: string | null;
   status: "pending" | "auto_merged" | "merged" | "dismissed";
   createdAt: string;
   reviewedAt: string | null;
   reviewedBy: string | null;
-  contactA?: Contact | null;
-  contactB?: Contact | null;
+  contactA?: SuggestedContact | null;
+  contactB?: SuggestedContact | null;
 }
+
+/** A contact in a suggestion, with its open follow-ups counted. */
+export type SuggestedContact = Contact & { openFollowUpCount?: number };
 
 /** A trashed (soft-deleted) contact row from /api/trash. */
 export interface TrashedContact {
@@ -228,58 +235,11 @@ export interface MergeLogEntry {
   duplicateSnapshot: string | null;
   primaryName?: string;
   duplicateName?: string;
-}
-
-interface MergeConflict {
-  type: "scalar_edited" | "record_edited" | "record_deleted" | "task_completed";
-  entity: string;
-  id?: string;
-  field?: string;
-  primaryValue?: unknown;
-  duplicateValue?: unknown;
-  currentValue?: unknown;
-  oldValue?: unknown;
-  message: string;
-}
-
-export interface UndoMergeResponse {
-  success: boolean;
-  restoredContactId?: string;
-  conflicts?: MergeConflict[];
-}
-
-/** A single piece of evidence connecting two contacts within a cluster. */
-export interface ClusterPair {
-  contactIdA: string;
-  contactIdB: string;
-  matchType:
-    | "email"
-    | "phone"
-    | "name"
-    | "name_company"
-    | "nickname"
-    | "middle_name"
-    | "cross_source"
-    | "fuzzy"
-    | "ai";
-  confidence: number;
-  reasoning: string;
-  matchedField?: string;
-}
-
-/** A group of contacts that the engine believes represent the same person. */
-export interface DedupeCluster {
-  id: string;
-  contacts: Contact[];
-  suggestedPrimaryId: string;
-  pairs: ClusterPair[];
-  aggregateConfidence: number;
-  summary: string;
-  size: number;
-  hasWeakLink: boolean;
-  minConfidence: number;
-  /** True for clusters with >10 contacts — requires explicit confirmation before merge */
-  requiresConfirmation: boolean;
+  /** What tells two entries for one name apart. */
+  primaryCompany?: string | null;
+  primaryLocation?: string | null;
+  duplicateCompany?: string | null;
+  duplicateLocation?: string | null;
 }
 
 export type DedupeScanMode = "quick" | "deep" | "full";
@@ -313,7 +273,6 @@ export interface DedupeScanProgress {
   totalPairs: number;
   autoMerged: number;
   pendingSuggestions: number;
-  clusters: DedupeCluster[];
   error?: string;
   startedAt: string;
   completedAt?: string;

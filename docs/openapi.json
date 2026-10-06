@@ -3179,9 +3179,10 @@
                   "type": "object",
                   "properties": {
                     "success": { "type": "boolean", "const": true },
-                    "contact": { "$ref": "#/components/schemas/Contact" }
+                    "contact": { "$ref": "#/components/schemas/Contact" },
+                    "mergeLogId": { "type": "string" }
                   },
-                  "required": ["success", "contact"],
+                  "required": ["success", "contact", "mergeLogId"],
                   "additionalProperties": false
                 }
               }
@@ -3229,9 +3230,19 @@
                         { "$ref": "#/components/schemas/Contact" },
                         { "type": "null" }
                       ]
+                    },
+                    "mergeLogIds": {
+                      "type": "array",
+                      "items": { "type": "string" }
                     }
                   },
-                  "required": ["success", "merged", "failed", "contact"],
+                  "required": [
+                    "success",
+                    "merged",
+                    "failed",
+                    "contact",
+                    "mergeLogIds"
+                  ],
                   "additionalProperties": false
                 }
               }
@@ -3285,9 +3296,18 @@
                         "properties": {
                           "primaryId": { "type": "string" },
                           "merged": { "type": "integer" },
-                          "failed": { "type": "integer" }
+                          "failed": { "type": "integer" },
+                          "mergeLogIds": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                          }
                         },
-                        "required": ["primaryId", "merged", "failed"],
+                        "required": [
+                          "primaryId",
+                          "merged",
+                          "failed",
+                          "mergeLogIds"
+                        ],
                         "additionalProperties": false
                       }
                     },
@@ -3295,6 +3315,144 @@
                     "totalFailed": { "type": "integer" }
                   },
                   "required": ["results", "totalMerged", "totalFailed"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dedupe/merge-log/{id}/undo": {
+      "post": {
+        "summary": "Undo a merge. By default the two contacts are also kept separate, so no scan or check merges them again",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "keepSeparate": { "type": "boolean" } },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "const": true },
+                    "restoredContactId": { "type": "string" },
+                    "conflicts": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/MergeConflict" }
+                    },
+                    "keptSeparate": { "type": "boolean" }
+                  },
+                  "required": [
+                    "success",
+                    "restoredContactId",
+                    "conflicts",
+                    "keptSeparate"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dedupe/merged-into/{contactId}": {
+      "get": {
+        "summary": "Where a merged-away contact lives now, or null while the contact is live",
+        "parameters": [
+          {
+            "name": "contactId",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "merge": {
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "properties": {
+                            "mergeLogId": { "type": ["string", "null"] },
+                            "primaryId": { "type": "string" },
+                            "primaryName": { "type": "string" },
+                            "mergedBy": {
+                              "type": "string",
+                              "enum": ["auto", "user"]
+                            },
+                            "mergedAt": { "type": "string" }
+                          },
+                          "required": [
+                            "mergeLogId",
+                            "primaryId",
+                            "primaryName",
+                            "mergedBy",
+                            "mergedAt"
+                          ],
+                          "additionalProperties": false
+                        },
+                        { "type": "null" }
+                      ]
+                    }
+                  },
+                  "required": ["merge"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/dedupe/suggestions/{id}/restore": {
+      "post": {
+        "summary": "Put a pair that was kept separate back in the review, and let scans find it again",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "const": true }
+                  },
+                  "required": ["success"],
                   "additionalProperties": false
                 }
               }
@@ -4916,6 +5074,30 @@
           "lng",
           "geoSource"
         ],
+        "additionalProperties": false
+      },
+      "MergeConflict": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "scalar_edited",
+              "record_edited",
+              "record_deleted",
+              "task_completed"
+            ]
+          },
+          "entity": { "type": "string" },
+          "id": { "type": "string" },
+          "field": { "type": "string" },
+          "primaryValue": {},
+          "duplicateValue": {},
+          "currentValue": {},
+          "oldValue": {},
+          "message": { "type": "string" }
+        },
+        "required": ["type", "entity", "message"],
         "additionalProperties": false
       },
       "NotOnMapContact": {

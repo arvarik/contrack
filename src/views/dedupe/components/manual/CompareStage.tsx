@@ -1,96 +1,82 @@
 import { motion } from "motion/react";
-import { ArrowRight, ChevronLeft, Shield, AlertTriangle } from "lucide-react";
-import { ContactCard } from "../shared/ContactCard";
+import { useQueries } from "@tanstack/react-query";
+import { ChevronLeft, GitMerge, Loader2 } from "lucide-react";
+import { contactQuery } from "../../../../api/contactCache";
 import type { Contact } from "../../../../types";
-import { cn } from "../../../../lib/utils";
-import { TONE_WASH } from "../../../../lib/styles";
+import { DuplicateComparison } from "../DuplicateComparison";
+import { roomAtBottom } from "../../utils/stickyRoom";
 
 interface CompareStageProps {
   selected: Contact[];
   primaryId: string | null;
   setPrimaryId: (id: string) => void;
   onBack: () => void;
-  onNext: () => void;
+  onMerge: () => Promise<void>;
+  isMerging: boolean;
 }
 
+/**
+ * The chosen contacts side by side, the one to keep, and what the merge
+ * keeps. The picker's rows are the list's slim contacts, with no profile
+ * links or sources, so each contact is read in full for the comparison, and
+ * the slim one stands in until it arrives.
+ */
 export const CompareStage = ({
   selected,
   primaryId,
   setPrimaryId,
   onBack,
-  onNext,
+  onMerge,
+  isMerging,
 }: CompareStageProps) => {
+  const full = useQueries({
+    queries: selected.map((c) => contactQuery(c.id)),
+  });
+  const contacts = selected.map((c, i) => full[i]?.data ?? c);
+  const others = selected.length - 1;
+
   return (
     <motion.div
       key="compare"
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -20 }}
+      className="flex flex-col gap-4"
     >
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <button
-          onClick={onBack}
-          className="hit-area flex items-center gap-1.5 text-sm text-on-surface-variant hover:text-on-surface transition-colors shrink-0"
-        >
-          <ChevronLeft className="w-4 h-4" />
-          Back
-        </button>
-        <p className="text-xs text-on-surface-variant text-right">
-          Choose which contact should be the primary (keeper)
-        </p>
-      </div>
-
-      {/* Comparison cards */}
-      <div
-        className={cn(
-          "grid gap-4 mb-6",
-          selected.length === 2
-            ? "grid-cols-1 lg:grid-cols-2"
-            : "grid-cols-1 lg:grid-cols-3",
-        )}
-      >
-        {selected.map((contact) => (
-          <ContactCard
-            key={contact.id}
-            contact={contact}
-            label={
-              contact.id === primaryId ? "Primary (keeper)" : "Will merge in"
-            }
-            labelColor={
-              contact.id === primaryId ? TONE_WASH.success : TONE_WASH.warning
-            }
-            other={selected.find((c) => c.id !== contact.id)}
-            isPrimary={contact.id === primaryId}
-            onSetPrimary={() => setPrimaryId(contact.id)}
-          />
-        ))}
-      </div>
-
-      {/* Warning for 3-way merge */}
-      {selected.length === 3 && (
-        <div className="flex items-start gap-3 p-4 bg-warning/8 rounded-xl mb-6">
-          <AlertTriangle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
-          <div>
-            <div className="text-sm font-bold text-warning mb-1">
-              3-way merge
-            </div>
-            <p className="text-xs text-on-surface-variant">
-              Two contacts will be merged sequentially into the primary. All
-              data from both duplicates will be preserved and combined
-            </p>
-          </div>
-        </div>
+      {primaryId && (
+        <DuplicateComparison
+          contacts={contacts}
+          keeperId={primaryId}
+          onKeeperChange={setPrimaryId}
+        />
       )}
 
-      <button
-        onClick={onNext}
-        disabled={!primaryId}
-        className="btn-primary w-full"
+      {/* The page is the one scroller, so Merge sticks to the bottom of the
+          screen. Below md it sits on top of the tab bar. */}
+      <div
+        ref={roomAtBottom}
+        className="sticky bottom-[calc(3.375rem+max(0.75rem,env(safe-area-inset-bottom)))] md:bottom-0 z-10 py-4 bg-surface flex gap-3"
       >
-        <Shield className="w-5 h-5" />
-        Preview merge result
-        <ArrowRight className="w-4 h-4" />
-      </button>
+        <button type="button" onClick={onBack} className="btn-secondary flex-1">
+          <ChevronLeft className="w-4 h-4" aria-hidden="true" />
+          Back
+        </button>
+        <button
+          type="button"
+          onClick={() => void onMerge()}
+          disabled={isMerging || !primaryId}
+          className="btn-primary flex-1"
+        >
+          {isMerging ? (
+            <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
+          ) : (
+            <GitMerge className="w-4 h-4" aria-hidden="true" />
+          )}
+          {others === 1
+            ? "Merge 2 contacts"
+            : `Merge ${selected.length} contacts`}
+        </button>
+      </div>
     </motion.div>
   );
 };

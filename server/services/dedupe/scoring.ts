@@ -106,15 +106,26 @@ export function computeMatchSignals(
       ? jaroWinkler(a.nameNorm, b.nameNorm)
       : 0;
 
-  const nameMetaphoneMatch =
-    a.phoneticHash.length > 0 &&
-    b.phoneticHash.length > 0 &&
-    a.phoneticHash === b.phoneticHash;
-
   const lastNameExactMatch =
     a.lastNameNorm.length > 1 &&
     b.lastNameNorm.length > 1 &&
     a.lastNameNorm === b.lastNameNorm;
+
+  // The full-name sound is four codes long, so it is mostly the first name:
+  // "Priyanka Narayan" and "Priyanka Desai" both sound PRNK. The last names
+  // must agree too, by sound or by a near spelling, before the pair counts as
+  // sounding alike.
+  const lastNamesAgree =
+    a.lastNameNorm.length > 1 &&
+    b.lastNameNorm.length > 1 &&
+    ((a.lastNamePhonetic.length > 0 &&
+      a.lastNamePhonetic === b.lastNamePhonetic) ||
+      jaroWinkler(a.lastNameNorm, b.lastNameNorm) >= 0.8);
+  const nameMetaphoneMatch =
+    a.phoneticHash.length > 0 &&
+    b.phoneticHash.length > 0 &&
+    a.phoneticHash === b.phoneticHash &&
+    lastNamesAgree;
 
   // --- Context signals ---
   const companyMatch =
@@ -207,6 +218,12 @@ export function computeCompositeScore(signals: MatchSignals): number {
     return weighClaim(ANCHOR_CONFIDENCE.social, 2, signals.namesContradict);
   }
 
+  // With no shared identifier, two different first names are two people.
+  // The name and the context below were enough to put "Josh Marlow" beside
+  // "Sam Marlow" at one company in front of a person, and every such pair a
+  // person was shown turned out to be two people.
+  if (signals.namesContradict) return 0;
+
   let score = 0;
 
   // --- Name signals (primary weight) ---
@@ -271,6 +288,32 @@ export function classifyPair(score: number): PairClassification {
   if (score >= THRESHOLD_AUTO) return "auto";
   if (score >= THRESHOLD_AI) return "ai";
   return "discard";
+}
+
+/** The least an unclear pair must score to be kept when no model checks it. */
+export const UNVERIFIED_FLOOR = 0.75;
+
+/** What an unclear pair keeps of its score when no model checks it. */
+export const UNVERIFIED_WEIGHT = 0.7;
+
+/**
+ * A funnel pair's confidence when no model checks it, or null to drop it.
+ *
+ * Three paths score pairs with nobody to ask: a scan without a provider, the
+ * check after an import, and the check after a contact is added. A pair in
+ * the auto band keeps its score. An unclear pair is kept only from 0.75, at
+ * 0.7 of its score, so it waits for a person below every preset. The import
+ * check used to keep every unclear pair at its full score, from 0.60, and
+ * one LinkedIn import filled the review list with people who only shared an
+ * employer.
+ */
+export function unverifiedConfidence(score: number): number | null {
+  const classification = classifyPair(score);
+  if (classification === "auto") return score;
+  if (classification === "ai" && score >= UNVERIFIED_FLOOR) {
+    return score * UNVERIFIED_WEIGHT;
+  }
+  return null;
 }
 
 /**
