@@ -233,6 +233,62 @@ describe("the contact to keep", () => {
   });
 });
 
+describe("a held key", () => {
+  it("decides once, though focus moves on to the next group", async () => {
+    const calls = stubApi([
+      pair("ab", ada, quill, 0.95),
+      pair("cd", tobias, wren, 0.94),
+    ]);
+    renderQueue();
+    await screen.findByRole("radiogroup", { name: "Contact to keep" });
+
+    fireEvent.keyDown(document.body, { key: "l" });
+    await waitFor(() =>
+      expect(document.activeElement?.textContent).toContain("Tobias Wren"),
+    );
+    fireEvent.keyDown(document.activeElement!, { key: "l", repeat: true });
+
+    await act(async () => new Promise((r) => setTimeout(r, 20)));
+    expect(merges(calls)).toHaveLength(1);
+  });
+});
+
+describe("Different person", () => {
+  it("keeps the open group and the contact chosen in it", async () => {
+    const adaQ = person("e", "Ada Q.");
+    stubApi([
+      pair("ab", ada, quill, 0.95),
+      pair("ae", ada, adaQ, 0.93),
+      pair("be", quill, adaQ, 0.93),
+      // First in the list before and after, so a lost place shows.
+      pair("cd", tobias, wren, 0.97),
+    ]);
+    renderQueue();
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Ada Quill and 2 others/ }),
+    );
+    const keep = () =>
+      screen.getByRole("radiogroup", { name: "Contact to keep" });
+    fireEvent.click(within(keep()).getByRole("radio", { name: /^A\. Quill/ }));
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Ada Q. is a different person" }),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("heading", {
+          level: 2,
+          name: "Ada Quill and A. Quill",
+        }),
+      ).toBeTruthy(),
+    );
+    expect(
+      within(keep()).getByRole("radio", { checked: true }).textContent,
+    ).toContain("A. Quill");
+  });
+});
+
 describe("Undo", () => {
   it("takes a merge back and puts the pair back in the list, without keeping them separate", async () => {
     const calls = stubApi([pair("ab", ada, quill, 0.95)]);

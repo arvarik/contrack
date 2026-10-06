@@ -169,7 +169,7 @@ export const ContactProfile = ({
   // ── Data queries ──────────────────────────────────────────────────────
   const { data: contact, error, isFetching, refetch } = useContact(id);
   // A merged contact's old link goes on to the contact it merged into.
-  const redirecting = useMergedRedirect(contact, id);
+  const redirecting = useMergedRedirect(contact, id, isFetching);
   const { data: timeline = [], isLoading: timelineLoading } = useTimeline(id);
   /**
    * The contact as far as it is known: the full one, or else its row in the

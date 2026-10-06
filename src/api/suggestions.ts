@@ -226,11 +226,24 @@ export const fetchMergedInto = async (
   return data.merge;
 };
 
-/** The contact page asks once it sees the contact was merged away. */
+/**
+ * The contact page asks once it sees the contact was merged away. Always
+ * fresh: an undo changes the answer, and a cached one sent the page back to
+ * the contact it had just left.
+ */
 export const useMergedInto = (contactId: string, enabled: boolean) =>
   useQuery({
     queryKey: suggestionKeys.mergedInto(contactId),
     queryFn: () => fetchMergedInto(contactId),
     enabled,
-    staleTime: 60_000,
+    staleTime: 0,
   });
+
+/**
+ * Forget what the cache knows about a contact's merge, before its page opens
+ * again after an undo: the contact as it was merged, and where it went.
+ */
+export function forgetMerge(qc: QueryClient, contactId: string): void {
+  qc.removeQueries({ queryKey: ["contacts", contactId], exact: true });
+  qc.removeQueries({ queryKey: suggestionKeys.mergedInto(contactId) });
+}

@@ -19,6 +19,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Copy, GitMerge, Loader2, X } from "lucide-react";
 import {
+  forgetMerge,
   undoMerges,
   useDismissSuggestion,
   useMergeCluster,
@@ -125,6 +126,8 @@ function Banner({
           void undoMerges(qc, result.mergeLogIds, false)
             .then(() => {
               if (gone.id === contactId) {
+                // The cache still holds this page's contact as merged.
+                forgetMerge(qc, contactId);
                 navigate(pageOf(contactId), { replace: true });
               }
             })

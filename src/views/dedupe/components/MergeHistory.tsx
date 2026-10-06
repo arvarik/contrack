@@ -32,7 +32,7 @@ import { LABEL, TONE_WASH } from "../../../lib/styles";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { Badge } from "../../../components/ui/Badge";
 import type { MergeLogEntry } from "../../../types";
-import { plainReason } from "../utils/reason";
+import { guessMatchType, plainReason } from "../utils/reason";
 
 /**
  * A time from the database. SQLite writes "2026-10-05 22:52:02" in UTC with
@@ -86,7 +86,7 @@ function Entry({ entry }: { entry: MergeLogEntry }) {
   const duplicateHint = hintOf(entry.duplicateCompany, entry.duplicateLocation);
   const primaryHint = hintOf(entry.primaryCompany, entry.primaryLocation);
   const reason = entry.reasoning
-    ? plainReason(entry.mergeType === "ai" ? "ai" : "", entry.reasoning)
+    ? plainReason(guessMatchType(entry.reasoning), entry.reasoning)
     : null;
 
   const handleUndo = async () => {
@@ -197,7 +197,7 @@ export const MergeHistory = () => {
   if (entries.length === 0) {
     return (
       <EmptyState
-        level={3}
+        level={2}
         icon={Clock}
         title="No merges yet"
         body="Each merge shows here, and can be undone for 90 days"
@@ -212,7 +212,7 @@ export const MergeHistory = () => {
       </p>
       {groups.map((group) => (
         <section key={group.label} aria-label={group.label}>
-          <h3 className={cn(LABEL, "px-1 mb-2")}>{group.label}</h3>
+          <h2 className={cn(LABEL, "px-1 mb-2")}>{group.label}</h2>
           <ul className="space-y-1.5">
             {group.items.map((entry) => (
               <Entry key={entry.id} entry={entry} />

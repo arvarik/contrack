@@ -44,6 +44,33 @@ const TYPE_WORDS: Record<string, string> = {
 const ENGINE_WORDS =
   /\d+%|\bscore\b|embedding|similarity|↔|^Shared (email|phone)|^Exact name match|^Nickname match/i;
 
+/**
+ * The match type an old merge-history line names, for a merge recorded
+ * before the line was plain: "Shared email address: …", "Exact name match
+ * with same company". Merge history keeps no match type of its own.
+ */
+export function guessMatchType(reasoning: string): string {
+  const line = reasoning.trim();
+  if (/^Shared email|^Same email/i.test(line)) return "email";
+  if (/^Shared phone|^Same phone/i.test(line)) return "phone";
+  if (/profile link/i.test(line)) return "social";
+  if (/^Exact name match.*same company|^Same name and company/i.test(line)) {
+    return "name_company";
+  }
+  if (
+    /^Exact name match.*(different sources|across)|^Same name, (in two imports|from)/i.test(
+      line,
+    )
+  ) {
+    return "cross_source";
+  }
+  if (/^Exact name match|^Same name$/i.test(line)) return "name";
+  if (/^Nickname/i.test(line)) return "nickname";
+  if (/middle name/i.test(line)) return "middle_name";
+  if (/\d+%|\bscore\b|embedding|similarity/i.test(line)) return "fuzzy";
+  return "";
+}
+
 /** True when a model wrote the reason. Only those wear the AI colour. */
 export const isAiReason = (matchType: string): boolean => matchType === "ai";
 

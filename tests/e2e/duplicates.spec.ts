@@ -80,9 +80,9 @@ test("a check fills the review list, and the contact chosen is the one a key kee
   await expect(
     page.getByRole("link", { name: "1 merged automatically" }),
   ).toBeVisible();
-  await page
-    .getByRole("link", { name: /Review 3 possible duplicates/ })
-    .click();
+  await expect(page.getByText("3 possible duplicates to review")).toBeVisible();
+  // One main button: the callout's Review them, over the card.
+  await page.getByRole("link", { name: "Review them" }).click();
   await expect(page).toHaveURL(/\/pulse\/duplicates$/);
 
   // 2. Three parts, and the caveat on its row.

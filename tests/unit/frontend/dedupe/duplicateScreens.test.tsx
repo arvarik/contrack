@@ -188,7 +188,7 @@ describe("the contact page's banner", () => {
 
 describe("a merged contact's old page", () => {
   function Page({ contact }: { contact: Contact }) {
-    const redirecting = useMergedRedirect(contact, contact.id);
+    const redirecting = useMergedRedirect(contact, contact.id, false);
     return <span>{redirecting ? "redirecting" : "page"}</span>;
   }
 
@@ -215,6 +215,55 @@ describe("a merged contact's old page", () => {
     expect(vi.mocked(toast).mock.calls[0][0]).toBe(
       "A. Quill was merged into Ada Quill",
     );
+  });
+
+  it("stays on the contact an Undo brought back", async () => {
+    // The server's answer changes with the undo. A cached answer sent the
+    // page straight back to the contact it had just left.
+    let merged = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/merged-into/")) {
+          return Response.json({
+            merge: merged
+              ? {
+                  mergeLogId: "log-9",
+                  primaryId: "keeper",
+                  primaryName: "Ada Quill",
+                  mergedBy: "auto",
+                  mergedAt: "2026-10-05 10:00:00",
+                }
+              : null,
+          });
+        }
+        return Response.json({
+          success: true,
+          restoredContactId: "gone",
+          conflicts: [],
+          keptSeparate: true,
+        });
+      }),
+    );
+    const contact = { ...person("gone", "A. Quill"), canonicalId: "keeper" };
+    withProviders(
+      <Page contact={contact as unknown as Contact} />,
+      "/contact/gone",
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("where").textContent).toBe("/contact/keeper"),
+    );
+
+    merged = false;
+    await act(async () => lastUndo(toast)());
+
+    await waitFor(() =>
+      expect(screen.getByTestId("where").textContent).toBe("/contact/gone"),
+    );
+    // Long enough for a stale answer to have bounced it back.
+    await act(async () => new Promise((r) => setTimeout(r, 50)));
+    expect(screen.getByTestId("where").textContent).toBe("/contact/gone");
   });
 
   it("leaves a live contact's page alone", () => {

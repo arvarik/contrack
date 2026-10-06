@@ -149,7 +149,23 @@ export const DuplicateQueue = () => {
   const nextAt = useRef<number | null>(null);
   const lastAction = useRef<LastAction | null>(null);
 
-  const index = groups.findIndex((g) => g.key === currentKey);
+  const index = (() => {
+    const exact = groups.findIndex((g) => g.key === currentKey);
+    if (exact >= 0 || currentKey === null) return exact;
+    // The open group lost a member, or gained one: it is now the group that
+    // shares the most contacts with it.
+    const was = new Set(currentKey.split(","));
+    let best = -1;
+    let most = 0;
+    groups.forEach((g, i) => {
+      const shared = g.contacts.filter((c) => was.has(c.id)).length;
+      if (shared > most) {
+        most = shared;
+        best = i;
+      }
+    });
+    return best;
+  })();
   // From `lg` a group is always open: the first, until a person picks.
   const current =
     index >= 0 ? groups[index] : isWide ? (groups[0] ?? null) : null;
@@ -253,8 +269,10 @@ export const DuplicateQueue = () => {
       setBusyFor([group.key], true);
       try {
         const result = await mergeOne(group);
-        nextAt.current = at;
         setSheetOpen(false);
+        // Focus goes on only when the group leaves: a merge that did nothing
+        // leaves it in place.
+        if (result.merged > 0) nextAt.current = at;
         const keeper = group.contacts.find((c) => c.id === result.keeperId)!;
         const undo = () =>
           undoMerges(qc, result.mergeLogIds, false).then(() => {});
@@ -308,8 +326,10 @@ export const DuplicateQueue = () => {
           },
           "Contrack will not suggest them again",
         );
+        return true;
       } catch (err) {
         toast.error(`Could not keep them separate: ${errorText(err)}`);
+        return false;
       } finally {
         setBusyFor(keys, false);
       }
@@ -326,20 +346,33 @@ export const DuplicateQueue = () => {
         group.suggestions,
         `Kept ${groupName(group.contacts)} separate`,
         [group.key],
-      );
+      ).then((ok) => {
+        if (!ok) nextAt.current = null;
+      });
     },
     [busy, groups, keepApart],
   );
 
   const handleRemove = useCallback(
     (group: DuplicateGroup, contact: ReviewContact) => {
+      // The group comes back under its other members' key, and keeps the
+      // contact a person chose there. The open pane finds it by overlap.
+      const rest = group.contacts
+        .map((c) => c.id)
+        .filter((id) => id !== contact.id)
+        .sort()
+        .join(",");
+      const chosen = keepers[group.key];
+      if (chosen && chosen !== contact.id) {
+        setKeepers((prev) => ({ ...prev, [rest]: chosen }));
+      }
       void keepApart(
         pairsOf(group, contact.id),
         `Took ${contact.name} out of the group`,
         [group.key],
       );
     },
-    [keepApart],
+    [keepApart, keepers],
   );
 
   /** Merge every group of one part, each into the contact it keeps. */
@@ -404,6 +437,9 @@ export const DuplicateQueue = () => {
         return;
       }
       if (!singleKeys && /^[hjklz]$/.test(e.key)) return;
+      // A decision is one press. A held key repeats, and a held L merged
+      // each group in turn as focus moved on to it. Moving may repeat.
+      if (e.repeat && /^(l|h|z|ArrowRight|ArrowLeft)$/.test(e.key)) return;
 
       if (e.key === "z") {
         if (!lastAction.current) return;

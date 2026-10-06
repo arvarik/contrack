@@ -9,6 +9,7 @@
 import { describe, expect, it } from "vitest";
 import { matchLevel } from "../../../../src/views/dedupe/utils/level";
 import {
+  guessMatchType,
   pairCaveat,
   plainReason,
 } from "../../../../src/views/dedupe/utils/reason";
@@ -103,6 +104,27 @@ describe("plainReason", () => {
     ).toBe("Similar names");
     expect(plainReason("phone", "Shared phone number: +1 212 555 0199")).toBe(
       "Same phone number",
+    );
+  });
+});
+
+describe("an old Merge history line", () => {
+  it("reads as its match type's plain words, and a model's line as it was", () => {
+    const plain = (line: string) => plainReason(guessMatchType(line), line);
+    expect(plain("Shared email address: ada@northwind.test")).toBe(
+      "Same email address",
+    );
+    expect(plain("Exact name match with same company")).toBe(
+      "Same name and company",
+    );
+    expect(plain('Exact name match: "Ada Quill"')).toBe("Same name");
+    expect(
+      plain(
+        "High name similarity (94%), embedding similarity 94% (score: 81%)",
+      ),
+    ).toBe("Similar names");
+    expect(plain("Both work at Northwind in Seattle")).toBe(
+      "Both work at Northwind in Seattle",
     );
   });
 });

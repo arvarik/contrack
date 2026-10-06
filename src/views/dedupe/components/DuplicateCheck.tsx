@@ -195,7 +195,12 @@ export const DuplicateCheck = ({ variant = "card" }: DuplicateCheckProps) => {
         );
       case "running":
         return (
-          <div className="space-y-3" role="status" aria-live="polite">
+          // One announcement when the check starts, not one for each step
+          // of the counter: the bar carries the numbers for a screen reader.
+          <div className="space-y-3">
+            <span role="status" className="sr-only">
+              Checking for duplicates
+            </span>
             <div className="flex items-baseline justify-between gap-3">
               <p className="text-sm font-bold text-on-surface">
                 {scan && scan.totalContacts > 0

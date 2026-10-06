@@ -12,41 +12,48 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMergedInto } from "../../../api";
+import { forgetMerge, useMergedInto } from "../../../api";
 import { announceMergedPage } from "../../../lib/mergeNotice";
 import type { Contact } from "../../../types";
 
-/** True while the page is on its way to the contact this one merged into. */
+/**
+ * True while the page is on its way to the contact this one merged into.
+ *
+ * It acts only on fresh answers: the contact as the server has it now, and
+ * where it went. After an undo the cache still held the merged contact, and
+ * the page went straight back to the kept one.
+ */
 export function useMergedRedirect(
   contact: Contact | undefined,
   id: string,
+  contactFetching: boolean,
 ): boolean {
   const qc = useQueryClient();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const mergedAway = Boolean(contact?.canonicalId);
-  const { data: merge, isFetched } = useMergedInto(id, mergedAway);
+  const mergedAway = Boolean(contact?.canonicalId) && !contactFetching;
+  const {
+    data: merge,
+    isFetchedAfterMount,
+    isFetching,
+  } = useMergedInto(id, mergedAway);
   const name = contact?.name ?? "This contact";
-  const fallback = contact?.canonicalId ?? null;
 
   useEffect(() => {
-    if (!mergedAway || !isFetched) return;
+    if (!mergedAway || !isFetchedAfterMount || isFetching || !merge) return;
     const base = pathname.startsWith("/map/contact/")
       ? "/map/contact/"
       : "/contact/";
-    if (merge) {
-      announceMergedPage(qc, name, merge, () =>
-        navigate(`${base}${id}`, { replace: true }),
-      );
-      navigate(`${base}${merge.primaryId}`, { replace: true });
-    } else if (fallback) {
-      navigate(`${base}${fallback}`, { replace: true });
-    }
+    announceMergedPage(qc, name, merge, () => {
+      forgetMerge(qc, id);
+      navigate(`${base}${id}`, { replace: true });
+    });
+    navigate(`${base}${merge.primaryId}`, { replace: true });
   }, [
     mergedAway,
-    isFetched,
+    isFetchedAfterMount,
+    isFetching,
     merge,
-    fallback,
     name,
     id,
     pathname,
@@ -54,5 +61,5 @@ export function useMergedRedirect(
     qc,
   ]);
 
-  return mergedAway;
+  return mergedAway && merge !== null;
 }
