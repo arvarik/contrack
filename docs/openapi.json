@@ -4227,6 +4227,7 @@
                       },
                       "isTracked": { "type": "integer" },
                       "trackedAt": { "type": ["string", "null"] },
+                      "archivedAt": { "type": ["string", "null"] },
                       "aiResearch": { "type": ["string", "null"] },
                       "ownerId": {
                         "type": "string",
@@ -4711,6 +4712,7 @@
           },
           "isTracked": { "type": "boolean" },
           "trackedAt": { "type": ["string", "null"] },
+          "archivedAt": { "type": ["string", "null"] },
           "aiResearch": { "type": ["string", "null"] },
           "ownerId": {
             "type": "string",
@@ -4971,6 +4973,7 @@
           "geoSource",
           "isTracked",
           "trackedAt",
+          "archivedAt",
           "aiResearch",
           "ownerId",
           "scoreDirty",

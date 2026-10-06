@@ -1134,7 +1134,7 @@ export const contactService = {
       .prepare(
         `SELECT * FROM contacts
           WHERE ownerId = ? AND isArchived = 1 AND deletedAt IS NULL
-          ORDER BY updatedAt DESC`,
+          ORDER BY COALESCE(archivedAt, updatedAt) DESC`,
       )
       .all(scope.ownerId);
     return contactRepo.hydrateMany(all);
