@@ -32,20 +32,18 @@ describe("safeHref", () => {
 });
 
 describe("cleanLinkedInSlug", () => {
-  // The six documented examples from the original heuristic, then a name
-  // with no suffix.
   it.each([
     // A numeric auto-generated suffix
-    ["alex-sadler-07993773", "alex-sadler"],
+    ["rowan-vale-07993773", "rowan-vale"],
     // A hex auto-generated suffix
-    ["alexander-glavin-17b821a8", "alexander-glavin"],
+    ["ellis-harbor-17b821a8", "ellis-harbor"],
     // The suffix goes, the short name initial stays
-    ["yuxuan-jonathan-c-027b18156", "yuxuan-jonathan-c"],
+    ["mira-jonah-c-027b18156", "mira-jonah-c"],
     // A mixed alphanumeric suffix
-    ["young-lee-78ab07111", "young-lee"],
+    ["tobin-ash-78ab07111", "tobin-ash"],
     // Custom usernames without hyphens stay, digits and all
-    ["aayush1196", "aayush1196"],
-    ["wangxi05104", "wangxi05104"],
+    ["rowanv1196", "rowanv1196"],
+    ["northwind05104", "northwind05104"],
     // A short name segment without digits stays
     ["jane-doe", "jane-doe"],
   ])("shows %j as %j", (slug, display) => {

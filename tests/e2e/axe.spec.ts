@@ -143,9 +143,8 @@ for (const screen of SCREENS) {
  * Landmarks and headings.
  *
  * The WCAG scans above pass on a page that is one undifferentiated block, so
- * structure is scanned separately, on the screens the review measured: no h1
- * on Network, the contact or the map, and thirty-three nodes outside any
- * landmark on Network.
+ * structure is scanned separately, on the screens most likely to lose an h1
+ * or leave nodes outside every landmark.
  */
 const STRUCTURED = [
   "network list",
