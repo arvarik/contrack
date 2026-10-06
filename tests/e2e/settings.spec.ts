@@ -401,12 +401,18 @@ test.describe("Settings — Tools and Data", () => {
       "N:Test;Zora;;;",
       "EMAIL;TYPE=INTERNET:zora@example.com",
       "END:VCARD",
+      // A card with no name is counted, not dropped without a word.
+      "BEGIN:VCARD",
+      "VERSION:3.0",
+      "EMAIL;TYPE=INTERNET:noname@example.com",
+      "END:VCARD",
       "",
     ].join("\n");
 
     const fileInput = page.locator('input[type="file"]');
+    // The extension is read in any case.
     await fileInput.setInputFiles({
-      name: "zora.vcf",
+      name: "ZORA.VCF",
       mimeType: "text/vcard",
       buffer: Buffer.from(vcard),
     });
@@ -415,7 +421,10 @@ test.describe("Settings — Tools and Data", () => {
     await expect(page.getByText("Import complete")).toBeVisible({
       timeout: 10_000,
     });
-    await expect(page.getByText("1 contacts processed")).toBeVisible();
+    await expect(page.getByText("1 contact imported")).toBeVisible();
+    await expect(
+      page.getByText("1 entry has no name and was not imported"),
+    ).toBeVisible();
 
     // Click Done to finish
     await page.getByRole("button", { name: "Done" }).click();
