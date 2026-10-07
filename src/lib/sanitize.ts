@@ -1,8 +1,8 @@
 /**
  * The DOMPurify settings for a note's rich text: the tags and attributes the
- * composer writes, so stored HTML cannot carry anything else through to the
- * page. The composer can also write `h4` to `h6` and `hr`, which this removes:
- * DOMPurify keeps the text of a removed tag. Any `data-` attribute passes.
+ * composer's editor writes, so stored HTML cannot carry anything else through
+ * to the page. Any `data-` attribute passes. A link preview card needs `div`
+ * and `img`, which this does not allow.
  */
 export const TIPTAP_SANITIZE_CONFIG = {
   ALLOWED_TAGS: [
@@ -20,9 +20,13 @@ export const TIPTAP_SANITIZE_CONFIG = {
     "h1",
     "h2",
     "h3",
+    "h4",
+    "h5",
+    "h6",
     "blockquote",
     "code",
     "pre",
+    "hr",
   ],
   // A link's, and a mention span's.
   ALLOWED_ATTR: ["href", "target", "rel", "data-type", "data-id", "class"],
