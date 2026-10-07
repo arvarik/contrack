@@ -16,10 +16,24 @@ import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import {
   BLINK_EVERY,
+  REDUCED_MOTION_STYLE,
   livingBird,
   loopPose,
   perchLoop,
 } from "../../../../scripts/brand/animatedLockup";
+import {
+  FLOW_ROOM,
+  FLOW_STEPS,
+  FLOW_VIEW,
+  PERCHES,
+  flowFrames,
+  flowPerches,
+  inkBox,
+  renderFlowSvg,
+  renderPerchSvg,
+  type PerchName,
+  type SceneFrame,
+} from "../../../../scripts/brand/readmeScenes";
 import {
   MARK_VARIANTS,
   MASKABLE_SAFE_RADIUS,
@@ -47,7 +61,11 @@ import {
   CORVID_PATHS,
   TILE,
 } from "../../../../src/assets/corvidPaths";
-import { HOME_POSE, POSE_KEYS } from "../../../../src/assets/corvidRig";
+import {
+  HOME_POSE,
+  POSE_KEYS,
+  bodyCenter,
+} from "../../../../src/assets/corvidRig";
 import { BLINK_EVERY as BRAIN_BLINK_EVERY } from "../../../../src/lib/corvidBrain";
 import type { Motion } from "../../../../src/lib/corvidMotion";
 
@@ -355,6 +373,126 @@ describe("the living lockup", () => {
     for (const name of LIVING) {
       const bytes = fs.statSync(file(`docs/brand/${name}.svg`)).size;
       expect(bytes, name).toBeLessThan(150_000);
+    }
+  });
+});
+
+describe("the README's scenes", () => {
+  const PERCH_NAMES = Object.keys(PERCHES) as PerchName[];
+  const scenes = async () => [
+    ...(await Promise.all(
+      [false, true].map(async (dark) => ({
+        name: `readme-flow${dark ? "-dark" : ""}`,
+        svg: await renderFlowSvg(dark),
+      })),
+    )),
+    ...PERCH_NAMES.flatMap((which) =>
+      [false, true].map((dark) => ({
+        name: `readme-perch-${which}${dark ? "-dark" : ""}`,
+        svg: renderPerchSvg(which, dark),
+      })),
+    ),
+  ];
+
+  it("commits every scene the script draws, byte for byte", async () => {
+    for (const { name, svg } of await scenes()) {
+      expect(read(`docs/brand/${name}.svg`), name).toBe(svg);
+    }
+  });
+
+  it("ends every animation where it starts, so each loop has no seam", async () => {
+    for (const { name, svg } of await scenes()) {
+      const all = [
+        ...svg.matchAll(/ keyTimes="([^"]*)" values="([^"]*)" \/>/g),
+      ];
+      expect(all.length, name).toBeGreaterThan(0);
+      for (const [, keyTimes, values] of all) {
+        const list = values!.split(";");
+        expect(list[0], name).toBe(list.at(-1));
+        expect(keyTimes!.split(";")).toHaveLength(list.length);
+      }
+    }
+  });
+
+  it("flies the bird from each step's ring to the next, and home to the first", () => {
+    const perches = flowPerches();
+    const frames = flowFrames();
+    const home = bodyCenter(HOME_POSE);
+    const ringOf = (frame: SceneFrame) =>
+      perches.findIndex(
+        (perch) =>
+          frame.rotate === 0 &&
+          frame.size === perch.size &&
+          Math.abs(frame.x - (perch.left + (home[0] / 100) * perch.size)) <
+            0.01 &&
+          Math.abs(frame.y - (perch.top + (home[1] / 100) * perch.size)) < 0.01,
+      );
+    const visits: number[] = [];
+    for (const frame of frames) {
+      const ring = ringOf(frame);
+      if (ring >= 0 && visits.at(-1) !== ring) visits.push(ring);
+    }
+    expect(visits).toEqual([0, 1, 2, 3, 0]);
+    for (const key of POSE_KEYS) {
+      expect(frames[0]!.pose[key], key).toBe(HOME_POSE[key]);
+    }
+    expect(FLOW_STEPS.map((step) => step.label)).toEqual([
+      "Import",
+      "Dedupe",
+      "Enrich",
+      "Track",
+    ]);
+  });
+
+  it("keeps the bird between the picture's top and bottom, and hides it across the jump back", () => {
+    const frames = flowFrames();
+    for (const frame of frames) {
+      const pen = (CORVID_OPTICAL.large.stroke / 2) * (frame.size / 100);
+      const ink = inkBox(frame);
+      expect(ink.top - pen).toBeGreaterThanOrEqual(FLOW_VIEW.top);
+      expect(ink.bottom + pen).toBeLessThanOrEqual(
+        FLOW_VIEW.top + FLOW_VIEW.height,
+      );
+      expect(ink.left).toBeGreaterThanOrEqual(0);
+      expect(ink.right).toBeLessThanOrEqual(FLOW_ROOM.width);
+    }
+    // It leaves on the right and comes back on the left. The two frames
+    // either side of the jump are hidden, and both are out of the picture.
+    const hidden = frames.flatMap((frame, i) => (frame.hidden ? [i] : []));
+    expect(hidden).toHaveLength(2);
+    const [out, back] = hidden as [number, number];
+    expect(back).toBe(out + 1);
+    expect(inkBox(frames[out]!).left).toBeGreaterThan(
+      FLOW_VIEW.left + FLOW_VIEW.width,
+    );
+    expect(inkBox(frames[back]!).right).toBeLessThan(FLOW_VIEW.left);
+  });
+
+  it("holds the logo still in the first ring, and in each perch, for reduced motion", async () => {
+    for (const { name, svg } of await scenes()) {
+      expect(svg, name).toContain(REDUCED_MOTION_STYLE.join("\n  "));
+      const still = svg.slice(
+        svg.indexOf('<g class="still"'),
+        svg.indexOf('<g class="alive">'),
+      );
+      expect(still, name).not.toContain("<animate");
+      for (const part of BIRD_PART_ORDER) {
+        expect(still, `${name} ${part}`).toContain(
+          `<path d="${CORVID_PATHS[part]}" />`,
+        );
+      }
+      expect(still, name).toContain(`<circle cx="${CORVID_EYE.cx}"`);
+    }
+  });
+
+  it("keeps the flow scene under 600 KB and each perch under 100 KB", () => {
+    for (const dark of ["", "-dark"]) {
+      const flow = fs.statSync(file(`docs/brand/readme-flow${dark}.svg`)).size;
+      expect(flow).toBeLessThan(600_000);
+      for (const which of PERCH_NAMES) {
+        const name = `docs/brand/readme-perch-${which}${dark}.svg`;
+        expect(fs.statSync(file(name)).size, name).toBeLessThan(100_000);
+      }
     }
   });
 });

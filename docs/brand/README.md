@@ -147,6 +147,31 @@ strokes and the name are the static lockup's. Only the bird moves.
 - **It honors reduced motion.** With `prefers-reduced-motion: reduce`, the
   file shows the still bird in place of the moving one.
 
+## The README's scenes
+
+![The four steps, with the bird flying from ring to ring](readme-flow.svg)
+
+The README shows the bird at work in two more places. Each file has a
+version for a light page and one for a dark page, and each follows the
+animated lockup's rules: the app's own motion, the logo at rest, SMIL inside
+an `<img>`, and the still bird for reduced motion.
+
+- **The four steps.** `readme-flow.svg` shows Import, Dedupe, Enrich and
+  Track as four rings. The bird sits in each ring, plays an act, and flies to
+  the next one. From Track it flies out of the picture on the right and comes
+  back in on the left, so it never crosses a ring. Each flight is a route from
+  `planFlight` in `src/lib/corvidFlight.ts`. The bird takes off as it does
+  from the perch in the app, and it is called home to the next ring as a
+  second press calls it home. The loop is about 22 seconds. The file is about
+  550 KB, because a wingbeat needs a keyframe in almost every frame.
+- **The cards at the foot.** `readme-perch-help.svg`,
+  `readme-perch-contribute.svg` and `readme-perch-license.svg` are the mark
+  in its ring, each with acts of its own.
+
+`scripts/brand/readmeScenes.ts` writes them. A flying bird is placed as the
+app places it: its body's middle on the route, turned and scaled about that
+point. Four nested groups carry that with `<animateTransform>`.
+
 ## The app icon
 
 ![The app icon](corvid-app-icon-1024.png)
@@ -212,6 +237,8 @@ The kit, in this folder:
 | `corvid-app-icon-1024.png`      | App stores and press kits                             |
 | `contrack-lockup*.svg`, `.png`  | The mark and the name                                 |
 | `contrack-lockup-animated*.svg` | The lockup with the bird alive, for the README        |
+| `readme-flow*.svg`              | The four steps, with the bird flying between them     |
+| `readme-perch-*.svg`            | The birds on the cards at the foot of the README      |
 | `social-preview.png`            | The repository's card, 1280 × 640                     |
 | `corvid-optical-sizes.png`      | The four masters, for this guide                      |
 | `corvid-mark-variants.png`      | The four versions on their grounds, for this guide    |
@@ -225,13 +252,17 @@ The kit, in this folder:
 
 ## Do and do not
 
-- ✅ Use the generated files, at the size their master is for.
-- ✅ Use the dark version on a dark ground, and the white one on a photograph.
-- ✅ Keep the eye cyan in the color versions.
-- ❌ Do not redraw, stretch, rotate or slant the mark.
-- ❌ Do not recolor the eye, or add a shadow, an outline or a gradient to
-  the mark.
-- ❌ Do not put the color mark on a busy photograph. Use the white one.
-- ❌ Do not put white on the branding gradient's end, `#47befd`. The tile
-  stops at `#2795c9` for that reason.
-- ❌ Do not scale one weight to every size. Each size has its master.
+Do:
+
+- Use the generated files, at the size their master is for.
+- Use the dark version on a dark ground, and the white one on a photograph.
+- Keep the eye cyan in the color versions.
+
+Do not:
+
+- Redraw, stretch, rotate or slant the mark.
+- Recolor the eye, or add a shadow, an outline or a gradient to the mark.
+- Put the color mark on a busy photograph. Use the white one.
+- Put white on the branding gradient's end, `#47befd`. The tile stops at
+  `#2795c9` for that reason.
+- Scale one weight to every size. Each size has its master.
