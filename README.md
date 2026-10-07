@@ -22,312 +22,167 @@
   <img src="docs/images/tour.gif" alt="A tour of Contrack: the Pulse page, the command palette opening a contact, a question answered in Ask Contrack, and the map of the network" width="100%" />
 </p>
 
-Relationships are your most valuable asset, but they're also the hardest thing to keep track of. Contacts scattered across Apple, Google, and LinkedIn. Names you recognize but can't quite place. Introductions you meant to follow up on but never did. **Contrack fixes that.**
+Relationships are your most valuable asset, and the hardest thing to keep track of. Your contacts are scattered across Apple, Google and LinkedIn. A name looks familiar, but you can't place it. You meant to follow up, and you never did. **Contrack fixes that.**
 
-Sync your contacts from every source into one unified network with automatic dedupe across platforms. Let AI enrichment research your connections across the web and fill in the context you never had time to enter. Behind the scenes, proactive intelligence keeps watch over your network and nudges you to reconnect before important relationships go quiet.
+Contrack is a personal CRM that you run yourself. Your network stays on your machine, search runs on small local models, and AI is optional: bring a Gemini, OpenAI or Anthropic key, point it at a model server of your own, or use none at all.
 
----
+## Import → Dedupe → Enrich → Track
 
-## ✨ Features
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/readme-flow-dark.svg" />
+    <img src="docs/brand/readme-flow.svg" alt="Import, Dedupe, Enrich and Track: the Contrack corvid flies from step to step" width="100%" />
+  </picture>
+</p>
+
+### 1. Import
+
+**Everyone, from everywhere.** Drop in a vCard from any address book, or your LinkedIn and Google exports. Connect Google, a calendar or a mailbox, and your meetings and email land on each person's timeline.
+
+<img src="docs/images/flow-import.gif" alt="A contacts file dropped on the Import page: the import runs, merges one duplicate by itself, and lists three to review" width="100%" />
+
+### 2. Dedupe
+
+**One person, one contact.** The same friend from three sources becomes one record. Contrack merges the sure matches by itself and asks you about the rest in one review list. Each pair says why it matched and shows what a merge keeps, and every merge can be undone for 90 days.
+
+<img src="docs/images/flow-dedupe.gif" alt="Possible duplicates: a pair with the reason it matched, what the merge keeps, the merge, and Undo" width="100%" />
+
+### 3. Enrich
+
+**The context you never had time to type.** With an AI provider connected, Contrack researches a contact on the web, fills in roles, companies and links, and cites a source for every fact. Paste a bio or an email signature, and it becomes a contact.
+
+<img src="docs/images/flow-enrich.gif" alt="Research on a contact: the run, and the Research card filling in with facts and their sources" width="100%" />
+
+### 4. Track
+
+**Never let a relationship go quiet.** Log a note in one line, and "next Tuesday" becomes a follow-up. Choose who to keep up with and how often. Each morning, Pulse shows who is due, who is drifting and what is coming up.
+
+<img src="docs/images/flow-track.gif" alt="A note logged with the follow-up 'Send the deck next Tuesday', then the contact tracked monthly" width="100%" />
+
+## Highlights
 
 <table>
 <tr>
-<td width="30%" valign="top">
-
-### 👤 Rich Contact Profiles
-
-Get a complete picture of every connection instantly. View their interaction history, personal details, and relationship context all in one beautifully designed profile card.
-
-Built with a timeline architecture featuring @mention network weaving, AI briefings, Ghost entity extraction and multi-value fields.
-
+<td width="50%" valign="top">
+<img src="docs/images/showcase-pulse.png" alt="Pulse: the day's sentence, Up next and Keeping up" width="100%" />
+<h3>Pulse</h3>
+Your morning page: follow-ups that are due, people to catch up with, birthdays, and how your network is doing.
 </td>
-<td width="70%">
-
-<img src="docs/screenshots/contact-detail.png" alt="Rich Contact Profile Detail" width="100%" />
-
-</td>
-</tr>
-<tr>
-<td width="30%" valign="top">
-
-### ⌘ Command Palette (Cmd+K)
-
-Navigate your entire network at lightning speed without ever touching your mouse. Instantly search contacts, log new notes, or jump to specific views using keyboard shortcuts.
-
-A GitHub-style command center featuring faceted filters (`role:`, `company:`, `tag:`), action sub-menus, and an inline note composer for zero-state CRM intelligence.
-
-</td>
-<td width="70%">
-
-<img src="docs/screenshots/command-palette.png" alt="Command Palette" width="100%" />
-
-</td>
-</tr>
-<tr>
-<td width="30%" valign="top">
-
-### 💓 Pulse
-
-Your daily relationship office. A responsive three-column workspace (Focus, Network, Intelligence) that organizes your morning workflow.
-
-The day is the headline: one sentence says what is due, and a field under it asks your network a question. A ranked Up next queue with one-key keyboard shortcuts and a Catch up group for the tracked people past their cadence, a Keeping up card for the state and the trend of the people you track, a twelve-week activity heatmap that fills its card, a cleanup inbox whose first row is the people you have not decided to track yet, a daily insight, what is coming up, a composition donut, and account-persisted layout customization. A card with nothing to show is one line.
-
-</td>
-<td width="70%">
-
-<img src="docs/screenshots/pulse-dashboard.png" alt="Pulse" width="100%" />
-
-</td>
-</tr>
-<tr>
-<td width="30%" valign="top">
-
-### 🗺️ Geospatial Mapping
-
-Visualize your network geographically to plan trips or coordinate local meetups. See exactly where your connections are clustered around the globe at a glance.
-
-Interactive cluster map powered by MapLibre GL JS on OpenFreeMap vector tiles, with no API key to obtain. Switch between pins and a heat map, save views, select contacts with box or lasso tools, search places, and filter by facets. The People pane lists everyone in view, and the overdue come first.
-
-</td>
-<td width="70%">
-
-<img src="docs/screenshots/map.png" alt="Geospatial Mapping Dashboard" width="100%" />
-
-</td>
-</tr>
-<tr>
-<td width="30%" valign="top">
-
-### 🔍 Ask Contrack
-
-Query your CRM using natural language just like you're talking to an assistant. Ask complex questions like "Who do I know in San Francisco that works in tech?" and get precise answers.
-
-Driven by a Hybrid RAG pipeline combining FTS5 + local vector KNN via Reciprocal Rank Fusion, with instant retrieval (<15ms) and streaming AI-enriched reasoning.
-
-</td>
-<td width="70%">
-
-<img src="docs/screenshots/search.png" alt="Ask Contrack" width="100%" />
-
-</td>
-</tr>
-<tr>
-<td width="30%" valign="top">
-
-### ⚡ Intelligent Deduplication
-
-Contrack merges the contacts that are surely one person by itself, and asks you about the rest in one review list. Each pair says why in plain words, warns when first names or places differ, and shows what a merge keeps. Every merge has Undo for 90 days.
-
-A multi-pass engine with exact matches, phonetic and near-spelling names, normalized phone numbers and profile links, local embeddings, and AI for the unclear pairs.
-
-</td>
-<td width="70%">
-
-<img src="docs/screenshots/dedupe-engine.png" alt="Intelligent Deduplication Review" width="100%" />
-
+<td width="50%" valign="top">
+<img src="docs/images/showcase-ask.png" alt="Ask Contrack answering a question with matching people" width="100%" />
+<h3>Ask Contrack</h3>
+Ask in plain words, such as "Who do I know in Lisbon?" Answers come from your own contacts and notes, and search runs on your machine.
 </td>
 </tr>
 </table>
 
-### More Capabilities
+<table>
+<tr>
+<td width="50%" valign="top">
+<img src="docs/images/showcase-palette.png" alt="The command palette with search results and a facet filter" width="100%" />
+<h3>Command palette</h3>
+Press <kbd>Cmd</kbd>+<kbd>K</kbd> to find anyone, filter by company or tag, or run any action without touching the mouse.
+</td>
+<td width="50%" valign="top">
+<img src="docs/images/showcase-map.png" alt="The map with clusters of people and the People pane" width="100%" />
+<h3>Map</h3>
+See where your network lives. Draw around a city to select everyone in it, then track them or add them to a list.
+</td>
+</tr>
+</table>
 
-- **MCP Server** — Built-in Model Context Protocol server (`POST /api/mcp`) running Streamable HTTP with 18 tools, prompts (`catch_me_up`, `weekly_review`), and resources. **Settings → MCP and API** sets up Claude Code, Claude Desktop, Cursor, VS Code, Codex and Gemini CLI in a few steps. Claude and ChatGPT connect to a public instance with OAuth: you approve read or write access on a consent page. A read-only token or grant sees only the read-only tools
-- **Add from text** — Paste unstructured text, AI extracts a structured contact
-- **Capability-Based AI** — connect Gemini, OpenAI, Anthropic, or any OpenAI-compatible server (Ollama, vLLM, LM Studio); assign a model per task from Settings, or just set one key and let it choose
-- **Automatic model choice** — With one key, every task runs on a fitting model from that provider. Pin a model per task when you want to
-- **Batch Enrichment** — AI-powered web research to hydrate contact profiles
-- **Custom Lists** — Unlimited groups with icons, drag-to-reorder, bulk membership
-- **Note Search** — "Who discussed hiring last month?" answered from your own notes, locally: the person, the date and the passage, with date phrases read in your time zone
-- **Ghost Detection** — Passive entity extraction from notes creates ghost contacts
-- **@Mentions** — Bi-directional relationship graph via Tiptap rich text
-- **AI Cache Telemetry** — Multi-tiered LRU caching with full transparency dashboard
-- **Enterprise Virtualization** — <20ms page transitions for 100K+ contacts
-- **Quick Note** (`Cmd+Shift+I`) — Log interactions from anywhere
-- **Link Unfurling** — Zero-Chromium OpenGraph extraction via Cheerio
-- **Logo Proxy** — Heuristic company logo discovery with local caching
-- **Themes** — Light, dark, or follow the machine, plus an accent color that derives a readable palette of its own
-- **Trash & Undo** — Deletes are soft: restore from Settings → Trash until the retention an admin sets runs out, 30 days by default
-- **Export** — vCard, CSV and JSON, each covering only your own contacts. vCard reads back in, so moving out and back in is honest
-- **Automatic Backups** — Scheduled SQLite snapshots with rotation. Every snapshot is reopened, checked and counted against the live database, and the answer shows per file
-- **Accounts** — Optional sign-in with username/password, server-side sessions you can revoke per device, plus personal API tokens for scripts and MCP
-- **Administration** — Member and admin roles, invitations, instance settings, an audit log and a health panel. Every query is scoped to one account, which a lint rule and a verification script both enforce
-- **Settings follow the account** — Theme, accent, list density, recent contacts, search history and dedupe thresholds live on the server, so a phone and a laptop agree
+<table>
+<tr>
+<td width="50%" valign="top">
+<img src="docs/images/showcase-mcp.png" alt="Settings, MCP and API: connecting Claude, Cursor and other clients" width="100%" />
+<h3>Works with your AI assistant</h3>
+A built-in MCP server lets Claude, ChatGPT, Cursor and other clients search and update your network. Give them read-only access if you prefer.
+</td>
+<td width="50%" valign="top">
+<img src="docs/images/showcase-phone.png" alt="Contrack on a phone: Pulse and a contact page" width="100%" />
+<h3>On your phone</h3>
+Install it on your home screen. A contact is one tap from a call, a message or an email.
+</td>
+</tr>
+</table>
 
----
+**Also:** note search, @mentions that link people, lists and tags, passkeys, several accounts on one server, a trash with undo, vCard, CSV and JSON export, verified backups, and light and dark themes.
 
-## 🚀 Quick Start
+## Quick start
 
-**AI is optional at install time.** Add one API key (Gemini, OpenAI, or Anthropic), point Contrack at a self-hosted OpenAI-compatible server (Ollama, vLLM, LM Studio) from **Settings → Administration → AI** after first boot, or run with no AI at all. Contact management and semantic search then run on two small local models, which the Docker image ships and a native install fetches once with `npm run models:fetch`. After that, search needs no network.
-
-### Option 1: Docker, prebuilt image (fastest)
-
-CI publishes a multi-arch image (amd64 + arm64) on every release:
+Run Contrack with Docker:
 
 ```bash
-docker run -d --name contrack \
-  -p 127.0.0.1:3210:3210 \
-  -v "$PWD/contrack-data":/app/data \
-  -e GEMINI_API_KEY=your-key \
-  ghcr.io/arvarik/contrack:latest
+docker run -d --name contrack -p 127.0.0.1:3210:3210 \
+  -v contrack-data:/app/data ghcr.io/arvarik/contrack:latest
 ```
 
-Contrack 2 is a new start: it does not open a data folder from Contrack 1, so give it an empty one.
+Then open [http://localhost:3210](http://localhost:3210). There is no account to create and no key to add. Your data lives in the `contrack-data` volume. To turn on AI later, open **Settings → Administration → AI** and add a key.
 
-Open **http://localhost:3210**. Everything that must survive a restart — database, uploads, backups — lives in `/app/data`, so that one volume is the whole persistence story. The search models are inside the image, so the container never downloads them. The container reports its own health (`docker ps` shows `healthy` once the app answers), and `docker stop` shuts down cleanly.
+<details>
+<summary><b>Other ways to run it</b></summary>
 
-Authentication is off by default, on the assumption that the container is reached from this machine only, which is why the port is published on `127.0.0.1`. To reach it from other devices, set `-e AUTH_REQUIRED=true` first, and the first visit will walk you through creating an account. Then publish the port as `-p 3210:3210`, or put a reverse proxy in front and set `TRUST_PROXY_HOPS=1` and `PUBLIC_URL`.
+<br/>
 
-### Option 2: Docker Compose (build from source)
+**Docker Compose** builds the image from this repository:
 
 ```bash
-git clone https://github.com/arvarik/contrack.git
-cd contrack
-cp .env.example .env
-# Optional: add an API key — or skip this and connect a provider in Settings → Administration → AI
+git clone https://github.com/arvarik/contrack.git && cd contrack
 docker compose up -d
 ```
 
-Same behavior as Option 1; data persists to `./data`. The first build compiles native modules and takes a few minutes.
-
-### Option 3: Native installation
+**From source**, with Node.js 26.10 or later:
 
 ```bash
-git clone https://github.com/arvarik/contrack.git
-cd contrack
+git clone https://github.com/arvarik/contrack.git && cd contrack
 npm install
-cp .env.example .env
-# Optional: add an API key — or skip this and connect a provider in Settings → Administration → AI
 npm run dev
 ```
 
-Open **http://localhost:3210**. The server auto-initializes the database, loads embedding models, and starts background tasks. Requires Node.js 26.10 or later.
+**On a server or for other devices:** turn on sign-in first with `-e AUTH_REQUIRED=true`. The first visit then creates the admin account. [Self-hosting](docs/self-hosting.md) covers remote access, reverse proxies, backups and upgrades.
 
-`npm run dev` listens on this machine only. To reach Contrack from other machines, run the production build: `npm run build`, then `NODE_ENV=production HOST=0.0.0.0 node server.ts`, and turn on sign-in first. See [Remote access](docs/self-hosting.md#remote-access).
+</details>
 
-The first start downloads the two search models (28 MB) from Hugging Face. To keep the server off the network, run `npm run models:fetch` once, then set `MODEL_DOWNLOADS=false` in `.env`. See [Model files and offline installs](docs/configuration.md#model-files-and-offline-installs).
-
-> **Demo data:** Run `npm run db:seed` to generate ~30 realistic demo contacts, or `npm run seed` to add a single example contact to an empty database. Neither deletes existing data.
-
-### Option 4: GitHub Codespaces (try it in the browser)
+## Try it in your browser
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/arvarik/contrack?quickstart=1)
 
-The Codespace installs Node.js 26.10, the dependencies and about 30 fictional demo contacts. Run `npm run dev` in its terminal, and the browser opens Contrack. The same setup works in VS Code with the Dev Containers extension, from [`.devcontainer/`](.devcontainer/devcontainer.json).
+A Codespace builds Contrack, fills it with 400 fictional people, starts it and opens it in a new tab, with no sign-in and no key. The first start takes a few minutes, and it runs on your GitHub account's Codespaces hours.
 
----
+<br/>
 
-## 🛠️ Technology Stack
-
-| Domain       | Technology                                                            |
-| ------------ | --------------------------------------------------------------------- |
-| **Frontend** | React 19, Vite 8, React Query v5, Tailwind CSS v4, Tiptap, Motion     |
-| **Backend**  | Node.js 26 (runs the TypeScript itself), Express, Zod validation      |
-| **Database** | SQLite3 (WAL mode), Drizzle ORM, FTS5, sqlite-vec                     |
-| **AI**       | Gemini / OpenAI / Anthropic / any OpenAI-compatible endpoint          |
-| **Search**   | Hybrid RAG: FTS5 keyword + 384-dim local vector KNN (Transformers.js) |
-| **Mapping**  | MapLibre GL JS + OpenFreeMap tiles, Nominatim geocoding               |
-| **Testing**  | Vitest unit, integration and eval tests, Playwright, no API keys      |
-
----
-
-## 📚 Documentation
-
-Full documentation lives in the [`docs/`](docs/README.md) directory:
-
-| Guide                                                  | Description                                               |
-| ------------------------------------------------------ | --------------------------------------------------------- |
-| [Getting Started](docs/getting-started.md)             | Installation, first steps, the main screens               |
-| [Self-Hosting](docs/self-hosting.md)                   | Docker, remote access, backups, upgrades, troubleshooting |
-| [Configuration](docs/configuration.md)                 | Environment variables, AI provider setup, model choice    |
-| [Privacy](docs/privacy.md)                             | What leaves the server, retention, and what deletes do    |
-| [Architecture](docs/architecture.md)                   | System overview, data flow, schema, search and AI         |
-| [API Reference](docs/api-reference.md)                 | Complete REST API with curl examples                      |
-| [CI & Release](CONTRIBUTING.md#continuous-integration) | Pipeline, published images, release procedure             |
-
-### Feature Guides
-
-| Feature            | Guide                                                                    |
-| ------------------ | ------------------------------------------------------------------------ |
-| Contact Management | [docs/contacts.md](docs/contacts.md)                                     |
-| Command Palette    | [docs/search.md#command-palette](docs/search.md#command-palette)         |
-| Ask Contrack       | [docs/search.md#ask-contrack](docs/search.md#ask-contrack)               |
-| Contact enrichment | [docs/ai.md#research-contacts](docs/ai.md#research-contacts)             |
-| Note Search        | [docs/search.md#search-your-notes](docs/search.md#search-your-notes)     |
-| Deduplication      | [docs/duplicates.md](docs/duplicates.md)                                 |
-| Pulse              | [docs/pulse.md](docs/pulse.md)                                           |
-| Map View           | [docs/map.md](docs/map.md)                                               |
-| Lists              | [docs/contacts.md#lists](docs/contacts.md#lists)                         |
-| Connectors         | [docs/import-and-sync.md#connectors](docs/import-and-sync.md#connectors) |
-| MCP Server         | [docs/mcp.md](docs/mcp.md)                                               |
-
----
-
-## 🔐 Configuration
-
-Contrack runs with no configuration. To change a default, set an environment variable in `.env` or in the container. The variables most installs touch:
-
-- An AI key: `GEMINI_API_KEY`, `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`. Each one is optional, and **Settings → Administration → AI** can connect a provider instead.
-- `AUTH_REQUIRED=true` before anything but this machine can reach the port.
-- `PUBLIC_URL` and `TRUST_PROXY_HOPS=1` behind a reverse proxy.
-- `SMTP_URL` and `MAIL_FROM` for invitations, password resets and sign-in links.
-
-The [Configuration reference](docs/configuration.md) lists every variable and its default. A liveness probe lives at `GET /healthz` — always reachable without a credential, used by the Docker `HEALTHCHECK`, and safe to point an uptime monitor at.
-
----
-
-## ⚡ System Architecture
-
-```mermaid
-graph TD
-    subgraph Frontend ["UI Layer — React 19 / Vite"]
-        RQ["React Query v5"] --> TW["Tailwind v4 'No-Line' UI"]
-        TW --> TT["Tiptap Editor + Cheerio Previews"]
-        TT --> Map["MapLibre GL Geospatial"]
-    end
-
-    subgraph Backend ["Node.js Express Server"]
-        EX["Express Router"] --> SVC["Service Layer"]
-        SVC --> AI["AI Service + Smart Router"]
-        SVC --> SRCH["Ask Contrack v3 Spotlight"]
-        SVC --> DDP["Dedupe Engine"]
-        SVC --> REL["Relationship Scoring"]
-    end
-
-    subgraph Storage ["Persistence — Local-First"]
-        SQL[("SQLite3 WAL Mode")]
-        DZ["Drizzle ORM"] --> SQL
-        FTS["FTS5 Search Index"] --- SQL
-        VEC["sqlite-vec Embeddings"] --- SQL
-    end
-
-    subgraph AILayer ["AI Infrastructure"]
-        SR["Smart Router"] --> Adapters["Gemini / OpenAI / Anthropic"]
-        SR --> QT["Quota Tracker + Parallel Queue"]
-        LE["Transformers.js Local"] --> VEC
-    end
-
-    Frontend <===>|"JSON REST + UUID Tracing"| Backend
-    AI <===>|"Smart Router model selection"| AILayer
-    Backend <===>|"Drizzle ORM"| Storage
-```
-
----
-
-## 💬 Get help
-
-- Ask a question in [Discussions](https://github.com/arvarik/contrack/discussions/categories/q-a).
-- Report a bug or ask for a feature in [Issues](https://github.com/arvarik/contrack/issues/new/choose).
-- Email the maintainer at [arvind.arikatla@gmail.com](mailto:arvind.arikatla@gmail.com).
-- Report a security problem privately, as the [security policy](SECURITY.md) says.
-
----
-
-## 🤝 Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development standards, code style, and PR process. Coding agents start at [AGENTS.md](AGENTS.md). Everyone who takes part follows the [Code of Conduct](CODE_OF_CONDUCT.md). Each release is summarized in the [changelog](CHANGELOG.md).
-
----
-
-## 📜 License
-
-This project is licensed under the [GNU Affero General Public License v3.0](LICENSE). This means you can use, modify, and distribute the code, but any modified versions — including those offered as a network service (SaaS) — must also be open-sourced under AGPL v3.
+<table>
+<tr>
+<td width="33%" align="center" valign="top">
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="docs/brand/readme-perch-help-dark.svg" />
+<img src="docs/brand/readme-perch-help.svg" alt="" width="72" />
+</picture>
+<h3>Get help</h3>
+<a href="docs/README.md">Read the docs</a><br/>
+<a href="https://github.com/arvarik/contrack/discussions/categories/q-a">Ask a question</a><br/>
+<a href="https://github.com/arvarik/contrack/issues/new/choose">Report a bug or ask for a feature</a><br/>
+<a href="SECURITY.md">Report a security problem privately</a><br/>
+<a href="mailto:arvind.arikatla@gmail.com">Email the maintainer</a>
+</td>
+<td width="33%" align="center" valign="top">
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="docs/brand/readme-perch-contribute-dark.svg" />
+<img src="docs/brand/readme-perch-contribute.svg" alt="" width="72" />
+</picture>
+<h3>Contribute</h3>
+<a href="CONTRIBUTING.md">Set up and send a change</a><br/>
+<a href="AGENTS.md">Instructions for coding agents</a><br/>
+<a href="CODE_OF_CONDUCT.md">Code of Conduct</a><br/>
+<a href="CHANGELOG.md">What changed in each release</a>
+</td>
+<td width="33%" align="center" valign="top">
+<picture>
+<source media="(prefers-color-scheme: dark)" srcset="docs/brand/readme-perch-license-dark.svg" />
+<img src="docs/brand/readme-perch-license.svg" alt="" width="72" />
+</picture>
+<h3>License</h3>
+Free software under the <a href="LICENSE">GNU AGPL v3</a>. Use it, change it and share it. If you offer a changed version as a network service, share its source too.
+</td>
+</tr>
+</table>
