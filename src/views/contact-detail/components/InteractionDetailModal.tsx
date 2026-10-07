@@ -8,7 +8,6 @@
  * (`startPendingDelete`, as on Pulse): no route reopens a follow-up.
  */
 import React, { Suspense } from "react";
-import DOMPurify from "dompurify";
 import {
   CalendarCheck,
   FileText,
@@ -33,7 +32,7 @@ import {
   TONE_TEXT,
 } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
-import { TIPTAP_SANITIZE_CONFIG } from "../../../lib/sanitize";
+import { sanitizeNote } from "../../../lib/sanitize";
 import { formatDue, formatWhen } from "../../../lib/datetime";
 import { isPastDay } from "../../../../shared/dates";
 import { useHiddenPendingIds } from "../../../lib/pendingDeletes";
@@ -97,10 +96,7 @@ export const InteractionDetailModal = ({
   }, [isOpen, id, initialEditing]);
 
   const sanitizedContent = React.useMemo(
-    () =>
-      interaction?.content
-        ? DOMPurify.sanitize(interaction.content, TIPTAP_SANITIZE_CONFIG)
-        : "",
+    () => (interaction?.content ? sanitizeNote(interaction.content) : ""),
     [interaction?.content],
   );
 

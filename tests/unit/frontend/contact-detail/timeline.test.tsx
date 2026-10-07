@@ -382,6 +382,36 @@ describe("an entry", () => {
   });
 });
 
+describe("a saved link preview", () => {
+  // What the editor saves for a pasted link. The display must show a link
+  // with the page's title, not the card's pieces run together.
+  const SAVED_CARD =
+    '<link-preview url="https://example.com/post" title="A title" description="A description" loading="false" error="false"><a href="https://example.com/post" target="_blank" rel="noopener noreferrer" class="card"><div><span>LINK</span></div><div><div>A title</div><div>A description</div><div>example.com</div></div></a></link-preview>';
+  const withCard = () => [
+    makeItem("card", "Shared a page", at(2026, 9, 15), {
+      type: "note",
+      content: SAVED_CARD,
+    }),
+  ];
+
+  it("shows in the entry as a link with the page's title", async () => {
+    await mount({ timeline: withCard() });
+
+    const link = within(entry("card")!).getByRole("link", { name: "A title" });
+    expect(link.getAttribute("href")).toBe("https://example.com/post");
+  });
+
+  it("shows in the detail modal the same way", async () => {
+    await mount({ timeline: withCard() });
+
+    fireEvent.click(screen.getByRole("button", { name: "Shared a page" }));
+    const link = within(
+      screen.getByRole("dialog", { name: "Shared a page" }),
+    ).getByRole("link", { name: "A title" });
+    expect(link.getAttribute("href")).toBe("https://example.com/post");
+  });
+});
+
 describe("delete", () => {
   it("asks first, and Cancel keeps the entry", async () => {
     const { props } = await mount();

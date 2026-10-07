@@ -194,6 +194,10 @@ unsaved note when it closes, for the next time it opens.
 - **Delete**: asks "Delete this interaction?". Press **Delete interaction**.
   The toast offers **Undo** for 10 seconds. After that the delete is final,
   and an attached file goes with the entry.
+- **Links**: paste a bare link into the composer. With AI on, Contrack asks
+  that page for its title and shows a card in the editor. The saved entry
+  shows the link with the page's title. With AI off the card does not load,
+  and the entry shows the address.
 - **Files**: drop files on the **Timeline** tab, or press **Attach a file**,
   to attach them, up to 50 MB each. Contrack takes PDFs, PNG, JPEG, GIF and WebP images, `.txt`, `.md`
   and `.csv` files, and `.eml` email files. An `.eml` file becomes an email
