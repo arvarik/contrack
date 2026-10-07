@@ -1,10 +1,7 @@
-// =============================================================================
 // Contracts: personal API tokens
-// =============================================================================
 // An account's own machine credentials, under /api/auth/tokens. Only a
 // browser session reaches these routes, so a token cannot mint another one
 // or revoke itself.
-// =============================================================================
 
 import { z } from "zod";
 import { route } from "./route.ts";

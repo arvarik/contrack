@@ -11,12 +11,8 @@ import { PULSE_TYPE } from "../lib/pulseStyles";
 const LIST_ID = "completed-card-content";
 
 /**
- * Completed: one line, in both states.
- *
- * "Nothing completed yet." or "3 completed recently", and a quiet Show that
- * opens the list under the line: each row on the wash with the title struck
- * through, the name as a link and when it was done. Nobody reads a framed
- * box for a number, and the queue above is the card that earns the frame.
+ * One line, "3 completed recently", with a Show that opens the list under
+ * it. A number does not earn a framed box.
  */
 export const CompletedCard = () => {
   const { data: completedItems = [] } = useCompletedActionItems();
@@ -48,17 +44,15 @@ export const CompletedCard = () => {
       </CardFrame>
 
       {open && (
-        // The rows start on the line's edge, where a card's rows start. The
-        // list scrolls inside itself from lg only, like the queue: on a
-        // phone a box that scrolls inside the page catches the flick.
+        // The list scrolls inside itself from lg only: on a phone a box that
+        // scrolls inside the page catches the flick.
         <ul
           id={LIST_ID}
           aria-label="Completed follow-ups"
           className="flex flex-col gap-1.5 px-4 sm:px-5 lg:max-h-72 lg:overflow-y-auto"
         >
           {completedItems.map((item) => (
-            // On a phone the date takes a line of its own under the title:
-            // beside the name and the date the title had one letter left.
+            // On a phone the date takes its own line, or the title has no room.
             <li
               key={item.id}
               className="flex flex-wrap items-center gap-x-3 gap-y-0.5 rounded-xl px-3 py-2 bg-surface-container-low/70"
@@ -76,7 +70,6 @@ export const CompletedCard = () => {
                 >
                   {item.title}
                 </span>
-                {/* A 14 px name with a 44 px tap box from `hit-area`. */}
                 <Link
                   to={`/contact/${item.contactId}`}
                   className={cn(

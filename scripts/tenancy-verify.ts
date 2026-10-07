@@ -1,18 +1,14 @@
-// =============================================================================
-// tenancy-verify — check that a database really is fully owned
-// =============================================================================
-// Opens the database read-only and runs the invariants Phase 1 is supposed to
-// establish. An operator runs this after upgrading; the migration test runs the
-// same checks against a fixture built from a 1.5.5-shaped database.
+// tenancy-verify: check that a database is fully owned.
+// Opens the database read-only and checks the ownership invariants. An
+// operator runs this after upgrading, and the migration test runs the same
+// checks against a fixture built from a 1.5.5-shaped database.
 //
-// The expectations are restated here rather than imported from server/db.ts on
-// purpose. Importing that module would run the migration, so the script would
-// be checking its own work. A second, independent statement of the invariant
-// is what makes this worth running at all.
+// The expectations are restated here, not imported from server/db.ts:
+// importing it would run the migration, so the script would check its own
+// work.
 //
 //   npm run tenancy:verify
 //   DATA_DIR=/path/to/data npm run tenancy:verify
-// =============================================================================
 
 import Database from "better-sqlite3";
 import * as sqliteVec from "sqlite-vec";

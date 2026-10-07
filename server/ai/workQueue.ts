@@ -5,9 +5,9 @@ export type JobPriority = "interactive" | "background";
 
 /**
  * A lane with slots of its own. "search" holds the Ask generations: the
- * planner, the reranker and the brief. A research call can hold a shared
- * slot for 15 to 75 s, so without a lane of its own a question waited behind
- * two of them (measured 2026-09-26: 12 s, then an empty answer).
+ * planner, the reranker and the brief. A research call can hold a shared slot
+ * for 15 to 75 s, and in the shared slots a question could wait behind two of
+ * them (12 s, then an empty answer).
  */
 export type QueueLane = "search";
 
@@ -75,16 +75,16 @@ interface AccountQueue {
 }
 
 /**
- * Multitenant fair generation queue with priority scheduling and noisy-neighbor isolation.
- *
- * - Bounds total concurrency (default 2 active jobs) across the instance.
- * - Bounds total waiting capacity (default 16 waiting jobs).
- * - Rotates waiting work between accounts (Round-Robin fair share) to eliminate starvation.
- * - Gives interactive user requests priority while guaranteeing background work progresses (anti-starvation).
- * - Prevents any single account from monopolizing the waiting capacity under congestion (fair tail drop).
- * - Decouples cancellation so caller aborts cleanly remove waiting jobs without leaking state.
- * - Keeps a separate "search" lane (default 2 slots, one FIFO) for Ask generations, so the
- *   shared slots and the lane never wait on each other.
+ * A fair, multi-account generation queue:
+ * - At most 2 active jobs across the instance, and at most 16 waiting, by
+ *   default.
+ * - Waiting work rotates between accounts (round robin), so none starves.
+ * - Interactive requests go first, and background work still progresses.
+ * - No single account can fill the waiting room under congestion (fair tail
+ *   drop).
+ * - A caller's abort removes its waiting job cleanly.
+ * - The "search" lane (2 slots by default, one FIFO) holds Ask generations, so
+ *   it and the shared slots never wait on each other.
  */
 export class GenerationQueue {
   private active = 0;
@@ -296,19 +296,17 @@ export class GenerationQueue {
   }
 
   /**
-   * Fair queue admission control:
-   * 1. If an account has waiting background jobs and submits an interactive request,
-   *    its own newest background job is evicted to admit the interactive request
-   *    (preserving the account's existing queue position in the round-robin order).
-   * 2. If any tenant has waiting background jobs, evict the newest background job
-   *    from the tenant with the most background work:
-   *    - An interactive request can evict background work from any tenant.
-   *    - A background request can only evict from a tenant with strictly more background jobs.
-   * 3. If no background jobs exist across the entire queue:
-   *    - Background requests can never evict interactive user requests.
-   *    - An interactive request can evict the newest interactive job from the heaviest
-   *      interactive tenant if caller has fewer interactive jobs.
-   * 4. Otherwise, the incoming request is rejected with 429 AI_BUSY.
+   * Fair admission when the queue is full:
+   * 1. An account with waiting background jobs that submits an interactive
+   *    request loses its own newest background job, keeping its place in the
+   *    rotation.
+   * 2. Otherwise, the newest background job of the account with the most
+   *    background work is evicted: by any interactive request, or by a
+   *    background request from an account with strictly fewer background jobs.
+   * 3. With no background jobs anywhere, a background request never evicts
+   *    interactive work, and an interactive request may evict the newest job of
+   *    the heaviest interactive account if the caller has fewer.
+   * 4. Otherwise the request is refused with 429 AI_BUSY.
    */
   private makeRoomIfFair(
     incomingAccountId: string,
@@ -366,9 +364,9 @@ export class GenerationQueue {
       }
     }
 
-    // Rule 3: No background jobs exist in the entire queue.
-    // Background requests can never evict interactive requests.
-    // An interactive request can evict from the heaviest interactive tenant if caller is quieter.
+    // Rule 3: no background jobs in the queue. A background request never
+    // evicts an interactive one; an interactive request may evict from the
+    // heaviest interactive account if the caller is quieter.
     if (incomingPriority === "interactive") {
       let heaviestIntAccount: AccountQueue | null = null;
       let maxIntCount = 0;
@@ -674,12 +672,12 @@ export class SharedWork<T> {
     const current = entry;
     current.users++;
     let onAbort: (() => void) | undefined;
-    const cancelled = new Promise<never>((_, reject) => {
+    const canceled = new Promise<never>((_, reject) => {
       onAbort = () => reject(signal?.reason);
       signal?.addEventListener("abort", onAbort, { once: true });
     });
     try {
-      return await Promise.race([current.promise, cancelled]);
+      return await Promise.race([current.promise, canceled]);
     } finally {
       if (onAbort) signal?.removeEventListener("abort", onAbort);
       current.users--;

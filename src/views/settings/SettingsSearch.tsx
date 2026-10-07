@@ -1,10 +1,7 @@
 /**
- * SettingsSearch — Row-level search for Settings.
- *
- * Used in both the left rail and the landing page.
- * Results are grouped by page. Enter opens the first match, Escape clears.
- * Row results link directly to path#rowId, and on a phone the page slides
- * in over the list (`useSlideNavigate`).
+ * Row-level search for Settings, in the rail and on the landing page.
+ * Results group by page and link to `path#rowId`. Enter opens the first
+ * match, and Escape clears.
  */
 import React, { useMemo } from "react";
 import { Search } from "lucide-react";
@@ -36,7 +33,6 @@ export const SettingsSearch = ({
     return findRows(query, { isAdmin, authRequired });
   }, [query, isAdmin, authRequired]);
 
-  // Group hits by page
   const groupedResults = useMemo(() => {
     const map = new Map<
       string,
@@ -54,9 +50,9 @@ export const SettingsSearch = ({
   const isRail = variant === "rail";
 
   /**
-   * The rail stays on screen beside the page it opened, so its search
-   * clears. The list slides away with its results still showing, and a
-   * cleared search would flash the whole list in the picture first.
+   * Only the rail clears, since it stays beside the page it opened. The
+   * landing list slides away, and a cleared search would flash the full list
+   * into the slide's picture.
    */
   const picked = () => {
     if (!isRail) return;
@@ -89,8 +85,6 @@ export const SettingsSearch = ({
           {...NO_AUTOCORRECT}
           className={cn(
             "w-full pl-10 pr-9 py-2.5 rounded-xl min-h-[44px] bg-surface-container-highest text-on-surface placeholder:text-on-surface-variant",
-            // The clear button below is the one clear control; the
-            // browser's own would draw a second one beside it.
             isRail ? "text-sm" : "text-base sm:text-sm",
           )}
         />

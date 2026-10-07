@@ -52,7 +52,7 @@ export const aiSearchBatchSchema = z.object({
         /**
          * The research technique this contact runs: "provider-search",
          * "search-and-read" or "combined". `strategy` names the same choice
-         * in its older words.
+         * in other words.
          */
         technique: z.string().max(40).optional(),
         /** The web search the technique searches with, such as "searxng". */

@@ -1,24 +1,19 @@
-// =============================================================================
-// The rerank stage
-// =============================================================================
-// Reorders the top of the local list, the keyword and vector results fused by
-// weighted reciprocal rank, with the reranker (`server/ai/reranker.ts`): the
-// local cross-encoder unless a test or the search gate put another in place.
+// The rerank stage: reorder the top of the local list (keyword and vector
+// results fused by weighted reciprocal rank) with the reranker
+// (`server/ai/reranker.ts`), the local cross-encoder unless a test or the
+// search gate put another in place.
 //
-// It never delays the list. The stage has a budget,
-// `SEARCH_RERANK_BUDGET_MS` (25 ms by default). When the scores arrive after
-// it, the list keeps its RRF order and the late scores are dropped. A job
-// that has not reached the worker yet is cancelled. A worker busy with an
-// embedding backfill is the usual reason for a late score.
+// It never delays the list. The stage has a budget, `SEARCH_RERANK_BUDGET_MS`
+// (25 ms by default); scores that arrive later are dropped and the list keeps
+// its RRF order, and a job that has not reached the worker is canceled. A
+// worker busy with an embedding backfill is the usual cause.
 //
-// It reads questions only, the `conceptual` kind. A name, an email, a phone
-// number and a quoted phrase are answered by strict keyword search, and a
-// short `mixed` query is usually a misspelled name or a prefix. A
-// cross-encoder is not typo-tolerant: on the search gate's corpus at 5,000
-// contacts it moved "Shivaun Murphey" from 2nd to 9th and the prefix "Thwa"
-// from 1st to 4th, while it moved "someone in Barcelona who cooks" from 3rd
-// to 1st.
-// =============================================================================
+// It reads questions only, the `conceptual` kind. Names, emails, phone numbers
+// and quoted phrases go to strict keyword search, and a short `mixed` query is
+// usually a misspelled name or a prefix, which a cross-encoder handles badly:
+// at 5,000 contacts it moved "Shivaun Murphey" from 2nd to 9th and the prefix
+// "Thwa" from 1st to 4th, while it moved "someone in Barcelona who cooks" from
+// 3rd to 1st.
 
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
@@ -28,18 +23,16 @@ import { currentReranker, type Reranker } from "../../ai/reranker.ts";
 export const DEFAULT_RERANK_BUDGET_MS = 25;
 
 /**
- * How many candidates from the top of the local list the model scores.
- *
- * The whole instant list: no extra retrieval, and well inside the budget.
- * 10, 20, 30 and 50 gave the same answers on the golden questions.
+ * How many candidates from the top of the local list the model scores: the
+ * whole instant list, no extra retrieval, well inside the budget. 10, 20, 30
+ * and 50 gave the same answers on the golden questions.
  */
 export const RERANK_CANDIDATES = 30;
 
 /**
- * Characters of profile text sent to the worker.
- *
- * The tokenizer cuts at 128 tokens anyway. This only keeps a long headline
- * from crossing the thread boundary for nothing.
+ * Characters of profile text sent to the worker. The tokenizer cuts at 128
+ * tokens anyway; this keeps a long headline from crossing the thread boundary
+ * for nothing.
  */
 const PROFILE_CHARS = 600;
 
@@ -52,9 +45,7 @@ export function rerankBudgetMs(): number {
     : DEFAULT_RERANK_BUDGET_MS;
 }
 
-// ---------------------------------------------------------------------------
 // The profile text
-// ---------------------------------------------------------------------------
 
 /** The contact fields the profile text reads. A hydrated contact has them all. */
 export interface ProfileFields {
@@ -109,9 +100,7 @@ export function profileText(contact: ProfileFields): string {
     .slice(0, PROFILE_CHARS);
 }
 
-// ---------------------------------------------------------------------------
 // The stage
-// ---------------------------------------------------------------------------
 
 /** For search and the benchmark, which compares models and candidate counts. */
 export interface RerankOptions {
@@ -130,13 +119,12 @@ export interface RerankOptions {
 }
 
 /**
- * Reorder the top of `candidates` by reranker score, inside the budget.
- *
- * The top `RERANK_CANDIDATES` are scored and sorted, highest first, with the
- * list's own order as the tie break. The rest follow unchanged. When the
- * stage is off, not loaded, late or failing, the list comes back as it was,
- * and so it does for a reranker that is not local unless `aiAllowed` is
- * true. The caller decides the query kind: only a question comes here.
+ * Reorder the top of `candidates` by reranker score, inside the budget. The top
+ * `RERANK_CANDIDATES` are sorted by score, highest first, ties in the list's
+ * own order, and the rest follow unchanged. When the stage is off, not loaded,
+ * late or failing, or the reranker is not local and `aiAllowed` is not true,
+ * the list comes back as it was. The caller decides the query kind: only a
+ * question comes here.
  */
 export async function rerankLocal<T extends ProfileFields>(
   query: string,

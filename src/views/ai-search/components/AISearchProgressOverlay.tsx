@@ -1,9 +1,6 @@
 /**
- * AISearchProgressOverlay — Google Drive-style floating progress panel.
- *
- * Positioned fixed, bottom-right. Does NOT block interaction with the app.
- * Shows per-job status with icons, latency, and a summary progress bar.
- * Stays open until manually minimized or dismissed.
+ * A floating research progress panel, bottom right. It does not block the
+ * app, and it stays open until the person minimizes or dismisses it.
  */
 import React, { useState, useMemo } from "react";
 import {
@@ -27,7 +24,7 @@ interface Props {
   batch: AISearchBatch;
   onDismiss: () => void;
   onCancel: () => void;
-  isCancelling?: boolean;
+  isCanceling?: boolean;
   connectionError?: boolean;
 }
 
@@ -44,7 +41,7 @@ export function AISearchProgressOverlay({
   batch,
   onDismiss,
   onCancel,
-  isCancelling,
+  isCanceling,
   connectionError,
 }: Props) {
   const [isMinimized, setIsMinimized] = useState(false);
@@ -82,9 +79,6 @@ export function AISearchProgressOverlay({
   const isComplete =
     batch.status === "complete" || batch.status === "cancelled";
 
-  // Auto-minimize removed — stays open until manually dismissed
-
-  // Minimized compact badge
   if (isMinimized) {
     return (
       <motion.div
@@ -95,8 +89,7 @@ export function AISearchProgressOverlay({
       >
         <button
           onClick={() => setIsMinimized(false)}
-          // It floats over the page, so it keeps its shadow and hairline,
-          // and hovers with the one layer like any flat control.
+          // It floats over the page, so it keeps its shadow and hairline.
           className={cn(
             "hit-area state-layer flex items-center gap-2 px-4 py-2.5 rounded-lg shadow-xl",
             "bg-surface-container-lowest ring-1 ring-surface-container-highest/30",
@@ -128,7 +121,7 @@ export function AISearchProgressOverlay({
       initial={{ y: 40, opacity: 0, scale: 0.95 }}
       animate={{ y: 0, opacity: 1, scale: 1 }}
       transition={{ type: "spring", damping: 24, stiffness: 300 }}
-      // Over the phone's tab bar, not on it: the panel covered the tabs.
+      // Over the phone's tab bar, not on it.
       className="fixed bottom-[calc(var(--tabbar-space)+0.75rem)] md:bottom-4 right-4 z-50 w-80 max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-var(--tabbar-space)-1.5rem)] md:max-h-[calc(100dvh-2rem)] overflow-y-auto"
     >
       <div
@@ -137,7 +130,6 @@ export function AISearchProgressOverlay({
           "p-0 shadow-2xl ring-1 ring-surface-container-highest/30 overflow-hidden",
         )}
       >
-        {/* Header */}
         <div className="px-4 py-3 bg-surface-container-low flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-primary" />
           <span className="font-bold text-sm text-on-surface flex-1">
@@ -166,7 +158,6 @@ export function AISearchProgressOverlay({
           </button>
         </div>
 
-        {/* Progress bar */}
         <div className="h-1 bg-surface-container-high">
           <motion.div
             className="h-full bg-gradient-to-r from-primary-dim to-primary-container"
@@ -185,21 +176,19 @@ export function AISearchProgressOverlay({
             </span>
             <button
               onClick={onCancel}
-              disabled={isCancelling}
+              disabled={isCanceling}
               className="hit-area state-layer shrink-0 px-2 py-1 rounded text-error disabled:opacity-50"
             >
-              {isCancelling ? "Stopping…" : "Stop research"}
+              {isCanceling ? "Stopping…" : "Stop research"}
             </button>
           </div>
         )}
-        {/* Job list */}
         <div className="max-h-64 overflow-y-auto">
           {batch.jobs.map((job) => (
             <JobRow key={job.id} job={job} />
           ))}
         </div>
 
-        {/* Summary footer */}
         {isComplete && (
           <div className="px-4 py-2.5 bg-surface-container-low text-xs text-on-surface-variant flex items-center gap-2">
             <span className="flex-1">
@@ -228,12 +217,8 @@ export function AISearchProgressOverlay({
               )}
             </span>
             <button
-              aria-label={
-                isComplete
-                  ? "Dismiss research progress"
-                  : "Minimize research progress"
-              }
-              onClick={isComplete ? onDismiss : () => setIsMinimized(true)}
+              aria-label="Dismiss research progress"
+              onClick={onDismiss}
               className={BTN_QUIET}
             >
               Dismiss
@@ -244,10 +229,6 @@ export function AISearchProgressOverlay({
     </motion.div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Individual Job Row
-// ---------------------------------------------------------------------------
 
 function JobRow({ job }: { key?: React.Key; job: AISearchJob }) {
   return (
@@ -273,7 +254,6 @@ function JobRow({ job }: { key?: React.Key; job: AISearchJob }) {
           {DEPTH_WORDS.deep.name}
         </span>
       )}
-      {/* Right side: latency or status text */}
       <span className="text-[11px] text-on-surface-variant shrink-0 tabular-nums">
         {job.status === "success" && job.latencyMs != null && (
           <span className="text-success">

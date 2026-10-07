@@ -1,33 +1,23 @@
-// =============================================================================
-// Starter questions: the pool behind "Try asking" on Ask Contrack
-// =============================================================================
-// Each account has a hidden pool of questions built from its own contacts:
-// the industries, cities, companies, roles, interests and tags that two
-// people or more share, and the industry and city pairs, and beside them
-// seven questions any network can ask: how long since you spoke, who you
-// track, whose details are old or missing (`shared/generalQuestions.ts`).
-// The Ask page shows six of them at random, so the list changes from visit
-// to visit.
+// The pool behind "Try asking" on Ask Contrack.
 //
-// Every question names a value some contact holds, in words the search
-// answers without a model: "Who works at X?", "Who do I know in X?" and
-// "Who works in X?" are facets (implicitFacets.ts), and the rest match the
-// keyword index. A press on a question always finds somebody. Schools are
-// left out: the keyword index does not hold education, so "Who studied at
-// X?" found nobody who did without a model.
+// Each account has a hidden pool of questions built from its own contacts: the
+// industries, cities, companies, roles, interests and tags two or more people
+// share, industry and city pairs, and seven questions any network can ask
+// (`shared/generalQuestions.ts`). The Ask page shows six at random.
 //
-// The pool holds no more questions than the account has contacts, except a
-// general question that finds some of them and not all, which says something
-// about a network of any size.
+// Every question names a value some contact holds, in words the search answers
+// without a model: "Who works at X?", "Who do I know in X?" and "Who works in
+// X?" are facets (implicitFacets.ts), and the rest match the keyword index, so
+// a press on a question always finds somebody. Schools are left out: the
+// keyword index does not hold education. The pool holds no more questions than
+// the account has contacts, except general questions that find some contacts
+// and not all.
 //
-// Building a pool is a few grouped reads. The pool is kept per owner and
-// search revision, so an edit to a searched column builds it again. The
-// general questions are checked against the contacts on every request, and a
-// change in which of them find somebody, or everybody, builds it again too. The
-// server builds every owner's pool in the background after boot, and an
-// import schedules its owner's pool as soon as the contacts commit. So the
-// first open of Ask after a deploy or an import reads a pool that is ready.
-// =============================================================================
+// A pool is a few grouped reads, kept per owner and search revision, so an edit
+// to a searched column rebuilds it. The general questions are checked on every
+// request, and a change in whom they find rebuilds it too. Every owner's pool
+// is built in the background after boot, and an import schedules its owner's
+// pool once the contacts commit, so Ask opens on a ready pool.
 
 import { sqlite } from "../../db.ts";
 import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";
@@ -43,15 +33,10 @@ import type {
 } from "../../../shared/starterQuestions.ts";
 
 /**
- * The most questions a pool holds.
- *
- * The page shows six of them at random, so the pool is a large hidden list:
- * at 40 it was the same forty questions in another order, and a network of a
- * few thousand people was asked about its six biggest companies and nothing
- * else. 500 questions are about 22 KB of JSON, which the app fetches once in
- * an idle moment, and a build is the same few grouped reads however long the
- * list. The pool still holds no more questions than the account has contacts,
- * beside the general questions that split the network.
+ * The most questions a pool holds. The page shows six at random, so a small
+ * pool repeats itself: at 40, a network of a few thousand was asked only about
+ * its six biggest companies. 500 questions are about 22 KB of JSON, fetched
+ * once when idle, and a build costs the same few grouped reads at any length.
  */
 export const POOL_LIMIT = 500;
 /**
@@ -222,10 +207,10 @@ const RANK_WORD =
   /^(vp|svp|evp|avp|director|head|chief|lead|manager|senior|principal|staff)$/i;
 
 /**
- * The starter question for a role. A role is a title or a team: "Who works
- * as a CTO?", but "Who works in Engineering?". The palette asked "Who works
- * as an Engineering?". A title with "of", or a rank before the team, names
- * a person: "Head of Sales", "VP Engineering".
+ * The starter question for a role. A role is a title or a team: "Who works as a
+ * CTO?", but "Who works in Engineering?", not "as an Engineering?". A title
+ * with "of", or a rank before the team, names a person: "Head of Sales", "VP
+ * Engineering".
  */
 export function roleQuestion(role: string): string {
   const words = role.trim().split(/\s+/);
@@ -369,11 +354,10 @@ export function buildStarterQuestions(
       questions.push({ text, kind });
     }
   }
-  // A general question that finds some of the network and not all of it
-  // says something about a network of any size, so it is offered past the
-  // cap: "Who is missing an email address?" in a network of three. One that
-  // finds everyone keeps its turn, such as "Who haven't I contacted in over
-  // 3 months?" before any note is logged.
+  // A general question that finds some of the network and not all says
+  // something at any size, so it is offered past the cap ("Who is missing an
+  // email address?" in a network of three). One that finds everyone keeps its
+  // turn, such as "Who haven't I contacted in over 3 months?" before any note.
   for (const { text, splits } of general) {
     if (!splits || seen.has(text)) continue;
     seen.add(text);
@@ -390,12 +374,10 @@ interface General {
 }
 
 /**
- * The general questions whose facets find somebody in this account.
- *
- * The facets are compiled the way the search compiles them, so a question is
- * offered exactly when pressing it would show a list. Two indexed reads
- * each, one for a contact it finds and one for a contact it leaves out, and
- * each stops at the first contact.
+ * The general questions whose facets find somebody in this account. The facets
+ * compile as the search compiles them, so a question is offered exactly when
+ * pressing it shows a list. Two indexed reads each, one for a contact it finds
+ * and one for a contact it leaves out, each stopping at the first.
  */
 function generalQuestions(scope: Scope): General[] {
   const any = (where: string, params: unknown[]) =>
@@ -441,13 +423,11 @@ function rebuild(
 }
 
 /**
- * The owner's pool, from memory.
- *
- * A pool built at the current revision is the answer. One a few edits
- * behind is the answer too, and a build is scheduled: those edits can
- * change a count, and rarely a question. A pool far behind, or none, is
- * built before the answer (about 20 ms at 5,000 contacts), so an import or a
- * bulk delete is never answered with the questions from before it.
+ * The owner's pool, from memory. A pool at the current revision is the answer.
+ * One a few edits behind is too, and a rebuild is scheduled: those edits rarely
+ * change a question. A pool far behind, or none, is built first (about 20 ms at
+ * 5,000 contacts), so an import or a bulk delete is never answered with the
+ * questions from before it.
  */
 export function starterQuestions(scope: Scope): StarterQuestion[] {
   const pool = pools.get(scope.ownerId);

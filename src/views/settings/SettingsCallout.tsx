@@ -1,12 +1,7 @@
 /**
- * SettingsCallout — what is waiting on a settings page, and the one step to
- * take about it: "12 possible duplicates, Review them".
- *
- * A card on the primary wash, above the page's settings. From `sm` the
- * action sits at the right of the sentence. On a phone it drops under it,
- * so the sentence keeps the card's width instead of a narrow column.
- *
- * @module views/settings/SettingsCallout
+ * What is waiting on a settings page and the one step to take ("12 possible
+ * duplicates, Review them"). On a phone the action drops under the sentence,
+ * so the sentence keeps the card's width.
  */
 import React from "react";
 import type { LucideIcon } from "lucide-react";

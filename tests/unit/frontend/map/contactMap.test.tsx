@@ -537,9 +537,9 @@ describe("the heat layer", () => {
 });
 
 describe("the pins before the basemap", () => {
-  // MapLibre's load waits for every basemap tile and font, which on a first
-  // visit over a slow link took seconds. The pins need only the contacts
-  // source, and the map has it once its style has arrived.
+  // MapLibre's load waits for every basemap tile and font, which can take
+  // seconds on a first visit over a slow link. The pins need only the
+  // contacts source, and the map has it once its style has arrived.
   it("reads the pins once the style has data, before the map loads", async () => {
     render(<ContactMap contacts={PEOPLE} onSelect={() => {}} />);
     await screen.findByTestId("map");

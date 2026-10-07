@@ -1,11 +1,7 @@
 /**
- * useMultiSelect — Multi-select state and bulk action handlers for the contact list.
- *
- * Manages the selection lifecycle (enter/exit mode, toggle individual, select all)
- * and delegates bulk mutation side-effects to `useBulkActions`.
- *
- * @param filteredContacts - The currently visible contacts (post-filter/search).
- *        Used by `selectAll` to select only what the user can see.
+ * Select mode and its selection for the contact list. The bulk actions come
+ * from `useBulkActions`. Select all and ranges cover `filteredContacts`, the
+ * rows on screen.
  */
 import { useState, useCallback, useRef } from "react";
 import { useBulkActions } from "../../../components/bulk/useBulkActions";
@@ -15,13 +11,8 @@ export function useMultiSelect(filteredContacts: Contact[]) {
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  /**
-   * The last row clicked without shift — the anchor a shift-click ranges from.
-   *
-   * A ref rather than state: it changes on every click but nothing renders
-   * from it, and making it state would re-render the whole list to store a
-   * string nobody displays.
-   */
+  // The last row clicked without shift, where a shift-click range starts. A
+  // ref, since nothing renders from it.
   const anchorRef = useRef<string | null>(null);
 
   const enterSelectMode = useCallback(() => {
@@ -40,19 +31,8 @@ export function useMultiSelect(filteredContacts: Contact[]) {
     contacts: filteredContacts,
   });
 
-  /**
-   * Toggle one row, or — with `extend` — select everything between the anchor
-   * and this row.
-   *
-   * A range *adds*; it never deselects. Shift-clicking across rows that happen
-   * to be selected already and having them flip off is never what anyone
-   * means by "select from here to there", and it is invisible until you look
-   * at the count.
-   *
-   * Ranges run over `filteredContacts`, which is what is actually on screen —
-   * so a range under an active search selects the rows you can see between
-   * the two you clicked, not the hidden ones between them in the full list.
-   */
+  // Toggle one row, or with `extend` add every row from the anchor to this
+  // one. A range only adds, never deselects.
   const toggleSelect = useCallback(
     (contactId: string, extend = false) => {
       setSelectedIds((prev) => {
@@ -68,21 +48,18 @@ export function useMultiSelect(filteredContacts: Contact[]) {
             for (let i = lo; i <= hi; i++) next.add(ids[i]);
             return next;
           }
-          // Anchor scrolled out of the filtered set — fall through to a plain
-          // toggle rather than silently doing nothing.
+          // The anchor left the filtered set: a plain toggle.
         }
 
         next.has(contactId) ? next.delete(contactId) : next.add(contactId);
         return next;
       });
-      // Shift-click extends from the original anchor, so a run of shift-clicks
-      // keeps growing from one point rather than walking it forward.
+      // A run of shift-clicks grows from one anchor.
       if (!extend) anchorRef.current = contactId;
     },
     [filteredContacts],
   );
 
-  /** Deselect everything while staying in select mode. */
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
   }, []);

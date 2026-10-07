@@ -1,26 +1,15 @@
 /**
- * ChipInput: a row of removable chips and one "+ Add" button.
+ * ChipInput: a row of removable chips and one "+ Add" button, for tags,
+ * preferences and interests.
  *
- * Tags, preferences and interests are the same kind of value, a short word
- * or phrase in a list, and they had three different editors: tags had no add
- * control at all, and preferences and interests each had an underlined bare
- * input that looked like a line under the card. One component now draws all
- * three.
- *
- * 1. Each chip shows its text and a remove button named "Remove <noun>
- *    <text>". A chip that enrichment found wears the AI colour and a sparkle.
- * 2. "+ Add" is a button. It opens a field in its place. Enter adds the text
- *    and keeps the field open for the next one. A comma splits: "beta,
- *    gamma" adds two. Escape, or leaving an empty field, closes
- *    it. Leaving a field with text adds the text.
+ * 1. A chip that enrichment found wears the AI color and a sparkle.
+ * 2. "+ Add" opens a field in its place. Enter adds the text and keeps the
+ *    field open. A comma splits: "beta, gamma" adds two. Escape, or leaving
+ *    an empty field, closes it. Leaving a field with text adds the text.
  * 3. Focus never falls to the page. After a remove it moves to the next
- *    chip's remove button, or to "+ Add" when no chip is left. When the field
- *    closes by key, it returns to "+ Add".
+ *    chip's remove button, or to "+ Add" when no chip is left.
  *
- * The component does not save. It calls `onAdd` and `onRemove`, and the
- * caller writes the change and offers the undo toast.
- *
- * @module views/contact-detail/components/ChipInput
+ * The component does not save. The caller writes the change and offers Undo.
  */
 import { useEffect, useRef, useState } from "react";
 import { Plus, Sparkles, X } from "lucide-react";
@@ -30,7 +19,7 @@ import { ADD_BUTTON, ADD_BUTTON_SMALL, ADD_FIELD } from "../../../lib/styles";
 export interface Chip {
   id: string;
   label: string;
-  /** True when enrichment found the value. Drawn in the AI colour. */
+  /** True when enrichment found the value. Drawn in the AI color. */
   ai?: boolean;
 }
 
@@ -43,10 +32,7 @@ interface ChipInputProps {
   noun: string;
   /** The add button's visible text after the plus. Default "Add". */
   addText?: string;
-  /**
-   * The small "+ tag" of the header's chip row. In the Details card the
-   * button is the card's one "+ Add", as under every other field.
-   */
+  /** The small "+ tag" of the header's chip row. */
   small?: boolean;
 }
 
@@ -63,13 +49,10 @@ export const ChipInput = ({
   const container = useRef<HTMLDivElement>(null);
   const addButton = useRef<HTMLButtonElement>(null);
   /**
-   * Where focus goes once the page has caught up: to "+ Add" after the field
-   * closed by key, or to the chip that took a removed chip's place.
-   *
-   * A remove is not drawn until the save answers, so the removed chip's
-   * button keeps focus until then, and focus moves only once that chip has
-   * left the list. A save that fails leaves the chip, and focus, where they
-   * are.
+   * Where focus goes once the page catches up: "+ Add" after the field
+   * closed by key, or the chip that took a removed chip's place. A remove
+   * draws only when the save answers, so focus moves once the chip has left
+   * the list. A failed save leaves the chip, and focus, where they are.
    */
   const focusNext = useRef<{ removed: string; index: number } | "add" | null>(
     null,
@@ -183,8 +166,6 @@ export const ChipInput = ({
             commit();
             setAdding(false);
           }}
-          // 44 px tall with 16 px text on a phone (see `ADD_FIELD`). "+ link"
-          // opens the same field.
           className={ADD_FIELD}
         />
       ) : (

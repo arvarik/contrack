@@ -1,33 +1,11 @@
 /**
- * AISearchContext — Global state for AI Search overlay.
+ * App-wide state for AI research batches and their progress overlay.
  *
- * Provides:
- * - startSearch(contactIds, options?): kicks off a batch and opens the
- *   overlay, or adds the contacts to the batch already running, at the
- *   depth the caller names (Standard when it names none), and with the
- *   engine the account's research runs (`runsEngine`). Callers: the
- *   Enrichment settings page, for many contacts, and for one, "Enrich
- *   contact" and "Enrich deeply" in a contact's actions menu, and the
- *   dossier's Enrich contact and Enrich again menus.
- *
- * A start says nothing in a toast. The overlay opens at the same corner as
- * the toasts, and a success toast over it ("Enrichment started for 1
- * contact") said what the overlay already showed, and hid part of it.
- * - batch: current batch state (live-updated via SSE)
- * - isVisible: whether the overlay is showing
- * - depthFiguresApply: whether the depths' measured time and cost describe
- *   this account's research, which they do only when Gemini's own search
- *   runs it
- * - webSearchProvider: the web search model's provider, such as "Google
- *   Gemini", which names the engines
- * - engine and runsEngine: the web search engine this account chose (its
- *   own, or the instance's), and the one a start runs now: the chosen one,
- *   or the one research gives way to when it cannot run
- *   (`lib/aiFeatures`). The Contact enrichment page sets the choice
- *   (`EngineChoice`)
- *
- * The AISearchProgressOverlay is rendered via portal from this provider,
- * so it floats above all content regardless of routing.
+ * `startSearch` starts a batch, or adds contacts to the running one, at the
+ * caller's depth (Standard by default) and with the engine research runs
+ * (`runsEngine`, see `lib/aiFeatures`). A start shows no toast: the overlay
+ * opens in the toasts' corner and says it already. The overlay renders
+ * through a portal, above every route.
  */
 import React, {
   createContext,
@@ -62,13 +40,9 @@ import { errorText } from "../lib/utils";
 /** How one call to `startSearch` reports a limit. */
 interface StartSearchOptions {
   /**
-   * Where a limit is said: the enrichment lock held by another account.
-   * `"page"`, the default, keeps it in `limitMessage` and shows no toast,
-   * for a page that prints the message itself, as the Enrichment settings
-   * page does. `"toast"` says it in a toast as well, for a control with no
-   * page of its own to print it on: "Enrich contact" in the contact actions
-   * menu closes as it is chosen, and without the toast a refused start said
-   * nothing at all.
+   * Where a limit (another account's enrichment lock) is said. `"page"`, the
+   * default, keeps it in `limitMessage` for a page that prints it. `"toast"`
+   * also toasts it, for a control with no page, such as a menu item.
    */
   limitAs?: "page" | "toast";
   /** How thoroughly to research. Standard when absent. */
@@ -86,23 +60,16 @@ interface AISearchContextValue {
   isVisible: boolean;
   isStarting: boolean;
   /**
-   * Why the last start was refused, when the reason was a limit rather than
-   * a failure.
-   *
-   * The view cannot read it from the mutation: `handleConfirmStart` fires and
-   * returns without awaiting, so the rejection lands here. Before 2.0 that
-   * only ever meant "you did this too fast"; now it can also mean another
-   * account holds the enrichment lock, which is not the reader's doing and
-   * deserves different words.
+   * Why the last start was refused, when a limit refused it. Kept here
+   * because `handleConfirmStart` does not await the mutation. It may be the
+   * reader's own limit or another account's lock.
    */
   limitMessage: string | null;
   /** Forget the message — the reader has seen it, or is trying again. */
   clearLimit: () => void;
   /**
-   * Whether the depths' time and cost describe this account's research.
-   * They were measured on Gemini's own search (shared/researchDepth.ts), so
-   * on another provider, or with SearXNG, the controls leave them out rather
-   * than show figures for research the instance does not run.
+   * Whether the depths' time and cost apply. They were measured on Gemini's
+   * own search (shared/researchDepth.ts), so other engines leave them out.
    */
   depthFiguresApply: boolean;
   /** The web search model's provider, such as "Google Gemini", or null. */
@@ -125,9 +92,8 @@ export function useAISearch() {
 }
 
 /**
- * The AI Search context, or null outside its provider. For a part that also
- * renders on its own, like the dossier's Research card in a test: it offers
- * "Enrich again" only when there is a provider to start it.
+ * The context, or null outside its provider, for a part that also renders
+ * alone (the Research card offers "Enrich again" only with a provider).
  */
 export function useOptionalAISearch(): AISearchContextValue | null {
   return useContext(AISearchContext);
@@ -137,10 +103,8 @@ export function useOptionalAISearch(): AISearchContextValue | null {
 const UNFINISHED = new Set(["queued", "searching", "merging"]);
 
 /**
- * Whether this contact is being enriched: a start is on its way, or the
- * running batch still has an unfinished job for it. A control that starts
- * research waits while it is, so a second press cannot queue the contact
- * twice.
+ * Whether a start for this contact is on its way or its job is unfinished,
+ * so a second press cannot queue it twice.
  */
 export function isEnriching(
   search: Pick<AISearchContextValue, "isStarting" | "batch"> | null,
@@ -162,8 +126,7 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
   const [limitMessage, setLimitMessage] = useState<string | null>(null);
   const limitTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(limitTimer.current), []);
-  // `mutate` is the one stable part of a mutation: the object around it is
-  // new on every render, and a callback that closed over it changed with it.
+  // `mutate` is stable. The mutation object around it is new each render.
   const { mutate: startMutate, isPending: isStarting } = useStartAISearch();
   const { data: aiSettings } = useAISettings();
   const { preferences } = usePreferences();
@@ -232,21 +195,16 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
             setLimitMessage(null);
           },
           onError: (err) => {
-            // A lock held by somebody else is not a failure, and
-            // a red toast that vanishes is the wrong place for a wait the
-            // reader has to act on. It is kept on the page instead, and the
-            // toast is dropped for that case.
+            // Another account's lock is a wait, not a failure, so it stays
+            // on the page instead of an error toast.
             const limited = rateLimitMessage(err, "enrichment");
             if (limited) {
               setLimitMessage(limited);
               // A caller with no page to print the message on asks for it in a
               // toast. An info toast, not an error: a wait is not a failure.
               if (limitAs === "toast") toast.info(limited);
-              // The message names a wait, and the provider outlives the view
-              // that shows it: the AI Search page unmounts on navigation, this
-              // does not. Without an expiry, coming back an hour later reads a
-              // countdown that ran out long ago. The stated wait, or a short
-              // window when the server named none.
+              // The provider outlives the page, so the message expires with
+              // the stated wait (a minute when none was named).
               const seconds = rateLimitFacts(err)?.retryAfterSeconds ?? 60;
               window.clearTimeout(limitTimer.current);
               limitTimer.current = window.setTimeout(
@@ -274,11 +232,9 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
     // Don't clear batch data — user might want to re-open
   }, []);
 
-  // Memoize the provider value so an outer-tree re-render does NOT recreate
-  // the object and force every `useAISearch()` consumer to re-render. The
-  // identity of `value` now only changes when one of its observable fields
-  // actually changes. `startSearch` keeps one identity for the provider's
-  // life, because the only thing it closes over is the stable `mutate`.
+  // Memoized, so a parent's render does not redraw every consumer.
+  // `startSearch` keeps one identity for the provider's life: it closes over
+  // only the stable `startMutate`.
   const value = useMemo(
     () => ({
       startSearch,
@@ -316,7 +272,7 @@ export function AISearchProvider({ children }: { children: React.ReactNode }) {
           batch={batch}
           onDismiss={dismiss}
           onCancel={cancel}
-          isCancelling={cancelMutation.isPending}
+          isCanceling={cancelMutation.isPending}
           connectionError={!!stream.error}
         />
       )}

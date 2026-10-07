@@ -1,5 +1,5 @@
 /**
- * tests/e2e/mcp.spec.ts — E2E tests for the MCP & API Settings page.
+ * The MCP and API Settings page.
  *
  * Covers:
  * - Rail navigation, the address, the client picker and its setups, and the

@@ -1,26 +1,17 @@
 /**
- * CorvidThinking — the bird tilts its head while the AI works.
+ * The bird tilts its head while the AI works: one indicator for the
+ * synthesis bar, a contact's enrichment and the briefing card. A bird with
+ * its head on one side says "something is thinking about this", which is
+ * what those wait for.
  *
- * One indicator, in three places that each had their own: the synthesis bar's
- * spinner, the refresh icon that spun while a contact enriched, and the
- * briefing card's pending state. A spinner says "something is happening"; a
- * bird with its head on one side says "something is thinking about this",
- * which is the truer description of what those three are waiting for.
- *
- * The glyph rather than the full mark, because this is a 20 px slot and the
- * chest and the tail smear at that size. It is the same drawing either way.
- * Only the head moves: it cocks, looks up, and dips as if at something, while
- * the ring and the wing hold still. Each instance runs at its own pace from
+ * The glyph, not the full mark, because the chest and the tail smear in a
+ * 20 px slot. Only the head moves. Each instance runs at its own pace from
  * its own place in the loop.
  *
- * It names itself "Thinking" by default, so replacing a silent spinner with a
- * picture adds a word rather than a mystery. Where the surface already says
- * what is happening in text, such as "Synthesizing…" next to it, pass
- * `decorative` and the bird stays out of the accessibility tree: a screen
- * reader should hear the sentence once.
- *
- * At level "off" it is the static glyph. Nothing about the waiting is lost:
- * every caller shows or says what it is waiting for in words as well.
+ * It names itself "Thinking" by default. Where text beside it already says
+ * what is happening, such as "Synthesizing…", pass `decorative`, so a screen
+ * reader hears the sentence once. At level "off" it is the static glyph, and
+ * every caller also says in words what it waits for.
  */
 import { useState, type CSSProperties } from "react";
 import { cn } from "../../lib/utils";

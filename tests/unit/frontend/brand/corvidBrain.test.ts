@@ -1,15 +1,13 @@
 /**
- * The perched corvid's brain.
- *
- * The brain keeps no timers, so a test can live ten minutes of a bird's day
- * in a few milliseconds: a seeded random source, a clock the test moves, and
- * `sample` called every frame. What it has to get right is when, not what:
+ * The perched corvid's brain keeps no timers, so a test lives ten minutes of
+ * a bird's day in milliseconds with a seeded random source, a clock it moves,
+ * and `sample` called every frame. It has to get when right:
  *
  * - blinks on their own clock, small acts often, big acts rarely, and the
  *   same big act never twice in a row;
  * - nothing big while the person is typing;
  * - asleep after two and a half quiet minutes, awake with a start;
- * - ready while hovered; watching the pointer when it comes near;
+ * - ready while hovered, watching the pointer when it comes near;
  * - a reaction the app asks for plays at once;
  * - no frames wanted while nothing moves.
  */

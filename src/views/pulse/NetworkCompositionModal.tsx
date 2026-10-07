@@ -30,7 +30,7 @@ const CompositionColumn = ({
   const maxCount = Math.max(...data.map((d) => d.count));
   const totalCount = data.reduce((acc, d) => acc + d.count, 0);
 
-  // Derive label by looking for the string property that isn't count
+  // The label is the one key that is not `count`.
   const renderItem = (item: CompositionEntry, index: number) => {
     const labelKey = Object.keys(item).find((k) => k !== "count")!;
     const labelResult = item[labelKey];
@@ -91,7 +91,6 @@ export const NetworkCompositionModal = ({
       size="2xl"
       ariaLabel="Network composition"
     >
-      {/* Header */}
       <div className="px-6 py-5 bg-surface-container-low flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-xl bg-primary/10">
@@ -106,7 +105,6 @@ export const NetworkCompositionModal = ({
         </button>
       </div>
 
-      {/* Scrollable Content */}
       <div className="p-6 sm:p-8">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-8">
           <CompositionColumn

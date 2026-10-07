@@ -177,12 +177,10 @@ export function passageSnapshot(contactId: string): PassageSnapshot | null {
 }
 
 /**
- * Keyword passage retrieval applies ownership, visibility and hard filters
- * before its limit.
- *
- * `CROSS JOIN` keeps the full-text match first, with the passage and its
- * contact looked up from each hit. With stale row counts SQLite scanned
- * `contacts` first instead (see `findPassageNeighbors`).
+ * Keyword passage retrieval, with ownership, visibility and hard filters
+ * applied before its limit. `CROSS JOIN` keeps the full-text match first, with
+ * the passage and its contact looked up from each hit; with stale row counts
+ * SQLite would scan `contacts` first (see `findPassageNeighbors`).
  */
 export function findPassages(
   scope: Scope,

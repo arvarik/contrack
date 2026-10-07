@@ -1,34 +1,16 @@
 /**
- * InteractionSearchPanel — the Notes mode of the search page.
- *
- * "Who discussed hiring last month?" → the notes that say so, each with the
- * person it is about, the date, and the passage that matched. Everything is
- * local: the server runs FTS5 over the note index and no model is called, so
- * the same question over the same notes gives the same page every time.
- *
- * The page has People's shape and feel: the same search box with the same
- * search button, the same "Searching…" line and shimmer while a first answer
- * is on its way, and the same results header. Enter or the button searches,
- * as on People. The box used to search as the words were typed, with no
- * button to press, which People had.
+ * The Notes mode of the search page. The server runs FTS5 over the note
+ * index and calls no model, so the same question gives the same page.
  *
  * The state lives in the URL (`q`, `from`, `to`, `type`), so Back returns to
- * the same search and a link to it can be shared. The input is the one thing
- * kept locally, and it reaches `q` when it is searched. The filters under the
- * box, the kind and the period, apply the moment they change.
+ * the same search. Only the input is local, and it reaches `q` on search.
+ * The filters apply the moment they change.
  *
- * **What stays on screen while an answer loads.** The last answer, notes or
- * "No notes match", stays where it is until the next one arrives, and the
- * next one replaces it in place: a card that is in both answers stays put,
- * and only a new card fades in. A search slower than 150 ms dims the old
- * answer and turns the box's glyph into a spinner (`useLoadingShown`), and
- * the new answer ends both at once. Only a first search, with nothing on
- * screen yet, shows the "Searching…" line and the shimmer, and they stay at
- * least 400 ms so they never blink. The panel used to remount the old cards
- * the moment the words changed, so they vanished and faded back in before
- * the answer came, to drop the answer on screen for a shimmer after 150 ms,
- * to hold a slow answer back behind the shimmer, and to spin the glyph for
- * one frame on every fast search.
+ * While an answer loads, the last one stays on screen and the next replaces
+ * it in place, so a card in both answers stays put. Past 150 ms the old
+ * answer dims and the glyph spins (`useLoadingShown`). Only a first search
+ * shows the "Searching…" line and the shimmer, for at least 400 ms so they
+ * never blink.
  */
 import React, {
   useCallback,
@@ -77,8 +59,6 @@ import { Highlighted } from "../../components/ui/Highlighted";
 import { AskSearchBox } from "./AskSearchBox";
 import { ShimmerCard } from "./SearchResultCards";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 const TYPE_ICONS: Record<string, LucideIcon> = {
   note: FileText,
   call: Phone,
@@ -88,10 +68,7 @@ const TYPE_ICONS: Record<string, LucideIcon> = {
   sms: MessageSquare,
 };
 
-/**
- * The kinds of note, for the first chip under the box. Each names its
- * choice with its glyph, so the chip reads "Calls" with a phone once chosen.
- */
+/** The kinds of note. The chip shows the chosen kind with its glyph. */
 const TYPES: SelectOption[] = [
   { value: "", label: "All kinds" },
   { value: "note", label: "Notes", icon: TYPE_ICONS.note },
@@ -113,13 +90,11 @@ const PERIODS: { value: Exclude<Period, "custom">; label: string }[] = [
   { value: "year", label: "This year" },
 ];
 
-/** The periods as one chip's list, for a phone, where six chips took three rows. */
+/** The periods as one chip, for a phone, where six chips take three rows. */
 const PERIOD_OPTIONS: SelectOption<Period>[] = [
   ...PERIODS,
   { value: "custom", label: "Custom" },
 ];
-
-// ─── Dates ────────────────────────────────────────────────────────────────────
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -174,19 +149,15 @@ function periodOf(from: string, to: string): Period {
 function describeRange(from: string | null, to: string | null): string {
   const start = from ? parseServerTime(from) : null;
   const end = to ? parseServerTime(to) : null;
-  // The medium date that formatDay prints. The bounds here are Date values
-  // and not API strings, so the options are the same and the call is direct.
+  // formatDay's medium date, called directly because these bounds are Dates.
   const day = (d: Date) =>
     d.toLocaleDateString(undefined, { dateStyle: "medium" });
-  // The end is exclusive, so the last day inside the range is a moment before.
   const lastDay = end ? new Date(end.getTime() - 1) : null;
   if (start && lastDay) return `${day(start)} – ${day(lastDay)}`;
   if (start) return `since ${day(start)}`;
   if (lastDay) return `until ${day(lastDay)}`;
   return "";
 }
-
-// ─── Result card ──────────────────────────────────────────────────────────────
 
 const HitCard = ({
   hit,
@@ -253,8 +224,6 @@ const HitCard = ({
   );
 };
 
-// ─── Panel ────────────────────────────────────────────────────────────────────
-
 export const InteractionSearchPanel = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -267,23 +236,18 @@ export const InteractionSearchPanel = () => {
   const [text, setText] = useState(q);
   const [mode, setMode] = useState<"auto" | "all" | "any">("auto");
   const [sort, setSort] = useState<"relevance" | "date">("relevance");
-  // The page of results belongs to one search: a new question or filter
-  // starts from the first page. Worked out as the panel renders, so the
-  // query never runs once with the old offset first, which an effect that
-  // reset it after the render did.
+  // A new question or filter starts from the first page. This is derived in
+  // render, so the query never runs once with the old offset, as it would
+  // with a reset in an effect.
   const searchKey = [q, from, to, type, mode, sort].join("\u0000");
   const [page, setPage] = useState({ key: searchKey, offset: 0 });
   const offset = page.key === searchKey ? page.offset : 0;
   const setOffset = (next: number) => setPage({ key: searchKey, offset: next });
-  /**
-   * Whether the reader asked for the date fields. Dates that happen to equal
-   * a preset are shown as that preset until Custom is chosen, and Custom
-   * stays open until a preset is chosen, so the fields do not vanish under
-   * a reader who has just typed the last day of last month into them.
-   */
+  // Custom stays open until a preset is chosen, so the date fields do not
+  // vanish when typed dates happen to equal a preset.
   const [customOpen, setCustomOpen] = useState(false);
 
-  /** Write one or more fields to the URL, dropping the ones set to "". */
+  /** Writes fields to the URL and drops the ones set to "". */
   const update = useCallback(
     (fields: Record<string, string>) => {
       setSearchParams(
@@ -301,8 +265,7 @@ export const InteractionSearchPanel = () => {
     [setSearchParams],
   );
 
-  // The box follows a question that arrives from elsewhere: a history entry,
-  // or Back to a search.
+  // The box follows a question from a history entry or from Back.
   const prevQRef = useRef(q);
   useEffect(() => {
     if (q !== prevQRef.current) {
@@ -311,13 +274,8 @@ export const InteractionSearchPanel = () => {
     }
   }, [q]);
 
-  /**
-   * Focus the question on arrival, unless the reader arrived by arrow key on
-   * the People / Notes switch. A radiogroup promises that the arrows move
-   * focus between its options; a field that takes focus the moment an
-   * option is chosen breaks that promise, and the next arrow press would
-   * type into the field instead of moving on.
-   */
+  // Focus the box on arrival, except after an arrow key on the People / Notes
+  // radiogroup: the next arrow press must move between its options, not type.
   useEffect(() => {
     if (document.activeElement?.getAttribute("role") === "radio") return;
     inputRef.current?.focus();
@@ -356,23 +314,16 @@ export const InteractionSearchPanel = () => {
   const hits = result?.hits ?? [];
   const total = result?.total ?? 0;
   const period: Period = customOpen ? "custom" : periodOf(from, to);
-  // A date phrase in the words ("coffee last month") sets the range, and
-  // the result says so in its own chip. "Any time" pressed beside that chip
-  // would say the opposite, so no period shows pressed then.
+  // A date phrase ("coffee last month") sets the range and shows its own
+  // chip, so no period shows pressed then.
   const phraseSetsRange =
     period === "any" && result?.query.range?.source === "phrase";
   const shownPeriod: Period | null = phraseSetsRange ? null : period;
   const hasSearch = Boolean(q || from || to || type);
   const showModeToggle = (result?.query.tokens.length ?? 0) >= 2;
 
-  /**
-   * The answer on screen belongs to an earlier search while this one
-   * loads: the query keeps it (`keepPreviousData`), so a new question or
-   * filter does not blank the page. Past 150 ms the old answer dims and
-   * the glyph spins. With nothing on screen yet, the shimmer shows instead,
-   * and it holds for 400 ms once it shows, so it never blinks: the answer
-   * waits for it, and it goes up only once per wait.
-   */
+  // `keepPreviousData` keeps the old answer on screen while this one loads.
+  // With nothing on screen yet, the shimmer shows instead, once per wait.
   const busy = useLoadingShown(hasSearch && search.isFetching);
   const stale = Boolean(result) && search.isPlaceholderData;
   const [shimmer, setShimmer] = useState(false);
@@ -383,8 +334,7 @@ export const InteractionSearchPanel = () => {
   const recordSearch = useRecordSearch();
   const lastRecordedNotesQueryRef = useRef<string | null>(null);
 
-  // Record each question once, when its own answer arrives: not the answer
-  // to the question before it, which the query shows while this one loads.
+  // Record each question once, with its own answer, not the placeholder.
   useEffect(() => {
     const trimmed = q.trim();
     if (trimmed.length < 2) return;
@@ -399,11 +349,7 @@ export const InteractionSearchPanel = () => {
     });
   }, [q, search.isSuccess, search.isPlaceholderData, result, recordSearch]);
 
-  /**
-   * Search for the words in the box. The words go to the URL, which is what
-   * the query reads, so Back returns to them. The same words again search
-   * again.
-   */
+  // The words go to the URL, which the query reads. The same words refetch.
   const submit = () => {
     const words = text.trim();
     if (words === q) void search.refetch();
@@ -419,7 +365,6 @@ export const InteractionSearchPanel = () => {
     } else update(presetRange(next));
   };
 
-  /** Empty the box and every filter, and with them what they found. */
   const clear = () => {
     setText("");
     setCustomOpen(false);
@@ -435,11 +380,7 @@ export const InteractionSearchPanel = () => {
   const last = Math.min(offset + hits.length, total);
   const showAnswer = !shimmer && hasSearch && result !== undefined;
 
-  /**
-   * The one sentence a screen reader hears about this search. The loading
-   * state and the count over the results are what a sighted person sees.
-   * See lib/searchAnnouncements for the wording.
-   */
+  // The one sentence a screen reader hears about this search.
   const status = noteSearchStatus({
     isFetching: search.isFetching,
     isSuccess: search.isSuccess,
@@ -454,11 +395,8 @@ export const InteractionSearchPanel = () => {
       <LiveStatus message={status} label="Search status" />
 
       {/*
-        The box and, under it, what narrows the search: the kind of note,
-        then the period. The same box as People's, so switching modes moves
-        nothing. A spinner takes the note's place while a search runs, not
-        the thinking bird: no model reads the notes, the server matches
-        words.
+        The same box as People's, so switching modes moves nothing. A spinner,
+        not the thinking bird, shows while a search runs: no model reads notes.
       */}
       <div className="space-y-3">
         <AskSearchBox
@@ -480,12 +418,8 @@ export const InteractionSearchPanel = () => {
         />
 
         {/*
-          The filters, as one row of chips. The kind comes first, a chip that
-          opens a list and names its choice, the way Gmail and Drive put
-          "Type" first under their search boxes: what, then when. A kind
-          other than all takes the chip's selected tint, like a pressed
-          period. On a phone the six periods fold into one chip of the same
-          kind, so the two filters share one row: six chips took three.
+          The kind comes first, then the period. On a phone the periods fold
+          into one chip, so the two filters share one row.
         */}
         <div className="flex flex-wrap items-center gap-2">
           <Select
@@ -564,15 +498,10 @@ export const InteractionSearchPanel = () => {
         )}
       </div>
 
-      {/*
-        A first search, past a short wait: the line and the shimmer that
-        People shows, in one slot with the answer, so one swaps for the
-        other in a single commit.
-      */}
+      {/* A first search: the shimmer and the answer swap in one commit. */}
       {shimmer && (
         <div className="fade-enter space-y-3">
           <div className="flex items-center gap-2 text-primary text-xs font-bold uppercase tracking-[0.08em] mb-4">
-            {/* Decorative: the word beside it says the same thing. */}
             <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
             Searching…
           </div>
@@ -582,26 +511,20 @@ export const InteractionSearchPanel = () => {
         </div>
       )}
 
-      {/* The last answer: the header, the notes, the pages or the empty
-          state. It dims while a slow search replaces it. */}
       {showAnswer && result && (
         <div
           aria-busy={dimmed || undefined}
           className={cn("space-y-6 transition-opacity", dimmed && "opacity-60")}
         >
-          {/* What the server understood, in the results' header: the count
-              in the pill People uses, the date range it read, and the ways
-              to match and order. With no notes found, only what still
-              helps stays: the range it read, and the way back from "All
-              words" a person chose. */}
+          {/* With no notes found, only the range read and the way back from
+              "All words" stay. */}
           {(total > 0 ||
             result.query.range ||
             (showModeToggle && mode === "all")) && (
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs">
               {total > 0 && (
                 <div className="flex items-center gap-2">
-                  {/* A label in the muted ink, as on People: blue would
-                        read as a link. */}
+                  {/* Muted ink, as on People: blue would read as a link. */}
                   <span className={SECTION_HEADING}>Search results</span>
                   <span className="text-[11px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded-md">
                     {total} note{total === 1 ? "" : "s"}
@@ -695,8 +618,6 @@ export const InteractionSearchPanel = () => {
             </div>
           )}
 
-          {/* The notes. A card that is in the next answer too stays put,
-              and only a new one fades in. */}
           {hits.length > 0 && (
             <div className="space-y-2">
               {hits.map((hit, i) => (
@@ -705,7 +626,6 @@ export const InteractionSearchPanel = () => {
             </div>
           )}
 
-          {/* Pages */}
           {hits.length > 0 && total > PAGE_SIZE && (
             <div className="flex items-center justify-between text-xs text-on-surface-variant">
               <span>
@@ -732,9 +652,8 @@ export const InteractionSearchPanel = () => {
             </div>
           )}
 
-          {/* Nothing. The words are stemmed and every word longer than a
-              letter matches as a prefix, so "hire" already finds hiring:
-              the way on is fewer words, or a wider period. */}
+          {/* Words are stemmed and match as prefixes, so the hint is fewer
+              words or a wider period, not other word forms. */}
           {total === 0 && (
             <EmptyState
               icon={SearchX}
@@ -744,8 +663,7 @@ export const InteractionSearchPanel = () => {
                   ? "Try a wider period, or fewer words"
                   : "Try fewer or other words"
               }
-              // A chosen kind is the narrowest filter, and the one a
-              // person forgets they set. One press widens it again.
+              // A chosen kind is the filter people forget they set.
               action={
                 type
                   ? {
@@ -760,10 +678,7 @@ export const InteractionSearchPanel = () => {
         </div>
       )}
 
-      {/*
-        Failure. `role="alert"` so it is announced when it appears; the status
-        region says nothing for an error, so the failure is spoken once.
-      */}
+      {/* The status region is silent on an error, so the alert speaks once. */}
       {search.isError && (
         <div role="alert" className="tile-enter">
           <EmptyState

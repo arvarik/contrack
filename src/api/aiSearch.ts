@@ -1,24 +1,14 @@
+/** Hooks to start an AI research batch and follow it, by stream or by poll. */
 import { apiFetch, ApiError } from "./client";
 import { aiSearchBatchSchema } from "../../shared/aiSearchContract";
 import { invalidateContactViews } from "./contactCache";
 import type { ResearchDepth } from "../../shared/researchDepth";
-/**
- * AI Search — React Query hooks and SSE streaming.
- *
- * Primary hook: useAISearchStream (SSE-based, real-time)
- * Fallback hook: useAISearchStatusPoll (polling-based)
- * Mutation: useStartAISearch (kicks off a batch)
- */
 
 import { useEffect, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AISearchBatch } from "../types";
 
 const API_BASE = "/api";
-
-// =============================================================================
-// Start AI Search mutation
-// =============================================================================
 
 export const useStartAISearch = () => {
   return useMutation({
@@ -36,12 +26,9 @@ export const useStartAISearch = () => {
        */
       strategy?: "two-pass" | "searxng" | "combined";
     }) => {
-      // `apiFetch` throws `ApiError` for any non-2xx, with the message read
-      // out of the standard `{ error: { code, message } }` envelope, so the
-      // caller's `onError` toast shows the server's own words. The cooldown
-      // 429 used to be the one endpoint that answered with a bare
-      // `{ error: string }`; since 2f it sends the envelope like everything
-      // else, and carries `details.yours` for Phase 4 to act on.
+      // A refusal throws `ApiError` with the server's words. A 429 here means
+      // another account's batch holds the research lock, and it carries
+      // `details.yours` (see `rateLimitFacts`).
       const res = await apiFetch(`/ai-search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

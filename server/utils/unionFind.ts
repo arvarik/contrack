@@ -1,25 +1,14 @@
-// =============================================================================
-// Union-Find (Disjoint Set Union)
-// =============================================================================
-// General-purpose data structure that groups elements into disjoint sets with
-// near-constant-time operations via path compression + union-by-rank.
-//
-// Used by the dedupe engine to cluster transitively-connected contacts:
-//   If pair (A,B) and pair (B,C) are detected,
-//   Union-Find groups them into a single cluster {A, B, C}.
-//
-// Time complexity: O(α(n)) per operation — effectively O(1).
-// Space complexity: O(n) — one parent pointer per element.
-// =============================================================================
+// Union-find (disjoint sets) with path compression and union by rank, about
+// O(1) per operation and O(n) space. The dedupe engine uses it to cluster
+// contacts: pairs (A,B) and (B,C) make one cluster {A, B, C}.
 
 export class UnionFind {
   private parent = new Map<string, string>();
   private rank = new Map<string, number>();
 
   /**
-   * Find the root representative of the set containing `x`.
-   * Uses path compression: every node touched during traversal is pointed
-   * directly to the root, flattening the tree for future lookups.
+   * The root of the set holding `x`. Path compression points every node on the
+   * way straight at the root.
    */
   find(x: string): string {
     if (!this.parent.has(x)) {
@@ -33,9 +22,8 @@ export class UnionFind {
   }
 
   /**
-   * Merge the sets containing `a` and `b`.
-   * Uses union-by-rank: the shorter tree is attached under the taller tree's
-   * root, keeping the overall tree shallow.
+   * Merge the sets holding `a` and `b`, the shorter tree under the taller one's
+   * root (union by rank).
    */
   union(a: string, b: string): void {
     const rootA = this.find(a);
@@ -55,10 +43,7 @@ export class UnionFind {
     }
   }
 
-  /**
-   * Return all clusters with 2+ members.
-   * Singletons (elements that were never union'd) are excluded.
-   */
+  /** Every cluster with 2 or more members; singletons are left out. */
   getClusters(): Map<string, string[]> {
     const groups = new Map<string, string[]>();
     for (const x of this.parent.keys()) {

@@ -1,21 +1,15 @@
 /**
- * useMapSelection — manages geospatial multi-selection on the map.
- *
- * Provides:
- * - A Set of selected contact IDs
- * - Selection via Box (Shift+drag), Lasso (freehand polygon), and All in view
- * - Selection tests actual MapContact rows, not rendered tiles, so contacts
- *   inside clusters are included
- * - Preserves selection across filter changes and reports hidden count
- * - Escape key to clear selection
- * - Accessibility announcements: "N people selected" and "(M hidden by filter)"
- *
- * @module views/map/useMapSelection
+ * Multi-selection on the map: box, lasso and all in view. It tests contact
+ * rows, not rendered tiles, so people inside clusters count. All in view is
+ * the part of the map that nothing covers, the box the "N in view" count
+ * uses. A selection survives filter changes, and the announcement counts the
+ * hidden ones.
  */
 import { useState, useCallback, useEffect, useMemo } from "react";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import type { MapContact } from "../../../shared/geo";
 import { isValidLatLng } from "../../../shared/geo";
+import { clearBounds } from "./insets";
 import { boundsContain, pointInPolygon, type Point } from "./mapMath";
 
 interface UseMapSelectionOptions {
@@ -43,25 +37,6 @@ export function useMapSelection({
     setSelectedIds(new Set());
   }, []);
 
-  const selectInView = useCallback(
-    (map: MapLibreMap | null, candidates?: MapContact[]) => {
-      if (!map) return;
-      const list = candidates ?? activeContacts;
-      const bounds = map.getBounds();
-      const insideIds: string[] = [];
-
-      for (const c of list) {
-        if (!isValidLatLng(c.lat, c.lng)) continue;
-        if (boundsContain(bounds, { lat: c.lat, lng: c.lng })) {
-          insideIds.push(c.id);
-        }
-      }
-
-      addMany(insideIds);
-    },
-    [activeContacts, addMany],
-  );
-
   const selectBox = useCallback(
     (
       bounds: [west: number, south: number, east: number, north: number],
@@ -82,6 +57,18 @@ export function useMapSelection({
     [activeContacts, addMany],
   );
 
+  const selectInView = useCallback(
+    (
+      map: MapLibreMap | null,
+      candidates: MapContact[] | undefined,
+      options: { contactOpen: boolean },
+    ) => {
+      if (!map) return;
+      selectBox(clearBounds(map, options), candidates);
+    },
+    [selectBox],
+  );
+
   const selectLasso = useCallback(
     (ring: Point[], candidates?: MapContact[]) => {
       if (ring.length < 3) return;
@@ -100,11 +87,10 @@ export function useMapSelection({
     [activeContacts, addMany],
   );
 
-  // Clear selection on Escape when no modal or menu is open
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && !e.defaultPrevented && selectedIds.size > 0) {
-        // If a modal or menu is open, let the modal handle Escape first
+        // An open dialog or menu takes Escape first.
         if (document.querySelector('[role="dialog"], [role="menu"]')) return;
         e.preventDefault();
         clear();

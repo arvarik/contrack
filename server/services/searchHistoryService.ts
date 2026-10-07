@@ -76,12 +76,10 @@ function parseCursor(
 }
 
 /**
- * Record a search question in history.
- *
- * Upserts on (ownerId, mode, normalizedQuery):
- * - If new: inserts row with runCount = 1, pinned = 0
- * - If exists: bumps runCount, moves lastRunAt to now, updates query snapshot (resultCount, resultIds, fallback)
- * Trims resultIds to at most 30 items.
+ * Record a search question in history, upserting on (ownerId, mode,
+ * normalizedQuery): a new row starts at runCount 1, unpinned; an existing one
+ * bumps runCount, moves lastRunAt to now and updates its snapshot (resultCount,
+ * resultIds, fallback). resultIds keeps at most 30.
  */
 export function record(
   ownerId: string,
@@ -129,11 +127,9 @@ export function record(
 }
 
 /**
- * List search history entries for an owner.
- *
- * Supports filtering by mode, pinned, and query text (`normalizedQuery LIKE ?`).
- * Uses cursor-based pagination (base64 of `lastRunAt|id`) with ordering `lastRunAt DESC, id DESC`.
- * Computes `total` count without the cursor clause.
+ * List an owner's search history, filtered by mode, pinned and query text
+ * (`normalizedQuery LIKE ?`), newest first (`lastRunAt DESC, id DESC`), with a
+ * base64 cursor of `lastRunAt|id`. `total` ignores the cursor.
  */
 export function list(
   ownerId: string,

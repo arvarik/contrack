@@ -1,10 +1,9 @@
 /**
  * The 44 pixel target floor and the 11 pixel type floor, on a phone.
  *
- * A 390 pixel viewport with touch, the shape of the iPhone 13 the UI review
- * walked. A phone is where both floors bite: a control a mouse can hit at 24
- * pixels is a miss for a thumb, and 10 pixel text at arm's length is a
- * squint. Each screen below is the one the review measured. See
+ * A 390 pixel viewport with touch, the shape of an iPhone 13. A phone is where
+ * both floors bite: a control a mouse can hit at 24 pixels is a miss for a
+ * thumb, and 10 pixel text at arm's length is a squint. See
  * `fixtures/metrics.ts` for how a hit box is measured.
  */
 import { devices, type Page } from "@playwright/test";

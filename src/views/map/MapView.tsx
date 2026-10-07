@@ -1,22 +1,14 @@
 /**
- * MapView — the map page, at `/map` and `/map/contact/:id`.
+ * The map page, at `/map` and `/map/contact/:id`. A pin opens the contact
+ * over the map, and a click on the map closes it.
  *
- * Draws every placed contact on a MapLibre map. A pin opens the contact
- * over the map at `/map/contact/:id`, and a click on the map itself closes
- * it again. The map is born correct: `ContactMap` measures its container
- * before the map exists, so the zoom, the minimum zoom and the bounds are
- * creation props and nothing moves the view at mount. See the header of
- * `ContactMap.tsx` for the bug that rule prevents.
+ * `ContactMap` measures its container before the map exists, so nothing
+ * moves the view at mount (see `ContactMap.tsx`). This is the one map kept
+ * between visits (`reuse`) that remembers its view (`rememberView`), so a
+ * return here is instant.
  *
- * The page map is the one map that is kept between visits (`reuse`) and the
- * one that remembers where it was left (`rememberView`). Both are what make
- * a return to this page instant.
- *
- * A link can ask for one pin with `state: { pin: id }`: the map flies to it
- * and opens its card, with no contact over the map. "Open in map" does so
- * where an open contact would cover the whole map (`LocationMiniMap`).
- *
- * @module views/map/MapView
+ * A link with `state: { pin: id }` flies to that pin and opens its card with
+ * no contact over the map, as "Open in map" in `LocationMiniMap` does.
  */
 import {
   lazy,
@@ -101,15 +93,11 @@ import { EmptyState } from "../../components/ui/EmptyState";
 import { boundsOf, degreesAcross, densestSpan } from "./mapMath";
 import { cn, errorText } from "../../lib/utils";
 
-// The dialog's chunk loads the first time a card asks for it.
 const AdjustPinModal = lazy(() =>
   import("./AdjustPinModal").then((m) => ({ default: m.AdjustPinModal })),
 );
 
-/**
- * The insights panel's own curve, so the map's pan and the panel's slide
- * start, run and land together.
- */
+// The insights panel's curve, so the map's pan and the panel's slide match.
 const PANEL_EASING = cubicBezier(...EASE);
 
 /** The box around the placed contacts among `people`, or null for none. */
@@ -157,7 +145,7 @@ export const MapView = () => {
   const { preferences, setPreference } = usePreferences();
 
   const urlViewId = searchParams.get("view");
-  // Health was a layer until v2, and an old link to it opens on Pins.
+  // A link with the retired `layer=health` opens on Pins.
   const layerParam = searchParams.get("layer");
   const urlLayer: MapLayer | null =
     layerParam === "heat"
@@ -224,10 +212,7 @@ export const MapView = () => {
     [setPreference, setSearchParams],
   );
 
-  /**
-   * Fit the map to a box clear of what covers it, or fly to it when the box
-   * is one point. Reduced motion jumps.
-   */
+  // Fits a box clear of what covers the map, or flies to a one-point box.
   const fitTo = useCallback(
     (bounds: MapBounds, pointZoom: number, instant = false) => {
       if (!map) return;
@@ -323,7 +308,6 @@ export const MapView = () => {
     [map, createMapView, filter.rawInput, layer, showView],
   );
 
-  // Update writes the filter, the layer and the box into a saved view.
   const handleUpdateView = useCallback(
     (view: MapViewType) => {
       if (!map) return;
@@ -403,12 +387,8 @@ export const MapView = () => {
     },
   });
 
-  /**
-   * The bulk bar's room: its height and its offset from the map's bottom.
-   * The selection bar sits 8 px above it. On a phone the bulk bar wraps to
-   * two rows, and at a fixed offset it covered the selection bar and its
-   * Clear button. Measured, as in ContactList.
-   */
+  // The bulk bar's height plus its bottom offset, for the selection bar 8 px
+  // above it. Measured, because the bulk bar wraps to two rows on a phone.
   const [bulkRoom, setBulkRoom] = useState(0);
   const measureBulkBar = useCallback((bar: HTMLDivElement | null) => {
     if (!bar) return;
@@ -423,12 +403,9 @@ export const MapView = () => {
     return () => observer.disconnect();
   }, []);
 
-  /**
-   * The bottom line's height. On a phone MapLibre's zoom buttons and credit
-   * sit over it, lifted by this much (index.css), and a line that wraps
-   * would otherwise run under them. While the line steps aside they keep
-   * its last height, so they do not drop under the bulk bar.
-   */
+  // The bottom line's height, which lifts MapLibre's zoom buttons and credit
+  // over it on a phone (index.css). While the line steps aside they keep its
+  // last height, so they do not drop under the bulk bar.
   const [lineHeight, setLineHeight] = useState(0);
   const measureLine = useCallback((corner: HTMLDivElement | null) => {
     if (!corner) return;
@@ -540,9 +517,8 @@ export const MapView = () => {
       .map((c) => ({ lat: c.lat, lng: c.lng }));
     const bounds = boundsOf(placed);
     if (!bounds || !map) return;
-    // At the lowest zoom the map shows so many degrees of the part nothing
-    // covers. A network wider than that cannot fit, and the middle of it
-    // can be an ocean: show the stretch that holds the most people.
+    // A network wider than the open map at its lowest zoom cannot fit, and
+    // its middle can be an ocean: show the stretch with the most people.
     const container = map.getContainer();
     const { right } = measureInsets(container, {
       contactOpen: openId !== null,
@@ -611,9 +587,7 @@ export const MapView = () => {
     map,
   ]);
 
-  /**
-   * What covers the map at mount, measured before the map exists.
-   */
+  // What covers the map at mount, known before the map exists.
   const initialInsets = useMemo<Insets>(() => {
     const right = isWide && isDesktopPaneOpen ? SIDE_PANEL_WIDTH : 0;
     return { right, bottom: 0 };
@@ -656,13 +630,10 @@ export const MapView = () => {
     return () => window.removeEventListener("resize", onResize);
   }, [map, openId, isPaneOpen]);
 
-  /**
-   * How much map the open contact leaves on the left, or null while no
-   * contact is open. The toolbar, the legend and the stats strip fit in it:
-   * at 1440 px the contact starts at x 580, over the end of the toolbar.
-   * Under `MIN_OPEN_PX` they step aside: at 1024 px the contact leaves a
-   * strip of 100 px, and they were cut off mid-word.
-   */
+  // How much map the open contact leaves on the left, or null with none open.
+  // The toolbar, the legend and the stats strip fit in it. Under
+  // `MIN_OPEN_PX` (a 1024 px window leaves 100 px) they step aside, so they
+  // are not cut off mid-word.
   const [room, setRoom] = useState<number | null>(null);
   useLayoutEffect(() => {
     const page = pageRef.current;
@@ -686,9 +657,7 @@ export const MapView = () => {
     if (openId) navigate({ pathname: "/map", search });
   }, [navigate, openId, search]);
 
-  /**
-   * Escape closes the contact.
-   */
+  // Escape closes the contact, unless a dialog or a menu is open.
   useEffect(() => {
     if (!openId) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -700,10 +669,8 @@ export const MapView = () => {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [closeContact, openId]);
 
-  /**
-   * Single-key shortcuts: "/", "F", "I", "L". An open menu keeps the keys,
-   * its letters jump to its items, and so does a dialog with the focus.
-   */
+  // Single-key shortcuts "/", F, I and L. An open menu, or a dialog with the
+  // focus, keeps the keys for itself.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
@@ -747,15 +714,10 @@ export const MapView = () => {
   }, [singleKeyShortcuts, handleFitAll, toggleInsightsPane]);
 
   return (
-    // The map, edge to edge. From `lg` the insights button sits in its
-    // top-right corner and the panel slides over its right edge.
-    //
-    // On a phone the bottom line spans the map above the tab bar, where
-    // MapLibre's zoom buttons, and the credit on top of them, also start.
-    // `--map-line`, its height, lifts those over it, so they are never under
-    // it and the credit opens above it. With a contact open, `--map-open`
-    // and `data-cramped` keep the credit and the zoom buttons in the map the
-    // contact leaves (index.css).
+    // The map, edge to edge. On a phone `--map-line` lifts MapLibre's zoom
+    // buttons and credit over the bottom line. With a contact open,
+    // `--map-open` and `data-cramped` keep them in the map the contact
+    // leaves (index.css).
     <div
       className="map-page flex w-full h-full relative bg-surface-container-lowest z-0 overflow-hidden"
       data-cramped={cramped || undefined}
@@ -810,22 +772,18 @@ export const MapView = () => {
           onFitAll={handleFitAll}
           onToggleInsights={() => toggleInsightsPane(true)}
           onSelectInView={() =>
-            selection.selectInView(map, filter.filteredContacts)
+            selection.selectInView(map, filter.filteredContacts, {
+              contactOpen: openId !== null,
+            })
           }
           onStartLasso={() => setIsLassoMode(true)}
           isLassoActive={isLassoMode}
         />
         {/*
-          The bottom-left corner: the bottom line, 12 px over the tab bar on
-          a phone. `z-[3]` puts it over every pin, the selected one (z 2)
-          too. The pin cards are z 3 as well and come later in the page, so
-          a card still draws over the corner. MapLibre's credit and zoom
-          buttons stay in the opposite corner, the credit on top of the zoom
-          buttons (index.css), so the two corners never meet. It keeps clear
-          of the open insights panel. With a contact open the corner keeps
-          to the map it leaves, or steps aside. It steps aside while
-          contacts are selected too: the bulk bar spans the map's bottom
-          edge.
+          The bottom line. `z-[3]` draws it over every pin (the selected one
+          is z 2), and the pin cards, also z 3, come later and draw over it.
+          It steps aside when an open contact leaves too little room, and
+          while contacts are selected, since the bulk bar spans the bottom.
         */}
         {!cramped && selection.selectedCount === 0 && (
           <div
@@ -912,7 +870,6 @@ export const MapView = () => {
           </div>
         )}
 
-        {/* Map selection floating toolbars */}
         {selection.selectedCount > 0 && (
           <>
             <div
@@ -977,7 +934,6 @@ export const MapView = () => {
           </>
         )}
 
-        {/* Bulk & single modals */}
         <BulkModals
           selectedCount={isSingleAddToListOpen ? 1 : selection.selectedCount}
           isAddToListOpen={isSingleAddToListOpen || bulkActions.isAddToListOpen}

@@ -1,8 +1,6 @@
 /**
- * NetworkPage — Where Contrack opens, contacts list defaults, and weather.
- *
- * Start page, list sort, recent contacts, the default cadence, whether new
- * contacts start tracked, week start, weather, and temperature unit.
+ * NetworkPage: where Contrack opens, the contact list's defaults, the
+ * default cadence, tracking, the week's start and the weather.
  */
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import {
@@ -17,8 +15,7 @@ import {
 } from "../../../../shared/cadence";
 import { Segmented } from "../../../components/ui/Segmented";
 import { Select } from "../../../components/ui/Select";
-import { Switch } from "../../../components/ui/Switch";
-import { SettingRow } from "../SettingRow";
+import { PrefSwitchRow, SettingRow } from "../SettingRow";
 import { SETTINGS_CARD, SETTINGS_PAGE } from "../layout";
 
 export const Stepper = ({
@@ -124,11 +121,10 @@ export const NetworkPage = () => {
           />
         </SettingRow>
 
-        {/* The four cadences, and the stored one when it is off the list:
-            every 2 months or every 6 months, saved before 2.0, shows as a
-            fifth option in its place in the order, so the select never
-            names a default the account does not have. A Select, not a
-            Segmented: five words do not fit a trough at phone width. */}
+        {/* A stored cadence off the list (every 2 or 6 months, from before
+            2.0) shows as a fifth option, so the select never names a
+            default the account does not have. A Select, because five words
+            do not fit a Segmented at phone width. */}
         <SettingRow
           id="cadence"
           title="Default cadence"
@@ -154,19 +150,12 @@ export const NetworkPage = () => {
           />
         </SettingRow>
 
-        <SettingRow
+        <PrefSwitchRow
           id="track-new"
           title="Track new contacts"
           prefKey="trackNewContacts"
           description="Contacts you add by hand start tracked. Imports and connectors never do"
-          inline
-        >
-          <Switch
-            label="Track new contacts"
-            checked={preferences.trackNewContacts}
-            onChange={(next) => setPreference("trackNewContacts", next)}
-          />
-        </SettingRow>
+        />
 
         <SettingRow
           id="week-start"
@@ -185,19 +174,12 @@ export const NetworkPage = () => {
           />
         </SettingRow>
 
-        <SettingRow
+        <PrefSwitchRow
           id="weather"
           title="Weather"
           prefKey="showWeather"
           description="Shows the weather beside a contact's local time. Contrack asks Open-Meteo for the weather where the contact is"
-          inline
-        >
-          <Switch
-            label="Weather"
-            checked={preferences.showWeather}
-            onChange={(next) => setPreference("showWeather", next)}
-          />
-        </SettingRow>
+        />
 
         <SettingRow
           id="temp-unit"

@@ -3,7 +3,7 @@
  *
  * - A search's count sits where its results start, in the list's own label,
  *   and a screen reader hears it once the typing pauses.
- * - The row under a mouse rises, and the neighbour on the pointer's side
+ * - The row under a mouse rises, and the neighbor on the pointer's side
  *   rises as the pointer nears it (`useProximityLift`). The suite runs with
  *   reduced motion, which keeps the rows from moving, so the lift is read
  *   where the hook writes it: `--p` on each row.
@@ -50,7 +50,7 @@ test.describe("Network list", () => {
     await expect(list(page).getByText(/\d+ match/)).toHaveCount(0);
   });
 
-  test("lifts the row under the mouse, and the neighbour the pointer nears", async ({
+  test("lifts the row under the mouse, and the neighbor the pointer nears", async ({
     page,
     seed,
   }) => {
@@ -69,12 +69,12 @@ test.describe("Network list", () => {
     expect(next).not.toBe("");
     const box = (await row.boundingBox())!;
 
-    // At the row's centre the whole lift is the row's.
+    // At the row's center the whole lift is the row's.
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await expect.poll(() => lift(page, ada)).toBeCloseTo(1, 1);
 
     // In its lower half the row below starts to rise, and the row keeps
-    // more of the lift than its neighbour.
+    // more of the lift than its neighbor.
     await page.mouse.move(box.x + box.width / 2, box.y + box.height * 0.9);
     await expect.poll(() => lift(page, next)).toBeGreaterThan(0);
     expect(await lift(page, ada)).toBeGreaterThan(await lift(page, next));

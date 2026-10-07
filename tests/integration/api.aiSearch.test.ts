@@ -1,6 +1,4 @@
-// =============================================================================
 // Integration: AI Search API routes and strategy resolution
-// =============================================================================
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import request from "supertest";

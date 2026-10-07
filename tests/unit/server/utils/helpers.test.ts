@@ -37,9 +37,7 @@ describe("getErrorMessage", () => {
   });
 });
 
-// =============================================================================
 // redactUrlForLog
-// =============================================================================
 // The query string carries invitation and sign-in secrets, palette searches,
 // pasted links and a failed Google sign-in's code. Morgan's `:url` token and
 // the error log read `req.originalUrl`, so both keep the path alone.

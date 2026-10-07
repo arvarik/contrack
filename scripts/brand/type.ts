@@ -2,22 +2,17 @@
  * type: the brand's typefaces as outlines, for the images that carry words.
  *
  * The link preview, the repository card and the lockups set the name in
- * Manrope ExtraBold and the line under it in Inter, the app's own headline
- * and body faces. They read the WOFF2 files the app serves from
- * `public/fonts`, so an image cannot drift from the page, and they draw each
- * word as SVG outlines, so a render is the same on every machine: no font
- * lookup and no fallback face.
+ * Manrope ExtraBold and the line under it in Inter, from the WOFF2 files in
+ * `public/fonts`, and draw each word as SVG outlines, so a render is the same
+ * on every machine. sharp sets text through Pango, which on macOS finds
+ * fonts through the system and falls back to Helvetica for Manrope. Outlines
+ * from `fontkit` match the browser: "Contrack" at 128 px, ExtraBold,
+ * `letter-spacing: -0.025em`, measures 559.70 px here and 559.75 px in
+ * Chromium.
  *
- * That is the reason for this file. sharp sets text through Pango, and on
- * macOS Pango finds fonts through the system, not through the file it is
- * given. Manrope is not a system font, so the name in the link preview came
- * out in Helvetica. Outlines from `fontkit` match the browser: "Contrack" at
- * 128 px, ExtraBold, `letter-spacing: -0.025em`, measures 559.70 px here and
- * 559.75 px in Chromium.
- *
- * The files are variable fonts (Manrope 200 to 800, Inter 100 to 900), so a
- * weight is a point on the `wght` axis. `fontkit` cannot take a weight from
- * a WOFF2 font directly, so `wawoff2` unpacks it to TrueType first.
+ * The files are variable fonts, so a weight is a point on the `wght` axis.
+ * `fontkit` cannot take a weight from WOFF2, so `wawoff2` unpacks it to
+ * TrueType first.
  */
 import { readFile } from "node:fs/promises";
 import path from "node:path";

@@ -1,13 +1,9 @@
 /**
- * RadioDot: the mark beside each option of a radio group.
- *
- * A selected option wears the selected tint, and a tint on its own says
- * "chosen" only by hue: the tint and the grey of the other options differ by
- * about 1.1 to 1 in lightness, which WCAG 1.4.1 does not accept as the only
- * cue. The dot is the second cue: a ring on every option, filled with the
- * primary and a centre dot on the chosen one, the shape every person knows
- * from a form. It is drawn for the eye only. The option itself carries
- * `role="radio"` and `aria-checked`, or `aria-pressed`, for a screen reader.
+ * The mark beside each option of a radio group: the cue besides the tint
+ * (about 1.1 to 1 from the others, too little alone for WCAG 1.4.1). A ring
+ * on every option, filled with a center dot on the chosen one. For the eye
+ * only: the option carries `role="radio"` and `aria-checked`, or
+ * `aria-pressed`.
  */
 import { cn } from "../../lib/utils";
 

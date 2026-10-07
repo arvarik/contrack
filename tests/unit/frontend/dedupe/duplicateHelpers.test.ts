@@ -1,11 +1,9 @@
-// =============================================================================
 // The words, the groups and the outcome the duplicate screens show
-// =============================================================================
+//
 // Possible duplicates says three things about a pair before a person decides:
 // how likely it is, why, and what a merge would keep. Each is worked out
 // here, away from the screens, so the review list, the contact page's banner
 // and the manual merge say the same thing.
-// =============================================================================
 import { describe, expect, it } from "vitest";
 import { matchLevel } from "../../../../src/views/dedupe/utils/level";
 import {

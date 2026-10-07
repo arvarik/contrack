@@ -1,14 +1,8 @@
 /**
- * DepthCostTip: the question mark beside "Depth". It opens a bubble
- * with what one contact costs at each depth on Google, Claude and OpenAI, at
- * the 2026 list prices of the model research uses on each.
- *
- * The tiles under the heading price Gemini alone, and only while research
- * runs on Gemini. This is the way to compare the three, or to see what a
- * change of provider would cost. Google's figures were measured. The other
- * two are estimates from the same searches and tokens (`estimateCostUsd`).
- *
- * @module views/ai-search/DepthCostTip
+ * The question mark beside "Depth": what one contact costs at each depth on
+ * Google, Claude and OpenAI, at 2026 list prices. The depth tiles price Gemini
+ * alone, so this is where to compare providers. Google's figures were
+ * measured. The others are estimates (`estimateCostUsd`).
  */
 import {
   estimateCostUsd,

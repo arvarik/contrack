@@ -1,16 +1,4 @@
-/**
- * AISearchConfirmModal — the cost and time of a batch, confirmed before it
- * starts.
- *
- * Shows:
- * - How many contacts will be searched, and at which depth
- * - The web search engine, when it is SearXNG or both rather than the web
- *   search model's own search
- * - The batch's time and cost at that depth, from the measured figures,
- *   when research runs on Gemini, where they were measured
- * - How many have been previously searched (re-search info)
- * - Additive-only data safety guarantee
- */
+/** Confirms a batch before it starts: its size, depth, engine, time and cost. */
 import { Sparkles } from "lucide-react";
 import { Modal } from "../../../components/ui/Modal";
 import type { Contact } from "../../../types";
@@ -48,7 +36,6 @@ export function AISearchConfirmModal({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Start enrichment">
       <div className="space-y-5 pt-2">
-        {/* Description */}
         <p className="text-sm text-on-surface-variant leading-relaxed">
           You're about to research{" "}
           <span className="font-bold text-on-surface">{total}</span> contact
@@ -59,7 +46,6 @@ export function AISearchConfirmModal({
           depth
         </p>
 
-        {/* Info bullets */}
         <div className="space-y-2.5">
           <InfoRow text={DEPTH_WORDS[depth].does} />
           {searchWith && (
@@ -71,7 +57,6 @@ export function AISearchConfirmModal({
           <InfoRow text="Runs in the background, so you can keep working" />
         </div>
 
-        {/* Re-search info */}
         {previouslySearched > 0 && (
           <p className="text-xs text-on-surface-variant bg-surface-container-low rounded-xl p-3 leading-relaxed">
             <span className="font-bold">{previouslySearched}</span> of these
@@ -80,7 +65,6 @@ export function AISearchConfirmModal({
           </p>
         )}
 
-        {/* Action buttons */}
         <div className="flex gap-3 pt-1">
           <button
             onClick={onClose}
@@ -101,7 +85,6 @@ export function AISearchConfirmModal({
           </button>
         </div>
 
-        {/* Safety note */}
         <p className="text-[11px] text-on-surface-variant text-center leading-relaxed">
           New data fills empty fields. Your existing data is never overwritten
         </p>

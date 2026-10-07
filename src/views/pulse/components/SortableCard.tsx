@@ -1,27 +1,13 @@
 /**
- * SortableCard: one card of the Pulse grid, as dnd-kit sees it.
+ * One card of the Pulse grid, its draggable and droppable at once. The grip
+ * in `CardFrame` reads the drag handle from the customize context this
+ * provides. In the air the card folds to a slot (`DRAG_SLOT`), so a move
+ * across columns mounts a light box, not the queue or the heatmap.
  *
- * The wrapper is the card's draggable and its droppable at once, under the
- * card's id. Its drag handle is the grip in the card's header (`CardFrame`),
- * which reads the attributes, the listeners and the handle's ref from the
- * customize context this component provides.
- *
- * While the card is in the air it folds to a slot (`DRAG_SLOT`): a dashed
- * box as tall as the preview under the pointer, and the card's own content
- * leaves the page until the drop. The slot is what moves through the columns,
- * so a move across columns mounts a light box and not the queue or the
- * heatmap. The preview is drawn by `PulseGrid`'s `DragOverlay`, not here.
- *
- * Nothing on the wrapper transitions. The slides between places are FLIP
- * animations on the Web Animations API (`lib/flip.ts`), started by
- * `PulseGrid`, and `data-flip-id` is how they find the card. A
- * `transition-all` here used to animate the card's own drag transform, so the
- * card trailed the pointer.
- *
- * The component is memoised, and its `children` are the page's card
- * elements, built once per change of their data. A step of the drag renders
- * the grid again and this component only where its place changed: the
- * card's content keeps the same element and React skips it.
+ * Nothing on the wrapper transitions: `PulseGrid` runs FLIP slides
+ * (`lib/flip.ts`) found by `data-flip-id`, and a CSS transition here would
+ * make the card trail the pointer. It is memoized, so a drag step renders
+ * only the cards whose place changed.
  */
 import React, { memo, useCallback, useMemo } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";

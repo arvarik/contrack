@@ -1,12 +1,8 @@
 /**
- * server/services/authLinkService.ts — One-time auth link tokens.
- *
- * Manages creation and redemption of single-use, hashed tokens for:
- * - Password resets (user-requested: 1h, admin-issued: 24h)
- * - Magic link sign-ins (15m)
- *
- * Tokens are stored as SHA-256 hashes. Plaintext is returned once upon creation.
- * Enforces an hourly cap of three creations per account for self-service requests.
+ * One-time auth link tokens: password resets (self-service 1 h, admin-issued 24
+ * h) and magic link sign-ins (15 m). Only the SHA-256 is stored; the plaintext
+ * is returned once, at creation. Self-service requests are capped at three an
+ * hour per account.
  */
 
 import crypto from "node:crypto";
@@ -56,10 +52,9 @@ function generateToken(): string {
 }
 
 /**
- * Create a new one-time auth link for an account.
- *
- * Enforces a cap of 3 creations per hour for self-service requests (createdBy is null).
- * When the cap is reached, returns null so the caller can answer 202 without sending email.
+ * Create a one-time auth link for an account. A self-service request (createdBy
+ * null) past 3 an hour returns null, so the caller answers 202 and sends
+ * nothing.
  */
 export function createAuthLink(
   kind: AuthLinkKind,
@@ -122,11 +117,9 @@ function parseDbDate(dateStr: string): number {
 }
 
 /**
- * Redeem an auth link token.
- *
- * Verifies kind, hash match, single use, and expiry.
- * On success, sets usedAt to CURRENT_TIMESTAMP and returns the link record.
- * Throws AppError with codes LINK_INVALID, LINK_USED, or LINK_EXPIRED.
+ * Redeem an auth link token: check its kind, hash, single use and expiry, set
+ * usedAt and return the link. Throws AppError LINK_INVALID, LINK_USED or
+ * LINK_EXPIRED.
  */
 export function redeemAuthLink(kind: AuthLinkKind, token: string): AuthLinkRow {
   const tokenHash = hashToken(token);

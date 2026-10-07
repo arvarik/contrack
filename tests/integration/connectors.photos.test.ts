@@ -1,15 +1,11 @@
-// =============================================================================
-// Connector contact photos — copied to the owner's uploads, never linked
-// =============================================================================
-// Google's People API gives each contact a photo URL on googleusercontent.com.
-// A contact that stored that URL made the browser ask Google for the image on
-// every view. ingestStream now copies the photo into
+// Integration: connector contact photos are copied to the owner's uploads.
+// A stored googleusercontent.com URL would make the browser ask Google on
+// every view, so ingestStream copies the photo into
 // uploads/u/<owner>/avatars/remote-<digest>.jpg before the event joins a batch,
 // and the contact stores that local path.
 //
-// Real database, real ingest engine, real sharp. The network is stubbed at
+// Real database, ingest engine and sharp. The network is stubbed at
 // safeFetch, the one door every server-side image download goes through.
-// =============================================================================
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -187,7 +183,7 @@ describe("Google contact photos", () => {
   });
 
   it("replaces a remote URL an older sync stored, on the next sync", async () => {
-    // What a contact synced before this change looks like.
+    // A contact that still holds a remote URL.
     safeFetchMock.mockRejectedValue(new TypeError("fetch failed"));
     await sync([contactEvent("people/c5", "Roley Builder")]);
     sqlite

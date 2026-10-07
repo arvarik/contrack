@@ -1,8 +1,4 @@
-// =============================================================================
-// Jobs: OAuth
-// =============================================================================
-// The sweep of expired sign-ins, expired tokens and clients nobody uses.
-// =============================================================================
+// The sweep of expired sign-ins, expired tokens and unused clients.
 
 import { defineJob } from "./runner.ts";
 import { sweepOAuth } from "../services/oauthService.ts";

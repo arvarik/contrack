@@ -1,26 +1,20 @@
-// =============================================================================
-// Research — one run for one contact
-// =============================================================================
-// `research()` runs every research request: the batch queue's jobs, the
-// one-contact route, and auto-enrichment through the queue. No other code
-// calls a technique.
+// One research run for one contact. `research()` runs every research request:
+// the batch queue's jobs, the one-contact route, and auto-enrichment through
+// the queue. No other code calls a technique.
 //
-//   1. The request's technique finds facts (`Technique.run`), with the web
+//   1. The request's technique finds facts (`Technique.run`) with the web
 //      search the request chose.
-//   2. The one extraction reads the facts into fields (`extractFacts`).
-//   3. A run whose fields only restate the records found nothing: it
-//      records no public information, with no fields and no pages
-//      (`hasNewFacts`).
+//   2. One extraction reads the facts into fields (`extractFacts`).
+//   3. A run whose fields only restate the records found nothing: it records
+//      no public information, with no fields and no pages (`hasNewFacts`).
 //   4. The result has the same fields for every technique.
 //
-// Every model call and every web search asks the AI switches first: the
-// instance switch, the account's own switch, and research that an admin
-// turned off. A model call asks again when it gets its slot in the AI work
-// queue. A refusal stops the whole run for this contact, the calls in flight
-// too, so nothing more of the contact reaches a model or a search service
-// once a switch says no. The batch queue then stops the account's batch
-// (`isRefusal`).
-// =============================================================================
+// Every model call and web search asks the AI switches first: the instance
+// switch, the account's own switch, and research an admin turned off. A model
+// call asks again when it gets its slot in the AI work queue. A refusal stops
+// the whole run for this contact, calls in flight too, so nothing more of the
+// contact reaches a model or a search service, and the batch queue then stops
+// the account's batch (`isRefusal`).
 
 import { generateFor } from "../../ai/gateway.ts";
 import { isResearchOff } from "../../ai/capabilities.ts";
@@ -50,12 +44,10 @@ import type {
 } from "./types.ts";
 
 /**
- * Time allowed for one contact, by depth: the first asks, the two that
- * follow them at once when none cites a page, and the extraction. A search
- * ask took from 15 s to more than 80 s, and one that returned nothing took
- * as long (2026-09-26). Three asks one after the other ran past 240 s; two
- * rounds stay inside it. A deep run's ask at thinking "high" can take the
- * whole 120 s an ask has, hence its minute more.
+ * Time allowed for one contact, by depth: the first asks, one more plain ask
+ * when none answered, and the extraction. A search ask takes from 15 s to more
+ * than 80 s, and one that returns nothing as long. Three asks in a row ran past
+ * 240 s; two rounds stay inside it.
  */
 export const RESEARCH_TIMEOUT_MS: Record<ResearchDepth, number> = {
   standard: 240_000,
@@ -105,9 +97,9 @@ function refusalFor(ownerId: string): AppError | null {
  *   technique or web search it leaves out is the account's default
  *   (`chooseResearch`).
  * @returns What the run found, with every field, for every technique.
- * @throws AppError 400 for an unknown technique or web search, the
- *   refusal of an AI switch, the timeout, the cancellation, or the error
- *   of a technique that found neither facts nor a no-match.
+ * @throws AppError 400 for an unknown technique or web search, the refusal of
+ *   an AI switch, the timeout, the cancellation, or the error of a technique
+ *   that found neither facts nor a no-match.
  */
 export async function research(
   request: ResearchRequest,

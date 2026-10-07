@@ -1,28 +1,12 @@
 /**
- * ContactProfile — Orchestrator component for the Contact Detail Page (CDP).
+ * The contact page. It wires the queries and mutations, holds the shared
+ * state, and renders ProfileHeader, DetailsCard, DossierTab and TimelineTab.
  *
- * This is a thin composition layer that wires up React Query mutations,
- * manages shared state (active tab, avatar picker), and delegates rendering
- * to four focused sub-components:
- *
- * - {@link ProfileHeader} — Avatar, name, meta line, tags, the actions
- * - {@link DetailsCard}   — Location, email, phone, birthday, preferences
- * - {@link DossierTab}    — Briefing, AI dossier, experience, education
- * - {@link TimelineTab}   — Interaction composer, timeline entries
- *
- * The page has two layouts, chosen by the width of its own pane, not of the
- * window:
- *
- * 1. Wide (768 px and up): the header, then two columns. Details is a
- *    column on the left that stays in view while it fits. On the right, a
- *    Timeline and Dossier control over the chosen section.
- * 2. Narrow: a short header, then a control for Timeline, Details and
- *    Dossier that sticks under the Back bar. The Timeline tab opens with a
- *    one-line composer above the first entry.
- *
- * The pane, not the window: at 1024 px the sidebar and the 350 px list sit
- * beside the contact, so its pane is about 600 px wide. Two columns there
- * left the timeline about 160 px.
+ * The layout follows the width of its own pane, not the window: at 1024 px
+ * the sidebar and the 350 px list leave the pane about 600 px, where two
+ * columns leave the timeline about 160 px. Wide (768 px and up), Details is a
+ * column beside a Timeline and Dossier control. Narrow, one control for all
+ * three sections sticks under the Back bar.
  */
 import React, {
   Suspense,
@@ -78,10 +62,7 @@ import { useTrackShortcut } from "./useTrackShortcut";
 import { ContactTags } from "./ContactTags";
 import { DetailsCard, type DetailRequest } from "./DetailsCard";
 import type { ResearchAnchor } from "../../../lib/research";
-/**
- * Card-shaped stand-in so switching tabs does not flash an empty pane, and
- * the page's body while the contact loads.
- */
+/** Card-shaped stand-in, so a tab switch or the first load shows no empty pane. */
 const CardsFallback = () => (
   <div className="space-y-6" aria-busy="true">
     {[0, 1].map((i) => (
@@ -94,10 +75,7 @@ const CardsFallback = () => (
   </div>
 );
 
-/**
- * Behind a tab the user has to click, so it has no business in the chunk that
- * blocks the first render of a contact.
- */
+/** Lazy: it sits behind a tab, so it stays out of the contact's first chunk. */
 const DossierTab = React.lazy(() =>
   import("./DossierTab").then((m) => ({ default: m.DossierTab })),
 );
@@ -107,10 +85,6 @@ import { usePreferences } from "../../../contexts/PreferencesContext";
 import { DupeBanner } from "./DupeBanner";
 import { useMergedRedirect } from "./useMergedRedirect";
 import { LoadFailed } from "../../../components/ui/LoadFailed";
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Props
-// ═══════════════════════════════════════════════════════════════════════════
 
 interface ContactProfileProps {
   contactId: string;
@@ -130,8 +104,8 @@ const ROOT =
   "h-full flex flex-col overflow-hidden w-full relative bg-surface md:bg-transparent";
 
 /**
- * The files the timeline takes. One object, not a literal per render: the
- * dropzone's props are memoized on it, and new ones draw the timeline again.
+ * One object, not a literal per render: the dropzone memoizes its props on
+ * it, and new props draw the timeline again.
  */
 const DROP_ACCEPT = {
   "message/rfc822": [".eml"],
@@ -145,7 +119,6 @@ const WIDE_CONTACT_MIN_PX = 768;
 
 type Section = "timeline" | "details" | "dossier";
 
-/** The name of the section control in both layouts. */
 const SECTIONS_LABEL = "Contact sections";
 
 const WIDE_TABS: readonly SegmentedOption<Section>[] = [
@@ -159,10 +132,6 @@ const NARROW_TABS: readonly SegmentedOption<Section>[] = [
   { value: "dossier", label: "Dossier" },
 ];
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Component
-// ═══════════════════════════════════════════════════════════════════════════
-
 export const ContactProfile = ({
   contactId: id,
   onClose,
@@ -173,17 +142,12 @@ export const ContactProfile = ({
   const navigate = useNavigate();
   const { mode } = usePreferences();
 
-  // ── Data queries ──────────────────────────────────────────────────────
   const { data: contact, error, isFetching, refetch } = useContact(id);
   // A merged contact's old link goes on to the contact it merged into.
   const redirecting = useMergedRedirect(contact, id, isFetching);
   const { data: timeline = [], isLoading: timelineLoading } = useTimeline(id);
-  /**
-   * The contact as far as it is known: the full one, or else its row in the
-   * list, which has the name, the picture, the role and the company. The row
-   * is only read, for the header while the full contact loads, and never
-   * stored as the contact.
-   */
+  // The full contact, or else its row in the list. The row only fills the
+  // header while the full contact loads, and is never stored as the contact.
   const queryClient = useQueryClient();
   const known =
     contact ??
@@ -191,16 +155,13 @@ export const ContactProfile = ({
       .getQueryData<Contact[]>(["contacts"])
       ?.find((row) => row.id === id);
 
-  // Dynamic page title — updates as contact data loads
   usePageTitle(known?.name ?? null);
 
   // `t` tracks or untracks this contact, as the header button does.
   useTrackShortcut(contact);
 
-  // ── Mutations ─────────────────────────────────────────────────────────
-  // Their `mutate` and `mutateAsync` keep one identity. The result objects
-  // are new on each render, and one in a memoized child's props would draw
-  // that child again on every render of this page.
+  // Only `mutate` and `mutateAsync` keep one identity. A result object is new
+  // each render, and in a memoized child's props it redraws that child.
   const { mutate: updateContact, mutateAsync: saveContact } =
     useUpdateContact();
   const { mutate: addAttachment } = useAddAttachment();
@@ -214,16 +175,12 @@ export const ContactProfile = ({
   const { mutate: unarchiveContact, isPending: unarchiving } =
     useUnarchiveContact();
 
-  // ── Local state ───────────────────────────────────────────────────────
   const [isAvatarPickerOpen, setIsAvatarPickerOpen] = useState(false);
   /** The pencil on the avatar, where focus goes back when the picker closes. */
   const avatarEdit = useRef<HTMLButtonElement>(null);
-  /**
-   * Palette B, "Catch me up", opens the contact with `?brief=1`. The page
-   * answers with the Dossier, and the Briefing card at its top scrolls into
-   * view and takes focus (`briefRequest`). The flag leaves the address at
-   * once, so Back or a reload does not ask for a briefing again.
-   */
+  // `?brief=1` (the palette's "Catch me up") opens the Dossier and focuses its
+  // Briefing card. The flag leaves the URL at once, so Back or a reload does
+  // not ask for a briefing again.
   const [searchParams, setSearchParams] = useSearchParams();
   const briefInUrl = searchParams.get("brief") === "1";
   const [activeTab, setActiveTab] = useState<Section>(
@@ -244,19 +201,14 @@ export const ContactProfile = ({
       { replace: true },
     );
   }, [briefInUrl, setSearchParams]);
-  /**
-   * A detail the Research card asked for, when research found no page: the
-   * field it names opens, in Details or in the header. Narrow, Details is a
-   * tab, so that tab opens first, and the field opens as it mounts. The field
-   * spends the request once it has opened, so a later visit to the tab does
-   * not open it again.
-   */
+  // A field the Research card asks to open when research found no page.
+  // Narrow, the Details tab opens first. The field spends the request once
+  // open, so a later visit to the tab does not open it again.
   const [detailRequest, setDetailRequest] = useState<DetailRequest | null>(
     null,
   );
   const spendDetailRequest = useCallback(() => setDetailRequest(null), []);
 
-  // ── Layout ────────────────────────────────────────────────────────────
   // Elements from callback refs, so the hooks see them on the render that
   // mounts them, after the loading state.
   const [root, setRoot] = useState<HTMLDivElement | null>(null);
@@ -274,13 +226,10 @@ export const ContactProfile = ({
   );
   // 16 px above the column and 32 px under it.
   const detailsFit = useFitsHeight(details, scroller, 48);
-  /**
-   * The section beside Details. Wide, Details is always on screen, so a
-   * Details tab chosen on a phone shows the timeline once the pane widens.
-   */
+  // Wide, Details is always on screen, so a Details tab chosen narrow shows
+  // the timeline once the pane widens.
   const mainTab: Section = activeTab === "dossier" ? "dossier" : "timeline";
 
-  // ── Dropzone (file uploads & .eml ingestion) ──────────────────────────
   // With AI off, the server saves an .eml with no summary, like any file.
   const aiAllowed = useAiAllowed();
   const onDrop = useCallback(
@@ -328,16 +277,14 @@ export const ContactProfile = ({
     onDrop,
     noClick: true,
     noKeyboard: true,
-    // react-dropzone 19.2 turned paste-to-upload on by default. This root
-    // wraps the note composer, so a screenshot pasted into a note would
-    // become an attachment.
+    // react-dropzone 19.2 uploads on paste by default. This root wraps the
+    // note composer, so a screenshot pasted into a note becomes a file.
     noPaste: true,
     accept: DROP_ACCEPT,
   });
 
-  // ── Event handlers ────────────────────────────────────────────────────
-  // A failed save answers with its error, so a field can show the server's
-  // reason ("Name is required"): it said only "Save failed".
+  // A failed save returns its error, so a field shows the server's reason
+  // ("Name is required"), not only "Save failed".
   const handleUpdate = useCallback(
     async (field: string, val: string) => {
       try {
@@ -351,15 +298,8 @@ export const ContactProfile = ({
   );
   const openAvatarPicker = useCallback(() => setIsAvatarPickerOpen(true), []);
 
-  // Delete confirmation — uses <Modal> instead of native confirm()
-
-  /**
-   * Delete and leave, offering undo — the modal that used to sit in front of
-   * this said "Permanently delete… This action cannot be undone", which was
-   * false: the mutation is a soft delete into Trash, and this handler
-   * already offered an Undo toast underneath the dialog that denied one
-   * existed. Same trade as the bulk path; see lib/undoToast.
-   */
+  // No confirm dialog: the delete is a soft delete into Trash, and an Undo
+  // toast takes it back. The bulk path makes the same trade (lib/undoToast).
   const name = contact?.name;
   const handleDeleteContact = useCallback(() => {
     if (!id || name === undefined) return;
@@ -389,22 +329,16 @@ export const ContactProfile = ({
     });
   }, [id, name, deleteContact, restoreContact, navigate, onClose, onDeleted]);
 
-  // ── Theme ─────────────────────────────────────────────────────────────
-  // The vibe replaces the primary palette for this page only, so it has to be
-  // derived for the palette on screen: the light values on a dark page put the
-  // brand blue at 2.84:1 against the background. Every accent token follows,
-  // the wash ink too: the selected tint and the list chips carry
-  // `text-on-primary-wash`, and the app accent's ink on a vibe's wash was the
-  // wrong colour.
+  // The vibe replaces the primary palette on this page, derived for the mode
+  // on screen: light values on a dark page put the brand blue at 2.84:1.
+  // Every accent token follows, `text-on-primary-wash` too.
   const themeStyles = Object.fromEntries(
     Object.entries(vibeTokens(known?.themeColor, mode)).map(
       ([token, value]) => [`--color-${token}`, value],
     ),
   ) as React.CSSProperties;
 
-  // ── Merged, error, and loading ────────────────────────────────────────
-  // A merged contact's page is on its way to the contact it merged into,
-  // and draws nothing a person could edit in the meantime.
+  // A merged contact draws nothing editable while it redirects.
   if (redirecting)
     return (
       <div className={ROOT}>
@@ -425,9 +359,8 @@ export const ContactProfile = ({
         )}
       </div>
     );
-  // The header from the list's row, and cards for the rest. The duplicate
-  // banner mounts here, so its request goes out beside the contact's, and
-  // it is in place when the page draws.
+  // The duplicate banner mounts while loading, so its request goes out
+  // beside the contact's.
   if (!contact)
     return (
       <div ref={setRoot} className={ROOT} style={themeStyles}>
@@ -449,10 +382,6 @@ export const ContactProfile = ({
       </div>
     );
 
-  // ═══════════════════════════════════════════════════════════════════════
-  // Render
-  // ═══════════════════════════════════════════════════════════════════════
-
   const dossier = (
     <Suspense fallback={<CardsFallback />}>
       <DossierTab
@@ -473,7 +402,6 @@ export const ContactProfile = ({
           ref={setScroller}
           className="contact-scroller flex-1 min-h-0 overflow-y-auto"
         >
-          {/* ── Profile Header ──────────────────────────────────────────── */}
           <ProfileHeader
             contact={contact}
             onUpdate={handleUpdate}
@@ -496,10 +424,8 @@ export const ContactProfile = ({
             onLinkRequestDone={spendDetailRequest}
           />
 
-          {/* ── Dupe Suggestion Banner ──────────────────────────────────── */}
           <DupeBanner contactId={id} />
 
-          {/* ── Narrow: the sections as tabs, stuck under the Back bar ──── */}
           {!wide && (
             <div
               className={cn(
@@ -518,11 +444,8 @@ export const ContactProfile = ({
             </div>
           )}
 
-          {/*
-            One grid for both layouts, with the same two children in the same
-            places, so a width that crosses 768 px changes classes and does
-            not remount the timeline and its composer.
-          */}
+          {/* One grid for both layouts, so crossing 768 px does not remount
+              the timeline and its composer. */}
           <div
             className={cn(
               "max-w-6xl mx-auto w-full",
@@ -544,9 +467,8 @@ export const ContactProfile = ({
                   className={cn(
                     "min-w-0 space-y-6",
                     wide ? "pb-8" : "pb-32",
-                    // Sticky only while the column fits the view. A taller
-                    // column scrolls with the page, so its last field is in
-                    // reach.
+                    // Sticky only while it fits the view, so the last field
+                    // of a taller column stays in reach.
                     wide &&
                       detailsFit &&
                       (onClose ? "sticky top-18 lg:top-4" : "sticky top-4"),
@@ -609,7 +531,6 @@ export const ContactProfile = ({
         </div>
       </div>
 
-      {/* ── Avatar Picker Modal ────────────────────────────────────────── */}
       {id && (
         <AvatarPickerModal
           isOpen={isAvatarPickerOpen}

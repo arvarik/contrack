@@ -1,8 +1,4 @@
-// =============================================================================
-// Module: dashboard
-// =============================================================================
 // Pulse: the dashboard, its queue and its cards.
-// =============================================================================
 
 import { defineModule } from "../module.ts";
 import { dashboardRouter } from "../../routes/dashboard.ts";

@@ -1,20 +1,10 @@
 /**
- * The clusters and single contacts the map is showing right now.
- *
- * MapLibre clusters the contacts source in its worker, and the result lives
- * in the source's loaded tiles. This hook reads those features back with
- * `querySourceFeatures`, so every visible cluster and pin can render as a
- * React element: a real `<button>` with a name, not an HTML string.
- *
- * It reads on `move`, `moveend` and on `sourcedata` for this source,
- * throttled to one read per animation frame. The loaded tiles cover a little
- * more than the viewport, and a feature near a tile edge is in more than one
- * tile, so the result is deduplicated by `cluster_id` for a cluster and by
- * contact id for a point. Past the cluster zoom, points at one spot are one
- * stack. State changes only when the set of features or a position changes,
- * so a pan does not re-render every marker.
- *
- * @module views/map/useClusterFeatures
+ * The clusters and single contacts the map shows now, read back from
+ * MapLibre's tiles with `querySourceFeatures` so each renders as a real
+ * `<button>`, not an HTML string. A feature near a tile edge is in more than
+ * one tile, so results dedupe by `cluster_id` or contact id. Points at one
+ * spot become one stack. State changes only when a feature or a position
+ * changes, so a pan does not re-render every marker.
  */
 import { useEffect, useState } from "react";
 import type { Map as MapLibreMap, MapSourceDataEvent } from "maplibre-gl";
@@ -34,7 +24,6 @@ export interface ClusterFeature {
 interface PointFeature {
   kind: "point";
   key: string;
-  /** The contact id. */
   id: string;
   longitude: number;
   latitude: number;
@@ -42,7 +31,6 @@ interface PointFeature {
 
 export type VisibleFeature = ClusterFeature | PointFeature;
 
-/** The part of a queried feature this module reads. */
 interface QueriedFeature {
   geometry: { type: string; coordinates?: unknown };
   properties: Record<string, unknown> | null;
@@ -63,11 +51,7 @@ function pointOf(
   return { longitude, latitude };
 }
 
-/**
- * Turn queried source features into one entry per cluster or contact.
- *
- * Pure, so the dedupe rule is tested without a map.
- */
+/** One entry per cluster, contact or stack. Pure, so tests need no map. */
 export function toVisibleFeatures(
   features: readonly QueriedFeature[],
 ): VisibleFeature[] {
@@ -108,7 +92,6 @@ export function toVisibleFeatures(
   return [...result.values()];
 }
 
-/** True when both lists hold the same features at the same positions. */
 export function sameFeatures(
   a: readonly VisibleFeature[],
   b: readonly VisibleFeature[],
@@ -126,12 +109,7 @@ export function sameFeatures(
   return true;
 }
 
-/**
- * The visible features of `sourceId` on `map`.
- *
- * `map` is null until the map has loaded, and the hook returns an empty list
- * until then.
- */
+/** The visible features of `sourceId`, read once a frame at most. */
 export function useClusterFeatures(
   map: MapLibreMap | null,
   sourceId: string,

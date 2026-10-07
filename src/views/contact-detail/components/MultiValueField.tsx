@@ -1,31 +1,14 @@
 /**
- * MultiValueField: the rows of a field that holds several values, a
- * contact's addresses, emails or phones.
+ * The rows of a field that holds several values: addresses, emails or phones.
+ * Each row is a value that edits in place, a label chip and a kebab. The first
+ * row is the primary one, and for addresses it places the map pin. A drag
+ * handle shows while the kebab is open, and Alt+ArrowUp and Alt+ArrowDown
+ * move the focused row. Every change saves the whole list, because the server
+ * keeps it in order.
  *
- * Each row follows the `Field` pattern: the value, its label chip, a kebab.
- *
- * 1. The value edits in place (`EditableField`). A save replaces that one row
- *    and saves the whole list, because the server keeps the list in order.
- *    An email or a phone (`kind`) is a link instead: a tap writes or calls,
- *    and the pencil after it opens the input, which asks the phone for the
- *    right keyboard.
- * 2. The label chip is a `Select` in its chip form (`CustomSelect`).
- * 3. The kebab holds "Make primary", "Message" (phones), "Show on map"
- *    (addresses) and "Remove". The first row is the primary one, so it has no
- *    "Make primary". For addresses the primary one places the map pin.
- * 4. Order. A drag handle shows while the row's kebab is open, and dnd-kit
- *    drags it by pointer or touch. From the keyboard, Alt+ArrowUp and
- *    Alt+ArrowDown move the row that has focus, and a polite live region says
- *    where it went.
- * 5. "+ Add" opens a label select and an input under the rows, and under
- *    `afterRows` when the field has one.
- *
- * Focus does not fall to the page. The rows change only when the server
- * answers, and the answer can give every row a new id, which mounts new rows.
- * So after an edit, a move, a label change or a remove, focus goes to the
- * same place in the new rows once they show the change.
- *
- * @module views/contact-detail/components/MultiValueField
+ * The server's answer can give every row a new id, which mounts new rows. So
+ * after a change, focus goes to the same place in the new rows once they show
+ * the change, and does not fall to the page.
  */
 import React, { useEffect, useId, useRef, useState } from "react";
 import { scrollBehavior } from "../../../lib/a11y";
@@ -81,28 +64,20 @@ export const ADDR_LABELS = ["home", "work", "other"] as const;
 /** A value a tap can act on: an email writes, a phone calls. */
 type ValueKind = "email" | "phone";
 
-/** The input hints of each kind (`INPUT_KIND`). */
 const INPUT_OF: Record<ValueKind, keyof typeof INPUT_KIND> = {
   email: "email",
   phone: "tel",
 };
 
-/** Where a tap on a value of each kind goes. */
 const HREF_OF: Record<ValueKind, (value: string) => string | null> = {
   email: mailtoHref,
   phone: telHref,
 };
 
-/**
- * The label chip: `CustomSelect` draws it as a 32 px chip with a 44 px tap
- * box from `hit-area`. It does not shrink beside a long value.
- */
+/** The label chip does not shrink beside a long value. */
 const LABEL_CHIP = "shrink-0";
 
-/**
- * An address as far as its first two parts, "1 Main St, Springfield", which
- * is enough to tell two addresses apart without reading out a postcode.
- */
+/** "1 Main St, Springfield": enough to tell addresses apart, no postal code. */
 const shortAddress = (value: string): string =>
   value
     .split(",")
@@ -131,10 +106,6 @@ interface FocusTarget {
   byKey?: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// One row
-// ---------------------------------------------------------------------------
-
 interface RowProps {
   item: MultiValueItem & { sortId: string };
   index: number;
@@ -150,7 +121,6 @@ interface RowProps {
   onLabelChange: (index: number, label: string) => void;
   onMakePrimary: (index: number) => void;
   onRemove: (index: number) => void;
-  /** Focus left the row. */
   onLeave: (index: number) => void;
 }
 
@@ -176,11 +146,8 @@ const SortableRow = ({
   // "Message" hands the number to the phone's messages app. With a mouse
   // there is often no app for `sms:`, and the item would do nothing.
   const touch = useMediaQuery(TOUCH_QUERY);
-  /**
-   * True from a press on the handle until the press ends. The press that
-   * grabs the handle is also a press outside the open kebab, so the kebab
-   * closes. Without this the handle would leave the page under the finger.
-   */
+  // True while the handle is pressed. That press also closes the kebab, and
+  // without this the handle would leave the page under the finger.
   const [grabbed, setGrabbed] = useState(false);
 
   useEffect(() => {
@@ -250,19 +217,16 @@ const SortableRow = ({
           onLeave(index);
       }}
       className={cn(
-        // An address is long, so it takes its own line and the chip and the
-        // kebab sit under it. An email or a phone shares one line with them
-        // when the card has room.
-        // gap-x-3 on a phone keeps the tap boxes apart.
+        // An address takes its own line. An email or a phone shares one with
+        // the chip and kebab when it fits. gap-x-3 keeps phone tap boxes apart.
         "flex flex-wrap items-center gap-x-3 gap-y-0.5 sm:gap-x-2 rounded-lg transition-colors",
         isDragging && "opacity-60 bg-primary/5 shadow-lg",
       )}
     >
       <div
         data-row-value=""
-        // An email or a phone asks for 11 rem before it shares the line. In
-        // the 300 px Details column that moves the chip and the kebab under
-        // it, and the address keeps whole words on one line.
+        // An email or a phone needs 11 rem to share the line, so in the 300 px
+        // Details column the chip and kebab wrap under it.
         className={cn("min-w-0", isAddress ? "basis-full" : "flex-[1_1_11rem]")}
       >
         <EditableField
@@ -299,8 +263,7 @@ const SortableRow = ({
         {showHandle && (
           <button
             type="button"
-            // The keyboard moves a row with Alt+Arrow, so the handle is for a
-            // pointer and a finger only.
+            // Pointer and touch only: the keyboard moves rows with Alt+Arrow.
             tabIndex={-1}
             aria-label={`Drag ${name} to reorder`}
             onPointerDownCapture={() => setGrabbed(true)}
@@ -321,46 +284,27 @@ const SortableRow = ({
   );
 };
 
-// ---------------------------------------------------------------------------
-// The field
-// ---------------------------------------------------------------------------
-
 interface MultiValueFieldProps {
   items: MultiValueItem[];
   /** Saves the whole list, in order. The first value is the primary one. */
   onSave: (items: { value: string; label: string }[]) => void;
   labelOptions: readonly string[];
-  /**
-   * One value's name in lower case: "address", "email", "phone". It names
-   * the edit input ("Edit email") and the new value's input ("New email").
-   */
+  /** One value's name in lower case, for "Edit email" and "New email". */
   noun: string;
   /** The add button's accessible name, for example "Add location". */
   addLabel: string;
   inputPlaceholder: string;
   isAddress?: boolean;
-  /**
-   * An email or a phone. Each value is then a `mailto:` or a `tel:` link,
-   * and the inputs open the email or the phone keyboard.
-   */
+  /** Each value is a `mailto:` or `tel:` link, and inputs open that keyboard. */
   kind?: ValueKind;
-  /**
-   * Where an address row's "Show on map" item goes (`useMapLink`). Left out
-   * when the contact has no coordinates, and the rows then offer no map item
-   * and no "Map pin" status.
-   */
+  /** "Show on map" target. Left out with no coordinates: no map item or pin. */
   mapLink?: MapLink;
-  /**
-   * Something that belongs to the rows and shows under them: the mini map
-   * and its caption, for addresses. The add control stays last, so a new
-   * value goes in under it.
-   */
+  /** Shows under the rows, such as the mini map. The add control stays last. */
   afterRows?: React.ReactNode;
   /**
-   * A request from elsewhere on the page to open the add form, such as the
-   * Research card's "Add a city". A new number opens it, brings it into
-   * view, and calls `onOpenRequestDone`, so the request is spent and the
-   * form does not open again when the field mounts later.
+   * A new number opens the add form and scrolls to it (the Research card's
+   * "Add a city"). `onOpenRequestDone` spends it, so a later mount does not
+   * open the form again.
    */
   openRequest?: number;
   /** The label the requested form starts with: "work" for a work email. */
@@ -395,11 +339,8 @@ export const MultiValueField = ({
   const addButton = useRef<HTMLButtonElement>(null);
   /** True when a key closed the add form. Focus then goes to "+ Add". */
   const focusAdd = useRef(false);
-  /**
-   * True while the add form is open. A browser can send a blur when the
-   * form leaves the page after Enter, and that blur must not add the value
-   * a second time.
-   */
+  // True while the add form is open, so the blur a browser can send after
+  // Enter does not add the value a second time.
   const addOpen = useRef(false);
   const focusAfterSave = useRef<FocusTarget | null>(null);
 
@@ -425,9 +366,8 @@ export const MultiValueField = ({
     addButton.current?.focus();
   }, [adding]);
 
-  // Opened from elsewhere: the form opens with its input focused (it
-  // autofocuses as it appears), and the field scrolls to the middle of the
-  // view so the person sees where the typing goes.
+  // The input autofocuses as it appears. The field scrolls to the middle of
+  // the view, so the person sees where the typing goes.
   useEffect(() => {
     if (openRequest === undefined) return;
     addOpen.current = true;
@@ -444,8 +384,7 @@ export const MultiValueField = ({
     const target = focusAfterSave.current;
     if (!target || !target.ready(items)) return;
     focusAfterSave.current = null;
-    // The person went somewhere else while the save was out. Focus stays
-    // with them.
+    // Focus moved elsewhere during the save: leave it there.
     const active = document.activeElement;
     if (
       active &&
@@ -581,9 +520,8 @@ export const MultiValueField = ({
     <div
       ref={wrapper}
       className="flex flex-col gap-1"
-      // Capture, so the kebab does not also open on Alt+ArrowDown. The
-      // inputs keep their own arrow keys, and so do an open menu and an
-      // open label list.
+      // Capture, so the kebab does not also open on Alt+ArrowDown. Inputs,
+      // open menus and open label lists keep their arrow keys.
       onKeyDownCapture={(event) => {
         if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey)
           return;

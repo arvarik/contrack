@@ -1,40 +1,22 @@
-// =============================================================================
-// Bounded Approximate Name Matching (AI-Free Spellfix Emulation)
-// =============================================================================
-// Provides bounded approximate-name matching and edit-distance fallback when
-// exact FTS5 keyword searches are insufficient (e.g. typos, phonetic spellings,
-// Irish/Gaelic/Slavic name variants, transpositions).
+// Bounded approximate-name matching with no model, for when exact FTS5 keyword
+// search misses: typos, phonetic spellings, Irish, Gaelic or Slavic variants,
+// transpositions. It follows SQLite's spellfix1 (character mapping, phonetic
+// hashing, a bounded candidate set, edit-distance re-ranking), which ships in
+// neither SQLite nor better-sqlite3, with what is here:
 //
-// Background & Techniques:
-// SQLite's spellfix1 extension (https://www.sqlite.org/spellfix1.html) uses:
-//  1. Transliteration & character mapping (k1)
-//  2. Phonetic hashing (k2)
-//  3. Bounded candidate search space (pruning candidates via index)
-//  4. Edit-distance re-ranking (Levenshtein / Damerau-Levenshtein)
-//
-// Because spellfix1 is a non-standard C extension not bundled into standard
-// SQLite / better-sqlite3 distributions, this module emulates and enhances that
-// approach purely using existing SQLite FTS5 prefix indexing, Double Metaphone
-// phonetic hashing, and in-memory Damerau-Levenshtein / Jaro-Winkler scoring:
-//  - Candidate Bounding:
-//      a) contacts_fts has prefix='2 3 4' on `name`. One query asks for each
-//         token's 3-letter prefix (tokens of 4 letters or more), its 2-letter
-//         prefix, and the other names of its nickname group. BM25 orders the
-//         rows, so a name that shares more of the query ranks first, and the
-//         first 200 are kept. The 2-letter prefix is kept because a typo in
-//         the third letter is common: "Kristof" and "Krzysztof" share "kr".
-//      b) contacts has composite index `idx_contacts_owner_phonetic` on (ownerId, phoneticHash),
-//         providing instant phonetic blocking for alternate spellings. The
-//         stored hash is the code of the whole name, so it is compared by
-//         equality with the code of the whole query and of each token.
-//      Both sources have a fixed order and a limit of 200, so no arbitrary
-//      cut drops a better match. The old step took 50 prefix rows in no order.
-//  - Scoring:
-//      In-memory multi-signal scoring via `nameSimilarity` (Damerau-Levenshtein
-//      transpositions + Jaro-Winkler prefix weighting + Double Metaphone equivalence).
-//  - Tenancy & Safety:
-//      Strictly scoped by `ownerTok` in FTS5 and `ownerId = ?` in contacts.
-// =============================================================================
+// - Candidates come from two sources, each with a fixed order and a limit of
+//   200, so no arbitrary cut drops a better match.
+// - contacts_fts has prefix='2 3 4' on `name`. One query asks for each token's
+//   3-letter prefix (tokens of 4 letters or more), its 2-letter prefix, and the
+//   other names of its nickname group. BM25 orders the rows, so a name that
+//   shares more of the query ranks first. The 2-letter prefix is there because
+//   a typo in the third letter is common: "Kristof" and "Krzysztof" share "kr".
+// - `idx_contacts_owner_phonetic` on (ownerId, phoneticHash) blocks alternate
+//   spellings. The stored hash is the whole name's code, so it is compared for
+//   equality with the code of the whole query and of each token.
+// - Scoring: `nameSimilarity` in memory (Damerau-Levenshtein transpositions,
+//   Jaro-Winkler prefix weight, Double Metaphone equivalence).
+// - Tenancy: scoped by `ownerTok` in FTS5 and `ownerId = ?` in contacts.
 
 import { sqlite } from "../../db.ts";
 import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";
@@ -70,14 +52,17 @@ interface Candidate {
 }
 
 /**
- * Find bounded approximate name matches for a query against active contacts.
+ * Bounded approximate name matches for a query among active contacts.
  *
- * @param scope       - Tenancy scope ensuring cross-tenant isolation.
+ * @param scope       - The caller's scope.
  * @param query       - Raw user query string.
  * @param limit       - Maximum number of matches to return.
- * @param allowedIds  - Optional set of contact IDs permitted by upstream filters.
- * @param excludeIds  - Optional set of contact IDs to exclude (e.g. exact matches already found).
- * @param facets      - Optional facet predicate, applied before each source's limit.
+ * @param allowedIds  - Optional set of contact IDs permitted by upstream
+ *   filters.
+ * @param excludeIds  - Optional set of contact IDs to exclude (e.g. exact
+ *   matches already found).
+ * @param facets      - Optional facet predicate, applied before each source's
+ *   limit.
  * @returns every match scoring 0.75 or more, best first, at most `limit`.
  */
 export function findApproximateNameMatches(
@@ -117,7 +102,7 @@ export function findApproximateNameMatches(
         candidates.set(row.id, row);
   };
 
-  // ── Step 1: name prefixes and nickname variants, by BM25 ─────────────────
+  // Step 1: name prefixes and nickname variants, by BM25
   const clauses = new Set<string>();
   for (const token of subTokens) {
     if (token.length >= 4) clauses.add(`name:"${token.slice(0, 3)}"*`);
@@ -147,7 +132,7 @@ export function findApproximateNameMatches(
     );
   }
 
-  // ── Step 2: phonetic codes, by the (ownerId, phoneticHash) index ─────────
+  // Step 2: phonetic codes, by the (ownerId, phoneticHash) index
   const codes = new Set<string>();
   const addCodes = (text: string) => {
     const dm = doubleMetaphone(text);
@@ -176,7 +161,7 @@ export function findApproximateNameMatches(
 
   if (candidates.size === 0) return [];
 
-  // ── Step 3: In-memory multi-signal scoring & filtering ─────────────────
+  // Step 3: In-memory multi-signal scoring & filtering
   const similarity = nameScorer(query);
   const scored: ApproximateNameMatch[] = [];
   for (const candidate of candidates.values()) {

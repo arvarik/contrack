@@ -46,7 +46,7 @@ Type part of a name, company, role, place, industry or tag. The first results co
 - nicknames, so "Bob Castellanos" finds Robert Castellanos
 - phone numbers in any common form, with or without the country code
 
-Each result takes two lines: the name, a dot in the band colour for a tracked contact, then the role, the company and how long ago you were last in touch. That time turns red after 60 days. A chip such as "7mo old" marks a contact that nobody has updated in six months or more. Its actions can refresh it from the web (see [Act on a result](#act-on-a-result)).
+Each result takes two lines: the name, a dot in the band color for a tracked contact, then the role, the company and how long ago you were last in touch. That time turns red after 60 days. A chip such as "7mo old" marks a contact that nobody has updated in six months or more. Its actions can refresh it from the web (see [Act on a result](#act-on-a-result)).
 
 Use `↑`/`↓` to move and `Enter` to open the contact. While the box holds text, `Home` and `End` move the cursor in it.
 

@@ -1,36 +1,27 @@
 /**
  * animatedLockup: the lockup's bird, alive, for the README.
  *
- * The README heads with the lockup, and there the bird does what it does on
- * the sidebar perch: it blinks, looks about, preens, caws without a sound
- * and stretches a wing, and between times it sits still as the logo. A
- * README image is an `<img>`, which runs no script, so the motion is written
- * into the SVG as SMIL: one `<animate>` for each stroke's `d` and one for
- * each number of the eye. Every current browser plays SMIL inside an image.
+ * The bird blinks, looks about, preens, caws and stretches a wing, as on the
+ * sidebar perch. A README image is an `<img>` that runs no script, so the
+ * motion is SMIL in the SVG: one `<animate>` per stroke's `d` and per eye
+ * number.
  *
- * Nothing here draws the bird. The motion is the app's own:
+ * The motion is the app's own:
  *
- * 1. `SCORE` says which acts play, in order. Each act is made by its maker
- *    in `src/lib/corvidMotion.ts`, from one seeded random source, so its
- *    reach and rhythm are the app's, and every build writes the same file.
- *    A still moment comes before each act. Blinks keep their own clock, and
- *    a blink plays over an act, as `CorvidBrain` layers them.
- * 2. The loop is sampled at the app's 60 frames a second. `drawCorvid` poses
- *    every frame and `corvidPathData` writes it, as the app paints a frame.
- * 3. A frame is dropped when a straight line between the frames kept either
- *    side of it passes within `TOLERANCE` of it. Each attribute keeps its own
- *    frames, so a stroke that holds still costs nothing while another moves.
+ * 1. `SCORE` lists the acts in order. Each comes from its maker in
+ *    `src/lib/corvidMotion.ts` with one seeded random source, so every build
+ *    writes the same file. A still moment comes before each act, and blinks
+ *    keep their own clock over the acts, as `CorvidBrain` layers them.
+ * 2. The loop is sampled at 60 frames a second, posed by `drawCorvid` and
+ *    written by `corvidPathData`.
+ * 3. A frame is dropped when the straight line between its kept neighbors
+ *    passes within `TOLERANCE` of it, per attribute.
  *
- * The loop starts and ends on `HOME_POSE`, so it repeats with no seam. A
- * stroke at rest is written with the logo's own path data, as `paintHome`
- * paints it in the app, so the still bird is the static lockup exactly. The
- * ring is not the bird's, and nothing here draws it.
- *
- * `CorvidBrain` does not direct the loop. It plans for a session in the app,
- * where a big act waits twenty seconds or more, so it cannot promise variety
- * in half a minute, or a loop that ends still. It also imports without file
- * extensions, which Node cannot load. The loop keeps what the brain does to a
- * perched bird: one act at a time, and blinks on `BLINK_EVERY`, its clock.
+ * The loop starts and ends on `HOME_POSE`, and a stroke at rest uses the
+ * logo's own path data, so it repeats with no seam and the still bird is the
+ * static lockup exactly. `CorvidBrain` does not direct the loop: it plans for
+ * a long session, so it cannot promise variety in half a minute or a still
+ * ending, and Node cannot load its extensionless imports.
  */
 import { CORVID_PATHS } from "../../src/assets/corvidPaths.ts";
 import {
@@ -56,16 +47,11 @@ import {
   type Rng,
 } from "../../src/lib/corvidMotion.ts";
 
-// ---------------------------------------------------------------------------
 // The loop
-// ---------------------------------------------------------------------------
 
 /**
- * The seed of the loop the README shows. It was chosen from the first few
- * hundred for a loop that moves within its first second and a half, rests
- * under four seconds across the seam, and plays a full version of each act:
- * a glance of three turns, a preen of four nibbles, a cock of the head that
- * is answered the other way, and a caw of two bows.
+ * The seed of the README's loop. Its loop moves within 1.5 s, rests under
+ * 4 s across the seam, and plays a full version of each act.
  */
 export const LOOP_SEED = 46;
 
@@ -167,9 +153,7 @@ export function loopPose(loop: PerchLoop, t: number): CorvidPose {
 export const loopFrames = (loop: PerchLoop): number =>
   Math.round((loop.duration * FRAME_RATE) / 1000);
 
-// ---------------------------------------------------------------------------
 // Tracks: what each attribute is in every frame
-// ---------------------------------------------------------------------------
 
 /**
  * How far an in-between frame may stray, in the mark's 100 units, from the
@@ -310,22 +294,17 @@ function loopTracks(loop: PerchLoop): BirdPart[] {
   return parts;
 }
 
-// ---------------------------------------------------------------------------
 // Keyframes
-// ---------------------------------------------------------------------------
 
 /**
- * The frames of a track worth keeping. A frame goes when a straight line
- * between the frames kept either side passes within the tolerance of it,
- * because a straight line is what the browser draws between two keyframes.
- * A discrete track keeps each frame where its value changes.
+ * The frames of a track worth keeping. A frame goes when the straight line
+ * between its kept neighbors passes within the tolerance of it, because the
+ * browser draws a straight line between keyframes. A discrete track keeps
+ * each frame where its value changes.
  *
- * A hold is exact. Both ends of a run of equal values that lasts
- * `HOLD_FRAMES` or more are kept, so a stroke that holds still is drawn with
- * its own value, and the bird at rest is the logo and not a line that passes
- * near it. A shorter run is a slow moment of a movement, where two frames
- * round to the same tenth. The frames inside a run are never needed, so a
- * long stillness costs two keyframes.
+ * A hold is exact: both ends of a run of equal values of `HOLD_FRAMES` or
+ * more are kept, so the bird at rest is the logo and not a line near it. A
+ * shorter run is a slow moment of a movement.
  */
 function keyframes(track: Track): number[] {
   const { values } = track;
@@ -376,9 +355,7 @@ function keyframes(track: Track): number[] {
   return kept.map((i) => frames[i]!);
 }
 
-// ---------------------------------------------------------------------------
 // SVG
-// ---------------------------------------------------------------------------
 
 /**
  * The style that holds the bird still for a person who asked for less

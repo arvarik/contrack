@@ -1,17 +1,15 @@
 // @vitest-environment jsdom
 /**
- * The corvid noticing the app at work.
+ * The corvid noticing the app at work. `apiFetch` counts every OK request.
+ * About once a hundred, or every six to twelve AI answers, the bird does
+ * something of its own. The rules that keep it out of the way:
  *
- * `apiFetch` counts every request that comes back OK. About once a hundred,
- * or every six to twelve AI answers, the bird does something of its own. The
- * rules that keep that from ever getting in the way are the ones measured:
- *
- * - A model's request is told apart by its path, the same list the server's
- *   AI limiter uses.
+ * - A model's request is told apart by its path, with the server's AI
+ *   limiter's list.
  * - The counts come due at random, within their ranges, once per crossing.
- * - At most one stir every twenty seconds, however busy the app is.
- * - A flight of its own only when nothing is open and no field has focus,
- *   and at most one every three minutes.
+ * - At most one stir every twenty seconds.
+ * - A flight of its own only when nothing is open and no field has focus, and
+ *   at most one every three minutes.
  * - A reaction repeated in quick succession plays once.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

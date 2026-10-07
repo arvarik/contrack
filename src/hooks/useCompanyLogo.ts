@@ -19,31 +19,24 @@ const GENERIC_DOMAINS = new Set([
 const guessDomainFromCompany = (name: string) => {
   let cleaned = name.toLowerCase().trim();
 
-  // 1. Remove common business suffixes completely
+  // Drop a business suffix and everything after it.
   cleaned = cleaned.replace(
     /\b(inc|llc|corp|corporation|ltd|co|limited|group|holdings|platforms|technologies)\b.*/gi,
     "",
   );
 
-  // 2. The most powerful heuristic: just take the very first word!
-  // "Amazon Web Services" -> "amazon"
-  // "Dell Technologies" -> "dell"
-  // "Meta Platforms" -> "meta"
+  // The first word: "Amazon Web Services" is "amazon".
   cleaned = cleaned.split(/[\s,.-]+/)[0];
 
-  // 3. Remove any remaining non-alphanumeric chars
   cleaned = cleaned.replace(/[^a-z0-9]/g, "");
 
   return cleaned.length > 1 ? `${cleaned}.com` : null;
 };
 
 /**
- * Extracts a business domain from an email address or guesses it from the company name,
- * returning our local proxy URL (which fetches from Google S2 Favicons).
- *
- * @param email The contact's email address
- * @param companyName The contact's company name
- * @returns An object with the logoUrl and the resolved domain for cache tracking, or null.
+ * The logo for a contact's business domain, from a work email or guessed
+ * from the company name, as the local proxy URL and the domain. Null when
+ * there is no domain.
  */
 export function useCompanyLogo(
   email: string | null | undefined,
@@ -52,7 +45,7 @@ export function useCompanyLogo(
   return useMemo(() => {
     let domain: string | null = null;
 
-    // Strategy 1: Extract exact domain from business email
+    // A work email names the domain exactly.
     if (email) {
       try {
         const parts = email.split("@");
@@ -65,7 +58,6 @@ export function useCompanyLogo(
       } catch {}
     }
 
-    // Strategy 2: Clever heuristic to guess domain from company name
     if (!domain && companyName) {
       domain = guessDomainFromCompany(companyName);
     }

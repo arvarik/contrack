@@ -1,10 +1,7 @@
-// =============================================================================
 // shared/monogram.ts: the initials circle, drawn the same on both sides
-// =============================================================================
 // The server serves it for `/api/avatar/initials`, and the screens that
 // create an account draw it in the browser, because they have no session to
 // ask the server with. One function draws both, so the two cannot drift.
-// =============================================================================
 import { describe, expect, it } from "vitest";
 import { monogramLetters, monogramSvg } from "../../../shared/monogram";
 import { renderAvatar } from "../../../server/services/avatarService";

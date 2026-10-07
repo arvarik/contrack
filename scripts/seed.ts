@@ -1,17 +1,12 @@
 import "../server/utils/loadEnv.ts";
 import * as schema from "../server/db/schema.ts";
-// The server's own database module, not a private connection: this resolves
-// DATA_DIR identically to the app AND runs migrations on import, so seeding
-// a brand-new data directory works instead of dying on "no such table".
-// (The old private connection hardcoded ./curator.db — on a DATA_DIR install
-// it seeded a stray database the app never reads.)
+// The server's own database module: it resolves DATA_DIR as the app does and
+// runs migrations on import, so a brand-new data directory seeds.
 import { db, ensureLocalOwner, sqlite } from "../server/db.ts";
 
-// Every contact needs an owner: the `contacts_owner_required` trigger from
-// Phase 1 refuses an insert without one. Importing server/db.ts above has
-// already run the migration, so the local owner exists by now. Interactions and
-// action items are filled from their contact by trigger, so only contacts and
-// lists have to name it.
+// The `contacts_owner_required` trigger refuses a contact without an owner.
+// Interactions and action items take theirs from their contact by trigger, so
+// only contacts and lists name it.
 const ownerId = ensureLocalOwner();
 
 const contactCount = sqlite

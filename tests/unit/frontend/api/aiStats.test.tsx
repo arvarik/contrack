@@ -1,16 +1,6 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The AI activity feed appends its pages
-// =============================================================================
-// "Load older activity" used to raise an offset on a plain query, which
-// REPLACED what was on screen with the next page. Reading the feed meant
-// losing the rows you had just read, and there was no button to get them
-// back. `.agent/STATUS.md` carried it as known issue B-02, and the blocker
-// was the design decision rather than the code.
-//
-// The decision is append, and this is what holds it. Every test here fails
-// against the behaviour it replaced.
-// =============================================================================
+// "Load older activity" appends the next page of the AI activity feed below
+// the rows on screen. It does not replace them.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import { cleanup, renderHook, waitFor } from "@testing-library/react";
@@ -25,11 +15,9 @@ afterEach(() => {
 });
 
 /**
- * One client per file, not one per render.
- *
- * `renderHook`'s wrapper is a component, so building a QueryClient in its
- * body makes a new one on every render and throws away everything cached.
- * Retries are off: a test that waits out a backoff is a test nobody runs.
+ * One client per file: `renderHook`'s wrapper is a component, so a
+ * QueryClient built in its body is new on every render and drops the cache.
+ * Retries are off so no test waits out a backoff.
  */
 const client = new QueryClient({
   defaultOptions: { queries: { retry: false, gcTime: 0 } },
@@ -53,10 +41,8 @@ function row(id: string) {
 }
 
 /**
- * A server that answers with `total` rows, `FEED_PAGE_SIZE` at a time.
- *
- * Returns the URLs it was asked for, because "which offsets did it request"
- * is half of what makes an appending feed different from a replacing one.
+ * A server that answers with `total` rows, `FEED_PAGE_SIZE` at a time, and
+ * returns the URLs it was asked for, so a test can check the offsets.
  */
 function stubFeed(total: number) {
   const asked: string[] = [];
@@ -193,8 +179,7 @@ describe("useAIStatsFeed", () => {
     rerender({ cached: "true" });
 
     // A different filter is a different query, so the accumulated pages are
-    // not carried into it. This is why the view no longer resets an offset of
-    // its own: there is no offset in the view to reset.
+    // not carried into it, and the view has no offset of its own to reset.
     await waitFor(() =>
       expect(result.current.items).toHaveLength(FEED_PAGE_SIZE),
     );

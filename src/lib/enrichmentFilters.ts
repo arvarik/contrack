@@ -1,21 +1,15 @@
 /**
- * enrichmentFilters: the Enrichment page's two rows of filters, as rules a
- * test can read.
+ * The Enrichment page's two rows of filters, as rules a test can read.
  *
  * ```
  *   Contacts   All · Tracked · Has links · Has email · No data
  *   Research   Any · Not yet · 6+ months ago · Found nothing
  * ```
  *
- * One choice in each row, and a contact shows when it matches both: tracked
- * contacts whose research is six months old, or everyone research found
- * nothing on. The rows answer the two questions a batch starts from, who
- * matters and whose research is missing or old, so a person can pick a batch
- * worth its cost. Each pill counts what it would show beside the other row's
- * choice. The page keeps both choices in its address (`filtersFromParams`),
- * so Back from a contact opened from the list returns to the same list.
- *
- * @module lib/enrichmentFilters
+ * A contact shows when it matches both rows' choices, so a person can pick a
+ * batch worth its cost. Each pill counts what it would show beside the other
+ * row's choice. The choices live in the page address (`filtersFromParams`),
+ * so Back from a contact returns to the same list.
  */
 import type { Contact } from "../types";
 
@@ -50,10 +44,8 @@ export interface EnrichmentFilters {
 }
 
 /**
- * The choices a page address names: `?contacts=tracked&research=stale`. The
- * page keeps them there, so Back from a contact opened from the list comes
- * back to the same list. A missing or unknown value is the row's first
- * choice.
+ * The choices a page address names: `?contacts=tracked&research=stale`. A
+ * missing or unknown value is the row's first choice.
  */
 export function filtersFromParams(params: URLSearchParams): EnrichmentFilters {
   const contacts = params.get("contacts") as ContactFilter | null;

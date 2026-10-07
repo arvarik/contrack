@@ -1,12 +1,9 @@
 // @vitest-environment jsdom
 /**
- * The thinking bird.
- *
- * It replaced three different spinners, so what matters is that it says the
- * same thing they did and no more: a name where the surface has no words of
- * its own, silence where it does, and a still picture for an account that
- * asked for no motion. The waiting itself is never conveyed by the animation
- * alone, which is why `decorative` exists.
+ * The thinking bird stands in for a spinner: a name where the surface has no
+ * words of its own, silence where it does, and a still picture for an account
+ * that asked for no motion. The animation alone never conveys the waiting,
+ * which is why `decorative` exists.
  */
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";

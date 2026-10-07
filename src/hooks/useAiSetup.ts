@@ -1,12 +1,8 @@
 /**
- * useAiSetup: whether an AI feature has AI behind it, and if not, why and
- * the page that fixes it, read the way Settings reads it (`featureStatus`).
- *
- * The palette's Ask mode said so up front, and the AI buttons elsewhere
- * (Generate briefing, Synthesize, Add from text, Enrich) looked ready and
- * then failed with "Is your API key configured?". They ask here first.
- *
- * @module hooks/useAiSetup
+ * Whether an AI feature has AI behind it, and if not, why and the page that
+ * fixes it, read the way Settings reads it (`featureStatus`). An AI button
+ * asks here first, so it waits and says why instead of failing with "Is your
+ * API key configured?".
  */
 import { useMemo } from "react";
 import { useAISettings } from "../api/aiSettings";
@@ -58,7 +54,7 @@ export function useAiSetup(featureId: string, enabled = true): AiSetup | null {
     const status = featureStatus(feature, settings, { accountAiOn: true });
     if (status.state === "ready") return null;
     // With no provider at all, a model cannot be chosen yet: connecting one
-    // comes first. The row said "Choose a Fast model" with nothing to choose.
+    // comes first, not "Choose a Fast model" with nothing to choose.
     const noProvider =
       settings.providers.length === 0 && settings.customEndpoints.length === 0;
     const fix =

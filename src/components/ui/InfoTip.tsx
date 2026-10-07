@@ -1,27 +1,15 @@
 /**
- * InfoTip — a small "what is this?" affordance that works with a finger.
- *
- * Deliberately not a hover tooltip. Hover does not exist on a phone, and the
- * native `title` attribute is unreachable there too, so anything explained
- * that way is explained only to people on a desktop. This is a button: it
- * opens on click or tap, on Enter or Space, and shows on hover as a bonus for
- * pointer users who expect that.
- *
- * How it opened decides how it closes:
+ * A small "what is this?" button that works with a finger, not a hover
+ * tooltip, which a phone cannot reach. How it opened decides how it closes:
  *
  * 1. A mouse resting on it opens it, and leaving closes it. A press while it
- *    shows keeps it open (a mouse press first hovers, and it must not close
- *    what the hover just opened).
+ *    shows keeps it open (a mouse press first hovers).
  * 2. A keyboard focus opens it, and leaving the button closes it.
  * 3. A press opens it until the next press, Escape, or a press elsewhere.
  *
- * A finger fires pointer and focus events too, so only a mouse hovers and
- * only a keyboard focus opens: a tap would otherwise open the panel and
- * toggle it shut in one gesture. Escape closes it however it opened, and
- * the panel stays in the page while closed, so the trigger's description
- * reads it to a screen reader on focus.
- *
- * @module components/ui/InfoTip
+ * Only a mouse hovers and only a keyboard focus opens, or a tap would open
+ * and close it in one gesture. Escape always closes it. The closed panel
+ * stays in the page, so the trigger's description reads it on focus.
  */
 import React, {
   useEffect,
@@ -67,15 +55,13 @@ export const InfoTip = ({
   children: React.ReactNode;
   className?: string;
   /**
-   * Which edge of the trigger the panel lines up with. `end` for a trigger
-   * at the right edge of a card, so the panel opens over the card and not
-   * past its edge, where an `overflow-hidden` card would clip it.
+   * The trigger edge the panel lines up with. `end` for a trigger at a
+   * card's right edge, so an `overflow-hidden` card does not clip it.
    */
   align?: "start" | "end";
   /**
-   * `warning` draws the question mark in the warning ink, a little larger:
-   * a mark that says "look here", such as a result AI did not verify. The
-   * label says it in words, so the colour is never the only signal.
+   * `warning` draws a larger question mark in the warning ink, such as on a
+   * result AI did not verify. The label says it in words too.
    */
   tone?: "muted" | "warning";
   /**

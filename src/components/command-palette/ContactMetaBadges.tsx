@@ -1,17 +1,7 @@
 /**
- * ContactMetaBadges — Inline metadata badges for search result cards.
- *
- * Renders up to 2 lightweight data points on any search result card:
- *   1. Relationship score dot — after the contact name, in its band's tone
- *   2. "Last contact" time distance — below role/company
- *
- * The avatar wears no freshness ring any more: a coloured ring around an
- * avatar is the relationship's health everywhere else in the app.
- *
- * Designed to be composable: each badge renders only if its data is non-null.
- * Zero API calls — uses data already present in the search result payload.
- *
- * @module src/components/command-palette/ContactMetaBadges
+ * The badges on a search result: the score dot after the name, and the last
+ * contact below the role. Each shows only when its data is there. No
+ * freshness ring: a ring around an avatar means the relationship's health.
  */
 import type { ReactNode } from "react";
 import { formatDistanceToNow } from "date-fns";
@@ -21,14 +11,10 @@ import { MATCH_BADGE } from "./utils";
 import { cn } from "../../lib/utils";
 import { describeScore, scoreView } from "../../../shared/scoreBand";
 
-// ─── Score Dot ───────────────────────────────────────────────────────────────
+// Score Dot
 
 interface ScoreDotProps {
-  /**
-   * The contact the dot stands for. `scoreView` reads the three fields and
-   * decides whether there is a score at all, so the palette and the ring
-   * can never disagree.
-   */
+  /** The contact. `scoreView` decides from it, as the ring does. */
   contact: {
     isTracked: boolean;
     relationshipScore?: number | null;
@@ -37,14 +23,9 @@ interface ScoreDotProps {
 }
 
 /**
- * A 6 px coloured circle after the contact's name, for the band.
- *
- * The dot shows for a tracked contact with a score. It is absent for a
- * contact nobody tracks and for one with nothing logged yet, so a fresh
- * import of hundreds of people shows no wall of red. It takes its band's
- * tone (`SCORE_BANDS` in shared/scoreBand), the token the avatar ring
- * strokes with, so the palette and the ring agree on the colour as well as
- * the cut points.
+ * A 6 px dot in the band's tone (`SCORE_BANDS`), for a tracked contact with
+ * a score. None for an untracked contact or one with nothing logged, so a
+ * fresh import shows no wall of red.
  */
 const ScoreDot = ({ contact }: ScoreDotProps) => {
   const view = scoreView(contact);
@@ -58,18 +39,15 @@ const ScoreDot = ({ contact }: ScoreDotProps) => {
   );
 };
 
-// ─── Last Contact Line ───────────────────────────────────────────────────────
+// Last Contact Line
 
 interface LastContactLineProps {
   lastContactedAt: string | null | undefined;
 }
 
 /**
- * Compact "last contact" indicator rendered below the role/company line.
- * Shows relative time ("3 weeks ago") when there IS contact history.
- *
- * Returns null for never-contacted contacts — avoids a wall of alarming
- * "Never contacted" labels when users import hundreds of contacts at once.
+ * The last contact as a relative time ("3 weeks ago"). Nothing for a contact
+ * never contacted, so a fresh import shows no wall of "Never contacted".
  */
 const LastContactLine = ({ lastContactedAt }: LastContactLineProps) => {
   if (!lastContactedAt) return null;
@@ -101,12 +79,11 @@ const LastContactLine = ({ lastContactedAt }: LastContactLineProps) => {
   );
 };
 
-// ─── Stale Data Chip ─────────────────────────────────────────────────────────
+// Stale Data Chip
 
 /**
- * "7mo old" after the name, for a contact nobody updated in six months or
- * more. Text only: a row is an option, and an option holds no second
- * control. Its refresh button moved to the row's actions (→, then R).
+ * "7mo old" after the name, for a contact not updated in six months. Text
+ * only: an option holds no second control. Refresh is in the row's actions.
  */
 const StaleChip = ({ updatedAt }: { updatedAt: string | null | undefined }) => {
   if (!updatedAt) return null;
@@ -126,12 +103,11 @@ const StaleChip = ({ updatedAt }: { updatedAt: string | null | undefined }) => {
   );
 };
 
-// ─── A person's row ──────────────────────────────────────────────────────────
+// A person's row
 
 /**
- * The two lines of a person's row, for the people search and AI's answer:
- * the name with its dot and badges, then the role, the company and the last
- * contact. A row used to take four lines, so the list showed five people.
+ * The two lines of a person's row: the name with its dot and badges, then
+ * the role, the company and the last contact.
  */
 export const ContactRowBody = ({
   contact,

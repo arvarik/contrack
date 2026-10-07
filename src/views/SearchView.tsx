@@ -50,13 +50,10 @@ import { useAISearchSession } from "../contexts/SessionContext";
 import type { HistoryEntry } from "../../shared/searchHistory";
 import { useAiAllowed } from "../hooks/useAiAllowed";
 
-// =============================================================================
-// SearchView — Dedicated full-page "Ask Contrack" semantic search
-// =============================================================================
-// Two modes share the page. People is the AI search over contacts. Notes is
-// the local search over what was written about them, with the date and the
-// passage that matched. The mode lives in the URL as `?mode=notes`, so the
-// command palette can link straight to a note search and Back returns to it.
+// The Ask page. People is the AI search over contacts, and Notes is the local
+// search over what was written about them. The mode lives in the URL as
+// `?mode=notes`, so the command palette can link to a note search and Back
+// returns to it.
 
 type SearchMode = "people" | "notes";
 
@@ -65,19 +62,14 @@ const MODES: readonly { value: SearchMode; label: string }[] = [
   { value: "notes", label: "Notes" },
 ];
 
-// ─── Main SearchView Component ────────────────────────────────────────────────
-
 export const SearchView = () => {
   const { lastAISearchQuery, setLastAISearchQuery, semanticSearch } =
     useAISearchSession();
 
   const inputRef = useRef<HTMLInputElement>(null);
   /**
-   * The editable input. `lastAISearchQuery` is what the input is restored
-   * to on the way back to this page, and it is written when a question is
-   * submitted, so the input comes back showing the question the results
-   * answer. It is not the question itself: that travels with the results,
-   * as `semanticSearch.data.query`, and the synthesis brief reads it there.
+   * The editable input, restored from `lastAISearchQuery` on the way back.
+   * The question the results answer is `semanticSearch.data.query`.
    */
   const [query, setQuery] = useState(lastAISearchQuery);
 
@@ -117,8 +109,8 @@ export const SearchView = () => {
 
   usePageTitle(mode === "notes" ? "Search notes" : NAMES.ask.title);
 
-  // The box takes focus on arrival on a desktop. On a touch screen that
-  // opened the keyboard over the page before a person chose to type.
+  // Focus on arrival on a desktop only: on a touch screen it opens the
+  // keyboard before a person chooses to type.
   useEffect(() => {
     if (touchFirst()) return;
     inputRef.current?.focus();
@@ -132,21 +124,12 @@ export const SearchView = () => {
   }, []);
 
   /**
-   * Ask a question.
-   *
-   * The only guard is against the same question while it is still being
-   * answered: Enter and the Search button both land here, and a second copy
-   * of a request in flight is a duplicate, not a retry. The guard reads the
-   * question the hook is answering, so it clears when the search does. This
-   * used to be a ref of the view's own, which Clear never reset, so a
-   * question once asked could not be asked again until a different one had
-   * been asked in between.
-   *
-   * The same question with its results already on screen runs again. That
-   * is what pressing Search means. The server answers it from its cache for
-   * five minutes, unless the contacts changed, so the page has no Refresh
-   * button: it showed the same list again. A list AI could not check is
-   * never cached, and "Ask AI again" beside it asks once more.
+   * Ask a question. The one guard skips the same question while it is in
+   * flight, since Enter and Search both land here. It reads the hook's
+   * question, so it clears with the search: a ref of the view's own would
+   * survive Clear and block asking the same question again. A question with
+   * its results on screen runs again, and the server answers it from a
+   * five-minute cache unless the contacts changed, so there is no Refresh.
    */
   const handleSearch = useCallback(
     (searchQuery?: string) => {
@@ -226,10 +209,8 @@ export const SearchView = () => {
     recordSearch,
   ]);
 
-  // Auto-fire search if ?q= param is present on mount. Through handleSearch,
-  // so the bridge records the question the way a typed one is recorded and
-  // the input is restored to it on the way back. In Notes mode the panel owns
-  // the URL, and `q` there is its question, not this one.
+  // Ask the `?q=` question on mount, through handleSearch, so it is recorded
+  // and restored like a typed one. In Notes mode `q` belongs to the panel.
   useEffect(() => {
     if (initialQueryHandled.current || mode === "notes") return;
     const urlQuery = searchParams.get("q")?.trim();
@@ -253,12 +234,11 @@ export const SearchView = () => {
     inputRef.current?.focus();
   }, [changeQuery, reset, setLastAISearchQuery]);
 
-  // Global keydown for focusing search and toggling history
   useEffect(() => {
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (!singleKeys) return;
-      // A key in a field, a dialog or a menu is theirs: H in the history's
-      // Clear confirmation, or in an open menu, closed the pane under it.
+      // A key in a field, a dialog or a menu is theirs, so H in the history's
+      // Clear confirmation does not close the pane under it.
       if (isPageKeyTaken(e)) return;
       if (e.key === "/") {
         e.preventDefault();
@@ -280,12 +260,9 @@ export const SearchView = () => {
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [singleKeys, isWide, askHistoryOpen, setHistoryOpen]);
 
-  // Six questions drawn at random from the account's pool, which the app
-  // fetched in an idle moment, so they are here with the page. A draw stays
-  // put while the pool refreshes behind it, so no chip moves under a
-  // pointer. A new visit, or Clear, draws again. A failed load shows none:
-  // a question that finds nobody is worse than no question. The palette's AI
-  // mode draws four from the same pool through the same hook.
+  // A draw stays put while the pool refreshes, so no chip moves under a
+  // pointer. A failed load shows none: a question that finds nobody is worse
+  // than no question.
   const suggestions = useStarterDraw(SUGGESTION_COUNT, draw);
   // The pool comes back empty only for a network with no one in it.
   const starter = useStarterQuestions();
@@ -303,10 +280,8 @@ export const SearchView = () => {
   const suggestionsId = useId();
 
   /**
-   * A question is being answered. With AI at work the local list that
-   * streams first is not shown: the page waits for the answer AI verified,
-   * and the corvid hunts for it meanwhile (`SearchingStage`). Without AI the
-   * one answer arrives at once and never shows the stage.
+   * With AI, the local list that streams first is not shown: the page waits
+   * for the verified answer while the corvid hunts (`SearchingStage`).
    */
   const isLoading = isPending;
   const results = isLoading ? [] : (semanticSearch.data?.matches ?? []);
@@ -322,10 +297,8 @@ export const SearchView = () => {
   const flight = useCorvidSearchFlight(isLoading && mode === "people");
 
   /**
-   * The one sentence a screen reader hears about this search. The thinking
-   * bird, the "Searching…" line and the count pill below are what a
-   * sighted person sees; none of them is announced. See
-   * lib/searchAnnouncements.
+   * The one sentence a screen reader hears about this search. The bird, the
+   * "Searching…" line and the count pill are not announced.
    */
   const status = peopleSearchStatus({
     isLoading,
@@ -342,15 +315,10 @@ export const SearchView = () => {
 
   return (
     <div className="relative h-full flex overflow-hidden bg-surface">
-      {/*
-        The page scrolls as one column: the header, then the search and its
-        results, in one box with one pair of gutters, so the title's left
-        edge is the search box's left edge. The header scrolls away with the
-        page, as it does on Pulse. The scroll padding keeps a card that Tab
-        brings into view clear of the edge, so its focus ring is never cut.
-        The bar's lane is kept while nothing scrolls, so the column does not
-        move when the results make the page scroll.
-      */}
+      {/* One scrolling column, header included, so the title and the search
+          box share a left edge. The scroll padding keeps a focus ring clear
+          of the edge, and the stable gutter keeps the column still when the
+          results make the page scroll. */}
       <div
         ref={flight.pageRef}
         className="flex-1 min-w-0 h-full overflow-y-auto scroll-py-2 [scrollbar-gutter:stable]"
@@ -366,9 +334,8 @@ export const SearchView = () => {
               under it says what the page is for. */}
           <PageHeader
             title={NAMES.ask.label}
-            // The switch is the same in both modes, so it stays where the
-            // person clicked it. On a phone the controls fill the row
-            // under the title, the switch growing beside History.
+            // The switch stays where it was clicked in both modes. On a
+            // phone the controls fill the row under the title.
             actionsClassName="max-sm:w-full"
             actions={
               <>
@@ -409,16 +376,10 @@ export const SearchView = () => {
             <>
               <LiveStatus message={status} label="Search status" />
 
-              {/*
-                The search box, and under it the index's one line while
-                People search cannot read the whole network yet.
-              */}
               <div className="space-y-3">
-                {/* The search box, the one raised surface on the page. The
-                    thinking bird takes the glyph's place while the answer
-                    is on its way: the "Searching…" line under the box says
-                    the same in words, and the status region reads it. The
-                    placeholder is short enough for a 390 px window. */}
+                {/* The bird replaces the glyph while the answer is on its
+                    way, and the status region says so in words. The
+                    placeholder fits a 390 px window. */}
                 <AskSearchBox
                   inputRef={inputRef}
                   formRef={flight.fieldRef}
@@ -457,10 +418,9 @@ export const SearchView = () => {
                 <SearchCoverageBar variant="row" returnFocusRef={inputRef} />
               </div>
 
-              {/* Suggested questions, before the first search. A press
-                  fills the box and asks. They arrive with the page: a
-                  staggered entrance replayed on each visit, so the chips
-                  were still fading in 300 ms after the page had drawn. */}
+              {/* Suggested questions, before the first search. No staggered
+                  entrance: it kept the chips fading in 300 ms after the page
+                  drew. */}
               {!hasSearched && !isLoading && suggestions.length > 0 && (
                 <div className="space-y-3">
                   <h2 id={suggestionsId} className={SECTION_HEADING}>
@@ -508,17 +468,9 @@ export const SearchView = () => {
                   </p>
                 ))}
 
-              {/*
-                Shimmer and results share one keyed slot and crossfade with
-                CSS.
-
-                This used to be `<AnimatePresence mode="popLayout">`, which
-                yanks the exiting shimmer into `position: absolute` for the
-                length of its exit — and for those frames the shimmer sits on
-                top of the incoming cards at a stale width. A keyed
-                `.fade-enter` swaps in one commit: the outgoing tree is gone
-                before the new one paints, so there is nothing to overlap.
-              */}
+              {/* A keyed `.fade-enter` swaps the shimmer for the results in one
+                  commit. `AnimatePresence mode="popLayout"` would keep the
+                  exiting shimmer on top of the new cards at a stale width. */}
               {isLoading ? (
                 flight.staged ? (
                   <SearchingStage
@@ -529,7 +481,6 @@ export const SearchView = () => {
                 ) : null
               ) : results.length > 0 ? (
                 <div key="results" className="fade-enter space-y-3">
-                  {/* Results header — wraps rather than crushes on narrow screens */}
                   <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                     <div className="flex items-center gap-2">
                       {/* A label in the muted ink, like "Try asking": blue
@@ -569,12 +520,8 @@ export const SearchView = () => {
                           />
                         </Link>
                       )}
-                      {/*
-                        AI did not check this list. Said once in words for
-                        the whole list, with the question mark every
-                        unverified card carries, which explains it on a
-                        tap, a click, a focus or a hover.
-                      */}
+                      {/* Said once for the whole list, with the question mark
+                          every unverified card carries. */}
                       {isFallback && (
                         <div className="flex items-center gap-0.5 text-xs font-medium text-warning">
                           <span>Not verified by AI</span>
@@ -589,20 +536,14 @@ export const SearchView = () => {
                           </InfoTip>
                         </div>
                       )}
-                      {/*
-                        The one list a second ask can change: AI could not
-                        check it, and the server never caches such a list.
-                        It asks the question these results answer, whatever
-                        the input says by now. A list AI checked would come
-                        back the same, so it has no such button.
-                      */}
+                      {/* Only an unchecked list can change on a second ask: the
+                          server never caches it. It asks the question these
+                          results answer, not the input. */}
                       {isFallback && aiAllowed && (
                         <button
                           type="button"
                           onClick={handleRerun}
                           disabled={isPending || !answeredQuery}
-                          // A quiet text button, like the status row's:
-                          // it is a button, not a link.
                           className={cn(
                             BTN_QUIET,
                             "disabled:opacity-50 disabled:cursor-not-allowed",
@@ -654,7 +595,6 @@ export const SearchView = () => {
                     </div>
                   )}
 
-                  {/* Synthesis executive brief (Feature 6) */}
                   {aiAllowed && !isFallback && (
                     <SynthesisBar
                       query={answeredQuery}
@@ -663,7 +603,7 @@ export const SearchView = () => {
                     />
                   )}
 
-                  {/* Cards — CSS stagger, no per-card Framer Motion */}
+                  {/* A CSS stagger, not per-card Framer Motion */}
                   <div ref={roving.listRef} className="space-y-2">
                     {results.map((match, i) => (
                       <ResultCard
@@ -693,15 +633,11 @@ export const SearchView = () => {
                   />
                 )}
 
-              {/*
-                Error state. `role="alert"` so the failure is announced the
-                moment it appears (WCAG 4.1.3, technique ARIA19). The status
-                region above says nothing for an error, so it is spoken
-                once. The question that failed is kept by the hook, so Try again
-                asks it again without reading the input, which may have
-                moved on. Asking clears the error, so the button is gone
-                before a second press could send the question twice.
-              */}
+              {/* `role="alert"` announces the failure once (WCAG 4.1.3,
+                  ARIA19): the status region says nothing for an error. Try
+                  again asks the failed question the hook kept, not the
+                  input. Asking clears the error, so a second press cannot
+                  send it twice. */}
               {semanticSearch.isError && (
                 <div role="alert" className="tile-enter">
                   <EmptyState
@@ -726,9 +662,8 @@ export const SearchView = () => {
         </div>
       </div>
 
-      {/* The history. From `lg`, the History button in the top-right
-          corner and the panel it opens over the page, which moves nothing
-          in the column. Below it, a sheet. */}
+      {/* The history: from `lg`, a panel over the page that moves nothing in
+          the column. Below it, a sheet. */}
       {isWide ? (
         <HistoryPane
           currentQuery={historyQuery}
@@ -769,7 +704,6 @@ export const SearchView = () => {
         </Modal>
       )}
 
-      {/* Floating Contact Card overlay */}
       <FloatingContactCard
         contactId={floatingContactId}
         isOpen={!!floatingContactId}

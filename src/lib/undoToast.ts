@@ -1,33 +1,16 @@
 /**
- * undoToast — the one place that describes a deletion to the user.
- *
- * Deleting a contact in Contrack is a soft delete: the row gets a `deletedAt`
- * stamp and sits in Trash for the retention an admin sets, 30 days unless they
- * change it. The UI did not say so. The bulk-delete dialog claimed
- * "Permanently delete N contacts… This cannot be undone", and the archived
- * view's success toast said "Permanently deleted" — both plainly false, and
- * false in the expensive direction. Telling someone a reversible action is
- * irreversible makes them hedge: they archive things they meant to delete, and
- * the list they came to tidy stays untidy.
- *
- * A confirmation dialog is also the wrong control here. It taxes every correct
- * deletion — the overwhelming majority — to guard against a rare mistake that
- * Trash already covers. An undo affordance charges nothing up front and is
- * there exactly when it is needed.
- *
- * @module lib/undoToast
+ * The one place that describes a contact deletion to the person. A delete is
+ * soft: the contact sits in Trash for the retention an admin sets. So the
+ * toast says so and offers Undo, instead of a confirmation dialog that would
+ * tax every correct deletion to guard against a mistake Trash covers.
  */
 import { useEffect } from "react";
 import { toast } from "sonner";
 import { MAIN_CONTENT_ID } from "../components/layout/SkipLink";
 
 /**
- * How long the undo stays on screen.
- *
- * Longer than sonner's 4s default: undo is only useful if it is still there
- * when the user realises what they did, and realising takes a beat. Short
- * enough that it does not linger over the next thing they do. The track and
- * untrack toasts keep the same beat.
+ * How long Undo stays on screen: longer than Sonner's 4 s default, because
+ * realizing a mistake takes a beat, and short enough not to linger.
  */
 export const UNDO_DURATION_MS = 10_000;
 
@@ -79,11 +62,9 @@ const inToasts = (node: EventTarget | null) =>
   node instanceof Element && node.closest("[data-sonner-toaster]") !== null;
 
 /**
- * Alt+T takes the keyboard to the toasts (Sonner's key). An Undo there
- * redraws the page, and its button leaves with its toast, so focus fell to
- * the page and a keyboard user lost their place. This puts focus back where
- * it was before Alt+T, or on the page's content when that element is gone.
- * Called once, in App.
+ * Alt+T takes the keyboard to the toasts (Sonner's key). A pressed Undo
+ * leaves with its toast, so this puts focus back where it was before Alt+T,
+ * or on the page's content when that element is gone. Called once, in App.
  */
 export function useToastFocusReturn(): void {
   useEffect(() => {

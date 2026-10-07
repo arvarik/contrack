@@ -1,15 +1,8 @@
 /**
- * How likely a possible duplicate is, in the words the review screens show.
- *
- * The engine scores a pair from 0 to 1, and the screens used to print the
- * number: "Phone match · 85%". A percentage reads as more precise than it
- * is, and 85% looked strong on the one pair the engine wanted a person to
- * check: 85% is the cap it gives a pair whose first names differ
- * (`REVIEW_CEILING` in server/services/dedupe/policy.ts). So the screens
- * show one of three words, and the engine's caveat, when it has one, always
- * makes the pair "Check carefully".
- *
- * @module views/dedupe/utils/level
+ * How likely a possible duplicate is, in words, never as a percentage: a
+ * number reads as more precise than it is, and 85% is the cap for a pair
+ * whose first names differ (`REVIEW_CEILING` in
+ * server/services/dedupe/policy.ts). A caveat always means "Check carefully".
  */
 export type MatchLevel = "very-likely" | "likely" | "check";
 
@@ -19,7 +12,6 @@ const VERY_LIKELY = 0.9;
 /** Below it, a pair is a guess: a close name with little else behind it. */
 const LIKELY = 0.75;
 
-/** The level of one pair, or of a group's strongest pair. */
 export function matchLevel(
   confidence: number,
   caveat: string | null | undefined,
@@ -36,7 +28,7 @@ export const LEVEL_LABEL: Record<MatchLevel, string> = {
   check: "Check carefully",
 };
 
-/** The order a review list shows its levels in: the easy decisions first. */
+/** The easy decisions first. */
 export const LEVEL_ORDER: Record<MatchLevel, number> = {
   "very-likely": 0,
   likely: 1,

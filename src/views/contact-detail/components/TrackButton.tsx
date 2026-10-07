@@ -3,62 +3,21 @@
  *
  * One menu button beside the kebab. The button says the state, and the menu
  * holds every way to change it:
- *
- * ```
- *   untracked                     tracked
- *   ┌───────────────┐             ┌───────────────┐
- *   │ ◎ Track     ▾ │             │ ◎ Quarterly ▾ │
- *   └───────────────┘             └───────────────┘
- *   KEEP UP                       KEEP UP
- *     Weekly                        Weekly
- *     Monthly                       Monthly
- *     Quarterly       Default       Quarterly           ✓
- *     Yearly                        Yearly
- *                                   ───────────────────
- *                                   ⊘ Stop tracking
- * ```
- *
- * 1. Untracked, the button reads Track on the container fill. Each row
- *    tracks the contact at that cadence in one press (`trackAt`), and the
- *    account's default cadence carries the hint "Default".
- * 2. Tracked, the button reads the cadence, one word, in the selected tint
- *    that every toggle wears when it is on, with the Radar glyph in the
- *    primary. The rows change the cadence (`useSetCadence`) with the current
- *    one checked, and Stop tracking, under a hairline, untracks with an Undo
- *    (`useTrackToggle`, the same toast as everywhere else).
- * 3. A cadence off the four words, 60 or 180 days saved before 2.0 or any
- *    value the API took, shows as one more checked row in its place in the
- *    order ("Every 2 months"), and the button says it short: "2 months".
- *    Untracked, an account default off the list is that extra row.
+ * 1. Untracked, the button reads Track. Each row tracks the contact at that
+ *    cadence in one press (`trackAt`). The account default reads "Default".
+ * 2. Tracked, the button reads the cadence in the selected tint. The rows
+ *    change it (`useSetCadence`), and Stop tracking untracks with an Undo
+ *    (`useTrackToggle`).
+ * 3. A stored cadence off the four words (such as 60 days) shows as one more
+ *    checked row, and the button says it short: "2 months".
  * 4. Custom… asks for a number of days, up to ten years.
  *
- * It was a split button: the word a toggle, and a caret behind a hairline
- * that held five cadences in sentences ("Every 3 months"). The owner asked
- * for something smaller and sleeker, with single words and no line down the
- * middle. One control does both jobs: the one thing a person does here is
- * choose how often, and stopping is one of the choices.
+ * The button keeps one width whatever it says. The header cluster is
+ * right-aligned, so a control that grows pulls its own label out from under
+ * the pointer. `tests/e2e/contact.spec.ts` measures the box.
  *
- * **One width, whatever it says.** Every word the button can show from the
- * menu, the default and the `t` key is drawn in one grid cell, invisibly,
- * and the glyph and the current word are drawn over them, centred. The cell
- * is as wide as the widest word, so choosing a cadence never moves the
- * control's left edge. That matters because the header's cluster is
- * right-aligned: a control that grows pulls its own label out from under
- * the pointer. `tests/e2e/contact.spec.ts` measures the box before and
- * after, and checks that the glyph and the word sit in the middle.
- *
- * **Size.** 32 px tall, the height of `.btn-sm`, with tight sides, 13 px
- * bold type, a 12 px chevron and the 44 px tap box of `hit-area`: about
- * 110 px wide at its widest word. It is flat and hovers with the one state
- * layer, because it is a toggle's face, not a call to action. The menu is
- * as slim as its words (11 rem, where other menus start at 13). The narrow
- * header shows the glyph and, once tracked, the cadence in a word: a phone
- * could not see how often it kept up.
- *
- * The `t` key stays a one-key toggle at the account's default cadence
- * (`useTrackShortcut`), as the palette's row is. The ring around the avatar
- * appears or goes with the flag, because both read the same contact. The
- * "Contact actions" menu gets no Track item: one control per concept.
+ * The `t` key toggles at the default cadence (`useTrackShortcut`). The
+ * "Contact actions" menu has no Track item: one control per concept.
  */
 import { useState, type FormEvent } from "react";
 import { ChevronDown, CircleSlash, Radar } from "lucide-react";
@@ -87,7 +46,7 @@ import { cn } from "../../../lib/utils";
 
 interface TrackButtonProps {
   contact: TrackableContact;
-  /** The narrow header: the glyph and the chevron, with the word in the name. */
+  /** The narrow header: the glyph, and the cadence word once tracked. */
   compact?: boolean;
 }
 
@@ -98,26 +57,15 @@ const TRACK_LABEL = "Track, choose how often";
 const trackingLabel = (cadenceDays: number) =>
   `Tracking ${describeCadence(cadenceDays, { sentence: true })}, change or stop`;
 
-/**
- * Every word the button can come to show without a change of contact: Track,
- * and each accepted cadence. They size the label's cell.
- */
+/** Every word the button can show for this contact. They size the label. */
 const SIZER_WORDS = ["Track", ...CADENCE_DAYS.map(shortCadence)];
 
-/**
- * The shape: 32 px tall, 4 px corners, 13 px bold, 4 px between the parts.
- * The trigger's own padding goes, and the sides are set here, a little
- * tighter after the chevron.
- */
+/** 32 px tall, the height of `.btn-sm`. The sides are set per use. */
 const SHAPE = "h-8 gap-1 p-0 rounded-md text-[13px] leading-none font-bold";
 
-/**
- * On: the selected tint. The ink stays on hover and while the menu is open,
- * so the button never reads as off.
- */
+/** The ink stays on hover and while open, so the button never reads as off. */
 const ON = cn(SELECTED_TINT, "hover:text-on-primary-wash");
 
-/** Off: the container fill, flat. */
 const OFF = "bg-surface-container-high text-on-surface hover:text-on-surface";
 
 export const TrackButton = ({ contact, compact = false }: TrackButtonProps) => {
@@ -146,9 +94,8 @@ export const TrackButton = ({ contact, compact = false }: TrackButtonProps) => {
     );
   };
 
-  // Untracked, the rows are ways to take one action, so none is checked:
-  // there is no cadence yet to be the current one. The contact's stored
-  // cadence is not shown then, because nobody chose it for this contact.
+  // Untracked, no row is checked and the stored cadence is not offered:
+  // nobody chose it for this contact.
   const items: ActionMenuItem[] = cadenceOptions(
     on ? cadenceDays : defaultDays,
   ).map((days) => ({
@@ -219,12 +166,9 @@ export const TrackButton = ({ contact, compact = false }: TrackButtonProps) => {
                 {on && word}
               </span>
             ) : (
-              // One cell, many layers: the words it may show, invisible, set
-              // the width, and the glyph and the current word are drawn over
-              // them together, centred. A short word such as Track sits in
-              // the middle of the button, not against its left edge with a
-              // gap before the chevron. Each sizer leaves room for the glyph
-              // and the gap after it: `pl-5` is the 16 px glyph and 4 px.
+              // One grid cell: the invisible sizers set the width, and the
+              // glyph and word sit centered over them. `pl-5` leaves room for
+              // the 16 px glyph and the 4 px gap.
               <span className="grid">
                 {sizers.map((sizer) => (
                   <span

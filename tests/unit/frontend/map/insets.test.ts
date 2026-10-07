@@ -3,7 +3,7 @@
  * What covers the map, and what the map does about it.
  *
  * The sliver rule first, without a layout: a cover that leaves less than
- * the minimum open is the whole map, and the map centres in all of itself
+ * the minimum open is the whole map, and the map centers in all of itself
  * for the moment the cover lifts. Then the measurement, with elements whose
  * sizes are set by hand, because jsdom lays nothing out.
  */
@@ -230,9 +230,9 @@ describe("measureInsets", () => {
 });
 
 describe("a map beside the insights rail", () => {
-  // From lg the map ends at the insights rail, 64 px short of the window,
-  // and the contact runs to the window's edge, over the rail. Its width
-  // covered 64 px of map that is not there, and the pin sat left of centre.
+  // From lg the map ends at the insights rail, 64 px short of the window, and
+  // the contact runs to the window's edge, over the rail. Its width must not
+  // count 64 px of map that is not there, or the pin sits left of center.
   afterEach(() => {
     document.body.innerHTML = "";
   });
@@ -291,8 +291,7 @@ describe("a map beside the insights rail", () => {
 
 describe("measureOpenWidth", () => {
   // The map's toolbar and its bottom-left corner keep to the map an open
-  // contact leaves. The contact started at x 580 at 1440 px and covered the
-  // end of the toolbar, and at 1024 px it left 100 px.
+  // contact leaves.
   afterEach(() => {
     document.body.innerHTML = "";
   });

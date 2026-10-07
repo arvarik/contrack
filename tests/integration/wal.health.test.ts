@@ -1,15 +1,8 @@
-// =============================================================================
-// Integration Tests — the write-ahead log is checkpointed, and refusals counted
-// =============================================================================
-// Every write goes to `curator.db-wal` first. SQLite folds it back once the
-// log passes a thousand pages, but only when no reader is still looking at an
-// older version of the database, so one long reader holds every checkpoint
-// off for as long as it runs. Nothing in this codebase called a checkpoint
-// before 2.0.
-//
-// The database here is real and so is its WAL: the tests write rows, read the
-// file off disk, and check that the number went down.
-// =============================================================================
+// Integration: the write-ahead log is checkpointed, and refusals counted.
+// SQLite folds `curator.db-wal` back past a thousand pages only when no
+// reader holds an older version, so one long reader holds every checkpoint
+// off. The tests write rows to a real database, read the WAL file off disk,
+// and check that it shrank.
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import request from "supertest";

@@ -1,19 +1,14 @@
-// =============================================================================
-// Email text — the readable part of an uploaded .eml file
-// =============================================================================
-// An .eml upload is summarized by the deep model. It used to be parsed with
-// eml-format, a package last published in 2022, from the file read as UTF-8.
-// It now goes through mailparser, which the IMAP connector already uses:
+// The readable part of an uploaded .eml file, which the deep model summarizes.
+// It goes through mailparser, as the IMAP connector's mail does:
 //
-//   - The raw bytes go in. Each MIME part is decoded with its own transfer
-//     encoding and charset, so a Latin-1 or Windows-1252 message is no longer
-//     corrupted by the UTF-8 read before it is parsed.
+//   - The raw bytes go in, and each MIME part is decoded with its own transfer
+//     encoding and charset, so a Latin-1 or Windows-1252 message is not
+//     corrupted by a UTF-8 read.
 //   - A message with only an HTML part comes back as text converted from the
-//     HTML, not as markup for the model to read around.
-//   - Subject, sender, recipients and date come first. The summary prompt
-//     asks for the subject and the participants, and the body alone often
-//     names neither.
-// =============================================================================
+//     HTML, not markup.
+//   - Subject, sender, recipients and date come first: the summary prompt asks
+//     for the subject and the participants, which the body alone often does
+//     not name.
 
 import { simpleParser, type AddressObject } from "mailparser";
 

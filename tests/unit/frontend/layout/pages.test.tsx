@@ -1,13 +1,8 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The lazy pages start loading before their link is pressed
-// =============================================================================
-// Map, Pulse and Ask Contrack are each their own chunk. A first visit showed
-// a skeleton for 300 ms even when the chunk took 5 ms, and Pulse then showed
-// its own skeleton while its data arrived. `views/pages.ts` loads the code in
-// idle moments and when a link is pointed at, and Pulse's data with it.
-// These tests pin what is loaded, when, and in what order.
-// =============================================================================
+// Map, Pulse and Ask Contrack are each their own chunk. `views/pages.ts` loads
+// the code in idle moments and when a link is pointed at, and Pulse's data
+// with it, so a first visit does not wait on a skeleton. These tests pin what
+// is loaded, when, and in what order.
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -15,13 +10,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const idle = vi.hoisted(() => ({
   tasks: [] as Array<() => void>,
-  cancelled: 0,
+  canceled: 0,
 }));
 vi.mock("../../../../src/lib/idle", () => ({
   whenIdle: (task: () => void) => {
     idle.tasks.push(task);
     return () => {
-      idle.cancelled += 1;
+      idle.canceled += 1;
       const index = idle.tasks.indexOf(task);
       if (index >= 0) idle.tasks.splice(index, 1);
     };
@@ -72,7 +67,7 @@ function fakePage(name: string, order: string[]) {
 
 beforeEach(() => {
   idle.tasks.length = 0;
-  idle.cancelled = 0;
+  idle.canceled = 0;
   prefetchPulse.mockClear();
 });
 
@@ -138,7 +133,7 @@ describe("warmPages", () => {
     stop();
     await nextIdle();
     expect(order).toEqual(["map"]);
-    expect(idle.cancelled).toBe(1);
+    expect(idle.canceled).toBe(1);
   });
 
   it("goes on to the next page when a download fails", async () => {

@@ -1,23 +1,15 @@
 /**
- * Shared Date Utilities.
- *
- * A day is a day on someone's calendar. Code that has the reader's zone
- * (`dayInZone`) uses it, because the server's own zone is UTC in Docker.
- * The older helpers below use the runtime's local zone.
+ * Date helpers. A day is a day on someone's calendar: code that has the
+ * reader's zone uses it (`dayInZone`), because the server's zone is UTC in
+ * Docker. The other helpers use the runtime's local zone.
  */
 
 /**
- * Parse a timestamp from the API, whichever of its forms it is in.
- *
- * SQLite's `CURRENT_TIMESTAMP` writes `2026-09-10 05:33:50`: UTC, with a
- * space and no zone marker. JavaScript writes `2026-09-10T05:33:50.000Z`.
- * Both land in the same columns, and `new Date()` reads the first as local
- * time, which puts it hours out. A date with no time (`2026-09-23`, a
- * birthday or a follow-up's day) is a day on the calendar, not an instant,
- * so it is read as local midnight: as UTC midnight it is the day before
- * anywhere west of Greenwich.
- *
- * Returns null rather than an Invalid Date, so a caller decides what to show.
+ * Parses a timestamp from the API in either form: SQLite's
+ * `2026-09-10 05:33:50` (UTC, no zone marker, which `new Date()` reads as
+ * local) or JavaScript's `2026-09-10T05:33:50.000Z`. A date with no time
+ * (`2026-09-23`) is read as local midnight: UTC midnight is the day before
+ * west of Greenwich. Null, not an Invalid Date, for a bad value.
  */
 export function parseServerTime(value: string | null | undefined): Date | null {
   if (!value) return null;
@@ -26,8 +18,7 @@ export function parseServerTime(value: string | null | undefined): Date | null {
     const date = new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3]));
     return Number.isNaN(date.getTime()) ? null : date;
   }
-  // A space separator and no zone means SQLite wrote it, and SQLite writes
-  // UTC. Naming the zone is what stops the runtime assuming local.
+  // A space and no zone means SQLite, which writes UTC.
   const normalized = value.includes("T")
     ? value
     : `${value.replace(" ", "T")}Z`;
@@ -47,10 +38,8 @@ export function calendarDaysBetween(from: Date, to: Date): number {
 }
 
 /**
- * True when a follow-up's day is before today on the local calendar.
- *
- * A follow-up due today is not late until midnight. The contact page's
- * banner counts the same way, so the map, its stats and the banner agree.
+ * True when a follow-up's day is before today on the local calendar: one due
+ * today is not late until midnight, as the contact page's banner counts.
  */
 export function isPastDay(
   value: string | null | undefined,
@@ -69,12 +58,9 @@ export function isPlainDay(value: string): boolean {
 }
 
 /**
- * The calendar day a timestamp falls on in a time zone, as `YYYY-MM-DD`.
- *
- * A date with no time (`2026-09-23`) is a day already and comes back as it
- * is, in every zone. An instant is read as `parseServerTime` reads it and
- * placed on the zone's calendar. With no zone, or one Intl does not know,
- * the runtime's own. Returns null for a value that is not a date.
+ * The calendar day a timestamp falls on in a time zone, as `YYYY-MM-DD`. A
+ * date with no time comes back as it is. An unknown or absent zone means the
+ * runtime's own. Null for a value that is not a date.
  */
 export function dayInZone(
   value: string | Date,
@@ -89,10 +75,9 @@ export function dayInZone(
 }
 
 /**
- * One formatter per zone, made once. A dashboard reads hundreds of dates
- * per request, and making a formatter costs more than using one. The zone
- * comes from a request, and Intl reads "UTC" and "utc" as one zone, so the
- * cache is capped: many spellings cannot grow it without end.
+ * One formatter per zone, made once: a dashboard reads hundreds of dates per
+ * request. The zone comes from a request, so the cache is capped against
+ * endless spellings ("UTC", "utc").
  */
 const dayFormatters = new Map<string, Intl.DateTimeFormat>();
 const MAX_DAY_FORMATTERS = 32;
@@ -145,13 +130,7 @@ export function weekStartsOn(pref: WeekStartPref = "monday"): 0 | 1 {
   return pref === "sunday" ? 0 : 1;
 }
 
-/**
- * Returns the ISO Monday date string (YYYY-MM-DD) for a given date.
- *
- * In ISO 8601, the week starts on Monday.
- * Sunday belongs to the preceding Monday.
- * Monday is itself.
- */
+/** The ISO 8601 week's Monday (YYYY-MM-DD). Sunday belongs to the Monday before. */
 export function isoWeekStart(date: Date | string | number): string {
   let localDate: Date;
   if (typeof date === "string") {

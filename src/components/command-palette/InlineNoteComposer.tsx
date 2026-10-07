@@ -1,16 +1,10 @@
 /**
- * InlineNoteComposer — Compact composer for a note, a call, a meeting or an
- * email, inside the palette: from the action sub-menu (N, C), and from `>`
- * mode on a touch screen, where a one-line box hid a longer note.
- *
- * Renders directly in the command palette (not a separate modal).
+ * A compact composer for a note, a call, a meeting or an email, inside the
+ * palette: from the actions menu (N, C), and from `>` mode on a touch screen.
  * Cmd+Enter saves. Escape returns to where it opened from.
  *
- * The text is a draft on disk from the first keystroke, so Escape, a click
- * on the backdrop or ⌘K does not lose it. It is read back the next time the
- * composer opens for the same contact, and cleared once the note is saved.
- *
- * @module components/command-palette/InlineNoteComposer
+ * The text is a saved draft from the first keystroke, so closing does not
+ * lose it. It comes back for the same contact and clears once saved.
  */
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { motion } from "motion/react";
@@ -38,8 +32,6 @@ import {
 import { useAuth } from "../auth/AuthGate";
 import { INTERACTION_LABELS } from "../../lib/interactionKinds";
 import type { LogKind } from "./actionMode";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 /** How each kind looks in the composer. */
 const KIND: Record<
@@ -83,8 +75,6 @@ interface InlineNoteComposerProps {
   onBack: () => void;
   onComplete: () => void;
 }
-
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
   contactId,
@@ -200,9 +190,8 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
           }}
           onKeyDown={(e) => {
             handleKeyDown(e);
-            // The text area's own keys: Enter makes a new line and the
-            // arrows move the caret. cmdk's handler on the palette took
-            // them for its list. Escape and ⌘K still reach the palette.
+            // The text area keeps Enter and the arrows from cmdk's list.
+            // Escape and ⌘K still reach the palette.
             if (
               !e.metaKey &&
               !e.ctrlKey &&

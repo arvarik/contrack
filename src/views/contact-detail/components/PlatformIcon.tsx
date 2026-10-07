@@ -1,8 +1,4 @@
-/**
- * PlatformIcon — Resolves a social platform name to the appropriate icon.
- * Uses Lucide-style icons for known platforms, falls back to the site's icon
- * from this server's logo route, or a globe.
- */
+/** A brand icon, else the site's icon from the logo route, else a globe. */
 import React, { useState } from "react";
 import { Globe } from "lucide-react";
 import {
@@ -14,7 +10,6 @@ import {
   Youtube,
 } from "../../../components/socialIcons";
 
-// Known platform → icon mapping
 const PLATFORM_ICONS: Record<string, React.FC<{ className?: string }>> = {
   linkedin: Linkedin,
   facebook: Facebook,
@@ -24,7 +19,6 @@ const PLATFORM_ICONS: Record<string, React.FC<{ className?: string }>> = {
   youtube: Youtube,
 };
 
-// Known platform → brand color mapping
 export const PLATFORM_COLORS: Record<string, string> = {
   linkedin: "text-[#0A66C2]",
   facebook: "text-[#1877F2]",
@@ -38,9 +32,8 @@ export const PLATFORM_COLORS: Record<string, string> = {
 const LOGO_DOMAIN = /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/;
 
 /**
- * The site's icon from this server's logo route, or null for a URL with no
- * such host. The server fetches the icon once and keeps it, so the browser
- * never asks a third party about the people in the list.
+ * The site's icon from this server's logo route, or null. The server fetches
+ * it once, so the browser never asks a third party about people in the list.
  */
 function faviconUrl(url: string): string | null {
   let host: string;
@@ -52,9 +45,6 @@ function faviconUrl(url: string): string | null {
   return LOGO_DOMAIN.test(host) ? `/api/logos/${host}` : null;
 }
 
-/**
- * Check if a platform has a known icon.
- */
 export function hasKnownIcon(platform: string): boolean {
   return platform.toLowerCase() in PLATFORM_ICONS;
 }
@@ -79,7 +69,6 @@ export const PlatformIcon = ({
     return <Icon className={className} />;
   }
 
-  // For unknown platforms with a URL, try to show the site's icon
   const icon = useFavicon && url ? faviconUrl(url) : null;
   if (icon) return <SiteIcon src={icon} alt={platform} className={className} />;
 

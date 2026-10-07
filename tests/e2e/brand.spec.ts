@@ -1,16 +1,12 @@
 /**
- * The brand, as the browser sees it.
- *
- * Three things a unit test cannot reach. The favicons and the manifest are
- * files a server has to hand over with the right type, and a broken one shows
- * up as a blank tab rather than as a failing assertion anywhere else. The
- * sidebar mark is a button now, and the whole point of that button is that
- * pressing it changes nothing about where you are or where your focus is.
+ * The brand, as the browser sees it: what a unit test cannot reach. The
+ * favicons and the manifest must be handed over with the right type, or the
+ * tab goes blank. The sidebar mark is a button, and pressing it must change
+ * nothing about where you are or where your focus is.
  *
  * The suite runs with `reducedMotion: "reduce"`, so the corvid holds still
- * here whatever the account's preference says. That is the assertion, not a
- * limitation: with motion reduced, Enter on the mark must leave the page
- * exactly as it found it.
+ * whatever the account's preference. That is the assertion: with motion
+ * reduced, Enter on the mark leaves the page as it found it.
  */
 import { test, expect } from "./fixtures/test";
 import { expectVisibleFocus } from "./fixtures/a11y";

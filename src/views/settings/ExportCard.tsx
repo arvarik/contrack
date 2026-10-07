@@ -1,23 +1,10 @@
 /**
- * ExportCard — take everything with you.
+ * Export in three formats, one per use: vCard for another address book (the
+ * only one that imports back, losslessly), CSV for a spreadsheet, and JSON
+ * for everything this app holds.
  *
- * Three formats were reachable only by typing a URL, which makes "no lock-in"
- * a claim rather than a feature. They answer three different questions, so all
- * three are offered rather than one being chosen for the person:
- *
- *   vCard  another address book. The only format that also comes back IN, and
- *          the same module writes and reads it, so a round trip is lossless.
- *   CSV    a spreadsheet. Flat by definition: three emails become one cell.
- *   JSON   this app. Interactions, lists, follow-ups and the merge log, which
- *          nothing else can carry.
- *
- * A plain `<a download>` rather than a fetch-and-blob: the browser already
- * knows how to save a file the server names, and the session cookie travels
- * with a navigation. Building a blob would mean holding a whole export in
- * memory to hand it to the same download the anchor performs.
- *
- * Each format is a tile that downloads its file as a whole, so it lifts on
- * hover (`lift`, "Elevation" in `.agent/STYLE.md`).
+ * A plain `<a download>`, not fetch and blob: the session cookie travels with
+ * a navigation, and a blob would hold the whole export in memory.
  */
 import { FileJson, FileSpreadsheet, Contact } from "lucide-react";
 import type { LucideIcon } from "lucide-react";

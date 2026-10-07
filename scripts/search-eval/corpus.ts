@@ -1,29 +1,21 @@
-// =============================================================================
-// The search evaluation corpus
-// =============================================================================
-// Three hundred contacts and seventy-nine queries, written once and
-// committed as JSON. This file is the source the JSON is generated from: it
-// is here so a reader can see why each contact exists, which the generated
-// file cannot show.
+// The search evaluation corpus: 300 contacts and 79 queries, committed as
+// JSON. This is the source of that JSON, so a reader can see why each contact
+// exists.
 //
 // Two kinds of contact:
 //
-// 1. TARGETS. Hand written. Every one of them is the answer to at least one
-//    query, and the fields a query leans on are deliberate. A target with a
-//    nickname has the formal name in `name`; a target for a typo query has a
-//    name somebody reliably misspells.
+// 1. TARGETS. Hand written. Each answers at least one query, and the fields a
+//    query leans on are deliberate: a nickname target has the formal name in
+//    `name`, and a typo target has a name people misspell.
 //
-// 2. DISTRACTORS. Generated from the pools below with a fixed seed. They are
-//    not filler: a good half of them are near misses, because a query that
-//    only has to beat noise measures nothing. Somebody shares each target's
-//    company, somebody shares the first name, somebody shares the city.
+// 2. DISTRACTORS. Generated from the pools below with a fixed seed. Half are
+//    near misses that share a target's company, first name or city, because a
+//    query that only has to beat noise measures nothing.
 //
-// About a third of both kinds have a home or a work address, or both, in the
-// format of their city. The streets are real; the house numbers and the ends
-// of the postcodes are not.
+// About a third have a home or work address in their city's format. The
+// streets are real, and the house numbers and postcode ends are not.
 //
 // Nothing here is a real person. The names are assembled from parts.
-// =============================================================================
 
 export interface EvalContact {
   /** Stable identity across regenerations. The queries name these. */
@@ -75,9 +67,7 @@ export interface EvalQuery {
   expect: string[];
 }
 
-// ---------------------------------------------------------------------------
 // Targets
-// ---------------------------------------------------------------------------
 // Column order: key, name, company, role, location, industry, headline,
 // about, tags, interests. First and last name are split from `name`.
 
@@ -95,7 +85,7 @@ type TargetRow = [
 ];
 
 const TARGETS: TargetRow[] = [
-  // ── Typo targets. Names with a well known misspelling. ──────────────────
+  // Typo targets. Names with a well known misspelling.
   [
     "jonathan-smith",
     "Jonathan Smith",
@@ -217,7 +207,7 @@ const TARGETS: TargetRow[] = [
     "kayaking,photography",
   ],
 
-  // ── Company plus role targets. Several people per company. ──────────────
+  // Company plus role targets. Several people per company.
   [
     "marcus-delgado",
     "Marcus Delgado",
@@ -339,7 +329,7 @@ const TARGETS: TargetRow[] = [
     "cross country skiing,sailing",
   ],
 
-  // ── Location plus interest targets. ─────────────────────────────────────
+  // Location plus interest targets.
   [
     "elena-vasquez",
     "Elena Vasquez",
@@ -461,7 +451,7 @@ const TARGETS: TargetRow[] = [
     "rock climbing,barbecue",
   ],
 
-  // ── Nickname targets. Formal name stored, nickname used in the query. ───
+  // Nickname targets. Formal name stored, nickname used in the query.
   [
     "katherine-ashworth",
     "Katherine Ashworth",
@@ -583,7 +573,7 @@ const TARGETS: TargetRow[] = [
     "astronomy,cross country skiing",
   ],
 
-  // ── Note phrase targets. A distinctive sentence in `about`. ─────────────
+  // Note phrase targets. A distinctive sentence in `about`.
   [
     "imogen-halvorsen",
     "Imogen Halvorsen",
@@ -705,7 +695,7 @@ const TARGETS: TargetRow[] = [
     "running,jollof",
   ],
 
-  // ── A hyphenated first name and surname. ─────────────────────────────────
+  // A hyphenated first name and surname.
   // FTS splits both at the hyphen, and people type the name with the
   // hyphens, with spaces, or run together.
   [
@@ -722,9 +712,7 @@ const TARGETS: TargetRow[] = [
   ],
 ];
 
-// ---------------------------------------------------------------------------
 // Emails and phone numbers
-// ---------------------------------------------------------------------------
 // On the targets of the email and phone queries, written the way people
 // write them: with a country code or without, with spaces, brackets and
 // dashes. The phone queries type the digits only.
@@ -749,9 +737,7 @@ const CONTACT_POINTS: Record<string, { emails?: string[]; phones?: string[] }> =
     },
   };
 
-// ---------------------------------------------------------------------------
 // Addresses
-// ---------------------------------------------------------------------------
 // Addresses are the lightest column of the keyword index, 0.5 against a
 // name's 10 (`WEIGHTS` in `search/lexical.ts`). Two things are measured: a
 // street, a postcode or a town that only an address names still finds its
@@ -761,9 +747,9 @@ const CONTACT_POINTS: Record<string, { emails?: string[]; phones?: string[] }> =
 // Each is written the way its city writes it: the house number first in
 // Britain, Ireland and France and after the street elsewhere, the postcode
 // where the country puts it, and the town's own name, "Lisboa", "Wien",
-// "Sevilla". Three older queries hold a word of an address collision:
+// "Sevilla". Three earlier queries hold a word of an address collision:
 // "Seville" (q30), "fleet" (q32) and "Changi" (q42). Apart from those, an
-// address meets an older query only where its contact already has the word
+// address meets an earlier query only where its contact already has the word
 // in another field, such as the city in the location.
 
 /**
@@ -1054,9 +1040,7 @@ const STREETS: Record<string, [string, string]> = {
   Zurich: ["Bahnhofstrasse {n}, 8001 Zürich", "Langstrasse {n}, 8004 Zürich"],
 };
 
-// ---------------------------------------------------------------------------
 // Queries
-// ---------------------------------------------------------------------------
 
 const QUERIES: [id: string, kind: QueryKind, q: string, expect: string][] = [
   // Name typos. The letters are wrong; the person is not.
@@ -1318,9 +1302,7 @@ const QUERIES: [id: string, kind: QueryKind, q: string, expect: string][] = [
   ["q79", "address-collision", "Changi", "ravi-krishnan"],
 ];
 
-// ---------------------------------------------------------------------------
 // Distractors
-// ---------------------------------------------------------------------------
 
 /** Deterministic 32-bit PRNG. The corpus must be byte identical every run. */
 function mulberry32(seed: number): () => number {
@@ -1667,17 +1649,11 @@ function fill(template: string, values: Record<string, string>): string {
 /**
  * Contacts whose NAME carries a word another contact carries in its COMPANY.
  *
- * Without these the BM25 column weights barely matter. Every target is close
- * to unique on its own tokens, so it comes back first whatever the weights
- * say, and a gate that cannot see the weights change is not guarding them.
- *
- * A person called "Ida Northwind" who is also a Product Manager competes
- * directly with the Product Manager at Northwind Logistics: one matches in
- * `name`, weight 10, the other in `company`, weight 5. Which of them wins is
- * decided by that string in `search/lexical.ts` and by nothing else.
- *
- * This is not a contrivance. Surnames become company names and company names
- * become surnames, and a real address book has both.
+ * Without these the BM25 column weights barely matter, because every target
+ * is close to unique on its own tokens. A Product Manager called "Ida
+ * Northwind" competes with the Product Manager at Northwind Logistics: one
+ * matches in `name` (weight 10), the other in `company` (weight 5), and only
+ * the weights in `search/lexical.ts` decide which wins.
  */
 function buildCollisions(targets: EvalContact[]): EvalContact[] {
   const rand = mulberry32(0xc0111d3);
@@ -1804,10 +1780,9 @@ function buildDistractors(
  * Give about a third of the distractors an address in their own city: one in
  * four gets one, home or work, and one in ten gets both.
  *
- * A stream of its own, so the names, companies and cities above are the ones
- * they were before any contact had an address. Every contact takes the same
- * five draws whether or not it gets an address, so a change to one contact
- * never moves the addresses of the contacts after it. A contact with a
+ * A random stream of its own, so the draws above stay the same. Every
+ * contact takes the same five draws whether or not it gets an address, so a
+ * change to one contact never moves the addresses after it. A contact with a
  * hand-written address keeps it.
  */
 function assignAddresses(contacts: EvalContact[]): void {
@@ -1832,9 +1807,7 @@ function assignAddresses(contacts: EvalContact[]): void {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Assembly
-// ---------------------------------------------------------------------------
 
 const CORPUS_SIZE = 300;
 

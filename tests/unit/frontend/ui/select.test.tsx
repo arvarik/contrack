@@ -1,13 +1,9 @@
 // @vitest-environment jsdom
-// =============================================================================
-// Select: the app's dropdown for choosing a value
-// =============================================================================
-// It replaces the native <select>. `role="combobox"` with a listbox promises
-// keys: the arrows open and move, Home and End jump, a letter finds an
-// option, Enter chooses, Escape goes back to the button. The label chip on a
-// contact, the model picker and the bulk edit field picker all share this
-// one control, so its keys are checked here once.
-// =============================================================================
+// Select: the app's dropdown for choosing a value, in place of the native
+// <select>. `role="combobox"` with a listbox promises keys: the arrows open and
+// move, Home and End jump, a letter finds an option, Enter chooses, Escape goes
+// back to the button. The label chip on a contact, the model picker and the
+// bulk edit field picker share this control, so its keys are checked here once.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import {

@@ -1,10 +1,7 @@
-// =============================================================================
 // Integration: avatar route
-// =============================================================================
-// The point of this route is that it exists at all: contact avatars used to be
-// `api.dicebear.com` URLs, so rendering the contact list sent every contact's
-// name to a third party. These tests pin the replacement's contract.
-// =============================================================================
+// Contact avatars are drawn by the server, so rendering the contact list sends
+// no contact's name to a third party such as `api.dicebear.com`. These tests
+// pin the route's contract.
 
 import { describe, it, expect } from "vitest";
 import request from "supertest";
@@ -15,7 +12,7 @@ import { doubleMetaphone } from "../../server/utils/nlp/index.ts";
 const app = makeTestApp();
 
 /**
- * Superagent only fills `res.text` for content types it recognises as text, and
+ * Superagent only fills `res.text` for content types it recognizes as text, and
  * `image/svg+xml` is not one — it buffers into `res.body` instead. Read
  * whichever the response actually populated.
  */

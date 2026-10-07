@@ -1,12 +1,9 @@
-// =============================================================================
 // Integration: the two research depths, from the API to the research record
-// =============================================================================
 // Standard asks the plain sentence once, at thinking "medium". Deep asks
 // the long prompt beside it, at "medium" too, and keeps what both cite.
 // Whether an ask searched comes from its search metadata: none searched is
 // one more plain ask and then AI_NO_SEARCH, and a search with nothing about
 // the person is no public information. Both depths keep what they spent.
-// =============================================================================
 
 import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
 import request from "supertest";

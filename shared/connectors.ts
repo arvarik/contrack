@@ -1,10 +1,4 @@
-/**
- * shared/connectors.ts — Shared types and constants for Contrack Connectors.
- *
- * Used by both server (routes, services, scheduler) and client (Settings UI, timeline).
- *
- * @module shared/connectors
- */
+/** Connector types and constants, for the server and the client. */
 
 export type ConnectorKind = "ics" | "imap" | "google";
 
@@ -115,9 +109,7 @@ const CONNECTOR_KINDS: Record<
   },
 };
 
-/**
- * Returns the "via X" badge label for an interaction source, or null if not a connector.
- */
+/** The "via X" badge for an interaction source, or null if not a connector. */
 export function connectorViaLabel(
   source: string | null | undefined,
 ): string | null {

@@ -20,5 +20,5 @@ The first folder names the code root. The second folder names the area.
 
 A file takes the name of the module it tests, or the name of the feature when
 it tests several modules. The folder already names the area, so the file name
-does not repeat it. For example, `map.flyTo.test.ts` is now
-`frontend/map/flyTo.test.ts`.
+does not repeat it. For example, the map's flyTo tests are
+`frontend/map/flyTo.test.ts`, not `map.flyTo.test.ts`.

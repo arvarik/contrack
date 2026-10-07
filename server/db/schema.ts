@@ -11,29 +11,14 @@ import {
 } from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
-// =============================================================================
-// Identity
-// =============================================================================
-// Contrack is single-account today: one `users` row, created through the
-// first-run setup screen. The tables are shaped for more than that on purpose,
-// because the thing that makes multi-tenancy expensive is not the login — it
-// is retrofitting ownership onto data that was written without it. Carrying
-// `ownerId` from the start means that project becomes "scope the queries"
-// rather than "scope the queries AND migrate live data".
-//
-// What is deliberately NOT here: any endpoint that creates a second user.
-// Two users today would share every contact, because no query filters by
-// owner yet — an actively misleading feature. `role` exists so the column is
-// already populated when admin/member starts to mean something.
-// =============================================================================
+// Identity. Every owned row carries `ownerId` (see OWNERSHIP below), and `role`
+// separates admins from members.
 
 /**
- * users — Account records. Exactly one row in the current single-user model.
- *
- * `email` and `username` are both stored lowercased and are independently
- * unique; sign-in accepts either. `passwordHash` is a self-describing scrypt
- * string (see server/services/passwords.ts) so the cost parameters can be
- * raised later without invalidating existing passwords.
+ * users: one row per account. `email` and `username` are stored lowercased and
+ * are each unique; sign-in accepts either. `passwordHash` is a self-describing
+ * scrypt string (server/services/passwords.ts), so the cost can rise without
+ * invalidating existing passwords.
  */
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -57,11 +42,11 @@ export const users = sqliteTable("users", {
   /** 'active' | 'disabled'. Disabling ends the account's live sessions. */
   status: text("status").notNull().default("active"),
   /**
-   * 'password' for an account somebody signs in to, 'none' for the local
-   * owner. The local owner holds this device's data while auth is off; its
-   * hash is `none$`, which cannot parse, so nothing can sign in as it.
-   * Securing an instance converts this row rather than adding one, which is
-   * how the data comes along.
+   * 'password' for an account somebody signs in to, 'none' for the local owner,
+   * which holds this device's data while auth is off. Its hash is `none$`,
+   * which cannot parse, so nothing can sign in as it. Securing an instance
+   * converts this row rather than adding one, which is how the data comes
+   * along.
    */
   credentialState: text("credentialState").notNull().default("password"),
   /** Set by an admin password reset. Requires the user to change password on next login. */
@@ -76,14 +61,10 @@ export const users = sqliteTable("users", {
 });
 
 /**
- * api_tokens — per-user machine credentials.
- *
- * `ctk_<43 base64url chars>`, shown once at creation. Only the SHA-256 reaches
- * the database, so a leaked backup does not hand over working tokens.
- * `tokenPrefix` is the first 12 characters, which is what a list can show
- * without being a credential itself.
- *
- * Resolved by attachPrincipal and minted via API token management endpoints.
+ * api_tokens: per-user machine credentials, `ctk_<43 base64url chars>`, shown
+ * once at creation. Only the SHA-256 reaches the database, so a leaked backup
+ * does not hand over working tokens. `tokenPrefix` is the first 12 characters,
+ * which a list can show without it being a credential.
  */
 export const apiTokens = sqliteTable("api_tokens", {
   id: text("id").primaryKey(),
@@ -194,10 +175,9 @@ export const invitations = sqliteTable("invitations", {
 });
 
 /**
- * user_settings — per-account preferences.
- *
- * The counterpart to app_settings, which stays instance-wide: provider keys
- * and capability assignments belong to the operator, not to each person.
+ * user_settings: per-account preferences. Provider keys and capability
+ * assignments stay instance-wide in app_settings, because they belong to the
+ * operator.
  */
 export const userSettings = sqliteTable(
   "user_settings",
@@ -217,12 +197,9 @@ export const userSettings = sqliteTable(
 );
 
 /**
- * app_settings — instance-wide settings, one JSON value per key.
- *
- * Provider keys entered through the UI, custom OpenAI-compatible endpoints,
- * capability assignments and cached model lists live here
- * (server/services/settingsService.ts), and `search.vectorScale` for the
- * int8 search vectors.
+ * app_settings: instance-wide settings, one JSON value per key: provider keys,
+ * custom OpenAI-compatible endpoints, capability assignments, cached model
+ * lists (server/services/settingsService.ts) and `search.vectorScale`.
  */
 export const appSettings = sqliteTable("app_settings", {
   key: text("key").primaryKey(),
@@ -233,10 +210,8 @@ export const appSettings = sqliteTable("app_settings", {
 });
 
 /**
- * audit_log — who did what to whom.
- *
- * `actorUserId` is SET NULL rather than CASCADE: deleting an account must not
- * erase the record of what it did, which is the entire point of an audit log.
+ * audit_log: who did what to whom. `actorUserId` is SET NULL, not CASCADE,
+ * because deleting an account must not erase the record of what it did.
  */
 export const auditLog = sqliteTable("audit_log", {
   id: text("id").primaryKey(),
@@ -255,15 +230,10 @@ export const auditLog = sqliteTable("audit_log", {
 });
 
 /**
- * sessions — Server-side browser sessions.
- *
- * `id` is the SHA-256 of the secret held in the client's cookie, never the
- * secret itself: a leaked database (or a stray backup, of which this app keeps
- * seven) does not hand over live sessions. Lookup is still a primary-key hit.
- *
- * Server-side rather than a stateless JWT because revocation is the feature
- * that matters here — "sign out everywhere" has to actually end the session,
- * and a self-hosted app cannot lean on short expiries to paper over that.
+ * sessions: server-side browser sessions. `id` is the SHA-256 of the cookie
+ * secret, so a leaked database or backup does not hand over live sessions.
+ * Server-side rather than a JWT, because "sign out everywhere" has to end the
+ * session.
  */
 export const sessions = sqliteTable("sessions", {
   /** SHA-256 hex of the cookie secret. */
@@ -285,9 +255,7 @@ export const sessions = sqliteTable("sessions", {
   method: text("method"),
 });
 
-/**
- * passkeys — WebAuthn discoverable credentials.
- */
+/** passkeys: WebAuthn discoverable credentials. */
 export const passkeys = sqliteTable("passkeys", {
   /** Credential ID, base64url encoded. */
   id: text("id").primaryKey(),
@@ -309,9 +277,7 @@ export const passkeys = sqliteTable("passkeys", {
   lastUsedAt: text("lastUsedAt"),
 });
 
-/**
- * auth_challenges — Temporary WebAuthn ceremony challenges.
- */
+/** auth_challenges: short-lived WebAuthn ceremony challenges. */
 export const authChallenges = sqliteTable("auth_challenges", {
   id: text("id").primaryKey(),
   /** 'register' | 'login'. */
@@ -324,9 +290,7 @@ export const authChallenges = sqliteTable("auth_challenges", {
   expiresAt: text("expiresAt").notNull(),
 });
 
-/**
- * auth_links — One-time tokens for password reset and magic-link sign-in.
- */
+/** auth_links: one-time tokens for password reset and magic-link sign-in. */
 export const authLinks = sqliteTable("auth_links", {
   id: text("id").primaryKey(),
   /** 'reset' | 'magic'. */
@@ -346,14 +310,11 @@ export const authLinks = sqliteTable("auth_links", {
   requestIp: text("requestIp"),
 });
 
-// =============================================================================
-// Core Tables
-// =============================================================================
+// Core tables
 
 /**
- * contacts — Primary entity table. Stores demographic, geospatial, and CRM
- * metadata. All multi-value fields (emails, phones, etc.) are normalized into
- * dedicated child tables linked by contactId.
+ * contacts: one row per person. Multi-value fields (emails, phones and the
+ * rest) live in child tables keyed by contactId.
  */
 export const contacts = sqliteTable("contacts", {
   id: text("id").primaryKey(),
@@ -424,82 +385,58 @@ export const contacts = sqliteTable("contacts", {
    */
   archivedAt: text("archivedAt"),
   /**
-   * Extra search words for this contact, indexed in `contacts_fts` and read
-   * by vector search. A derived cache: nothing in 2.0 writes it, and the
-   * triggers and the index queue clear it when the text under it changes.
+   * Extra search words for this contact, indexed in `contacts_fts` and read by
+   * vector search. A derived cache that nothing writes; the triggers and the
+   * index queue clear it when the text under it changes.
    */
   searchExpansion: text("searchExpansion"),
   // Dedupe infrastructure
   canonicalId: text("canonicalId"), // Soft merge: points to primary contact's id. NULL = active contact.
   deletedAt: text("deletedAt"), // Trash: soft-delete timestamp. NULL = not deleted. Purged after TRASH_RETENTION_DAYS.
   phoneticHash: text("phoneticHash"), // Double Metaphone encoding for phonetic blocking.
-  /**
-   * Owning account. See the OWNERSHIP note below — NULL means "belongs to
-   * whoever owns this instance", which is every row until an account exists.
-   */
+  /** Owning account. NULL never survives boot (see OWNERSHIP below). */
   ownerId: text("ownerId").references(() => users.id, { onDelete: "restrict" }),
 });
 
-// =============================================================================
 // OWNERSHIP
-// =============================================================================
-// `ownerId` appears on eight tables: contacts, lists, interactions, action_items,
-// dedupe_suggestions, dedupe_exclusions, dedupe_merge_log and ai_invocations.
+//
+// `ownerId` is on every table in `OWNED_TABLES` (server/db.ts): contacts,
+// lists, interactions, action_items, dedupe_suggestions, dedupe_exclusions,
+// dedupe_merge_log, ai_invocations and the tables listed after them.
 //
 // THE INVARIANT: after boot, `ownerId` is never NULL. SQLite cannot add a NOT
-// NULL column to an existing table, so triggers give the same guarantee.
-// `<table>_owner_required` aborts an insert with no owner on the four tables
-// that have no parent contact. `<table>_owner_fill` fills it from the parent
-// on the four that do, and `<table>_owner_check` aborts a child row whose
-// owner disagrees with its contact — which is what makes a cross-owner dedupe
-// pair impossible rather than merely unlikely.
+// NULL column to an existing table, so triggers give the guarantee.
+// `<table>_owner_required` refuses a row with no owner on the tables with no
+// parent contact. `<table>_owner_fill` copies it from the parent contact, and
+// `<table>_owner_check` refuses a child row whose owner disagrees with its
+// contact, which makes a cross-owner dedupe pair impossible.
 //
-// The four child tables carry a denormalized copy of their contact's owner.
-// That is redundant by design: a covering index on `(ownerId, date)` answers a
-// scoped timeline without touching `contacts`, and the triggers above are what
-// keep the copy honest. `contacts_owner_propagate` pushes an owner change down
-// to all four, for a future admin "reassign data" action. It cannot touch the
-// two vec0 tables, because sqlite-vec refuses an UPDATE of a partition key;
-// that feature will delete and re-insert those rows in code.
+// The child tables keep a denormalized copy of the owner so a covering index on
+// `(ownerId, date)` answers a scoped timeline without reading `contacts`.
+// `contacts_owner_propagate` pushes an owner change down to them. It cannot
+// update the two vec0 tables, because sqlite-vec refuses an UPDATE of a
+// partition key.
 //
-// THE LOCAL OWNER is what makes auth-off mode work. Every instance has one
-// account from boot: username `local`, `credentialState = 'none'`, a password
-// hash that cannot parse. Nobody signs in as it. With auth off it is the
-// implicit principal for a request with no credential, so every row written on
-// a personal instance has a real owner rather than a NULL somebody later has
-// to guess at. Securing the instance converts that row in place, keeping its
-// id, which is how the data comes along without a claim.
+// dedupe_merge_log has no foreign key to contacts, because its snapshots of
+// hard-deleted contacts must outlive them. Its owner is copied from the
+// surviving contact at write time.
 //
-// All queries and mutations enforce tenant scoping via caller Scope across
-// all scoped routes.
+// THE LOCAL OWNER makes auth-off mode work. Every instance has it from boot:
+// username `local`, `credentialState = 'none'`, a hash that cannot parse. With
+// auth off it is the principal for a request with no credential, so every row
+// has a real owner (server/db/owners.ts). Securing the instance converts that
+// row in place, keeping its id.
 //
-// dedupe_merge_log is the interesting one: it deliberately has no foreign key
-// to contacts, because it stores snapshots of contacts that were hard-deleted
-// and must outlive them. Nothing to join through, so its owner is copied from
-// the surviving contact at write time rather than filled by a trigger.
-//
-// THE INVARIANT: every owned row has an owner. A top-level table refuses a
-// row without one (the `_owner_required` triggers), and a child table copies
-// it from its contact (`_owner_fill`). While nobody signs in, the owner is the
-// local owner (server/db/owners.ts).
-//
-// ON DELETE RESTRICT, not CASCADE. Cascade is what a mature multi-tenant app
-// wants — remove an account, remove its data — but it is the wrong default to
-// inherit *before* account deletion has been designed, because it turns
-// `DELETE FROM users` into "silently destroy every contact". Restrict makes
-// that fail loudly instead, which forces whoever builds account deletion to
-// decide what should happen to the data rather than discovering the answer
-// afterwards. `sessions` still cascades: a session without its account is
-// meaningless, and nobody mourns it.
-// =============================================================================
+// ON DELETE RESTRICT, not CASCADE: a `DELETE FROM users` that would orphan
+// owned rows fails loudly instead of destroying every contact. Account deletion
+// removes the data first. `sessions` still cascades, because a session without
+// its account means nothing.
 
-// =============================================================================
-// Normalized Child Tables
-// =============================================================================
+// Normalized child tables
 
 /**
- * contact_emails — Multi-value emails with label, primary flag, and source
- * provenance so we know which import contributed each address.
+ * contact_emails: emails with label, primary flag and the source that added
+ * each one.
  */
 export const contactEmails = sqliteTable("contact_emails", {
   id: text("id").primaryKey(),
@@ -514,9 +451,7 @@ export const contactEmails = sqliteTable("contact_emails", {
   addedAt: text("addedAt").default(sql`(CURRENT_TIMESTAMP)`),
 });
 
-/**
- * contact_phones — Multi-value phone numbers with label and provenance.
- */
+/** contact_phones: phone numbers with label and source. */
 export const contactPhones = sqliteTable("contact_phones", {
   id: text("id").primaryKey(),
   contactId: text("contactId")
@@ -530,9 +465,7 @@ export const contactPhones = sqliteTable("contact_phones", {
   addedAt: text("addedAt").default(sql`(CURRENT_TIMESTAMP)`),
 });
 
-/**
- * contact_addresses — Multi-value physical addresses parsed from inputs.
- */
+/** contact_addresses: physical addresses. */
 export const contactAddresses = sqliteTable(
   "contact_addresses",
   {
@@ -553,8 +486,8 @@ export const contactAddresses = sqliteTable(
 );
 
 /**
- * contact_social_links — Typed social/professional profile URLs.
- * Platform field allows icon resolution and deduplication across imports.
+ * contact_social_links: profile URLs. `platform` picks the icon and dedupes
+ * links across imports.
  */
 export const contactSocialLinks = sqliteTable("contact_social_links", {
   id: text("id").primaryKey(),
@@ -569,8 +502,7 @@ export const contactSocialLinks = sqliteTable("contact_social_links", {
 });
 
 /**
- * contact_education — Normalized education history with separate date fields
- * and field-of-study support (richer than the old { school, degree, dates } blob).
+ * contact_education: education history with separate dates and field of study.
  */
 export const contactEducation = sqliteTable("contact_education", {
   id: text("id").primaryKey(),
@@ -588,8 +520,8 @@ export const contactEducation = sqliteTable("contact_education", {
 });
 
 /**
- * contact_experience — Normalized work history with isCurrent flag,
- * separate start/end dates, and per-entry location.
+ * contact_experience: work history with `isCurrent`, separate dates and a
+ * location per entry.
  */
 export const contactExperience = sqliteTable("contact_experience", {
   id: text("id").primaryKey(),
@@ -608,9 +540,9 @@ export const contactExperience = sqliteTable("contact_experience", {
 });
 
 /**
- * contact_sources — Per-import provenance records. Tracks which platform
- * a contact was imported from, the external profile ID/URL, and the original
- * connection date (e.g. LinkedIn "Connected On").
+ * contact_sources: one row per import of a contact: the platform, the external
+ * profile id or URL, and the original connection date (LinkedIn "Connected
+ * On").
  */
 export const contactSources = sqliteTable("contact_sources", {
   id: text("id").primaryKey(),
@@ -666,10 +598,7 @@ export const searchPassageState = sqliteTable(
   (table) => [index("idx_search_passage_state_owner").on(table.ownerId)],
 );
 
-/**
- * contact_tags — Flexible free-form tagging system for pipeline stages,
- * custom grouping, and relationship categorization.
- */
+/** contact_tags: free-form tags. */
 export const contactTags = sqliteTable("contact_tags", {
   id: text("id").primaryKey(),
   contactId: text("contactId")
@@ -679,10 +608,7 @@ export const contactTags = sqliteTable("contact_tags", {
   addedAt: text("addedAt").default(sql`(CURRENT_TIMESTAMP)`),
 });
 
-/**
- * contact_interests — Personal hobbies and interests extracted by AI
- * Kept separate from generic CRM tags to avoid cluttering pipeline management.
- */
+/** contact_interests: hobbies and interests, kept apart from tags. */
 export const contactInterests = sqliteTable(
   "contact_interests",
   {
@@ -700,8 +626,8 @@ export const contactInterests = sqliteTable(
 );
 
 /**
- * contact_attributes — Flexible key-value store for domain-specific LLM extractions.
- * e.g., { name: "Investment Philosophy", value: "Focuses on early stage AI..." }
+ * contact_attributes: named facts that fit no other field, such as { name:
+ * "Investment Philosophy", value: "Focuses on early stage AI..." }.
  */
 export const contactAttributes = sqliteTable(
   "contact_attributes",
@@ -719,14 +645,9 @@ export const contactAttributes = sqliteTable(
   }),
 );
 
-// =============================================================================
-// Interactions (Timeline)
-// =============================================================================
+// Interactions (timeline)
 
-/**
- * interactions — Chronological timeline entries for each contact.
- * Expanded type enum supports platform-specific interaction logging.
- */
+/** interactions: timeline entries for each contact. */
 export const interactions = sqliteTable("interactions", {
   id: text("id").primaryKey(),
   contactId: text("contactId")
@@ -750,9 +671,7 @@ export const interactions = sqliteTable("interactions", {
   ownerId: text("ownerId").references(() => users.id, { onDelete: "restrict" }),
 });
 
-/**
- * interactionMentions — Bi-directional network weaving junction table natively resolving references.
- */
+/** interaction_mentions: the contacts an interaction mentions. */
 export const interactionMentions = sqliteTable(
   "interaction_mentions",
   {
@@ -768,14 +687,11 @@ export const interactionMentions = sqliteTable(
   }),
 );
 
-// =============================================================================
-// Deduplication Engine Infrastructure
-// =============================================================================
+// Deduplication
 
 /**
- * dedupe_suggestions — Persistent match suggestions produced by the dedupe engine.
- * Each row represents a detected pair of contacts that may be duplicates.
- * Status tracks the lifecycle: pending → merged / dismissed / auto_merged.
+ * dedupe_suggestions: pairs of contacts that may be duplicates. Status runs
+ * pending → merged / dismissed / auto_merged.
  */
 export const dedupeSuggestions = sqliteTable(
   "dedupe_suggestions",
@@ -803,8 +719,8 @@ export const dedupeSuggestions = sqliteTable(
       onDelete: "restrict",
     }),
     /**
-     * 0006: why a person should look twice before merging, such as "First
-     * names differ: Ada and Ben". Null when nothing argues against the match.
+     * Why a person should look twice before merging, such as "First names
+     * differ: Ada and Ben". Null when nothing argues against the match.
      */
     caveat: text("caveat"),
   },
@@ -815,10 +731,7 @@ export const dedupeSuggestions = sqliteTable(
   }),
 );
 
-/**
- * dedupe_exclusions — User-dismissed contact pairs that should never be
- * re-suggested as duplicates. Acts as a permanent negative constraint.
- */
+/** dedupe_exclusions: pairs a person dismissed, never suggested again. */
 export const dedupeExclusions = sqliteTable(
   "dedupe_exclusions",
   {
@@ -840,9 +753,8 @@ export const dedupeExclusions = sqliteTable(
 );
 
 /**
- * dedupe_merge_log — Audit trail for all merge operations (both user-initiated
- * hard merges and auto-triggered soft merges). Enables undo for soft merges
- * and forensic analysis of merge decisions.
+ * dedupe_merge_log: every merge, hard or soft, with snapshots, so a soft merge
+ * can be undone.
  */
 export const dedupeMergeLog = sqliteTable("dedupe_merge_log", {
   id: text("id").primaryKey(),
@@ -856,16 +768,15 @@ export const dedupeMergeLog = sqliteTable("dedupe_merge_log", {
   undoneAt: text("undoneAt"),
   duplicateSnapshot: text("duplicateSnapshot"), // JSON blob for hard deletes
   /**
-   * Owning account. This table carries its own because it has no foreign key
-   * to join through — the snapshots outlive the contacts they describe.
+   * Owning account. Copied, because there is no foreign key to join through:
+   * the snapshots outlive the contacts they describe.
    */
   ownerId: text("ownerId").references(() => users.id, { onDelete: "restrict" }),
 });
 
 /**
- * dedupe_embedding_meta — when each contact's dedupe vector was computed.
- *
- * A contact whose `updatedAt` is newer than `embeddedAt` is embedded again.
+ * dedupe_embedding_meta: when each contact's dedupe vector was computed. A
+ * contact whose `updatedAt` is newer than `embeddedAt` is embedded again.
  */
 export const dedupeEmbeddingMeta = sqliteTable("dedupe_embedding_meta", {
   contactId: text("contactId").primaryKey(),
@@ -874,15 +785,11 @@ export const dedupeEmbeddingMeta = sqliteTable("dedupe_embedding_meta", {
     .default(sql`(CURRENT_TIMESTAMP)`),
 });
 
-// =============================================================================
-// Action Items (Proactive Follow-Up Tasks)
-// =============================================================================
+// Action items
 
 /**
- * action_items — First-class follow-up tasks linked to contacts.
- * Replaces the single `nextFollowUpAt` date field with a full entity that
- * supports multiple items per contact, descriptive titles, and completion tracking.
- * SQL triggers keep `contacts.nextFollowUpAt` in sync as a denormalized cache.
+ * action_items: follow-up tasks, several per contact. Triggers keep
+ * `contacts.nextFollowUpAt` in sync as a denormalized cache.
  */
 export const actionItems = sqliteTable("action_items", {
   id: text("id").primaryKey(),
@@ -901,13 +808,9 @@ export const actionItems = sqliteTable("action_items", {
   ownerId: text("ownerId").references(() => users.id, { onDelete: "restrict" }),
 });
 
-// =============================================================================
-// Lists (User-Created Contact Groups)
-// =============================================================================
+// Lists
 
-/**
- * lists — User-created named contact groups with icon and drag-to-reorder support.
- */
+/** lists: named contact groups with an icon and a sort order. */
 export const lists = sqliteTable("lists", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -918,10 +821,7 @@ export const lists = sqliteTable("lists", {
   ownerId: text("ownerId").references(() => users.id, { onDelete: "restrict" }),
 });
 
-/**
- * list_members — Junction table connecting lists to contacts.
- * Composite PK ensures each contact appears in a list at most once.
- */
+/** list_members: which contacts are in which list, each at most once. */
 export const listMembers = sqliteTable(
   "list_members",
   {
@@ -938,19 +838,12 @@ export const listMembers = sqliteTable(
   }),
 );
 
-// =============================================================================
-// AI Invocation Log (AI Stats Page)
-// =============================================================================
+// AI invocation log
 
 /**
- * ai_invocations — Persistent audit log of every AI call (fresh and cached).
- * Standalone table with no foreign keys — invocations are independent events
- * that reference contacts/queries by description only.
- *
- * Used by the AI Usage page (`/settings/ai-usage`) to surface historical
- * AI activity, token usage, cache performance, and approximate costs.
- *
- * Retention: 30-day rolling window, cleaned up on server startup.
+ * ai_invocations: every AI call, fresh or cached, for the AI usage page. No
+ * foreign keys: a row names its contact or query in `description` only. Rows
+ * older than 30 days are deleted.
  */
 export const aiInvocations = sqliteTable("ai_invocations", {
   id: text("id").primaryKey(),
@@ -974,12 +867,10 @@ export const aiInvocations = sqliteTable("ai_invocations", {
 });
 
 /**
- * search_index_queue — Durable queue for semantic search vector indexing.
- *
- * Persists pending and failed indexing tasks across server restarts and edits.
- * When contacts are edited, outdated vectors are removed and the contact is queued
- * here. Background drain processes local models automatically with retry, while
- * provider-backed refreshes remain pending until explicitly triggered by the user.
+ * search_index_queue: contacts waiting for their search vectors, durable across
+ * restarts. An edit removes the old vectors and queues the contact. Local
+ * models drain it in the background with retries. A provider-backed refresh
+ * waits until a person starts it.
  */
 export const searchIndexQueue = sqliteTable("search_index_queue", {
   contactId: text("contactId").primaryKey(),
@@ -1076,10 +967,8 @@ export const importRows = sqliteTable(
 );
 
 /**
- * score_snapshots — Weekly snapshots of relationship scores.
- *
- * Populated on boot and during scoring recomputation.
- * Keyed by (contactId, weekStart). Retained for 26 weeks.
+ * score_snapshots: weekly relationship scores, keyed by (contactId, weekStart)
+ * and kept for 26 weeks.
  */
 export const scoreSnapshots = sqliteTable(
   "score_snapshots",
@@ -1102,10 +991,8 @@ export const scoreSnapshots = sqliteTable(
 );
 
 /**
- * search_history — Persistent search queries per owner and mode.
- *
- * One row per distinct question per mode. Stores query snapshot,
- * pinned state, and tracks run count and last run timestamp.
+ * search_history: one row per distinct question per owner and mode, with its
+ * snapshot, pinned state, run count and last run.
  */
 export const searchHistory = sqliteTable(
   "search_history",
@@ -1317,19 +1204,15 @@ export const geocodeCache = sqliteTable("geocode_cache", {
   displayName: text("displayName"),
 });
 
-// =============================================================================
 // The migration ledger
-// =============================================================================
 
 /**
- * schema_migrations — one row per applied migration (`kind = 'migration'`,
- * such as `0001_baseline`), and one per derived structure with the version
- * it is built at (`kind = 'index'`, such as `contacts_fts`). Written by
- * server/db/runner.ts and server/db/indexes.ts.
- *
- * Not here on purpose: `__drizzle_migrations`, which only the baseline
- * migration writes, the FTS5 and vec0 virtual tables, and the shadow tables
- * those create.
+ * schema_migrations: one row per applied migration (`kind = 'migration'`, such
+ * as `0001_baseline`), and one per derived structure with the version it is
+ * built at (`kind = 'index'`, such as `contacts_fts`). Written by
+ * server/db/runner.ts and server/db/indexes.ts. Not here on purpose:
+ * `__drizzle_migrations`, the FTS5 and vec0 virtual tables, and their shadow
+ * tables.
  */
 export const schemaMigrations = sqliteTable("schema_migrations", {
   id: text("id").primaryKey(),
@@ -1340,9 +1223,7 @@ export const schemaMigrations = sqliteTable("schema_migrations", {
     .default(sql`(CURRENT_TIMESTAMP)`),
 });
 
-// =============================================================================
 // Events and jobs (migration 0002_events_and_jobs)
-// =============================================================================
 
 /**
  * events — what a write changed, recorded in the write's own transaction by

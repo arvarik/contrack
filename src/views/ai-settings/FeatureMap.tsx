@@ -1,32 +1,11 @@
 /**
- * FeatureMap: "What each feature uses": every AI feature, whether it works
- * now, and what it runs on.
+ * "What each feature uses": every AI feature, whether it works now, and what
+ * it runs on. Models are chosen by role, but people think by feature. It reads
+ * the one feature table (`lib/aiFeatures`).
  *
- * ```
- * Ask Contrack                                                    READY
- * Answers questions about your network
- * Embedding model: Built-in · Reranker: Built-in · Fast model: Google Gemini
- *
- * Contact research                                              LIMITED
- * Finds public facts about a contact on the web
- * Web search: SearXNG · Strong model: Google Gemini · Fast model: …
- * SearXNG needs a SearXNG address, so research searches with Google Gemini
- * ```
- *
- * Models are chosen by role, and people think by feature, so this list
- * answers the feature's questions: does it work, why not, and what reads my
- * data. It reads the one feature table (`lib/aiFeatures`).
- *
- * - `scope="instance"` on Administration → AI: the instance's view, and
- *   each part's name links to the control that changes it.
- * - `scope="account"` on Privacy and AI: the same list for this account,
- *   with its own AI switch and engine, and no links: a member cannot change
- *   them, and an admin has the AI page.
- *
- * With no provider at all, the list is the AI page's empty state: one line
- * that says only local features work, and the way to add a key.
- *
- * @module views/ai-settings/FeatureMap
+ * - `scope="instance"` (Administration → AI): each part links to its control.
+ * - `scope="account"` (Privacy and AI): this account's AI switch and engine,
+ *   and no links. A member cannot change them, and an admin has the AI page.
  */
 import { Link } from "react-router-dom";
 import { useAISettings } from "../../api/aiSettings";
@@ -131,7 +110,7 @@ export function FeatureMap({ scope }: { scope: "instance" | "account" }) {
                       </span>
                     )}
                     {links ? (
-                      // Underlined, so the link does not rely on its colour.
+                      // Underlined, so the link does not rely on its color.
                       <Link
                         to={`#${ROLE_ANCHORS[part.role]}`}
                         className={cn(

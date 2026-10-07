@@ -1,19 +1,8 @@
-/**
- * API client for password resets and magic link sign-in.
- *
- * Like other unauthenticated endpoints outside the gate, these use `authFetch`
- * to communicate directly with `/api/auth/*`.
- *
- * @module api/authLinks
- */
+/** Password resets and magic link sign-in, outside the gate (`authFetch`). */
 
 import { authFetch, type AccountUser } from "./auth";
 
-/**
- * Request a password reset email.
- *
- * Always succeeds (202 Accepted) even if the address is unknown, preventing enumeration.
- */
+/** Asks for a reset email. Always 202, even for an unknown address. */
 export async function requestPasswordReset(email: string): Promise<void> {
   await authFetch<Record<string, never>>("/password-reset/request", {
     method: "POST",
@@ -21,9 +10,7 @@ export async function requestPasswordReset(email: string): Promise<void> {
   });
 }
 
-/**
- * Complete a password reset with a verified token and new password.
- */
+/** Completes a password reset with the token and a new password. */
 export async function completePasswordReset(input: {
   token: string;
   password: string;
@@ -34,11 +21,7 @@ export async function completePasswordReset(input: {
   });
 }
 
-/**
- * Request a magic link sign-in email.
- *
- * Throws ApiError with code MAGIC_LINK_OFF if magic links are disabled.
- */
+/** Asks for a sign-in link. Throws `MAGIC_LINK_OFF` when they are off. */
 export async function requestMagicLink(email: string): Promise<void> {
   await authFetch<Record<string, never>>("/magic-link/request", {
     method: "POST",
@@ -46,9 +29,7 @@ export async function requestMagicLink(email: string): Promise<void> {
   });
 }
 
-/**
- * Complete magic link sign-in with a verified token.
- */
+/** Completes a magic link sign-in with its token. */
 export async function completeMagicLink(input: {
   token: string;
   remember?: boolean;

@@ -1,10 +1,6 @@
-// =============================================================================
-// Avatar URLs — the same-origin address of a generated avatar
-// =============================================================================
-// Kept apart from services/avatarService, which loads the DiceBear artwork.
-// Building or reading a URL needs none of it, and the database's boot
-// migration builds URLs before anything renders.
-// =============================================================================
+// The same-origin address of a generated avatar, apart from
+// services/avatarService, which loads the DiceBear artwork: a URL needs none of
+// it, and the database's boot migration builds URLs before anything renders.
 
 import { lookFromPronouns, type AvatarLook } from "./smartAvatar.ts";
 import type { AvatarStyle, AvatarTheme } from "../services/avatarService.ts";
@@ -16,7 +12,7 @@ const LOOK_PARAM: Record<AvatarLook, string> = {
   neutral: "n",
 };
 
-/** Read a `look` query value. Anything unrecognised means "decide from the seed". */
+/** Read a `look` query value. Anything unrecognized means "decide from the seed". */
 export function parseAvatarLook(value: unknown): AvatarLook | undefined {
   if (typeof value !== "string") return undefined;
   return (Object.keys(LOOK_PARAM) as AvatarLook[]).find(
@@ -46,11 +42,10 @@ export function buildAvatarUrl(
 }
 
 /**
- * The avatar a contact gets when nobody chose one.
- *
- * Pronouns go into the URL, because the route only sees the seed. A name
- * does not: the route reads it at render time, so a better name table
- * reaches every existing contact without rewriting a row.
+ * The avatar a contact gets when nobody chose one. Pronouns go into the URL,
+ * because the route sees only the seed. The name does not: the route reads it
+ * at render time, so a better name table reaches every contact without
+ * rewriting a row.
  */
 export function defaultAvatarUrl(
   name: string,
@@ -61,12 +56,10 @@ export function defaultAvatarUrl(
 }
 
 /**
- * True when `url` is the default avatar for a contact called `name`, with
- * any pronoun look.
- *
- * A face from the picker has `bg=1` and one of the picker's own seeds, and a
- * photo is an upload path, so neither matches. This is what lets a rename or
- * a pronoun edit redraw the default face without replacing a choice.
+ * True when `url` is the default avatar for a contact called `name`, with any
+ * pronoun look. A face from the picker has `bg=1` and one of the picker's own
+ * seeds, and a photo is an upload path, so neither matches; a rename or a
+ * pronoun edit can redraw the default face without replacing a choice.
  */
 export function isDefaultAvatarFor(
   url: string | null | undefined,

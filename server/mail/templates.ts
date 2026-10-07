@@ -1,8 +1,6 @@
 /**
- * server/mail/templates.ts — email templates for Contrack.
- *
- * Renders invitation, test, password reset, and magic link emails
- * in plain text and minimal HTML, using the instance name as the sender.
+ * Email templates: invitation, test, password reset and magic link, in plain
+ * text and minimal HTML, with the instance name as the sender.
  */
 
 function escapeHtml(str: string): string {
@@ -20,9 +18,7 @@ export interface RenderedEmail {
   html: string;
 }
 
-/**
- * Format the sender From header, setting the display name to the instance name.
- */
+/** The From header, with the instance name as the display name. */
 export function formatSender(
   fromAddress: string,
   instanceName?: string,
@@ -34,9 +30,7 @@ export function formatSender(
   return fromAddress;
 }
 
-/**
- * Invitation email template.
- */
+/** The invitation email. */
 export function renderInvitationEmail(options: {
   instanceName?: string;
   link: string;
@@ -73,9 +67,7 @@ export function renderInvitationEmail(options: {
   return { subject, text, html };
 }
 
-/**
- * Test message email template.
- */
+/** The test email. */
 export function renderTestEmail(options: {
   instanceName?: string;
 }): RenderedEmail {
@@ -99,11 +91,7 @@ export function renderTestEmail(options: {
   return { subject, text, html };
 }
 
-// ─── Future templates (Prompt 3: Reset and sign-in links) ───────────────────
-
-/**
- * Password reset email template (implemented in Prompt 3).
- */
+/** The password reset email. */
 export function renderPasswordResetEmail(options: {
   instanceName?: string;
   link: string;
@@ -146,9 +134,7 @@ export function renderPasswordResetEmail(options: {
   return { subject, text, html };
 }
 
-/**
- * Magic link sign-in email template (implemented in Prompt 3).
- */
+/** The magic link sign-in email. */
 export function renderMagicLinkEmail(options: {
   instanceName?: string;
   link: string;

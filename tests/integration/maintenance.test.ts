@@ -1,21 +1,13 @@
-// =============================================================================
-// Integration Tests — the daily maintenance sweep
-// =============================================================================
-// Five tables accumulate rows that no request removes. Before Phase 3 there
-// was no daily job at all: `cleanupOldInvocations` ran once at boot and the
-// session sweep was boot-only, so an instance left running for a year swept
-// twice.
+// Integration: the daily maintenance sweep.
+// Five tables accumulate rows that no request removes.
 //
-// The rows are aged by writing an old timestamp rather than by moving the
-// clock. Every cut-off is `datetime('now', '-N days')`, evaluated by SQLite,
-// so a fake clock in the test process would not reach it. An aged row and an
-// advanced clock are the same comparison from the statement's point of view,
-// and this way the assertion is about the SQL that ships.
+// Rows are aged by writing an old timestamp, not by moving the clock: every
+// cut-off is `datetime('now', '-N days')` in SQLite, which a fake clock in the
+// test process does not reach. For the statement the two are the same
+// comparison, so the assertion is about the SQL that ships.
 //
-// The schedule is tested through the job runner, with the clock passed to
-// the poll, because "it runs daily" is a claim about scheduling that no
-// amount of calling the function proves.
-// =============================================================================
+// The schedule is tested through the job runner, with the clock passed to the
+// poll, because "it runs daily" is a claim about scheduling.
 
 import {
   describe,
@@ -390,7 +382,7 @@ describe("the daily sweep", () => {
     // `createSession` writes `new Date(...).toISOString()`, not
     // `CURRENT_TIMESTAMP`. SQLite compares TEXT byte by byte, and the two
     // formats differ first at the `T`, which sorts after a space, so a
-    // session that expired an hour ago looked as though it had not. Every
+    // session that expired an hour ago could look as though it had not. Every
     // other fixture here is seeded in SQLite's format and cannot see that.
     insertSession(
       "iso-expired",

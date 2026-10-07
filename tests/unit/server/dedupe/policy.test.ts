@@ -1,10 +1,7 @@
-// =============================================================================
 // The merge policy, one rule at a time
-// =============================================================================
 // `tests/eval/dedupe.eval.test.ts` measures what the policy does to a whole
 // corpus. This checks each rule on its own, with the two contacts written out,
 // so a failure names the rule rather than moving a number.
-// =============================================================================
 
 import { describe, it, expect } from "vitest";
 import {

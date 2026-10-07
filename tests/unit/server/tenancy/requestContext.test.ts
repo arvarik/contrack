@@ -1,15 +1,11 @@
-// =============================================================================
-// Unit Tests — request context (AsyncLocalStorage)
-// =============================================================================
-// These tests pin the two facts Phase 2 depends on.
+// Unit: the request context (AsyncLocalStorage).
 //
 // 1. The store survives every async boundary the request path uses, so an
 //    insert deep in a service can still read who is asking.
 // 2. An EventEmitter listener runs in the context of whoever calls emit(),
-//    NOT the context that subscribed. Every SSE and NDJSON handler therefore
-//    captures its Scope in the closure before subscribing. This test is the
-//    reason that rule exists, so it asserts the surprising behavior directly.
-// =============================================================================
+//    not the one that subscribed. So every SSE and NDJSON handler captures
+//    its Scope in the closure before subscribing, and this asserts the
+//    surprising behavior directly.
 
 import { describe, it, expect } from "vitest";
 import { EventEmitter } from "node:events";

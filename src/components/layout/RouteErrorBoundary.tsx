@@ -1,14 +1,7 @@
 /**
- * RouteErrorBoundary — View-level error boundary for individual routes.
- *
- * Unlike the root ErrorBoundary (which shows a full-page crash screen),
- * this component catches errors within a single route and renders an
- * inline recovery UI. The rest of the app (sidebar, nav) remains functional.
- *
- * Usage:
- *   <RouteErrorBoundary>
- *     <SomeView />
- *   </RouteErrorBoundary>
+ * Catches an error inside one route and shows a recovery in its place, so
+ * the sidebar and the nav keep working. The root ErrorBoundary is the
+ * full-page one.
  */
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertCircle, CloudOff, RefreshCw, RotateCcw } from "lucide-react";
@@ -27,14 +20,9 @@ interface State {
 }
 
 /**
- * True when the boundary caught a failed `React.lazy` chunk download rather
- * than a genuine crash in the view.
- *
- * This matters because the two need opposite messages. Every secondary route
- * is code-split, so navigating to one the user has not opened yet while the
- * server is restarting throws here — and reporting "this view crashed
- * unexpectedly" for what is really a network blip sends the user hunting for a
- * bug that does not exist. Browsers word it differently, hence the alternatives.
+ * True for a failed `React.lazy` chunk download, not a crash in the view: a
+ * network blip needs a different message. Browsers word it differently,
+ * hence the alternatives.
  */
 function isChunkLoadError(error?: Error): boolean {
   if (!error) return false;
@@ -70,10 +58,9 @@ export class RouteErrorBoundary extends Component<Props, State> {
   };
 
   /**
-   * A failed chunk cannot be re-imported: the module registry caches the
-   * rejection, so simply clearing the boundary re-throws immediately. A full
-   * reload is the only reliable recovery — and it is also what the user wants
-   * after a deploy, since it picks up the new bundle.
+   * A full reload: the module registry caches a failed chunk's rejection,
+   * so clearing the boundary would throw again. It also picks up a new
+   * deploy.
    */
   private handleReload = () => {
     window.location.reload();
@@ -106,11 +93,7 @@ export class RouteErrorBoundary extends Component<Props, State> {
                 ? "Contrack could not download the rest of the app. The server may be restarting. Your data is safe"
                 : "This page hit an error. The rest of Contrack still works, so retry or go to another page"}
             </p>
-            {/*
-              The raw message helps on a real crash and only confuses on a
-              network blip, where it says "Failed to fetch dynamically imported
-              module" — true, and meaningless to the person reading it.
-            */}
+            {/* The raw message helps on a crash, not on a network blip. */}
             {!isChunk && this.state.error && (
               <div className="bg-surface-container-highest p-3 rounded-xl text-left overflow-x-auto text-xs font-mono text-error">
                 {this.state.error.message}

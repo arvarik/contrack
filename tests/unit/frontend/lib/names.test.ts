@@ -1,13 +1,7 @@
 // @vitest-environment jsdom
-// =============================================================================
-// One name per destination
-// =============================================================================
-// The same page used to carry a different name on each surface: "Ask AI" in
-// the tab bar, "AI Search" in the sidebar, "Ask Contrack" on the page. Every
-// surface now reads its name from `lib/names`. These tests hold the surfaces
-// to that module, so a label typed in by hand shows up here and not in a
-// support thread.
-// =============================================================================
+// One name per destination. Every surface reads its name from `lib/names`, and
+// these tests hold the surfaces to that module, so a label typed in by hand
+// fails here.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createElement } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
@@ -42,7 +36,7 @@ afterEach(() => {
   cleanup();
 });
 
-/** Names the app used before 2.0. None of them may come back. */
+/** Retired names. None of them may come back. */
 const OLD_NAMES = [
   "Relationship Pulse",
   "AI Search",

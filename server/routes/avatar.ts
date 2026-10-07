@@ -1,20 +1,12 @@
-// =============================================================================
-// Routes — Avatar rendering
-// =============================================================================
-// Mounted at /api/avatar. Replaces the `api.dicebear.com` URLs that used to be
-// embedded in every contact row, so no contact name leaves the machine.
-//
-// Deliberately stores nothing. The response is a pure function of (style, seed,
-// bg, theme, look) plus the presets in avatarService, so HTTP caching is the
-// whole cache:
-//
-//   - `max-age` keeps the browser from asking again for a day, which is what
-//     makes a list of 200 avatars cheap after the first paint.
-//   - Express's ETag then makes the revalidation a 304 with no body.
-//   - Because the ETag is derived from the bytes, changing an expression preset
-//     invalidates every avatar automatically. A URL-embedded version would have
-//     meant a database migration every time we adjusted an eyebrow.
-// =============================================================================
+// Avatar rendering at /api/avatar, so no contact name leaves the machine for a
+// third-party avatar service. It stores nothing: the response is a pure
+// function of (style, seed, bg, theme, look) and avatarService's presets, so
+// HTTP caching is the whole cache:
+//   - `max-age` spares the browser a day of requests, so a list of 200 avatars
+//     is cheap after the first paint.
+//   - Express's ETag makes a revalidation a 304 with no body.
+//   - The ETag comes from the bytes, so changing a preset invalidates every
+//     avatar with no version in the URL.
 
 import { Router } from "express";
 import { asyncHandler } from "../utils/asyncHandler.ts";
@@ -53,13 +45,13 @@ router.get(
       throw new ValidationError("An avatar needs a seed");
     }
 
-    // An absent or unrecognised `theme` is not an error: the monogram then
+    // An absent or unrecognized `theme` is not an error: the monogram then
     // carries its own `prefers-color-scheme` rule and answers for both
     // palettes, which is what the default `system` theme wants.
     const theme = isAvatarTheme(req.query.theme) ? req.query.theme : undefined;
 
     // `look` is how a contact's pronouns reach the face (`f`, `m` or `n`).
-    // Absent or unrecognised, the avatar service reads the look from the seed.
+    // Absent or unrecognized, the avatar service reads the look from the seed.
     const look = parseAvatarLook(req.query.look);
 
     const svg = renderAvatar({

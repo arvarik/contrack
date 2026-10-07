@@ -1,44 +1,17 @@
 /**
- * DuplicateQueue: the possible duplicates waiting for a person, the one
- * place a person decides about the pairs Contrack is not sure of.
+ * The possible duplicates waiting for a decision.
  *
- * ```
- * VERY LIKELY (2)                [Merge all 2]  ┌ Ada Quill and A. Quill ──────────────┐
- * ┃ Ada Quill · Northwind                      │ ✉ Same email address ada@…           │
- * ┃ A. Quill                                    │ CONTACT TO KEEP  (●) Ada  ( ) A.     │
- * ┃ ✉ Same email address                        │ Name •   Ada Quill   A̶.̶ ̶Q̶u̶i̶l̶l̶          │
- *   Tobias Wren · Contoso                      │ Same: email, company  [Show all]     │
- * CHECK CAREFULLY (1)                          │ AFTER THE MERGE …                    │
- *   Ada Twin · Ben Twin                        │          [Keep separate H] [Merge L] │
- *   ☏ Same phone number                        └──────────────────────────────────────┘
- *   ⚠ First names differ: Ada and Ben
- * ```
+ * From `lg` the list and the open group's comparison sit side by side. Below
+ * `lg` each row has its own buttons and the comparison opens in a sheet.
  *
- * From `lg` the list and the open group sit side by side, the way mail and
- * the Network page do: the keys move through the list and the comparison
- * follows. Below `lg` the list is the page, each row carries its two
- * buttons, and the comparison opens in a sheet.
+ * Three parts, easy decisions first: Very likely, Likely, Check carefully.
+ * Only Very likely offers Merge all: a pair with a caveat never merges in a
+ * batch. Every decision has an Undo, and Z undoes the last one. After a
+ * decision, focus goes to the group that took its place.
  *
- * The list is in three parts, the easy decisions first: Very likely, Likely
- * and Check carefully. The level is said once, in the part's heading, and
- * never as a percentage. Only Very likely offers Merge all, because a pair
- * with a caveat must never merge with a batch.
- *
- * Every decision says what it did, with Undo, and Z undoes the last one.
- * The Undo after a person's own merge puts the pair back in the list,
- * because it takes back a slip. Focus then goes to the group that took the
- * decided one's place, so the keys go on from there.
- *
- * Keys, with the single-key switch for the letters: J and K, or the down
- * and up arrows, move between groups, L or → merges the group into the
- * contact chosen in its comparison, H or ← keeps it separate, and Z undoes.
- * A Check carefully group never merges from one key: the first L opens its
- * comparison and puts focus on Merge, which names the caution, and a second
- * L or Enter merges. Below `lg` its row offers Compare, not Merge. A key
- * another control used first, an arrow in the radio group of the contact to
- * keep, is that control's. A letter counts with Caps Lock on.
- *
- * @module views/dedupe/components/DuplicateQueue
+ * Keys: J/K or ↓/↑ move, L or → merges into the chosen keeper, H or ← keeps
+ * separate, Z undoes. A Check carefully group never merges from one key: the
+ * first L opens its comparison with focus on Merge, and a second L merges.
  */
 import {
   useCallback,
@@ -106,8 +79,8 @@ function hint(contact: ReviewContact): string | null {
 }
 
 /**
- * Put focus on the open group's Merge button once it is drawn: in the pane
- * at once, in a sheet after the sheet has placed its own first focus.
+ * Focus the open group's Merge button once it is drawn. In a sheet this
+ * waits until the sheet has placed its own first focus.
  */
 function focusMergeSoon() {
   let frames = 0;
@@ -121,7 +94,6 @@ function focusMergeSoon() {
   requestAnimationFrame(attempt);
 }
 
-/** An action Z or the message's Undo can take back. */
 interface LastAction {
   run: () => Promise<void>;
 }
@@ -144,7 +116,7 @@ export const DuplicateQueue = () => {
 
   const groups = useMemo(() => buildGroups(suggestions), [suggestions]);
 
-  /** The contact each group keeps, where a person chose one. */
+  /** The keeper a person chose, per group. */
   const [keepers, setKeepers] = useState<Record<string, string>>({});
   const keeperOf = useCallback(
     (group: DuplicateGroup) => {
@@ -157,9 +129,7 @@ export const DuplicateQueue = () => {
   );
 
   const [busy, setBusy] = useState<Set<string>>(new Set());
-  /** The group the keys and the open pane act on. */
   const [currentKey, setCurrentKey] = useState<string | null>(null);
-  /** Below `lg`, the comparison opens in a sheet. */
   const [sheetOpen, setSheetOpen] = useState(false);
   /** A Check carefully group the first L opened: the next L merges it. */
   const [armedKey, setArmedKey] = useState<string | null>(null);
@@ -172,8 +142,7 @@ export const DuplicateQueue = () => {
   const index = (() => {
     const exact = groups.findIndex((g) => g.key === currentKey);
     if (exact >= 0 || currentKey === null) return exact;
-    // The open group lost a member, or gained one: it is now the group that
-    // shares the most contacts with it.
+    // The open group changed members: take the group that shares the most.
     const was = new Set(currentKey.split(","));
     let best = -1;
     let most = 0;
@@ -202,7 +171,6 @@ export const DuplicateQueue = () => {
     [groups],
   );
 
-  /** Open a Check carefully group's comparison, with focus on its Merge. */
   const openCareful = useCallback(
     (group: DuplicateGroup) => {
       setCurrentKey(group.key);
@@ -213,9 +181,8 @@ export const DuplicateQueue = () => {
     [isWide],
   );
 
-  // A decided group leaves the list when the list reads the server again.
-  // The group now at its place takes over, and focus with it, so the keys
-  // go on from there. With none left, focus goes to the empty state.
+  // When a decided group leaves on refetch, the group now at its place takes
+  // focus. With none left, the empty state does.
   useLayoutEffect(() => {
     if (nextAt.current === null) return;
     const at = Math.min(nextAt.current, groups.length - 1);
@@ -237,7 +204,7 @@ export const DuplicateQueue = () => {
       return next;
     });
 
-  /** Say what happened, with the one Undo, and let Z take it back too. */
+  /** Toast what happened, with Undo, and let Z take it back too. */
   const announce = useCallback(
     (
       kind: "success" | "warning" | "message",
@@ -301,8 +268,7 @@ export const DuplicateQueue = () => {
       try {
         const result = await mergeOne(group);
         setSheetOpen(false);
-        // Focus goes on only when the group leaves: a merge that did nothing
-        // leaves it in place.
+        // A merge that did nothing leaves the group, and focus, in place.
         if (result.merged > 0) nextAt.current = at;
         const keeper = group.contacts.find((c) => c.id === result.keeperId)!;
         const undo = () =>
@@ -386,8 +352,8 @@ export const DuplicateQueue = () => {
 
   const handleRemove = useCallback(
     (group: DuplicateGroup, contact: ReviewContact) => {
-      // The group comes back under its other members' key, and keeps the
-      // contact a person chose there. The open pane finds it by overlap.
+      // The group comes back under its other members' key: carry the chosen
+      // keeper over. The open pane finds it by overlap.
       const rest = group.contacts
         .map((c) => c.id)
         .filter((id) => id !== contact.id)
@@ -406,7 +372,6 @@ export const DuplicateQueue = () => {
     [keepApart, keepers],
   );
 
-  /** Merge every group of one part, each into the contact it keeps. */
   const handleMergeAll = async (part: DuplicateGroup[]) => {
     const keys = part.map((g) => g.key);
     setBusyFor(keys, true);
@@ -450,24 +415,20 @@ export const DuplicateQueue = () => {
     }
   };
 
-  // ─── Keys ────────────────────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      // A key another control used first is its own (an arrow that moved
-      // the radio of the contact to keep must not also merge the group), and
-      // so is a key in a field, a dialog or a menu.
+      // Skips a key another control used first, such as an arrow that moved
+      // the keeper radio, and keys in a field, a dialog or a menu.
       if (isPageKeyTaken(e)) return;
       const target = e.target instanceof Element ? e.target : null;
-      // The arrows move the contact to keep. The letters still decide, so a
-      // person who just chose the contact presses L from where they are.
+      // In the keeper radio group the arrows are its own, and letters decide.
       if (target?.closest('[role="radiogroup"]') && e.key.startsWith("Arrow")) {
         return;
       }
       // Caps Lock makes "L" of l.
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       if (!singleKeys && /^[hjklz]$/.test(key)) return;
-      // A decision is one press. A held key repeats, and a held L merged
-      // each group in turn as focus moved on to it. Moving may repeat.
+      // A decision ignores key repeat, or a held L merges group after group.
       if (e.repeat && /^(l|h|z|ArrowRight|ArrowLeft)$/.test(key)) return;
 
       if (key === "z") {
@@ -668,10 +629,6 @@ export const DuplicateQueue = () => {
   );
 };
 
-// =============================================================================
-// DuplicateRow — one pair or group in the list
-// =============================================================================
-
 interface DuplicateRowProps {
   group: DuplicateGroup;
   buttonRef: (el: HTMLButtonElement | null) => void;
@@ -683,7 +640,6 @@ interface DuplicateRowProps {
   onKeepSeparate: () => void;
 }
 
-/** The faces of a group, a few at most, overlapping. */
 function Faces({ contacts }: { contacts: ReviewContact[] }) {
   return (
     <span className="flex -space-x-2 shrink-0" aria-hidden="true">
@@ -699,7 +655,6 @@ function Faces({ contacts }: { contacts: ReviewContact[] }) {
   );
 }
 
-/** One contact of a pair: the face, the name, what tells it apart. */
 function PairSide({ contact }: { contact: ReviewContact }) {
   const where = hint(contact);
   return (
@@ -794,8 +749,7 @@ function DuplicateRow({
           </span>
         ))}
       </button>
-      {/* Below `lg` each row decides on its own. From `lg` the open group's
-          pane holds the buttons. */}
+      {/* From `lg` the open group's pane holds the buttons. */}
       {!isWide && (
         <div className="flex gap-2 px-3 pb-3 sm:px-4 sm:pb-4">
           <button
@@ -807,8 +761,8 @@ function DuplicateRow({
             <X className="w-3.5 h-3.5" aria-hidden="true" />
             Keep separate
           </button>
-          {/* A pair to check carefully opens its comparison first: its
-              Merge is in there, under the differences. */}
+          {/* A careful pair opens its comparison first, where Merge sits
+              under the differences. */}
           <button
             type="button"
             onClick={onMerge}

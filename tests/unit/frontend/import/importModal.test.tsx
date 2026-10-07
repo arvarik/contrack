@@ -1,18 +1,12 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The import modal shows success when the server says so, and not before
-// =============================================================================
-// The modal read the import stream to its end and showed whatever it had as
-// the result. A connection that dropped part way showed "Import complete"
-// over an import the server was still writing, or had never received. And
-// the natural response, choosing the file again, made a second copy of every
-// contact, because nothing tied the two requests together.
+// The import modal shows success when the server says so, and not before. A
+// dropped connection must not show "Import complete" over an import the
+// server is still writing, and choosing the file again must not copy every
+// contact twice.
 //
-// Every request here carries the id the browser made. A dropped stream polls
-// the record. A failed import is tried again under the same id. Rows the
-// server could not write are listed and retried. The server's word is the
-// only thing that turns the modal green.
-// =============================================================================
+// Every request carries the id the browser made. A dropped stream polls the
+// record. A failed import is tried again under the same id. Rows the server
+// could not write are listed and retried.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import React from "react";
 import {
@@ -41,10 +35,8 @@ vi.mock("../../../../src/components/auth/AuthGate", () => ({
 
 /**
  * Animations are stubbed out. `AnimatePresence mode="wait"` holds the next
- * card back until the previous one has animated off, which is a quarter of
- * a second of real time per phase change and much longer when the whole
- * unit project runs at once. The states here are what is under test, not the
- * crossfade between them.
+ * card back until the previous one has animated off, which is slow under a
+ * full unit run. The states are under test, not the crossfade.
  */
 vi.mock("motion/react", async () => {
   const ReactModule = await import("react");
@@ -149,12 +141,10 @@ type Answer =
   | { kind: "network" };
 
 /**
- * A fetch that serves the import routes.
- *
- * Every call is recorded. The bulk POST answers with whatever `onImport`
- * returns. Status polls shift answers off a queue and repeat the last one
- * once it is empty, so a test can say "running, running, complete" and let
- * the modal poll as often as it likes.
+ * A fetch that serves the import routes. Every call is recorded. The bulk
+ * POST answers with whatever `onImport` returns. Status polls shift answers
+ * off a queue and repeat the last one, so a test can say "running, running,
+ * complete" and let the modal poll as often as it likes.
  */
 function stubServer(options: {
   onImport: (call: Call) => Response | Promise<Response>;

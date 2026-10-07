@@ -1,6 +1,4 @@
-// =============================================================================
 // Integration: interactions, @mention linking, action items, lists
-// =============================================================================
 
 import { describe, it, expect } from "vitest";
 import request from "supertest";

@@ -5,9 +5,8 @@ import { AppError } from "./AppError.ts";
 const HOST_SHAPE = /^(?:\[[0-9a-fA-F:]+\]|[A-Za-z0-9.\-_]+)(?::\d{1,5})?$/;
 
 /**
- * Validate `PUBLIC_URL` at boot.
- * Must be a valid URL with http or https protocol and no path component.
- * Returns the validated origin or null if not configured.
+ * Validate `PUBLIC_URL` at boot: an http or https URL with no path. Returns the
+ * origin, or null when it is not set.
  */
 export function validatePublicUrl(raw?: string | null): string | null {
   if (!raw || !raw.trim()) return null;
@@ -43,17 +42,12 @@ export function validatePublicUrl(raw?: string | null): string | null {
 }
 
 /**
- * Return the public origin for the current request.
- *
- * If `PUBLIC_URL` is set, its origin is returned. Otherwise the origin is
- * derived from `req.host` and `req.protocol`, which read X-Forwarded-Host and
- * X-Forwarded-Proto only from a hop that TRUST_PROXY_HOPS trusts. This used to
- * read X-Forwarded-Host itself, from anybody, so a client could name the host
- * of a link the server built.
- *
- * Fine for an answer that goes back to the same caller (a passkey ceremony, an
- * invitation link shown to the admin who asked for it). A link that goes out
- * by mail uses `mailLinkOrigin` instead.
+ * The public origin for this request: `PUBLIC_URL`'s origin when it is set,
+ * else `req.host` and `req.protocol`, which read X-Forwarded-Host and
+ * X-Forwarded-Proto only from a hop TRUST_PROXY_HOPS trusts, so a client cannot
+ * name the host of a link the server builds. Fine for an answer to the same
+ * caller (a passkey ceremony, an invitation link shown to its admin). A mailed
+ * link uses `mailLinkOrigin`.
  */
 export function publicOrigin(req: Request): string {
   if (process.env.PUBLIC_URL) {
@@ -66,11 +60,9 @@ export function publicOrigin(req: Request): string {
 }
 
 /**
- * True when an `Origin` header names this server: the host the request was
- * sent to, or `PUBLIC_URL`.
- *
- * The host is compared without the scheme. Behind a proxy that does not say
- * the request was HTTPS, the page's `https://` origin still names this host.
+ * True when an `Origin` header names this server: the host the request was sent
+ * to, or `PUBLIC_URL`. The host is compared without the scheme, so behind a
+ * proxy that does not report HTTPS the page's `https://` origin still matches.
  */
 export function isOwnOrigin(req: Request, origin: string): boolean {
   let host: string;
@@ -88,24 +80,20 @@ export function isOwnOrigin(req: Request, origin: string): boolean {
 }
 
 /**
- * The origin of a link the server sends by mail, or null when `PUBLIC_URL` is
- * not set.
- *
- * A mailed link reaches somebody other than the caller, so it must never be
- * built from the request. A password-reset request with a forged Host header
- * would otherwise mail the real account holder a genuine reset token inside a
- * link to the attacker's server, and one click would hand the token over.
- * With no `PUBLIC_URL`, the server sends no link at all.
+ * The origin of a link the server mails, or null when `PUBLIC_URL` is not set.
+ * A mailed link reaches somebody other than the caller, so it is never built
+ * from the request: a password-reset request with a forged Host header would
+ * otherwise mail the account holder a real reset token inside a link to the
+ * attacker's server. With no `PUBLIC_URL`, no link is sent.
  */
 export function mailLinkOrigin(): string | null {
   return validatePublicUrl(process.env.PUBLIC_URL);
 }
 
 /**
- * Extract the WebAuthn relying-party ID (rpID) from the public origin.
- *
- * An IP address (IPv4 or IPv6) is not a valid rpID under the WebAuthn spec
- * and throws `AppError(400, "PASSKEY_UNSUPPORTED_ORIGIN")`.
+ * The WebAuthn relying-party ID (rpID) of the public origin. An IP address is
+ * not a valid rpID under the WebAuthn spec, and throws `AppError(400,
+ * "PASSKEY_UNSUPPORTED_ORIGIN")`.
  */
 export function getRpIdFromOrigin(origin: string): string {
   let hostname: string;

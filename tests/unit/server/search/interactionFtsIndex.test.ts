@@ -1,6 +1,4 @@
-// =============================================================================
-// Unit Tests — the note index triggers, and the index on a real connection
-// =============================================================================
+// Unit: the note index triggers, and the index on a real connection.
 // Two of the contact index's properties, pinned the same way: every delete
 // is by rowid, and every insert carries the owner token. Then two things
 // only a connection shows: an install fills in the rows the index is
@@ -8,7 +6,6 @@
 // tests/integration/search.interactions.test.ts pins the rest on the real
 // schema: the indexed text, the stemming, the owner fill, and the edit,
 // delete and cascade paths.
-// =============================================================================
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import Database from "better-sqlite3";

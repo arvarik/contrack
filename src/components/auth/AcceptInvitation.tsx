@@ -1,15 +1,8 @@
 /**
- * AcceptInvitation — the screen an invitation link lands on.
- *
- * The link is `/join?token=<secret>`. The gate reads the secret, strips it
- * from the address bar, and renders this instead of the app; `/join` is not a
- * route in the router, and never becomes one, because the gate answers it
- * before the router exists.
- *
- * The secret is single-use and lives in this component's props until the form
- * is submitted. Everything about it is one-shot: a link that has been used,
- * revoked or has expired is gone, and the screen says which, because "that
- * link does not work" leaves somebody retrying a link that never will.
+ * The screen an invitation link (`/join?token=<secret>`) lands on. The gate
+ * reads the secret, strips it from the address bar and renders this before
+ * the router exists, so `/join` is not a route. A used, revoked or expired
+ * link says which, so nobody retries it.
  */
 import React, { useEffect, useState } from "react";
 import { Loader2, MailCheck } from "lucide-react";
@@ -22,10 +15,7 @@ import {
   useAccountForm,
 } from "./accountForm";
 
-/**
- * 404 is a secret the server does not recognise, 410 is one it used to. Both
- * are final: no amount of retrying makes a used link work again.
- */
+/** 404 is an unknown secret, 410 a spent one. Both are final. */
 const isDeadLink = (err: unknown): err is ApiError =>
   err instanceof ApiError && (err.status === 404 || err.status === 410);
 

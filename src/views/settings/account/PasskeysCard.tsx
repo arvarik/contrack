@@ -1,8 +1,4 @@
-/**
- * PasskeysCard — view, add, rename, and remove WebAuthn passkeys in Account settings.
- *
- * @module views/settings/account/PasskeysCard
- */
+/** Lists, adds, renames and removes the account's WebAuthn passkeys. */
 import { useState } from "react";
 import {
   queryOptions,

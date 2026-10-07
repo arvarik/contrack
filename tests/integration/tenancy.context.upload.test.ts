@@ -1,11 +1,8 @@
-// =============================================================================
-// Integration Tests — request context across multer
-// =============================================================================
+// Integration: request context across multer
 // Tests that AsyncLocalStorage request context survives across multer's
 // upload.single() middleware when the multipart body carries both text fields
 // and files. If the handler assertion ever fails, upload handlers must read
 // the scope from req.principal instead of the context.
-// =============================================================================
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import express from "express";
@@ -86,7 +83,7 @@ describe("request context survives multer", () => {
 
     expect(seen.destination).toBe(OWNER);
     expect(seen.filename).toBe(OWNER);
-    // T25: this is the assertion multer issue #1111 predicts might fail.
+    // The assertion multer issue #1111 predicts might fail.
     expect(seen.handler).toBe(OWNER);
   });
 });

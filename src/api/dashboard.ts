@@ -99,7 +99,6 @@ const dashboardQuery = queryOptions({
   queryKey: ["dashboard"],
   queryFn: async ({ signal }): Promise<DashboardPayload> => {
     const res = await apiFetch(`/dashboard${zoneQuery()}`, { signal });
-    if (!res.ok) throw new Error("Failed to fetch dashboard payload");
     return res.json();
   },
   staleTime: STALE_TIMES.dashboard,
@@ -111,7 +110,6 @@ const dashboardActivityQuery = queryOptions({
     const res = await apiFetch(`/dashboard/activity${zoneQuery()}`, {
       signal,
     });
-    if (!res.ok) throw new Error("Failed to fetch dashboard activity");
     return res.json();
   },
   staleTime: STALE_TIMES.dashboard,
@@ -122,13 +120,9 @@ export const useDashboard = () => useQuery(dashboardQuery);
 export const useDashboardActivity = () => useQuery(dashboardActivityQuery);
 
 /**
- * Starts the data Pulse draws first, for a link to Pulse a person points at.
- *
- * Without it, Pulse's data was asked for only once its page had mounted, so
- * the first visit drew the page's card skeleton after its code arrived. Data
- * read a moment ago is not read again (`staleTime`). The daily insight is
- * left out: it can cost an AI call, and a pointer passing over the link is
- * not a reason to make one.
+ * Fetches the data Pulse draws first, when a link to Pulse is pointed at, so
+ * the first visit skips the skeleton. Not the daily insight: it can cost an
+ * AI call.
  */
 export function prefetchPulse(queryClient: QueryClient): void {
   void queryClient.prefetchQuery(dashboardQuery);
@@ -140,7 +134,6 @@ export const useDailyInsight = (options?: { enabled?: boolean }) => {
     queryKey: ["dashboard", "insight"],
     queryFn: async ({ signal }): Promise<DailyInsight | null> => {
       const res = await apiFetch(`/dashboard/insight`, { signal });
-      if (!res.ok) throw new Error("Failed to fetch daily insight");
       return res.json();
     },
     staleTime: 1000 * 60 * 60 * 2, // 2 hours stale time to prevent multi-fetching AI calls
@@ -149,11 +142,8 @@ export const useDailyInsight = (options?: { enabled?: boolean }) => {
 };
 
 /**
- * Fetch CRM intelligence signals for the Cmd+K command palette zero-state.
- *
- * Returns action items due, catch-ups, and ghost alerts — all computed
- * from deterministic SQLite queries (no AI calls). Stale time is 2 minutes so
- * rapid Cmd+K opens don't re-fetch, but the data stays fresh enough to be useful.
+ * The palette's zero state: follow-ups due, catch-ups and ghost alerts, from
+ * plain SQL (no AI). Two minutes stale, so quick reopens do not refetch.
  */
 export const useZeroState = () => {
   return useQuery({
@@ -162,7 +152,6 @@ export const useZeroState = () => {
       const res = await apiFetch(`/command-palette/zero-state${zoneQuery()}`, {
         signal,
       });
-      if (!res.ok) throw new Error("Failed to fetch zero state");
       return res.json();
     },
     staleTime: 1000 * 60 * 2, // 2 minutes

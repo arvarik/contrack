@@ -1,18 +1,9 @@
 /**
- * useRecentContacts — the last N contacts this tab visited, and how many of
- * them the Network sidebar pins.
+ * The last contacts this tab visited, and how many the Network sidebar pins.
  *
- * Two different things, stored two different ways on purpose.
- *
- * The visit list is per tab: it lives in `sessionStorage` and clears when the
- * tab closes, because "recent" that survives a week is not recent. It is keyed
- * by account id, so signing out and in as somebody else does not show their
- * Network a list of ids they cannot open.
- *
- * The limit is a preference, so it lives on the account and follows it to
- * another device. See contexts/PreferencesContext.
- *
- * @module hooks/useRecentContacts
+ * The visit list lives in `sessionStorage`, per tab, because "recent" that
+ * survives a week is not recent. The limit is a preference, so it lives on
+ * the account and follows it to another device (contexts/PreferencesContext).
  */
 import { useState, useCallback } from "react";
 import { usePreferences } from "../contexts/PreferencesContext";
@@ -28,13 +19,8 @@ export const MIN_RECENT_LIMIT = 0;
 export const MAX_RECENT_LIMIT = 10;
 
 /**
- * One key per account.
- *
- * `sessionStorage` is per tab, not per account, so signing out and in as
- * somebody else in the same tab used to hand the new account the previous
- * one's list of contact ids. They resolve to nothing — every read is scoped
- * server-side — so the visible symptom was an empty strip, but the ids were
- * still there to read.
+ * One key per account. `sessionStorage` is per tab, so without it a new
+ * account signed in on the same tab would get the last one's contact ids.
  */
 const storageKey = (accountId: string | null) =>
   `${STORAGE_PREFIX}:${accountId ?? "local"}`;
@@ -61,9 +47,7 @@ const writeToStorage = (key: string, ids: string[]): void => {
   }
 };
 
-// ---------------------------------------------------------------------------
 // useRecentContactsLimit — how many are pinned
-// ---------------------------------------------------------------------------
 
 export const useRecentContactsLimit = () => {
   const { preferences, setPreference } = usePreferences();
@@ -80,9 +64,7 @@ export const useRecentContactsLimit = () => {
   return { limit: preferences.recentLimit, setLimit };
 };
 
-// ---------------------------------------------------------------------------
 // useRecentContacts — which ones
-// ---------------------------------------------------------------------------
 
 export const useRecentContacts = () => {
   const { user } = useAuth();

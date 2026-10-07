@@ -1,6 +1,4 @@
-// =============================================================================
-// GET /api/logos/:domain — one fetch per domain, cached on disk
-// =============================================================================
+// Unit: GET /api/logos/:domain, one fetch per domain, cached on disk.
 // The browser never loads a logo from Google. The server asks Google's S2
 // favicon service once per domain, re-encodes the answer, and serves it from
 // disk after that. These tests pin the cache states:
@@ -14,7 +12,6 @@
 //
 // The network is stubbed at safeFetch. The route, the helper, sharp and the
 // file system are real. LOGOS_DIR sits in this file's temp DATA_DIR.
-// =============================================================================
 
 import {
   afterEach,

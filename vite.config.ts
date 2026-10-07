@@ -17,11 +17,10 @@ export default defineConfig({
     // app's own port (`serveClient`), so a second dev server works either way.
     hmr: process.env.DISABLE_HMR !== "true",
     fs: {
-      // The dev server serves any file under the project folder, which is
-      // also the data folder when DATA_DIR is unset: `GET /curator.db` sent
-      // the whole database. A list here replaces Vite's own, so the first
-      // six are Vite 8's defaults. A pattern with a slash is matched against
-      // the whole path, hence the leading `**/`.
+      // The dev server serves any file under the project folder, which is the
+      // data folder when DATA_DIR is unset, so `GET /curator.db` would send the
+      // database. This list replaces Vite's own, so the first six are Vite 8's
+      // defaults. A pattern with a slash matches the whole path, hence `**/`.
       deny: [
         ".env",
         ".env.*",
@@ -47,21 +46,14 @@ export default defineConfig({
     rolldownOptions: {
       output: {
         /*
-         * One chunk per large library, so a page loads only the libraries
-         * it uses and a release that touches one of them invalidates one
-         * file.
+         * One chunk per large library, so a page loads only what it uses.
          *
-         * Rolldown's groups, not Rollup's `manualChunks`: a group here also
-         * captures the dependencies of what it matches, and the first group
-         * to capture a module keeps it. Under the old function React itself
-         * was captured through its importers, `react-dom` by the map's
-         * group, and every page preloaded a megabyte of MapLibre to get
-         * React. The React group has the highest priority so it wins those
-         * modules back. The map's group captures no dependencies at all:
-         * react-maplibre imports MapLibre lazily, and the helper Vite writes
-         * for a lazy import is used by every page, so through it the map's
-         * chunk was still on every page. The group names the one dependency
-         * it wants, the compression library PMTiles reads with.
+         * A Rolldown group also captures the dependencies of what it matches,
+         * and the first group to capture a module keeps it. The React group
+         * ranks highest, so no other group captures React. The map's group
+         * captures no dependencies: through Vite's lazy-import helper, used
+         * by every page, it would put the map on every page. It names the one
+         * dependency it wants, the compression library PMTiles reads with.
          */
         codeSplitting: {
           groups: [

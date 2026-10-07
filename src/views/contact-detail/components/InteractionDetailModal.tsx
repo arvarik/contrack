@@ -1,15 +1,8 @@
 /**
  * InteractionDetailModal: one timeline entry, read in full or edited.
  *
- * Built on the shared `Modal`, so it is a dialog like every other: focus
- * moves in and stays in, Escape and Android's Back close it, a phone shows
- * it as a sheet, and the page behind it (the map under a contact) does not
- * also take the Escape. It was a hand-made overlay that did none of this.
- *
- * Edit uses the note editor itself (`NoteEditor`, from the composer's
- * chunk), so a note keeps its paragraphs and @mentions. It used to open the
- * raw HTML in a plain box. A Save that fails keeps the edit and says so, and
- * a close with unsaved changes asks first.
+ * Edit uses `NoteEditor`, so a note keeps its paragraphs and @mentions. A
+ * failed Save keeps the edit, and a close with unsaved changes asks first.
  *
  * A follow-up's row marks it done. The request waits for the toast's Undo
  * (`startPendingDelete`, as on Pulse): no route reopens a follow-up.
@@ -232,8 +225,7 @@ export const InteractionDetailModal = ({
                 <Edit2 aria-hidden="true" className="w-4 h-4" /> Edit
               </button>
               {onDelete && (
-                // The same quiet look as Edit. Red shows only inside the
-                // confirmation, where the choice is made.
+                // Quiet like Edit: red shows only in the confirmation.
                 <button type="button" onClick={onDelete} className={BTN_QUIET}>
                   <Trash2 aria-hidden="true" className="w-4 h-4" /> Delete
                 </button>
@@ -311,8 +303,7 @@ export const InteractionDetailModal = ({
                         >
                           {action.title}
                         </span>
-                        {/* Red only when it is late: the error tone means
-                            overdue, not due. */}
+                        {/* Red only when late: the error tone means overdue. */}
                         <span
                           className={cn(
                             LABEL,

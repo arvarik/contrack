@@ -1,11 +1,7 @@
 /**
- * BirthdayField: a birthday, with or without a year, edited as text.
- *
- * It was a date input. A date input needs a year, so "May 14" opened as
- * 2001 and a save kept that year, and Chrome sends a change for each typed
- * part, so a typed date saved after its first digit. A text field takes
- * "May 14" or "May 14, 1990" (`parseBirthday`), and saves on Enter or when
- * focus leaves. Escape puts it back. An empty field removes the birthday.
+ * A birthday, with or without a year, edited as text (`parseBirthday`). Not
+ * a date input: that needs a year, and Chrome fires a change per typed part.
+ * Enter or blur saves, Escape cancels, and an empty field removes it.
  */
 import { useEffect, useId, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -31,7 +27,7 @@ export const BirthdayField = ({
   const [invalid, setInvalid] = useState(false);
   const invalidId = useId();
   const button = useRef<HTMLButtonElement>(null);
-  /** A key closed the field: focus goes back to the value, and the blur that follows saves nothing. */
+  /** A key closed the field: refocus the value, and skip the blur's save. */
   const closedByKey = useRef(false);
 
   useEffect(() => {
@@ -40,7 +36,7 @@ export const BirthdayField = ({
     button.current?.focus();
   }, [isEditing]);
 
-  /** Save the text when it is a date or empty. False when it is neither. */
+  /** Saves a date or an empty text. False for anything else. */
   const commit = (text: string): boolean => {
     const trimmed = text.trim();
     const parsed = parseBirthday(trimmed);
@@ -93,7 +89,6 @@ export const BirthdayField = ({
   }
 
   const display = formatBirthdayDisplay(value);
-  // The card's one "+ Add" look, as under every other empty field.
   if (!display) {
     return (
       <AddButton
@@ -106,10 +101,9 @@ export const BirthdayField = ({
   const upcomingDays = getUpcomingBirthdayDays(value);
 
   return (
-    // 44 px tall on a phone, so the row gives the value's tap box room.
+    // 44 px tall on a phone, for the value's tap target.
     <div className="flex flex-wrap items-center gap-2 min-h-[44px] sm:pointer-fine:min-h-0">
-      {/* A real button: Enter and Space open the field with no key
-          handler, and `group/edit` shows the pencil on keyboard focus. */}
+      {/* `group/edit` shows the pencil on keyboard focus too. */}
       <button
         ref={button}
         type="button"

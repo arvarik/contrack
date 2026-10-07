@@ -8,12 +8,9 @@ export function getMode(search: string): "normal" | "action" | "ai" {
 }
 
 /**
- * Where a zero-state insight leads, or null when it has nowhere to go.
- *
- * A count opens the page that lists what it counts. Stale data opens the
- * People list already filtered to those contacts, the address the Pulse
- * inbox row uses. It once opened Settings, which lists no contact at all.
- * A catch-up or a ghost names one contact, and opens that contact.
+ * Where a zero-state insight leads, or null. A count opens the page that
+ * lists it. Stale data opens the People list filtered to those contacts. A
+ * catch-up or a ghost opens its contact.
  */
 export function insightPath(insight: ZeroStateInsight): string | null {
   switch (insight.type) {
@@ -33,11 +30,8 @@ const GROUP_HEADING =
   "[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[11px] [&_[cmdk-group-heading]]:font-bold [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.08em]";
 
 /**
- * The palette's current row: the selected-row look (the `row-selected`
- * utility in index.css), the primary tint. cmdk marks the current row with
- * `aria-selected`, so the utility
- * takes that variant. Text that was `text-primary` on the row takes
- * `aria-selected:text-on-primary-wash`.
+ * The palette's current row: `row-selected` (index.css) on the row cmdk
+ * marks `aria-selected`. Its text takes `aria-selected:text-on-primary-wash`.
  */
 export const ITEM_CURRENT = "aria-selected:row-selected";
 
@@ -51,9 +45,8 @@ export const MATCH_BADGE =
 
 /**
  * True when no exact answer, model or filter proved this result, so it
- * wears the orange "Not verified by AI" question mark. An older server
- * sends no `verified`, and then the chunk's `fallback` decides, as it did
- * before.
+ * wears the orange "Not verified by AI" mark. Without `verified`, the
+ * chunk's `fallback` decides.
  */
 export function isUnverified(
   match: { verified?: boolean },

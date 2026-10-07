@@ -1,24 +1,14 @@
-// =============================================================================
-// Dedupe Embedding Service — Semantic Contact Embeddings
-// =============================================================================
-// Generates, stores, and queries contact embeddings for duplicate detection,
-// using sqlite-vec for native vector similarity search within SQLite.
+// Contact embeddings for duplicate detection, stored and searched with
+// sqlite-vec.
 //
-// The model comes from the *embeddings capability* — the same setting that
-// powers semantic search — so "Embeddings: built-in (local)" genuinely means
-// nothing leaves the machine. This file previously called Gemini directly
-// regardless of that setting, which both ignored the user's choice and sent
-// every contact to Google from an app that advertises local-first operation.
-//
-// Design principles:
-// - Model/provider resolved from the embeddings capability, never hardcoded
+// - The model comes from the embeddings capability, the same setting as
+//   semantic search, so "built-in (local)" means nothing leaves the machine.
 // - A provider model never embeds the contacts of an account with AI off
-//   (mayEmbedContactsFor)
-// - Manual L2 normalization (provider vectors are not always unit length)
-// - Float32Array buffer format for sqlite-vec compatibility
-// - Concurrency guard: only one backfill at a time
-// - Graceful degradation: if embedding fails, log a warning and continue
-// =============================================================================
+//   (mayEmbedContactsFor).
+// - Vectors are L2-normalized here, because provider vectors are not always
+//   unit length.
+// - One backfill at a time. A failed embedding logs a warning and the rest go
+//   on.
 
 import {
   sqlite,
@@ -49,9 +39,7 @@ import {
   type Embedder,
 } from "../../ai/embedder.ts";
 
-// =============================================================================
 // Constants
-// =============================================================================
 
 const EMBED_BATCH_SIZE = 64;
 
@@ -61,11 +49,9 @@ export function isEmbeddingAvailable(): boolean {
 }
 
 /**
- * Recreate contact_embeddings at a new width. vec0 columns are fixed-size.
- *
- * Exported so a unit test can pin its DDL equal to the one db.ts uses for the
- * partition-key rebuild. Two copies of this string drifting apart is how a
- * table loses its partition key without anyone noticing.
+ * Recreate contact_embeddings at a new width (vec0 columns are fixed-size).
+ * Exported so a unit test can pin its DDL equal to the partition-key rebuild in
+ * db.ts: two copies drifting apart would lose the partition key unnoticed.
  */
 export function rebuildDedupeEmbeddingTable(dimension: number): void {
   sqlite.exec(`DROP TABLE IF EXISTS contact_embeddings`);
@@ -77,9 +63,10 @@ export function rebuildDedupeEmbeddingTable(dimension: number): void {
 }
 
 /**
- * Bring the dedupe vector store in line with the embeddings capability,
- * mirroring what ensureEmbeddingStore() does for search. Returns the number
- * of contacts re-embedded (0 when nothing changed).
+ * Bring the dedupe vector store in line with the embeddings capability, like
+ * ensureEmbeddingStore() for search.
+ *
+ * @returns the number of contacts embedded again (0 when nothing changed).
  */
 export async function ensureDedupeEmbeddingStore(): Promise<number> {
   const embedder = currentEmbedder();
@@ -106,8 +93,8 @@ export async function ensureDedupeEmbeddingStore(): Promise<number> {
       `Embeddings changed (${state.signature} → ${embedder.id}); rebuilding dedupe vector store`,
     );
   }
-  // Also covers first boot after upgrade: db.ts creates the table at the
-  // legacy 768 width, which won't match a 384-dim local model.
+  // Also covers the first boot: db/vec.ts creates the table 768 wide, which
+  // does not match a 384-dim local model.
   rebuildDedupeEmbeddingTable(dimension);
   setEmbeddingsState({ signature: embedder.id, dimension }, "dedupe");
   return backfillEmbeddings();
@@ -125,15 +112,11 @@ function replaced(embedder: Embedder): boolean {
   );
 }
 
-// =============================================================================
-// L2 Normalization
-// =============================================================================
+// L2 normalization
 
 /**
- * Normalize a vector to unit length (L2 norm = 1).
- * Required for sub-3072 MRL dimensions — Gemini only auto-normalizes
- * the full 3072-dim output. Truncated outputs need manual normalization
- * to ensure cosine similarity works correctly.
+ * Normalize a vector to unit length. Gemini normalizes only its full 3072-dim
+ * output, and cosine similarity needs unit vectors at the shorter MRL widths.
  */
 function l2Normalize(values: number[]): Float32Array {
   let sumSq = 0;
@@ -150,17 +133,13 @@ function l2Normalize(values: number[]): Float32Array {
   return result;
 }
 
-// =============================================================================
-// Core: Embedding Generation
-// =============================================================================
+// Embedding generation
 
 /**
- * Generate embeddings for a batch of text strings.
- *
- * Through the embedder search uses, so it honors the embeddings capability
- * and the embedder's count guard: a backend that returns fewer vectors than
- * inputs is an error, not a silently short batch. A duplicate check compares
- * one contact's text with another's, so the use is `similarity`.
+ * Embeddings for a batch of texts, through the embedder search uses, so the
+ * embeddings capability and the embedder's count guard apply: a backend that
+ * returns fewer vectors than inputs is an error. A duplicate check compares one
+ * contact's text with another's, so the use is `similarity`.
  *
  * @param items - Array of { id, text } to embed
  * @param embedder - The embedder its caller's checks allowed
@@ -197,10 +176,7 @@ export async function generateBatchEmbeddings(
   return results;
 }
 
-/**
- * Generate a single embedding for one text string.
- * Used for incremental contact create/update.
- */
+/** One embedding, for a contact create or update. */
 export async function generateSingleEmbedding(
   text: string,
   embedder = currentEmbedder(),
@@ -210,21 +186,17 @@ export async function generateSingleEmbedding(
   return l2Normalize(Array.from(vector));
 }
 
-// =============================================================================
-// Storage: sqlite-vec Operations
-// =============================================================================
+// sqlite-vec storage
 
 // Pre-compiled statements for performance
 const _stmts = {
-  // DELETE then INSERT, never INSERT OR REPLACE. On a partitioned vec0 table
+  // DELETE then INSERT, never INSERT OR REPLACE: on a partitioned vec0 table
   // sqlite-vec 0.1.9 answers INSERT OR REPLACE with "UNIQUE constraint failed
-  // on contact_embeddings primary key" whether or not the partition changes,
-  // so the search store's pattern is now the only pattern. Measured on the
-  // installed 0.1.9 in the day-one smoke test for this phase.
+  // on contact_embeddings primary key" whether or not the partition changes.
   //
-  // The owner comes from `contacts` in the same transaction rather than from
-  // the caller: an INSERT that omits a partition key stores NULL silently, and
-  // a NULL partition is invisible to every scoped KNN Phase 2 writes.
+  // The owner comes from `contacts` in the same statement, not from the caller:
+  // an INSERT that omits a partition key stores NULL silently, and a NULL
+  // partition is invisible to every scoped KNN.
   insert: sqlite.prepare(
     `INSERT INTO contact_embeddings (contactId, ownerId, isGhost, isArchived, active, embedding)
      SELECT c.id, c.ownerId, ${VEC_METADATA_SQL}, ?
@@ -232,10 +204,8 @@ const _stmts = {
   ),
   // tenant-lint: allow owner-checked by caller
   delete: sqlite.prepare("DELETE FROM contact_embeddings WHERE contactId = ?"),
-  // `ownerId` is the partition key, so this counts one owner's chunks rather
-  // than reading the table. The dedupe index is per account: a scan asks how
-  // many of ITS contacts are embedded, and the answer decides whether the run
-  // pays a provider to backfill.
+  // `ownerId` is the partition key, so this counts one owner's chunks. The
+  // answer decides whether a scan pays a provider to backfill.
   count: sqlite.prepare(
     "SELECT COUNT(*) AS cnt FROM contact_embeddings WHERE ownerId = ?",
   ),
@@ -247,10 +217,9 @@ const _stmts = {
     // tenant-lint: allow owner-checked by caller
     "SELECT embedding FROM contact_embeddings WHERE contactId = ?",
   ),
-  // `ownerId` is the vec0 partition key, so sqlite-vec reads one owner's
-  // chunks rather than the whole table and the neighbours can never come from
-  // another account. `ownerId IN (...)` is not supported on a partition
-  // column, so this is one owner per statement by design.
+  // `ownerId` is the vec0 partition key, so sqlite-vec reads one owner's chunks
+  // and neighbors never come from another account. A partition column takes no
+  // `IN (...)`, so it is one owner per statement.
   knn: sqlite.prepare(`
     SELECT contactId, distance
     FROM contact_embeddings
@@ -313,14 +282,9 @@ export function storeEmbeddings(
 }
 
 /**
- * Drop one account's dedupe index, vectors and metadata together.
- *
- * A full-mode scan re-embeds from scratch, so it starts by throwing the old
- * vectors away. Until 2e that was `DELETE FROM contact_embeddings` with no
- * predicate plus a metadata wipe, so one person choosing "full" erased every
- * other account's dedupe index and made their next scan pay a provider to
- * rebuild it. The two deletes run in one transaction so a KNN never sees
- * vectors whose metadata is already gone.
+ * Drop one account's dedupe vectors and metadata, in one transaction so a KNN
+ * never sees vectors whose metadata is gone. A full-mode scan starts here. Only
+ * this owner's rows go, so another account's next scan does not pay to rebuild.
  */
 export const clearOwnerEmbeddings = sqlite.transaction((scope: Scope) => {
   _stmts.clearOwnerMeta.run(scope.ownerId);
@@ -332,10 +296,7 @@ export function getEmbeddingCount(scope: Scope): number {
   return (_stmts.count.get(scope.ownerId) as { cnt: number }).cnt;
 }
 
-/**
- * Retrieve the stored embedding vector for a contact.
- * Returns null if the contact has no embedding.
- */
+/** A contact's stored embedding, or null. */
 export function getEmbedding(contactId: string): Float32Array | null {
   const row = _stmts.get.get(contactId) as { embedding: Buffer } | undefined;
   if (!row) return null;
@@ -347,10 +308,10 @@ export function getEmbedding(contactId: string): Float32Array | null {
 }
 
 /**
- * Find the K nearest neighbors for a given embedding vector.
+ * The K nearest neighbors of an embedding.
  *
  * @param scope      - The owner whose vectors are searched
- * @param embedding  - The query vector (768-dim Float32Array)
+ * @param embedding  - The query vector
  * @param limit      - Max results to return (default 10)
  * @param excludeId  - Optional contact ID to exclude from results (self-match)
  * @returns Array of { contactId, distance } sorted by ascending distance
@@ -379,15 +340,9 @@ export function findNearestNeighbors(
   return rows;
 }
 
-// =============================================================================
-// Embedding Staleness Detection
-// =============================================================================
+// Staleness
 
-/**
- * Find contacts whose updatedAt is newer than their last embedding timestamp.
- * These contacts have been modified after their embedding was generated and
- * should be re-embedded to reflect current data.
- */
+/** Contacts edited since their embedding was made. */
 function findStaleEmbeddings(scope: Scope): string[] {
   const rows = sqlite
     .prepare(
@@ -407,10 +362,10 @@ function findStaleEmbeddings(scope: Scope): string[] {
 }
 
 /**
- * Re-embed contacts whose data has changed since their last embedding.
- * Called during non-full scans when embeddings already exist.
+ * Embed contacts edited since their last embedding, during a non-full scan when
+ * embeddings already exist.
  *
- * @returns Number of contacts re-embedded
+ * @returns Number of contacts embedded again
  */
 export async function reEmbedStaleContacts(scope: Scope): Promise<number> {
   const allowed = currentEmbedder();
@@ -431,9 +386,9 @@ export async function reEmbedStaleContacts(scope: Scope): Promise<number> {
 
   const items: { id: string; text: string }[] = [];
   for (const id of staleIds) {
-    // Every id came out of the scoped query above, so the scan's own scope
-    // reads them. Re-embedding is provider-billed: it must stop at the account
-    // that asked for the scan.
+    // Every id came from the scoped query above, so the scan's own scope reads
+    // them. Embedding is provider-billed and must stop at the account that
+    // asked.
     const normalized = normalizeContactById(scope, id);
     if (normalized) {
       items.push({ id: normalized.id, text: normalized.embeddingText });
@@ -457,9 +412,7 @@ export async function reEmbedStaleContacts(scope: Scope): Promise<number> {
   return entries.length;
 }
 
-// =============================================================================
-// High-Level: Backfill All Contacts
-// =============================================================================
+// Backfill
 
 let _backfillRunning = false;
 
@@ -501,10 +454,9 @@ function pendingEmbeddings(scope: Scope): PendingEmbedding[] {
 }
 
 /**
- * Embed one slice and store it.
- *
- * The caller runs this inside the owning account's context, so every provider
- * call it makes writes an `ai_invocations` row naming that account.
+ * Embed one slice and store it. The caller runs this inside the owning
+ * account's context, so every provider call is recorded for that account in
+ * `ai_invocations`.
  */
 async function embedAndStore(
   items: PendingEmbedding[],
@@ -522,12 +474,9 @@ async function embedAndStore(
 }
 
 /**
- * Embed one account's missing contacts.
- *
- * The duplicate scan calls this: a scan runs for one account, and paying a
- * provider to embed every other account's contacts in the middle of it billed
- * the wrong person and re-filled the index a full-mode scan had just cleared
- * for its own account only.
+ * Embed one account's missing contacts, for the duplicate scan. It stays inside
+ * that account, so it bills the right person and does not refill other
+ * accounts' indexes.
  *
  * @param scope - The account to embed
  * @param onProgress - Callback for progress reporting
@@ -555,10 +504,9 @@ export async function backfillOwnerEmbeddings(
 
   _backfillRunning = true;
   try {
-    // The scan that calls this is already inside its own context, but a
-    // background caller is not, and `recordInvocation` reads the context
-    // rather than this argument. Establishing it here is what makes the
-    // provider spend land on `scope` from every caller.
+    // A background caller has no context, and `recordInvocation` reads the
+    // context rather than this argument, so it is set here to bill `scope` from
+    // every caller.
     return await runWithContext(
       {
         requestId: `job-dedupe-backfill-${scope.ownerId.slice(0, 8)}`,
@@ -611,13 +559,10 @@ async function embedOwnerBacklog(
  * Embed every account's missing contacts, one round at a time.
  *
  * Instance-wide on purpose: this is the boot sweep and the operator's repair
- * button, and neither may stop at the rows of whoever pressed it. Each round
- * runs inside its own account's context, so the provider spend lands on the
- * account whose contacts it embedded rather than on the primary admin. Owners
- * interleave so a large account does not hold up a small one's first results.
- *
- * Idempotent — only processes contacts missing from contact_embeddings.
- * Concurrency-safe — only one backfill can run at a time.
+ * button. Each round runs inside its own account's context, so the provider
+ * spend lands on that account. Owners interleave, so a large account does not
+ * hold up a small one. Only contacts missing from contact_embeddings are
+ * embedded, and one backfill runs at a time.
  *
  * @param onProgress - Callback for progress reporting
  * @returns Number of contacts embedded
@@ -704,17 +649,14 @@ export async function backfillEmbeddings(
   }
 }
 
-// =============================================================================
-// High-Level: Generate + Store for a Single Contact (Incremental)
-// =============================================================================
+// One contact at a time
 
 /** In-flight contact IDs — prevents duplicate API calls for the same contact */
 const _inFlightIds = new Set<string>();
 
 /**
- * Generate and store an embedding for a single contact.
- * Used as a fire-and-forget background task after contact create/update.
- * Concurrency-safe: if the same contactId is already being embedded, skips.
+ * Generate and store one contact's embedding, in the background after a write.
+ * A contact already being embedded is skipped.
  *
  * @param contactId - The contact to embed
  * @returns true if successful, false if skipped/failed
@@ -765,8 +707,8 @@ export async function generateAndStoreEmbedding(
 }
 
 /**
- * Generate and store embeddings for multiple contacts (bulk import).
- * Used as a fire-and-forget background task after bulk contact creation.
+ * Generate and store embeddings for many contacts, in the background after a
+ * bulk create.
  */
 export async function generateAndStoreBulkEmbeddings(
   contactIds: string[],

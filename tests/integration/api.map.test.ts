@@ -1,11 +1,8 @@
-// =============================================================================
 // Integration: the map's data and the policy that lets the basemap load
-// =============================================================================
 // Two halves of one feature. The route decides which contacts have a pin, and
 // the CSP decides whether the browser may fetch the basemap they sit on. Both
 // run against the real Express pipeline here, because the CSP is built at
 // request time from the same module the status payload reads.
-// =============================================================================
 
 import { describe, it, expect } from "vitest";
 import crypto from "crypto";

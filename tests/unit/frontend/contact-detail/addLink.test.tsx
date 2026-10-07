@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
-// =============================================================================
 // "+ link": a new link from the contact header's meta line
-// =============================================================================
+//
 // A button with the "+ tag" look opens a field in its place. Enter adds and
 // closes, Escape closes, leaving with text adds, leaving empty closes. The
 // text is tidied (https:// in front when it has none) and has to be a web
 // address whose host has a dot, and a link the contact already has, in any
 // spelling, is refused. A refusal says why beside the field and keeps the
 // field open with the text in it. Focus never falls to the page.
-// =============================================================================
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -21,7 +19,7 @@ import {
 import {
   AddLink,
   linkKey,
-  normaliseLink,
+  normalizeLink,
 } from "../../../../src/views/contact-detail/components/AddLink";
 import { ADD_BUTTON_SMALL } from "../../../../src/lib/styles";
 
@@ -29,20 +27,20 @@ afterEach(() => {
   cleanup();
 });
 
-describe("normaliseLink", () => {
+describe("normalizeLink", () => {
   it("puts https:// in front of text with no scheme, and keeps the rest as written", () => {
-    expect(normaliseLink("github.com/ada")).toBe("https://github.com/ada");
-    expect(normaliseLink("  www.linkedin.com/in/Ada  ")).toBe(
+    expect(normalizeLink("github.com/ada")).toBe("https://github.com/ada");
+    expect(normalizeLink("  www.linkedin.com/in/Ada  ")).toBe(
       "https://www.linkedin.com/in/Ada",
     );
-    expect(normaliseLink("example.com:8080/x")).toBe(
+    expect(normalizeLink("example.com:8080/x")).toBe(
       "https://example.com:8080/x",
     );
   });
 
   it("keeps a link that has its scheme", () => {
-    expect(normaliseLink("http://ada.dev")).toBe("http://ada.dev");
-    expect(normaliseLink("https://x.com/ada?ref=1")).toBe(
+    expect(normalizeLink("http://ada.dev")).toBe("http://ada.dev");
+    expect(normalizeLink("https://x.com/ada?ref=1")).toBe(
       "https://x.com/ada?ref=1",
     );
   });
@@ -60,7 +58,7 @@ describe("normaliseLink", () => {
     ["another scheme", "ftp://example.com/file"],
     ["a user name in the address", "https://ada:secret@example.com"],
   ])("refuses %s", (_label, text) => {
-    expect(normaliseLink(text)).toBeNull();
+    expect(normalizeLink(text)).toBeNull();
   });
 });
 

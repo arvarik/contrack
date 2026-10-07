@@ -1,11 +1,6 @@
-// =============================================================================
-// Lifecycle Settings Service — trash retention and backup rotation policies
-// =============================================================================
-// Resolves instance lifecycle policies with fallbacks:
-//   1. Persisted database setting (app_settings)
-//   2. Environment variable override
-//   3. Built-in defaults (trash 30d, backup interval 24h, backup keep 7)
-// =============================================================================
+// Trash retention and backup policies, each resolved from the saved setting
+// (app_settings), else the environment variable, else the default (trash 30
+// days, backups every 24 hours, 7 kept).
 
 import { getSetting, setSetting, SETTING_KEYS } from "./settingsService.ts";
 
@@ -69,9 +64,8 @@ export function trashRetentionDays(): ResolvedSetting<number> {
 }
 
 /**
- * Resolved backup interval in hours with source attribution.
- * 0 disables scheduled backups.
- * Setting takes precedence, then environment variable, then 24 hours default.
+ * The backup interval in hours, with its source; 0 turns scheduled backups off.
+ * The setting wins, then the environment variable, then 24 hours.
  */
 export function backupIntervalHours(): ResolvedSetting<number> {
   const setting = getSetting<number>(SETTING_KEYS.backupIntervalHours);

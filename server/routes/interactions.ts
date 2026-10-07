@@ -11,15 +11,16 @@ import { parseQuery, validateBody } from "../utils/validators.ts";
 import { interactionRoutes } from "../../shared/contracts/interactions.ts";
 import { AppError, NotFoundError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
+import { abortOnDisconnect } from "../utils/stream.ts";
 import { ensureDir, ownerUploadDir } from "../utils/paths.ts";
 import { scopeOf } from "../tenancy/scope.ts";
 
-// Attachments go to uploads/u/<ownerId>/files/ now. The destination callback
-// creates the caller's directory; there is no shared one to make here.
+// Attachments go to uploads/u/<ownerId>/files/, which the destination callback
+// creates for the caller.
 
-// Attachment extensions we accept. Script-capable types (.html, .svg, .xhtml,
-// .js, …) are excluded — uploads are served from the app origin, so a stored
-// HTML file would execute as same-origin script.
+// Accepted attachment extensions. Script-capable types (.html, .svg, .xhtml,
+// .js, …) are left out: uploads are served from the app origin, so a stored
+// HTML file would run as same-origin script.
 const ALLOWED_ATTACHMENT_EXTENSIONS = new Set([
   ".eml",
   ".txt",
@@ -101,20 +102,16 @@ router.post(
   requireContact,
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const controller = new AbortController();
-    const onClose = () => {
-      if (!res.writableEnded) controller.abort();
-    };
-    res.on("close", onClose);
+    const client = abortOnDisconnect(res);
     let points;
     try {
       points = await interactionService.generateBriefing(
         scopeOf(req),
         String(req.params.id),
-        controller.signal,
+        client.signal,
       );
     } finally {
-      res.off("close", onClose);
+      client.release();
     }
     if (!points) throw new AppError("Contact not found", 404);
 

@@ -1,15 +1,8 @@
-// =============================================================================
-// Integration: the vCard round trip, through the real API
-// =============================================================================
-// The unit test walks a contact through the serializer and the parser. This
-// one walks it through the product: contacts are created with POST, exported
-// with GET, parsed the way the import modal parses a dropped file, and posted
-// back. What comes out of the second import has to be the same people.
-//
-// That is the whole claim of "migration in and out is honest for a self-hosted
-// tool", and it is the only test that can make it, because it is the only one
-// that exercises the repository's own writing and hydration on both sides.
-// =============================================================================
+// Integration: the vCard round trip, through the real API.
+// Contacts are created with POST, exported with GET, parsed as the import
+// modal parses a dropped file, and posted back, and the second import must
+// hold the same people. It is the one test that runs the repository's own
+// writing and hydration on both sides.
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
@@ -80,8 +73,7 @@ describe("GET /api/export/vcard", () => {
     expect(res.status).toBe(200);
     expect(res.headers["content-type"]).toContain("text/vcard");
     expect(res.headers["content-disposition"]).toMatch(/\.vcf"$/);
-    // Extra F1 put no-store on the export prefix, and an export is the
-    // caller's whole address book.
+    // An export is the caller's whole address book, so it is no-store.
     expect(res.headers["cache-control"]).toContain("no-store");
   });
 

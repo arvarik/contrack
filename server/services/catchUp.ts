@@ -1,14 +1,11 @@
 /**
- * The catch-up rule, once, in SQL.
- *
- * A catch-up is a tracked contact whose clock is past its cadence. The clock
- * is the last interaction, or the moment of tracking when nothing is logged
- * yet, so a person tracked today at "every month" comes up in a month even
- * if the timeline is empty. The dashboard's Catch up list and count, the
- * palette's zero state and `GET /api/contacts/action-items` all read these
- * strings, so they cannot disagree about who needs a call.
- *
- * Every string expects the contacts table aliased `c`.
+ * The catch-up rule, once, in SQL. A catch-up is a tracked contact whose clock
+ * is past its cadence. The clock is the last interaction, or the moment of
+ * tracking when nothing is logged, so a contact tracked today at "every month"
+ * comes up in a month even with an empty timeline. The dashboard's Catch up
+ * list and count, the palette's empty state and `GET
+ * /api/contacts/action-items` all read these strings, so they agree. Every
+ * string expects the contacts table aliased `c`.
  *
  * @module server/services/catchUp
  */

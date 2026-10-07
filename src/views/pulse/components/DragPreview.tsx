@@ -1,18 +1,9 @@
 /**
- * DragPreview: the card in the hand while it moves.
- *
- * The drag used to move the card itself, all of it, under the pointer at 60
- * percent opacity: Up next was 800 px of see-through queue over the places
- * a person was trying to see. The preview is the card folded to its face,
- * three facts at most: the title, where the card will land ("Intelligence ·
- * 2 of 4"), and the grip, which sits under the pointer that picked it up.
- * It is lifted by a hairline and a deep shadow, and it never turns or
- * scales, which blurs words.
- *
- * `PulseGrid` renders it inside dnd-kit's `DragOverlay`, in a portal, so it
- * floats over every stacking context. It is a picture: a screen reader hears
- * the drag's announcements instead, and the preview is hidden from it. It
- * uses no dnd-kit hook, as the overlay requires.
+ * The card in the hand, folded to its title, where it will land
+ * ("Intelligence · 2 of 4") and its grip. A full card under the pointer hid
+ * the page. `PulseGrid` renders it in dnd-kit's `DragOverlay`, in a portal,
+ * so it floats over every stacking context. A screen reader hears the drag's
+ * announcements instead. It uses no dnd-kit hook, as the overlay requires.
  */
 import { memo } from "react";
 import { GripVertical } from "lucide-react";
@@ -21,7 +12,6 @@ import { cn } from "../../../lib/utils";
 import { DRAG_PREVIEW, PULSE_TYPE } from "../lib/pulseStyles";
 
 interface DragPreviewProps {
-  /** The card's title. */
   title: string;
   /** The column the card lands in, by name. */
   column: string;
@@ -52,8 +42,7 @@ export const DragPreview = memo(function DragPreview({
           {column} <MetaDot /> {position} of {total}
         </p>
       </div>
-      {/* The grip, lit: the same glyph the person pressed, in the same
-          32 px box, 16 px from the edge (`DRAG_GRIP_OFFSET`). */}
+      {/* The grip the person pressed, placed by `DRAG_GRIP_OFFSET`. */}
       <span className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary">
         <GripVertical className="w-4 h-4" />
       </span>

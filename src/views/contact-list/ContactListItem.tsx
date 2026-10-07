@@ -1,11 +1,6 @@
 /**
- * ContactListItem — A single row in the contact list.
- *
- * Performance:
- * - Wrapped in React.memo with a structural comparator to prevent cascade
- *   rerenders when unrelated ContactList state (flashId, contextMenu, etc.) changes.
- * - Prefetches what the contact page reads on pointer enter (100ms debounce)
- *   and at once on a press, so the page draws from the cache when it opens.
+ * One row in the contact list. It prefetches what the contact page reads, so
+ * the page draws from the cache when it opens.
  */
 import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -14,6 +9,7 @@ import {
   Building,
   Briefcase,
   CalendarClock,
+  MapPin,
   Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -29,16 +25,10 @@ import { DENSITY_METRICS, type ListDensity } from "../../hooks/useListDensity";
 import { ROVING_INDEX_ATTR, type RovingItemProps } from "./useRovingList";
 import { PROXIMITY_ROW_ATTR } from "../../hooks/useProximityLift";
 import { describeFollowUp } from "../../lib/followUp";
-import { MapPin } from "lucide-react";
 
 import { formatDistanceToNowStrict } from "date-fns";
 
-/**
- * "3mo" / "5d" / "—" — a recency stamp short enough to sit in a list row.
- *
- * `formatDistanceToNowStrict` gives "3 months"; the list has room for a
- * column, not a sentence.
- */
+/** "3mo", "5d" or "—": a recency stamp short enough for a list column. */
 function shortRecency(iso: string | null | undefined): string {
   if (!iso) return "—";
   const parsed = new Date(iso);
@@ -64,32 +54,24 @@ import { timelineQuery } from "../../api/interactions";
 import { suggestionQuery } from "../../api/suggestions";
 import { keepLoadedImage } from "../../lib/keptImages";
 
-// ---------------------------------------------------------------------------
-// ContactListItem — memoized row component
-// ---------------------------------------------------------------------------
-
 interface ContactListItemProps {
   contact: Contact;
   idPrefix?: string;
-  /** Comfortable keeps the roomy default; compact roughly doubles rows/screen. */
   density: ListDensity;
   active: boolean;
   isSelectMode: boolean;
   isSelected: boolean;
   /**
-   * False on the Recent strip when the same person is also a row in the list
-   * under it: one contact looks selected in one place, so that copy takes no
-   * tint. It keeps `aria-current` and its checkbox. A contact the list does
-   * not show (a ghost, or one a filter leaves out) has only its Recent copy,
-   * and that copy takes the tint.
+   * False on a Recent copy of a person the list also shows, so one contact
+   * takes the selected tint in one place. It keeps `aria-current` and its
+   * checkbox.
    */
   showSelection?: boolean;
   /** `extend` is true for a shift-click: select the range, don't toggle. */
   onToggleSelect: (id: string, extend: boolean) => void;
   /**
-   * The row's place in the list's roving Tab order (see useRovingList).
-   * Passed as separate props rather than one object so the memo comparison
-   * still skips rows whose Tab stop did not move.
+   * The row's place in the roving Tab order (useRovingList). Separate props,
+   * not one object, so the memo still skips rows whose Tab stop did not move.
    */
   rovingIndex?: number;
   tabIndex?: RovingItemProps["tabIndex"];
@@ -126,14 +108,11 @@ const ContactListItemInner = ({
     [contact.id],
   );
 
-  // ── Prefetch ───────────────────────────────────────────────────────────────
-  // The contact, its timeline and its duplicate banner, so the page draws
-  // whole when it opens. A pointer that rests on the row for 100ms starts it.
-  // A tap ends before that timer, so a press starts it at once. Each query
-  // keeps its own stale time, so a second press asks nothing again.
-
+  // Prefetch the contact, its timeline and its duplicate banner. A pointer
+  // that rests 100 ms starts it, and a press starts it at once, since a tap
+  // ends before the timer. Each query's stale time stops a second fetch.
   const prefetch = useCallback(() => {
-    if (isSelectMode || active) return; // already loaded or irrelevant in select mode
+    if (isSelectMode || active) return;
     void queryClient.prefetchQuery(contactQuery(contact.id));
     void queryClient.prefetchQuery(timelineQuery(contact.id));
     void queryClient.prefetchQuery(suggestionQuery(contact.id));
@@ -148,8 +127,6 @@ const ContactListItemInner = ({
     if (prefetchTimer.current) clearTimeout(prefetchTimer.current);
   }, []);
 
-  // ── Click handler (select mode, and the slide) ─────────────────────────────
-
   const slide = useSlideNavigate();
   const to = isSelectMode ? "#" : `/contact/${contact.id}${location.search}`;
   const handleClick = (e: React.MouseEvent) => {
@@ -158,8 +135,7 @@ const ContactListItemInner = ({
       onToggleSelect(contact.id, e.shiftKey);
       return;
     }
-    // Below `lg` the contact takes the list's place, and it slides in over
-    // the list, as a settings page does. Elsewhere the link opens it.
+    // Below `lg` the contact slides in over the list.
     if (isPlainClick(e) && canSlide()) {
       e.preventDefault();
       slide(to, "forward");
@@ -176,13 +152,9 @@ const ContactListItemInner = ({
   // One selected look: the open contact, or a row picked in select mode.
   const selected = showSelection && (isSelectMode ? isSelected : active);
 
-  // The row's name says the score in words, so the ring's colour is never the
-  // only sign of it: "Betty Clark, Global Dynamics, score 72, strong". The
-  // middle part is the line printed under the name, the company or else the
-  // role, and it is left out when the row prints neither. A contact nobody
-  // tracks has no ring and no score words: "Betty Clark, Global Dynamics".
-  // The follow-up closes it, for the same reason the glyph's colour is not
-  // enough: "…, follow-up 3 days overdue".
+  // The row's name says the score and the follow-up in words, so color is
+  // never the only sign: "Name, Company, score 72, strong, follow-up 3 days
+  // overdue". An untracked contact has no score words.
   const view = scoreView(contact);
   const rowName = [
     contact.name,
@@ -192,8 +164,7 @@ const ContactListItemInner = ({
   ]
     .filter(Boolean)
     .join(", ");
-  // The calendar glyph, in the tone of how late the follow-up is. Its words
-  // are the row's name and the tooltip of the box around it.
+  // Its words are in the row's name and the wrapper's tooltip.
   const followUpGlyph = followUp && (
     <CalendarClock
       aria-hidden="true"
@@ -206,8 +177,7 @@ const ContactListItemInner = ({
       id={`${idPrefix}-${contact.id}`}
       aria-label={rowName}
       aria-current={active && !isSelectMode ? "page" : undefined}
-      // In select mode the row picks rather than opens: a checkbox, so a
-      // screen reader hears whether it is picked. Space and Enter press it.
+      // A checkbox in select mode, so a screen reader hears its state.
       role={isSelectMode ? "checkbox" : undefined}
       aria-checked={isSelectMode ? isSelected : undefined}
       to={to}
@@ -222,16 +192,12 @@ const ContactListItemInner = ({
       onPointerDown={prefetch}
       className={cn(
         listRow(selected),
-        // The row rises toward the pointer (`useProximityLift` on the
-        // list), so its transition names `translate` with its colours.
+        // `translate` for `useProximityLift`.
         "proximity-row transition-[translate,color,background-color]",
-        // Compact trims the padding, not the information: the same name and
-        // company are shown, just in less vertical space.
         compact && "gap-2.5 p-2",
         isSelectMode && "cursor-pointer select-none",
       )}
     >
-      {/* Checkbox overlay in select mode */}
       <AnimatePresence>
         {isSelectMode && (
           <motion.div
@@ -254,10 +220,8 @@ const ContactListItemInner = ({
         )}
       </AnimatePresence>
 
-      {/* The row's name already says the score, so the ring is decorative
-          and a screen reader hears the score once. The tooltip stays on this
-          wrapper for a pointer user, and aria-hidden keeps it out of the
-          accessibility tree. */}
+      {/* The row's name says the score, so the ring is hidden from a screen
+          reader. The tooltip is for a pointer. */}
       <span
         className="shrink-0 flex"
         title={scoreWords(view) ?? undefined}
@@ -274,12 +238,8 @@ const ContactListItemInner = ({
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-1.5 min-w-0">
-            {/*
-              Not a heading. The list sits under an h1 on the Network page and
-              an h2 beside an open contact, so a fixed level was wrong on one
-              of them, and a heading per row is thirty headings to skip past.
-              The row is a link, and its name is already the link's name.
-            */}
+            {/* Not a heading: no fixed level fits both layouts, and a heading
+                per row is many to skip. The link's name already says it. */}
             <span
               className={cn(
                 "block text-sm font-semibold truncate",
@@ -294,10 +254,8 @@ const ContactListItemInner = ({
               </span>
             ) : null}
           </div>
-          {/* The next follow-up in the tones of Pulse's due chips, and its
-              words for a pointer: the glyph alone said nothing. Between 768
-              and 1023 px it moves to its own slot in the column on the
-              right, where it no longer shifts with the city's width. */}
+          {/* Between 768 and 1023 px the glyph moves to its own slot in the
+              right column, so it does not shift with the city's width. */}
           {followUp && (
             <span
               title={followUp.text}
@@ -326,8 +284,7 @@ const ContactListItemInner = ({
             ) : (
               <Building className="w-3.5 h-3.5 shrink-0 opacity-60" />
             )}
-            {/* The words truncate in a box of their own: `truncate` on a
-                flex line clips with no ellipsis. */}
+            {/* `truncate` on a flex line clips with no ellipsis. */}
             <span className="truncate">{contact.company}</span>
           </p>
         ) : contact.role ? (
@@ -343,19 +300,8 @@ const ContactListItemInner = ({
         ) : null}
       </div>
 
-      {/*
-        Tablet-only metadata column.
-
-        Between 768 and 1023 px the list is the whole content area — roughly a
-        700 px row carrying a name and a company, with most of it empty. Above
-        1023 px the list collapses to a 350 px column beside the detail pane
-        and there is no room for this; below 768 px there is no room either.
-        So it appears exactly in the band that has spare width, which is what
-        `md:flex lg:hidden` says.
-
-        Recency is the signal a relationship CRM is actually for, so it gets
-        the column rather than, say, the role.
-      */}
+      {/* Tablet-only column: only between 768 and 1023 px is the row wide
+          enough. Recency gets it, as the signal a CRM is for. */}
       <div className="hidden md:flex lg:hidden items-center gap-5 shrink-0 pl-4 text-xs text-on-surface-variant">
         {contact.location && (
           <span className="flex items-center gap-1.5 max-w-[14rem] truncate">
@@ -363,8 +309,7 @@ const ContactListItemInner = ({
             <span className="truncate">{contact.location}</span>
           </span>
         )}
-        {/* The follow-up's slot: the same width on every row, empty when
-            there is none, so the glyphs and the recency line up. */}
+        {/* A fixed-width slot, even when empty, so the columns line up. */}
         <span title={followUp?.text} className="flex w-3.5 shrink-0">
           {followUpGlyph}
         </span>

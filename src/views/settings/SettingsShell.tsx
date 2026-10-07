@@ -1,29 +1,13 @@
 /**
- * SettingsShell — Two-pane settings shell on desktop, single-pane on mobile.
+ * The settings shell, built from `registry.ts`: the rail beside the page from
+ * `lg`, and the landing list and its pages below `lg`. The shell draws each
+ * page's header and its end (Reset to defaults and tab bar room).
  *
- * Driven by registry.ts. From lg width, renders the rail (search and the
- * navigation groups, the left pane's width, which a person can drag) beside
- * the page. Below lg, renders the landing list and pages, with a link on
- * each page back to the list.
- *
- * The page's header is `PageHeader`: the page's title, its one-line
- * description from the registry, and the page's own actions at the right
- * (`SettingsHeaderActions`).
- *
- * The back link. From lg there is none: the rail and the app's sidebar are
- * both on screen, and a link above the title would only push every settings
- * title 20 px below every other page's. Below lg a page has "Settings",
- * back to the list, its parent, the way a phone's settings app does, and the
- * list has none. The move between the list and a page slides (`slide.tsx`).
- *
- * Scrolling. A page that scrolls carries its header with it, the way Pulse
- * does, in the page's one scroller. A page that owns its scrolling (the
- * Lists manager, Tracked contacts) keeps the header fixed above it. A page
- * opens at its top, and the list comes back where it was left.
- *
- * The end of a page. Under the page, in its box, the shell draws "Reset to
- * defaults" while a preference on the page is off its default
- * (`ResetToDefaults`), and the room for the phone's tab bar.
+ * Below `lg` a page links back to the list, as a phone's settings app does.
+ * From `lg` the rail is on screen, so there is no back link to push the
+ * title 20 px down. A page scrolls with its header in one scroller, and a
+ * page that owns its scrolling (Lists, Tracked contacts) keeps the header
+ * fixed above it.
  */
 import React, {
   Suspense,
@@ -71,15 +55,11 @@ import { cn } from "../../lib/utils";
 import { SETTINGS_BOX, SETTINGS_PAGE } from "./layout";
 import { settingsPagePreload, useWarmSettingsPages } from "./warm";
 
-// Lazy admin user view for special route /admin/users/new
 const UsersView = React.lazy(() =>
   import("./admin/UsersView").then((m) => ({ default: m.UsersView })),
 );
 
-/**
- * A page on its way, in the page's own box, so its content lands in place.
- * While it shows, a slide waits for the page (`holdSlide`).
- */
+/** In the page's own box, so the content lands in place. Holds the slide. */
 const PageFallback = () => {
   useLayoutEffect(() => holdSlide(), []);
   return (
@@ -95,10 +75,6 @@ const PageFallback = () => {
   );
 };
 
-/**
- * One page. A page that owns its scrolling fills the pane and scrolls
- * itself; every other page is a block in the shell's one scroller.
- */
 const PageRoute = ({
   ownsScrolling = false,
   children,
@@ -125,14 +101,10 @@ export const SettingsShell = () => {
   const { isAdmin, authRequired } = useAuth();
 
   usePageTitle(title);
-  // Every page this viewer can open loads in idle moments, its code and
-  // its first data, so the first click on a page does not wait for either.
   useWarmSettingsPages({ isAdmin, authRequired });
 
-  // The preferences the page's rows hold, for its Reset to defaults.
   const { scope: resetScope, entries: resetEntries } = useResetScope();
 
-  // The page's actions, drawn in the header (`SettingsHeaderActions`).
   const [actionsTarget, setActionsTarget] = useState<HTMLDivElement | null>(
     null,
   );
@@ -146,10 +118,9 @@ export const SettingsShell = () => {
     [actionsTarget, claimActions],
   );
 
-  // A page opens at its top, and the list comes back where it was left.
-  // The list's place is kept as it scrolls: by the time a page is in the
-  // DOM the browser has already clamped `scrollTop` to the shorter page.
-  // Then a slide that waits for this route can take its picture.
+  // A page opens at its top, and the list comes back where it was left. The
+  // list's place is saved on scroll, because by the time a page renders the
+  // browser has clamped `scrollTop` to the shorter page.
   const listScroll = useRef(0);
   const onScrollerScroll = () => {
     if (!isSubpage && scrollerRef.current) {
@@ -164,15 +135,9 @@ export const SettingsShell = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
-  // Below lg a page links back to the list, its parent. From lg the rail is
-  // on screen, and a back link would say nothing it does not.
   const back = settingsBackLink(location.pathname, isWide);
 
-  /**
-   * The back link slides the page away. `PageHeader` draws the link, so the
-   * stage catches its click on the way down, before the link navigates
-   * without the slide.
-   */
+  /** The stage catches the back link's click from `PageHeader` to slide. */
   const onStageClickCapture = (event: React.MouseEvent) => {
     if (!back || !isPlainClick(event)) return;
     const link = (event.target as Element).closest?.("a");
@@ -194,10 +159,8 @@ export const SettingsShell = () => {
       }
       className={cn(
         PAGE_TOP,
-        // A page that owns its scrolling is a full-width tool, and its
-        // header spans the column, unless it is `boxed`. Every other page is
-        // a centred box, and the header takes the same box, so the title
-        // starts above the page's first card and not off to its left.
+        // A full-width tool's header spans the column unless `boxed`. Other
+        // headers take the page's box, in line with its first card.
         ownsScrolling
           ? cn(currentSubpage?.boxed ? SETTINGS_BOX : PAGE_X, "shrink-0")
           : SETTINGS_BOX,
@@ -209,32 +172,25 @@ export const SettingsShell = () => {
     <SettingsHeaderContext.Provider value={headerSlot}>
       <ResetScopeProvider value={resetScope}>
         <div className="h-full flex overflow-hidden bg-surface text-on-surface">
-          {/* The rail, from lg. A child of this row itself: the handle on
-            its edge measures the room beside it from the row. */}
+          {/* A direct child: its handle measures the room from this row. */}
           <SettingsRail />
 
-          {/* ── The stage: header and page. Below lg it is what slides, so it
-            has its own opaque surface for the picture. ── */}
+          {/* The stage slides below lg, so it has an opaque surface. */}
           <div
             id={SETTINGS_CONTENT_ID}
             tabIndex={-1}
             className="settings-stage flex-1 flex flex-col min-w-0 h-full overflow-hidden bg-surface outline-none"
             onClickCapture={onStageClickCapture}
           >
-            {/* Every page centres its header and its body in the same width:
-              the stage less a scrollbar's lane, kept whether or not the page
-              scrolls. Without it a title sat 5.5 px further left on a page
-              long enough to scroll. A page that owns its scrolling keeps
-              the lane in its own scroller, so its header keeps one here. */}
+            {/* A stable scrollbar lane keeps header and body centered in one
+              width whether or not the page scrolls. */}
             {ownsScrolling && (
               <div className="shrink-0 overflow-hidden [scrollbar-gutter:stable]">
                 {header}
               </div>
             )}
 
-            {/* The page's one scroller. Not a second `main`: the app's layout
-              already draws the main landmark (and its `main-content` id)
-              around the whole shell. */}
+            {/* Not a second `main`: the app's layout draws the landmark. */}
             <div
               ref={scrollerRef}
               onScroll={onScrollerScroll}
@@ -246,20 +202,13 @@ export const SettingsShell = () => {
               )}
             >
               {!ownsScrolling && header}
-              {/*
-                One Suspense boundary for every page, and it stays on screen
-                from page to page. A move to a page whose code is still on
-                its way then keeps the last page up until the code arrives
-                (React Router moves in a transition), where a boundary new to
-                the screen showed "Loading…" at once and React held the page
-                behind it for 300 ms. A page whose code has arrived does not
-                suspend at all (`settingsPagePreload`).
-              */}
+              {/* One boundary that stays mounted: a move in a transition keeps
+                the last page up while new code loads. A new boundary shows
+                "Loading…" at once and React holds it for 300 ms. */}
               <Suspense fallback={<PageFallback />}>
                 <Routes>
                   <Route path="/" element={<SettingsHome />} />
 
-                  {/* Special route for new user in Accounts */}
                   <Route
                     path="admin/users/new"
                     element={
@@ -271,7 +220,6 @@ export const SettingsShell = () => {
                     }
                   />
 
-                  {/* Registry driven pages */}
                   {SETTINGS_PAGES.map((page: SettingsPage) => {
                     const Component = settingsPagePreload(page).Component;
                     const relativePath = page.path.replace(
@@ -298,7 +246,6 @@ export const SettingsShell = () => {
                     );
                   })}
 
-                  {/* An address Settings does not have: the list, and why. */}
                   <Route
                     path="*"
                     element={
@@ -307,9 +254,7 @@ export const SettingsShell = () => {
                   />
                 </Routes>
               </Suspense>
-              {/* The page's end, in its box: Reset to defaults when a value
-                on the page is changed, and the room for the phone's tab
-                bar. A page that owns its scrolling has its own end. */}
+              {/* A page that owns its scrolling draws its own end. */}
               {!ownsScrolling && (
                 <div className={cn(SETTINGS_BOX, "pb-28 md:pb-10")}>
                   <ResetToDefaults entries={resetEntries} />

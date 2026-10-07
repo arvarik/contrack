@@ -1,20 +1,9 @@
 /**
- * Shared API client — the base URL, and the one place a server rejection is
- * turned into something the app can act on.
- *
- * Every module under `src/api/` goes through here. That is not tidiness: the
- * server can now answer a perfectly ordinary request with "your session
- * expired", "your account is disabled", or "change your password first", and
- * each of those needs the whole app to change screen rather than the calling
- * view to show a toast. A view cannot make that decision, and eleven views
- * making it separately would make it eleven ways. So the transport recognises
- * the answer, announces it once on the window, and still throws, so the
- * calling query fails exactly the way it always has.
- *
- * `tests/unit/frontend/api/client.test.ts` reads every file in this directory
- * and fails if one calls `fetch` without coming back through here.
- *
- * @module api/client
+ * The shared API client. Every module in `src/api/` calls the server through
+ * here, so one place turns a refusal into an `ApiError` and tells the app
+ * when a session expires, an account is disabled or a password must change.
+ * `tests/unit/frontend/api/client.test.ts` fails if a file here calls
+ * `fetch` directly.
  */
 
 import {
@@ -54,10 +43,8 @@ export class ApiError extends Error {
   }
 
   /**
-   * How long the server asked us to wait, in whole seconds.
-   *
-   * Rounded up, because a client that sleeps 0 seconds on a fractional wait
-   * retries into the same refusal.
+   * The server's wait in whole seconds, rounded up: a client that sleeps 0
+   * seconds on a fractional wait retries into the same refusal.
    */
   get retryAfterSeconds(): number | undefined {
     if (this.retryAfterMs === undefined) return undefined;
@@ -66,12 +53,8 @@ export class ApiError extends Error {
 }
 
 /**
- * What a `429` was actually about.
- *
- * Two very different refusals share the status. `yours === false` means
- * somebody else on this instance holds a lock or has spent the budget, and
- * the honest message names that rather than implying the reader did something
- * wrong. `yours === true` (or absent) is the caller's own limit.
+ * What a `429` was about. `yours === false` means another account holds a
+ * lock or has spent the budget. Otherwise it is the caller's own limit.
  */
 interface RateLimitFacts {
   /** False when another account holds the lock this request wanted. */
@@ -82,7 +65,7 @@ interface RateLimitFacts {
   retryAfterSeconds?: number;
 }
 
-/** Read the `429` facts out of an error, whatever it turns out to be. */
+/** The `429` facts of an error, or null for any other error. */
 export function rateLimitFacts(error: unknown): RateLimitFacts | null {
   if (!(error instanceof ApiError) || error.status !== 429) return null;
   const details = (error.details ?? {}) as {
@@ -113,17 +96,9 @@ export function retryApiQuery(failures: number, error: unknown): boolean {
 }
 
 /**
- * The server could not be reached at all — as opposed to reaching it and being
- * told no.
- *
- * These are completely different events for the user ("Contrack is down or
- * you are offline" vs "that contact does not exist") but `fetch` reports the
- * first as a bare `TypeError: Failed to fetch`, indistinguishable from a
- * programming error. Naming it lets one app-level sentinel recognise a
- * disconnection and speak for the whole app, instead of every view inventing
- * its own story about why it has no data.
- *
- * @see hooks/useConnectionStatus
+ * The server could not be reached at all, as opposed to answering no. `fetch`
+ * reports this as a bare `TypeError`, so naming it lets one app-level check
+ * (`hooks/useConnectionStatus`) speak for the whole app.
  */
 export class NetworkError extends Error {
   constructor(cause?: unknown) {
@@ -138,24 +113,12 @@ export function isNetworkError(error: unknown): boolean {
   return error instanceof NetworkError;
 }
 
-/**
- * Tell the app about a refusal only it can answer.
- *
- * Each of these changes which screen the app should be showing, and the gate
- * is the only component that can change it. Everything else about the failure
- * stays with the caller.
- */
+/** Tells the app about a refusal that changes which screen it shows. */
 function announce(status: number, code: string | undefined): void {
   if (status === 401) {
-    // Two different things arrive as 401 and only one of them is an expiry.
-    //
-    // `INVALID_CREDENTIALS` is the server rejecting a password somebody just
-    // typed — a wrong current password on the change-password form. The
-    // browser's own credential is fine and the cookie is untouched. Treating
-    // it as an expiry ejected the person to a sign-in screen reading "your
-    // session expired" for a typo, and on the forced-change screen that is a
-    // loop: signing back in returns them to the same form with no idea what
-    // went wrong.
+    // `INVALID_CREDENTIALS` is a wrong password typed into a form, not an
+    // expiry: the session is fine. On the forced-change screen, treating it
+    // as an expiry loops back to the same form.
     if (code === "INVALID_CREDENTIALS") return;
     emitAuthExpired("expired");
     return;
@@ -170,28 +133,18 @@ function announce(status: number, code: string | undefined): void {
     return;
   }
   if (code === "ADMIN_REQUIRED") {
-    // No toast, which is a departure from what task 4.11 asks for. A toast
-    // from the transport fires for requests nobody made: `useGroundingCapacity`
-    // polls an admin-only route every two minutes from the command palette,
-    // so every member would have seen a red error on load and again every two
-    // minutes for the life of the tab. It also fires a second time from the
-    // caller's own `onError`, which already shows the server's own sentence.
-    //
-    // What it does instead is useful. The server has just said this account
-    // is not an admin, and the tab evidently believes otherwise, so the gate
-    // re-reads `/status` and `RequireAdmin` takes the screen away. That fixes
-    // the stale tab rather than complaining about it.
+    // No toast: background polls would show it for requests nobody made,
+    // and the caller's `onError` already shows the server's sentence. The
+    // tab thinks this account is an admin and the server disagrees, so the
+    // gate re-reads `/status` and `RequireAdmin` takes the screen away.
     emitAuthStatusStale();
   }
 }
 
 /**
- * Turn a non-2xx response into an {@link ApiError}, announcing it first.
- *
- * Reads the body once. A body that is not JSON, or is JSON with nothing
- * usable in it, falls back to the status code — the point is that the caller
- * always gets an `ApiError` with a `status`, never a parse failure standing
- * in for the server's answer.
+ * Turns a non-2xx response into an {@link ApiError}, announcing it first. A
+ * body with no usable message falls back to the status code, so the caller
+ * never gets a parse failure in place of the server's answer.
  */
 async function failureOf(res: Response): Promise<ApiError> {
   let message = `HTTP ${res.status}`;
@@ -202,7 +155,7 @@ async function failureOf(res: Response): Promise<ApiError> {
     const body = await res.json();
     const envelope = body?.error;
     if (typeof envelope === "string" && envelope) {
-      // The pre-2.0 shape. A handful of routes still answer with it.
+      // A plain string error. A few routes still answer with it.
       message = envelope;
     } else if (envelope && typeof envelope.message === "string") {
       message = envelope.message;
@@ -219,7 +172,7 @@ async function failureOf(res: Response): Promise<ApiError> {
       message = body.message;
     }
   } catch {
-    // Body wasn't JSON — keep the HTTP status fallback.
+    // Not JSON: keep the status fallback.
   }
 
   announce(res.status, code);
@@ -233,13 +186,9 @@ async function failureOf(res: Response): Promise<ApiError> {
 }
 
 /**
- * Fetch `${API_BASE}${path}` and throw {@link ApiError} on non-2xx.
- *
- * Returns the `Response` rather than its body, because plenty of callers want
- * the headers, a blob, or a stream. {@link handleResponse} is the shorthand
- * for the common case.
- *
- * A transport failure throws {@link NetworkError} instead.
+ * Fetches `${API_BASE}${path}`. Throws {@link ApiError} on non-2xx and
+ * {@link NetworkError} when the server cannot be reached. Returns the
+ * `Response`, for callers that want headers, a blob or a stream.
  */
 export async function apiFetch(
   path: string,
@@ -249,7 +198,7 @@ export async function apiFetch(
   try {
     res = await fetch(`${API_BASE}${path}`, init);
   } catch (cause) {
-    // AbortError is a caller cancelling on purpose, not a dead server.
+    // AbortError is a caller canceling on purpose, not a dead server.
     if (
       init?.signal?.aborted ||
       (cause instanceof Error && cause.name === "AbortError")
@@ -258,20 +207,11 @@ export async function apiFetch(
     throw new NetworkError(cause);
   }
   if (!res.ok) throw await failureOf(res);
-  // The corvid counts the work going by, and once in a long while notices.
   noteCorvidActivity(path);
   return res;
 }
 
-/**
- * The parsed body of a success. `apiFetch` has already thrown an
- * {@link ApiError} for anything else.
- *
- * Use this for anything that reads JSON, which is nearly everything:
- * `handleResponse<Shape>(await apiFetch(path))`. A `204` and an empty body
- * both resolve to `undefined`, so a delete endpoint that returns nothing does
- * not have to pretend to return something.
- */
+/** The parsed body of a success. A `204` or an empty body is `undefined`. */
 async function handleResponse<T>(res: Response): Promise<T> {
   if (res.status === 204) return undefined as T;
   const text = await res.text();
@@ -280,13 +220,11 @@ async function handleResponse<T>(res: Response): Promise<T> {
 }
 
 /**
- * `apiFetch` and `handleResponse` in one call, for the ordinary JSON case.
- *
- * Give it the route's contract from `shared/contracts/` and it sends the
- * contract's method and types the answer by the contract's response. The
- * answer is not parsed: the types say what the server sends, and the
- * integration suite checks that it does. A route with no contract yet takes
- * the type it is given.
+ * `apiFetch` and a JSON body in one call. Given a route's contract from
+ * `shared/contracts/`, it sends the contract's method and types the answer by
+ * its response. The answer is not parsed at runtime: the integration suite
+ * checks that the server sends that shape. A route with no contract takes the
+ * type it is given.
  */
 export async function apiJson<C extends RouteContract>(
   contract: C,

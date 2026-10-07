@@ -1,16 +1,8 @@
 /**
- * The palette's `?` mode: ask AI about the network.
- *
- * It renders in three parts, because the list is a listbox and holds rows
- * only (`aria-required-children`): `notes` above the list (the intro, the
- * waits, a warning), `rows` inside it (the starters, the answer, a link to
- * set AI up) and `after` below it (the brief and the links out).
- *
- * When AI cannot answer, the mode says why and how to fix it. Without a
- * model, the answer used to say "AI could not check these people this
- * time", as if it were a passing outage, and offered a brief that failed.
- *
- * @module components/command-palette/AiMode
+ * The palette's `?` mode: ask AI about the network. In three parts, because
+ * the listbox holds rows only (`aria-required-children`): `notes` above the
+ * list, `rows` inside it and `after` below it. When AI cannot answer, it
+ * says why and how to fix it.
  */
 import { Command } from "cmdk";
 import { ArrowUpRight, HelpCircle, Settings, Sparkles } from "lucide-react";

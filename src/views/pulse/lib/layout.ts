@@ -1,10 +1,4 @@
-/**
- * Pulse Office Layout & Column State Management.
- *
- * Defines the 3-column grid structure (Focus, Network, Intelligence),
- * standard card IDs, default card placements, and a pure reducer
- * for manipulating user layout preferences.
- */
+/** The Pulse columns, the card ids, the default layout, and its reducer. */
 import type { PulseColumn, PulseLayout } from "../../../api/preferences";
 
 export type { PulseColumn, PulseLayout };
@@ -34,12 +28,9 @@ const MAX_CARDS_PER_COL = 20;
 
 const DEFAULT_COLUMN_CARDS: Record<PulseColumn, PulseCardId[]> = {
   focus: ["up-next", "completed"],
-  // Keeping up first: the state of the people you track is the Network
-  // column's headline. A stored layout that still names "momentum" or
-  // "new-people" drops the id in resolveLayout, and one that does not name
-  // "keeping-up" gets the card back here. Composition is last in
-  // Intelligence: no other page has a home for it yet, and customize mode
-  // can hide it.
+  // Keeping up leads: the state of the people you track is Network's
+  // headline. Composition goes last in Intelligence, and customize mode can
+  // hide it.
   network: ["keeping-up", "activity"],
   intel: ["insight", "inbox", "coming-up", "composition"],
 };
@@ -54,9 +45,8 @@ export const DEFAULT_PULSE_LAYOUT: PulseLayout = {
 };
 
 /**
- * A column's name, as customize mode shows it over the column and as the
- * Move menu and the live region say it. "Column" is part of the name:
- * "Move to Network" read as the Network page.
+ * A column's name in customize mode, the Move menu and the live region.
+ * "Column" is part of it: "Move to Network" read as the Network page.
  */
 export const COLUMN_NAMES: Record<PulseColumn, string> = {
   focus: "Focus column",
@@ -93,12 +83,9 @@ interface ResolvedLayout {
 }
 
 /**
- * Resolves a raw layout against known card IDs and defaults.
- *
- * - Drops unknown card IDs
- * - Drops duplicate IDs
- * - Caps at 20 items
- * - Restores unplaced known cards (that are not hidden) to their default column
+ * Resolves a stored layout: drops unknown and duplicate ids, caps each list,
+ * and puts every known card that is neither hidden nor placed back in its
+ * default column.
  */
 export function resolveLayout(raw?: PulseLayout | null): ResolvedLayout {
   if (!raw) {
@@ -112,7 +99,7 @@ export function resolveLayout(raw?: PulseLayout | null): ResolvedLayout {
     };
   }
 
-  // 1. Sanitize hidden list (known only, unique, capped at 20)
+  // Hidden first, so a card that is hidden and placed stays hidden.
   const seen = new Set<string>();
   const hidden: PulseCardId[] = [];
   const rawHidden = Array.isArray(raw.hidden) ? raw.hidden : [];
@@ -124,7 +111,6 @@ export function resolveLayout(raw?: PulseLayout | null): ResolvedLayout {
     }
   }
 
-  // 2. Resolve columns
   const visible: Record<PulseColumn, PulseCardId[]> = {
     focus: [],
     network: [],
@@ -145,11 +131,8 @@ export function resolveLayout(raw?: PulseLayout | null): ResolvedLayout {
     }
   }
 
-  // 3. Any known card not yet in hidden or visible gets restored to its
-  //    default column, in the default order of that column. The order used
-  //    to follow PULSE_CARD_IDS, so an account whose stored order was empty
-  //    (the server's default preference) got Composition first in
-  //    Intelligence, ahead of the insight.
+  // In each column's default order, so an empty stored order (the server's
+  // default) matches the default layout.
   for (const col of PULSE_COLUMNS) {
     for (const cardId of DEFAULT_COLUMN_CARDS[col]) {
       if (!seen.has(cardId) && visible[col].length < MAX_CARDS_PER_COL) {
@@ -174,9 +157,6 @@ export type PulseLayoutAction =
   | { type: "reorder"; column: PulseColumn; cardIds: string[] }
   | { type: "reset" };
 
-/**
- * Pure reducer for Pulse layout actions.
- */
 export function pulseLayoutReducer(
   state: PulseLayout,
   action: PulseLayoutAction,
@@ -197,7 +177,6 @@ export function pulseLayoutReducer(
       const { visible, hidden } = resolveLayout(state);
       if (hidden.includes(action.cardId as PulseCardId)) return state;
 
-      // Remove from whichever visible column it's in
       const nextVisible: Record<PulseColumn, string[]> = {
         focus: visible.focus.filter((id) => id !== action.cardId),
         network: visible.network.filter((id) => id !== action.cardId),
@@ -240,10 +219,8 @@ export function pulseLayoutReducer(
         ? action.targetColumn
         : "focus";
 
-      // Unhide if it was hidden
       const nextHidden = hidden.filter((id) => id !== action.cardId);
 
-      // Remove from all visible columns
       const nextVisible: Record<PulseColumn, string[]> = {
         focus: visible.focus.filter((id) => id !== action.cardId),
         network: visible.network.filter((id) => id !== action.cardId),
@@ -306,16 +283,9 @@ export function pulseLayoutReducer(
   }
 }
 
-// ─── The drag's draft ────────────────────────────────────────────────────────
-//
-// A drag in customize mode moves a card through a local copy of the visible
-// columns, one step each time the drop target changes, so the target column
-// opens a gap while the card is still in the air. Nothing is saved until the
-// drop, and then once: `dropAction` turns the draft into one reducer action,
-// and `pulseLayoutReducer` applies it to the stored preference. Escape
-// throws the draft away.
+// The drag's draft: a local copy of the visible columns that a drag moves a
+// card through. The drop saves once, through `dropAction`.
 
-/** The column that holds a card, or null when no visible column does. */
 export function columnOf(
   visible: VisibleColumns,
   cardId: string,
@@ -327,11 +297,8 @@ export function columnOf(
 }
 
 /**
- * The columns with one card moved. The card leaves the column it is in and
- * goes into `targetColumn` at `targetIndex`. The index counts the target
- * column's other cards, without the card itself, and is clamped to them, so
- * 0 is the top and the column's length is the end. Pure: the other columns
- * come back as they were, in new arrays.
+ * The columns with one card moved. `targetIndex` counts the target column's
+ * other cards and is clamped to them.
  */
 export function moveCard(
   visible: VisibleColumns,
@@ -356,7 +323,6 @@ export function moveCard(
   return next;
 }
 
-/** Whether two sets of columns hold the same cards in the same order. */
 export function sameColumns(a: VisibleColumns, b: VisibleColumns): boolean {
   return PULSE_COLUMNS.every(
     (col) =>
@@ -366,11 +332,8 @@ export function sameColumns(a: VisibleColumns, b: VisibleColumns): boolean {
 }
 
 /**
- * The one reducer action that turns `before` into `after` once a drag has
- * moved `cardId`, or null when the card landed where it started. A card
- * that stayed in its column is a `reorder` of that column, and a card that
- * changed column is a `move` to its place there. The drop saves the result
- * of `pulseLayoutReducer` with this action, so a drag is one write.
+ * The one reducer action that turns `before` into `after`, so a drag is one
+ * write: a `reorder` within a column, a `move` across, or null for no change.
  */
 export function dropAction(
   before: VisibleColumns,

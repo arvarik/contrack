@@ -1,24 +1,12 @@
 /**
- * SettingsRail — The left navigation rail for wide screens (lg and up).
+ * The settings rail from `lg`. It shares the Network list's resizable width
+ * (`LEFT_PANE`), so the page stays put between the two. Only the page that
+ * owns the path is active (`findSettingsPage`), so Correspondents, under the
+ * Connectors path, does not light Connectors too.
  *
- * The left pane, the way the Network list is: the same width, the same
- * edge to drag between 300 and 480 px, and one stored width for both
- * (`LEFT_PANE`), so moving between Network and Settings leaves the page
- * beside the pane where it was. It holds the search box at the top, group
- * headings in SECTION_HEADING, and rows with an icon, a label and an
- * optional count pill. The active row has aria-current="page" and wears the
- * selected row's tint, with its label in the tint's ink. One row is active:
- * the page the path belongs to (`findSettingsPage`), so Correspondents,
- * under the Connectors path, does not light Connectors too.
- *
- * The rows scroll with their bar on the left edge, as the Network list's
- * do (`dir="rtl"` on the scroller, `ltr` inside it), so the bar sits on the
- * sidebar's side and away from the page. The bar shows only while the
- * pointer is over the rail or the keyboard is in it (`scrollbar-on-hover`).
- *
- * The rail's own surface sets it apart from the page, with no line between
- * them. The label keeps one weight in both states, so the selected row's
- * label is as wide as it was.
+ * `dir="rtl"` on the scroller puts its bar on the sidebar's side, as in the
+ * Network list. The label keeps one weight, so a selected label keeps its
+ * width.
  */
 import { useContext, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -43,13 +31,10 @@ export const SettingsRail = () => {
   const location = useLocation();
   const { isAdmin, authRequired } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
-  // A link's page starts loading, code and first data, when a person
-  // points at it or tabs to it (`warm.ts`), so it opens complete.
   const queryClient = useContext(QueryClientContext);
 
   const counts = useAttentionCounts();
 
-  /** The count pill beside a page's name: what is waiting there. */
   const badgeFor = (pageId: string): number => {
     switch (pageId) {
       case "duplicates":
@@ -66,12 +51,8 @@ export const SettingsRail = () => {
   const activeId = findSettingsPage(location.pathname)?.id;
 
   return (
-    // Not `overflow-hidden`: the handle's grip reaches past the rail's edge,
-    // over the page, and a clip would cut it off. The rail paints over the
-    // page (z 10) for the same reason.
+    // No `overflow-hidden` and z 10: the handle's grip reaches over the page.
     <aside className="relative z-10 hidden lg:flex flex-col w-(--pane-width) shrink-0 h-full bg-surface-container-low">
-      {/* The same 8 px sides as the rows below, so the box and a selected
-          row share one width. */}
       <div className="px-2 pt-3 pb-2 shrink-0">
         <SettingsSearch
           value={searchQuery}
@@ -85,9 +66,7 @@ export const SettingsRail = () => {
         <nav
           aria-label="Settings"
           dir="rtl"
-          // 8 px sides and 10 px inside a row. A row the keyboard reaches
-          // scrolls into view with 12 px to spare, not flush with the
-          // rail's edge.
+          // A row the keyboard reaches scrolls in with 12 px to spare.
           className="flex-1 min-h-0 overflow-y-auto scrollbar-on-hover px-2 py-2 scroll-py-3"
         >
           <div dir="ltr" className="space-y-4">
@@ -141,8 +120,7 @@ export const SettingsRail = () => {
                           <span className="truncate flex-1">{page.title}</span>
                           {badgeCount > 0 && (
                             // On the selected row the pill takes the card
-                            // face: its own tint over the row's measured
-                            // 4.2 to 1.
+                            // face: its tint over the row's measured 4.2:1.
                             <span
                               aria-hidden="true"
                               className={cn(

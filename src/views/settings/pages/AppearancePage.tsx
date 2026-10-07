@@ -1,7 +1,6 @@
 /**
- * AppearancePage — How Contrack looks on this account.
- *
- * Theme, accent colour, text size, motion, the corvid, and list density.
+ * AppearancePage: theme, accent color, text size, motion, the corvid and
+ * list density.
  */
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { useListDensity } from "../../../hooks/useListDensity";
@@ -20,9 +19,8 @@ export const AppearancePage = () => {
   const { density, setDensity } = useListDensity();
   const osReducesMotion = useMediaQuery(REDUCED_MOTION_QUERY);
 
-  // Either input silences the bird, so the row has to say which one did it.
-  // A person who set the OS switch years ago and forgot has no other way to
-  // find out why "Full" changes nothing.
+  // Either input silences the bird, so the row says which one did, or
+  // "Full" seems to change nothing.
   const motionIsReduced = osReducesMotion || preferences.motion === "reduced";
 
   return (
@@ -52,9 +50,9 @@ export const AppearancePage = () => {
 
         <SettingRow
           id="accent"
-          title="Accent colour"
+          title="Accent color"
           prefKey="accent"
-          description="The colour of links, buttons, and anything that wants your attention. Each one is adjusted to stay readable in light and dark"
+          description="The color of links, buttons, and anything that wants your attention. Each one is adjusted to stay readable in light and dark"
         >
           <AccentPicker
             value={preferences.accent}

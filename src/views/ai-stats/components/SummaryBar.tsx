@@ -1,14 +1,11 @@
-/**
- * SummaryBar — Tinted hero card for the AI Stats page.
- * Shows a badge when calls are simulated or on Gemini's free tier, the
- * session summary sentence, and a Brain icon watermark.
- */
+/** The tinted summary card at the top of the AI usage page. */
 import { cn } from "../../../lib/utils";
 import { CARD_TINTED, LABEL_PRIMARY } from "../../../lib/styles";
 import { DURATION, EASE } from "../../../lib/motion";
 import { Brain } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import type { AIStatsSummary } from "../../../api";
+import { formatCompact } from "../formatCompact";
 
 interface SummaryBarProps {
   summary?: AIStatsSummary | null;
@@ -16,10 +13,9 @@ interface SummaryBarProps {
 }
 
 /**
- * The badge, shown only when it tells a reader something about their calls.
- * Simulated calls mean nothing reached a provider. The Gemini free tier means
- * Google may use the prompts, contacts' details included, to improve its
- * products, which is the one tier fact worth a warning.
+ * A badge only when it says something about the calls: simulated calls reach
+ * no provider, and on the Gemini free tier Google may use the prompts,
+ * contacts' details included, to improve its products.
  */
 function badgeFor(s: AIStatsSummary): { label: string; color: string } | null {
   if (s.tier === "MOCK")
@@ -56,12 +52,6 @@ function buildSummaryText(s: AIStatsSummary): string {
   }
 
   return parts.join(" · ");
-}
-
-function formatCompact(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
 }
 
 export const SummaryBar = ({ summary, isLoading }: SummaryBarProps) => {

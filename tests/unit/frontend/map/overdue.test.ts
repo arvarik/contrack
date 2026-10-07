@@ -1,13 +1,9 @@
 /**
  * The map counts a follow-up as overdue by the calendar day, as the contact
- * page's banner does.
- *
- * It compared instants. At 6 PM in Los Angeles a follow-up set to
- * "Tomorrow" (`2026-09-23`) counted as one overdue, because
- * `new Date("2026-09-23")` is UTC midnight, 5 PM the day before in
- * California. And SQLite's `2026-09-22 10:00:00` is UTC, which `new Date()`
- * read as local time. The zone is pinned to Los Angeles here, where both
- * mistakes show, and `now` is fixed.
+ * page's banner does, not by instant. `new Date("2026-09-23")` is UTC
+ * midnight, 5 PM the day before in California, and SQLite's
+ * `2026-09-22 10:00:00` is UTC, which `new Date()` reads as local time. The
+ * zone is pinned to Los Angeles, where both mistakes show, and `now` is fixed.
  */
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {

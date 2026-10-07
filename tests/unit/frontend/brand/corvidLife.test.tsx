@@ -1,18 +1,15 @@
 // @vitest-environment jsdom
 /**
- * A living mark, in a page.
- *
- * `corvidBrain.test.ts` measures what the bird decides. This measures the
- * wiring round it, which is where a mascot turns into a nuisance or a leak:
+ * A living mark, in a page. `corvidBrain.test.ts` measures what the bird
+ * decides. This measures the wiring round it:
  *
  * - Only the app's own bird, `primary`, answers the whole app. Any other
  *   living mark answers only what is addressed to it or to its controls.
- * - A mark too small to live still answers, and then holds still with no
- *   timer left.
- * - While its bird is away flying, a perch does nothing at all, and it lives
- *   again when the bird is home.
- * - The app's own bird watches the pointer, falls asleep when nobody is
- *   there, and does something of its own when the app stirs it.
+ * - A mark too small to live still answers, then holds still with no timer.
+ * - While its bird is away flying, a perch does nothing, and it lives again
+ *   when the bird is home.
+ * - The app's own bird watches the pointer, sleeps when nobody is there, and
+ *   acts on its own when the app stirs it.
  * - It never repaints the ring, and every act ends in the logo.
  */
 import React from "react";

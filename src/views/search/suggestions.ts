@@ -1,38 +1,22 @@
 /**
- * The questions under "Try asking" on Ask Contrack, in People mode, and in
- * the palette's AI mode.
+ * The "Try asking" questions on Ask Contrack and in the palette's AI mode,
+ * drawn at random from a pool the server builds from the person's own
+ * network (`GET /api/search/starters`), so a press always finds people.
  *
- * The server keeps a pool of questions built from the person's own network
- * (`GET /api/search/starters`): its industries, cities, companies, roles,
- * interests and tags, each held by someone, and seven questions any network
- * can ask, so a press always finds people. The page shows six of them at
- * random, drawn each time the list appears, so the list changes from visit to
- * visit. The palette shows four, through the same draw.
- *
- * A draw picks kinds first. The pool is mostly companies and roles, and
- * seven general questions among five hundred would almost never be drawn by a
- * shuffle of the whole pool. With the kind chosen first, every kind has a
- * place in a draw when there are places enough: six questions from six
- * different kinds, and never more than two of one kind while other kinds are
- * left.
- *
- * The list used to be three questions from the network and fixed examples
- * for the rest. On a real network most examples found no one.
- *
- * @module views/search/suggestions
+ * A draw picks kinds first. The pool is mostly companies and roles, so a
+ * plain shuffle of about five hundred would almost never draw the seven
+ * general questions.
  */
 import type { StarterQuestion } from "../../../shared/starterQuestions";
 
-/** How many questions the Ask page shows. */
 export const SUGGESTION_COUNT = 6;
 
-/** How many questions the palette's AI mode shows. */
 export const PALETTE_SUGGESTION_COUNT = 4;
 
 /** The most questions of one kind in a draw, while other kinds are left. */
 const PER_KIND = 2;
 
-/** A shuffled copy (Fisher-Yates, with `random`). */
+/** A Fisher-Yates shuffled copy. */
 function shuffled<T>(items: readonly T[], random: () => number): T[] {
   const out = [...items];
   for (let i = out.length - 1; i > 0; i--) {
@@ -43,16 +27,8 @@ function shuffled<T>(items: readonly T[], random: () => number): T[] {
 }
 
 /**
- * Draw `count` questions from the pool at random, mixing the kinds.
- *
- * 1. Group the pool by kind, and shuffle the kinds and each kind's questions
- *    (with `random`).
- * 2. Take one question from each kind in turn, then a second from each, until
- *    the draw is full. So six kinds give six kinds, and at most
- *    {@link PER_KIND} of one kind are taken here.
- * 3. If the draw is still short, because the pool has few kinds, fill it
- *    from the questions left, in their shuffled order.
- *
+ * Draws `count` questions: one from each shuffled kind in turn, up to
+ * {@link PER_KIND} rounds, then fills any gap from the rest of the pool.
  * Returns the whole pool, shuffled, when it holds `count` or fewer.
  */
 export function drawSuggestions(

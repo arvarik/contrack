@@ -1,11 +1,4 @@
-/**
- * ImportPage — Settings workbench for importing contacts and reviewing past imports.
- *
- * Renders ImportPanel inline and displays a history of recent imports with status,
- * counts, timestamp, and retry capabilities.
- *
- * @module views/settings/pages/ImportPage
- */
+/** ImportPage: the import panel, then the recent imports with Try again. */
 import React, { useState } from "react";
 import {
   AlertCircle,
@@ -76,9 +69,8 @@ export const ImportPage = () => {
         <ImportPanel />
       </div>
 
-      {/* Recent imports: one card, a row for each import. With none yet
-          the section is not there: a heading over "No recent imports" said
-          the same thing twice about nothing. */}
+      {/* No section at all with no imports: a heading over "No recent
+          imports" says nothing twice. */}
       {(isLoading || imports.length > 0) && (
         <section aria-label="Recent imports">
           <h2 className={SETTINGS_SECTION_HEADING}>Recent imports</h2>

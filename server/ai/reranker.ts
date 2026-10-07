@@ -1,27 +1,19 @@
-// =============================================================================
-// AI Layer — the reranker
-// =============================================================================
-// Search reorders the top of its local list through one interface,
-// `Reranker`, and never asks which model is behind it. One adapter implements
-// it: a small cross-encoder on the CPU worker, `Xenova/ms-marco-TinyBERT-L-2-v2`
-// unless `SEARCH_RERANK_MODEL` names another. A cross-encoder reads the
-// question and one profile together, so "someone who knows about beekeeping"
-// ranks a profile by what it says, not only by which words or vectors happen
-// to be close.
+// The reranker. Search reorders the top of its local list through one
+// interface, `Reranker`. One adapter implements it: a small cross-encoder on
+// the CPU worker, `Xenova/ms-marco-TinyBERT-L-2-v2` unless
+// `SEARCH_RERANK_MODEL` names another. A cross-encoder reads the question and
+// one profile together, so "someone who knows about beekeeping" ranks a profile
+// by what it says, not by which words or vectors happen to be close. The stage
+// that uses it, with its budget and candidates, is
+// `server/services/search/rerank.ts`.
 //
-// The stage that uses it, with its budget and its candidates, is
-// `server/services/search/rerank.ts`. This file says which reranker runs and
-// how it scores.
+// `local` is the privacy fact: the cross-encoder runs on this server, so it
+// orders an AI-off account's list. A reranker that sends the question and
+// profiles to a service is not local, and runs only where AI is allowed.
 //
-// `local` is the privacy fact. The cross-encoder runs on this server, so it
-// orders the list of an account with AI off. A reranker that sends the
-// question and the profiles to a service is not local, and search runs it
-// only where AI is allowed.
-//
-// The model loads once, on the worker, when the server starts
-// (`initCrossEncoder`). Until it has loaded, or when it cannot load, the
-// stage is skipped. `SEARCH_RERANK_MODEL=off` turns it off.
-// =============================================================================
+// The model loads once, on the worker, at startup (`initCrossEncoder`). Until
+// it loads, or when it cannot, the stage is skipped. `SEARCH_RERANK_MODEL=off`
+// turns it off.
 
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
@@ -47,13 +39,11 @@ export interface Reranker {
 }
 
 /**
- * The model when `SEARCH_RERANK_MODEL` is unset.
- *
- * Measured against `Xenova/ms-marco-MiniLM-L-6-v2` with
- * `scripts/benchmark-search.ts --rerank-sweep`. Both lift the golden
- * questions the same, from MRR 0.983 to 0.993 at 5,000 contacts, and only
- * this one fits the budget: 10.5 ms at p95 for 30 candidates, where
- * MiniLM-L-6 needs 30.8 ms for 10.
+ * The model when `SEARCH_RERANK_MODEL` is unset. Against
+ * `Xenova/ms-marco-MiniLM-L-6-v2` (`scripts/benchmark-search.ts
+ * --rerank-sweep`), both lift the golden questions alike, MRR 0.983 to 0.993 at
+ * 5,000 contacts, and only this one fits the budget: 10.5 ms at p95 for 30
+ * candidates, where MiniLM-L-6 needs 30.8 ms for 10.
  */
 export const DEFAULT_RERANK_MODEL = "Xenova/ms-marco-TinyBERT-L-2-v2";
 
@@ -67,9 +57,7 @@ export function rerankModel(): string | null {
   return value || DEFAULT_RERANK_MODEL;
 }
 
-// ---------------------------------------------------------------------------
 // The cross-encoder on the CPU worker
-// ---------------------------------------------------------------------------
 
 /** Models that have loaded on the worker in this process. */
 const loaded = new Set<string>();
@@ -119,13 +107,11 @@ export function crossEncoder(model: string): Reranker {
 }
 
 /**
- * Load the model on the worker with one pair, once, at boot.
- *
- * Loading at boot keeps the model's load time, and a first download, off a
- * person's search. Returns false when the stage is off, when the worker
- * cannot run, or when the model does not load. Nothing else runs it on
- * this thread: the main thread must never load onnxruntime (see
- * `cpuWorker.ts`), and the stage is not worth a second copy of a model.
+ * Load the model on the worker with one pair, once, at boot, so its load (and a
+ * first download) is not on somebody's search. False when the stage is off, the
+ * worker cannot run, or the model does not load. It never runs on this thread:
+ * the main thread must never load onnxruntime (`cpuWorker.ts`), and the stage
+ * is not worth a second copy of a model.
  */
 export async function initCrossEncoder(
   model = rerankModel(),
@@ -164,18 +150,15 @@ export async function initCrossEncoder(
   }
 }
 
-// ---------------------------------------------------------------------------
 // The choice
-// ---------------------------------------------------------------------------
 
 /** A reranker that a test or the evaluation recorder put in place. */
 let replacement: Reranker | null = null;
 
 /**
- * Use `reranker` for every model name. Null puts the cross-encoder back.
- *
- * Set by the search gate, which replays recorded scores so it needs no model,
- * by its recorder, which records what the worker returns, and by tests.
+ * Use `reranker` for every model name; null puts the cross-encoder back. For
+ * the search gate, which replays recorded scores without a model, its recorder,
+ * and tests.
  */
 export function setReranker(reranker: Reranker | null): void {
   replacement = reranker;

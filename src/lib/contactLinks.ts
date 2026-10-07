@@ -1,12 +1,6 @@
 /**
- * The ways a contact leaves the app: a call, a text, an email, and a card
- * that another address book can import.
- *
- * A phone number is one tap from a call only when it is a `tel:` link, and a
- * contact goes into the phone's own address book only as a vCard. These
- * functions are pure, so the unit test reads what they write.
- *
- * @module lib/contactLinks
+ * The ways a contact leaves the app: a `tel:`, `sms:` or `mailto:` link, and
+ * a vCard another address book can import. Pure functions.
  */
 import { vcardBirthdayLine } from "../../shared/birthday";
 
@@ -17,15 +11,15 @@ const EXTENSION = /\s*(?:ext(?:ension)?\.?|x)\s*(\d+)\s*$/i;
 const MAX_DIGITS = 15;
 
 /**
- * The number as a dialler reads it, in two parts.
+ * The number as a dialer reads it, in two parts.
  *
  * 1. `number`: a leading "+" and the digits. Spaces, brackets, dots, dashes
  *    and slashes go. The trunk "(0)" after a country code goes too: "+44
- *    (0) 20" is dialled as "+4420".
+ *    (0) 20" is dialed as "+4420".
  * 2. `pauses`: what a phone dials after the call connects, each after a ","
  *    (a pause): the digits after a "," in the text, and an extension.
  *
- * Null when a wrong number would be dialled, so the caller shows plain text:
+ * Null when a wrong number would be dialed, so the caller shows plain text:
  * no digit; a letter ("1-800-FLOWERS" would dial "1800"); a second "+" or
  * more than 15 digits (two numbers in one field); a "*" or a "#", which the
  * iPhone's Phone app refuses to dial.
@@ -74,9 +68,7 @@ export function mailtoHref(email: string): string {
   return `mailto:${encodeURIComponent(email.trim()).replace(/%40/g, "@")}`;
 }
 
-// ---------------------------------------------------------------------------
 // vCard
-// ---------------------------------------------------------------------------
 
 /** What a vCard reads from a contact. A full `Contact` fits. */
 export interface VCardSource {
@@ -156,8 +148,8 @@ function typeParam(types: (string | undefined)[], first: boolean): string {
  * A contact as a vCard 3.0 card, the version that iOS, Android and the
  * desktop address books all import.
  *
- * 1. The name, as FN, and as N split at its last space: "Ada Lovelace" is
- *    the family name "Lovelace" and the given name "Ada". A suffix such as
+ * 1. The name, as FN, and as N split at its last space: "Rowan Vale" is the
+ *    family name "Vale" and the given name "Rowan". A suffix such as
  *    "Jr." stays a suffix. A contact with no name is named by its company
  *    or its email, because an importer refuses an empty FN.
  * 2. The company and the role, as ORG and TITLE.

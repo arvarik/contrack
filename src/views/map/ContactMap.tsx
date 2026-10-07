@@ -1,24 +1,15 @@
 /**
- * ContactMap — contacts on a MapLibre map, clustered, as named buttons.
+ * Contacts on a MapLibre map, clustered, as named buttons. The map page
+ * renders it full size, and a smaller map renders it with
+ * `interactive={false}`.
  *
- * Reusable: the map page renders it full size, and a smaller map can render
- * it with `interactive={false}`. It owns the MapLibre map, the clustered
- * GeoJSON source, the pins, the hover card and the zoom buttons.
- *
- * BORN CORRECT. The world must fill the container, so the minimum zoom is a
- * function of the container's size (see `mapMath.ts`). That size is measured
- * before the map exists, and the zoom, the minimum zoom and the bounds are
- * passed as props at creation. Nothing mutates or animates the view at mount.
- * The Leaflet map this replaces once set its zoom in an effect after mount,
- * and the animation it started put every pin in the ocean on a fresh load.
- * The only later change is the resize path, and it uses `jumpTo`, never an
- * animation. Two things keep the rule rather than break it: the page map
- * opens on the view it was left at, read from storage before the map exists
- * (see `lastView.ts`), and it is born with padding for what covers it (see
- * `insets.ts`). The page map can also keep its map alive between visits with
- * `reuse`, and a kept map is not born at all: it comes back as it was.
- *
- * @module views/map/ContactMap
+ * Born correct: the minimum zoom depends on the container's size (see
+ * `mapMath.ts`), so the size is measured before the map exists, and the zoom,
+ * minimum zoom, bounds, last view (`lastView.ts`) and padding (`insets.ts`)
+ * are creation props. Nothing animates the view at mount, because a zoom
+ * animation after mount puts every pin in the ocean on a fresh load. Only
+ * the resize path changes the view later, with `jumpTo`. A `reuse` map is
+ * not born again: it comes back as it was.
  */
 import {
   useCallback,
@@ -93,12 +84,9 @@ export const CONTACTS_SOURCE_ID = "contacts";
 const CLUSTER_RADIUS = 50;
 
 /**
- * An invisible layer on the contacts source.
- *
- * MapLibre loads tiles only for a source that a visible layer uses, and
- * `querySourceFeatures` reads loaded tiles. With no layer the source holds
- * the contacts and returns none of them. The pins themselves are React
- * markers, so this layer draws nothing.
+ * An invisible layer on the contacts source. MapLibre loads tiles only for a
+ * source that a visible layer uses, and `querySourceFeatures` reads loaded
+ * tiles, so with no layer the source returns no contacts.
  */
 const PRESENCE_LAYER: LayerProps = {
   id: "contacts-presence",
@@ -110,22 +98,13 @@ const PRESENCE_LAYER: LayerProps = {
   },
 };
 
-/**
- * What the map draws when the basemap style fails to load. A map with no
- * style cannot hold a source, so without this a failed style would also
- * remove every pin.
- */
+/** Drawn when the style fails, since a map with no style holds no pins. */
 const BLANK_STYLE: StyleSpecification = { version: 8, sources: {}, layers: [] };
 
 /**
- * Opens over the Americas rather than the Atlantic. Longitude 0 puts the
- * prime meridian mid-screen and pushes the Americas to the left edge.
- *
- * Zoom 1 is the whole world, because a vector tile is 512 px: every zoom is
- * one step closer than the same number on the 256 px raster tiles the map
- * used before. Zoom 2 here would open on half the planet and hide everybody
- * in Asia until the first drag. The measured minimum zoom raises this when
- * the window is larger than the world at zoom 1.
+ * Opens over the Americas rather than the Atlantic. With 512 px vector tiles,
+ * zoom 1 is the whole world, and zoom 2 hides Asia until the first drag. The
+ * measured minimum zoom raises this in a large window.
  */
 const DEFAULT_VIEW = { longitude: -95, latitude: 20, zoom: 1 };
 
@@ -163,38 +142,23 @@ interface ContactMapProps {
   /** False draws a still map: no pan, no zoom, no zoom buttons. */
   interactive?: boolean;
   initialView?: { longitude: number; latitude: number; zoom?: number };
-  /**
-   * Padding the map is born with, for what covers it at mount. The map page
-   * measures its covers before the map exists (see `insets.ts`).
-   */
+  /** Padding the map is born with, for what covers it (see `insets.ts`). */
   initialPadding?: PaddingOptions;
-  /**
-   * Open on the view this browser was left at, and remember every move. An
-   * `initialView` still wins when both are given. The page map alone.
-   */
+  /** Open on, and save, this browser's last view. `initialView` wins. */
   rememberView?: boolean;
   /**
-   * Keep the map alive when this component unmounts and take it back on the
-   * next mount, style, tiles and worker included, so a return to the page
-   * shows the map at once. One map is kept, so one caller sets this: the
-   * page map. A map born with other options must not take it.
+   * Keep the map (style, tiles, worker) alive across unmounts, so a return
+   * shows it at once. One map is kept, so only the page map sets this.
    */
   reuse?: boolean;
   /** Keep the minimum zoom where the world covers the container. */
   minZoomFromViewport?: boolean;
-  /**
-   * False draws pins with no hover card. A small map has no room to open one,
-   * and the page around it already names the person.
-   */
+  /** False draws pins with no hover card, for a small map. */
   hoverCard?: boolean;
-  /**
-   * Names the region, so two maps on one page are two landmarks a reader can
-   * tell apart. The page map keeps the default.
-   */
+  /** Names the region, so two maps on one page are distinct landmarks. */
   label?: string;
   /** The map, once it has loaded. The caller uses it to move the view. */
   onMapReady?: (map: MapLibreMap) => void;
-  /** The contacts are still loading. */
   loading?: boolean;
   /** A card's button other than Open, which opens the contact. */
   onCardAction?: (action: Exclude<CardAction, "open">, id: string) => void;
@@ -203,10 +167,7 @@ interface ContactMapProps {
   /** Show this contact's card, pinned. Each new object asks again. */
   cardRequest?: { id: string } | null;
   layer?: MapLayer;
-  /**
-   * Rendered inside the map, after the pins. A caller that needs one marker
-   * of its own, such as the pin a person drags into place, puts it here.
-   */
+  /** Rendered inside the map after the pins, such as a draggable pin. */
   children?: ReactNode;
 }
 
@@ -236,8 +197,7 @@ export const ContactMap = ({
   const { mapStyles } = useAuth();
   const styleUrl = styleFor(mode, mapStyles);
 
-  // Read once, before the map exists, so the remembered view is a creation
-  // prop like every other part of the first frame.
+  // Read once, before the map exists, so it is a creation prop.
   const [remembered] = useState(() =>
     rememberView && !initialView ? readLastView() : null,
   );
@@ -246,9 +206,8 @@ export const ContactMap = ({
     writeLastView(event.viewState);
   }, []);
 
-  // Measure before the map exists. useLayoutEffect runs after layout and
-  // before paint, so the map still appears on the first painted frame, with
-  // the right zoom instead of animating into it.
+  // useLayoutEffect measures before paint, so the first painted frame already
+  // has the right zoom.
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const [initialMinZoom, setInitialMinZoom] = useState<number | null>(null);
   useLayoutEffect(() => {
@@ -264,8 +223,7 @@ export const ContactMap = ({
   const [map, setMap] = useState<MapLibreMap | null>(null);
   useKeepWorldCovering(map, wrapperRef, minZoomFromViewport);
 
-  // The heat, in the accent as the page paints it, scaled to the contacts
-  // shown (see `heat.ts`). Its pins come back as it fades.
+  // The heat is scaled to the contacts shown, and pins come back as it fades.
   const heatOn = layer === "heat";
   const heatStops = useHeatStops(heatOn);
   const heatScale = useMemo(
@@ -281,21 +239,10 @@ export const ContactMap = ({
   const drawPins = !heatOn || pinsOverHeat;
 
   /**
-   * MapLibre's own chrome is hidden until the map has loaded.
-   *
-   * The attribution control is born expanded: the moment the style's
-   * attributions arrive, MapLibre puts the full "OpenFreeMap,
-   * OpenStreetMap contributors" strip across the map and leaves it there
-   * until something collapses it. This map collapses it on load, so the
-   * strip used to flash over the picture on every map that opened, which
-   * on the contact page meant every time a reader moved to another person.
-   *
-   * A class cannot tell the two states apart: the strip a reader opens
-   * carries the same one MapLibre opens it with. So the chrome is hidden by
-   * CSS for the one moment it is wrong, from creation until load, and the
-   * collapse below decides what it looks like when it appears. The credit
-   * the basemap's terms require is then where MapLibre puts it, behind the
-   * "i" button, from the first frame anybody sees.
+   * CSS hides MapLibre's chrome until load. The attribution control is born
+   * expanded, and a class cannot tell that from a reader's open strip, so
+   * without this the full strip flashes over every new map. After load the
+   * required credit sits behind the "i" button.
    */
   const [ready, setReady] = useState(false);
 
@@ -314,13 +261,9 @@ export const ContactMap = ({
   }, [contacts]);
 
   /**
-   * The map as soon as its style has arrived, before it has loaded.
-   *
-   * MapLibre's `load` waits for every basemap tile and font. On a first
-   * visit over a slow link that took seconds, and the pins waited for all of
-   * it. The pins need only the contacts source, which the map holds once the
-   * style is in, so they are read from this map and appear while the
-   * basemap is still painting in.
+   * The map once its style arrives, before load. `load` waits for every
+   * basemap tile and font, which takes seconds on a slow link, and the pins
+   * need only the contacts source.
    */
   const [styledMap, setStyledMap] = useState<MapLibreMap | null>(null);
   const features = useClusterFeatures(map ?? styledMap, CONTACTS_SOURCE_ID);
@@ -482,8 +425,8 @@ export const ContactMap = ({
     clusterLeavesCache.current.clear();
     setClusterLeaves((prev) => (prev.size ? new Map() : prev));
   }, [contacts, setCard]);
-  // A caller's card, pinned as Space pins it, or a sheet on a touch screen.
-  // Each request asks once, so new contacts do not open it again.
+  // A caller's card, pinned, or a sheet on a touch screen. Each request
+  // object opens once, so new contacts do not open it again.
   const asked = useRef<{ id: string } | null>(null);
   useEffect(() => {
     if (!cardRequest || cardRequest === asked.current) return;
@@ -512,9 +455,8 @@ export const ContactMap = ({
   }, [features, stack]);
 
   /**
-   * Give the focus to a pin by its contact, quietly (no tooltip), or to the
-   * map when no pin of theirs is drawn. The map keeps the arrow keys, so a
-   * keyboard is never left on the page.
+   * Focus a contact's pin without its tooltip, or the map canvas when no pin
+   * is drawn, so the keyboard never falls to the page.
    */
   const refocus = useCallback(
     (contactId: string | null, selector?: string) => {
@@ -528,8 +470,7 @@ export const ContactMap = ({
     [map],
   );
 
-  // A contact that closes takes the focus away with its panel: Escape, its
-  // close button or Back. The focus comes back to that contact's pin.
+  // A closed contact panel takes the focus with it, so give it back to the pin.
   const lastSelected = useRef(selectedId);
   useEffect(() => {
     const closed = lastSelected.current;
@@ -590,8 +531,7 @@ export const ContactMap = ({
 
   const handleClick = useCallback(
     (event: MapLayerMouseEvent) => {
-      // MapLibre reports a click on a pin or a card as a map click too, and
-      // opening a contact must not also close it.
+      // MapLibre also reports a click on a pin or a card as a map click.
       const target = event.originalEvent.target as Element | null;
       if (target?.closest?.(".maplibregl-marker, .maplibregl-popup")) return;
       handleCloseCard();
@@ -639,9 +579,8 @@ export const ContactMap = ({
           zoom: await source.getClusterExpansionZoom(cluster.clusterId),
           duration: prefersReducedMotion() ? 0 : 500,
         });
-        // The cluster's button goes with the zoom. The focus waits on the
-        // map, and a keyboard's moves on to the pin nearest the spot once
-        // the split is drawn.
+        // The zoom unmounts the cluster's button. The focus waits on the map,
+        // then a keyboard user's moves to the nearest pin once drawn.
         if (!(focused instanceof HTMLElement)) return;
         if (!wrapperRef.current?.contains(focused)) return;
         const keyboard = focused.matches(":focus-visible");
@@ -718,8 +657,7 @@ export const ContactMap = ({
           }
         />
       )}
-      {/* Rendered only once the wrapper is measured. One frame without a
-          map is invisible, and pins in the ocean were not. */}
+      {/* Born only once the wrapper is measured, at the right zoom. */}
       {initialMinZoom !== null && (
         <MapGL
           mapStyle={styleBroken ? BLANK_STYLE : styleUrl}
@@ -741,9 +679,8 @@ export const ContactMap = ({
           touchPitch={false}
           pitchWithRotate={false}
           onStyleData={(event) => {
-            // The style's attributions are what opens the strip, and this
-            // is the event that carries them. Collapsing here means the
-            // chrome is already right when `onLoad` reveals it.
+            // This event carries the attributions that open the strip, so
+            // the chrome is right before `onLoad` reveals it.
             collapseAttribution(event.target.getContainer());
             setStyledMap(event.target);
           }}
@@ -782,8 +719,7 @@ export const ContactMap = ({
           {interactive && (
             <NavigationControl position="bottom-right" showCompass={false} />
           )}
-          {/* Over the heat the pins wait until it fades: drawn over the heat
-              they stood for, Heat looked like Pins. */}
+          {/* Pins wait until the heat fades, or Heat looks like Pins. */}
           {drawPins &&
             features.map((feature) => {
               if (feature.kind === "cluster") {
@@ -914,11 +850,8 @@ function HeatReadoutLabel({
 }
 
 /**
- * Keep the world covering the container as the container changes size.
- *
- * Initial sizing happens before the map is created. This is the resize path
- * only, and every call in it is idempotent and not animated, so the first
- * ResizeObserver callback, which fires on observe, changes nothing.
+ * Keep the world covering the container on resize. Every call is idempotent
+ * and not animated, so the ResizeObserver callback on observe changes nothing.
  */
 function useKeepWorldCovering(
   map: MapLibreMap | null,

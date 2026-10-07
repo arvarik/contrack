@@ -1,14 +1,12 @@
 /**
- * Settings revamped — shell, rail, search, rows and redirects.
- *
- * Covers Prompt 1 of the settings revamp:
+ * Settings: shell, rail, search, rows and redirects.
  * - Desktop two-pane shell with 240px navigation rail
  * - Tab sequence walking the rail in order
  * - SettingRow search, keyboard selection, deep link navigation, flash and focus
  * - Modified indicator dot and reset preference button
  * - Phone single-pane view and back link behavior
  * - Redirection aliases for moved settings paths
- * - Accessibility scans for the revamped settings pages
+ * - Accessibility scans for the settings pages
  */
 import { devices } from "@playwright/test";
 import { test, gatedTest, expect } from "./fixtures/test";
@@ -219,7 +217,7 @@ test.describe("Settings — Phone", () => {
       page.getByRole("heading", { name: "Settings", level: 1 }),
     ).toBeVisible();
 
-    // Finding A14: On phone landing page, no back control of any kind
+    // The phone landing page has no back control of any kind
     await expect(page.getByRole("link", { name: /^Back to/ })).toBeHidden();
     await expect(page.getByRole("button", { name: /^Back to/ })).toBeHidden();
 

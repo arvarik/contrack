@@ -1,31 +1,20 @@
 /**
- * The arithmetic that keeps the world filling the map, whatever the window is.
- *
- * The world is a square: at zoom z it is 512 * 2^z pixels on a side with
- * vector tiles, and Mercator stops at ±85.05° latitude, so there is nothing to
- * draw past it. The minimum zoom is therefore not a constant but a function of
- * the viewport: the smallest z whose world covers the container's larger
- * dimension. A window wider than the world would otherwise show empty
- * background, or wrapped continent copies that carry no pins, which reads as
- * "my contacts are in the ocean".
- *
- * @module views/map/mapMath
+ * Map arithmetic. The world is a square of 512 * 2^z px at zoom z, so the
+ * minimum zoom depends on the viewport: the smallest z whose world covers the
+ * container. A window wider than the world shows empty background, or wrapped
+ * copies with no pins, which reads as "my contacts are in the ocean".
  */
 
-/** Vector tiles are 512 px, twice the 256 px of the old raster tiles. */
+/** Vector tiles are 512 px, not the 256 px of raster tiles. */
 export const TILE_SIZE = 512;
 
 /** Web Mercator's latitude limit. There is no map past it. */
 export const MERCATOR_MAX_LAT = 85.05112878;
 
 /**
- * A hair inside ±180 degrees of longitude.
- *
- * MapLibre wraps a longitude range into one world width, and exactly -180 to
- * 180 wraps to the same number twice. It then reads that as a range of zero
- * width, scales the view by screen width over zero, and every matrix after
- * that is NaN: the map throws on its first resize and draws nothing. Its own
- * code keeps the same hair's width inside the meridian for the same reason.
+ * A hair inside ±180 degrees. MapLibre wraps exactly -180 to 180 into a range
+ * of zero width, every matrix becomes NaN, and the map throws on its first
+ * resize and draws nothing.
  */
 const LNG_EPSILON = 1e-9;
 
@@ -44,21 +33,15 @@ export const FALLBACK_MIN_ZOOM = 2;
 export const MAX_MIN_ZOOM = 5;
 
 /**
- * One person on their part of the map.
- *
- * Close enough to read the street grid around the pin, far enough to show
- * the city it belongs to. The mini map on the contact page opens here, and
- * the map page flies here when a contact opens.
+ * The zoom for one person: the street grid around the pin and its city. The
+ * mini map opens here, and the map page flies here when a contact opens.
  */
 export const CONTACT_ZOOM = 11;
 
 /**
- * Smallest zoom whose world covers both container dimensions.
- *
- * MapLibre accepts a fractional zoom, so the result is the exact fit rounded
- * up to two decimals. Rounding up, never down, is what keeps a one pixel band
- * of background from showing at the edge. A zero size, which is a layout that
- * has not settled, returns {@link FALLBACK_MIN_ZOOM}.
+ * Smallest zoom whose world covers both container dimensions, rounded up to
+ * two decimals: rounding down shows a one pixel band of background. A zero
+ * size (an unsettled layout) returns {@link FALLBACK_MIN_ZOOM}.
  */
 export function minZoomFor(width: number, height: number): number {
   if (!width || !height || width < 0 || height < 0) return FALLBACK_MIN_ZOOM;
@@ -67,10 +50,7 @@ export function minZoomFor(width: number, height: number): number {
   return Math.max(0, Math.min(rounded, MAX_MIN_ZOOM));
 }
 
-/**
- * True when the bounding box contains the given coordinate point.
- * Supports standard [west, south, east, north] bounds and antimeridian crossing.
- */
+/** True when the bounds contain the point, also across the antimeridian. */
 export function boundsContain(
   bounds:
     | [west: number, south: number, east: number, north: number]
@@ -104,15 +84,11 @@ function getLngLat(p: Point): [number, number] {
   return [p.lng, p.lat];
 }
 
-/**
- * Ray-casting (even-odd rule) to check if a point is inside a polygon ring.
- * Also returns true if the point lies directly on a polygon vertex.
- */
+/** Even-odd ray casting. A point on a vertex counts as inside. */
 export function pointInPolygon(point: Point, ring: Point[]): boolean {
   if (ring.length < 3) return false;
   const [px, py] = getLngLat(point);
 
-  // Check if exactly on vertex
   for (let i = 0; i < ring.length; i++) {
     const [vx, vy] = getLngLat(ring[i]);
     if (vx === px && vy === py) return true;
@@ -131,9 +107,8 @@ export function pointInPolygon(point: Point, ring: Point[]): boolean {
 }
 
 /**
- * Calculate the bounding box [west, south, east, north] containing all given points.
- * Returns null if points array is empty.
- * Points across the antimeridian are returned as a wide box spanning the range.
+ * The box around all points, or null for none. Points on both sides of the
+ * antimeridian give a wide box, not one that crosses it.
  */
 export function boundsOf(
   points: Point[],
@@ -157,13 +132,9 @@ export function boundsOf(
 }
 
 /**
- * The box around the most points that fit in `span` degrees of longitude,
- * or null for none. Ties go to the western window.
- *
- * "Fit all" asks for it when everyone cannot fit. On a phone the world at
- * the lowest zoom is about twice the screen, and the middle of a network
- * that spans the globe is often an ocean, or Europe with four of thirty
- * people. The stretch that holds the most people is the better picture.
+ * The box around the most points that fit in `span` degrees of longitude, or
+ * null for none. Ties go west. "Fit all" uses it when everyone cannot fit (on
+ * a phone), because the middle of a global network is often an ocean.
  */
 export function densestSpan(
   points: Point[],
@@ -184,10 +155,7 @@ export function densestSpan(
   return boundsOf(sorted.slice(bestStart, bestEnd + 1));
 }
 
-/**
- * How many degrees of longitude `width` px shows at `zoom`, on MapLibre's
- * 512 px tiles.
- */
+/** How many degrees of longitude `width` px shows at `zoom`. */
 export function degreesAcross(width: number, zoom: number): number {
   return (width / (TILE_SIZE * 2 ** zoom)) * 360;
 }

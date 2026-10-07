@@ -4,10 +4,6 @@ import { cn } from "../../../../lib/utils";
 import { SELECTED_ROW } from "../../../../lib/styles";
 import { fallbackAvatarUrl } from "../../../../lib/avatar";
 
-// =============================================================================
-// ContactMiniCard — Compact contact card for the picker
-// =============================================================================
-
 interface ContactMiniCardProps {
   key?: React.Key;
   contact: Contact;
@@ -30,8 +26,8 @@ export const ContactMiniCard = ({
     {...itemProps}
     aria-pressed={selected}
     onClick={onToggle}
-    // Not `disabled`: a disabled button takes no focus, and the arrows must
-    // still walk past it. The picker adds no one past its limit.
+    // Not `disabled`: the arrows must still focus it. The picker enforces the
+    // limit.
     aria-disabled={(disabled && !selected) || undefined}
     className={cn(
       "state-layer w-full flex items-center gap-3 p-3 rounded-xl transition-colors text-left",
@@ -71,8 +67,7 @@ export const ContactMiniCard = ({
       className="w-10 h-10 rounded-full object-cover bg-surface-container-high shrink-0"
     />
     <div className="min-w-0 flex-1">
-      {/* A picked row's name takes the primary ink: the tint alone is about
-          1.06 to 1. */}
+      {/* Primary ink: the tint alone is about 1.06 to 1. */}
       <div
         className={cn(
           "text-sm font-bold truncate",

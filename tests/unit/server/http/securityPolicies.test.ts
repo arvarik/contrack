@@ -1,7 +1,5 @@
-// =============================================================================
 // Unit: the CSP builder, the proxy hop count, the CSV formula guard, and the
 // owner-only file modes
-// =============================================================================
 
 import {
   chmodSync,

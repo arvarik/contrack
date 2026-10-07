@@ -1,7 +1,5 @@
 #!/usr/bin/env node
-// =============================================================================
 // Record the dedupe precision and recall baseline
-// =============================================================================
 // Run this when a change to the matchers, the thresholds or the passes is
 // intended:
 //
@@ -11,17 +9,12 @@
 //
 //   tests/eval/dedupe.baseline.json   precision and recall per pass
 //
-// The baseline diff is the evidence that goes in the pull request. A change
-// that improves matching shows as numbers going up; a change that was meant
-// to be a rearrangement and is not shows as numbers moving at all.
-// `tests/eval/dedupe.eval.test.ts` fails in both directions, so nobody can
-// improve or damage matching without saying so.
+// The baseline diff goes in the pull request. `tests/eval/dedupe.eval.test.ts`
+// fails when the numbers move either way, so no change improves or damages
+// matching without saying so.
 //
-// Unlike the search recorder this writes no fixture. The corpus is built from
-// `scripts/dedupe-eval/corpus.ts` at run time by both the recorder and the
-// gate, and there is no model in the loop, so there is nothing to record that
-// the source does not already say.
-// =============================================================================
+// It writes no fixture: the recorder and the gate both build the corpus from
+// `scripts/dedupe-eval/corpus.ts`, and no model is in the loop.
 
 import fs from "fs";
 import os from "os";

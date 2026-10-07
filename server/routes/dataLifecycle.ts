@@ -1,12 +1,7 @@
 import { idsSchema } from "../../shared/contracts/common.ts";
-// =============================================================================
-// Routes — Data Lifecycle: trash (undoable deletes), backups, full export
-// =============================================================================
-// Mounted in server/app.ts at /api.
-// =============================================================================
+// Data lifecycle routes: trash (undoable deletes), backups and full export.
 
 import { Router } from "express";
-import type { Request } from "express";
 import { z } from "zod";
 import { log } from "../utils/logger.ts";
 import { AppError } from "../utils/AppError.ts";
@@ -22,11 +17,12 @@ import {
   buildFullExport,
   buildContactsCsv,
   buildContactsVcf,
+  exportFileSlug,
 } from "../services/exportService.ts";
 
 const router = Router();
 
-// ─── Trash ───────────────────────────────────────────────────────────────────
+// Trash
 
 // The trash routes are scoped through `contactService` and enforced by isolation tests.
 router.get(
@@ -58,11 +54,8 @@ router.post(
 );
 
 /**
- * Restore many at once — the undo path for a bulk delete.
- *
- * Without this, undoing a 200-contact delete meant 200 round trips, which is
- * slow enough that the user watches their contacts trickle back one by one
- * and cannot tell whether it worked.
+ * Restore many at once, the undo of a bulk delete, so undoing 200 deletes is
+ * one round trip instead of 200.
  */
 router.post(
   "/trash/bulk-restore",
@@ -110,11 +103,10 @@ router.delete(
   }),
 );
 
-// ─── Backups ─────────────────────────────────────────────────────────────────
+// Backups
 
-// A backup is a copy of the whole database, so it holds every account's rows.
-// Both routes are administration, which is what the manifest has said since
-// Phase 2 and what `requireAdmin` enforces from Phase 3.
+// A backup is a copy of the whole database, so it holds every account's rows,
+// and both routes are admin only.
 router.get(
   "/backups",
   requireAdmin,
@@ -134,9 +126,9 @@ router.post(
       action: "backup.created",
       targetType: "backup",
       targetId: backup.filename,
-      // `verified` is in the audit row because a snapshot that failed its
-      // check is an event somebody should be able to find later, and the
-      // sidecar next to a rotated-out file will not be there to find.
+      // `verified` goes in the audit row, because a snapshot that failed its
+      // check is worth finding later, and the sidecar of a rotated-out file is
+      // gone.
       details: {
         filename: backup.filename,
         verified: backup.verification?.ok ?? false,
@@ -154,24 +146,7 @@ router.post(
   }),
 );
 
-// ─── Export ──────────────────────────────────────────────────────────────────
-
-/**
- * The account name that goes in the download filename.
- *
- * Two accounts on one instance produce two files a day, and a filename with
- * only a date in it makes the second one overwrite the first in the browser's
- * downloads folder. The username answers which account the file came from.
- *
- * `validateUsername` already restricts what an account name may contain, and
- * this strips anything else anyway: the value lands inside a quoted
- * `Content-Disposition` header, where a stray quote would end the filename.
- */
-function exportOwnerSlug(req: Request): string {
-  const raw = req.principal?.user.username ?? "";
-  const slug = raw.replace(/[^A-Za-z0-9._-]/g, "").slice(0, 40);
-  return slug || "account";
-}
+// Export
 
 router.get(
   "/export/json",
@@ -182,7 +157,7 @@ router.get(
     res.setHeader("Content-Type", "application/json");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="contrack-export-${exportOwnerSlug(req)}-${stamp}.json"`,
+      `attachment; filename="contrack-export-${exportFileSlug(req.principal?.user.username)}-${stamp}.json"`,
     );
     log.info(
       "API",
@@ -201,7 +176,7 @@ router.get(
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="contrack-contacts-${exportOwnerSlug(req)}-${stamp}.csv"`,
+      `attachment; filename="contrack-contacts-${exportFileSlug(req.principal?.user.username)}-${stamp}.csv"`,
     );
     log.info("API", `[${rid}] GET /api/export/csv`);
     res.send(csv);
@@ -219,7 +194,7 @@ router.get(
     res.setHeader("Content-Type", "text/vcard; charset=utf-8");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename="contrack-contacts-${exportOwnerSlug(req)}-${stamp}.vcf"`,
+      `attachment; filename="contrack-contacts-${exportFileSlug(req.principal?.user.username)}-${stamp}.vcf"`,
     );
     log.info("API", `[${rid}] GET /api/export/vcard`);
     res.send(vcf);

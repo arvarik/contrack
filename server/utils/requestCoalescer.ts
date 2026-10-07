@@ -1,16 +1,10 @@
 /**
- * requestCoalescer.ts — Single-flight request coalescing with caller-level cancellation.
- *
- * Implements the single-flight pattern: concurrent identical requests share
- * a single in-flight operation rather than repeating expensive work
- * (e.g., AI provider LLM calls or semantic retrieval).
- *
- * Cancellation preservation:
- * - Each waiting caller may supply its own AbortSignal.
- * - If one caller aborts, its promise rejects immediately with the abort reason.
- *   The underlying operation CONTINUES running for remaining callers.
- * - If ALL waiting callers abort, the underlying operation's AbortController
- *   is aborted, cancelling downstream provider work and preventing wasted quota.
+ * Single-flight request coalescing with per-caller cancellation: concurrent
+ * identical requests share one in-flight operation (an AI call, a retrieval).
+ * Each caller may pass its own AbortSignal. A caller that aborts gets an
+ * immediate rejection with its reason while the operation goes on for the rest;
+ * when every caller has aborted, the operation's own AbortController aborts
+ * too, so no provider quota is wasted.
  */
 
 import { log } from "./logger.ts";
@@ -33,9 +27,10 @@ export class RequestCoalescer {
   /**
    * Coalesce concurrent identical executions of `action` under `key`.
    *
-   * @param key Unique cache/flight key (e.g., scoped by account, query, model, revision).
-   * @param action The work function to run if this caller is the first to arrive.
-   *               Receives a shared AbortSignal that only aborts when ALL callers abort.
+   * @param key Unique flight key (scoped by account, query, model, revision and
+   *   so on).
+   * @param action The work, run by the first caller to arrive. Its shared
+   *   AbortSignal aborts only when every caller has aborted.
    * @param signal Optional caller-specific AbortSignal.
    */
   async coalesce<T>(

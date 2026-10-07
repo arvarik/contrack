@@ -1,8 +1,6 @@
 /**
- * server/connectors/service.ts — Connector lifecycle, execution, and credential service.
- *
- * Owns connector CRUD, credential sealing via secretBox, inline and scheduled runs,
- * run history, backoff calculation, and audit logging.
+ * Connector lifecycle, runs and credentials: CRUD, credential sealing with
+ * secretBox, inline and scheduled runs, run history, backoff and audit rows.
  *
  * @module server/connectors/service
  */
@@ -178,12 +176,12 @@ export async function testConnector(
 const DESTINATION_KEYS = ["host", "port", "secure", "username", "url"];
 
 /**
- * The saved secret of one of the caller's connectors, for a test from its
- * edit form, where an empty password field means "keep the saved one".
- * Another account's connector is not found, so it lends no secret. The
- * secret goes only where it went before: a test with another host, port,
- * username or address must type it again, or a stolen session could send
- * a saved mailbox password to a server of its choosing.
+ * The saved secret of one of the caller's connectors, for a test from its edit
+ * form, where an empty password means "keep the saved one". Another account's
+ * connector is not found, so it lends no secret. The secret goes only where it
+ * went before: a test with another host, port, username or address must type it
+ * again, or a stolen session could send a saved mailbox password to a server of
+ * its choosing.
  */
 function savedSecret(
   scope: Scope,

@@ -1,20 +1,15 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The browser's half of preferences
-// =============================================================================
-// None of these tests is the round trip, which the integration file covers.
+// The browser's half of preferences. The integration file covers the round
+// trip.
 //
-// The first is that the browser's defaults are the server's defaults. The app
-// renders before the first response arrives, so it has to carry a copy — and a
-// copy that drifts means a list that silently re-packs itself a moment after
-// it paints, for one release, until somebody notices. The server builds its
-// copy fresh on every call, so one account's history never lands in another
-// account's default.
+// The browser's defaults must equal the server's. The app renders before the
+// first response, so it carries a copy, and a copy that drifts re-packs a list
+// a moment after it paints. The server builds its copy fresh on every call, so
+// one account's history never lands in another account's default.
 //
-// The second is the removal of the keys 1.x kept in localStorage. 2.0 does not
-// read them. Deleting them is the point: `localStorage` is keyed by origin, so
-// whatever is left is readable by whoever signs in next.
-// =============================================================================
+// The keys version 1 kept in localStorage are deleted, not just ignored:
+// `localStorage` is keyed by origin, so whatever is left is readable by
+// whoever signs in next.
 
 import { describe, it, expect, beforeEach } from "vitest";
 import {

@@ -1,18 +1,11 @@
 /**
  * The palette's search for people, pages and new contacts, once words or
- * pills are typed.
+ * pills are typed. The rows keep one order between keys: a page named
+ * exactly, the people, "Show all in Network", the matching pages, "Create
+ * contact" (not for a question) and "Ask AI".
  *
- * Rows, in one order that does not change between keys: a page named
- * exactly, the people, "Show all in Network", the pages the words match,
- * "Create contact" (not for a question) and "Ask AI". A question moved
- * "Ask AI" up, so the rows changed places as the words did.
- *
- * It renders in two parts, as `AiMode` does: `notes` above the list and
- * `rows` inside it. A row holds no control of its own: the → mark at its
- * end is a tap target that the → key matches, hidden from a screen reader,
- * which hears the row and opens its actions with the key.
- *
- * @module components/command-palette/PeopleMode
+ * It renders `notes` above the list and `rows` inside it. The → mark at a
+ * row's end is a tap target for the → key, hidden from a screen reader.
  */
 import { Command } from "cmdk";
 import { ChevronsRight, List, Sparkles, UserPlus } from "lucide-react";
@@ -157,9 +150,8 @@ export const PeopleMode = (props: PeopleModeProps) => {
 
       {!props.exactPage && pages}
 
-      {/* Last, and only when nobody has the name: an approximate match hid
-          it, so "Nancy Drew" could not be made while "Nancy Drews" was a
-          result. Never with pills, which it would not keep. */}
+      {/* Last, and only when nobody has the exact name, even beside an
+          approximate match. Never with pills, which it would not keep. */}
       {props.canCreate && (
         <Command.Group heading="Create" className={GROUP_HEADING_DEFAULT}>
           <Command.Item

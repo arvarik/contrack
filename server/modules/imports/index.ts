@@ -1,8 +1,4 @@
-// =============================================================================
-// Module: imports
-// =============================================================================
 // Bulk imports from CSV and vCard files, and their durable record.
-// =============================================================================
 
 import { defineModule } from "../module.ts";
 import { importsRouter } from "../../routes/imports.ts";

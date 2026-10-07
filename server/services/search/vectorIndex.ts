@@ -5,19 +5,15 @@ import {
   type PassageSnapshot,
   type SearchPassage,
 } from "./passages.ts";
-// =============================================================================
-// The search vector index
-// =============================================================================
 // Ask Contrack's vectors: one int8 vector per contact in `search_embeddings`
 // and one per passage in `search_passage_vectors` (`vectorScale.ts`), both
-// partitioned by owner. This file writes them, finds their neighbours, keeps
+// partitioned by owner. This file writes them, finds their neighbors, keeps
 // them in step with the embeddings capability, and backfills them.
 //
 // It runs no model. Every vector comes from the embedder
 // (`server/ai/embedder.ts`): the built-in model on the CPU worker unless a
 // provider model is pinned. `embedText` embeds a question and `embedBatch`
-// embeds documents, the contact and passage texts.
-// =============================================================================
+// embeds documents.
 
 import {
   refreshPlannerStats,
@@ -55,9 +51,7 @@ import type { CompiledFacets } from "./facetSql.ts";
 
 const BACKFILL_BATCH_SIZE = 64;
 
-// =============================================================================
 // Embedding
-// =============================================================================
 
 /**
  * Embed one search question, with the current embedder unless the caller
@@ -86,9 +80,9 @@ export function isSearchEmbeddingReady(): boolean {
 }
 
 /**
- * Recreate the search_embeddings vec0 table at a new dimension.
- * vec0 tables have a fixed width, so changing embedding models requires a
- * rebuild; every contact is then re-embedded by backfillSearchEmbeddings().
+ * Recreate the search_embeddings vec0 table at a new dimension. vec0 tables
+ * have a fixed width, so a new embedding model needs a rebuild, and
+ * backfillSearchEmbeddings() then embeds every contact again.
  */
 export function rebuildSearchEmbeddingTable(dimension: number): void {
   sqlite.transaction(() => {
@@ -99,9 +93,9 @@ export function rebuildSearchEmbeddingTable(dimension: number): void {
     );
     sqlite.exec(passageVectorDdl(dimension));
     sqlite.exec(`DROP TABLE IF EXISTS search_embeddings`);
-    // The DDL comes from db.ts so a model change cannot silently recreate the
-    // table without its partition key, which would make every scoped KNN in
-    // Phase 2 return nothing. A unit test pins the two call sites equal.
+    // The DDL comes from db.ts, so a model change cannot recreate the table
+    // without its partition key, which would make every scoped KNN return
+    // nothing. A unit test pins the two call sites equal.
     sqlite.exec(
       vecTableDdl(
         "search_embeddings",
@@ -124,9 +118,7 @@ export function rebuildSearchEmbeddingTable(dimension: number): void {
   );
 }
 
-// =============================================================================
-// Storage: search_embeddings Table Operations
-// =============================================================================
+// search_embeddings storage
 
 /** The table's int8 scale, or null before the first vector is written. */
 export function searchVectorScale(): number | null {
@@ -144,11 +136,9 @@ function hasSearchVectors(): boolean {
 }
 
 /**
- * The scale to write `vectors` at.
- *
- * The table's own scale once it has one. The first write to an empty table
- * sets it from the vectors that write carries: the first backfill batch, or
- * every vector of an evaluation corpus. An emptied table starts over.
+ * The scale to write `vectors` at: the table's own scale once it has one. The
+ * first write to an empty table sets it from that write's vectors (the first
+ * backfill batch, or a whole evaluation corpus). An emptied table starts over.
  */
 function writeScale(vectors: Float32Array[]): number {
   const stored = searchVectorScale();
@@ -161,28 +151,22 @@ function writeScale(vectors: Float32Array[]): number {
   return scale;
 }
 
-/**
- * Upsert a search embedding for a contact.
- */
-// Pre-compiled transaction for atomic upsert (vec0 doesn't support ON CONFLICT).
-// Wrapping in a transaction prevents a concurrent KNN query from seeing a gap
-// between the DELETE and INSERT, and gives a minor perf boost (single journal entry).
+/** Upsert a search embedding for a contact. */
+// vec0 has no ON CONFLICT, so this is a delete and an insert in one
+// transaction, which no concurrent KNN can see half done.
 //
-// The owner is read from `contacts` inside the same transaction rather than
-// taken as an argument. sqlite-vec accepts an INSERT that omits a partition
-// key and stores NULL without complaint, so a caller passing the wrong owner,
-// or none, would produce a row that every scoped KNN in Phase 2 skips and no
-// test notices. Reading it here makes "the vector's owner is its contact's
-// owner" true by construction.
+// The owner is read from `contacts` in the same transaction, not taken as an
+// argument: sqlite-vec stores NULL for an omitted partition key without
+// complaint, and that row would be skipped by every scoped KNN. Reading it
+// here makes the vector's owner its contact's owner by construction.
 const _upsertTxn = sqlite.transaction((contactId: string, buf: Buffer) => {
   sqlite
     // tenant-lint: allow owner-checked by caller
     .prepare("DELETE FROM search_embeddings WHERE contactId = ?")
     .run(contactId);
-  // The owner and the three status columns all come out of the contact row in
-  // this one statement, so a vector cannot disagree with its contact about
-  // who owns it or whether it is archived. A contact that is gone matches
-  // nothing and writes nothing, which is the orphan case handled by omission.
+  // The owner and the three status columns come from the contact row in this
+  // one statement, so a vector cannot disagree with its contact. A contact that
+  // is gone matches nothing and writes nothing.
   sqlite
     .prepare(
       `INSERT INTO search_embeddings (contactId, ownerId, isGhost, isArchived, active, embedding)
@@ -200,11 +184,9 @@ export function upsertSearchEmbedding(
 }
 
 /**
- * Upsert several contacts' vectors in one transaction, at one scale.
- *
- * Into an empty table, the scale comes from all of them together. The
- * evaluation gates write their whole corpus this way, so its scale is the
- * one the boot migration would compute from the same vectors.
+ * Upsert several contacts' vectors in one transaction, at one scale. Into an
+ * empty table the scale comes from all of them together, so an evaluation
+ * corpus gets the scale the boot migration would compute.
  */
 export function upsertSearchEmbeddings(
   rows: { contactId: string; embedding: Float32Array }[],
@@ -222,25 +204,19 @@ export function upsertSearchEmbeddings(
 /**
  * Find K nearest neighbors among one owner's search vectors.
  *
- * `ownerId` is the vec0 partition key, so sqlite-vec reads that owner's chunks
- * and nothing else. This is a correctness fix before it is a speed one: the
- * global KNN fetched the instance-wide top k and filtered afterwards, so an
- * owner with 200 contacts on an instance of 40,000 would rarely appear in the
- * top 100 and their vector channel returned nothing. The architecture
- * document, section 7, has the measurements.
+ * `ownerId` is the vec0 partition key, so sqlite-vec reads only that owner's
+ * chunks. That is needed for correctness: an instance-wide top k filtered
+ * afterwards rarely reaches an owner with 200 contacts among 40,000.
  *
- * The three status predicates are vec0 metadata columns, so sqlite-vec drops
- * a ghost or an archived contact while it is choosing the k nearest rather
- * than after. They replaced `contactId IN (SELECT c.id FROM contacts c ...)`,
- * which gave the same answers but made SQLite materialize a list of every
- * active contact the account has on every single search. Measured at k = 50:
- * 0.83 ms to 0.10 ms on 1,000 contacts, 8.16 ms to 0.36 ms on 10,000, and
- * 43.68 ms to 1.48 ms on 50,000, for the same fifty contacts in the same
- * order.
+ * The three status predicates are vec0 metadata columns, so sqlite-vec drops a
+ * ghost or an archived contact while it chooses the k nearest. A `contactId IN
+ * (SELECT ... FROM contacts)` filter gives the same answers but materializes
+ * every active contact on every search: at k = 50 it takes 0.83 ms against 0.10
+ * ms on 1,000 contacts, 8.16 ms against 0.36 ms on 10,000, and 43.68 ms against
+ * 1.48 ms on 50,000.
  *
- * `preFilterIds` stays a separate `IN` list because it is the query plan's
- * hard filter, not an ownership check. It is small by nature — a list, a tag,
- * a set of ids the planner already chose — so materializing it is cheap.
+ * `preFilterIds` stays an `IN` list because it is the plan's hard filter, not
+ * an ownership check, and it is small: a list, a tag, ids the planner chose.
  */
 export function findSearchNeighbors(
   scope: Scope,
@@ -256,7 +232,7 @@ export function findSearchNeighbors(
   const selectors: string[] = [];
   if (preFilterIds) selectors.push("SELECT value FROM json_each(?)");
   // The facets run inside the KNN, before `k`, so a contact the facets keep
-  // is never lost to closer neighbours they drop.
+  // is never lost to closer neighbors they drop.
   if (facets)
     selectors.push(
       `SELECT c.id FROM contacts c WHERE c.ownerId = ? AND (${facets.sql})`,
@@ -288,12 +264,9 @@ export function findSearchNeighbors(
 }
 
 /**
- * How many of one owner's contacts have a search vector.
- *
- * `ownerId` is the partition key, so this counts one partition rather than
- * the table. The vector channel uses it to decide whether to run at all, and
- * an owner who has never been indexed must see zero rather than the
- * instance's total.
+ * How many of one owner's contacts have a search vector. It counts one
+ * partition, so an owner never indexed sees zero, not the instance's total. The
+ * vector channel uses it to decide whether to run.
  */
 export function getSearchEmbeddingCount(scope: Scope): number {
   const row = sqlite
@@ -305,13 +278,11 @@ export function getSearchEmbeddingCount(scope: Scope): number {
 /**
  * Read passage vectors in the same space as contact vectors and the query.
  *
- * `CROSS JOIN` fixes the order of the join: the nearest-neighbour search is
- * the outer loop and runs once, and each of its rows looks up its passage.
- * Left to choose, SQLite plans from the row counts at the last ANALYZE. After
- * a bulk index those say "2 passages" for a table of twenty thousand, and it
- * put `search_passages` first, which ran this search once for every passage:
- * 145 seconds instead of 60 milliseconds (`refreshPlannerStats` keeps the
- * counts fresh too, but a plan that cannot go wrong does not need them).
+ * `CROSS JOIN` fixes the join order: the nearest-neighbor search is the outer
+ * loop and runs once. Left to choose, SQLite plans from the row counts at the
+ * last ANALYZE, which after a bulk index can say "2 passages" for twenty
+ * thousand. It then put `search_passages` first and ran the search once per
+ * passage: 145 seconds instead of 60 milliseconds.
  */
 export function findPassageNeighbors(
   scope: Scope,
@@ -428,18 +399,15 @@ function writePassages(
     .run(snapshot.ownerId);
 }
 
-// =============================================================================
 // Embedding-store migration
-// =============================================================================
 
 /**
- * Bring the vector store in line with the current embedder.
+ * Bring the vector store in line with the current embedder, at startup and
+ * whenever the embeddings capability changes. When the embedder's id or width
+ * differs from the table's, the table is rebuilt at the new width and every
+ * contact is embedded again.
  *
- * Called at startup and whenever the embeddings capability changes. When the
- * embedder's id or width differs from what the table was built with, the
- * vec0 table is recreated at the new width and every contact is re-embedded.
- *
- * Returns the number of contacts re-embedded (0 when nothing changed).
+ * @returns the number of contacts embedded again (0 when nothing changed).
  */
 export async function ensureEmbeddingStore(): Promise<number> {
   const embedder = currentEmbedder();
@@ -479,17 +447,11 @@ export async function ensureEmbeddingStore(): Promise<number> {
   return backfillSearchEmbeddings();
 }
 
-// =============================================================================
-// Backfill: Embed All Contacts
-// =============================================================================
+// Backfill
 
 /**
- * Owners take turns in rounds of this many contacts.
- *
- * A single instance-wide pass finished the first owner completely before it
- * started the second, so on a busy instance a new account's search stayed
- * empty until every older account was done. One round each, in turn, gives
- * every account results in about the same time.
+ * Owners take turns in rounds of this many contacts, so a new account's search
+ * does not wait for every older account to finish.
  */
 const OWNER_ROUND_SIZE = 200;
 
@@ -546,12 +508,11 @@ function backfillStatements() {
 /**
  * Embed one account's round with `embedder`, the one its check allowed.
  *
- * `aborted` is true when the current embedder changed during the round, or
- * the store was built for another one. The vector store is about to be
- * rebuilt for the new one, so the whole backfill stops rather than writing
- * rows in two shapes. Every call in the round uses `embedder`, never the new
- * one, so a model pinned during the round reads nothing of an account it may
- * not embed. `embedder` refuses once the account may no longer be embedded
+ * `aborted` is true when the current embedder changed during the round, or the
+ * store was built for another one: the store is about to be rebuilt, so the
+ * backfill stops rather than write rows in two shapes. Every call in the round
+ * uses `embedder`, so a model pinned meanwhile reads nothing of an account it
+ * may not embed. `embedder` refuses once the account may no longer be embedded
  * (`embedderFor`), and the refusal ends the round.
  */
 async function embedSearchRound(
@@ -628,13 +589,9 @@ async function embedSearchRound(
 }
 
 /**
- * Generate and store search embeddings for every contact that has none.
- *
- * One account at a time, in rounds, each round inside that account's context.
- * The embedding model is local, so there is no bill to attribute, but the
- * context is what keeps a future provider-backed model from charging the
- * primary admin for everybody's corpus.
- *
+ * Generate and store search embeddings for every contact that has none, one
+ * account at a time, in rounds, each inside that account's context, so a
+ * provider-backed model bills the right account.
  */
 let backfillTail: Promise<number> = Promise.resolve(0);
 let backfillRunning = false;
@@ -742,8 +699,8 @@ export interface EmbedContactResult {
 }
 
 /**
- * Generate and store a search embedding for a single contact.
- * Called on contact create/update or from indexQueue.
+ * Generate and store one contact's search embedding, on a contact write or from
+ * the index queue.
  */
 export async function embedContact(
   contactId: string,
@@ -826,9 +783,7 @@ export async function embedContact(
   return { status: "indexed" };
 }
 
-// =============================================================================
-// Text Representation
-// =============================================================================
+// Text representation
 
 /** Narrow row of contact columns selected for building search-embedding text. */
 interface SearchTextRow {
@@ -845,9 +800,9 @@ interface SearchTextRow {
 }
 
 /**
- * Convert a contact row into a text string optimized for search embedding.
- * This compact vector complements the full source passages.
- * Expansion terms help retrieval but never count as verified evidence.
+ * The compact text a contact's search vector embeds, beside the full source
+ * passages. Expansion terms help retrieval but never count as verified
+ * evidence.
  */
 function contactToSearchText(
   row: SearchTextRow,
@@ -870,9 +825,8 @@ function contactToSearchText(
 }
 
 /**
- * The text a contact's search vector embeds, as the contact reads now.
- *
- * Also read by the evaluation recorders, which embed the same text.
+ * The text a contact's search vector embeds, as the contact reads now. The
+ * evaluation recorders embed the same text.
  */
 export function currentSearchText(contactId: string): string | null {
   const row = sqlite

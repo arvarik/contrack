@@ -1,28 +1,20 @@
-// =============================================================================
-// Interaction search index — interactions_fts and the triggers that feed it
-// =============================================================================
-// contacts_fts answers "which person". This table answers "which note": a
-// title, the readable text of the body, and the owner token, mirrored by
-// rowid from `interactions` exactly the way contacts_fts mirrors `contacts`.
+// interactions_fts and the triggers that feed it. contacts_fts answers "which
+// person"; this answers "which note": a title, the readable text of the body
+// and the owner token, mirrored by rowid from `interactions` the way
+// contacts_fts mirrors `contacts`. Three decisions:
 //
-// Three decisions are worth knowing before touching this file:
-//
-//   • The body goes in as plain text. The triggers call `contrack_note_text`,
-//     a SQL function this module registers on the connection, so an insert
-//     from any path — the composer, an email import, a merge undo, a seed
-//     script — is indexed as readable text and never as HTML. A connection
-//     that has not registered the function cannot insert or update a note.
-//     That is the trade: every write path is covered, and this database is
-//     written by this app.
-//   • The tokenizer stems. `porter unicode61 remove_diacritics 2` makes
-//     "hire" match "hiring", "engineer" match "engineers", and "cafe" match
-//     "café". Names are not stemmed anywhere in contacts_fts, and should not
-//     be; note text is prose, and prose is what a stemmer is for.
-//   • Visibility is decided at query time. A note on an archived, trashed,
-//     merged or ghost contact stays in the index, and the search joins to
-//     `contacts` with ACTIVE_CONTACT_SQL to hide it. Restoring the contact
-//     brings its notes back without touching the index.
-// =============================================================================
+// - The body goes in as plain text. The triggers call `contrack_note_text`, a
+//   SQL function this module registers on the connection, so an insert from any
+//   path (the composer, an email import, a merge undo, a seed script) is
+//   indexed as readable text, never HTML. A connection without the function
+//   cannot insert or update a note; this database is written by this app.
+// - The tokenizer stems. `porter unicode61 remove_diacritics 2` makes "hire"
+//   match "hiring" and "cafe" match "café". contacts_fts does not stem names,
+//   but note text is prose.
+// - Visibility is decided at query time. A note on an archived, trashed, merged
+//   or ghost contact stays in the index, and the search joins `contacts` with
+//   ACTIVE_CONTACT_SQL to hide it, so restoring the contact brings its notes
+//   back without touching the index.
 
 import type Database from "better-sqlite3";
 import { notePlainText } from "./noteText.ts";
@@ -32,18 +24,15 @@ export const NOTE_TEXT_FUNCTION = "contrack_note_text";
 
 /**
  * Every interactions_fts column, in order. Position 0 is the UNINDEXED id.
- *
- * `ownerTok` is last and indexed, for the same reason as in contacts_fts:
- * the search prefixes every query with `ownerTok:<token> AND (...)` so FTS5
- * intersects posting lists inside the index rather than post-filtering rows
- * the caller may not read.
+ * `ownerTok` is last and indexed, as in contacts_fts, so FTS5 intersects
+ * posting lists inside the index instead of filtering rows afterwards.
  */
 export const INTERACTION_FTS_COLUMNS =
   "interactionId, title, content, ownerTok";
 
 /**
- * One bm25 weight per column. The id and the owner token carry none. A title
- * match outranks the same word in a body, because a title is what the person
+ * One bm25 weight per column; the id and the owner token carry none. A title
+ * match outranks the same word in a body, because the title is what the person
  * chose to call the note.
  */
 export const INTERACTION_WEIGHTS = "0, 3, 1, 0";
@@ -53,12 +42,10 @@ export const INTERACTION_FTS_TITLE_COLUMN = 1;
 export const INTERACTION_FTS_CONTENT_COLUMN = 2;
 
 /**
- * The columns whose change makes an index row wrong.
- *
- * `ownerId` is here so that a row inserted without an owner, which the
- * `interactions_owner_fill` trigger stamps a moment later, is indexed once
- * the owner is known. `contactId`, `date` and `type` are not: the search
- * reads those from `interactions` at query time.
+ * The columns whose change makes an index row wrong. `ownerId` is here so a row
+ * inserted without an owner, which `interactions_owner_fill` stamps a moment
+ * later, is indexed once the owner is known. `contactId`, `date` and `type` are
+ * read from `interactions` at query time.
  */
 export const INTERACTION_SEARCH_COLUMNS = "title, content, ownerId";
 
@@ -73,14 +60,11 @@ function ftsValues(row: string): string {
 
 /**
  * The three triggers that keep interactions_fts in step with interactions.
- *
  * Deletes are by `rowid`, which FTS5 pushes down, never by the UNINDEXED id.
- * Inserts are gated on `ownerId IS NOT NULL`: a row that arrives without an
- * owner is filled by `interactions_owner_fill`, whose UPDATE of `ownerId`
- * fires the update trigger below, so the row is indexed exactly once and
- * never with an empty owner token.
- *
- * Exported so a unit test can pin these properties.
+ * Inserts wait for `ownerId IS NOT NULL`: `interactions_owner_fill` fills a
+ * missing owner with an UPDATE that fires the update trigger, so the row is
+ * indexed once and never with an empty owner token. Exported so a unit test can
+ * pin these properties.
  */
 export function interactionTriggerSql(): string {
   // Every insert copies the owner token of the interaction row it mirrors,
@@ -109,11 +93,9 @@ export function interactionTriggerSql(): string {
 }
 
 /**
- * Register the plain-text function on a connection.
- *
- * Idempotent: SQLite replaces a function registered under the same name and
- * arity, so calling this on every install is safe. Deterministic, so SQLite
- * may fold it inside one statement.
+ * Register the plain-text function on a connection. Idempotent: SQLite replaces
+ * a function with the same name and arity. Deterministic, so SQLite may fold it
+ * inside one statement.
  */
 export function registerNoteTextFunction(sqlite: Database.Database): void {
   sqlite.function(
@@ -125,12 +107,9 @@ export function registerNoteTextFunction(sqlite: Database.Database): void {
 
 /**
  * Create or rebuild interactions_fts, install its triggers, and index any
- * interaction that has no row yet.
- *
- * Runs inside the transaction `installSearchIndex` opens, and under the same
+ * interaction without a row. Runs inside `installSearchIndex`'s transaction and
  * version gate: `rebuilt` is true when the recorded `contacts_fts` version
- * disagreed with FTS_SCHEMA_VERSION, and then the table is dropped and filled
- * again.
+ * differed from FTS_SCHEMA_VERSION, and then the table is dropped and refilled.
  *
  * @returns how many rows the backfill wrote
  */
@@ -147,9 +126,8 @@ export function installInteractionSearchIndex(
     );
     ${interactionTriggerSql()}
   `);
-  // Every row this writes takes its owner token from the interaction it
-  // copies, and rows with no owner yet are skipped until the claim stamps
-  // them, when the update trigger above indexes them.
+  // Each row takes its owner token from the interaction it copies. Rows with no
+  // owner yet wait for the update trigger above.
   // tenant-lint: allow derived table
   const backfill = sqlite.prepare(`
     INSERT INTO interactions_fts(rowid, ${INTERACTION_FTS_COLUMNS})

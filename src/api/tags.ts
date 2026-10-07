@@ -1,11 +1,4 @@
-/**
- * Tags API client and React Query hooks.
- *
- * Provides tag vocabulary summaries with contact counts, tag renaming/merging,
- * and tag deletion across the account's contacts.
- *
- * @module api/tags
- */
+/** Hooks for the account's tags: counts, rename or merge, and delete. */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiJson, jsonBody } from "./client";
 import { tagRoutes, type TagSummary } from "../../shared/contracts/tags";

@@ -1,13 +1,9 @@
-// =============================================================================
-// Integration Settings Service — SearXNG and Google OAuth configuration
-// =============================================================================
-// Resolves third-party integration settings (SearXNG search, Google OAuth client):
-//   - Google OAuth credentials are stored encrypted using secretBox (AES-256-GCM)
-//   - The client secret is write-only: status carries a redacted preview, never
-//     the raw or sealed value
-//   - Environment variables (SEARXNG_URL, GOOGLE_OAUTH_CLIENT_ID and
-//     GOOGLE_OAUTH_CLIENT_SECRET) override and lock settings
-// =============================================================================
+// Third-party integration settings: SearXNG and the Google OAuth client.
+// - Google OAuth credentials are sealed with secretBox (AES-256-GCM).
+// - The client secret is write-only: status carries a redacted preview, never
+//   the raw or sealed value.
+// - SEARXNG_URL, GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET override
+//   and lock the settings.
 
 import {
   getSetting,
@@ -62,11 +58,9 @@ function redact(secret: string | null | undefined): string | null {
 
 /**
  * Where SearXNG is: SEARXNG_URL, which wins and locks the setting, or the
- * address an admin saved in Settings → Administration → AI → Web search.
- *
- * The variable used to lose to a saved address, while the save itself was
- * refused with SET_BY_ENVIRONMENT. An address saved before the variable was
- * set then ran, and nothing on the page could change it.
+ * address an admin saved in Settings → Administration → AI → Web search. The
+ * page cannot save while the variable is set (SET_BY_ENVIRONMENT), so the
+ * variable must also win over an address saved before it.
  */
 export function getSearxngStatus(): SearxngIntegrationStatus {
   if (isSearxngEnvSet()) {
@@ -112,9 +106,8 @@ export function getIntegrationsStatus(): IntegrationsStatus {
 }
 
 /**
- * Returns the unsealed Google OAuth credentials.
- * Checks environment overrides (GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET)
- * before falling back to sealed database setting.
+ * The unsealed Google OAuth credentials: GOOGLE_OAUTH_CLIENT_ID and
+ * GOOGLE_OAUTH_CLIENT_SECRET when set, else the sealed setting.
  */
 export function getGoogleOAuthCredentials(): GoogleOAuthCredentials | null {
   const envId = process.env.GOOGLE_OAUTH_CLIENT_ID?.trim();

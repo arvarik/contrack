@@ -1,37 +1,18 @@
 /**
- * The slide between the settings list and a settings page, below `lg`.
+ * The slide between the settings list and a settings page, below `lg`, where
+ * the two share one screen. From `lg` the rail stays on screen and a page
+ * swaps in place.
  *
- * On a phone or a tablet the list and a page take the same screen. Opening a
- * page slides it in from the right, and the back link slides it out to the
- * right. From `lg` the rail is on screen and a page swaps in place, so
- * nothing slides there.
+ * React Router's `viewTransition` needs a data router and the app uses
+ * `BrowserRouter`, so this starts the View Transition itself. It sets
+ * `data-settings-slide` on the root to pick the keyframes (end of
+ * `src/index.css`), navigates inside the update callback, and waits for
+ * `settleSlide` and for no `PageFallback`, so the new picture is the page and
+ * not "Loading…". The wait never passes `MAX_WAIT_MS`.
  *
- * The View Transitions API takes a picture of the screen before and after
- * the move, and CSS animates the two (the "Settings: the slide" block at the
- * end of `src/index.css`). React Router's own `viewTransition` option works
- * only with a data router, and the app uses `BrowserRouter`, so this starts
- * the transition itself:
- *
- * 1. It sets `data-settings-slide` on the root to "forward" or "back", which
- *    picks the keyframes.
- * 2. It starts the transition. The browser keeps the old picture on screen
- *    while the update callback runs.
- * 3. The callback navigates and waits until the shell has drawn the new page
- *    (`settleSlide`), and until no page is still on its way (`PageFallback`),
- *    so the new picture is the page and not "Loading…". It never waits more
- *    than `MAX_WAIT_MS`.
- *
- * Reduced motion, from the system or the Motion row (`data-motion`), a
- * browser without the API, and a door out of Settings (Tracked contacts)
- * navigate at once, with no picture and no wait.
- *
- * The Network list and a contact take turns on a phone's screen in the same
- * way, so they slide the same way: a row slides its contact in, and the
- * contact's Back slides it out. Their roots carry the `settings-stage` class
- * too, which names the picture (`ContactList`, `ContactDetail`), and each
- * calls `settleSlide` once it has drawn.
- *
- * @module views/settings/slide
+ * Reduced motion, a browser without the API and a link out of Settings
+ * navigate at once. The Network list and a contact slide the same way: their
+ * roots carry `settings-stage` and call `settleSlide`.
  */
 import React, { useCallback } from "react";
 import { Link, useNavigate, type LinkProps } from "react-router-dom";
@@ -66,10 +47,7 @@ export function settleSlide(pathname: string) {
   tryFinish();
 }
 
-/**
- * A page's fallback calls this while it is on screen. The slide waits for it
- * to go, so the picture it takes is the page itself.
- */
+/** A page's fallback holds the slide while it is on screen. */
 export function holdSlide(): () => void {
   loadingPages += 1;
   return () => {
@@ -90,19 +68,12 @@ function wantsSlide(doc: ViewTransitionDocument): boolean {
   return !prefersReducedMotion();
 }
 
-/**
- * True when a move would slide now: below `lg`, with motion, in a browser
- * with the API. A link checks it before it hands its click to the slide,
- * and otherwise keeps its own click.
- */
+/** True below `lg`, with motion, in a browser with the API. */
 export function canSlide(): boolean {
   return wantsSlide(document as ViewTransitionDocument);
 }
 
-/**
- * `navigate`, with the slide. `to` may carry a hash (a search result's
- * row); the wait matches on the path alone.
- */
+/** `navigate` with the slide. The wait matches the path without its hash. */
 export function useSlideNavigate() {
   const navigate = useNavigate();
   return useCallback(
@@ -132,9 +103,8 @@ export function useSlideNavigate() {
             navigate(to);
           }),
       );
-      // A slide that starts while this one waits for its page makes the
-      // browser skip this one, whose `finished` then settles first. Its
-      // cleanup must leave the newer slide's direction in place.
+      // A newer slide makes the browser skip this one, whose `finished`
+      // settles first. Its cleanup must keep the newer direction.
       const clear = () => {
         if (id === slideId) delete root.dataset.settingsSlide;
       };
@@ -157,11 +127,8 @@ export function isPlainClick(event: React.MouseEvent): boolean {
 }
 
 /**
- * A link from the settings list into a page, which slides the page in below
- * `lg`. It is still a link: its `href` is real, and a modified click opens a
- * tab as any link does. Pointing at it, focusing it or pressing it starts
- * loading the page, its code and its first data (`warm.ts`), before the
- * click lands.
+ * A real link into a settings page that slides the page in below `lg`.
+ * Hover, focus or press warms the page code and data (`warm.ts`).
  */
 export const SlideLink = ({
   to,

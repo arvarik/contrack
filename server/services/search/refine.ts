@@ -1,18 +1,12 @@
-// =============================================================================
-// Ways to narrow a long answer
-// =============================================================================
-// A question made only of facets, such as "Who do I track?", can find
-// thousands, and Ask lists the first 30 by name. Here are the facets that
-// split the whole list: tracking, its most common industries, cities,
-// companies and tags, and a recent contact. A press asks the question again
-// with the facet added.
-//
-// Each count comes from the facet SQL the search runs (`compileFacets`), so a
-// chip's number is the narrowed answer's own total. A text facet matches a
-// part of a value ("Fintech" also finds "Fintech Infrastructure"), so the
-// grouped counts only choose the values, and each one is counted again. One
-// pass over the list counts every candidate.
-// =============================================================================
+// Ways to narrow a long answer. A question made only of facets, such as "Who do
+// I track?", can find thousands, and Ask lists the first 30 by name. These are
+// the facets that split the whole list: tracking, its most common industries,
+// cities, companies and tags, and a recent contact. A press asks again with the
+// facet added. Each count comes from the facet SQL the search runs
+// (`compileFacets`), so a chip's number is the narrowed answer's total. A text
+// facet matches part of a value ("Fintech" finds "Fintech Infrastructure"), so
+// grouped counts only pick the values, and each is counted again, all in one
+// pass over the list.
 
 import { sqlite } from "../../db.ts";
 import type { Scope } from "../../tenancy/scope.ts";

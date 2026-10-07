@@ -1,34 +1,15 @@
 /**
  * EnrichMenu: one button that researches this contact on the web, at the
- * depth the person picks from its menu.
- *
- * ```
- *   ┌──────────────────┐
- *   │ ✦ Enrich again ▾ │
- *   └──────────────────┘
- *   DEPTH
- *     Standard     about 40 s
- *     Deep         about 1 min
- * ```
- *
- * The dossier has two: Enrich contact in the empty dossier, and Enrich
- * again on the Research card. It is one control with a chevron, not a split
- * button. The Track button beside the name was a split button, and the
- * owner asked for one control with single words (`TrackButton`). The
- * contact's actions menu lists the same two depths as rows of its own.
+ * depth the person picks from its menu. The dossier shows it as Enrich
+ * contact when empty, and as Enrich again on the Research card.
  *
  * A row starts the same background run as the Enrichment page
- * (`startSearch`), with the account's web search engine. When the engine
- * that runs is SearXNG or both, the heading says so: "Depth · with
- * SearXNG". While this contact's research runs, the button reads
- * "Enriching…" and waits, so a second press cannot queue the contact twice.
- * With the account's AI off, outside the AI Search provider, or for a
- * ghost, it is not there. With no model or no web search set up, it waits,
- * and its tooltip and name say why (`useBlockedAi`): it used to look ready
- * and fail after the press. The times show only when research runs on
- * Gemini, where they were measured (`depthFiguresApply`).
- *
- * @module views/contact-detail/components/EnrichMenu
+ * (`startSearch`). The heading names the engine when SearXNG runs. While
+ * this contact's research runs, the button reads "Enriching…" and waits, so
+ * a second press cannot queue the contact twice. With no model or no web
+ * search set up, it waits too, and its tooltip and name say why
+ * (`useBlockedAi`). The times show only on Gemini, where they were measured
+ * (`depthFiguresApply`).
  */
 import { ChevronDown, Sparkles } from "lucide-react";
 import type { Contact } from "../../../types";
@@ -59,9 +40,8 @@ interface EnrichMenuProps {
 }
 
 /**
- * Whether the menu shows for this contact: research is on for the account,
- * and the contact is not a ghost. Words that point to Enrich again ask it
- * too, so they never name a button that is not there.
+ * Whether the menu shows: research is on and the contact is not a ghost.
+ * Text that points to Enrich again checks it too.
  */
 export function useCanEnrich(contact: Pick<Contact, "isGhost">): boolean {
   const search = useOptionalAISearch();

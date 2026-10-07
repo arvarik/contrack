@@ -1,7 +1,4 @@
-/**
- * CacheTiersAccordion — Collapsible cache tier detail section.
- * Shows hit/miss/eviction stats per AI cache tier with color-coded hit rates.
- */
+/** Saved-answer stats per AI cache tier, collapsed by default. */
 import { useState } from "react";
 import { cn } from "../../../lib/utils";
 import { CARD, SECTION_HEADING } from "../../../lib/styles";
@@ -15,7 +12,6 @@ interface CacheTiersAccordionProps {
   cacheTiers: Record<string, AIStatsCacheTier>;
 }
 
-/** Human-readable tier labels. */
 const TIER_LABELS: Record<string, string> = {
   briefing: "Briefings",
   rerank: "Reranking results",
@@ -27,11 +23,8 @@ const TIER_LABELS: Record<string, string> = {
 };
 
 /**
- * What each tier caches, and what a hit actually saved you.
- *
- * "Rerank: 82%" tells you nothing unless you know what a rerank is and what
- * was avoided by not doing one. Each description names the feature in the
- * words the UI uses for it, then says what a reused answer means in practice.
+ * What each tier caches and what a reuse saves, in the UI's words. A bare hit
+ * rate means nothing without them.
  */
 const TIER_DESCRIPTIONS: Record<string, string> = {
   briefing:
@@ -70,7 +63,6 @@ export const CacheTiersAccordion = ({
 
   return (
     <div className={CARD}>
-      {/* Header — clickable */}
       <button
         onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
@@ -89,7 +81,6 @@ export const CacheTiersAccordion = ({
         </motion.div>
       </button>
 
-      {/* Expanded content */}
       <AnimatePresence initial={false}>
         {isOpen && (
           <motion.div
@@ -99,14 +90,9 @@ export const CacheTiersAccordion = ({
             transition={{ duration: DURATION.slow, ease: EASE }}
             className="overflow-hidden"
           >
-            {/*
-              Six numeric columns at a fixed 56px (wide enough for "ENTRIES"
-              at the 11px floor) plus the tier name do not fit a phone. Rather than shrink the numbers into illegibility or drop
-              columns, the table scrolls sideways inside its own container; the
-              card itself never causes the page to scroll horizontally.
-            */}
+            {/* Six 56px columns and the name do not fit a phone, so the
+                table scrolls sideways in its own box, not the page. */}
             <div className="mt-4 space-y-0 overflow-x-auto -mx-2 px-2">
-              {/* Header row */}
               <div className="grid grid-cols-[minmax(120px,1fr)_56px_56px_56px_56px_56px_56px] gap-2 px-2 py-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-on-surface-variant min-w-[504px]">
                 <span>Feature</span>
                 <span className="text-right">Saved</span>

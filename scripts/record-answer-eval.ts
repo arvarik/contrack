@@ -1,7 +1,5 @@
 #!/usr/bin/env node
-// =============================================================================
 // Record / Live Evaluation for the Complete AI Answer Pipeline
-// =============================================================================
 // Usage:
 //   npm run eval:record:answer   # Re-records vectors, AI responses & writes baseline
 //   npm run eval:answer:live     # Runs live evaluation against configured AI provider
@@ -9,7 +7,6 @@
 // Arguments:
 //   --record   Record embeddings, LLM completions, and write answer.baseline.json
 //   --live     Evaluate live AI provider without overwriting baseline
-// =============================================================================
 
 import fs from "fs";
 import { setTimeout as delay } from "node:timers/promises";

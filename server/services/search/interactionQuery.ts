@@ -1,12 +1,7 @@
-// =============================================================================
-// Interaction query — from a question to an FTS5 MATCH expression
-// =============================================================================
-// A person types "who discussed hiring", not "hiring". The words that make a
-// question a question carry nothing a note could match on, so they are set
-// aside before the rest go to the index. The words that are left are matched
-// two ways: all of them, then, when nothing has all of them, any of them,
-// ranked so that a note with more of them comes first.
-// =============================================================================
+// From a question to an FTS5 MATCH expression. A person types "who discussed
+// hiring", not "hiring": the question words match nothing in a note, so they
+// are set aside. The rest are matched all together, then, when nothing has all
+// of them, any of them, ranked so a note with more comes first.
 
 import { searchTokens } from "./lexical.ts";
 
@@ -126,9 +121,9 @@ function term(token: string): string {
  * Compile the free text of a query.
  *
  * @param text - The query after any date phrase has been lifted out.
- * @param keepQuestionWords - Search for every word, including the question
- *   words. Used when dropping them would leave nothing to search for and
- *   there is no date filter either, so a best effort beats an empty page.
+ * @param keepQuestionWords - Search for every word, question words included,
+ *   when dropping them would leave nothing and there is no date filter either,
+ *   so a best effort beats an empty page.
  */
 export function compileInteractionMatch(
   text: string,

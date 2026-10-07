@@ -1,26 +1,19 @@
 /**
  * The palette's keys: the arrows move the highlight, Enter opens it, and
- * Escape steps back one layer at a time.
+ * Escape steps back one layer at a time. Each test pins one of these:
+ * - ↑ on an empty input does not fill it with the last search.
+ * - When the server's people replace the instant ones, a row stays
+ *   highlighted, Enter opens it, and the input names it for a screen reader
+ *   before any arrow key.
+ * - Escape clears the text first, and closes a facet's suggestions.
+ * - A one-line `>` action shows a row, so Enter logs it.
+ * - A press on a heading keeps the focus in the input.
+ * - Escape in the note composer moves the focus off the dialog.
+ * - Back from the actions menu, the highlight returns to its row.
+ * - Home and End move the caret, not the highlight.
  *
- * Each test here but the quick interaction one failed before the fix it
- * covers:
- * - ↑ on an empty input filled it with the last search, so ↓ then ↑ in the
- *   empty palette swapped the list for that search's results.
- * - When the server's people replaced the instant ones, the highlighted row
- *   could leave the list, and then no row was highlighted and Enter did
- *   nothing. The input did not name the highlighted row for a screen reader
- *   either, until an arrow key was pressed.
- * - Escape closed the palette with the text still in it, and with a facet's
- *   suggestions open it did nothing at all.
- * - A one-line `>` action showed no row, so Enter logged nothing.
- * - A press on a heading took the focus from the input, and the page
- *   behind took the next key.
- * - Escape in the note composer left the focus on the dialog.
- * - Back from the actions menu, the highlight sat on the top row.
- * - Home and End moved the highlight, not the caret.
- *
- * The quick interaction test holds that shortcut to closing the palette.
- * It used to send the palette an Escape, which now only clears the text.
+ * The quick interaction test holds that shortcut to closing the palette,
+ * because Escape only clears the text.
  */
 import type { Page } from "@playwright/test";
 import { test, expect } from "./fixtures/test";
@@ -77,7 +70,7 @@ test("↓ then ↑ in the empty palette moves the highlight and keeps the input 
   page,
   instance,
 }) => {
-  // A recent search: ↑ used to bring it back into the input.
+  // A recent search, which ↑ must not bring back into the input.
   const { entry } = await instance.api<{ entry: { id: string } }>(
     "POST",
     "/search/history",
@@ -176,7 +169,7 @@ test("Escape clears a facet pill with the text", async ({ page }) => {
   await page.keyboard.type("company:Acme ");
   const pill = palette.getByRole("button", { name: /Remove filter company/ });
   await expect(pill).toBeVisible();
-  // The typed facet left the box once it was a pill.
+  // The typed facet leaves the box once it is a pill.
   await expect(input).toHaveValue("");
 
   await page.keyboard.press("Escape");
@@ -413,7 +406,7 @@ test("the actions and the list picker work by keyboard, and say where they are",
   await page.keyboard.type("Grace");
   await expect(palette.getByText("Grace Hopper")).toBeVisible();
 
-  // A screen reader heard nothing in the actions: they were plain buttons.
+  // A screen reader hears each action, which plain buttons would not give.
   await page.keyboard.press("ArrowRight");
   await points("Actions for Grace Hopper", /^View profile/);
   await expect(

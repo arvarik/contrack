@@ -1,20 +1,15 @@
-// =============================================================================
-// The migration runner and the schema_migrations ledger
-// =============================================================================
-// A schema change is a numbered file in server/db/migrations/, and
-// server/db/migrations/index.ts lists the files in order. At boot,
-// server/db.ts calls runMigrations. It applies each listed migration that has
-// no row in schema_migrations, in list order. A migration and its row commit
-// in one transaction, so a migration that throws leaves no change and no row,
-// and boot stops with an error that names it.
+// The migration runner and the schema_migrations ledger. A schema change is a
+// numbered file in server/db/migrations/, listed in order in
+// server/db/migrations/index.ts. At boot, server/db.ts calls runMigrations,
+// which applies each listed migration without a row in schema_migrations, in
+// list order. A migration and its row commit in one transaction, so one that
+// throws leaves no change and no row, and boot stops with an error that names
+// it.
 //
 // The same table records each derived structure (the FTS tables, the vec0
-// stores and the triggers that feed them) as an `index` row with the version
-// it is built at. server/db/indexes.ts owns those rows.
-//
-// Nothing under server/db/ imports server/db.ts. Every function here takes
-// the connection.
-// =============================================================================
+// stores and their triggers) as an `index` row with the version it is built at;
+// server/db/indexes.ts owns those rows. Nothing under server/db/ imports
+// server/db.ts, so every function here takes the connection.
 
 import type Database from "better-sqlite3";
 import { log } from "../utils/logger.ts";
@@ -105,12 +100,10 @@ export function recordIndexVersion(
 }
 
 /**
- * Apply every listed migration that has no row, in list order.
- *
- * Refuses to start, before it writes anything, on a database that has tables
- * but no ledger: another program, or Contrack 1, made it. Refuses as well
- * when the database holds a migration this list does not have: a newer build
- * applied it, and this build cannot know what it did.
+ * Apply every listed migration without a row, in list order. Before writing
+ * anything it refuses a database that has tables but no ledger (made by another
+ * program, or Contrack 1), and one that holds a migration this list lacks
+ * (applied by a newer build, which this one cannot understand).
  *
  * @returns the ids applied by this call
  */

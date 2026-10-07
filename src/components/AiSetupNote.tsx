@@ -1,10 +1,7 @@
 /**
- * AiSetupNote: why an AI button waits, and the page that fixes it for a
- * person who can fix it. "No AI model is set up. Connect a provider in
- * Settings → Administration → AI". Every AI button that waits says it in
- * these words and with this link: Generate briefing, Enrich, Add from text.
- *
- * @module components/AiSetupNote
+ * Why an AI button waits, and the link that fixes it for a person who can:
+ * "No AI model is set up. Connect a provider in Settings → Administration →
+ * AI". Every waiting AI button says it this way.
  */
 import { Link } from "react-router-dom";
 import { aiSetupLine, type AiSetup } from "../hooks/useAiSetup";

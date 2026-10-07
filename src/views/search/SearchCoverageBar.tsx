@@ -1,18 +1,8 @@
 /**
- * SearchCoverageBar: how much of the network search by meaning can read.
- *
- * Two looks, for two places:
- *
- *   - `card` (the default), under the embedding model on Administration →
- *     AI: the coverage, its numbers and its actions as buttons, with a
- *     progress bar under them.
- *   - `row`, under the Ask Contrack search box: one slim line with a short
- *     bar, the count in words and quiet text buttons. It is only there while
- *     there is something to say, so a network that is fully indexed shows
- *     nothing and the search keeps the page.
- *
- * Both reach the same two dialogs: the confirmation before a paid provider
- * embeds anything, and the list of the contacts that failed.
+ * How much of the network search by meaning can read. `card` sits on
+ * Administration → AI. `row` sits under the Ask search box and shows only
+ * while there is something to say. Both open the paid-provider confirmation
+ * and the failed-contacts list.
  */
 import { type RefObject, useCallback, useState } from "react";
 import {
@@ -38,17 +28,13 @@ interface SearchCoverageBarProps {
   /** `card` on a settings page, `row` under a search box. */
   variant?: "card" | "row";
   /**
-   * Where the keyboard goes when the row leaves with focus inside it: the
-   * search box. Indexing that ends after a press hides the row, and focus on
-   * its button would fall onto the body.
+   * Gets focus when the row unmounts with focus inside it, so focus does not
+   * fall to the body when indexing ends after a press.
    */
   returnFocusRef?: RefObject<HTMLElement | null>;
 }
 
-/**
- * The share of contacts indexed, as a bar. Decorative: the words beside it
- * say the same number. It fills, so it takes the slow duration.
- */
+/** Decorative: the words beside it say the same number. */
 const CoverageMeter = ({
   value,
   tone,
@@ -85,12 +71,10 @@ export function SearchCoverageBar({
 
   const [showProviderConfirm, setShowProviderConfirm] = useState(false);
   const [showInspectModal, setShowInspectModal] = useState(false);
-  // Whether a person pressed Index missing or Retry failed, so the row keeps
-  // that button until the work is done. It resets once nothing is missing
-  // or failed.
+  // Keeps the queue button on the row until the work is done.
   const [queuePressed, setQueuePressed] = useState(false);
   // React detaches a ref before it removes the node, so the cleanup still
-  // finds focus inside the row and can hand it on while the row is there.
+  // finds focus inside the row.
   const keepFocus = useCallback(
     (node: HTMLElement | null) => {
       if (!node) return;
@@ -107,16 +91,14 @@ export function SearchCoverageBar({
 
   if (isLoading || !coverage) return null;
 
-  // A hosted embedding model sends each contact to the provider, so it does
-  // not index an account with AI off, and the server refuses to queue one.
-  // Search stays keyword-only, and there is nothing to offer here.
+  // A hosted embedding model sends each contact to the provider, so the
+  // server refuses to queue for an account with AI off.
   const providerBlocked = coverage.provider.isPaid && !aiAllowed;
 
   const isComplete =
     coverage.coverage === 100 &&
     coverage.pending === 0 &&
     coverage.failed === 0;
-  /** The bar's tone, and the card's icon tile: done, failing, or still to do. */
   const tone: Tone = isComplete
     ? "success"
     : coverage.failed > 0
@@ -149,8 +131,7 @@ export function SearchCoverageBar({
     }
   };
 
-  // Mounted whatever the row shows, so a dialog that is open stays open when
-  // the numbers under it change.
+  // Always mounted, so an open dialog stays open when the numbers change.
   const dialogs = (
     <>
       <ProviderConfirmModal
@@ -174,30 +155,21 @@ export function SearchCoverageBar({
 
   if (variant === "row") {
     if (providerBlocked) return null;
-    /*
-     * Indexing is under way: the worker is running, or contacts wait for the
-     * built-in model, which drains its queue on its own between batches. A
-     * paid provider's queue waits until a person allows it, so it is not
-     * running: while contacts are missing, the row offers the action that
-     * asks, and the changed contacts it would embed again are a settings
-     * matter, as they always were.
-     */
+    // The built-in model drains its queue on its own. A paid provider's
+    // queue waits for a person to allow it, so it is not running.
     const running =
       coverage.isIndexing ||
       (coverage.pending > 0 && !coverage.provider.isPaid);
     const hasNews = running || coverage.missing > 0 || coverage.failed > 0;
-    // One endpoint queues the missing contacts and the failed ones together,
-    // so there is one action, named for the failures when there are some.
-    // Once pressed it stays on the row until the work is done, marked
-    // unavailable with `aria-disabled` while the queue runs: a pressed button
-    // that left the page, or turned `disabled`, would drop the keyboard's
-    // focus onto the body.
+    // One endpoint queues missing and failed contacts, so there is one
+    // action. Once pressed it stays, with `aria-disabled` while the queue
+    // runs: a button that unmounts or turns `disabled` drops focus to the body.
     const hasWork = coverage.missing > 0 || coverage.failed > 0;
     const canQueue = !running && hasWork;
     const showQueue = canQueue || (queuePressed && hasWork);
     const queueUnavailable = running || refreshIndex.isPending;
-    // Every contact counted and the worker busy: it is embedding contacts
-    // that changed, and "30 of 30" would read as stuck.
+    // With none missing, the worker embeds changed contacts, and "30 of 30"
+    // would read as stuck.
     const words = running
       ? coverage.missing > 0
         ? `Indexing ${coverage.indexed} of ${coverage.total}…`
@@ -228,8 +200,7 @@ export function SearchCoverageBar({
                 )}
               </p>
             </div>
-            {/* The negative margin sets the last word flush with the search
-                box's right edge, past the button's own padding. */}
+            {/* The negative margin aligns the last word with the box edge. */}
             {(coverage.failed > 0 || showQueue) && (
               <div className="flex items-center gap-1 ml-auto -mr-2">
                 {coverage.failed > 0 && (

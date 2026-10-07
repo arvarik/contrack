@@ -1,62 +1,43 @@
 #!/usr/bin/env node
-// =============================================================================
-// Ask Contrack search benchmark
-// =============================================================================
-// Three modes. Each one works in a temporary database and never opens the
-// owner's own.
+// Ask Contrack search benchmark. Every mode works in a temporary database and
+// never opens the owner's own.
 //
 //   node scripts/benchmark-search.ts
-//       10,000 simple rows: the cost of a contact edit and of one keyword
-//       search against the FTS index.
+//       10,000 simple rows: the cost of a contact edit and of one FTS search.
 //
 //   node scripts/benchmark-search.ts --contacts 5000
-//       The search-gate corpus (300 contacts) plus generated contacts up to
-//       N (default 5,000), 70 percent with an email, 50 percent with a phone,
-//       600 with a last-contact date. Real MiniLM vectors when the model is
-//       available. Prints p50 and p95 for the sidebar search with and
-//       without a facet, lexical search, the query embedding, the KNN,
-//       `localRetrieval` per query kind, and the local answer as a person
-//       gets it (a local kind's final answer, a facet answer, or the instant
-//       chunk with hydration), then recall@10 and MRR per channel for the
-//       golden queries.
+//       The search-gate corpus (300 contacts) plus generated contacts up to N
+//       (default 5,000), with real MiniLM vectors when the model is present.
+//       Prints p50 and p95 for each search stage and query kind, then
+//       recall@10 and MRR per channel for the golden queries.
 //
 //   node scripts/benchmark-search.ts --live
 //       The same database, then the Ask pipeline with the configured
-//       provider: ten queries, three cold runs each, each model stage from
-//       the adapter's own latency, then one query again while two 15 s
-//       background jobs hold both shared AI slots, then two questions asked
-//       again in other words, for the semantic cache. Needs a provider key in
-//       the environment:
+//       provider: ten queries, three cold runs each, one query behind two 15 s
+//       background jobs that hold both shared AI slots, and two questions in
+//       other words for the semantic cache. Needs a provider key in the
+//       environment, and costs a few cents:
 //         (set -a; . ../contrack/.env; set +a; node scripts/benchmark-search.ts --live)
-//       A run costs a few cents.
 //
 //   node scripts/benchmark-search.ts --contacts 50000 --vector-ab
-//       Search vectors as int8 against float, on the same contacts and
-//       queries: each contact is embedded once, written as int8 through the
-//       product's path and as float into a twin table. Prints bytes per
-//       vector, table size from dbstat, KNN p50 and p95 at k = 100, and the
-//       int8 KNN's recall@10 against the float one.
+//       int8 search vectors against float on the same contacts: bytes per
+//       vector, table size, KNN p50 and p95 at k = 100, and the int8 KNN's
+//       recall@10 against the float one.
 //
 //   node scripts/benchmark-search.ts --contacts 5000 --rerank-sweep
-//       The same database, then both cross-encoders on 10, 20, 30 and 50
-//       candidates: the stage's p50 and p95 on the sentence questions, and
-//       recall@10 and MRR of the local answer with each. Run it with
-//       --contacts 300 for the search gate's corpus alone.
+//       Both cross-encoders on 10, 20, 30 and 50 candidates: the stage's p50
+//       and p95, and the local answer's recall@10 and MRR with each.
 //
 //   node scripts/benchmark-search.ts --contacts 300 --embedder Xenova/e5-small-v2
-//       Any mode above with another local embedding model in place of the
-//       bundled one, from EMBEDDERS below: both indexes are built with it, and
-//       every question is embedded with it. The model downloads once. At 300
-//       contacts the search gate's ids are fixed, so the quality numbers are
-//       the same on every run and compare across models. At 5,000 they move a
-//       little between runs, because the int8 scale comes from the first
-//       backfill batch.
+//       Any mode with another local embedding model from EMBEDDERS. At 300
+//       contacts the ids are fixed, so the quality numbers compare across
+//       models. At 5,000 they move a little between runs, because the int8
+//       scale comes from the first backfill batch.
 //
-// Flags: --json prints one JSON document instead of the report. --runs N sets
-// the timed repetitions per query (default 5, 3 for --live). --rrf-k N sets
-// the fusion constant for the k sweep (default: the code's RRF_K).
-// --verbose keeps the server's log lines. The script never prints a key.
-// =============================================================================
+// Flags: --json prints one JSON document. --runs N sets the timed repetitions
+// per query (default 5, 3 for --live). --rrf-k N sets the fusion constant for
+// the k sweep (default RRF_K). --verbose keeps the server's log lines. The
+// script never prints a key.
 
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -170,9 +151,7 @@ if (!verbose) {
 type Db = typeof import("../server/db.ts");
 const { sqlite } = await load<Db>("server/db.ts");
 
-// ---------------------------------------------------------------------------
 // Numbers
-// ---------------------------------------------------------------------------
 
 interface Stat {
   p50: number;
@@ -204,14 +183,11 @@ const seconds = (value: number) =>
   value < 1000 ? ms(value) : `${(value / 1000).toFixed(2)} s`;
 const pad = (text: string, width: number) => text.padEnd(width);
 
-// ---------------------------------------------------------------------------
 // Mode 1: edits and keyword searches on 10,000 simple rows
-// ---------------------------------------------------------------------------
 
 async function simpleRows() {
   const count = 10_000;
-  // Every contact has an owner since the tenancy work, and the insert
-  // trigger refuses a row without one.
+  // The insert trigger refuses a contact without an owner.
   const { ensureLocalOwner } = await load<Db>("server/db.ts");
   const ownerId = ensureLocalOwner();
   const insert = sqlite.prepare(
@@ -256,9 +232,7 @@ async function simpleRows() {
   );
 }
 
-// ---------------------------------------------------------------------------
 // The corpus: the search gate's 300 contacts plus generated ones
-// ---------------------------------------------------------------------------
 
 const INDUSTRIES = [
   "Fintech",
@@ -467,9 +441,7 @@ async function modules() {
   };
 }
 
-// ---------------------------------------------------------------------------
 // Mode 2: local stages and quality at N contacts
-// ---------------------------------------------------------------------------
 
 async function localBenchmark(seeded: Seeded) {
   const m = await modules();
@@ -705,11 +677,9 @@ function printLocal(result: Awaited<ReturnType<typeof localBenchmark>>) {
   console.log(lines.join("\n"));
 }
 
-// ---------------------------------------------------------------------------
 // Mode 2a: int8 search vectors against float
-// ---------------------------------------------------------------------------
 
-/** The float twin of `search_embeddings`, the shape it had before int8. */
+/** The float twin of `search_embeddings`, to compare with int8. */
 const FLOAT_TWIN = "bench_float_vectors";
 
 async function vectorAb(seeded: Seeded) {
@@ -870,16 +840,14 @@ function printVectorAb(result: Awaited<ReturnType<typeof vectorAb>>) {
   );
 }
 
-// ---------------------------------------------------------------------------
 // Mode 2b: the cross-encoder sweep
-// ---------------------------------------------------------------------------
 
 /**
  * The live mode's semantic cache check: a question, then the same question
  * in other words. MiniLM puts each pair at cosine 0.97 or more, and each
  * pair has the same facets and the same entity key. The first also keeps
  * the ordered constraint text and can hit. The plural change in the second
- * now needs a fresh answer, because similarity alone is not sufficient.
+ * needs a fresh answer, because similarity alone is not sufficient.
  */
 const REWORDED: [string, string][] = [
   ["who in Lisbon goes rock climbing", "who goes rock climbing in Lisbon"],
@@ -1029,9 +997,7 @@ function printSweep(result: Awaited<ReturnType<typeof rerankSweep>>) {
   console.log(lines.join("\n"));
 }
 
-// ---------------------------------------------------------------------------
 // Mode 3: the live pipeline with the configured provider
-// ---------------------------------------------------------------------------
 
 interface ModelCall {
   operation: string;
@@ -1242,8 +1208,6 @@ function printLive(result: Awaited<ReturnType<typeof liveBenchmark>>) {
   );
   console.log(lines.join("\n"));
 }
-
-// ---------------------------------------------------------------------------
 
 try {
   if (!corpusMode) await simpleRows();

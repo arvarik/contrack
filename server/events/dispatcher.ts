@@ -1,28 +1,22 @@
-// =============================================================================
-// The event dispatcher: subscribers, their cursors, and one dispatch loop
-// =============================================================================
-// A write records events in its transaction (record.ts) and calls
+// The event dispatcher: subscribers, their cursors, and one dispatch loop. A
+// write records events in its transaction (record.ts) and calls
 // `dispatchEvents()` after the transaction returns and before it reads its
-// own answer. The dispatcher hands each subscriber the events of its types
-// that it has not seen, in `id` order, and moves the subscriber's cursor in
-// `event_cursors` past each one it handled.
+// answer. Each subscriber gets the events of its types it has not seen, in `id`
+// order, and its cursor in `event_cursors` moves past each one handled.
 //
-// The rules:
-// - A handler is synchronous and short. It schedules work (the index queue,
-//   a job, a fire-and-forget promise) and does not run slow work.
+// - A handler is synchronous and short: it schedules work (the index queue, a
+//   job, a fire-and-forget promise) and never runs slow work itself.
 // - A handler that throws is logged and retried from its cursor on the next
-//   dispatch. After MAX_FAILURES failures on one event, that event is skipped
-//   for that subscriber with an error log. A throw never undoes the write:
-//   the write committed before the dispatch began.
-// - A dispatch never starts inside another one. A handler whose own write
-//   calls `dispatchEvents()` sets a flag, and the outer loop goes round again.
-// - Called while a transaction is open (a write nested in another write), it
-//   waits for a microtask, so it never reads rows that may still roll back.
-// - A new subscriber starts from now: registration creates its cursor at the
-//   newest event. Register before any write in the process, or the events
-//   before the registration are not handed to it.
-// - Boot catches up from the cursors, by calling `dispatchEvents()` once.
-// =============================================================================
+//   dispatch. After MAX_FAILURES on one event, that event is skipped for the
+//   subscriber with an error log. A throw never undoes the write, which
+//   committed first.
+// - A dispatch never starts inside another: a handler whose write calls
+//   `dispatchEvents()` sets a flag, and the outer loop goes round again.
+// - Inside an open transaction (a write nested in another) it waits a
+//   microtask, so it never reads rows that may still roll back.
+// - A new subscriber starts from now: its cursor is created at the newest
+//   event. Register before any write in the process.
+// - Boot catches up from the cursors with one `dispatchEvents()`.
 
 import type Database from "better-sqlite3";
 import { sqlite } from "../db.ts";
@@ -71,10 +65,8 @@ const registry = new Map<string, Subscriber>();
 
 /**
  * Add a subscriber. Idempotent by id: the modules list the same subscriber
- * objects as the services that register them, and the first one stays.
- *
- * A new subscriber's cursor starts at the newest event, so it reacts to
- * writes from now on and never to the history before it.
+ * objects as the services that register them, and the first stays. Its cursor
+ * starts at the newest event, so it never sees the history before it.
  */
 export function registerSubscriber(subscriber: Subscriber): void {
   if (registry.has(subscriber.id)) return;
@@ -238,10 +230,10 @@ let again = false;
 let deferred = false;
 
 /**
- * Wait for the open transaction to end. A transaction in this codebase is
- * synchronous, so it has ended by the next microtask. One held open across
- * an await would not have, and then the dispatch waits for the next turn of
- * the event loop instead, so a waiting dispatch never starves the loop.
+ * Wait for the open transaction to end. Transactions here are synchronous, so
+ * it has ended by the next microtask. One held open across an await would not
+ * have, and then the dispatch waits for the next turn of the event loop, so a
+ * waiting dispatch never starves the loop.
  */
 function deferUntilCommitted(): void {
   if (deferred) return;

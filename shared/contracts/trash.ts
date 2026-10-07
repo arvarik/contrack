@@ -1,9 +1,6 @@
-// =============================================================================
 // Contracts: trash
-// =============================================================================
 // Contacts a person deleted wait in the Trash for the retention an admin
 // sets. The other trash routes have no contract yet (see `UNCONTRACTED`).
-// =============================================================================
 
 import { z } from "zod";
 import { route } from "./route.ts";

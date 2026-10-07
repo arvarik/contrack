@@ -1,34 +1,12 @@
 /**
- * AskSearchBox: the search box on Ask Contrack, the same in both modes.
+ * The search box on Ask Contrack, the same in People and Notes mode, so
+ * switching modes moves nothing under it.
  *
- * People and Notes had two boxes. People had a Search button with a word on
- * it, and Notes had none, so a person who typed a note search and looked
- * for the button found nothing to press. One box now serves both:
- *
- * ```
- * ┌──────────────────────────────────────────────────────┐
- * │ ✦  Ask about your network…                 ×  [ 🔍 ] │
- * └──────────────────────────────────────────────────────┘
- * ```
- *
- * 1. The mode's glyph leads: the sparkles for People, a note for Notes. It
- *    gives way to the page's busy mark while a search runs. The glyph is
- *    decoration, and the page's status region says the same in words.
- * 2. The box is a search landmark and a form. Enter and the button submit
- *    it, so both run the same search. Escape empties the box and what it
- *    found.
- * 3. Clear keeps its slot while there is nothing to clear, so the caret
- *    never moves when the first letter arrives. It is out of the Tab order
- *    and hidden from a screen reader until then.
- * 4. The button is the magnifying glass alone, the page's primary action,
- *    named "Search" for a screen reader and for a pointer. A glyph with a
- *    word beside it said "Search" twice.
- *
- * The card draws the focus ring while the input has focus (`focus-frame`).
- * It is 80 px tall from `sm` in both modes, so switching modes moves
- * nothing under it.
- *
- * @module views/search/AskSearchBox
+ * - The mode's glyph is decorative. The page's status region says the same.
+ * - Clear keeps its slot while there is nothing to clear, so the caret never
+ *   moves on the first letter. It is out of the Tab order and hidden from a
+ *   screen reader until then.
+ * - The card draws the focus ring for the input (`focus-frame`).
  */
 import React from "react";
 import { Search, X, type LucideIcon } from "lucide-react";
@@ -38,22 +16,17 @@ import { NO_AUTOCORRECT } from "../../components/ui/SearchField";
 
 interface AskSearchBoxProps {
   inputRef: React.RefObject<HTMLInputElement | null>;
-  /**
-   * The box itself. The Ask page's search flight measures it: the bird
-   * keeps out of the column from its top down.
-   */
+  /** Measured by the search flight, which keeps out of the column. */
   formRef?: React.Ref<HTMLFormElement>;
   value: string;
   onChange: (value: string) => void;
-  /** Runs the search, from Enter and from the button. */
+  /** From Enter and from the button. */
   onSubmit: () => void;
   /** Empties the box and what it found, from Escape and from Clear. */
   onClear: () => void;
   /** True while there is something to clear: words, or filters behind them. */
   canClear: boolean;
-  /** False while the words cannot be searched, or a search of them runs. */
   canSubmit: boolean;
-  /** The mode's glyph at the start of the box. */
   icon: LucideIcon;
   /** Drawn in the glyph's place while a search runs. */
   busyMark?: React.ReactNode;
@@ -94,13 +67,11 @@ export const AskSearchBox = ({
     <input
       ref={inputRef}
       type="text"
-      // A phone's Enter key reads "Search", the thing it does here.
       enterKeyHint="search"
       value={value}
       onChange={(event) => onChange(event.target.value)}
-      // Enter is answered here rather than by the form's own submit, so a
-      // search runs the same way wherever the key comes from, and never
-      // twice. A key that finishes an IME composition is the composer's.
+      // Enter is answered here, not by the form submit, so a search never
+      // runs twice. A key that ends an IME composition belongs to the IME.
       onKeyDown={(event) => {
         if (event.nativeEvent.isComposing) return;
         if (event.key === "Enter") {
@@ -114,8 +85,7 @@ export const AskSearchBox = ({
       placeholder={placeholder}
       aria-label={label}
       {...NO_AUTOCORRECT}
-      // 44 px tall on a phone, the touch floor, and the button's 40 px from
-      // `sm`. 16 px type on a phone keeps iOS from zooming in on focus.
+      // 44 px is the touch floor. 16 px type keeps iOS from zooming on focus.
       className="flex-1 min-w-0 h-11 sm:h-10 bg-transparent border-none text-on-surface placeholder:text-on-surface-variant text-base sm:text-lg"
     />
     <button

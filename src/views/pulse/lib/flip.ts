@@ -1,44 +1,28 @@
 /**
- * The motion of the Pulse grid while a card is moved.
+ * FLIP slides for the Pulse grid while a card is moved: `capture` measures
+ * every card before a change, and `play` slides each card that moved from
+ * its old place to its new one.
  *
- * A card that changes place in the DOM jumps there. Each time the drag's
- * draft moves a card, its neighbours shift: the slot opens a gap in one
- * column and closes one in another, a card folds to its slot when it is
- * picked up, and unfolds when it is let go. FLIP makes each of those a
- * slide. `capture` measures every card before the change, `play` measures
- * them after it, and each card that moved starts from its old place with a
- * transform and slides to the new one: first, last, invert, play.
- *
- * Only `transform` animates, on the Web Animations API, so the compositor
- * runs the slide and no frame lays the page out again. dnd-kit measures the
- * cards without their transform, so a card in mid-slide is still found at
- * its real place. A card caught in mid-slide by the next change starts
- * again from where it is on screen.
- *
- * Reduced motion, from the operating system or the Motion row in Settings,
- * turns all of it off: the cards take their new places at once.
- *
- * @module views/pulse/lib/flip
+ * Only `transform` animates, so no frame lays the page out again, and
+ * dnd-kit, which measures without the transform, still finds a sliding card
+ * at its real place. Reduced motion turns it off.
  */
 import { DURATION, EASE, prefersReducedMotion } from "../../../lib/motion";
 
 /** The app's one curve, for the Web Animations API and dnd-kit. */
 export const EASE_CSS = `cubic-bezier(${EASE.join(", ")})`;
 
-/** The id the slides carry, so the next change can find and stop them. */
+/** Lets the next change find and stop the running slides. */
 const FLIP_ID = "pulse-flip";
 
 interface Flip {
-  /** Measure where each card is on screen, before the change that moves it. */
   capture: () => void;
-  /** Slide each card that moved from where it was to where it is now. */
   play: () => void;
 }
 
 /**
- * FLIP over the elements under `getRoot()` that carry `data-flip-id`, matched
- * by its value, so a card that moved to another column (a new element with
- * the same id) slides across too.
+ * Matches elements by `data-flip-id`, so a card that moved to another column
+ * (a new element with the same id) slides across too.
  */
 export function createFlip(getRoot: () => HTMLElement | null): Flip {
   const attribute = "data-flip-id";
@@ -66,8 +50,7 @@ export function createFlip(getRoot: () => HTMLElement | null): Flip {
       before = null;
       if (!last) return;
       const list = nodes();
-      // Stop every slide still running, then read every place, then start
-      // the new slides: one layout pass between the writes and the reads.
+      // Cancel, then read, then write: one layout pass for the whole batch.
       for (const node of list) {
         for (const animation of node.getAnimations?.() ?? []) {
           if (animation.id === FLIP_ID) animation.cancel();

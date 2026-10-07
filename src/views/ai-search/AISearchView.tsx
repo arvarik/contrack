@@ -1,24 +1,9 @@
 /**
- * AISearchView — Main AI Search settings sub-view.
- *
- * Displays the research depth, Standard or Deep, with what each does and,
- * when research runs on Gemini, where the figures were measured, what a
- * contact takes and costs. Then a selectable list of non-archived
- * contacts with status badges (✨ previously searched, "No page" when the
- * last research found none, NEW never searched, 🔴 last search errored).
- * Two rows of filters narrow the list, one for who and one for how their
- * research stands (`lib/enrichmentFilters`), each pill with its count. Users
- * choose the depth, select contacts, and see the batch's time and cost under
- * "Start enrichment" before they press it. The page is named "Contact
- * enrichment" in the UI (`lib/names`). The code keeps the `aiSearch` name of
- * the subsystem behind it.
- *
- * The web search engine is a setting, not part of this tool: it is chosen
- * once, on the card above (`EngineChoice`), and every start uses it, here,
- * in a contact's Enrich menu and in "Enrich new contacts automatically".
- * The confirmation names the engine a batch runs when it is not the web
- * search model's own. The measured time and cost describe Gemini's own
- * search only, so they show for it alone (`depthFiguresApply`).
+ * The "Contact enrichment" page (`lib/names`). The code keeps the `aiSearch`
+ * name. Pick a depth, filter and select contacts, and see the batch's time and
+ * cost before the start. The web search engine is a setting on the card above
+ * (`EngineChoice`). The measured figures describe Gemini's own search only, so
+ * they show for it alone (`depthFiguresApply`).
  */
 import { useState, useCallback, useDeferredValue, useMemo } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
@@ -66,10 +51,7 @@ import { ENGINE_HINT, engineName } from "../../lib/webSearchEngine";
 import type { ResearchDepth } from "../../../shared/researchDepth";
 import { SearchField } from "../../components/ui/SearchField";
 
-/**
- * The two depths as tiles: what each does, and its time and cost when the
- * measured figures describe this research (`depthFiguresApply`).
- */
+/** The depth tiles. Time and cost show only when the measured figures apply. */
 const depthChoices = (figures: boolean): readonly Choice<ResearchDepth>[] =>
   DEPTH_ORDER.map((depth) => ({
     value: depth,
@@ -131,23 +113,20 @@ export function AISearchView({
   );
 
   const [searchQuery, setSearchQuery] = useState("");
-  // The list follows a deferred copy of the box, so a letter shows in the
-  // box at once and the list and its counts catch up a moment later.
+  // The list follows a deferred copy, so typing stays instant.
   const deferredQuery = useDeferredValue(searchQuery);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showConfirm, setShowConfirm] = useState(false);
-  // The two choices live in the page's address, so Back from a contact
-  // opened from the list comes back to the same list. The search box stays
-  // in the component: the router applies an address in a transition, and a
-  // text field bound to one can drop what was typed.
+  // The filters live in the address, so Back from a contact returns to the
+  // same list. The search text stays in state: the router applies an address
+  // in a transition, which can drop typed text.
   const [params, setParams] = useSearchParams();
   const { contacts: contactFilter, research: researchFilter } =
     filtersFromParams(params);
   const setFilters = (next: Partial<EnrichmentFilters>) =>
     setParams((prev) => paramsWithFilters(prev, next), { replace: true });
   const filtered = contactFilter !== "all" || researchFilter !== "any";
-  // What a row's link hands the contact page: Back returns here, to this
-  // list, and says so.
+  // Back on the contact page returns to this list.
   const location = useLocation();
   const openState = useMemo(
     () => ({
@@ -162,8 +141,7 @@ export function AISearchView({
   // this batch, not one that sticks.
   const [depth, setDepth] = useState<ResearchDepth>("standard");
 
-  // Archived and ghost contacts are never researched; the search box
-  // narrows the rest before either row of filters does.
+  // Archived and ghost contacts are never researched.
   const searchedContacts = useMemo(() => {
     const list = contacts.filter((c) => !c.isArchived && !c.isGhost);
     const q = deferredQuery.trim().toLowerCase();
@@ -185,8 +163,7 @@ export function AISearchView({
     );
   }, [searchedContacts, contactFilter, researchFilter]);
 
-  // What each pill would show, beside the other row's choice: a pill says
-  // how many it holds before it is pressed.
+  // Each pill counts what it would show, given the other row's choice.
   const counts = useMemo(() => {
     const now = Date.now();
     const contactCounts = new Map<ContactFilter, number>();
@@ -223,7 +200,6 @@ export function AISearchView({
     setSelectedIds(new Set());
   };
 
-  // Track which contacts errored in the current/last batch
   const erroredContactIds = useMemo(() => {
     if (!batch) return new Set<string>();
     return new Set(
@@ -266,17 +242,8 @@ export function AISearchView({
 
   return (
     <div className="space-y-4">
-      {/*
-        No title block here. This view is only ever mounted inside the
-        Settings shell, which already renders the icon and "Contact
-        enrichment" heading — repeating it stacked two near-identical headers
-        on top of each other and pushed the actual content off a phone screen.
-        Only the description that the shell does not carry survives.
-
-        No box either: the page that mounts it (EnrichmentPage) draws the
-        settings page box, and a second one here set its cards 8 to 16 px
-        off the page title.
-      */}
+      {/* No title or box: the Settings shell draws the heading, and
+          EnrichmentPage draws the page box. */}
       {!hideHeaderDescription && (
         <p className="text-sm text-on-surface-variant">
           Research contacts on the live web and fill in the gaps in their
@@ -284,14 +251,12 @@ export function AISearchView({
         </p>
       )}
 
-      {/* Loading */}
       {isLoading && (
         <div className="flex justify-center p-8">
           <div className="animate-pulse w-6 h-6 rounded-full bg-primary/20" />
         </div>
       )}
 
-      {/* Empty state */}
       {!isLoading &&
         filteredContacts.length === 0 &&
         !searchQuery &&
@@ -303,12 +268,11 @@ export function AISearchView({
           />
         )}
 
-      {/* Contact list */}
       {!isLoading &&
         (filteredContacts.length > 0 || searchQuery || filtered) && (
           <>
-            {/* How deep: named, described and priced before anything is
-                chosen, so the cost of a batch is no surprise. */}
+            {/* Depth comes first, with its price, so a batch's cost is no
+                surprise. */}
             <section
               aria-labelledby="research-depth-heading"
               className={cn(CARD, "space-y-3")}
@@ -333,7 +297,6 @@ export function AISearchView({
             </section>
 
             <div className={cn(CARD, "p-0 overflow-hidden")}>
-              {/* Search bar + filters */}
               <div className="px-4 py-2.5 bg-surface-container-low space-y-2">
                 <SearchField
                   aria-label="Filter contacts"
@@ -344,12 +307,7 @@ export function AISearchView({
                   clearLabel="Clear filter text"
                 />
 
-                {/*
-                  Two rows of filter pills, one choice in each, and a contact
-                  shows when it matches both. The active pill is the selected
-                  tint, like every filter pill, not a filled button, and each
-                  pill counts what it would show.
-                */}
+                {/* A contact shows when it matches both rows. */}
                 <FilterRow
                   idPrefix="enrichment-filter"
                   label="Contacts"
@@ -368,7 +326,6 @@ export function AISearchView({
                 />
               </div>
 
-              {/* Count + select all */}
               <div className="px-5 py-2 flex items-center justify-between bg-surface-container-lowest border-t border-surface-container">
                 <span
                   className={cn(SECTION_HEADING, "flex items-center gap-2")}
@@ -388,9 +345,9 @@ export function AISearchView({
                 </button>
               </div>
 
-              {/* Contact rows, in a box of their own that scrolls, so the
-                  Start button stays near. Only the rows in view are drawn
-                  (`VirtualRows`): all 5,824 took 44 s to open the page. */}
+              {/* The rows scroll in their own box, so Start stays near.
+                  `VirtualRows` draws only the rows in view: all 5,824 took
+                  44 s to open the page. */}
               <div className="max-h-[360px] overflow-y-auto">
                 {filteredContacts.length === 0 && (searchQuery || filtered) && (
                   <div className="px-6 py-6 text-center text-sm text-on-surface-variant space-y-2">
@@ -426,12 +383,8 @@ export function AISearchView({
               </div>
             </div>
 
-            {/*
-              A refusal that is about timing rather than about the request.
-              It stays on the page under the button that caused it, because
-              the reader's next move is to wait and press it again, and a
-              toast that has already faded cannot tell them how long.
-            */}
+            {/* A timing refusal stays under the button: the next move is to
+                wait and press again, and a faded toast cannot say how long. */}
             {limitMessage && (
               <div
                 role="status"
@@ -444,7 +397,6 @@ export function AISearchView({
               </div>
             )}
 
-            {/* Start button */}
             <button
               onClick={() => {
                 clearLimit();
@@ -458,8 +410,7 @@ export function AISearchView({
                 ? `Start enrichment (${selectedIds.size} selected)`
                 : "Select contacts to search"}
             </button>
-            {/* What the batch will take, before the press, at the depth
-                chosen above: the confirmation says it again. */}
+            {/* The batch estimate, before the press. */}
             {selectedIds.size > 0 && depthFiguresApply && (
               <p
                 aria-live="polite"
@@ -472,7 +423,6 @@ export function AISearchView({
           </>
         )}
 
-      {/* Confirm modal */}
       <AISearchConfirmModal
         isOpen={showConfirm}
         onClose={() => setShowConfirm(false)}

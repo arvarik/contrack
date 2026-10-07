@@ -1,13 +1,6 @@
-// =============================================================================
-// Safe Parse Utilities
-// =============================================================================
-// Defensive JSON parsers that never throw. Protects against malformed data
-// in AI-generated fields (aiBriefing, aiSummary, etc.).
-// =============================================================================
-
 /**
- * Safely parse an aiBriefing JSON string into a string array.
- * Returns empty array on null, undefined, or malformed JSON.
+ * An `aiBriefing` JSON string as a string array. Never throws: a model wrote
+ * the field, so it may be malformed, and that reads as an empty array.
  */
 export function parseBriefingPoints(raw: string | null | undefined): string[] {
   if (!raw) return [];

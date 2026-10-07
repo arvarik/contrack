@@ -1,13 +1,10 @@
-// =============================================================================
 // Integration: int8 search vectors
-// =============================================================================
 // `search_embeddings` stores each component as one signed byte, at one scale
 // for the whole table. The boot migration turns a float table into int8
 // without re-embedding anything, and it must keep every row, the partition
 // key and the three status columns. The KNN must still find the same
-// neighbours, up to rounding. The scale must be set once, from all the
+// neighbors, up to rounding. The scale must be set once, from all the
 // vectors of the first write, and start over with a new model.
-// =============================================================================
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -79,7 +76,7 @@ function spread(seed: number): Float32Array {
   return v;
 }
 
-describe("the neighbours of real vectors", () => {
+describe("the neighbors of real vectors", () => {
   it("keeps the float KNN's nearest contacts, up to rounding", () => {
     // The search gate's MiniLM vectors: 300 contacts and 79 questions.
     const fixture = loadFixture();
@@ -109,11 +106,10 @@ describe("the neighbours of real vectors", () => {
       recall += found.filter((id) => exact.includes(id)).length / 10;
       if (found[0] === exact[0]) sameFirst++;
     }
-    // Measured with 79 questions (2026-09-30): recall@10 0.986 and the same
-    // nearest contact for 79 of 79. What int8 loses is near ties at the tenth
-    // place.
-    // With bytes up to ±127, sqlite-vec's 16-bit square overflowed for two
-    // large components of opposite sign, and recall@10 was 0.967.
+    // With 79 questions: recall@10 0.986 and the same nearest contact for 79
+    // of 79. What int8 loses is near ties at the tenth place. Bytes up to
+    // ±127 overflow sqlite-vec's 16-bit square for two large components of
+    // opposite sign (recall@10 0.967).
     expect(recall / fixture.queryVectors.length).toBeGreaterThanOrEqual(0.98);
     expect(sameFirst).toBeGreaterThanOrEqual(69);
   });

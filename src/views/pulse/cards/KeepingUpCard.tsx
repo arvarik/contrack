@@ -1,22 +1,8 @@
 /**
- * KeepingUpCard: the state of the people you track, and their trend.
- *
- * One card on Pulse for tracking. It absorbs the Momentum card: rising and
- * cooling are the trend of the people you track, so they belong on the
- * card that shows the state of the people you track. From the top:
- *
- * 1. The bar: one `role="img"` named "42 tracked: 30 strong, 8 fading, 4
- *    at risk, 0 with no interactions yet", with a legend of links to the
- *    groups on the Tracked contacts page.
- * 2. The number: "31" large, then "of 42 within cadence", and when anybody
- *    is past cadence a quiet button, "11 to catch up", that scrolls to the
- *    Catch up group of the queue on this page.
- * 3. Rising and Cooling, up to three rows each, once four snapshot weeks
- *    exist. Before that the card says nothing about them: a line that
- *    promises a feature in four weeks is not a fact about the network.
- *
- * Empty, when nobody is tracked, it is the upgrade moment: the words and
- * one button to the Tracked contacts page.
+ * The state of the people you track, and their trend: a bar with a legend of
+ * links, "31 of 42 within cadence" with a button to the queue's Catch up
+ * group, then Rising and Cooling once four snapshot weeks exist. Before
+ * that the card says nothing of a trend: a promise is not a fact.
  */
 import { Link, useNavigate } from "react-router-dom";
 import { Radar } from "lucide-react";
@@ -35,9 +21,8 @@ interface KeepingUpCardProps {
 }
 
 /**
- * The four segments of the bar, in order, with the group each links to.
- * Strong, fading and at risk are tones. "No interactions yet" is not a
- * state of a relationship, so it is the bar's neutral track colour.
+ * The bar's segments, in order. "No interactions yet" is not a state of a
+ * relationship, so it takes the neutral track color.
  */
 const SEGMENTS = [
   { key: "strong", label: "Strong", fill: TONE_DOT.success, hash: "strong" },
@@ -146,7 +131,6 @@ export const KeepingUpCard = ({ tracking }: KeepingUpCardProps) => {
       }
     >
       <div className="flex flex-col gap-4">
-        {/* The bar, and its legend */}
         <div className="flex flex-col gap-2">
           <div
             role="img"
@@ -184,7 +168,6 @@ export const KeepingUpCard = ({ tracking }: KeepingUpCardProps) => {
           </ul>
         </div>
 
-        {/* The number, and the door to the Catch up group of the queue */}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <p className="flex items-baseline gap-1.5 min-w-0">
             <span className={PULSE_TYPE.figure}>{withinCadence}</span>
@@ -201,7 +184,6 @@ export const KeepingUpCard = ({ tracking }: KeepingUpCardProps) => {
           )}
         </div>
 
-        {/* Rising and Cooling, once four snapshot weeks exist */}
         {trendReady && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {(

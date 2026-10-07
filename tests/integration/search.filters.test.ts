@@ -1,6 +1,4 @@
-// =============================================================================
 // Integration: facets in SQL, facets in Ask, and facets read from a question
-// =============================================================================
 // A facet runs inside each search statement, before its LIMIT, so a contact
 // the facet keeps is found however far down the unfiltered ranking it sits.
 // Every palette facet works on the server. Ask takes facets from the request
@@ -11,7 +9,6 @@
 //
 // The real pipeline and database run here. Only the provider is scripted, at
 // the gateway, so a call the pipeline makes is a call these tests can count.
-// =============================================================================
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
@@ -215,7 +212,7 @@ describe("facets run before the limit", () => {
     ]);
   });
 
-  it("keeps a filtered contact the nearest neighbours would crowd out", () => {
+  it("keeps a filtered contact the nearest neighbors would crowd out", () => {
     // Every engineer sits on the query vector. Rhea Quill points the other way.
     const unit = (sign: number) => {
       const v = new Float32Array(384);

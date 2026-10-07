@@ -11,8 +11,8 @@ import {
 } from "../../shared/mapViews.ts";
 
 /**
- * A view's layer. Health was a third layer until v2: a view saved with it,
- * and a save from a page loaded before v2, open on Pins rather than fail.
+ * A view's layer. A view saved with the removed "health" layer opens on Pins
+ * rather than failing.
  */
 const layerSchema = z.preprocess(
   (value) => (value === "health" ? "pins" : value),

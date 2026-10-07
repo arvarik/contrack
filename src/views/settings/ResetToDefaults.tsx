@@ -1,19 +1,8 @@
 /**
- * Reset to defaults: one button at the end of a settings page.
- *
- * Every row that holds an account preference (`SettingRow` with a
- * `prefKey`) tells the page's scope which key it holds. While any of those
- * keys is off its default, the page ends with one button, "Reset to
- * defaults", in the primary look of Pulse's Log note. It resets every
- * changed key on the page at once, says how many in a toast with an Undo,
- * and goes away. It also goes when a person sets each value back by hand,
- * with the dots after the rows' titles, because both read `changed`: a key
- * that is stored at its default is not changed.
- *
- * It replaced a "Reset" text button on each changed row, which moved the
- * row's controls and repeated itself down a page of changes.
- *
- * @module views/settings/ResetToDefaults
+ * One "Reset to defaults" button at the end of a settings page. Each
+ * `SettingRow` with a `prefKey` registers its key, and the button shows
+ * while any key is in `changed` (a key stored at its default is not
+ * changed). One button per page, not one per row, keeps row controls still.
  */
 import {
   createContext,
@@ -32,23 +21,19 @@ import { withUndo } from "../../lib/undoToast";
 
 type PrefKey = keyof Preferences;
 
-/** A row in the page: its key, and the row itself, for the focus after a reset. */
+/** The row takes the focus after a reset. */
 interface Entry {
   key: PrefKey;
   row: RefObject<HTMLElement | null>;
 }
 
 interface ResetScope {
-  /** Adds a row. Returns the function that takes it away. */
   register: (entry: Entry) => () => void;
 }
 
 const ResetScopeContext = createContext<ResetScope | null>(null);
 
-/**
- * The page's scope, for the shell: the rows its page registered, and the
- * provider to put around the page.
- */
+/** The shell's side: the rows its page registered. */
 export function useResetScope() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const register = useCallback((entry: Entry) => {
@@ -61,13 +46,7 @@ export function useResetScope() {
 
 export const ResetScopeProvider = ResetScopeContext.Provider;
 
-/**
- * Called by a row that holds a preference. Outside a settings page (a unit
- * test that renders one row) it does nothing.
- *
- * @param key - The preference the row holds, if any.
- * @param row - The row, which takes the focus after a reset.
- */
+/** A no-op outside a settings page (a unit test of one row). */
 export function useResetScopeKey(
   key: PrefKey | undefined,
   row: RefObject<HTMLElement | null>,
@@ -79,7 +58,6 @@ export function useResetScopeKey(
   }, [key, row, scope]);
 }
 
-/** "1 setting is back to its default", "3 settings are back to their defaults". */
 const resetMessage = (count: number) =>
   count === 1
     ? "1 setting is back to its default"
@@ -96,9 +74,8 @@ export const ResetToDefaults = ({ entries }: { entries: readonly Entry[] }) => {
     const previous = Object.fromEntries(
       keys.map((key) => [key, preferences[key]]),
     ) as Partial<Preferences>;
-    // The button is about to go. The keyboard lands on the first row that
-    // was reset, which a screen reader reads by its title, and the page
-    // stays where it is.
+    // The button is about to go, so focus moves to the first reset row
+    // without a scroll.
     const first = off
       .map((entry) => entry.row.current)
       .filter((row): row is HTMLElement => row !== null)

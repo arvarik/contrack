@@ -1,13 +1,7 @@
-// =============================================================================
-// Research — the web searches
-// =============================================================================
 // The search services a technique can search the web with, by id. SearXNG is
-// the only one. Another service is one adapter here and its settings: the
-// techniques read results, not services.
-//
-// A web search's error codes start with its id in capitals, such as
-// SEARXNG_NOT_CONFIGURED, so each service keeps codes of its own.
-// =============================================================================
+// the only one; another is one adapter here plus its settings, since the
+// techniques read results, not services. A web search's error codes start with
+// its id in capitals, such as SEARXNG_NOT_CONFIGURED.
 
 import { AppError } from "../../utils/AppError.ts";
 import type { WebSearch } from "./types.ts";

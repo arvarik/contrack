@@ -1,22 +1,12 @@
+/**
+ * Hooks for the background duplicate check and for merges. Each merge
+ * answers with its merge-log ids, so the message after it can offer Undo.
+ */
 import { ApiError, apiFetch, apiJson, jsonBody } from "./client";
 import { contactRoutes } from "../../shared/contracts/contacts";
 import { fetchAuthStatus } from "./auth";
 import { emitAuthExpired } from "../lib/appEvents";
 import { corvidReact } from "../lib/corvid";
-/**
- * Deduplication API Hooks — React Query hooks for the async duplicate detection engine.
- *
- * Provides:
- * - `useStartDedupeScan` — Starts a check for duplicates in the background
- * - `useDedupeStream` — SSE hook for real-time check progress
- * - `useMergeCluster` — Merge two or more contacts into one
- * - `useMergeClusters` — Merge several groups in one call
- *
- * Each merge answers with its merge-log ids, so the message after it can
- * offer Undo without reading Merge history.
- *
- * @module api/dedupe
- */
 import { useEffect, useRef } from "react";
 import {
   useMutation,
@@ -28,24 +18,14 @@ import { refreshDuplicates } from "./suggestions";
 
 const API_BASE = "/api";
 
-// =============================================================================
-// Start dedupe scan mutation
-// =============================================================================
+// Start a scan
 
 export const useStartDedupeScan = () => {
   return useMutation({
     mutationFn: async (opts: { mode: DedupeScanMode }) => {
-      // `apiFetch` throws `ApiError` for any non-2xx, with the message read
-      // out of the standard `{ error: { code, message } }` envelope, so the
-      // caller's `onError` toast shows the server's own words. The busy 429
-      // used to be the one endpoint here that answered with a bare
-      // `{ error: string }`, which the block that used to sit below read by
-      // hand; since 2e it sends the envelope like everything else and carries
-      // `details.yours` and `details.queued` for Phase 4 to act on.
-      //
-      // No threshold in the body. The server reads the account's sensitivity
-      // preset for a scan exactly as it does for an import, so the browser
-      // no longer carries a copy of the preset table that could disagree.
+      // No threshold in the body: the server reads the account's preset, as
+      // it does for an import. A busy 429 carries `details.yours` and
+      // `details.queued` (see `rateLimitFacts`).
       const res = await apiFetch(`/dedupe/scan`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -56,32 +36,23 @@ export const useStartDedupeScan = () => {
   });
 };
 
-// =============================================================================
-// Active scan discovery (for state recovery after refresh)
-// =============================================================================
+// The active scan, for recovery after a reload
 
 /** What the server says about this account's scan right now. */
 interface ActiveScanState {
   /** The scan record, whether it is running or only booked. */
   scan: DedupeScanProgress | null;
   /**
-   * True when the scan exists but has not started, because another account
-   * holds the global run lock.
-   *
-   * The distinction cannot be made from the scan record: a queued scan and a
-   * scan that began a moment ago are both phase `starting`. Attaching the SSE
-   * stream to a queued scan produces silence until the lock frees, which
-   * looks exactly like a scan that has hung.
+   * True when the scan waits for another account's run lock. The record
+   * cannot tell: a queued scan and a new one are both phase `starting`, and
+   * a stream on a queued scan is silent, like a hung one.
    */
   queued: boolean;
 }
 
 /**
- * What this account's scan is doing, if anything.
- *
- * This used to answer every failure with `null`, which reads as "idle". A
- * three-second poll built on that would spin forever against a 401. It now
- * throws like every other call, and both callers decide what to do.
+ * What this account's scan is doing, if anything. A failure throws rather
+ * than reading as idle, or a poll would spin forever against a 401.
  */
 export async function fetchActiveScan(): Promise<ActiveScanState> {
   const data = await apiJson<{
@@ -95,9 +66,7 @@ export async function fetchActiveScan(): Promise<ActiveScanState> {
   };
 }
 
-// =============================================================================
-// SSE-based scan progress hook
-// =============================================================================
+// Scan progress
 
 /** Max SSE reconnection attempts before giving up */
 const SSE_MAX_RETRIES = 3;
@@ -105,20 +74,15 @@ const SSE_MAX_RETRIES = 3;
 const SSE_RETRY_DELAY_MS = 2000;
 
 /**
- * Failed polls in a row before the fallback gives up.
- *
- * Ten at three seconds is half a minute of silence. Long enough to ride out a
- * laptop lid, short enough that a tab left open on a dead server stops asking.
+ * Failed polls in a row before the fallback gives up: half a minute, enough
+ * for a laptop lid, short enough that a tab on a dead server stops asking.
  */
 const POLL_MAX_FAILURES = 10;
 
 /**
- * One scan by id, or null when the server does not have it.
- *
- * Unlike `/dedupe/active` this serves a scan that has already finished, for
- * the thirty minutes before it is garbage-collected. That is what lets a
- * queued scan which started and completed between two polls still be shown
- * rather than silently disappearing.
+ * One scan by id, or null when the server does not have it. Unlike
+ * `/dedupe/active` it serves a finished scan for thirty minutes, so a queued
+ * scan that ran between two polls still shows.
  */
 export async function fetchScan(
   scanId: string,
@@ -136,24 +100,13 @@ export async function fetchScan(
 }
 
 /**
- * Follow one scan to its end, by stream if possible and by polling if not.
+ * Follows one scan to its end, by stream if possible and by polling if not.
  *
- * The stream is an `EventSource`, and an `EventSource` cannot report why it
- * failed: a network blip, a proxy timing out an idle connection, and a server
- * that has stopped accepting this browser's credential all arrive as the same
- * bare `error` event with no status and no body. So a failure is diagnosed
- * rather than guessed at.
- *
- * Three retries first, because most failures really are a blip. After that
- * `/api/auth/status` is asked the one question the stream cannot answer: is
- * this browser still signed in? If it is not, the gate is told and takes the
- * screen; the scan is somebody else's problem now. If it is, the scan is
- * still running and only the transport is broken, so progress comes from
- * `GET /api/dedupe/status` every three seconds until the scan ends.
- *
- * Before this, a stream that failed four times simply stopped. No error, no
- * toast, no state change — a progress bar that never moved again, for a scan
- * that finished normally.
+ * An `EventSource` cannot say why it failed: a blip, a proxy timeout and a
+ * rejected credential are the same bare `error` event. So after three
+ * retries `/api/auth/status` says whether this browser is still signed in.
+ * If not, the gate takes the screen. If so, only the transport is broken,
+ * and `GET /api/dedupe/status` is polled every three seconds until the end.
  */
 export const useDedupeStream = (
   scanId: string | null,
@@ -205,18 +158,15 @@ export const useDedupeStream = (
           if (!closed) deliver(scan);
         } catch (error) {
           if (closed) return;
-          // A definite answer ends the wait. A 404 means the scan has been
-          // garbage-collected, and a 401 or 403 has already reached the gate.
+          // A definite answer ends the wait: a 404 is a collected scan, and a
+          // 401 or 403 has reached the gate.
           const status = error instanceof ApiError ? error.status : 0;
           if (status === 404 || status === 401 || status === 403) {
             stop();
             return;
           }
-          // Anything else is the connection, which is why polling started in
-          // the first place: `diagnose` sends us here precisely when the
-          // network looks broken. Stopping on the first failed tick would
-          // have ended every scan that outlived a dropped packet, and the
-          // comment promising recovery would never once have been true.
+          // Anything else is the connection, the reason polling started, so
+          // one failed tick does not stop it.
           if (++failures >= POLL_MAX_FAILURES) stop();
         }
       };
@@ -230,8 +180,7 @@ export const useDedupeStream = (
         const status = await fetchAuthStatus();
         const signedOut = status.authRequired && !status.authenticated;
         if (signedOut || status.user?.status === "disabled") {
-          // The gate owns this. It puts up the right screen; a scan progress
-          // card behind a sign-in form is not worth keeping alive.
+          // The gate puts up the right screen. The scan card can go.
           emitAuthExpired(
             status.user?.status === "disabled" ? "disabled" : "expired",
           );
@@ -239,9 +188,8 @@ export const useDedupeStream = (
           return;
         }
       } catch {
-        // The status call failed too, which points at the connection rather
-        // than the credential. Poll: it is the same answer either way, and
-        // polling recovers on its own when the network comes back.
+        // The status call failed too: the connection, not the credential.
+        // Polling recovers on its own when the network comes back.
       }
       startPolling();
     }
@@ -278,9 +226,7 @@ export const useDedupeStream = (
   }, [scanId, queryClient]);
 };
 
-// =============================================================================
-// Cluster merge mutations
-// =============================================================================
+// Merges
 
 /**
  * After a merge: the contacts reload, and Possible duplicates, its count,

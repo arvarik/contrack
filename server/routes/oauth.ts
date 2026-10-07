@@ -1,18 +1,14 @@
-// =============================================================================
-// Routes — OAuth sign-in for MCP clients
-// =============================================================================
-// Two routers, because they sit on two sides of the credential gate:
-//
+// OAuth sign-in for MCP clients, in two routers on two sides of the credential
+// gate:
 // - `oauthRouter`, outside /api, is what other programs call: the metadata
 //   documents under /.well-known, and /oauth/authorize, token, register and
-//   revoke. None of these reads a session. Each answers a JSON 404 while
-//   OAuth is off, which it is unless sign-in is on and PUBLIC_URL is https
-//   (or http on a loopback name).
-// - `oauthConsentRouter`, under /api/auth/oauth, is what the consent page in
-//   the app calls with the person's session.
+//   revoke. None reads a session. Each answers a JSON 404 while OAuth is off,
+//   which it is unless sign-in is on and PUBLIC_URL is https (or http on a
+//   loopback name).
+// - `oauthConsentRouter`, under /api/auth/oauth, is what the app's consent page
+//   calls with the person's session.
 //
 // The flow and its rules are in server/services/oauthService.ts.
-// =============================================================================
 
 import express, { Router } from "express";
 import type { NextFunction, Request, Response } from "express";
@@ -197,10 +193,9 @@ router.get(
 );
 
 /**
- * The link a client opens in the browser. It checks the request and sends
- * the browser on: to the consent page, back to the client with an error, or
- * to the consent page's error view when the client cannot be trusted with a
- * redirect at all.
+ * The link a client opens in the browser. It checks the request and sends the
+ * browser on: to the consent page, back to the client with an error, or to the
+ * consent page's error view when the client cannot be trusted with a redirect.
  */
 router.get(
   "/oauth/authorize",
@@ -296,9 +291,7 @@ router.use(
 
 export const oauthRouter = router;
 
-// -----------------------------------------------------------------------------
 // The consent page's two calls, with the person's session.
-// -----------------------------------------------------------------------------
 
 const consent = Router();
 

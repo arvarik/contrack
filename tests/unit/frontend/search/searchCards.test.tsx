@@ -1,19 +1,15 @@
 // @vitest-environment jsdom
-// =============================================================================
-// Ask results: the "Not verified by AI" mark, and the brief that streams
-// =============================================================================
-// A match the model has not checked wears an orange question mark named
-// "Not verified by AI", on the Ask page and in the palette. A server that
-// sends no `verified` leaves the mark to the chunk's `fallback`, as before.
-// "Approximate" wins over both. On the Ask page the mark is a toggletip, a
-// button beside the card that explains itself on a press, a focus or a
-// hover. In the palette a row is an option, so the mark is a named picture.
+// Ask results: the "Not verified by AI" mark, and the streamed brief.
 //
-// The brief streams a start, deltas that grow the text, and one terminal
-// chunk. The final text replaces the streamed text in the same box. Only the
-// final text reaches the "Summary status" live region, and an error removes
-// the provisional text.
-// =============================================================================
+// A match the model has not checked wears an orange question mark named "Not
+// verified by AI". A server that sends no `verified` leaves the mark to the
+// chunk's `fallback`, and "Approximate" wins over both. On the Ask page the
+// mark is a toggletip that explains itself on a press, a focus or a hover. In
+// the palette a row is an option, so the mark is a named picture.
+//
+// The brief streams a start, deltas and one terminal chunk. The final text
+// replaces the streamed text in the same box, only it reaches the "Summary
+// status" live region, and an error removes the provisional text.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   act,

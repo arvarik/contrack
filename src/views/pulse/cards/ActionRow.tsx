@@ -27,48 +27,39 @@ import type { UpNextItem } from "../lib/upNext";
 
 interface ActionRowProps {
   item: UpNextItem;
-  /**
-   * The row is the list's current row: `aria-current` and the one tab stop.
-   * It does not paint the row. See `looksSelected`.
-   */
+  /** The current row: `aria-current` and the one tab stop. Not the tint. */
   isSelected?: boolean;
   /** The row wears the selected tint. The queue paints it for the keyboard only. */
   looksSelected?: boolean;
   onSelect?: () => void;
   onComplete?: (id: string) => void;
-  /** Move a follow-up's due date out by some days. The page says so, with Undo. */
+  /** Move a follow-up's due date out by some days. */
   onSnooze?: (item: UpNextItem, days: number) => void;
   onLog?: (contactId: string) => void;
   onOpenContact?: (contactId: string) => void;
-  /**
-   * ArrowDown and ArrowUp on the focused row move the highlight. The card
-   * passes a function that steps the index within bounds.
-   */
+  /** ArrowDown and ArrowUp on the focused row move the highlight. */
   onMove?: (direction: -1 | 1) => void;
   /**
-   * True while focus is inside the list. A row that becomes selected while
-   * focus is inside the list takes focus, so the arrows walk the rows. A row
-   * that becomes selected from a bare J or K with focus elsewhere only
-   * scrolls into view, so a key press never yanks focus off a control.
+   * True while focus is inside the list. A newly selected row then takes
+   * focus. Otherwise it only scrolls into view, so J or K never pulls focus
+   * off a control.
    */
   focusOnSelect?: boolean;
   /**
-   * The phone anatomy, below `sm`. The name takes line one with the snooze
-   * at its end, the title may run to two lines, and the chip moves down to a
-   * meta line beside "Last spoke". On a 390 px phone a row has about 220 px
-   * for text, and a name, a chip and a button do not share that width.
+   * The phone layout, below `sm`: the chip moves down beside "Last spoke"
+   * and the title may run to two lines. A 390 px phone leaves a row about
+   * 220 px for text, too little for a name, a chip and a button.
    */
   compact?: boolean;
 }
 
 /**
  * The leading glyph's circle: 24 px on screen with a 44 px tap box, and the
- * hover layer rather than a fill, so the glyph keeps its group's colour.
+ * hover layer rather than a fill, so the glyph keeps its group's color.
  */
 const GLYPH =
   "hit-area state-layer w-6 h-6 rounded-full flex items-center justify-center shrink-0 cursor-pointer";
 
-/** The snooze choices. Each one moves the due date that many days out. */
 const SNOOZE_PRESETS = [
   { id: "tomorrow", label: "Tomorrow", days: 1, icon: Clock },
   { id: "three-days", label: "In 3 days", days: 3, icon: CalendarDays },
@@ -82,34 +73,15 @@ const onControl = (target: EventTarget | null) =>
   target.closest("a, button, [role='menu'], [role='menuitem']") !== null;
 
 /**
- * One row of the Up next queue.
- *
- * Two lines with a free right edge. Line one is the name and the chip, and
- * it wraps on a phone so the name is never cut. Line two is the title. Under
- * them, when the row knows it, "Last spoke 12 days ago". A click or a tap
- * anywhere on the row opens the contact, the same as Enter, so the row does
- * what a list row does everywhere else in the app and a tap on a phone is
- * not a dead gesture. A click that starts on a control inside the row (the
- * check, the Log button, the name, the snooze menu) belongs to that control.
- *
- * The one action at the right, snooze, is the shared `ActionMenu`. From `sm`
- * it floats over the row's right edge on a wash and shows on hover or focus,
- * so at rest the text has the whole width. Below `sm` there is no hover, so
- * it sits in the flow at the row's end as a 44 px target. A birthday or a
+ * One row of the Up next queue. A click anywhere opens the contact, like
+ * Enter, unless it starts on a control inside the row. A birthday or a
  * catch-up row has no snooze: there is no date to move.
  *
- * The row is the one roving tab stop of the list: `tabIndex` is 0 on the
- * highlighted row and -1 elsewhere, and so are the controls inside it. Tab
- * goes from the current row to its check, its name and its snooze, then out
- * of the list: 38 rows used to be about 100 Tab stops. Enter opens the
- * contact, Space does the row's primary action, ArrowDown and ArrowUp move
- * the highlight. Each key is claimed only when the event target is the row
- * itself, so a button inside the row keeps its own Enter and Space. The row
- * keeps
- * `role="listitem"`: it is a clickable element with a keyboard equivalent,
- * not a button. Focus that enters the row, on the row or on a control in
- * it, makes it the current row. Being current and looking selected are two
- * props: the queue paints the tint only while the keyboard is on the list.
+ * The row is the list's one roving tab stop, and its controls are Tab stops
+ * only while it is current. Enter opens the contact, Space does the primary
+ * action, and the arrows move the highlight. Keys count only when the row
+ * itself is the target, so a button inside keeps its own Enter and Space.
+ * Focus anywhere in the row makes it current.
  */
 export const ActionRow = memo(
   ({
@@ -129,7 +101,6 @@ export const ActionRow = memo(
     const completeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const rowRef = useRef<HTMLDivElement>(null);
     const wasSelectedRef = useRef(isSelected);
-    /** The controls inside the row are Tab stops only on the current row. */
     const tabIndex = isSelected ? 0 : -1;
 
     useEffect(() => {
@@ -140,14 +111,11 @@ export const ActionRow = memo(
       };
     }, []);
 
-    // When the keyboard moves the highlight onto this row, bring it into
-    // view. It takes focus too when focus was already inside the list, so
-    // the arrows and J or K pressed on a row keep walking rows. Focus that
-    // is already in the row stays where it is: Tab onto the row's check
-    // makes the row current, and the row must not take focus back from the
-    // check. The first row that the queue picks as it loads is no arrival:
-    // the scroll moved the browser's Tab starting point to it, and the
-    // first Tab on a fresh Pulse skipped the skip link and the sidebar.
+    // A row the highlight arrives on scrolls into view, and takes focus when
+    // focus is in the list but not already in this row (Tab onto its check
+    // makes it current). A row picked while the keyboard is off the list does
+    // not scroll: on load that moved the browser's Tab start point, and the
+    // first Tab skipped the skip link and the sidebar.
     useEffect(() => {
       const arrived = isSelected && !wasSelectedRef.current;
       wasSelectedRef.current = isSelected;
@@ -161,9 +129,8 @@ export const ActionRow = memo(
       }
     }, [isSelected, looksSelected, focusOnSelect]);
 
-    // The check shows done while it animates. The row then leaves the
-    // queue, or stays when the write did not happen, and a row that stays
-    // must work again.
+    // The check shows done while it animates. A row that stays because the
+    // write failed must work again.
     const complete = () => {
       if (isCompleting) return;
       setIsCompleting(true);
@@ -223,15 +190,14 @@ export const ActionRow = memo(
       onSelect: () => onSnooze?.(item, preset.days),
     }));
 
-    // A catch-up's chip already says how long it has been, so the row does
-    // not say it twice.
+    // A catch-up's chip already says how long it has been.
     const lastSpoke =
       item.kind !== "catch-up" && item.lastContactedAt
         ? formatRelative(item.lastContactedAt)
         : null;
 
-    // The chip's tone says how soon the row is due. The leading glyph's tone
-    // is its group's, the same as the dot beside the group's name.
+    // The chip's tone says how soon the row is due. The glyph takes the
+    // group's tone, like the dot beside the group's name.
     const chip = (
       <span
         className={cn(PULSE_CHIP, TONE_WASH[DUE_TONE[item.dueChip.variant]])}
@@ -241,13 +207,9 @@ export const ActionRow = memo(
     );
     const tone = GROUP_TONE[item.group];
 
-    // The one action. On a phone it ends line one and is always visible,
-    // and its negative margin keeps the 32 px glyph from making line one
-    // taller than the name, so a row with a snooze has the same rhythm as
-    // a row without one. From sm it floats over the row's right edge and
-    // shows on hover or focus, so at rest the text has the whole width. A
-    // touch screen from sm (a tablet, a phone on its side) has no hover, so
-    // there it ends line one at rest, as it does on a phone.
+    // On a phone or a touch screen it ends line one at rest, and its negative
+    // margin keeps line one as tall as the name. With a fine pointer it
+    // floats over the row's right edge and shows on hover or focus.
     const snooze = item.hasCheckAction ? (
       <ActionMenu
         label="Snooze item"
@@ -256,8 +218,7 @@ export const ActionRow = memo(
         icon={Clock}
         iconClassName="w-4 h-4"
         items={snoozeItems}
-        // The menu's own button takes no tabIndex prop, so the roving stop
-        // is set on the element.
+        // The trigger takes no tabIndex prop, so the roving stop is set here.
         triggerRef={(el) => {
           if (el) el.tabIndex = tabIndex;
         }}
@@ -265,9 +226,7 @@ export const ActionRow = memo(
           "shrink-0",
           compact
             ? "ml-auto"
-            : // At rest on a touch screen. For a mouse it waits over the
-              // row's end until the row is hovered or holds focus.
-              "ml-auto transition-opacity pointer-fine:ml-0 pointer-fine:absolute pointer-fine:right-2 pointer-fine:top-1/2 pointer-fine:-translate-y-1/2 pointer-fine:rounded-lg pointer-fine:bg-surface-container-low/95 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100",
+            : "ml-auto transition-opacity pointer-fine:ml-0 pointer-fine:absolute pointer-fine:right-2 pointer-fine:top-1/2 pointer-fine:-translate-y-1/2 pointer-fine:rounded-lg pointer-fine:bg-surface-container-low/95 pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100",
         )}
         triggerClassName={
           compact ? "-my-1.5" : "p-1 rounded-lg -my-1.5 pointer-fine:my-0"
@@ -276,8 +235,7 @@ export const ActionRow = memo(
     ) : null;
 
     return (
-      // The row is a list item with a roving tab stop and its own keys, on
-      // purpose: see the component comment. The two rules disabled here would
+      // A list item with its own keys on purpose. The two rules disabled here
       // ask for role="button", which would take the list semantics away.
       // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
       <div
@@ -286,26 +244,19 @@ export const ActionRow = memo(
         aria-current={isSelected ? "true" : undefined}
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={isSelected ? 0 : -1}
-        // Focus on the row, or on a control inside it (a click on another
-        // row's snooze), makes the row the current one, the row J and K move.
         onFocus={() => {
           if (!isSelected) onSelect?.();
         }}
         onClick={handleRowClick}
         onKeyDown={handleKeyDown}
         className={cn(
-          // The resting wash, or the selected row's tint, with the
-          // hover layer over either one.
           "state-layer group relative w-full flex items-center rounded-xl py-2.5 transition-colors cursor-pointer",
           compact ? "gap-2.5 px-2.5" : "gap-3 px-3",
           looksSelected ? SELECTED_ROW : "bg-surface-container-low/70",
           isCompleting && "opacity-50",
         )}
       >
-        {/* The primary action: the check for a follow-up, Log for a
-            birthday or a catch-up, in the group's tone. The check's ring
-            is a step under full ink at rest, and full on hover and while
-            it completes. */}
+        {/* The check for a follow-up, Log for a birthday or a catch-up. */}
         {item.hasCheckAction ? (
           <button
             type="button"
@@ -316,8 +267,7 @@ export const ActionRow = memo(
             className={cn(
               GLYPH,
               "border-2 transition-all duration-(--dur-fast)",
-              // Done is the success tone: its wash and its own ink, which
-              // clear AA where white on a raw green did not.
+              // The success wash and ink clear AA. White on raw green does not.
               isCompleting
                 ? cn(TONE_WASH.success, "border-success scale-110")
                 : cn(TONE_TEXT[tone], CHECK_RING_REST, "hover:border-current"),
@@ -369,13 +319,7 @@ export const ActionRow = memo(
           />
         </div>
 
-        {/* The text block takes the whole width. From sm, line one is the
-            name and the chip, and it wraps so a long name pushes the chip
-            under it instead of losing its letters. The snooze floats over the
-            row's right edge on a wash and shows on hover or focus. On a phone
-            the snooze ends line one as a 32 px glyph with a 44 px tap box,
-            the title may run to two lines, and the chip joins "Last spoke"
-            on a meta line. */}
+        {/* Line one wraps, so a long name pushes the chip down, not off. */}
         <div className="flex flex-col flex-1 min-w-0 gap-0.5">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
             <Link
@@ -385,8 +329,7 @@ export const ActionRow = memo(
               className={cn(
                 PULSE_TYPE.name,
                 "hit-area inline-flex hover:text-primary transition-colors",
-                // The second cue beside the tint, as on a Network row: the
-                // tint alone sits about 1.06 to 1 against the resting wash.
+                // A second cue: the tint alone is about 1.06 to 1 on the wash.
                 looksSelected && "text-on-primary-wash",
               )}
             >

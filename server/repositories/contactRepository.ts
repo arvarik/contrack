@@ -1,16 +1,7 @@
-// =============================================================================
-// ContactRepository — Typed Data Access Layer
-// =============================================================================
-// Encapsulates all child-table hydration and persistence for the contacts
-// entity. Replaces the monolithic hydrateContact() and insertChildRecords()
-// functions from helpers.ts with typed Drizzle ORM queries.
-//
-// Design decisions:
-// - Single class, not 10 repository classes — avoids over-engineering
-// - Uses sqlite.prepare() for hydration queries (better-sqlite3 caches these)
-// - Uses Drizzle insert() for mutations (type-safe column mapping)
-// - Boolean conversion (SQLite 0/1 → JS boolean) handled centrally
-// =============================================================================
+// Typed data access for contacts and their child tables: hydration and
+// persistence in one class. Reads use prepared statements, writes use Drizzle
+// insert() for type-safe columns, and SQLite 0/1 becomes a boolean in one
+// place.
 
 import { sqlite, db } from "../db.ts";
 import * as schema from "../db/schema.ts";
@@ -37,9 +28,7 @@ export const RELATION_REGISTRY = {
   sources: { table: schema.contactSources, dbName: "contact_sources" },
 } as const;
 
-// =============================================================================
-// URL Utilities (used by social link insertion)
-// =============================================================================
+// URL utilities for social links
 
 /**
  * The domains each known platform answers on. A link's host is one of these
@@ -55,17 +44,15 @@ const PLATFORM_DOMAINS: readonly (readonly [string, readonly string[]])[] = [
 ];
 
 /**
- * The platform a social link belongs to, from its host: "linkedin",
- * "twitter", "youtube", or "other".
+ * The platform a social link belongs to, from its host: "linkedin", "twitter",
+ * "youtube", or "other".
  *
- * It matched on the text of the whole URL, so `includes("x.com")` labelled
- * dropbox.com and netflix.com "twitter", and a LinkedIn URL anywhere in a
- * query string made any link "linkedin". It reads the host now: `www.` off,
- * then the domain itself or a subdomain of it, so "netflix.com" is not
- * "x.com" and "notgithub.com" is not "github.com". A link with no scheme
- * ("www.linkedin.com/in/ada", as a vCard or a CSV often has it) is read as
- * https, the way a person types it, so an import keeps its platforms. Text
- * that is not a URL at all is "other".
+ * It reads the host, not the whole URL text, with `www.` off, and matches the
+ * domain itself or a subdomain, so dropbox.com is not "x.com", "notgithub.com"
+ * is not "github.com", and a LinkedIn URL in a query string does not make a
+ * link "linkedin". A link with no scheme ("www.linkedin.com/in/ada", as vCards
+ * and CSVs often have it) is read as https, so an import keeps its platforms.
+ * Text that is not a URL is "other".
  *
  * Exported for `tests/unit/server/repositories/detectPlatform.test.ts`.
  */
@@ -99,9 +86,8 @@ function extractHandleFromUrl(url: string): string | null {
 }
 
 /**
- * Check if a URL matches a known-dead service pattern.
- * These services are permanently shut down — every link is guaranteed broken.
- * Using a blocklist (not HTTP checks) keeps import instant and offline-capable.
+ * Services that are shut down for good, so every link to them is dead. A list,
+ * not an HTTP check, keeps import instant and offline.
  */
 const DEAD_URL_PATTERNS = [
   "profiles.google.com", // Google Profiles — shut down 2012
@@ -118,13 +104,7 @@ function isDeadLinkPattern(url: string): boolean {
   return DEAD_URL_PATTERNS.some((pattern) => lower.includes(pattern));
 }
 
-// =============================================================================
-// Prepared Statements for Hydration
-// =============================================================================
-// These are compiled once at module load and reused for every hydrate() call.
-// better-sqlite3 caches prepared statements internally, making repeated
-// .all(contactId) calls extremely fast (~µs per query).
-// =============================================================================
+// Hydration statements, compiled once at module load.
 
 const stmts = {
   emails: sqlite.prepare(
@@ -169,27 +149,19 @@ const stmts = {
 };
 
 /**
- * A raw contact row as returned by better-sqlite3 `prepare().get()` or `.all()`.
- *
- * Intentionally loose — callers pass different column subsets depending on the
- * query (slim view, full select, dedupe engine, etc.). Only `id` is required
- * for child-table JOINs.
- *
- * NOTE: Drizzle's InferSelectModel<typeof schema.contacts> is stricter than what
- * better-sqlite3 actually returns (it returns numbers for booleans, etc.),
- * so we use a pragmatic Record-based type here.
+ * A raw contact row from better-sqlite3. Loose on purpose: callers select
+ * different columns (slim view, full select, dedupe engine), and only `id` is
+ * needed for child-table joins. Drizzle's InferSelectModel is stricter than
+ * what better-sqlite3 returns (numbers for booleans, for one).
  */
 export type RawContactRow = Record<string, unknown> & { id: string };
 
 /**
  * The scoped finders. Every read of a contact by a client-supplied id goes
- * through one of these.
- *
- * Each puts the id and the owner in the same statement. Selecting by id and
- * comparing the owner in JavaScript would be two index probes instead of one,
- * and it would leave a window in which the row is read before the check runs.
- * `idx_contacts_owner_status` and the primary key both start with a column
- * these predicates pin, so the extra term costs nothing measurable.
+ * through one of these. Each puts the id and the owner in the same statement:
+ * one index probe, and no window in which the row is read before the owner is
+ * checked. The primary key and `idx_contacts_owner_status` both start with a
+ * column these predicates pin, so the extra term costs nothing measurable.
  */
 const finders = {
   byId: sqlite.prepare("SELECT * FROM contacts WHERE id = ? AND ownerId = ?"),
@@ -202,9 +174,7 @@ const finders = {
 const FIND_MANY_CHUNK = 500;
 
 export const contactRepo = {
-  // -------------------------------------------------------------------------
-  // Scoped Finders — the owner and the id in one statement
-  // -------------------------------------------------------------------------
+  // Scoped finders: the owner and the id in one statement
 
   /** One contact the scope owns, trashed or not, or null. */
   findOwned(scope: Scope, id: string): RawContactRow | null {
@@ -217,11 +187,9 @@ export const contactRepo = {
   },
 
   /**
-   * The subset of `ids` the scope owns, in no particular order.
-   *
-   * Bulk endpoints use this to drop foreign ids before they act, so the count
-   * they report is the number of rows they really changed. Duplicate ids in
-   * the request collapse, because the caller asked about a contact once.
+   * The subset of `ids` the scope owns, in no particular order. Bulk endpoints
+   * drop foreign ids with it first, so the count they report is the rows they
+   * changed. Duplicate ids collapse.
    */
   findManyOwned(scope: Scope, ids: string[]): RawContactRow[] {
     const unique = [...new Set(ids)];
@@ -242,11 +210,9 @@ export const contactRepo = {
   },
 
   /**
-   * One contact the scope owns, or a 404.
-   *
-   * The error carries no id and names no reason. A caller must not be able to
-   * tell "there is no such contact" from "that contact is not yours", or the
-   * 404 becomes an existence oracle for every id it is handed.
+   * One contact the scope owns, or a 404. The error carries no id and no
+   * reason, so "no such contact" and "not yours" look alike and the 404 is no
+   * existence oracle.
    */
   requireOwned(scope: Scope, id: string): RawContactRow {
     const row = contactRepo.findOwned(scope, id);
@@ -254,18 +220,15 @@ export const contactRepo = {
     return row;
   },
 
-  // -------------------------------------------------------------------------
-  // Hydration — Read Side
-  // -------------------------------------------------------------------------
+  // Hydration (read side)
 
   /**
-   * Hydrate a single raw contact row into the full API response shape.
-   * Joins all 10 child tables + list memberships + interaction count.
+   * Hydrate one raw contact row into the full API shape: all 10 child tables,
+   * list memberships and the interaction count. Takes `unknown`, as
+   * `sqlite.prepare().get()` returns, and narrows it.
    *
-   * Accepts `unknown` for ergonomic use with `sqlite.prepare().get()` which
-   * returns `unknown`. Performs a runtime type-narrowing guard internally.
-   *
-   * @param contact - A raw row from the contacts table, or null/undefined/unknown
+   * @param contact - A raw row from the contacts table, or
+   *   null/undefined/unknown
    * @returns Fully hydrated contact with typed child arrays, or null
    */
   hydrate(contact: unknown): HydratedContact | null {
@@ -316,8 +279,7 @@ export const contactRepo = {
   },
 
   /**
-   * Hydrate multiple contact rows in bulk.
-   * Leverages high-performance chunked SQL batch loading to bypass N+1 queries.
+   * Hydrate many contact rows with chunked batch queries, not N+1.
    *
    * @param contacts - Array of raw contact rows
    * @returns Array of fully hydrated contacts (nulls filtered out)
@@ -592,24 +554,18 @@ export const contactRepo = {
     );
   },
 
-  // -------------------------------------------------------------------------
-  // Child Record Persistence — Write Side
-  // -------------------------------------------------------------------------
+  // Child records (write side)
 
   /**
-   * Insert normalized child records (emails, phones, tags, etc.) for a contact.
-   * Handles the polymorphic input types (string | object unions) and normalizes
-   * them into proper typed inserts.
-   *
-   * ATOMICITY: All ten child-table inserts run inside a single `sqlite.transaction`.
-   * If any individual `.run()` throws (FK violation, UNIQUE conflict on
-   * attributes/interests/addresses, etc.) the entire batch is rolled back —
-   * we never leave a contact with partial child rows. better-sqlite3
-   * transactions are synchronous, which suits this loop perfectly.
+   * Insert a contact's child records (emails, phones, tags and the rest),
+   * normalizing the string-or-object inputs into typed inserts. All ten tables
+   * are written in one transaction, so a failed insert (a foreign key, a UNIQUE
+   * conflict) never leaves a contact with part of its rows.
    *
    * @param contactId - Foreign key UUID of the parent contact
    * @param body - Payload containing arrays of child record objects
-   * @param sourceName - Origin stamp for provenance tracking (default: 'manual')
+   * @param sourceName - Origin stamp for provenance tracking (default:
+   *   'manual')
    */
   insertChildRecords(
     contactId: string,
@@ -623,17 +579,16 @@ export const contactRepo = {
   },
 
   /**
-   * INTERNAL — caller MUST hold an open transaction. Used by
-   * `insertChildRecords` (which opens its own) and by any service that
-   * already runs inside a wider transaction (e.g. bulk import) to avoid
-   * nested-transaction errors.
+   * INTERNAL: the caller must hold an open transaction. For
+   * `insertChildRecords`, which opens its own, and for services already inside
+   * a wider one (bulk import), where a nested transaction would fail.
    */
   _insertChildRecordsUnsafe(
     contactId: string,
     body: ChildRecordsPayload,
     sourceName = "manual",
   ): void {
-    // ── Emails ──────────────────────────────────────────────────────────
+    // Emails
     if (Array.isArray(body.emails)) {
       for (let i = 0; i < body.emails.length; i++) {
         const e = body.emails[i];
@@ -654,7 +609,7 @@ export const contactRepo = {
       }
     }
 
-    // ── Phones ──────────────────────────────────────────────────────────
+    // Phones
     if (Array.isArray(body.phones)) {
       for (let i = 0; i < body.phones.length; i++) {
         const p = body.phones[i];
@@ -675,7 +630,7 @@ export const contactRepo = {
       }
     }
 
-    // ── Social Links ────────────────────────────────────────────────────
+    // Social Links
     if (Array.isArray(body.socialLinks)) {
       for (const sl of body.socialLinks) {
         const url = (typeof sl === "string" ? sl : sl.url)?.trim();
@@ -701,7 +656,7 @@ export const contactRepo = {
       }
     }
 
-    // ── Education ───────────────────────────────────────────────────────
+    // Education
     if (Array.isArray(body.education)) {
       for (const edu of body.education) {
         if (!edu?.school) continue;
@@ -721,7 +676,7 @@ export const contactRepo = {
       }
     }
 
-    // ── Experience ──────────────────────────────────────────────────────
+    // Experience
     if (Array.isArray(body.experience)) {
       for (const exp of body.experience) {
         if (!exp?.company) continue;
@@ -742,10 +697,9 @@ export const contactRepo = {
       }
     }
 
-    // ── Tags ────────────────────────────────────────────────────────────
-    // One row per tag whatever its case: "dup", "dup" and "Dup" are one tag,
-    // spelled as it came first. A unique index would first need the rows
-    // that already repeat cleaned up, so the write dedupes instead.
+    // Tags: one row per tag whatever its case ("dup", "dup" and "Dup" are one
+    // tag, spelled as it came first). A unique index would need existing
+    // repeats cleaned up first, so the write dedupes instead.
     if (Array.isArray(body.tags)) {
       const seen = new Set(
         (
@@ -769,7 +723,7 @@ export const contactRepo = {
       }
     }
 
-    // ── Sources ─────────────────────────────────────────────────────────
+    // Sources
     if (Array.isArray(body.sources)) {
       for (const src of body.sources) {
         const platform = typeof src === "string" ? src : src.platform;
@@ -788,7 +742,7 @@ export const contactRepo = {
       }
     }
 
-    // ── Interests ───────────────────────────────────────────────────────
+    // Interests
     if (Array.isArray(body.interests)) {
       for (const item of body.interests) {
         const val = (typeof item === "string" ? item : item.interest)?.trim();
@@ -807,7 +761,7 @@ export const contactRepo = {
       }
     }
 
-    // ── Attributes ──────────────────────────────────────────────────────
+    // Attributes
     if (Array.isArray(body.attributes)) {
       for (const attr of body.attributes) {
         if (!attr?.name || !attr?.value) continue;
@@ -828,7 +782,7 @@ export const contactRepo = {
       }
     }
 
-    // ── Addresses ───────────────────────────────────────────────────────
+    // Addresses
     if (Array.isArray(body.addresses)) {
       for (let i = 0; i < body.addresses.length; i++) {
         const a = body.addresses[i];

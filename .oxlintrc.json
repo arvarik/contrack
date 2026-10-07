@@ -224,7 +224,7 @@
     // and are ratcheted to "error" once their violation count reaches zero,
     // so a rule that has been paid off cannot quietly regress.
     //
-    // label-has-for stays off. jsx-a11y deprecated it in favour of
+    // label-has-for stays off. jsx-a11y deprecated it in favor of
     // label-has-associated-control, which is on and locked.
     {
       "files": ["src/**/*.tsx"],

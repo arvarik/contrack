@@ -1,36 +1,14 @@
 /**
- * DuplicateComparison: the contacts of one possible duplicate side by side,
- * the choice of the one to keep, and what the merge will do.
+ * The contacts of one possible duplicate side by side, the choice of the one
+ * to keep, and what the merge will do.
  *
- * ```
- *  CONTACT TO KEEP   (●) Ada Quill          ( ) A. Quill
- *  Name • ............ Ada Quill            A̶.̶ ̶Q̶u̶i̶l̶l̶
- *    ⚠ First names differ: Ada and Ben
- *  Company ........... Northwind            —
- *  Notes ............. 3 notes              1 note
- *  Same: email, phone                               [ Show all fields ]
+ * One column per contact. Only rows that differ show at first: rows every
+ * contact agrees on fold into one "Same:" line. A caveat sits under the row
+ * it is about, and a value the merge drops is struck through. A narrow
+ * container, or more than three contacts, stacks them as cards.
  *
- *  AFTER THE MERGE
- *  → Moves to Ada Quill: 1 note
- *  ⊘ Not kept: name "A. Quill"
- *  ↺ Undo brings everything back for 90 days
- * ```
- *
- * One column for each contact, so a value is read across the row it shares
- * with the others. Only the rows that differ show at first, because a
- * person decides on the differences: the rows every contact agrees on fold
- * into one "Same:" line, and Show all fields opens them. A row whose values
- * differ carries the warning dot, the engine's caveat sits under the row it
- * is about, and a value the merge drops is struck through, with "not kept"
- * for a screen reader. The kept contact's column wears the selected tint.
- * A narrow container, or a group of more than three, stacks the contacts
- * as cards with the same rows.
- *
- * The heading of each column is a radio: the contact to keep is chosen
- * where it is read. The parent holds the choice, so a key press that merges
- * uses the contact chosen here.
- *
- * @module views/dedupe/components/DuplicateComparison
+ * Each column's heading is a radio for the keeper. The parent holds the
+ * choice, so a merge key uses it.
  */
 import { Fragment, useId, useMemo, useState, type ReactNode } from "react";
 import {
@@ -61,39 +39,31 @@ import {
   type SingleField,
 } from "../utils/mergeOutcome";
 
-/** The narrowest a comparison may be and still show columns, by how many it holds. */
+/** The narrowest width that still shows columns, by contact count. */
 const TABLE_MIN_WIDTH: Record<number, number> = { 2: 500, 3: 600 };
 
-/** The first rows of a list a cell shows before "+2 more". */
+/** Items a list cell shows before "+2 more". */
 const LIST_LIMIT = 3;
 
 interface DuplicateComparisonProps {
   contacts: ReviewContact[];
   keeperId: string;
   onKeeperChange: (id: string) => void;
-  /**
-   * In a group of three or more: take one contact out, because it is a
-   * different person. The group then merges without it.
-   */
+  /** In a group of three or more: take out a contact who is someone else. */
   onRemove?: (contact: ReviewContact) => void;
-  /** The engine's caveats, each shown under the row it is about. */
   caveats?: string[];
   /** Ids for the caveats, so the Merge button can point at them. */
   caveatIdPrefix?: string;
-  /**
-   * The caveats are in words just above, on the contact page's banner, so
-   * the rows only carry their mark.
-   */
+  /** The caveats' words are already above (the contact page's banner). */
   caveatsAbove?: boolean;
 }
 
-/** A row of the comparison: its name, and what each contact shows in it. */
 interface Row {
   key: string;
   label: string;
   /** The single-value field, so the merge can strike a value through. */
   field?: SingleField;
-  /** A count, not a value: shown whenever any contact has one. */
+  /** A count, not a value: never folds into "Same:". */
   count?: boolean;
   render: (contact: ReviewContact) => ReactNode | null;
   /** What two contacts compare equal on. */
@@ -103,7 +73,6 @@ interface Row {
 const norm = (value: string | null | undefined) =>
   (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
-/** "LinkedIn" for "linkedin". */
 const platformName = (platform: string) =>
   platform === "linkedin"
     ? "LinkedIn"
@@ -111,20 +80,16 @@ const platformName = (platform: string) =>
       ? "GitHub"
       : platform.charAt(0).toUpperCase() + platform.slice(1);
 
-/**
- * An email or a link that may wrap after its "@" and its dots, so a narrow
- * column breaks it there and not inside a word ("…exam / ple").
- */
+/** An email or a link that wraps after its "@" and dots, not mid-word. */
 export const breakable = (text: string) =>
   text
     .split(/(?<=[@.])/)
     .flatMap((part, i) => (i === 0 ? [part] : [<wbr key={i} />, part]));
 
-/** A cell's list, or nothing for an empty one, so the row knows it is empty. */
+/** Null for an empty list, so the row knows it is empty. */
 const listCell = (items: string[]) =>
   items.length === 0 ? null : <ListCell items={items} />;
 
-/** A cell's list: the first few, then how many more. */
 function ListCell({ items }: { items: string[] }) {
   const shown = items.slice(0, LIST_LIMIT);
   return (
@@ -146,7 +111,6 @@ function ListCell({ items }: { items: string[] }) {
 const listKey = (items: string[]) =>
   items.map(norm).filter(Boolean).sort().join("|");
 
-/** The rows, in the order a person checks identity: who, where, how to reach. */
 const single = (key: SingleField, label: string): Row => ({
   key,
   label,
@@ -163,6 +127,7 @@ const single = (key: SingleField, label: string): Row => ({
   compare: (c) => norm(c[key]),
 });
 
+/** In the order a person checks identity: who, where, how to reach. */
 const ROWS: Row[] = [
   single("name", "Name"),
   single("company", "Company"),
@@ -265,7 +230,7 @@ function caveatRows(caveat: string): string[] {
   return rows;
 }
 
-/** The header of one contact: the radio that keeps it, its face and name. */
+/** One contact's header: the keeper radio, its face and name. */
 function KeepChoice({
   contact,
   index,
@@ -359,7 +324,6 @@ function Value({
   );
 }
 
-/** The name of a row, with the dot when its values differ. */
 function RowLabel({
   label,
   differs,
@@ -390,7 +354,6 @@ function RowLabel({
   );
 }
 
-/** One caveat, in the warning ink with its glyph. */
 function Caveat({ id, children }: { id?: string; children: ReactNode }) {
   return (
     <p
@@ -431,9 +394,8 @@ export const DuplicateComparison = ({
   );
   const outcome = useMemo(() => mergeOutcome(keeper, others), [keeper, others]);
 
-  // Each caveat marks every row it is about, and its words go under the
-  // first of them. One with no row, such as a shared inbox seen only by
-  // the engine, goes above the comparison ("").
+  // Each caveat marks every row it is about. One with no row, such as a
+  // shared inbox, goes under the key "".
   const flags = useMemo(() => {
     const byRow = new Map<string, string[]>();
     for (const caveat of caveats) {
@@ -450,8 +412,7 @@ export const DuplicateComparison = ({
       (caveat) => (caveatRows(caveat)[0] ?? "") === rowKey,
     );
 
-  // Rows nobody has a value in say nothing. The rest differ, or are the
-  // same on every contact and fold into one line until asked for.
+  // Empty rows go. Rows equal on every contact fold into "Same:".
   const { shownRows, sameRows } = useMemo(() => {
     const filled = ROWS.filter((row) =>
       contacts.some((c) => row.render(c) !== null),
@@ -469,8 +430,7 @@ export const DuplicateComparison = ({
     };
   }, [contacts, flags, showAll]);
 
-  // Only a field that holds one value can lose one, so only it differs in a
-  // way that matters. Lists join, and counts add up.
+  // Only a single-value field can lose a value. Lists join and counts add.
   const differs = (row: Row) =>
     row.field !== undefined &&
     new Set(contacts.map(row.compare).filter(Boolean)).size > 1;
@@ -494,8 +454,8 @@ export const DuplicateComparison = ({
   );
   const caveatId = (caveat: string) =>
     caveatIdPrefix ? `${caveatIdPrefix}-${caveats.indexOf(caveat)}` : undefined;
-  // A caveat with no row, such as a shared inbox seen only by the engine,
-  // goes above the comparison. So do all of them when the contacts stack.
+  // A caveat with no row goes above the comparison, and so do all of them
+  // when the contacts stack.
   const loose = caveatsAbove ? [] : asTable ? (flags.get("") ?? []) : caveats;
 
   const sameLine = sameRows.length > 0 && (
@@ -633,8 +593,8 @@ export const DuplicateComparison = ({
 };
 
 /**
- * "role "Investor"" or, in a group, "role "Investor" (Elena Marchetti)". A
- * name names its own contact, so it goes without.
+ * `role "Investor"`, or in a group `role "Investor" (Name)`. A name line
+ * needs no source name.
  */
 const outcomePart = (
   line: { field: SingleField; label: string; value: string; from: string },
@@ -646,10 +606,7 @@ const outcomePart = (
   return `${line.label.toLowerCase()} "${value}"${from}`;
 };
 
-/**
- * What the merge does, in three lines: what moves to the contact kept,
- * what it drops, and that Undo brings it all back.
- */
+/** What moves to the keeper, what is dropped, and that Undo restores it. */
 function MergeOutcomeSummary({
   keeper,
   others,

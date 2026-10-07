@@ -1,8 +1,6 @@
 /**
- * ExportPage — Download your contacts in standard formats.
- *
- * vCard, CSV, and JSON exports. An admin also gets the way to a copy of the
- * whole database.
+ * ExportPage: vCard, CSV and JSON exports. An admin also gets the way to a
+ * copy of the whole database.
  */
 import { Link } from "react-router-dom";
 import { ExportCard } from "../ExportCard";

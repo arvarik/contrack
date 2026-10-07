@@ -39,11 +39,8 @@ export const IndustryField = ({
   const [isEditing, setIsEditing] = useState(false);
   const [tempVal, setTempVal] = useState(value || "");
   const button = useRef<HTMLButtonElement>(null);
-  /**
-   * True when Enter or Escape closed the editor. The input leaves the page,
-   * so focus goes back to the value. A blur closes it too, and then focus
-   * is already somewhere else and stays there.
-   */
+  // Set when Enter or Escape closes the editor, so focus returns to the
+  // value. After a blur, focus is already elsewhere and stays there.
   const refocus = useRef(false);
 
   useEffect(() => {

@@ -20,7 +20,7 @@ A contact is on the map when it has a pin. Contrack places the pin from the cont
 
 - **A pin** is the contact's picture. Select it to open the contact over the right side of the map. Select the map, or press `Esc`, to close the contact. A red dot on a pin means that the contact's follow-up is overdue.
 - **A cluster** is a circle with a number. It holds contacts that are too close to tell apart at this zoom. Point at it to see up to five of its people, the ones with the most logged interactions first. Select it to zoom in until it splits. A red dot means that some of its people have an overdue follow-up, and its name says how many.
-- **A stack** is a cluster that never splits, because its people have the same point, such as a city. It stays a stack at every zoom, and its name says, for example, "12 contacts at one place, list them". People a few metres apart split at the closest zooms. Select it to see a list of the people, up to 50, under a line such as "12 people here". Select a name to open the contact. The list marks the open contact and stays open, so you can go through the people. `Esc` closes the list.
+- **A stack** is a cluster that never splits, because its people have the same point, such as a city. It stays a stack at every zoom, and its name says, for example, "12 contacts at one place, list them". People a few meters apart split at the closest zooms. Select it to see a list of the people, up to 50, under a line such as "12 people here". Select a name to open the contact. The list marks the open contact and stays open, so you can go through the people. `Esc` closes the list.
 
 When the map opens a contact, it moves the pin to the middle of the part of the map that you can still see. The open contact's pin gets a halo, and the other pins fade until you point at one.
 
@@ -86,9 +86,9 @@ The line in the bottom left corner says who is on the map and in view. Only peop
 The **Pins** and **Heat** switch sets what the map draws.
 
 - **Pins** draws the pins, the clusters and the stacks.
-- **Heat** shows where your network gathers, as a field of colour. Every person counts, and a person with many logged interactions counts up to twice as much. The colours scale to your busiest place, so a small network and a large one both use the whole range. The heat sits under the place names.
+- **Heat** shows where your network gathers, as a field of color. Every person counts, and a person with many logged interactions counts up to twice as much. The colors scale to your busiest place, so a small network and a large one both use the whole range. The heat sits under the place names.
 
-As you zoom in towards one city, the heat fades and the pins come back. While the heat hides the pins, a mouse over the map says how many people are near it, for example "About 12 people here". Contrack saves your layer to your account.
+As you zoom in toward one city, the heat fades and the pins come back. While the heat hides the pins, a mouse over the map says how many people are near it, for example "About 12 people here". Contrack saves your layer to your account.
 
 ## Saved views
 
@@ -127,7 +127,7 @@ Select people by area, then act on all of them at once.
 
 ![The map with a box selection, the selection bar and the bulk bar at the bottom](images/map-selection.png)
 
-- **All in view**: choose **Select** → **All in view**. On a phone, open **Filters** and select **Select all in view**. With the keyboard, move the map to the people with the arrow keys, `+` and `-`, then choose **All in view**.
+- **All in view**: choose **Select** → **All in view**. On a phone, open **Filters** and select **Select all in view**. With the keyboard, move the map to the people with the arrow keys, `+` and `-`, then choose **All in view**. It picks the people the "in view" count shows, so it leaves out anyone under the open contact or the Map insights panel.
 - **Box**: hold `Shift` and drag across the map. **Select** → **Box select** tells you how.
 - **Lasso**: press `L`, or choose **Select** → **Lasso select**. Then drag a shape around the people. The lasso ends when you let go. `Esc` cancels it.
 

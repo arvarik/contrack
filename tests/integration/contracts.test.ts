@@ -1,13 +1,10 @@
-// =============================================================================
 // Integration: the route contracts keep up with the route manifest
-// =============================================================================
 // Every route in the manifest has a contract in shared/contracts/ or a line
 // in UNCONTRACTED, never both, and that list only shrinks. The committed
 // OpenAPI file is the one `npm run api:openapi` writes from the contracts.
 //
 // The response check has no file of its own: every integration test runs it,
 // through makeTestApp() in ./helpers.ts.
-// =============================================================================
 
 import { readFileSync } from "node:fs";
 import path from "node:path";

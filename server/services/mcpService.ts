@@ -1,12 +1,7 @@
-// =============================================================================
-// MCP Service — the read-only surface an MCP client or a personal token asks
-// =============================================================================
-// Five queries, one account. Every one of them names the caller's owner, so an
-// MCP client signed in with one account's personal token reads that account's
-// contacts and nothing else. The principal a token produces is an ordinary
-// user principal, so `scopeOf(req)` answers for a token exactly as it answers
-// for a browser session.
-// =============================================================================
+// The read-only surface an MCP client or a personal token asks: five queries,
+// one account. Every one names the caller's owner. A token's principal is an
+// ordinary user principal, so `scopeOf(req)` answers for it as for a browser
+// session.
 
 import { sqlite } from "../db.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
@@ -29,13 +24,11 @@ export interface ContactMatch {
 
 export const mcpService = {
   /**
-   * The caller's contacts, filtered and paged.
-   *
-   * Filters active rows: excludes trashed contacts, ghosts, and the losing side
-   * of a merge, so an MCP client never sees people the user had deleted, stubs
-   * the app never shows, or duplicates the app had already retired. `softMergeContacts`
-   * sets `canonicalId` and nothing else, so that third filter is what excludes a
-   * merged row. Archived contacts stay: the app shows those on their own page.
+   * The caller's contacts, filtered and paged. Trashed contacts, ghosts and the
+   * losing side of a merge are left out, so an MCP client never sees deleted
+   * people, stubs the app never shows, or retired duplicates.
+   * `softMergeContacts` sets only `canonicalId`, so that filter is what hides a
+   * merged row. Archived contacts stay: the app shows them on their own page.
    */
   queryContacts(
     scope: Scope,
@@ -161,13 +154,11 @@ export const mcpService = {
   },
 
   /**
-   * The caller's contacts that hold one of these emails or phones.
-   *
-   * It reads the contacts that list_contacts reads, archived ones included:
-   * a second contact for an archived person is still a duplicate. An email
-   * matches without regard to case or the spaces around it. A phone matches
-   * on its digits through `normalizePhone`, as a connector matches one, so
-   * "+1 (415) 555-0100" finds "415-555-0100". One row for each match.
+   * The caller's contacts that hold one of these emails or phones, archived
+   * ones included: a second contact for an archived person is still a
+   * duplicate. An email matches ignoring case and surrounding spaces. A phone
+   * matches on its digits through `normalizePhone`, as a connector matches one,
+   * so "+1 (415) 555-0100" finds "415-555-0100". One row per match.
    */
   findByEmailOrPhone(
     scope: Scope,
@@ -235,11 +226,8 @@ export const mcpService = {
   },
 
   /**
-   * Every tag the caller uses.
-   *
-   * `contact_tags` carries no owner of its own, so the join to `contacts` is
-   * what makes this one account's list. Reading the child table alone returned
-   * the tag vocabulary of everybody on the instance.
+   * Every tag the caller uses. `contact_tags` has no owner of its own, so the
+   * join to `contacts` scopes it to one account.
    */
   getTags(scope: Scope) {
     return sqlite
@@ -264,11 +252,9 @@ export const mcpService = {
   },
 
   /**
-   * The caller's whole timeline, newest first.
-   *
-   * The owner predicate sits on `interactions`, which carries its own
-   * `ownerId`, so this reads `idx_interactions_owner_date` rather than joining
-   * first and filtering afterwards.
+   * The caller's whole timeline, newest first. The owner predicate is on
+   * `interactions`, which has its own `ownerId`, so this reads
+   * `idx_interactions_owner_date` instead of joining first.
    */
   getGlobalTimeline(
     scope: Scope,

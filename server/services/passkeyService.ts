@@ -69,7 +69,7 @@ function ipOf(req: Request): string | null {
   return req.ip ?? null;
 }
 
-// ── Registration ─────────────────────────────────────────────────────────────
+// Registration
 
 export async function createRegistrationOptions(
   req: Request,
@@ -229,7 +229,7 @@ export async function verifyRegistration(
   return { passkey };
 }
 
-// ── Passkey Management ────────────────────────────────────────────────────────
+// Passkey Management
 
 export function listPasskeys(userId: string): PasskeySummary[] {
   const rows = sqlite
@@ -320,7 +320,7 @@ export function removePasskey(
   return { ok: true };
 }
 
-// ── Login ────────────────────────────────────────────────────────────────────
+// Login
 
 export async function createLoginOptions(req: Request): Promise<{
   ceremonyId: string;
@@ -457,7 +457,7 @@ export async function verifyLogin(
   return { user };
 }
 
-// ── Passkey Nudge ────────────────────────────────────────────────────────────
+// Passkey Nudge
 
 export function isPasskeyNudgeDismissed(userId: string): boolean {
   const row = sqlite

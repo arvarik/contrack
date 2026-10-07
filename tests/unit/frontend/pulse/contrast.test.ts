@@ -75,9 +75,9 @@ describe("pulse.contrast", () => {
     }
   });
 
-  it("draws the composition donut in one hue, with no AI colour, and keeps its steps apart", () => {
+  it("draws the composition donut in one hue, with no AI color, and keeps its steps apart", () => {
     // The ramp is the primary at six steps of opacity, largest slice
-    // darkest. The AI colour marks AI-derived data and a count of people by
+    // darkest. The AI color marks AI-derived data and a count of people by
     // industry is not that, so it is not in the chart.
     expect(COMPOSITION_RAMP.color).toBe("var(--color-primary)");
     expect(COMPOSITION_RAMP.other).not.toContain("--color-ai");

@@ -1,15 +1,9 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The Enrichment list with thousands of contacts
-// =============================================================================
-// The list drew every contact: 5,824 rows took 44 s to open the page and
-// 5 s to leave it. It now draws the rows in view of its own box, while the
-// count, the filters, Select all and the batch still cover every contact.
-// tests/e2e/long-lists.spec.ts draws the rows with the real virtualizer and
-// presses Select all. This file checks that a filter reads every contact.
-// jsdom has no layout, so the virtualizer asks for the first ten rows, and
-// the list's scroller is its box.
-// =============================================================================
+// The Enrichment list with thousands of contacts draws only the rows in view
+// of its own box, while the count, the filters, Select all and the batch
+// still cover every contact. tests/e2e/long-lists.spec.ts covers the real
+// virtualizer. This file checks that a filter reads every contact. jsdom has
+// no layout, so the virtualizer asks for the first ten rows.
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";

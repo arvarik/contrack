@@ -1,14 +1,8 @@
 /**
- * AddConnectorSheet — gallery sheet for choosing a new connector to add.
- *
- * Reads supported kinds from `/api/connectors/kinds` and presents each option
- * with icon, description, and platform availability notes.
- *
- * Each kind is a tile (`ConnectorKindTile`) that opens its form as a whole,
- * so it lifts on hover (`lift`, "Elevation" in `.agent/STYLE.md`). The
- * Connectors page shows the same tiles when nothing is connected yet.
- *
- * @module views/settings/connectors/AddConnectorSheet
+ * AddConnectorSheet: the sheet that picks a kind of connector to add, one
+ * tile per kind from `/api/connectors/kinds`. A tile opens its form as a
+ * whole, so it lifts on hover. The Connectors page shows the same tiles when
+ * nothing is connected.
  */
 
 import React from "react";

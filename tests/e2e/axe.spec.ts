@@ -143,9 +143,8 @@ for (const screen of SCREENS) {
  * Landmarks and headings.
  *
  * The WCAG scans above pass on a page that is one undifferentiated block, so
- * structure is scanned separately, on the screens the review measured: no h1
- * on Network, the contact or the map, and thirty-three nodes outside any
- * landmark on Network.
+ * structure is scanned separately, on the screens most likely to lose an h1
+ * or leave nodes outside every landmark.
  */
 const STRUCTURED = [
   "network list",
@@ -197,8 +196,8 @@ test.describe("phone", () => {
 
 /**
  * The dark palette is held to the same contract as the light one. A token
- * that clears AA in one and not the other is the regression the theme work
- * made possible, so the screens with the most text are scanned twice.
+ * can clear AA in one and not the other, so the screens with the most text
+ * are scanned twice.
  */
 test.describe("dark theme", () => {
   test.use({ colorScheme: "dark" });

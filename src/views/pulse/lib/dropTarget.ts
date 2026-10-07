@@ -1,33 +1,15 @@
 /**
- * Where a card lands in customize mode, as plain geometry.
+ * Where a card lands in customize mode, as pure geometry.
  *
- * The drag used dnd-kit's `closestCenter` against the cards' own boxes. Up
- * next can be 800 px tall, so its centre sat 400 px from the pointer, and
- * the card the drop went to was not the card under the pointer. Here the
- * pointer decides, in two steps:
+ * The pointer decides, not the cards' boxes: dnd-kit's `closestCenter` put an
+ * 800 px Up next's center 400 px from the pointer. First the column whose
+ * width holds the pointer (else the nearest), then the place before the first
+ * other card whose middle is below the pointer. The moved card is left out of
+ * the count and its slot stays in the layout, so a pointer resting on a line
+ * does not make the card jump back and forth.
  *
- * 1. The column: the one whose width holds the pointer, the nearest one
- *    down or up from it. The empty space under a short column belongs to
- *    that column, so a card let go under Network goes to the end of
- *    Network. A pointer in the gutter between columns goes to the nearest.
- * 2. The place in that column, counted among its other cards: before the
- *    first card whose middle is below the pointer. In a card's top half the
- *    card goes before it, in its bottom half after it, whatever its height.
- *    At `lg` the Intelligence column is a grid two across, and there the
- *    order is the reading order: the row the pointer is in, then left or
- *    right of each card's middle.
- *
- * The moved card is left out of the count, and the layout it sits in
- * already holds its slot, so each move leaves the pointer a slot's height
- * past the line it crossed: a pointer that rests on a line does not make the
- * card jump back and forth.
- *
- * A place is sent to dnd-kit as the id of a droppable: the card the moved
- * card goes before, or the column itself for its end (`overIdFor`,
- * `targetFor`). The keyboard moves one place at a time (`keyboardStep`).
- * All of it is pure, so the unit tests run it without a browser.
- *
- * @module views/pulse/lib/dropTarget
+ * A place goes to dnd-kit as a droppable id: the card the moved card goes
+ * before, or the column itself for its end.
  */
 import {
   PULSE_COLUMNS,
@@ -50,16 +32,15 @@ interface Point {
   y: number;
 }
 
-/** How a column lays out its cards: one under another, or a grid. */
 export type ColumnMode = "list" | "grid";
 
-/** A place in the columns: a column and an index among its other cards. */
+/** A column and an index among its other cards. */
 export interface DropPlace {
   column: PulseColumn;
   index: number;
 }
 
-/** Tops closer than this share a row. Grid cells in one row share a top. */
+/** Tops closer than this share a row. */
 const ROW_TOLERANCE = 4;
 
 /** The id of a column's own droppable, which stands for its end. */
@@ -67,7 +48,6 @@ const COLUMN_DROP_PREFIX = "column-";
 export const columnDropId = (column: PulseColumn) =>
   `${COLUMN_DROP_PREFIX}${column}`;
 
-/** The distance from a point to a box, 0 inside it. */
 function distanceTo(box: Box, point: Point): number {
   const dx = Math.max(box.left - point.x, 0, point.x - (box.left + box.width));
   const dy = Math.max(box.top - point.y, 0, point.y - (box.top + box.height));
@@ -75,9 +55,8 @@ function distanceTo(box: Box, point: Point): number {
 }
 
 /**
- * The column a point belongs to. Among the columns whose width holds the
- * point, the nearest one up or down, 0 inside it. With none, the nearest
- * column. Null only when there are no columns.
+ * The nearest column whose width holds the point, so the space under a short
+ * column belongs to it. With none, the nearest column.
  */
 export function pickColumn(
   columns: ReadonlyArray<{ id: PulseColumn; rect: Box }>,
@@ -98,11 +77,10 @@ export function pickColumn(
 }
 
 /**
- * Where a card goes among a column's other cards, given in order. In a list,
- * before the first card whose middle is below the point. In a grid, in
- * reading order: every card of the rows above the point's row, then the
- * cards of its row whose middle is left of the point. The rows split halfway
- * through the gap between them, and a point under the last row is the end.
+ * Where a card goes among a column's other cards. In a list, before the first
+ * card whose middle is below the point. In a grid, in reading order: the rows
+ * above, then the cards of the point's row whose middle is left of it. Rows
+ * split halfway through the gap between them.
  */
 export function insertionIndex(
   cards: readonly Box[],
@@ -149,10 +127,8 @@ export function insertionIndex(
 }
 
 /**
- * The columns in the order the eye reads them: row by row from the top,
- * left to right in a row. Focus, Intelligence, Network from `xl`, and
- * Focus, Network, Intelligence at `lg` and on a phone. Boxes that all sit
- * at 0 (a test without layout) keep the order they came in.
+ * The columns in reading order, row by row and left to right. Boxes that all
+ * sit at 0 (a test without layout) keep their order.
  */
 export function visualColumnOrder(
   columns: ReadonlyArray<{ id: PulseColumn; rect: Box }>,
@@ -166,15 +142,12 @@ export function visualColumnOrder(
     .map((column) => column.id);
 }
 
-/** An arrow key, as a direction in the columns. */
 export type KeyStep = "up" | "down" | "left" | "right";
 
 /**
- * One keyboard step for a card that is being moved. Up and down move it one
- * place earlier or later in its column, and past either end into the column
- * before or after it in reading order. Left and right move it to the column
- * before or after, at the same place or that column's end. Null when there
- * is nowhere to go.
+ * One keyboard step. Up and down move one place, and past either end into
+ * the column before or after in reading order. Left and right keep the index,
+ * or take that column's end.
  */
 export function keyboardStep(
   visible: VisibleColumns,
@@ -210,10 +183,6 @@ export function keyboardStep(
   }
 }
 
-/**
- * The droppable id that stands for a place: the card the moved card goes
- * before, or the column's own droppable for its end.
- */
 export function overIdFor(
   visible: VisibleColumns,
   cardId: PulseCardId,
@@ -223,7 +192,6 @@ export function overIdFor(
   return others[place.index] ?? columnDropId(place.column);
 }
 
-/** The place a droppable id stands for, or null for an id it does not know. */
 export function targetFor(
   visible: VisibleColumns,
   cardId: PulseCardId,
@@ -251,14 +219,9 @@ export function targetFor(
 }
 
 /**
- * Where the keyboard aims the preview for a step: the top left corner the
- * card's slot will have at `place`, worked out from the boxes as they are
- * now, with the slot still in its old place. A card that moves later in its
- * own column lands under the card it passes, which rises by a slot and a
- * gap. A card that moves earlier takes the top of the card it passes. In
- * another column it takes the top of the card it goes before, or sits a gap
- * under the last card, or at the top of an empty column. Null when a box it
- * needs is missing.
+ * The top left corner the slot will have at `place`, from the boxes as they
+ * are now, with the slot still in its old place. A card that moves later in
+ * its own column lands at the bottom of the card it passes, which rises.
  */
 export function slotAim(
   visible: VisibleColumns,
@@ -290,7 +253,7 @@ export function slotAim(
   return column ? { x: column.left + 4, y: column.top + 4 } : null;
 }
 
-/** Where a card is: its column, and its place counted from 1 of how many. */
+/** A card's column, and its place counted from 1. */
 export function positionOf(
   visible: VisibleColumns,
   cardId: PulseCardId,

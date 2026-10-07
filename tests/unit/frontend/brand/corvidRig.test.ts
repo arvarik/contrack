@@ -1,19 +1,14 @@
 /**
- * The corvid's rig.
+ * The promises the corvid's rig makes to everything that draws with it:
  *
- * The rig is what lets the one drawing move, so the checks are the promises
- * it makes to everything that draws with it:
- *
- * 1. At rest it is the logo, point for point, and its path data is the
- *    mark's to within a rounding of the handles.
- * 2. The ring is not part of it. Nothing a pose does can move the ring,
- *    because the rig never draws one.
+ * 1. At rest it is the logo, point for point, to within a rounding of the
+ *    handles.
+ * 2. It never draws the ring, so no pose can move the ring.
  * 3. The nape is the one new line, hidden in the ring and drawn from the
  *    crown when the bird is out.
- * 4. Turning round is a true mirror, about the neck, so a bird that faces the
- *    other way is the same bird and not a new drawing.
- * 5. Whatever the numbers, it draws finite points, and a wing in any part of
- *    a wingbeat keeps its length and never goes flat.
+ * 4. Turning round is a true mirror about the neck.
+ * 5. Whatever the numbers, it draws finite points, and a wing keeps its
+ *    length and never goes flat through a wingbeat.
  * 6. A barrel roll turns the points and not the pen, so the bird edge on is
  *    a line as thick as its strokes.
  */
@@ -22,7 +17,7 @@ import {
   HOME_POSE,
   NECK,
   POSE_KEYS,
-  bodyCentre,
+  bodyCenter,
   corvidPathData,
   corvidPose,
   drawCorvid,
@@ -180,19 +175,19 @@ describe("turning round", () => {
   it("holds a sitting bird still by its middle while it turns, and mirrors a flying one", () => {
     // On the perch the body turns about the neck under a still head, so the
     // point the bird is held by does not move.
-    expect(bodyCentre({ ...HOME_POSE, bodyFacing: -1 })).toEqual(
-      bodyCentre(HOME_POSE),
+    expect(bodyCenter({ ...HOME_POSE, bodyFacing: -1 })).toEqual(
+      bodyCenter(HOME_POSE),
     );
     // In the air the body's middle goes where the body goes.
-    const [x] = bodyCentre({ ...HOME_POSE, flight: 1 });
-    const [turnedX] = bodyCentre({ ...HOME_POSE, flight: 1, bodyFacing: -1 });
+    const [x] = bodyCenter({ ...HOME_POSE, flight: 1 });
+    const [turnedX] = bodyCenter({ ...HOME_POSE, flight: 1, bodyFacing: -1 });
     expect(turnedX).toBeCloseTo(2 * NECK[0] - x, 9);
   });
 });
 
 describe("a barrel roll", () => {
   const flying = drawCorvid(corvidPose({ flight: 1, nape: 1 }));
-  const about = bodyCentre(corvidPose({ flight: 1 }))[1];
+  const about = bodyCenter(corvidPose({ flight: 1 }))[1];
   const strokes = (d: CorvidDrawing): Vec[][] => [
     d.head[0],
     d.head[1],

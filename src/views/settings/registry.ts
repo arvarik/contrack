@@ -1,10 +1,7 @@
 /**
- * registry.ts — One registry for all settings pages, rows, redirects and search.
- *
- * Drives the two-pane shell on wide screens, the mobile landing list,
- * row-level search with deep links, palette navigation and URL redirects.
- *
- * @module views/settings/registry
+ * Every settings page and row, for the shell, the rail, the landing list,
+ * row search and the command palette. Keywords keep British spellings
+ * ("colour", "organise") on purpose, so a British user finds a setting.
  */
 import type React from "react";
 import type { QueryClient } from "@tanstack/react-query";
@@ -62,11 +59,7 @@ interface SettingsRow {
 /** What a settings page's module gives the shell. */
 export interface SettingsPageModule {
   default: React.ComponentType;
-  /**
-   * Starts loading the data the page shows first, so the page opens with
-   * it. The rail and the list call it when a person points at, focuses or
-   * presses the page's link (`warmSettingsPage`).
-   */
+  /** Starts the page's first data on a link's intent (`warm.ts`). */
   prefetch?: (queryClient: QueryClient) => void;
 }
 
@@ -77,7 +70,7 @@ export interface SettingsPage {
   description: string;
   icon: LucideIcon;
   group: SettingsGroup;
-  /** The colour of the page's tile on the landing list. Primary by default. */
+  /** The landing tile's color. Primary by default. */
   tone?: Tone;
   admin?: boolean;
   needsAccount?: boolean;
@@ -85,17 +78,9 @@ export interface SettingsPage {
   rows?: SettingsRow[];
   load: () => Promise<SettingsPageModule>;
   ownsScrolling?: boolean;
-  /**
-   * A page that owns its scrolling but sits in the centred settings box, as
-   * every page that does not own it: the shell's header takes the box too,
-   * so the title starts at the same place as on every other settings page.
-   */
+  /** A page that owns its scrolling but keeps the centered settings box. */
   boxed?: boolean;
-  /**
-   * An admin reaches the same page under Administration, where it covers
-   * every account, so the rail, the list and the search leave this one out
-   * for an admin.
-   */
+  /** Hidden from an admin, who has an all-accounts copy in Administration. */
   memberOnly?: boolean;
 }
 
@@ -108,7 +93,7 @@ export interface SettingsSearchHit {
 }
 
 export const SETTINGS_PAGES: SettingsPage[] = [
-  // ── YOU ──────────────────────────────────────────────────────────────────
+  // You
   {
     id: "account",
     path: "/settings/account",
@@ -214,7 +199,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       },
       {
         id: "accent",
-        label: "Accent colour",
+        label: "Accent color",
         keywords: ["accent", "colour", "color", "brand", "primary", "palette"],
       },
       {
@@ -480,7 +465,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     load: () => import("../ai-stats").then((m) => ({ default: m.AIStatsView })),
   },
 
-  // ── TOOLS ────────────────────────────────────────────────────────────────
+  // Tools
   {
     id: "import",
     path: "/settings/import",
@@ -609,7 +594,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     load: () => import("./pages/EnrichmentPage"),
   },
 
-  // ── DATA ─────────────────────────────────────────────────────────────────
+  // Data
   {
     id: "tags",
     path: "/settings/tags",
@@ -680,8 +665,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     load: () => import("./pages/ExportPage"),
   },
   {
-    // A page in the shell like every other: the rail stays beside it. It
-    // scrolls itself, so its virtualised list has a scroller of its own.
+    // It scrolls itself, so its virtualized list has its own scroller.
     id: "tracked",
     path: "/settings/tracked",
     title: NAMES.tracked.title,
@@ -731,7 +715,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     load: () => import("../TrashView").then((m) => ({ default: m.TrashView })),
   },
 
-  // ── CONNECT ──────────────────────────────────────────────────────────────
+  // Connect
   {
     id: "connectors",
     path: "/settings/connectors",
@@ -851,7 +835,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     load: () => import("./mcp/McpView"),
   },
 
-  // ── ADMINISTRATION ───────────────────────────────────────────────────────
+  // Administration
   {
     id: "admin-general",
     path: "/settings/admin/general",
@@ -1203,17 +1187,13 @@ export const SETTINGS_PAGES: SettingsPage[] = [
   },
 ];
 
-/** Who is looking: an admin, and whether this instance asks anyone to sign in. */
 export interface SettingsViewer {
   isAdmin?: boolean;
   /** Undefined when the caller does not know, which shows the page. */
   authRequired?: boolean;
 }
 
-/**
- * Whether a page is offered to this person. The rail, the list, and the
- * search ask this one question, so the three never disagree.
- */
+/** The rail, the list and the search all ask this, so they never disagree. */
 export function isSettingsPageVisible(
   page: SettingsPage,
   viewer: SettingsViewer = {},
@@ -1225,9 +1205,8 @@ export function isSettingsPageVisible(
 }
 
 /**
- * The page a path belongs to: the page with the longest path that the path
- * is or sits under. `/settings/connectors/people` is Correspondents, not
- * Connectors.
+ * The page with the longest matching path prefix:
+ * `/settings/connectors/people` is Correspondents, not Connectors.
  */
 export function findSettingsPage(pathname: string): SettingsPage | undefined {
   let found: SettingsPage | undefined;
@@ -1241,16 +1220,11 @@ export function findSettingsPage(pathname: string): SettingsPage | undefined {
   return found;
 }
 
-/** The settings list's own path, the parent of every settings page. */
 export const SETTINGS_LIST_PATH = "/settings";
 
 /**
- * The link above a settings page's title, or none.
- *
- * From `lg` there is none: the rail and the app's sidebar are both on
- * screen, so a back link would say nothing they do not, and it pushed every
- * settings title below every other page's. Below `lg` a page links back to
- * the settings list, its parent, and the list itself has none.
+ * Below `lg`, a page links back to the settings list. From `lg` the rail is
+ * on screen, so there is no back link to push the title down.
  */
 export function settingsBackLink(
   pathname: string,
@@ -1261,10 +1235,8 @@ export function settingsBackLink(
 }
 
 /**
- * Search the registry for settings rows matching the query.
- *
- * Matches against row labels and keywords, as well as page titles and keywords.
- * Returns row-level hits linked to path#rowId.
+ * Matches row labels, ids and keywords, then page titles, descriptions and
+ * keywords. A page match returns all its rows, each linked to `path#rowId`.
  */
 export function findRows(
   query: string,
@@ -1306,7 +1278,6 @@ export function findRows(
       }
     }
 
-    // If no individual row matched, check if the page itself matches
     if (!matchedRowOnThisPage) {
       const pageMatches =
         page.title.toLowerCase().includes(q) ||
@@ -1315,7 +1286,6 @@ export function findRows(
 
       if (pageMatches) {
         if (page.rows && page.rows.length > 0) {
-          // If the page matched by keyword/title, include all of its rows
           for (const row of page.rows) {
             const hitPath = `${page.path}#${row.id}`;
             if (!seenPaths.has(hitPath)) {
@@ -1330,7 +1300,6 @@ export function findRows(
             }
           }
         } else {
-          // Page has no sub-rows: return the page itself
           if (!seenPaths.has(page.path)) {
             seenPaths.add(page.path);
             results.push({

@@ -1,12 +1,6 @@
 /**
- * server/mcp/tools/taxonomy.ts — Tags and lists MCP tools.
- *
- * Implements:
- * - list_tags
- * - list_lists
- * - create_list
- * - add_to_list
- * - remove_from_list
+ * Tag and list MCP tools: list_tags, list_lists, create_list, add_to_list,
+ * remove_from_list.
  *
  * @module server/mcp/tools/taxonomy
  */

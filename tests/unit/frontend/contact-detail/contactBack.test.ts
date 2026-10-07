@@ -1,10 +1,8 @@
-// =============================================================================
 // Unit: where the contact page's Back goes
-// =============================================================================
+//
 // A page that opens a contact from its own list names itself as Back. The
 // Enrichment page does, with its filters in the address. Anything else goes
 // by the route: the archived list, the map with its filter, or the network.
-// =============================================================================
 
 import { describe, expect, it } from "vitest";
 import { backTarget } from "../../../../src/views/contact-detail/backTarget";

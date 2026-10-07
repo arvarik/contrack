@@ -1,11 +1,7 @@
-// =============================================================================
-// Jobs: the duplicate check for one contact
-// =============================================================================
-// Queued by the `contacts.dedupeCheck` subscriber (server/events/
-// contactSubscribers.ts) five seconds after a contact is added or its
-// identity fields change, keyed by the contact so a burst of edits is one
-// check. It compares the contact against the rest of its owner's contacts.
-// =============================================================================
+// The duplicate check for one contact, queued by the `contacts.dedupeCheck`
+// subscriber (server/events/contactSubscribers.ts) five seconds after a contact
+// is added or its identity fields change, keyed by the contact so a burst of
+// edits is one check.
 
 import crypto from "node:crypto";
 import { z } from "zod";

@@ -1,11 +1,6 @@
 /**
- * SettingsHome — the Settings landing page.
- *
- * Driven directly by the settings registry. Renders the identity row at top,
- * the search box, the registry groups and destination cards, and the storage footer.
- *
- * Below `lg` this is the list a person opens every page from, and a page
- * slides in over it (`SlideLink`).
+ * The Settings landing page, built from the registry. Below `lg` it is the
+ * list every page opens from, and a page slides in over it.
  */
 import { useCallback, useEffect, useState } from "react";
 import { ChevronRight, HardDrive, type LucideIcon } from "lucide-react";
@@ -28,10 +23,7 @@ import { perchProps } from "../../components/brand/CorvidFlight";
 import { useCorvidLevel } from "../../hooks/useCorvidLevel";
 import { flyCorvid } from "../../lib/corvid";
 
-/**
- * One destination: a card that is itself the link. It rises on hover
- * (`CARD_INTERACTIVE`), and that lift is its only hover.
- */
+/** A card that is itself the link. The lift is its only hover. */
 const SettingsLink = ({
   to,
   icon: Icon,
@@ -70,15 +62,8 @@ const SettingsLink = ({
 };
 
 /**
- * The corvid's perch on a phone.
- *
- * There is no sidebar below `md`, so the one mark a person can press lives
- * here, at the end of the line that closes the page. It behaves exactly like
- * the sidebar perch: the same name, the same tooltip, the same three levels,
- * and the same flight, which leaves from this rectangle instead of that one.
- *
- * `md:hidden`, because above the breakpoint the sidebar perch is on screen
- * and two birds that both fly would be two birds in the air.
+ * The corvid's perch below `md`, where there is no sidebar perch. It acts
+ * like the sidebar perch. `md:hidden` keeps two birds out of the air.
  */
 const PhonePerch = () => {
   const level = useCorvidLevel();
@@ -92,8 +77,8 @@ const PhonePerch = () => {
     <button
       type="button"
       onClick={onClick}
-      // `hit-area` rather than padding: the line is 12 px tall and a 44 px
-      // box drawn in the layout would push the sentence off its baseline.
+      // `hit-area`, not padding: a 44 px box in the 12 px line would push
+      // the sentence off its baseline.
       className="hit-area state-layer md:hidden ml-auto shrink-0 rounded-lg text-primary transition-colors"
       aria-label="Contrack"
       title="Let the corvid fly"
@@ -107,9 +92,8 @@ const PhonePerch = () => {
 };
 
 /**
- * Whether the list has already arrived once in this visit to the app. The
- * groups come in turn the first time only: coming back from a page, the list
- * is already there, and a slide's picture of it must not be blank.
+ * The groups animate in on the first visit only, so a back slide's picture
+ * of the list is never blank.
  */
 let listHasArrived = false;
 

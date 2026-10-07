@@ -1,11 +1,8 @@
-// =============================================================================
 // Integration: the research record the enrichment merge keeps
-// =============================================================================
 // Every enrichment is recorded on the contact (`aiResearch`): when it ran,
 // which models, what it added field by field, the searches, the facts and the
 // pages. A second enrichment adds to the record, and "Not this person" takes
 // a run back.
-// =============================================================================
 
 import { beforeEach, describe, it, expect } from "vitest";
 import request from "supertest";
@@ -564,6 +561,21 @@ describe("a second round, worded another way", () => {
     expect(enrichmentContact(scope(), id).attributes[0].value).toBe(
       "Dean's List; New Medal",
     );
+  });
+
+  it("adds to a row an earlier run named Licences, and makes no second row", () => {
+    // The research prompt asks for "Licenses". Runs from before it said so
+    // named the attribute "Licences".
+    merge({ attributes: [{ name: "Licences", value: "Series 7" }] });
+    merge({
+      attributes: [{ name: "Licenses", value: "Series 7; Series 63" }],
+    });
+    const { attributes } = enrichmentContact(scope(), id);
+    expect(attributes).toHaveLength(1);
+    expect(attributes[0]).toMatchObject({
+      name: "Licences",
+      value: "Series 7; Series 63",
+    });
   });
 });
 

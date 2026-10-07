@@ -1,12 +1,10 @@
 /**
- * server/connectors/ingest.ts — Event ingestion engine for Contrack connectors.
- *
- * Consumes SyncEvents yielded by adapters:
- * 1. Matches participants to contacts via ContactMatcher.
- * 2. Deduplicates by externalId using connector_links.
- * 3. Supports day roll-up by contactId:YYYY-MM-DD.
- * 4. Counts unknown participants as correspondents; promotes to ghost contacts
- *    when crossing ghostThreshold.
+ * Event ingestion for connectors. It consumes the SyncEvents adapters yield:
+ * 1. Matches participants to contacts (ContactMatcher).
+ * 2. Deduplicates by externalId through connector_links.
+ * 3. Rolls a day up by contactId:YYYY-MM-DD.
+ * 4. Counts unknown participants as correspondents, and promotes them to ghost
+ *    contacts past ghostThreshold.
  * 5. Refreshes upcoming_events, replacing stale rows.
  * 6. Commits in transactions of 100 events.
  * 7. Copies each contact photo to the owner's uploads before the event is
@@ -78,8 +76,8 @@ const PHOTO_MAX_BYTES = 5 * 1024 * 1024;
 const PHOTO_TIMEOUT_MS = 8_000;
 /**
  * Photo downloads in flight at once. A first sync can carry thousands of
- * photos, and one at a time would add minutes to it. A few at a time keeps
- * the sync quick without a burst of requests to one host.
+ * photos: one at a time adds minutes, and a few at a time avoids a burst at one
+ * host.
  */
 const PHOTO_CONCURRENCY = 6;
 
@@ -104,16 +102,12 @@ function createLimiter(limit: number) {
 }
 
 /**
- * Copy a connector's contact photo into the owner's avatars folder, and
- * return the local URL.
- *
- * Google's photo URLs point at googleusercontent.com, and a browser that
- * loads one tells Google each time somebody opens the contact. The copy is
- * re-encoded the way processBase64Avatar does it: 256 px cover JPEG.
- *
- * The file name is the digest of the remote URL. Every sync sends the same
- * URL for an unchanged photo, so an existing file is reused with no network
- * call, and a changed photo gets a new URL and so a new file.
+ * Copy a connector's contact photo into the owner's avatars folder and return
+ * the local URL. A browser that loads a googleusercontent.com URL tells Google
+ * each time somebody opens the contact. The copy is re-encoded like
+ * processBase64Avatar: a 256 px cover JPEG. The file name is the digest of the
+ * remote URL: an unchanged photo keeps its URL, so its file is reused with no
+ * network call, and a changed photo gets a new file.
  *
  * Throws RemoteImageError (see isTransientImageError) or the caller's abort.
  */
@@ -130,7 +124,7 @@ export async function saveContactPhoto(
     (img) =>
       img
         .rotate()
-        .resize(PHOTO_SIZE, PHOTO_SIZE, { fit: "cover", position: "centre" })
+        .resize(PHOTO_SIZE, PHOTO_SIZE, { fit: "cover", position: "center" })
         .flatten({ background: "#ffffff" })
         .jpeg({ quality: PHOTO_JPEG_QUALITY, mozjpeg: true }),
     { maxBytes: PHOTO_MAX_BYTES, timeoutMs: PHOTO_TIMEOUT_MS, signal },
@@ -751,14 +745,12 @@ export async function ingestStream(
     }
   }
 
-  // Process stream in batches of `BATCH_SIZE` per transaction.
-  //
-  // The photo download is async and the batch transaction is synchronous, so
-  // the copy is made before the event joins a batch. A contact event with a
-  // photo enters the batch as a promise of the same event carrying the local
-  // URL, or no photo at all. The batch waits for all of them before its
-  // transaction opens, so the transaction never sees a remote URL, and the
-  // events keep the order the adapter sent them in.
+  // Process the stream in batches of `BATCH_SIZE` per transaction. The photo
+  // download is async and the transaction is synchronous, so the copy is made
+  // first: a contact event with a photo enters the batch as a promise of the
+  // same event with the local URL, or with no photo. The batch waits for all of
+  // them before its transaction opens, so it never sees a remote URL, and the
+  // events keep the adapter's order.
   const photoSlot = createLimiter(PHOTO_CONCURRENCY);
   let batch: Array<SyncEvent | Promise<SyncEvent>> = [];
 

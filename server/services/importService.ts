@@ -1,39 +1,25 @@
-// =============================================================================
-// Import Service — one durable record per bulk import
-// =============================================================================
-// A bulk import used to exist only for the life of its request. The browser
-// parsed a file, posted the rows, and read a stream of progress frames until
-// a `done` frame arrived. Two things went wrong with that.
+// One durable record per bulk import.
 //
-// The stream could end without a `done` frame, when a phone changed networks
-// or a proxy timed out an idle connection, and the browser showed "Import
-// Complete" anyway. It had no way to ask what had happened.
+// Every import has an id the browser chooses, a row that records what happened
+// to it, and a row per contact that says whether that contact was written. So a
+// browser whose progress stream ended early (a phone changed networks, a proxy
+// timed out) can ask what happened, and a second request with a known id
+// answers with the record instead of importing every contact twice. Reading a
+// record whose process died settles it: an import that never committed is
+// failed, and one that committed but never finished its duplicate check is
+// finished now.
 //
-// And a second attempt was a second import. Every request made fresh contact
-// ids, so a person who saw an error and tried again had every contact twice,
-// with a duplicate scan to clean up after.
-//
-// This module gives every import an id the browser chooses, a row that
-// records what happened to it, and a row per contact that says whether that
-// contact was written. A second request with a known id answers with the
-// record rather than importing again. A read of a record whose process died
-// settles it: an import that never committed is reported failed, and one that
-// committed but never finished its duplicate check is finished now.
-//
-// The row per contact is also what makes a retry possible. A row that fails
-// keeps its payload, and `retry` runs those rows again without the browser
-// re-sending the file. A row that succeeds keeps only its contact id.
+// A failed row keeps its payload, so `retry` runs it again without the file. A
+// done row keeps only its contact id.
 //
 // The contacts are written in batches, each its own transaction, so a large
-// file does not hold the database, and every other request, for the whole
-// write. Every row is first recorded as `pending`, with its payload. A run
-// that stops part way, by an error or a process death, has committed some
-// batches and not the rest: the rows it never reached become `failed`, with
-// their payloads, and the import is `imported` with what it saved. Nothing is
-// lost and nothing is written twice. A run that committed nothing is `failed`.
+// file does not hold the database for the whole write. Every row is first
+// recorded as `pending` with its payload. A run that stops part way has
+// committed some batches: the rows it never reached become `failed`, with their
+// payloads, and the import is `imported` with what it saved. Nothing is lost
+// and nothing is written twice. A run that committed nothing is `failed`.
 //
 // @module server/services/importService
-// =============================================================================
 
 import crypto from "crypto";
 import { sqlite } from "../db.ts";
@@ -51,9 +37,7 @@ import { dedupeService } from "./dedupe/index.ts";
 import { getPreferences } from "./userPreferencesService.ts";
 import { scheduleStarterQuestions } from "./search/starterQuestions.ts";
 
-// ---------------------------------------------------------------------------
 // Shapes
-// ---------------------------------------------------------------------------
 
 /**
  * Where an import is.
@@ -123,16 +107,11 @@ interface ImportTableRow {
 /** A progress frame, the shape the SSE route writes. */
 export type ImportFrame = Record<string, unknown>;
 
-// ---------------------------------------------------------------------------
 // The process's own imports
-// ---------------------------------------------------------------------------
 
 /**
- * Imports this process is running right now.
- *
- * A `running` row whose id is not here belongs to a process that died. The
- * row says the contacts were being written, the absence here says nobody is
- * writing them, and together they say the write never committed.
+ * Imports this process is running now. A `running` row whose id is not here
+ * belongs to a process that died, so its write never committed.
  */
 const live = new Map<string, { ownerId: string }>();
 
@@ -151,12 +130,9 @@ function inProgress(id: string): AppError {
   });
 }
 
-// ---------------------------------------------------------------------------
-// Statements
-// ---------------------------------------------------------------------------
-// Every statement on `imports` names the owner. `import_rows` reaches its
-// owner through the import it belongs to, and every write to it is gated on
-// that row existing for this owner.
+// Statements. Every statement on `imports` names the owner. `import_rows`
+// reaches its owner through its import, and every write to it is gated on that
+// import existing for this owner.
 
 const _stmts = {
   get: sqlite.prepare(`SELECT * FROM imports WHERE id = ? AND ownerId = ?`),
@@ -308,17 +284,16 @@ const _stmts = {
   /**
    * What the duplicate check found for this import's contacts.
    *
-   * Read from the suggestions table rather than carried back from the scan,
-   * so a resumed check and a retried one add up the same way a fresh one
-   * does. A pair is counted once whichever side of it the import wrote: the
-   * UNION drops the second copy of a pair whose two contacts it wrote.
+   * Read from the suggestions table, not carried back from the scan, so a
+   * resumed or retried check adds up like a fresh one. A pair counts once
+   * whichever side the import wrote: the UNION drops the second copy of a pair
+   * whose two contacts it wrote.
    *
-   * It starts from the import's rows and finds each row's suggestions by
-   * one side and then the other, through the UNIQUE index on contactIdA and
-   * `idx_dedupe_sugg_contact_b`. The cost follows the size of the import.
-   * It used to start from every suggestion of the account and compare each
-   * with every row (`r.contactId IN (s.contactIdA, s.contactIdB)`, which no
-   * index serves): 1.3 s at 14,000 suggestions, run every 50 rows.
+   * It starts from the import's rows and finds each row's suggestions by one
+   * side and then the other, through the UNIQUE index on contactIdA and
+   * `idx_dedupe_sugg_contact_b`, so the cost follows the size of the import.
+   * Matching `r.contactId IN (s.contactIdA, s.contactIdB)` from every
+   * suggestion uses no index and takes 1.3 s at 14,000 suggestions.
    */
   matches: sqlite.prepare(`
     WITH touched AS (
@@ -342,11 +317,9 @@ const _stmts = {
   `),
 
   /**
-   * Pending suggestions naming this import's contacts, for a resumed check.
-   *
-   * A check that died part way may have written some of them already, and
-   * the scan that runs again would write them twice. Auto-merged rows stay:
-   * the merge they record happened.
+   * Pending suggestions naming this import's contacts, cleared before a resumed
+   * check, which would otherwise write some of them twice. Auto-merged rows
+   * stay: the merge they record happened.
    */
   clearPending: sqlite.prepare(`
     DELETE FROM dedupe_suggestions
@@ -369,9 +342,7 @@ const _stmts = {
   `),
 };
 
-// ---------------------------------------------------------------------------
 // Helpers
-// ---------------------------------------------------------------------------
 
 function toRecord(row: ImportTableRow): ImportRecord {
   const summary: ImportSummary | null =
@@ -409,12 +380,11 @@ function read(scope: Scope, id: string): ImportTableRow | undefined {
  * Make the record agree with its rows, for an import nobody is running.
  *
  * A record whose phase is still `importing` was being written when its run
- * stopped: a fresh run (`running`), or a retry of an import that was
- * already `imported` or `complete`. The batches it committed are there and
- * the rest are not. When a fresh run saved no contact, the import failed
- * and keeps no rows. Otherwise the rows it never reached become `failed`,
- * the counts are taken from the rows, and the import is `imported`, so its
- * duplicate check runs for what it saved.
+ * stopped: a fresh run (`running`), or a retry of an import already `imported`
+ * or `complete`. When a fresh run saved no contact, the import failed and keeps
+ * no rows. Otherwise the rows it never reached become `failed`, the counts come
+ * from the rows, and the import is `imported`, so its duplicate check runs for
+ * what it saved.
  *
  * @returns true when the record changed.
  */
@@ -454,19 +424,17 @@ function countMatches(
   };
 }
 
-// ---------------------------------------------------------------------------
 // The service
-// ---------------------------------------------------------------------------
 
 export const importService = {
   /**
-   * Record the start of an import, or recognise one already recorded.
+   * Record the start of an import, or recognize one already recorded.
    *
-   * Returns `repeated: true` when the id names an import this account has
-   * already run to a commit, and nothing more should happen. Throws 409 when
-   * the import is running in this process, because a second copy would race
-   * the first. A `running` row nobody is running, or a `failed` one, is a
-   * run that never committed and starts again under the same id.
+   * Returns `repeated: true` when this account already ran the id to a commit,
+   * and nothing more should happen. Throws 409 when this process is running it,
+   * because a second copy would race the first. A `running` row nobody is
+   * running, or a `failed` one, never committed and starts again under the same
+   * id.
    */
   begin(
     scope: Scope,
@@ -536,12 +504,9 @@ export const importService = {
     })();
   },
 
-  // -- Called from inside an import batch ---------------------------------
-  //
-  // These three run inside the transactions of
-  // `contactService.bulkCreateContacts`, so each row commits with its
-  // contact or not at all, and `markImported` commits with the last batch.
-  // A record can never say `imported` about contacts that are not there.
+  // Called from inside an import batch. These run inside the transactions of
+  // `contactService.bulkCreateContacts`, so each row commits with its contact
+  // or not at all, and `markImported` commits with the last batch.
 
   rowDone(
     scope: Scope,
@@ -576,7 +541,7 @@ export const importService = {
     _stmts.markImported.run(id, scope.ownerId);
   },
 
-  // -- Outside the transaction --------------------------------------------
+  // Outside the transaction
 
   /** How far the write has got, for a browser that is polling. */
   progress(scope: Scope, id: string, processed: number): void {
@@ -596,14 +561,14 @@ export const importService = {
   /**
    * The tail of an import: fingerprints, the duplicate check, the summary.
    *
-   * The same function for a fresh import, a retry, and a resumed check, and
-   * the same for the stream and the JSON path. `send` is the stream's frame
-   * writer when there is one. Every phase is written to the record as well,
-   * so a browser that lost the stream reads the same progress by polling.
+   * The same for a fresh import, a retry and a resumed check, and for the
+   * stream and the JSON path. `send` writes the stream's frames when there is
+   * one. Every phase is also written to the record, so a browser that lost the
+   * stream reads the same progress by polling.
    *
-   * Never throws. A check that fails after the contacts are committed leaves
-   * them committed, marks the import complete with the counts it could
-   * derive, and puts the failure in `error` for the record to show.
+   * Never throws. A check that fails after the contacts are committed marks the
+   * import complete with the counts it could derive and puts the failure in
+   * `error`.
    */
   async finish(
     scope: Scope,
@@ -623,8 +588,8 @@ export const importService = {
       // passes `skipEmbedding` and this step is not run a second time.
       if (createdIds.length > 0 && !options.skipEmbedding) {
         // The phase is announced only when a provider can answer. The call
-        // itself is unconditional: with no provider it returns at once, and
-        // the tenancy test that stubs it counts on being reached.
+        // itself is unconditional: with no provider it returns at once, and the
+        // tenancy test that stubs it counts on reaching it.
         if (isEmbeddingAvailable()) {
           const message = "Generating contact fingerprints…";
           _stmts.phase.run("embedding", message, id, scope.ownerId);
@@ -701,12 +666,10 @@ export const importService = {
   },
 
   /**
-   * The record, settled.
-   *
-   * A `running` import nobody is running never committed, and is reported
-   * failed so the browser offers to send it again. An `imported` one nobody
-   * is running has its contacts and no summary, and its check is resumed
-   * here in the background. Both are the shape a process death leaves.
+   * The record, settled. A `running` import nobody is running never committed,
+   * and is reported failed so the browser offers to send it again. An
+   * `imported` one nobody is running has its contacts and no summary, and its
+   * check resumes here in the background.
    */
   get(scope: Scope, id: string, rid: string): ImportRecord | null {
     let row = read(scope, id);
@@ -776,10 +739,9 @@ export const importService = {
   },
 
   /**
-   * The failed rows of an import, as the payloads to run again.
-   *
-   * The route hands these to `bulkCreateContacts` under the same import id
-   * with their original indexes, so each row lands back on its own line.
+   * The failed rows of an import, as the payloads to run again. The route hands
+   * them to `bulkCreateContacts` under the same import id with their original
+   * indexes, so each row lands back on its own line.
    */
   failedRows(
     scope: Scope,
@@ -846,9 +808,8 @@ export const importService = {
   },
 
   /**
-   * List the newest imports for this account.
-   * An import that was being written when its process stopped is settled
-   * first, the way `get` settles it.
+   * The newest imports for this account. An import its process stopped writing
+   * is settled first, as `get` does.
    */
   list(scope: Scope, limit = 50): ImportRecord[] {
     const rows = _stmts.list.all(scope.ownerId, limit) as ImportTableRow[];

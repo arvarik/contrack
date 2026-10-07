@@ -1,9 +1,7 @@
 /**
- * server/routes/connectors.ts — REST endpoints for connector lifecycle, testing and sync.
- *
- * Mounted at `/api/connectors`.
- * Mutation endpoints require a user session (requireSession) so that personal
- * API tokens cannot configure or modify external credentials.
+ * REST endpoints for connector lifecycle, testing and sync, at
+ * `/api/connectors`. Writes require a session (requireSession), so a personal
+ * API token cannot configure external credentials.
  *
  * @module server/routes/connectors
  */
@@ -42,7 +40,7 @@ import {
 
 export const connectorsRouter = Router();
 
-// ── GET /kinds ─────────────────────────────────────────────────────────────
+// GET /kinds
 // Returns available connector kinds based on the host platform and containerization.
 connectorsRouter.get(
   "/kinds",
@@ -55,7 +53,7 @@ connectorsRouter.get(
   }),
 );
 
-// ── GET / ──────────────────────────────────────────────────────────────────
+// GET /
 // Lists all connectors owned by the caller (never includes raw secrets).
 connectorsRouter.get(
   "/",
@@ -66,7 +64,7 @@ connectorsRouter.get(
   }),
 );
 
-// ── POST / ─────────────────────────────────────────────────────────────────
+// POST /
 // Creates a new connector after proving credentials via adapter.test.
 const createConnectorSchema = z.object({
   kind: z.string().trim().min(1),
@@ -92,7 +90,7 @@ connectorsRouter.post(
   }),
 );
 
-// ── POST /test ─────────────────────────────────────────────────────────────
+// POST /test
 // Proves credentials with the adapter without persisting anything.
 const testConnectorSchema = z.object({
   kind: z.string().trim().min(1),
@@ -119,7 +117,7 @@ connectorsRouter.post(
   }),
 );
 
-// ── GET /correspondents ────────────────────────────────────────────────────
+// GET /correspondents
 // Lists unknown people seen by connectors who are not contacts yet.
 connectorsRouter.get(
   "/correspondents",
@@ -133,7 +131,7 @@ connectorsRouter.get(
   }),
 );
 
-// ── POST /correspondents/ignore ────────────────────────────────────────────
+// POST /correspondents/ignore
 // Marks a correspondent as ignored so they do not become a ghost contact.
 const ignoreCorrespondentSchema = z.object({
   connectorId: z.string().min(1, "connectorId is required"),
@@ -155,7 +153,7 @@ connectorsRouter.post(
   }),
 );
 
-// ── GET /google/start ──────────────────────────────────────────────────────
+// GET /google/start
 // Initiates Google OAuth authorization with PKCE.
 connectorsRouter.get(
   "/google/start",
@@ -215,8 +213,8 @@ connectorsRouter.get(
 
 /**
  * Why a Google sign-in did not finish. The browser opened the callback as a
- * page, so a failure goes back to Connectors, which says it in words: a
- * thrown error showed the person raw JSON.
+ * page, so a failure goes back to Connectors, which says it in words instead of
+ * showing raw JSON.
  */
 type GoogleFailure = "denied" | "expired" | "failed" | "not-configured";
 
@@ -224,9 +222,9 @@ const backToConnectors = (res: Response, reason: GoogleFailure) =>
   res.redirect(`/settings/connectors?error=${reason}`);
 
 /**
- * The Google connector that already holds this account, by its address.
- * Each account keeps its own connector and tokens: matched by kind alone, a
- * second account's sign-in wrote its tokens over the first one's.
+ * The Google connector that already holds this account, by its address. Each
+ * account keeps its own connector and tokens; matched by kind alone, a second
+ * account's sign-in would write over the first one's tokens.
  */
 function googleConnectorFor(scope: Scope, email: string) {
   const rows = sqlite
@@ -248,7 +246,7 @@ function googleConnectorFor(scope: Scope, email: string) {
   return null;
 }
 
-// ── GET /google/callback ───────────────────────────────────────────────────
+// GET /google/callback
 // Handles the redirect back from Google OAuth consent screen.
 connectorsRouter.get(
   "/google/callback",
@@ -392,7 +390,7 @@ connectorsRouter.get(
   }),
 );
 
-// ── GET /:id ───────────────────────────────────────────────────────────────
+// GET /:id
 // Returns connector detail including recent run history.
 connectorsRouter.get(
   "/:id",
@@ -406,7 +404,7 @@ connectorsRouter.get(
   }),
 );
 
-// ── PATCH /:id ─────────────────────────────────────────────────────────────
+// PATCH /:id
 // Updates connector name, config, secret, intervalMinutes, or status.
 const updateConnectorSchema = z.object({
   name: z.string().trim().min(1).max(200).optional(),
@@ -432,7 +430,7 @@ connectorsRouter.patch(
   }),
 );
 
-// ── DELETE /:id ────────────────────────────────────────────────────────────
+// DELETE /:id
 // Removes a connector. When deleteImported is true, also removes interactions
 // and ghost contacts created by this connector.
 connectorsRouter.delete(
@@ -452,10 +450,9 @@ connectorsRouter.delete(
   }),
 );
 
-// ── POST /:id/sync ─────────────────────────────────────────────────────────
-// Triggers an immediate sync run. Runs synchronously if background jobs are disabled.
-// The run takes the scheduler's lock: a connector that is syncing already,
-// by schedule or by a second click, answers with the run in flight.
+// POST /:id/sync runs a sync now, in the request when background jobs are off.
+// It takes the scheduler's lock: a connector already syncing, by schedule or a
+// second click, answers with the run in flight.
 connectorsRouter.post(
   "/:id/sync",
   requireSession,
@@ -501,7 +498,7 @@ connectorsRouter.post(
   }),
 );
 
-// ── GET /:id/runs ──────────────────────────────────────────────────────────
+// GET /:id/runs
 // Returns run history for a specific connector.
 connectorsRouter.get(
   "/:id/runs",

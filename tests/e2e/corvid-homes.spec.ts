@@ -1,20 +1,15 @@
 /**
- * The corvid's other homes, in a real browser.
+ * The corvid's other homes, in a real browser: the AI pending states and the
+ * phone perch. A person can be at each while a screen reader runs, so each
+ * is scanned there.
  *
- * The bird now stands where three spinners and a check mark used to, and on
- * a phone it has a perch of its own. Each of those is a place a person can
- * be while a screen reader is running, so each is scanned there.
+ * Two pending states need the answer held open, because on a fast machine
+ * neither lasts a frame: the synthesis bar starts only after a click, and a
+ * blank instance answers the briefing at once. Both are held at the network
+ * edge, so the client code from click to last render is real.
  *
- * Two of the three AI pending states need the answer held open, because
- * neither is a frame between two renders on a fast machine: the synthesis
- * bar only starts after a click, and the briefing is written by a request a
- * blank instance answers at once. Both are held at the network edge, so
- * everything from the click to the last render is the real client code.
- *
- * The suite forces reduced motion, so none of these birds move. That is the
- * point of scanning them here: what is left when the motion is gone has to
- * be a picture with a name, or no picture at all, and never a control that
- * has quietly lost its label.
+ * The suite forces reduced motion, so no bird moves. What is left must be a
+ * picture with a name, or no picture, and never a control without a label.
  */
 import { devices, type Page } from "@playwright/test";
 import { test, expect } from "./fixtures/test";
@@ -62,7 +57,7 @@ test.describe("the bird while the AI works", () => {
     page,
     seed,
   }, testInfo) => {
-    // The bar offers to summarise only once there are three results, and
+    // The bar offers to summarize only once there are three results, and
     // only with a model to write it.
     await serveAiModels(page);
     await answerPeopleSearch(page, [

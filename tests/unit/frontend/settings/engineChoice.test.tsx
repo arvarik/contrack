@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
-// =============================================================================
 // Unit: the web search engine, where it is set and where it is used
-// =============================================================================
+//
 // Administration → AI sets the instance's engine. Contact enrichment sets the
 // account's: its own choice when the instance has more than one account,
 // with "Instance default" first, and the instance's own value when there is
 // one account, so the same choice never lives in two places. An engine that
 // cannot run stays, disabled, and says what it lacks.
-// =============================================================================
 
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

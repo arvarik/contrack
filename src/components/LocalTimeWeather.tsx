@@ -1,25 +1,14 @@
 /**
- * LocalTimeWeather: the time where a contact is, and the weather there.
+ * The time where a contact is, and the weather there, as plain text on the
+ * meta line ("Sydney · 2:45 AM AEST · 13°C"). A fragment, so each part is an
+ * item in the caller's flex row.
  *
- * Both are facts on the contact's meta line ("Sydney · 2:45 AM AEST ·
- * 13°C"), so they render as plain text. They used to wear grey pills, the
- * same pills as the social links, and a fact looked like something to press.
+ * The time carries its zone: the abbreviation when there is one (EDT, AEST),
+ * the offset when not (GMT+4). A screen reader and a hover get the long name
+ * (`zoneName`).
  *
- * The time carries its zone, short: "2:13 PM EDT". A time alone does not say
- * whether it is ahead of the reader or behind. The zone is the abbreviation
- * people write when there is one (EDT, BST, CEST, AEST, IST, JST), and the
- * offset when there is none (GMT+4). A screen reader hears the long name
- * instead, "2:13 PM, local time, Eastern Daylight Time", because letters
- * read one by one say nothing, and a pointer that rests on the abbreviation
- * shows the long name too. `zoneName` below works the name out.
- *
- * The component renders a fragment, so each part is its own item in the
- * caller's flex row: the time, then a middle dot and the weather.
- *
- * The weather is a request to Open-Meteo with the contact's coordinates. It
- * is a third party, so the weather renders only when `showWeather` allows it,
- * and when it does not, the part that owns the request never mounts. The
- * coordinates it gets are rounded to about a kilometre (`weatherUrl`).
+ * The weather comes from Open-Meteo, a third party, so it renders only when
+ * `showWeather` allows, and gets coordinates rounded to about a kilometer.
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -42,10 +31,7 @@ import { MetaDot } from "./ui/MetaDot";
 interface LocalTimeWeatherProps {
   lat: number | null;
   lng: number | null;
-  /**
-   * True when the weather may show. When false, no request goes to
-   * Open-Meteo.
-   */
+  /** True when the weather may show. False sends no request to Open-Meteo. */
   showWeather: boolean;
 }
 
@@ -81,24 +67,14 @@ const getWeatherIcon = (code: number, isDay: boolean) => {
   return <Cloud className="w-4 h-4 text-on-surface-variant" />;
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
 // The zone's name
-// ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * The locales asked for a zone's short name, in this order. The first answer
- * that is an abbreviation wins.
- *
- * No one locale knows them all. "en-US" answers EST and PDT but "GMT+10"
- * for Sydney, where "en-AU" answers AEST. "en-GB" knows BST, CET and CEST,
- * "en-IN" knows IST for India and "en-IE" knows IST for Ireland, "en-ZA"
- * SAST and "en-SG" SGT, "en-CA" Newfoundland's NST, and "en-HK" HKT. Japan's
- * JST is known only to "ja-JP", which is why one locale here is not English:
- * it comes last, so it can only fill a gap. Checked in Node 26 (ICU 78.3,
- * tzdata 2026c) against every
- * IANA zone, in January and in July: the list names about half of them, the
- * populous half. The rest, such as Seoul, Shanghai, São Paulo and Moscow,
- * keep the offset.
+ * The locales asked for a zone's short name, in order. The first
+ * abbreviation wins. No one locale knows them all: "en-US" says "GMT+10" for
+ * Sydney, where "en-AU" says AEST. Only "ja-JP" knows JST, so it comes last.
+ * In Node 26 (ICU 78.3, tzdata 2026c) the list names the populous half of
+ * the IANA zones. The rest, such as Seoul and Moscow, keep the offset.
  */
 const ZONE_LOCALES = [
   "en-US",
@@ -139,16 +115,13 @@ interface ZoneFormatters {
 
 /**
  * The formatters, by zone. A formatter costs far more to make than to use,
- * and the clock asks every minute, so each zone's are made once. A page
- * meets a handful of zones, so the map stays small.
+ * so each zone's are made once.
  */
 const formattersByZone = new Map<string, ZoneFormatters>();
 
 /**
- * The names, by zone and by what "en-US" calls it at that moment. The
- * "en-US" name changes with daylight saving ("EST" to "EDT", "GMT+10" to
- * "GMT+11"), so it tells one half of the year from the other, and the walk
- * down `ZONE_LOCALES` runs once for each.
+ * The names, by zone and by its "en-US" name at that moment, which changes
+ * with daylight saving, so `ZONE_LOCALES` is walked once per half-year.
  */
 const namesByZone = new Map<string, ZoneName>();
 
@@ -156,8 +129,7 @@ function formattersFor(timeZone: string): ZoneFormatters {
   let formatters = formattersByZone.get(timeZone);
   if (!formatters) {
     formatters = {
-      // The reader's own clock: 15:21 where people say so, 3:21 PM where
-      // they do not. It was always 12-hour English.
+      // The reader's own clock: 15:21 or 3:21 PM.
       time: new Intl.DateTimeFormat(undefined, {
         timeZone,
         hour: "numeric",
@@ -207,13 +179,8 @@ function shortName(
 /**
  * A time zone's name at a moment: "EDT" and "Eastern Daylight Time" for New
  * York in July, and "GMT-3" and "Brasilia Standard Time" for São Paulo,
- * where no locale in `ZONE_LOCALES` has an abbreviation.
- *
- * It used to turn every "GMT+X" into "<City> Time", from the last part of
- * the zone's id, so a reader got "Sao Paulo Time" and no way to tell how far
- * behind São Paulo is. An offset says that.
- *
- * `timeZone` is an IANA id, as `timeZoneAt` returns it.
+ * where no locale in `ZONE_LOCALES` has an abbreviation. `timeZone` is an
+ * IANA id, as `timeZoneAt` returns it.
  */
 export function zoneName(timeZone: string, now: Date = new Date()): ZoneName {
   const formatters = formattersFor(timeZone);
@@ -255,10 +222,8 @@ export function describeLocalTime(
 }
 
 /**
- * The IANA time zone at a point, or null when there is none.
- *
- * Exported so a caller can tell before rendering whether the time will show,
- * and so place a separator only where there is something to separate.
+ * The IANA time zone at a point, or null. A caller uses it to place a
+ * separator only when the time will show.
  */
 export function timeZoneAt(lat: number | null, lng: number | null) {
   if (lat === null || lng === null) return null;
@@ -270,10 +235,8 @@ export function timeZoneAt(lat: number | null, lng: number | null) {
 }
 
 /**
- * A coordinate rounded to two decimals: about 1.1 km of latitude.
- *
- * The weather in a town is the same a street away, and a contact's pin can
- * sit on their front door. Open-Meteo is a third party, so it gets the town.
+ * A coordinate rounded to two decimals, about 1.1 km. A pin can sit on a
+ * front door, and the third party only needs the town.
  */
 function roundCoordinate(value: number): number {
   return Math.round(value * 100) / 100;
@@ -300,11 +263,9 @@ function useNow(): Date {
 }
 
 /**
- * The temperature and a glyph for the sky.
- *
- * Nothing renders while the answer is on its way or when the request fails.
- * A spinner or "No data" in a line of facts is noise, and the separator
- * before the weather comes with it, so the line never ends in a lone dot.
+ * The temperature and a glyph for the sky. Nothing, separator included,
+ * renders while loading or after a failure, so the line never ends in a
+ * lone dot.
  */
 const Weather = ({
   lat,
@@ -315,8 +276,7 @@ const Weather = ({
   lng: number;
   isDay: boolean;
 }) => {
-  // The unit is an account preference, so the provider re-renders this the
-  // moment it changes.
+  // The unit is an account preference.
   const { preferences } = usePreferences();
   const tempUnit = preferences.tempUnit;
 
@@ -346,11 +306,8 @@ const Weather = ({
     <>
       <MetaDot />
       <motion.span
-        // The temperature arrives at its full colour and grows into
-        // place. Text faded in from nothing is text below its
-        // contrast for as long as the fade lasts, which WCAG 1.4.3
-        // does not excuse and an accessibility scan catches whenever
-        // it starts mid-animation.
+        // Full color from the start, and grows into place: faded text is
+        // below its contrast while it fades (WCAG 1.4.3).
         initial={{ opacity: 1, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
         className="inline-flex items-center gap-1"
@@ -382,14 +339,10 @@ export const LocalTimeWeather: React.FC<LocalTimeWeatherProps> = ({
   return (
     <>
       {/*
-        "2:13 PM EDT" on screen. A screen reader skips the abbreviation and
-        hears "2:13 PM, local time, Eastern Daylight Time": it has no place
-        beside it to read the time against, and "E D T" read letter by
-        letter says nothing. A no-break space keeps the zone on the time's
-        line when the meta line wraps. Tabular digits hold the width from one
-        minute to the next ("3:09" was wider than "3:10"), so the items after
-        the time do not shift, and a full line does not wrap and unwrap as
-        the clock moves.
+        "2:13 PM EDT" on screen. A screen reader hears "2:13 PM, local time,
+        Eastern Daylight Time" instead of "E D T". A no-break space keeps the
+        zone with the time. Tabular digits keep the width as the minutes
+        change, so the line does not shift or rewrap.
       */}
       <span className="tabular-nums">
         {time}

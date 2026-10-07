@@ -1,8 +1,6 @@
 /**
  * ProfileHeader: who this contact is.
  *
- * Wide (the contact pane is 768 px or more):
- *
  * ```
  * (avatar 96) Thomas Walker (they/them)                  ◎ Quarterly ▾  ⋮
  *          ✎  UX Researcher at Umbrella Corp
@@ -10,40 +8,16 @@
  *             [tech-lead ×] [advisor ×] [+ tag]
  * ```
  *
- * Narrow (a phone, or a pane too slim for two columns):
- *
- * ```
- * ← Network
- * (avatar 56) Thomas Walker                                  ◎ ▾  ⋮
- *          ✎  UX Researcher · Umbrella Corp
- *             Sydney · 2:45 AM AEST · in ↗  +
- * [ Call ]  [ Message ]  [ Email ]  [ Log note ]
- * ```
- *
  * 1. The name is the page's h1 and takes focus when a contact opens.
- * 2. The ring around the avatar is the relationship score (ScoreRingAvatar).
- *    The contact's own colour is the page accent, not the ring. The pencil
- *    on the ring's lower right changes the picture (`AvatarEditButton`).
- * 3. The meta line is text. Facts (place, local time with its zone, weather)
- *    are plain, and links look like links, with ↗ because they open a new
- *    tab. "+ link" ends the line with no dot before it, because it is an
- *    action and not a fact (`AddLink`).
- * 4. The header has no primary button. Colour, enrichment, copy, share,
- *    archive and delete sit in the kebab, and the pencil on the avatar
- *    changes the avatar. Wide, a note starts in the composer under the
- *    tabs, which is the first thing in the Timeline column, so a button for
- *    it here said the same thing twice. Track is the one control beside the
- *    kebab: a menu that says the cadence while the contact is tracked
- *    (`TrackButton`).
- * 5. The narrow header keeps to about 200 px. The headline, the summary and
- *    the tags move to the Details tab (`ContactIntro`, `ContactTags`), and
- *    the weather stays off.
- * 6. Narrow, a row of quick actions ends the header (`QuickActions`): Call,
- *    Message and Email for the primary phone and email, and Log note. A
- *    person with a phone in hand opens a contact to reach them, so each of
- *    these is one tap from any tab.
- *
- * The briefing lives in the Dossier tab, not here.
+ * 2. The avatar ring is the relationship score. The contact's own color is
+ *    the page accent.
+ * 3. The meta line is text: facts are plain, links show ↗ (new tab), and
+ *    "+ link" has no dot before it, because it is an action.
+ * 4. No primary button. Wide, a note starts in the Timeline composer under
+ *    the tabs. Track is the one control beside the kebab.
+ * 5. Narrow (a phone or a slim pane) keeps to about 200 px: the headline,
+ *    the summary and the tags move to the Details tab, the weather stays
+ *    off, and a row of quick actions ends the header.
  */
 import React, { useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
@@ -109,10 +83,6 @@ type ContactMutate = (
   opts?: { onSuccess?: () => void; onError?: (err: Error) => void },
 ) => void;
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Props
-// ═══════════════════════════════════════════════════════════════════════════
-
 export interface ProfileHeaderProps {
   contact: Contact;
   onUpdate: (field: string, val: string) => void;
@@ -121,23 +91,18 @@ export interface ProfileHeaderProps {
   /** Opens the avatar picker. The pencil on the avatar calls it. */
   onOpenAvatarPicker: () => void;
   /**
-   * Receives the pencil, so the avatar picker can hand focus back to it when
-   * it closes. Safari does not focus a button it clicks, so "wherever focus
-   * was" could be the page.
+   * The pencil, so the avatar picker can return focus to it on close. Safari
+   * does not focus a button it clicks.
    */
   avatarEditRef?: React.Ref<HTMLButtonElement>;
   showNetworkButton?: boolean;
-  /** Which form to draw. Defaults to wide. */
+  /** Defaults to wide. */
   layout?: ContactLayout;
-  /**
-   * Where Back goes, by the name of the page: "Network", "Map". The button
-   * says it, so nobody has to guess. Without one, the button says "Back".
-   */
+  /** The page Back returns to ("Network", "Map"). Without one: "Back". */
   backLabel?: string;
 
-  // The parent's mutations: their `mutate`, which keeps one identity, and
-  // not the result object, which is new on each render and would draw this
-  // memoized header again each time.
+  // The parent's `mutate` functions, not the result objects: those are new
+  // on each render and would re-render this memoized header.
   archiveContact: ContactMutate;
   unarchiveContact: ContactMutate;
   /** True while an archive or a restore is out. */
@@ -145,24 +110,17 @@ export interface ProfileHeaderProps {
   updateContact: (args: { id: string; data: ContactUpdateData }) => void;
   promoteGhost: ContactMutate;
   promotePending: boolean;
-  /**
-   * The Research card asked for a link: a new number opens "+ link", and
-   * `onLinkRequestDone` spends the request.
-   */
+  /** A new number (from the Research card) opens "+ link". */
   linkRequest?: number;
   onLinkRequestDone?: () => void;
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Meta line helpers
-// ═══════════════════════════════════════════════════════════════════════════
 
 /** The first comma part of a place: "Sydney" from "Sydney, NSW, Australia". */
 const shortPlace = (text: string | null | undefined): string | null =>
   text?.split(",")[0]?.trim() || null;
 
 /** "Linkedin" from "linkedin": the label used when a link has no handle. */
-const capitalise = (text: string) =>
+const capitalize = (text: string) =>
   text.charAt(0).toUpperCase() + text.slice(1);
 
 /** The text a social link shows: its handle, else its platform, else its host. */
@@ -176,16 +134,13 @@ function socialLinkName(sl: ContactSocialLink): string {
       displayName = new URL(sl.url).hostname.replace("www.", "");
     } catch {}
   }
-  // Capitalize platform name for known ones
   if (!sl.handle && isKnown) {
-    displayName = capitalise(sl.platform);
+    displayName = capitalize(sl.platform);
   }
 
-  // Clean up LinkedIn auto-generated suffixes for display
   if (platformKey === "linkedin" && sl.handle) {
     displayName = cleanLinkedInSlug(sl.handle);
   } else if (platformKey === "linkedin" && sl.url) {
-    // Extract slug from LinkedIn URL and clean it
     try {
       const url = new URL(sl.url);
       const pathParts = url.pathname.replace(/\/+$/, "").split("/");
@@ -210,44 +165,18 @@ function websiteName(url: string): string {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// AvatarEditButton: the pencil on the avatar
-// ═══════════════════════════════════════════════════════════════════════════
-
 /**
- * The pencil on the avatar, "Change avatar", which opens the avatar picker.
+ * "Change avatar": a pencil badge on the ring's lower right. It is a sibling
+ * of the score button, never inside it, because a scored ring is already the
+ * button that explains the score. It shows at rest, since a phone has no
+ * hover.
  *
- * It was an item in the kebab, one of six, far from the picture it changes.
- * The products people know put the control on the picture: GitHub an Edit
- * button with a pencil over its corner, Google a pen on the picture in the
- * account menu, Discord's app a pencil on the avatar. Slack and Discord's
- * desktop put a labelled button beside it, which this header has no room
- * for, and Notion and LinkedIn make the picture itself the button, which
- * this one cannot be: a scored ring is already the button that explains the
- * score. A layer that shows on hover over the picture would never show on a
- * phone, and it would promise that a click on the picture edits it.
- *
- * So it is a small round badge of its own, a sibling of the score button and
- * never inside it, on the ring's lower right, where the corner of the box
- * puts its centre on the circle:
- *
- * 1. 28 px on the 96 px avatar and 24 px on the narrow header's 56 px one,
- *    each with the 44 px tap box of `hit-area`. The box sits 10 px out from
- *    the badge's centre, towards the empty corner: centred, on the 56 px
- *    avatar it reached past the avatar's middle, and a tap on the face,
- *    which asks for the score, opened the picker. The pencil still wins the
- *    taps where the two boxes meet, as the later control.
- * 2. At rest it is lightly clear: the card face at 85 percent with a blur,
- *    a hairline edge and a 2 px ring in the page's colour that cuts it out
- *    of the score ring, and the pencil in the variant ink. It shows at rest
- *    on every screen, so a phone, which has no hover, always has it.
- * 3. On hover and on focus the face turns solid and the pencil takes the
- *    full ink. The face is what changes, not a layer over it: over a photo,
- *    the state layer's 6 percent ink on a clear face reads as a smudge. On
- *    press it sinks to 95 percent, which a glyph with no text may do.
- * 4. Its name and its tooltip are "Change avatar". Focus draws the app's one
- *    ring, which nothing here clips, and comes back to the pencil when the
- *    picker closes (`avatarEditRef`, passed to the picker's `Modal`).
+ * 1. The 44 px `hit-area` box sits 10 px out toward the empty corner.
+ *    Centered, it reaches past the middle of the 56 px avatar and takes taps
+ *    meant for the score.
+ * 2. Hover and focus make the face solid instead of a state layer: 6 percent
+ *    ink on a clear face over a photo reads as a smudge.
+ * 3. Focus returns here when the picker closes (`avatarEditRef`).
  */
 const AvatarEditButton = ({
   narrow,
@@ -266,7 +195,7 @@ const AvatarEditButton = ({
     title="Change avatar"
     className={cn(
       "hit-area absolute right-0 bottom-0 z-10 flex items-center justify-center rounded-full",
-      // The tap box, moved out towards the corner (see 1 above).
+      // The tap box, moved out toward the corner (see 1 above).
       "after:translate-x-2.5 after:translate-y-2.5",
       narrow ? "size-6" : "size-7",
       "bg-surface-container-lowest/85 backdrop-blur-sm border border-outline-variant/70 ring-2 ring-surface shadow-sm",
@@ -280,10 +209,7 @@ const AvatarEditButton = ({
   </button>
 );
 
-// ═══════════════════════════════════════════════════════════════════════════
-// SocialLink: a text link on the meta line, with its own small actions menu
-// ═══════════════════════════════════════════════════════════════════════════
-
+/** A text link on the meta line, with its own small actions menu. */
 const SocialLink = ({
   url,
   platform,
@@ -304,9 +230,8 @@ const SocialLink = ({
   /** When set, the link gets a menu with Copy link and Remove link. */
   onRemove?: () => void;
   /**
-   * The narrow header's form: the platform icon and ↗, with the handle as the
-   * link's name and its tooltip. Two handles in words take a phone's meta
-   * line onto three lines.
+   * Narrow: the icon and ↗ only, with the handle as name and tooltip. Two
+   * handles in words wrap a phone's meta line to three lines.
    */
   iconOnly?: boolean;
 }) => (
@@ -318,8 +243,7 @@ const SocialLink = ({
       title={iconOnly ? displayName : undefined}
       className="hit-area inline-flex items-center gap-1.5 min-w-0 rounded font-medium text-on-surface underline-offset-2 hover:underline"
     >
-      {/* The icon is hidden: a favicon's alt text would add a host name to
-          the link's name. */}
+      {/* Hidden: a favicon's alt text would add a host to the link's name. */}
       <span aria-hidden="true" className="inline-flex shrink-0">
         <PlatformIcon
           platform={platform}
@@ -341,8 +265,8 @@ const SocialLink = ({
       <ActionMenu
         label={`Actions for ${displayName}`}
         iconClassName="w-3.5 h-3.5"
-        // At rest at every width. Hidden until hover, it still took its width,
-        // so the gap after each link was wider than the gap after each fact.
+        // Always shown: hidden until hover, it still takes its width, and the
+        // gap after a link looks wider than the gap after a fact.
         triggerClassName="p-1 rounded-lg"
         items={[
           {
@@ -369,31 +293,15 @@ const SocialLink = ({
   </span>
 );
 
-// ═══════════════════════════════════════════════════════════════════════════
-// QuickActions: Call, Message, Email and Log note, under a phone's header
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * One tile: a link out of the app, or a button that opens the note sheet.
- * At most 144 px wide, so a lone Log note on a tablet is a tile, not a bar.
- */
+/** At most 144 px wide, so a lone Log note on a tablet is a tile, not a bar. */
 const QUICK_ACTION =
   "state-layer flex-1 basis-0 min-w-0 max-w-36 flex flex-col items-center justify-center gap-1 min-h-[52px] px-1 py-2 rounded-xl text-xs font-semibold";
 
 /**
- * The narrow header's last row: what a person with a phone in hand opens a
- * contact for.
- *
- * 1. Call and Message use the phone, and with two or more numbers they ask
- *    which one first. Email uses the primary email. A tile shows only when
- *    the contact has the value, so no tile leads nowhere.
- * 2. Log note opens the quick note sheet for this contact (`openQuickNote`).
- *    The composer is on the Timeline tab, and this works from every tab.
- *    A ghost has no row: its one step is Promote to contact.
- * 3. The tiles share the row equally, on the page's primary wash, so they
- *    take the contact's own colour. Each is at least 52 px tall.
- * 4. Only on a touch screen. A computer with a narrow window has no use for
- *    tel: and sms: links, and has the composer on the page.
+ * The narrow header's last row, only on a touch screen: a narrow desktop
+ * window has no use for tel: and sms:. A tile shows only when the contact has
+ * its value. Call and Message ask which number when there are two or more.
+ * Log note opens the quick note sheet from any tab.
  */
 const QuickActions = ({ contact }: { contact: Contact }) => {
   const phones = (contact.phones ?? []).filter((p) => p.phone);
@@ -457,10 +365,6 @@ const QuickActions = ({ contact }: { contact: Contact }) => {
   );
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// ContactIntro: the headline and the AI summary
-// ═══════════════════════════════════════════════════════════════════════════
-
 /**
  * What a headline says that the role and company line above it does not.
  * "Partner at Northwind | Investor" under "Partner at Northwind" is
@@ -483,10 +387,8 @@ export function newInHeadline({
 }
 
 /**
- * The headline and the summary, when they add something.
- *
- * Under the role in the wide header, and at the top of the Details tab in the
- * narrow layout. Renders nothing when there is nothing new to say.
+ * The headline and the summary, when they add something: under the role when
+ * wide, at the top of the Details tab when narrow.
  */
 export const ContactIntro = ({
   contact,
@@ -513,7 +415,7 @@ export const ContactIntro = ({
   return (
     <div className={cn("flex flex-col gap-3", className)}>
       {headline}
-      {/* A model wrote the summary, so it wears the AI colour. */}
+      {/* A model wrote the summary, so it wears the AI color. */}
       {contact.aiSummary && (
         <div className="flex items-start gap-2 bg-ai/10 text-on-ai-wash rounded-xl p-3 max-w-fit">
           <Sparkles aria-hidden="true" className="w-4 h-4 mt-0.5 shrink-0" />
@@ -526,14 +428,9 @@ export const ContactIntro = ({
   );
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// BackBar, and the header while the contact loads
-// ═══════════════════════════════════════════════════════════════════════════
-
 /**
- * Back, below `lg`, where the contact has the screen and the list does not
- * show. It names the page it goes to. The bar is 56 px tall, and the narrow
- * layout's tabs stick right under it (ContactProfile).
+ * Back, below `lg`, where the list does not show. The bar is 56 px tall, and
+ * the narrow tabs stick right under it (ContactProfile).
  */
 export const BackBar = ({
   onClose,
@@ -562,11 +459,9 @@ const headerBox = (narrow: boolean) =>
   );
 
 /**
- * The header while the full contact loads. The avatar, the name, the role
- * and the company come from the contact's row in the list, when the list
- * has it, and a bar holds the place of the meta line. Nothing here edits:
- * the row has empty links and addresses, and an edit writes a list back
- * whole, so an edit from the row would wipe the contact's own.
+ * The header while the full contact loads, filled from the list row when there
+ * is one. Nothing edits: the row has empty links and addresses, and an edit
+ * writes a list back whole, so it would wipe the contact's own.
  */
 export const ProfileHeaderSkeleton = ({
   contact,
@@ -627,10 +522,6 @@ export const ProfileHeaderSkeleton = ({
   );
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Component
-// ═══════════════════════════════════════════════════════════════════════════
-
 const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
   contact,
   onUpdate,
@@ -655,19 +546,10 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
   const { preferences } = usePreferences();
 
   /**
-   * Opening a contact puts focus on its name.
-   *
-   * Clicking a row used to leave focus on the row while the contact rendered
-   * beside it, and on a phone, where the list leaves the screen, focus fell to
-   * the document. Either way the next Tab started somewhere unrelated to what
-   * just opened. The name is the page's h1, so a screen reader also announces
-   * which contact this is.
-   *
-   * Three cases keep focus where it is: a page that has just loaded (the
-   * first Tab there belongs to the skip link), someone typing (a quick note, a
-   * search field) and a contact shown inside a dialog, which manages its own
-   * focus. The header mounts once per contact, because the profile is keyed
-   * by id.
+   * Opening a contact moves focus to its name, the h1, so the next Tab starts
+   * here and a screen reader says who this is. Focus stays put on a fresh page
+   * load (the skip link owns the first Tab), while someone types, and inside a
+   * dialog. The profile is keyed by id, so this runs once per contact.
    */
   const headingRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -690,7 +572,6 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
     [contact.lat, contact.lng],
   );
 
-  // ── Social links ──────────────────────────────────────────────────────
   /** The links as the update takes them: what each is, not its row id. */
   const linkPayload = (links: ContactSocialLink[]) =>
     links.map((s) => ({
@@ -699,10 +580,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
       handle: s.handle,
     }));
 
-  /**
-   * "+ link": the links the contact has, and the new one with its URL alone.
-   * The server works out its platform and handle from the host.
-   */
+  /** The server derives the new link's platform and handle from its URL. */
   const addSocialLink = (url: string) => {
     updateContact({
       id: contact.id,
@@ -727,10 +605,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
     );
   };
 
-  // ── Meta line ─────────────────────────────────────────────────────────
-  // Each item is one fact or one link. The dots go between items, so the
-  // line never starts or ends with one. "+ link" follows the last item with
-  // no dot: it is an action, not a fact.
+  // Meta line: one fact or one link per item, with dots between items.
   const metaItems: { key: string; node: React.ReactNode }[] = [];
   const place =
     shortPlace(contact.addresses?.[0]?.address) ?? shortPlace(contact.location);
@@ -744,8 +619,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
         <LocalTimeWeather
           lat={contact.lat}
           lng={contact.lng}
-          // The settings revamp's `showWeather` preference replaces the wide
-          // case. The narrow header has room for one line, and no weather.
+          // The narrow header has room for one line, and no weather.
           showWeather={!narrow && preferences.showWeather}
         />
       ),
@@ -755,7 +629,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
     const platformKey = sl.platform?.toLowerCase() || "other";
     const isKnown = hasKnownIcon(platformKey);
     const displayName = socialLinkName(sl);
-    const platformName = isKnown ? capitalise(platformKey) : undefined;
+    const platformName = isKnown ? capitalize(platformKey) : undefined;
     metaItems.push({
       key: `link-${sl.id}`,
       node: (
@@ -825,18 +699,30 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
   const view = scoreView(contact);
   const headerScore = view.kind === "scored" ? view.score : null;
 
+  // A ghost's one step: beside the menus on a wide header, under the name on
+  // a phone.
+  const addToNetwork = (className: string) => (
+    <button
+      type="button"
+      onClick={() => {
+        promoteGhost(contact.id, {
+          onSuccess: () => toast.success(`${contact.name} added to Network`),
+        });
+      }}
+      disabled={promotePending}
+      className={className}
+    >
+      <Sparkles aria-hidden="true" className="w-4 h-4" />
+      {promotePending ? "Adding…" : "Add to Network"}
+    </button>
+  );
+
   return (
     <>
       {onClose && <BackBar onClose={onClose} backLabel={backLabel} />}
 
-      {/*
-        The next follow-up, when it is late, today or within the week, in
-        the words of the fact: "Follow-up 3 days overdue", "Follow-up due
-        Friday". It read "Pending follow-up alert", which said neither what
-        nor when. A week out is the last day Pulse's "This week" holds, so
-        the two show the same follow-ups. Details has the date too, but under
-        the fold, or behind a tab on a phone. A later follow-up is only there.
-      */}
+      {/* A follow-up that is late, today or within the week, the same window
+          as Pulse's "This week". A later one shows only in Details. */}
       {followUp && followUp.days <= BANNER_DAYS && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -858,17 +744,9 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
             narrow ? "gap-4" : "gap-6",
           )}
         >
-          {/* Avatar in the score ring, with the pencil that changes it.
-
-              A scored ring is the button that explains the score. The
-              breakdown used to be reachable only from the map's hover card,
-              which is the one place a person is not reading about this
-              contact. The ring is then decorative, because the button around
-              it carries the name.
-
-              `flex`, so the box is the avatar's own size: as a block around
-              an inline button it ran 6 px under the ring, and everything
-              placed on its edge sat 6 px low. */}
+          {/* A scored ring is the button that explains the score, so the
+              ring inside is decorative. `flex` sizes the box to the avatar:
+              a block box runs 6 px under the ring, and badges sit low. */}
           <div className="relative shrink-0 flex">
             {headerScore === null ? (
               <ScoreRingAvatar
@@ -891,14 +769,9 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
               onClick={onOpenAvatarPicker}
               buttonRef={avatarEditRef}
             />
-            {/* The warning ink on the card face, lifted off the page by its
-                shadow. White on a raw amber measured about 2 to 1. It sits
-                just under the avatar, centred: over the ring's bottom edge,
-                where it sat before the pencil came, it ran into the pencil
-                at both sizes. The narrow header drops the glyph and some
-                padding: at 95 px the chip was wider than the 56 px avatar
-                and its gap, and ran off the phone's edge and into the meta
-                line. The word says it alone. */}
+            {/* Warning ink on the card face: white on amber is about 2 to 1.
+                Centered under the avatar, clear of the pencil. Narrow drops
+                the glyph, or the chip runs off a phone's edge. */}
             {!!contact.isArchived && (
               <div
                 className={cn(
@@ -944,13 +817,10 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
               : null}
           </div>
 
-          {/* Identity */}
           <div className="flex-1 min-w-0 w-full">
-            {/* The name, then the actions. Wide, the actions keep the top
-                right corner however long the name. Narrow, they wrap under
-                a name that needs the line, so a name breaks between its
-                words: beside Track at 320 px, "Whitfield" broke at a
-                letter. */}
+            {/* Wide, the actions keep the top right corner. Narrow, they wrap
+                under a long name, so the name breaks between words, not
+                inside one. */}
             <div
               className={cn(
                 "flex justify-between",
@@ -959,12 +829,9 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                   : "items-start gap-4",
               )}
             >
-              {/*
-                The page's h1. `tabIndex={-1}` lets focus land here on
-                navigation and from the skip link without adding a Tab stop.
-                No ring: it is a place, not a control, and the name inside it
-                is the control and shows its own.
-              */}
+              {/* `tabIndex={-1}` takes focus on navigation and from the skip
+                  link without a Tab stop. No ring: the name inside is the
+                  control and shows its own. */}
               <h1
                 id={CONTACT_HEADING_ID}
                 ref={headingRef}
@@ -995,25 +862,9 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
               </h1>
 
               <div className="flex flex-wrap items-center gap-2 shrink-0">
-                {!!contact.isGhost && !narrow && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      promoteGhost(contact.id, {
-                        onSuccess: () =>
-                          toast.success(`${contact.name} added to Network`),
-                      });
-                    }}
-                    disabled={promotePending}
-                    className="btn-secondary"
-                  >
-                    <Sparkles aria-hidden="true" className="w-4 h-4" />
-                    {promotePending ? "Adding…" : "Add to Network"}
-                  </button>
-                )}
+                {!!contact.isGhost && !narrow && addToNetwork("btn-secondary")}
 
-                {/* Track: a menu that says the cadence while tracked. A
-                    ghost cannot be tracked: it shows Add to Network. */}
+                {/* A ghost cannot be tracked: it shows Add to Network. */}
                 {!contact.isGhost && (
                   <TrackButton contact={contact} compact={narrow} />
                 )}
@@ -1029,8 +880,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
               </div>
             </div>
 
-            {/* Role at company. Narrow, a dot joins them, as in the meta
-                line, and a wrapped line neither starts nor ends with it. */}
+            {/* Narrow, a dot joins role and company, as in the meta line. */}
             {narrow ? (
               <DotLine
                 className="font-medium text-on-surface-variant text-sm"
@@ -1055,17 +905,10 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
               />
             )}
 
-            {/* Meta line: facts as text, links as links, and "+ link" at
-                the end. The line always shows, so "+ link" is always there,
-                even for a contact with no facts yet. */}
-            {/*
-              A wrapped line neither starts nor ends with a dot (`DotLine`).
-              The last item and "+ link" wrap as one: on a phone the plus on
-              a line of its own read as a stray bullet. No dot before it: an
-              action, not a fact. The pair is one element whatever the last
-              item is, so "+ link" is the same element after a save, and
-              focus stays on it while the new link arrives in front of it.
-            */}
+            {/* Always drawn, so "+ link" is always there. The last item and
+                "+ link" are one element: a lone plus on a phone reads as a
+                stray bullet, and focus stays on "+ link" while a new link
+                arrives in front of it. */}
             <DotLine
               className={cn(
                 "text-sm text-on-surface-variant",
@@ -1100,25 +943,8 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
               />
             )}
 
-            {/* A ghost's one step, under the name where a phone has room. */}
-            {!!contact.isGhost && narrow && (
-              <button
-                type="button"
-                onClick={() => {
-                  promoteGhost(contact.id, {
-                    onSuccess: () =>
-                      toast.success(`${contact.name} added to Network`),
-                  });
-                }}
-                disabled={promotePending}
-                className="btn-secondary mt-3"
-              >
-                <Sparkles aria-hidden="true" className="w-4 h-4" />
-                {promotePending ? "Adding…" : "Add to Network"}
-              </button>
-            )}
+            {!!contact.isGhost && narrow && addToNetwork("btn-secondary mt-3")}
 
-            {/* Actions Row */}
             {showNetworkButton && (
               <div className="mt-4 flex items-center gap-3 flex-wrap">
                 <button

@@ -1,28 +1,16 @@
 /**
- * pages: the app's three lazy pages, and their warm-up.
+ * The app's three lazy pages (Map, Pulse and Ask), and their warm-up. A plain
+ * `React.lazy` page suspends on its first render, and React holds a new
+ * fallback for 300 ms, so even a 5 ms chunk flashes a skeleton.
  *
- * Map, Pulse and Ask Contrack are each their own chunk. A first visit to one
- * of them used to show its skeleton even when the chunk took 5 ms: a plain
- * `React.lazy` page suspends on its first render, and React then holds a
- * new fallback on screen for 300 ms (its fallback throttle). Pulse then
- * drew a second skeleton, its own, because its data was asked for only once
- * its page had mounted. That skeleton, then skeleton, then page was the
- * flicker on a first switch.
+ * 1. Each page is a `preloadable`: once its code is here it renders at once.
+ * 2. On a fast connection only, the app loads all three in idle moments, one
+ *    per moment. On a slow phone the 1 MB competes with the first page.
+ * 3. A link warms its page on point, focus or press (`usePageLinkWarm`): its
+ *    code, and for Pulse its first data, so Pulse draws no second skeleton.
  *
- * 1. Each page is a `preloadable` (`lib/preloadable`): once its code is here
- *    it renders at once, with no Suspense on the way.
- * 2. The app loads the code of all three in idle moments, one page per idle
- *    moment, the map first because it is the largest (`useWarmPages`). Only
- *    on a fast connection: on a slow phone the 1 MB competed with the first
- *    page for the line (`onFastConnection` in `lib/idle`).
- * 3. A link to a page warms it when a person points at, focuses or presses
- *    it (`usePageLinkWarm`): its code, and for Pulse its first data.
- *
- * The code of a page that is still on its way suspends inside the app's one
- * page boundary (`App.tsx`), and a navigation is a transition, so the page
- * on screen stays until the new one can draw.
- *
- * @module views/pages
+ * A page still on its way suspends in the one page boundary (`App.tsx`), and
+ * a navigation is a transition, so the old page stays until the new one draws.
  */
 import { useContext, useMemo, useEffect } from "react";
 import { QueryClientContext, type QueryClient } from "@tanstack/react-query";

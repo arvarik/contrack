@@ -1,70 +1,11 @@
-import { ListPlus, X, type LucideIcon } from "lucide-react";
+import { ListPlus, X } from "lucide-react";
 import { showUndoToast } from "./Field";
-import {
-  Star,
-  Heart,
-  Crown,
-  Flame,
-  Rocket,
-  Target,
-  Gem,
-  Award,
-  Briefcase,
-  Users,
-  Globe,
-  Zap,
-  Shield,
-  Coffee,
-  Music,
-  Camera,
-  BookOpen,
-  TrendingUp,
-  Anchor,
-  Flag,
-  Sparkles,
-  Sun,
-} from "lucide-react";
 import { useLists, useAddToList, useRemoveFromList } from "../../../api";
+import { ListIcon, listIcon } from "../../contact-list/CreateListModal";
 import {
   ActionMenu,
   type ActionMenuItem,
 } from "../../../components/ui/ActionMenu";
-
-const LIST_ICON_MAP: Record<string, LucideIcon> = {
-  star: Star,
-  heart: Heart,
-  crown: Crown,
-  flame: Flame,
-  rocket: Rocket,
-  target: Target,
-  gem: Gem,
-  award: Award,
-  briefcase: Briefcase,
-  users: Users,
-  globe: Globe,
-  zap: Zap,
-  shield: Shield,
-  coffee: Coffee,
-  music: Music,
-  camera: Camera,
-  "book-open": BookOpen,
-  "trending-up": TrendingUp,
-  anchor: Anchor,
-  flag: Flag,
-  sparkles: Sparkles,
-  sun: Sun,
-};
-
-const DetailListIcon = ({
-  icon,
-  className,
-}: {
-  icon: string;
-  className?: string;
-}) => {
-  const Icon = LIST_ICON_MAP[icon] || Star;
-  return <Icon className={className} />;
-};
 
 export const ContactListsSection = ({
   contactId,
@@ -80,12 +21,11 @@ export const ContactListsSection = ({
   const memberOfIds = new Set(contactLists.map((l) => l.id));
   const availableLists = allLists.filter((l) => !memberOfIds.has(l.id));
 
-  // One row per list the contact is not on yet. `ActionMenu` draws the
-  // panel, closes it, and returns focus to the button before the mutation.
+  // `ActionMenu` returns focus to its button before the mutation runs.
   const addItems: ActionMenuItem[] = availableLists.map((list) => ({
     id: list.id,
     label: list.name,
-    icon: LIST_ICON_MAP[list.icon] || Star,
+    icon: listIcon(list.icon),
     onSelect: () => addToList.mutate({ listId: list.id, contactId }),
   }));
 
@@ -96,7 +36,7 @@ export const ContactListsSection = ({
           key={list.id}
           className="state-layer flex items-center gap-1.5 text-xs font-bold bg-primary/10 text-on-primary-wash px-2.5 py-1 rounded-md group/listpill transition-colors"
         >
-          <DetailListIcon icon={list.icon} className="w-3 h-3" />
+          <ListIcon icon={list.icon} className="w-3 h-3" />
           {list.name}
           <button
             onClick={() =>
@@ -110,10 +50,9 @@ export const ContactListsSection = ({
                 },
               )
             }
-            // A touch screen has no hover, so there the X shows at rest with
-            // a 44 px tap box, a tablet too. With a mouse, from `sm`, it
-            // slides in on hover or focus, and its overflow clip (which
-            // would clip the tap box) comes back.
+            // Touch has no hover, so the X shows at rest with a 44 px tap box
+            // and no overflow clip, which would cut the box. With a fine
+            // pointer from `sm`, it slides in on hover or focus.
             className="hit-area w-3 ml-0.5 opacity-100 sm:pointer-fine:w-0 sm:pointer-fine:ml-0 sm:pointer-fine:overflow-hidden sm:pointer-fine:opacity-0 sm:pointer-fine:group-hover/listpill:w-3 sm:pointer-fine:group-hover/listpill:ml-0.5 sm:pointer-fine:group-hover/listpill:opacity-100 sm:pointer-fine:focus-visible:w-3 sm:pointer-fine:focus-visible:opacity-100 hover:text-error transition-all duration-(--dur-slow) flex items-center"
             title="Remove from list"
             aria-label={`Remove from ${list.name}`}
@@ -123,7 +62,6 @@ export const ContactListsSection = ({
         </span>
       ))}
 
-      {/* Add to list menu */}
       {availableLists.length > 0 && (
         <ActionMenu
           label="Add to a list"

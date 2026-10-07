@@ -18,14 +18,9 @@ import type { TrashedContact } from "../types";
 import { SETTINGS_PAGE } from "./settings/layout";
 import { formatRelative } from "../lib/datetime";
 
-// ---------------------------------------------------------------------------
-// TrashView — recently deleted contacts with restore + permanent delete
-//
-// The same shape as Archived contacts: one card, a strip that counts what is
-// in it and offers Empty trash, and a row for each contact with Restore and
-// Delete forever. Both deletes ask first, with the red button and the verb
-// repeated, because nothing brings the contacts back.
-// ---------------------------------------------------------------------------
+// Trash, the same shape as Archived contacts, with Empty trash in the strip
+// and Restore and Delete forever on each row. Both deletes ask first, with
+// the red button and the verb repeated, because nothing brings them back.
 
 function daysUntilPurge(deletedAt: string, retentionDays = 30): number {
   const purgeAt = new Date(deletedAt).getTime() + retentionDays * 86_400_000;
@@ -91,10 +86,6 @@ export const TrashView = () => {
 
   if (items.length === 0) {
     return (
-      /*
-        No number in the sentence. The server's window is TRASH_RETENTION_DAYS
-        (30 by default), and the client cannot read what an instance set.
-      */
       <div className={SETTINGS_PAGE}>
         <EmptyState
           illustration={<CorvidMark size={64} className="text-primary/60" />}

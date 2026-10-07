@@ -1,9 +1,6 @@
 /**
- * server/mcp/server.ts — McpServer factory per request.
- *
- * Each request to POST /api/mcp creates a fresh McpServer instance bound to the
- * caller's Scope and Request context. Tools call services directly; SQL is never
- * touched directly from an MCP tool.
+ * A fresh McpServer per POST /api/mcp request, bound to the caller's Scope and
+ * request. Tools call services, never SQL.
  *
  * @module server/mcp/server
  */

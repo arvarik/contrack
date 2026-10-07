@@ -1,10 +1,8 @@
 /**
- * server/services/mailService.ts — Outgoing mail service.
- *
- * Resolves SMTP configuration from the environment (SMTP_URL, MAIL_FROM)
- * or instance settings (key "mail.smtp"). Manages nodemailer transport,
- * enforces a 10s timeout, provides safe sending and test sending, and exposes
- * a JSON transport test seam.
+ * Outgoing mail. SMTP settings come from the environment (SMTP_URL, MAIL_FROM)
+ * or the instance setting "mail.smtp". It manages the nodemailer transport,
+ * enforces a 10 s timeout, sends safely, sends tests, and has a JSON transport
+ * for tests.
  */
 
 import nodemailer from "nodemailer";
@@ -64,14 +62,14 @@ export interface RecordedMessage {
 
 const SETTING_KEY = "mail.smtp";
 
-// ── Test seam state ─────────────────────────────────────────────────────────
+// Test seam state
 
 let isJsonTransportActive = false;
 const recordedMessages: RecordedMessage[] = [];
 
 /**
- * Activates the JSON transport test seam.
- * When active, emails are recorded into an in-memory list rather than sent over the network.
+ * Turn on the JSON transport for tests: mail is recorded in memory instead of
+ * sent.
  */
 export function __useJsonTransport(enabled = true): {
   getMessages: () => RecordedMessage[];
@@ -97,7 +95,7 @@ export function __clearSentMessages(): void {
   recordedMessages.length = 0;
 }
 
-// ── Transport cache ─────────────────────────────────────────────────────────
+// Transport cache
 
 let cachedTransport: Transporter | null = null;
 let cachedTransportKey: string | null = null;
@@ -107,7 +105,7 @@ export function __invalidateTransportCache(): void {
   cachedTransportKey = null;
 }
 
-// ── Configuration resolution ────────────────────────────────────────────────
+// Configuration resolution
 
 function parseSmtpUrl(urlStr: string): {
   host: string;
@@ -287,7 +285,7 @@ export function deleteMailSettings(): MailConfig {
   return resolveConfig();
 }
 
-// ── Transport initialization ────────────────────────────────────────────────
+// Transport initialization
 
 function getTransport(): Transporter {
   if (isJsonTransportActive) {
@@ -333,7 +331,7 @@ function getTransport(): Transporter {
   return transport;
 }
 
-// ── Mail Sending ────────────────────────────────────────────────────────────
+// Mail Sending
 
 /**
  * A mail error for the log. A mail server that refuses a recipient quotes
@@ -397,8 +395,7 @@ export async function sendOrThrow(
 }
 
 /**
- * Sends an email safely. Never throws to a route; logs warning on failure.
- * Returns true if sending succeeded, false otherwise.
+ * Send a mail. Never throws to a route: a failure is logged and returns false.
  */
 export async function send(options: SendMailOptions): Promise<boolean> {
   try {

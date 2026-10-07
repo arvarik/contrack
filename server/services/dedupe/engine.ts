@@ -38,33 +38,26 @@ import type { DedupeScanMode, RawPair, MatchType } from "./types.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 
 /**
- * The threshold with nothing chosen, re-exported from the policy.
- *
- * The number itself lives in policy.ts beside the preset table it belongs
- * to. It is still exported from here because the dedupe eval and the identity
- * tests pin it by this name.
+ * The threshold with nothing chosen, from policy.ts. Re-exported because the
+ * dedupe eval and the identity tests pin it by this name.
  */
 export { DEFAULT_AUTO_MERGE_THRESHOLD };
 
 /**
- * Persist the pairs one contact produced.
+ * Save the pairs one contact produced. A pair at or above the auto-merge
+ * threshold merges now and is recorded `auto_merged`; the rest become pending
+ * suggestions, and so does a pair whose merge throws.
  *
- * Anything at or above the auto-merge threshold is merged now and recorded as
- * `auto_merged`; everything else becomes a pending suggestion for somebody to
- * look at. A merge that throws becomes a pending suggestion too, because the
- * pair is still a pair even when the merge could not be completed.
+ * Every pair is stored against the contacts live now: merges run first, and
+ * each id is followed to the contact it lives on, so "X shares a phone with C"
+ * becomes "B shares a phone with C" once X merged into B. Stored as found, the
+ * pair would wait in the review list for a hidden contact. A pair whose two
+ * sides are now one contact is done, and a pair the account kept apart stays
+ * apart.
  *
- * Every pair is stored against the contacts that are live now. Merges run
- * first, and each id is followed to the contact it lives on, so "X shares a
- * phone with C" becomes "B shares a phone with C" once X merged into B. The
- * pair used to be stored as found, against the hidden X, where it waited in
- * the review list for a contact nobody could see, and its merge did nothing.
- * A pair whose two sides are one contact now is done, and a pair the account
- * kept apart stays apart.
- *
- * Returns what went where, so a batch can add up its own summary, and adds
- * every merged-away contact to `corpus.retired` so later contacts in the same
- * batch stop being offered a contact that is no longer there.
+ * Returns what went where, so a batch can add up its summary, and adds every
+ * merged-away contact to `corpus.retired`, so later contacts in the batch are
+ * not offered it.
  */
 function persistIncrementalPairs(
   corpus: IncrementalCorpus,
@@ -136,11 +129,9 @@ function persistIncrementalPairs(
 }
 
 /**
- * The body of one incremental check, inside the contact owner's context.
- *
- * Every read below names that owner: a duplicate of a contact can only be
- * another contact in the same account, so a candidate from anywhere else is
- * not a near miss, it is a leak.
+ * One incremental check, inside the contact owner's context. Every read names
+ * that owner: a duplicate can only be another contact in the same account, and
+ * a candidate from anywhere else would be a leak.
  */
 async function runIncrementalCheck(
   scope: Scope,
@@ -187,12 +178,9 @@ export const dedupeService = {
   softMergeContacts,
 
   /**
-   * Find this account's duplicates and persist them.
-   *
-   * The scope is an argument, not a context read. A queued scan starts long
-   * after its request returned, from inside another account's completion
-   * callback, so an ambient owner would be the wrong one exactly when two
-   * accounts scan at once.
+   * Find this account's duplicates and save them. The scope is an argument, not
+   * a context read: a queued scan starts long after its request, inside another
+   * account's completion callback, where an ambient owner would be wrong.
    */
   async runScan(
     scope: Scope,
@@ -260,9 +248,9 @@ export const dedupeService = {
             );
             // A backfill already running elsewhere makes this one a no-op that
             // returns 0. In full mode the vectors were just cleared, so
-            // declaring the index ready would send the scan into a KNN over an
-            // empty partition and report "no duplicates" for an account that
-            // has them. Ask the store instead of trusting the count.
+            // trusting the count would send the scan into a KNN over an empty
+            // partition and report "no duplicates" for an account that has
+            // them. Ask the store.
             embeddingsReady = embedded > 0 || getEmbeddingCount(scope) > 0;
             if (!embeddingsReady) {
               log.warn(
@@ -442,9 +430,9 @@ export const dedupeService = {
         pendingSuggestions: pendingPairs.length,
       });
 
-      // The results hold only what is left to review. A group merged above
-      // is done, and offering it again put one of its contacts, now hidden,
-      // forward as a primary.
+      // The results hold only what is left to review: a group merged above is
+      // done, and offering it again would put a hidden contact forward as a
+      // primary.
       const mergedIds = new Set(merged.flatMap((p) => [p.idA, p.idB]));
       dedupeQueue.complete(
         scanId,
@@ -465,12 +453,10 @@ export const dedupeService = {
   },
 
   /**
-   * Check one just-written contact against its own account.
-   *
-   * A debounced timer calls this, so the request that created the contact has
-   * returned and there is no context left to inherit. The owner comes off the
-   * contact row, and the whole check runs inside `runWithContext`, so the AI
-   * rows it writes name the right account as well as read from it.
+   * Check one just-written contact against its own account. A debounced timer
+   * calls this after the request returned, so the owner comes from the contact
+   * row, and the check runs inside `runWithContext`, so its AI rows name the
+   * right account.
    */
   async incrementalDedupeCheck(
     contactId: string,
@@ -498,29 +484,21 @@ export const dedupeService = {
   },
 
   /**
-   * Check a whole import against the account it landed in, in one pass.
+   * Check a whole import against the account it landed in, in one pass. The
+   * corpus is built once and every new contact is matched against that
+   * snapshot; one check per contact would normalize the whole corpus each time,
+   * about `n × m` work.
    *
-   * This replaces a loop that called `incrementalDedupeCheck` once per
-   * imported contact. Each of those calls normalized the entire corpus and
-   * built a whole pass context of its own, so importing `n` contacts into a
-   * corpus of `m` did about `n × m` work, almost all of it the same work
-   * repeated. The corpus is now built once and every new contact is matched
-   * against that one snapshot.
+   * The new contacts are the left side of every pair. Two contacts that were
+   * both already there are a full scan's job (`POST /api/dedupe/scan`).
    *
-   * The new contacts are the left side of every pair. Nothing compares two
-   * contacts that were both already there, which is what a full scan is for
-   * and what `POST /api/dedupe/scan` still does.
+   * It is not `runScan` with another mode: `runScan` takes the instance-wide
+   * run lock and clears every pending suggestion of the account first. An
+   * import must not empty somebody's review queue, nor block or be blocked by a
+   * scan somebody asked for. They share the matching, not the lifecycle.
    *
-   * It is NOT `runScan` with another mode: `runScan` takes the instance-wide
-   * run lock and clears every pending suggestion the account has before it
-   * writes its own. An import may do neither: it must not empty somebody's
-   * neither: it must not empty somebody's review queue, and it must not block
-   * or be blocked by a scan somebody asked for. What `runScan` and this share
-   * is the matching, not the lifecycle.
-   *
-   * Yields to the event loop between contacts. The per-contact work is
-   * synchronous and a large import would otherwise hold the thread for the
-   * whole batch, which on a shared instance is everybody else's requests.
+   * Yields to the event loop between contacts, or a large import would hold the
+   * thread, and every other request, for the whole batch.
    */
   async runImportScan(
     scope: Scope,
@@ -536,9 +514,7 @@ export const dedupeService = {
     /** Imported contacts that matched something. The rest are new people. */
     matchedIds: Set<string>;
   }> {
-    // The account's preset, the same way a scan resolves it. This used to
-    // be a fixed 0.93, so the sensitivity chosen in Settings reached the
-    // scan and never the import.
+    // The account's preset, resolved the way a scan resolves it.
     const autoMergeThreshold =
       options.autoMergeThreshold ?? autoMergeThresholdFor(scope);
     const matchedIds = new Set<string>();

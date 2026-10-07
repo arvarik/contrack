@@ -1,20 +1,15 @@
-// =============================================================================
-// Integration: what "Use AI for this account" keeps on the server
-// =============================================================================
+// Integration: what "Use AI for this account" keeps on the server.
 // The Privacy page says: "When it is off, Contrack sends nothing to an AI
-// provider for you". Four paths still reached a provider with the account
-// switch off, while AI was on for the instance: mention detection on a saved
-// note, the summary of an attached .eml file, a search that an MCP client
-// runs, and contact embeddings with a hosted model. Each test here runs one
-// path for an account with AI on and for one with AI off. The call for the
-// first account proves that the path runs, so the silence for the second is
-// the switch's.
+// provider for you". Each test runs one path (mention detection on a saved
+// note, the summary of an attached .eml file, an MCP client's search, contact
+// embeddings with a hosted model) for an account with AI on and one with AI
+// off, while AI is on for the instance. The first call proves the path runs,
+// so the silence for the second is the switch's.
 //
 // The last block covers who "Enrich new contacts automatically" researches:
 // the contacts a person adds, not the ones an MCP client or a sync adds.
 //
 // Every model call is mocked. No provider is reached.
-// =============================================================================
 
 import {
   describe,

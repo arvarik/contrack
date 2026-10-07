@@ -1,16 +1,10 @@
-// =============================================================================
-// Integration Tests — ownership stamping
-// =============================================================================
-// Phase 0 does not scope any read. What it does do is stop the hole getting
-// deeper: from this phase on, a row written by a signed-in caller carries that
-// caller's id from the moment it is created, so Phase 1 has less to backfill
-// and Phase 2 has something true to filter on.
+// Integration: ownership stamping.
+// A row written by a signed-in caller carries that caller's id from the
+// moment it is created.
 //
-// Auth is switched on inside this file rather than at boot, because the
-// acceptance criterion is that stamping starts working WITHOUT a restart.
-// isAuthRequired() reads process.env on every call, so flipping it here is
-// the real thing and not a fixture.
-// =============================================================================
+// Auth is switched on inside this file, not at boot, because stamping must
+// work without a restart. isAuthRequired() reads process.env on every call,
+// so flipping it here is the real thing.
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import request from "supertest";
@@ -137,11 +131,10 @@ describe("ownership stamping with auth on", () => {
 });
 
 describe("ownership stamping with no context", () => {
-  // Phase 0 wrote NULL here, because with no account guaranteed to exist there
-  // was nobody to name. Phase 1 forbids NULL with a trigger and creates the
-  // local owner on every instance, so a background write now lands on the
-  // primary admin instead of aborting. Phase 2 wraps jobs in runWithContext,
-  // which is what stops a multi-user instance reaching this path at all.
+  // A trigger forbids NULL, and every instance has a local owner, so a
+  // background write with no context lands on the primary admin instead of
+  // aborting. Jobs run in runWithContext, so a multi-user instance does not
+  // reach this path.
   it("falls back to the primary admin rather than aborting on the required trigger", async () => {
     const { recordInvocation } =
       await import("../../server/services/aiStatsService.ts");
@@ -169,8 +162,8 @@ describe("ownership stamping with no context", () => {
   });
 
   it("refuses an insert into an owned table with no owner at all", () => {
-    // The invariant this phase buys. Without the trigger a forgotten stamp is
-    // a silent NULL that no test notices until Phase 2 filters on it.
+    // Without the trigger a forgotten stamp is a silent NULL that no read
+    // filter would ever match.
     expect(() =>
       sqlite
         .prepare(

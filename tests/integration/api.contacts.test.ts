@@ -1,10 +1,7 @@
-// =============================================================================
 // Integration: contact CRUD, validation, FTS search, error envelope
-// =============================================================================
 // Every request here runs the real Express pipeline against a real SQLite
 // database (fresh temp file per test file) — validation middleware, service
 // layer, repositories, FTS triggers, and the error envelope all execute.
-// =============================================================================
 
 import { describe, it, expect, vi } from "vitest";
 import request from "supertest";
@@ -170,7 +167,7 @@ describe("PATCH /api/contacts/:id", () => {
   });
 
   it("turns a follow-up date into the task it stands for, and keeps the two in step", async () => {
-    // The column used to be written alone: no task until the next restart.
+    // The column alone would leave no task until the next restart.
     const created = await request(app)
       .post("/api/contacts")
       .send({ name: "Follow Me", nextFollowUpAt: "2027-05-01" });
@@ -212,7 +209,7 @@ describe("social links saved without a platform", () => {
     socialLinks: { url: string; platform: string }[];
   }) => Object.fromEntries(body.socialLinks.map((l) => [l.url, l.platform]));
 
-  it("are labelled by their host when a contact is created", async () => {
+  it("are labeled by their host when a contact is created", async () => {
     const res = await request(app)
       .post("/api/contacts")
       .send({
@@ -231,7 +228,7 @@ describe("social links saved without a platform", () => {
     });
   });
 
-  it("are labelled by their host when a contact is updated, and keep a platform that was sent", async () => {
+  it("are labeled by their host when a contact is updated, and keep a platform that was sent", async () => {
     const created = await request(app)
       .post("/api/contacts")
       .send({ name: "Link Updater" });

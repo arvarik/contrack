@@ -1,18 +1,12 @@
-// =============================================================================
-// Link previews — the image is a local copy, never the linked site's URL
-// =============================================================================
-// A preview card used to carry the page's og:image URL, and the browser
-// loaded it from the linked site each time the note was drawn. The unfurl
-// now downloads that image once, re-encodes it, stores it in the caller's
-// uploads/u/<owner>/previews/, and answers with the local path. A failed
-// image gives a preview without one, and the remote URL never appears in the
-// response.
+// Unit: a link preview's image is a local copy, never the linked site's URL.
+// The unfurl downloads the og:image once, re-encodes it, stores it in the
+// caller's uploads/u/<owner>/previews/, and answers with the local path. A
+// failed image gives a preview without one, and the remote URL never appears
+// in the response.
 //
-// The page fetch goes through safeFetch too (it closes the DNS rebinding gap
-// the old fetch loop left), so one stub serves both the page and the image.
-// The route, with real sign-in and two accounts, is tested in
-// tests/integration/tenancy.isolation.test.ts.
-// =============================================================================
+// The page fetch goes through safeFetch too, which closes the DNS rebinding
+// gap, so one stub serves the page and the image. The route, with real
+// sign-in and two accounts, is tested in tenancy.isolation.test.ts.
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -94,8 +88,8 @@ beforeEach(() => {
 
 describe("linkPreviewService.unfurlUrl", () => {
   it("answers with a local preview image, and the file exists", async () => {
-    // A relative path with no leading slash: resolved against the FINAL
-    // page URL, which the old code could not do.
+    // A relative path with no leading slash, resolved against the final
+    // page URL.
     serve(page("media/og.png?w=1600"), pngReply);
 
     const result = await linkPreviewService.unfurlUrl(scope, PAGE_URL);

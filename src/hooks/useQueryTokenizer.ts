@@ -1,8 +1,6 @@
 /**
  * Facet pills from a search input: a token such as `tag:vc` is a pill once a
  * space follows it. The palette's hook also keeps a pill whose text is gone.
- *
- * @module hooks/useQueryTokenizer
  */
 import { useMemo, useCallback, useState } from "react";
 import {
@@ -11,8 +9,6 @@ import {
   formatFacet,
   parseFilterValue,
 } from "../../shared/facetQuery";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 import type { FacetField, FacetFilter } from "../../shared/searchFacets";
 export type { FacetField, FacetFilter } from "../../shared/searchFacets";
@@ -28,17 +24,11 @@ interface ParsedQuery {
   activePrefix: { field: FacetField; partial: string } | null;
 }
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
 /**
- * Regex to match completed facet tokens (followed by whitespace).
- * Captures: field name, colon, value, then whitespace.
- *
- * The value is a quoted run, `industry:"Venture Capital"`, or a run of
- * characters with no space that does not start with a quote. The map's
- * insight bars write the quoted form for a value with a space. A plain
- * `\S+` cut it at the space, so the pill read `"Venture` and the map showed
- * nobody. An open quote with no closing quote is still being typed, so it
+ * A completed facet token: the field, the colon, the value, then whitespace.
+ * The value is a quoted run, `industry:"Venture Capital"` (the map's insight
+ * bars write that form), or a run with no space that does not start with a
+ * quote. An open quote with no closing quote is still being typed, so it
  * never locks.
  */
 const COMPLETED_FACET_REGEX = new RegExp(
@@ -47,8 +37,8 @@ const COMPLETED_FACET_REGEX = new RegExp(
 );
 
 /**
- * Regex to detect an in-progress facet at the end of input.
- * e.g., "role:", "role:eng" or `industry:"Venture Cap` (no trailing space).
+ * A facet still being typed at the end of the input, such as "role:",
+ * "role:eng" or `industry:"Venture Cap`.
  */
 const ACTIVE_PREFIX_REGEX = new RegExp(
   `\\b(${FACET_FIELD_PATTERN}):("[^"]*"?\\S*|\\S*)$`,
@@ -70,8 +60,8 @@ export function parseQuery(
   const filters = [...locked];
   let remaining = rawInput;
   // The input less the facets that became pills. A facet the parser
-  // rejects, such as `score:high`, stays in the box for the person to fix:
-  // taking it out with the rest left nothing, not even a pill.
+  // rejects, such as `score:high`, stays in the box for the person to fix,
+  // since it makes no pill.
   let rest = rawInput;
   for (const [full, field, value] of rawInput.matchAll(COMPLETED_FACET_REGEX)) {
     const filter = parseFilterValue(field.toLowerCase() as FacetField, value);
@@ -116,12 +106,10 @@ export function withoutFacet(input: string, filter: FacetFilter): string {
   );
 }
 
-// ─── Hook ─────────────────────────────────────────────────────────────────────
-
 /**
  * The palette's pills: a pill stays until removed, even once its text is
  * gone. With `takeTyped`, a typed facet leaves the input when it becomes a
- * pill, as a picked value does. It used to stay, so `tag:vc ` showed twice.
+ * pill, as a picked value does, so `tag:vc ` does not show twice.
  */
 export function useQueryTokenizer(
   rawInput: string,

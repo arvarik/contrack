@@ -1,12 +1,7 @@
 /**
- * clients.ts — The MCP clients the settings page sets up, and what each one
- * needs: the steps, the text to copy, and a one-click install link where the
- * client has one.
- *
- * `token` is null when the instance asks nobody to sign in. Then a client
- * sends no header at all.
- *
- * @module views/settings/mcp/clients
+ * The MCP clients the settings page sets up: the steps, the text to copy, and
+ * a one-click install link where the client has one. `token` is null when the
+ * instance asks nobody to sign in, and then a client sends no header.
  */
 
 export type McpClientId =

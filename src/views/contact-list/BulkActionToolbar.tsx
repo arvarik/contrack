@@ -42,11 +42,8 @@ const BulkActionBtn = ({
 );
 
 /**
- * "3 selected" at the start of a bulk bar, read out as it changes. The
- * Network list's bar and the Tracked page's bar both lead with it.
- *
- * Atomic, so a screen reader says the whole "2 selected" when the number
- * changes. Without it NVDA read the changed text node alone: "2".
+ * "3 selected" at the start of a bulk bar, read out as it changes. Atomic,
+ * or NVDA reads only the changed number.
  */
 export const SelectedCount = ({ count }: { count: number }) => (
   <span
@@ -62,17 +59,10 @@ export const SelectedCount = ({ count }: { count: number }) => (
 interface BulkActionToolbarProps {
   /** The bar's outer box, for a list that keeps room under its last row. */
   ref?: React.Ref<HTMLDivElement>;
-  /**
-   * How many are selected, said first in the bar. The map leaves it out:
-   * its own selection bar above this one already says it.
-   */
+  /** Omitted on the map, whose own selection bar says it. */
   selectedCount?: number;
   isPending: boolean;
-  /**
-   * Track the selection, or stop tracking it. The bar reads Stop tracking
-   * when every selected contact is tracked and Track otherwise, and sends
-   * the answer.
-   */
+  /** Track the selection, or stop when every selected contact is tracked. */
   onTrack: (next: boolean) => void;
   selectionTracked: SelectionTracked;
   onArchive: () => void;
@@ -97,8 +87,7 @@ export const BulkActionToolbar = ({
   onDelete,
 }: BulkActionToolbarProps) => {
   const { mode } = usePreferences();
-  // "0 selected" acts on no one, so every action rests until a row is
-  // picked. Delete was live at zero, beside a Tracked bar that rests.
+  // Every action is disabled until a row is picked.
   const nothingSelected = selectedCount === 0;
   const [showBulkColorPicker, setShowBulkColorPicker] = React.useState(false);
   const bulkColorPickerRef = useRef<HTMLDivElement>(null);
@@ -126,32 +115,16 @@ export const BulkActionToolbar = ({
       transition={{ type: "spring", damping: 22, stiffness: 300 }}
       className="absolute bottom-24 md:bottom-0 left-0 right-0 z-40 px-3 pb-2 md:pb-4"
     >
-      {/*
-        Opaque, not glass.
-
-        This bar floats over a dense list of avatars and names, and
-        `.glass-panel` is 80% white: whatever is underneath bleeds through and
-        every label fights it for contrast. A translucent surface is a fine
-        choice for something decorative; it is the wrong one for the only
-        controls that can archive or delete forty contacts at once. Those need
-        to be unambiguously readable over whatever happens to be behind them.
-
-        The blur stays for depth, but at 98% the panel is effectively solid,
-        and a ring plus a stronger shadow separate it from the list rather than
-        relying on transparency to imply layering.
-
-        The buttons wrap onto a second row when the pane is narrow. They used
-        to scroll sideways behind a hidden scrollbar, and at the Network
-        pane's width CSV and Delete sat past the edge where nobody saw them.
-      */}
+      {/* Nearly opaque, not glass: the list under it would fight the labels
+          for contrast. The buttons wrap in a narrow pane, so none sit past
+          the edge. */}
       <div
         role="toolbar"
         aria-label="Bulk actions"
         className="bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-2.5 flex flex-wrap items-center justify-center gap-1 min-w-0"
       >
         {selectedCount !== undefined && <SelectedCount count={selectedCount} />}
-        {/* Action buttons. Track first: it is the one that decides who the
-            score and Pulse are about. */}
+        {/* Track first: it decides who the score and Pulse are about. */}
         <BulkActionBtn
           icon={<Radar className="w-4 h-4" />}
           label={selectionTracked === "all" ? "Stop tracking" : "Track"}
@@ -181,13 +154,12 @@ export const BulkActionToolbar = ({
           className="text-primary"
         />
 
-        {/* Bulk colour picker */}
         <div className="relative shrink-0" ref={bulkColorPickerRef}>
           <button
             type="button"
             onClick={() => setShowBulkColorPicker((v) => !v)}
             disabled={nothingSelected}
-            title="Change colour"
+            title="Change color"
             aria-expanded={showBulkColorPicker}
             className={cn(
               BAR_BUTTON,
@@ -196,7 +168,7 @@ export const BulkActionToolbar = ({
             )}
           >
             <Palette className="w-4 h-4" />
-            <span className={BAR_LABEL}>Colour</span>
+            <span className={BAR_LABEL}>Color</span>
           </button>
 
           <AnimatePresence>
@@ -209,7 +181,7 @@ export const BulkActionToolbar = ({
               >
                 {VIBES.map((vibe) => (
                   <button
-                    aria-label={`Set colour to ${vibe.label}`}
+                    aria-label={`Set color to ${vibe.label}`}
                     key={vibe.id}
                     onClick={() => {
                       onColorChange(vibe.id);
@@ -228,7 +200,7 @@ export const BulkActionToolbar = ({
           </AnimatePresence>
         </div>
 
-        {/* It copies the rows as CSV text, and downloads no file. */}
+        {/* It copies CSV text, and downloads no file. */}
         <BulkActionBtn
           icon={<Copy className="w-4 h-4" />}
           label="Copy CSV"
@@ -237,7 +209,6 @@ export const BulkActionToolbar = ({
           className="text-on-surface-variant"
         />
 
-        {/* Divider */}
         <div className="w-px h-5 bg-surface-container-high" />
 
         <BulkActionBtn

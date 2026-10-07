@@ -1,6 +1,4 @@
-// =============================================================================
-// Adapter streams: `generateStream` on the four adapters
-// =============================================================================
+// Unit: `generateStream` on the four adapters.
 // The Ask brief grows word by word from these streams. Each adapter must:
 //   - send the pieces in order, and return them joined, with the usage that
 //     the provider reports at the end of the stream.
@@ -12,7 +10,6 @@
 //     after that.
 // The table proves these for each adapter. The blocks after it cover what
 // one adapter does on its own.
-// =============================================================================
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type {
@@ -118,9 +115,7 @@ import { OpenAIAdapter } from "../../../../server/ai/adapters/openai.ts";
 import { AnthropicAdapter } from "../../../../server/ai/adapters/anthropic.ts";
 import { OpenAICompatibleAdapter } from "../../../../server/ai/adapters/openaiCompatible.ts";
 
-// ---------------------------------------------------------------------------
 // Streams on the wire
-// ---------------------------------------------------------------------------
 
 /** A provider's stream: the chunks before the text, one per piece, and after. */
 interface Wire {
@@ -185,9 +180,7 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 const overloaded = () =>
   Object.assign(new Error("503 The model is overloaded"), { status: 503 });
 
-// ---------------------------------------------------------------------------
 // The four adapters
-// ---------------------------------------------------------------------------
 
 /** What the table calls on each adapter. */
 interface Streamer {
@@ -326,9 +319,7 @@ beforeEach(() => {
   sdk.replies.answer = "";
 });
 
-// ---------------------------------------------------------------------------
 // The contract, on every adapter
-// ---------------------------------------------------------------------------
 
 describe.each([GEMINI, OPENAI, ANTHROPIC, COMPAT])(
   "$name generateStream",
@@ -422,12 +413,12 @@ describe.each([GEMINI, OPENAI, ANTHROPIC, COMPAT])(
       await expect(run).rejects.toMatchObject({ code: "CANCELLED" });
       await settle();
       expect(pieces).toEqual(["Ada "]);
-      // The SDK call is cancelled too, and nothing falls back to generate.
+      // The SDK call is canceled too, and nothing falls back to generate.
       expect(c.lastSignal()?.aborted).toBe(true);
       expect(c.plainCalls()).toBe(0);
     });
 
-    it("starts nothing for a caller that has already cancelled", async () => {
+    it("starts nothing for a caller that has already canceled", async () => {
       const controller = new AbortController();
       controller.abort();
       const { pieces, onDelta } = collect();
@@ -455,9 +446,7 @@ describe.each([GEMINI, OPENAI, ANTHROPIC, COMPAT])(
   },
 );
 
-// ---------------------------------------------------------------------------
 // What each adapter does on its own
-// ---------------------------------------------------------------------------
 
 describe("Gemini stream", () => {
   const request = {

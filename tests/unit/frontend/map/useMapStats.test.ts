@@ -33,7 +33,7 @@ const contact: MapContact = {
   lists: [],
 };
 
-/** One array, as the page passes one memoised list between renders. */
+/** One array, as the page passes one memoized list between renders. */
 const one = [contact];
 const two = [contact, { ...contact, id: "2" }];
 

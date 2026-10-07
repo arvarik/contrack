@@ -1,31 +1,19 @@
-// =============================================================================
-// Route manifest — every route this app registers, and what guards it
-// =============================================================================
-// The route manifest tracks every route this app registers, and what guards it.
-// Every route is classified, and tenancy.routeManifest.test.ts fails if a route is
-// added, removed, or renamed without updating this file. A new route cannot reach
-// production unclassified.
-//
-// `isolated: true` indicates that the route enforces multi-tenant scoping and its
-// isolation test verifies this behavior. Every `scoped` route must be isolated,
-// and tenancy.routeManifest.test.ts verifies this invariant.
-//
-// The `admin` rows enforce that each admin route mounts `requireAdmin` on the route
-// itself; the manifest test inspects every admin row's handler stack and fails if
-// the guard is missing. Adding an admin route without the guard is therefore a test failure.
-// =============================================================================
+// Every route this app registers, and what guards it.
+// tenancy.routeManifest.test.ts fails when a route is added, removed or renamed
+// without a row here, so no route reaches production unclassified. `isolated:
+// true` says the route enforces tenant scoping and its isolation test proves
+// it; every `scoped` route must be isolated. Each `admin` route must mount
+// `requireAdmin` itself, and the test inspects its handler stack.
 
 export type RouteClass =
   /** No credential needed: /healthz, /api/auth/status, /api/auth/login. */
   | "public"
   /**
    * Acts on the caller's own account: /api/auth/me, /api/auth/tokens,
-   * /api/auth/preferences.
-   *
-   * Most of these require a session, so a personal token cannot change the
-   * credential that would revoke it. Preferences do not: an instance with
-   * sign-in switched off has no session to require, and its local owner must
-   * still be able to choose a theme.
+   * /api/auth/preferences. Most require a session, so a personal token cannot
+   * change the credential that would revoke it. Preferences do not: with
+   * sign-in off there is no session, and the local owner must still choose a
+   * theme.
    */
   | "session-self"
   /** Reads or writes owned data for the caller's scope. */
@@ -132,7 +120,7 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     class: "scoped",
     isolated: true,
   },
-  // ── Instance administration ───────────────────────────────────────────
+  // Instance administration
   // Every row below carries `requireAdmin` on the route itself. The manifest
   // test reads each route's stack and fails when one does not.
   {

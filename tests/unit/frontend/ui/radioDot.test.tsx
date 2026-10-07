@@ -22,7 +22,7 @@ describe("RadioDot", () => {
     expect(dot.getAttribute("aria-hidden")).toBe("true");
   });
 
-  it("fills with the primary and shows its centre dot when checked", () => {
+  it("fills with the primary and shows its center dot when checked", () => {
     const { container } = render(<RadioDot checked />);
     const dot = container.firstElementChild as HTMLElement;
     expect(dot.className).toContain("bg-primary");

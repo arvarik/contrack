@@ -1,35 +1,18 @@
-// =============================================================================
-// User preferences — the per-account settings a browser used to keep
-// =============================================================================
-// List density, the recent-contacts limit, the dedupe sensitivity, the
-// temperature unit and the search history all lived in `localStorage`. That is
-// wrong in two ways on a shared instance.
-//
-// It is per browser, so the preference a person sets on their laptop does not
-// reach their phone, and a fresh profile starts over.
-//
-// And `localStorage` is keyed by origin, not by account. Two people signing in
-// and out of one instance in one browser share every key: sign out, sign in as
-// somebody else, and their list is compact because yours was, their search
-// history is yours, and clearing it clears yours too. Nothing here is a secret,
-// but a search history is a list of the things somebody looked for.
-//
-// So they live in `user_settings`, one row per preference, and the browser
-// keeps only a cache it is free to lose. The table already existed and was
-// empty; this is its first use.
-//
-// Each key is namespaced `pref.` so a later feature can put something in this
-// table that is not a preference without either colliding or having to guess.
-// =============================================================================
+// Per-account preferences: list density, the recent-contacts limit, dedupe
+// sensitivity, the temperature unit, the search history and the rest below.
+// They live in `user_settings`, one row each, and the browser keeps only a
+// cache it may lose. `localStorage` would be wrong twice over on a shared
+// instance: it is per browser, so a laptop's choice never reaches the phone,
+// and it is keyed by origin, not account, so two people signing in and out of
+// one browser would share every key, a search history included. Keys are
+// namespaced `pref.`, so the table can hold other things without collisions.
 
 import { z } from "zod";
 import { sqlite } from "../db.ts";
 import { CADENCE_DAYS } from "../../shared/cadence.ts";
 import { engineChoiceSchema } from "../../shared/webSearchEngine.ts";
 
-// ---------------------------------------------------------------------------
 // The shape
-// ---------------------------------------------------------------------------
 
 /** Which palette the app paints. `system` follows the operating system. */
 export const THEME_MODES = ["light", "dark", "system"] as const;
@@ -77,24 +60,21 @@ export const pulseLayoutSchema = z
   }));
 
 /**
- * Every preference, and what each value may be.
+ * Every preference and what its value may be. One schema each, used twice: to
+ * validate a PATCH and to parse a stored row back, since a row written by
+ * another version may hold a value this one refuses. A preference that is not
+ * here cannot be stored, so the table grows no keys nobody reads.
  *
- * One schema per preference, used twice: to validate a PATCH, and to parse a
- * stored row back — a row written by an older version can hold a value this
- * one no longer accepts. A preference that is not here cannot be stored, which
- * is what stops this table growing keys nobody reads.
- *
- * NO `.default()` ANYWHERE. A defaulted field inside `.partial()` still fills
- * itself in when the key is absent, so a PATCH naming one preference would
- * arrive at the route naming all seven and mark every one of them chosen. The
- * defaults live in their own object below, where they cannot leak into a
- * request body.
+ * NO `.default()` ANYWHERE. A defaulted field inside `.partial()` fills itself
+ * in when absent, so a PATCH naming one preference would arrive naming all
+ * seven and mark each one chosen. The defaults have their own object below,
+ * where they cannot leak into a request body.
  */
 export const preferenceSchemas = {
   theme: z.enum(THEME_MODES),
   accent: z
     .string()
-    .regex(/^#[0-9a-fA-F]{6}$/, "An accent is a six-digit hex colour")
+    .regex(/^#[0-9a-fA-F]{6}$/, "An accent is a six-digit hex color")
     .transform((hex) => hex.toLowerCase()),
   listDensity: z.enum(["comfortable", "compact"]),
   recentLimit: z.number().int().min(0).max(10),
@@ -104,8 +84,8 @@ export const preferenceSchemas = {
   askHistoryOpen: z.boolean(),
   mapPaneOpen: z.boolean(),
   /**
-   * Health was a third layer until v2. A stored "health", and a PATCH from a
-   * page loaded before v2, read as Pins, so neither fails to load.
+   * A stored "health" layer, or one in a PATCH from an old page, reads as Pins,
+   * so neither fails to load.
    */
   mapLayer: z.preprocess(
     (value) => (value === "health" ? "pins" : value),
@@ -114,9 +94,9 @@ export const preferenceSchemas = {
   startPage: z.enum(["network", "pulse"]),
   listSort: z.enum(["name", "recent"]),
   /**
-   * The accepted days, not only the four the menus offer: 60 and 180 were
-   * choices before 2.0, and a row saved at either must still parse, or the
-   * account would lose its default and fall back to 90 without a word.
+   * The accepted days, not only the four the menus offer: a row saved at 60 or
+   * 180, once choices too, must still parse, or the account would quietly fall
+   * back to 90.
    */
   defaultCadenceDays: z.literal(CADENCE_DAYS),
   /**
@@ -202,9 +182,7 @@ export function defaultPreferences(): Preferences {
   };
 }
 
-// ---------------------------------------------------------------------------
 // Storage
-// ---------------------------------------------------------------------------
 
 const PREFIX = "pref.";
 
@@ -234,9 +212,8 @@ function readStored(userId: string): Partial<Preferences> {
   for (const row of rows) {
     const key = row.key.slice(PREFIX.length) as PreferenceKey;
     const schema = preferenceSchemas[key];
-    // A key this version does not know, or a value it no longer accepts, is
-    // skipped rather than thrown. The alternative is that one bad row from an
-    // older release makes the whole app unable to read its own settings.
+    // A key this version does not know, or a value it refuses, is skipped, not
+    // thrown, so one bad row cannot leave the app unable to read its settings.
     if (!schema) continue;
     try {
       const parsed = schema.safeParse(JSON.parse(row.value));
@@ -260,11 +237,9 @@ export function storedPreferenceKeys(userId: string): PreferenceKey[] {
 }
 
 /**
- * Write the named preferences and return the whole set.
- *
- * One transaction, so a PATCH naming four preferences either lands or does
- * not. Values are stored as JSON so a string, a number and an array all read
- * back as what they were, rather than as text that has to be guessed at.
+ * Write the named preferences and return the whole set, in one transaction, so
+ * a PATCH lands whole or not at all. Values are stored as JSON, so a string, a
+ * number and an array read back as what they were.
  */
 export function setPreferences(
   userId: string,

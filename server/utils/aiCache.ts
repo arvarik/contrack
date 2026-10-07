@@ -1,26 +1,9 @@
 /**
- * aiCache.ts — Unified AI Response Cache with Per-Operation LRU + TTL Tiers.
- *
- * This module is the single source of truth for ALL server-side caching of AI
- * responses. It replaces the bare
- * `cachedInsight` variable in `dashboardService.ts`.
- *
- * WHY THIS EXISTS:
- * Every Gemini API call costs quota (RPM/RPD/TPM). On the FREE tier, redundant
- * calls for identical inputs are pure waste. This cache intercepts repeated
- * requests and returns cached results in <0.1ms instead of 500ms–3s LLM calls.
- *
- * ARCHITECTURE:
- * - Each AI operation gets its own isolated tier (Map) with independent TTL,
- *   max-entry cap, and invalidation strategy.
- * - Operations never interfere: a flood of search queries can't evict briefings.
- * - Batch mode defers invalidation during bulk operations, then
- *   consolidates into a single flush on exit.
- *
- * DIAGNOSTICS:
- * Every cache event (HIT, MISS, SET, EVICT, INVALIDATE, BATCH_DEFER,
- * BATCH_FLUSH) is logged at DEBUG level via the structured logger.
- * Cache stats (hit/miss counters per tier) are available via getStats().
+ * The server's cache of AI responses: one LRU tier per operation, each with its
+ * own TTL, size cap and invalidation, so a flood of searches cannot evict
+ * briefings. Every call it saves is provider quota and 0.5 to 3 s of waiting.
+ * Batch mode defers invalidation during bulk writes and replays it as one
+ * flush. Every cache event is logged at DEBUG, and getStats() has the counters.
  *
  * @module server/utils/aiCache
  */
@@ -29,9 +12,7 @@ import { log } from "./logger.ts";
 import crypto from "crypto";
 import type { Scope } from "../tenancy/scope.ts";
 
-// =============================================================================
 // Types
-// =============================================================================
 
 /** Configuration for a single cache operation tier. */
 interface TierConfig {
@@ -59,67 +40,42 @@ interface TierStats {
   evictions: number;
 }
 
-// =============================================================================
-// Tier Definitions
-// =============================================================================
-// Each AI operation has its own isolated cache tier with tuned TTL and capacity.
-// The rationale for each TTL is documented inline.
+// Tiers, with the reason for each TTL inline.
 
 const TIER_CONFIGS: Record<string, TierConfig> = {
   /**
-   * Briefing: "Catch Me Up" executive briefings per contact.
-   * TTL 24h: Increased from 30m to 24h. Caches will still be invalidated
-   * automatically when the contact's interaction count changes.
-   * Invalidation: Targeted per-contact (prefix match on contactId).
+   * Briefing: "Catch Me Up" per contact. TTL 24 h. Invalidation: the contact's
+   * entry when its notes change, and the owner's entries on any change to their
+   * contacts.
    */
   briefing: { ttlMs: 24 * 60 * 60_000, maxEntries: 100, label: "Briefing" },
 
   /**
-   * Rerank: LLM reranking results for Ask Contrack search queries.
-   * TTL 12h: Increased from 5m to 12h for longer persistence.
-   * Invalidation: Full flush on any contact mutation.
-   *
-   * The key leads with the owner id (see `ownerKey`). The
-   * cached value is a list of that owner's contacts, so one instance-wide key
-   * per query text served the first searcher's matches to everybody who typed
-   * the same words.
+   * Rerank: reranked Ask Contrack results. TTL 12 h. Invalidation: the owner's
+   * entries, on any change to their contacts. The key leads with the owner id
+   * (`ownerKey`), because the value lists that owner's contacts.
    */
   rerank: { ttlMs: 12 * 60 * 60_000, maxEntries: 200, label: "Rerank" },
 
   /**
-   * Synthesis: Executive brief from Ask Contrack search results.
-   * TTL 12h: Increased from 10m to 12h for longer persistence.
-   * Invalidation: Full flush on any contact mutation.
-   *
-   * Owner-keyed for the same reason as `rerank`: the cached text is
-   * a paragraph about named contacts.
+   * Synthesis: the brief over Ask Contrack results. TTL 12 h. Owner-keyed and
+   * invalidated like `rerank`: the text names contacts.
    */
   synthesis: { ttlMs: 12 * 60 * 60_000, maxEntries: 100, label: "Synthesis" },
 
   /**
-   * Mentions: Named entity extraction from interaction text.
-   * TTL 24h: Interaction text is immutable after save. Mention extraction is
-   * deterministic per input text. The 24h TTL bounds memory growth (peer review
-   * concern) while still providing near-permanent caching for the session.
-   * Invalidation: Never (inputs are immutable).
-   *
-   * Shared across owners: the extraction prompt is a fixed instruction plus the note
-   * text, and the key is a content hash of that same text. Two owners share an
-   * entry only when they wrote the same words, and the answer is a pure
-   * function of those words, so sharing saves a paid call and tells neither
-   * owner anything about the other.
+   * Mentions: names extracted from a note. TTL 24 h, which bounds memory: the
+   * answer is a pure function of the note text, which does not change.
+   * Invalidation: never. Shared across owners: the key is a hash of the text,
+   * so two owners share an entry only when they wrote the same words, which
+   * saves a paid call and tells neither anything about the other.
    */
   mentions: { ttlMs: 24 * 60 * 60_000, maxEntries: 200, label: "Mentions" },
 
   /**
-   * Daily Insight: AI-generated CRM network insight.
-   * TTL 24h: Regenerated once per day.
-   * Invalidation: Full flush on any contact mutation.
-   *
-   * The key leads with the owner id, so the tier holds one
-   * entry per owner rather than one entry for the instance. `maxEntries` is
-   * 100 to match. A single slot would have made each owner's first dashboard
-   * of the day evict the last owner's.
+   * Daily Insight: the dashboard's network insight, regenerated once a day.
+   * Owner-keyed, one entry per owner, so one owner's first dashboard of the day
+   * does not evict another's.
    */
   dailyInsight: {
     ttlMs: 24 * 60 * 60_000,
@@ -128,11 +84,9 @@ const TIER_CONFIGS: Record<string, TierConfig> = {
   },
 
   /**
-   * Query Parse: Structured filters extracted from a natural-language
-   * Ask Contrack query (location / company / industry / role / traits /
-   * temporal). Pure function of the query text and a small static schema,
-   * so the result is stable across contact mutations — long TTL is safe.
-   * Invalidation: Never (independent of contact data).
+   * Query Parse: structured filters from an Ask Contrack question. A pure
+   * function of the question and a fixed schema, so contact edits do not stale
+   * it. Invalidation: never.
    */
   queryParse: {
     ttlMs: 24 * 60 * 60_000,
@@ -141,19 +95,15 @@ const TIER_CONFIGS: Record<string, TierConfig> = {
   },
 };
 
-// =============================================================================
-// Cache State
-// =============================================================================
+// State
 
 /** Per-tier storage. Each tier is an isolated Map<cacheKey, CacheEntry>. */
 const stores = new Map<string, Map<string, CacheEntry>>();
 
 /**
- * Caches outside the tiers that must empty with them.
- *
- * The semantic cache (`services/search/semanticCache.ts`) finds Ask answers
- * by question vector, so it cannot be a keyed tier here. A flush of every
- * tier must still reach it.
+ * Caches outside the tiers that must empty with them. The semantic cache
+ * (`services/search/semanticCache.ts`) finds Ask answers by question vector, so
+ * it cannot be a keyed tier, but a flush of every tier must reach it.
  */
 const flushAllListeners = new Set<() => void>();
 
@@ -175,19 +125,13 @@ log.info(
   `Initialized ${Object.keys(TIER_CONFIGS).length} tiers: ${tierSummary}`,
 );
 
-// =============================================================================
-// Batch Mode
-// =============================================================================
-// Ref-counted batch mode. While active, invalidation calls are deferred and
-// recorded. On exit (refCount → 0), all pending invalidations are replayed
-// as a single consolidated flush.
+// Batch mode, ref-counted. While active, invalidations are recorded, and the
+// last exit replays them as one flush.
 
 let batchRefCount = 0;
 const pendingInvalidations = new Set<string>(); // "all" or "tier::keyPrefix"
 
-// =============================================================================
-// Internal Helpers
-// =============================================================================
+// Helpers
 
 /** Format milliseconds into human-readable duration. */
 function formatMs(ms: number): string {
@@ -197,22 +141,16 @@ function formatMs(ms: number): string {
   return `${ms / 1000}s`;
 }
 
-/** Normalise a raw query string into a cache key (same as former searchCache). */
+/** Normalize a raw query string into a cache key. */
 export function normalizeKey(query: string): string {
   return query.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 /**
- * The cache key for one owner.
- *
- * Every tier whose value describes contacts uses this: `rerank`, `synthesis`,
- * `briefing` and `dailyInsight`. The separator makes the owner a prefix, which
- * the existing `startsWith` invalidation can then match, so one owner's edit
- * can drop one owner's entries.
- *
- * `queryParse` and `mentions` do not use it. Their values are pure
- * functions of the text the caller supplied and name no contact, so sharing
- * them across owners saves paid calls and reveals nothing.
+ * The cache key for one owner, used by every tier whose value describes
+ * contacts: `rerank`, `synthesis`, `briefing` and `dailyInsight`. The owner is
+ * a prefix, so prefix invalidation drops one owner's entries. `queryParse` and
+ * `mentions` do not use it: their values name no contact.
  */
 export function ownerKey(scope: Scope, key: string): string {
   return `${scope.ownerId}::${key}`;
@@ -252,14 +190,11 @@ function removeExpired(tier: string, store: Map<string, CacheEntry>): void {
   tierStats.entries = store.size;
 }
 
-// =============================================================================
-// Public API — Core Operations
-// =============================================================================
+// Public API
 
 export const aiCache = {
   /**
-   * Retrieve a cached value. Returns null on miss or expiry.
-   * Refreshes lastAccessed for LRU ordering on hit.
+   * A cached value, or null on a miss or expiry. A hit refreshes its LRU place.
    */
   get<T>(operation: string, key: string): T | null {
     const store = stores.get(operation);
@@ -303,9 +238,7 @@ export const aiCache = {
     return entry.value as T;
   },
 
-  /**
-   * Store a value. Enforces maxEntries via LRU eviction.
-   */
+  /** Store a value, evicting the least recently used past maxEntries. */
   set<T>(operation: string, key: string, value: T): void {
     const store = stores.get(operation);
     const config = TIER_CONFIGS[operation];
@@ -335,10 +268,8 @@ export const aiCache = {
   },
 
   /**
-   * Invalidate cached entries.
-   * - If `keyPrefix` is provided: remove all entries in the tier whose key
-   *   starts with `keyPrefix`. Used for targeted per-contact invalidation.
-   * - If `keyPrefix` is omitted: flush all entries in the tier.
+   * Invalidate entries: those whose key starts with `keyPrefix`, or the whole
+   * tier without one.
    */
   invalidate(operation: string, keyPrefix?: string): void {
     // Batch mode: defer invalidation
@@ -387,17 +318,9 @@ export const aiCache = {
   },
 
   /**
-   * Drop one owner's entries from an owner-keyed tier.
-   *
-   * The tiers that carry `ownerKey` lead every key with `<ownerId>::`, so the
-   * prefix invalidation above is exactly the right tool. Before this existed,
-   * one account editing a contact flushed the whole `rerank`, `synthesis`,
-   * `briefing` and `dailyInsight` tiers, which cost every other account on the
-   * instance a regeneration through a paid provider.
-   *
-   * Only for owner-keyed tiers. `queryParse` and `mentions` hold no
-   * owner in their keys and nothing about them goes stale when a contact
-   * changes.
+   * Drop one owner's entries from an owner-keyed tier, so one account's edit
+   * does not cost every other account a paid regeneration. Not for `queryParse`
+   * or `mentions`, whose keys hold no owner.
    */
   invalidateForOwner(operation: string, ownerId: string): void {
     aiCache.invalidate(operation, `${ownerId}::`);
@@ -408,10 +331,7 @@ export const aiCache = {
     flushAllListeners.add(listener);
   },
 
-  /**
-   * Nuclear option: flush ALL tiers. Used by contactService.invalidateAllCaches().
-   * In batch mode, the flush is deferred until exitBatchMode().
-   */
+  /** Flush every tier, deferred to exitBatchMode() in batch mode. */
   invalidateAll(): void {
     if (batchRefCount > 0) {
       pendingInvalidations.add("__all__");
@@ -438,22 +358,16 @@ export const aiCache = {
     }
   },
 
-  // ===========================================================================
-  // Batch Mode
-  // ===========================================================================
+  // Batch mode
 
-  /**
-   * Enter batch mode. Invalidation calls are deferred until exitBatchMode().
-   * Supports nesting (ref-counted).
-   */
+  /** Enter batch mode: invalidations wait for exitBatchMode(). Nests. */
   enterBatchMode(): void {
     batchRefCount++;
     log.info("AICache", `BATCH_ENTER (depth: ${batchRefCount})`);
   },
 
   /**
-   * Exit batch mode. When the ref count reaches 0, replay all pending
-   * invalidations as a single consolidated flush.
+   * Exit batch mode. At depth 0, replay the pending invalidations as one flush.
    */
   exitBatchMode(): void {
     if (batchRefCount <= 0) {
@@ -499,18 +413,11 @@ export const aiCache = {
     }
   },
 
-  // ===========================================================================
   // Diagnostics
-  // ===========================================================================
 
   /**
-   * Get hit/miss/entry statistics for all tiers.
-   *
-   * The returned record maps tier names to their stats, plus one special
-   * "batchMode" key with batch-mode metadata — consumers iterate entries and
-   * skip "batchMode" (see aiStatsService). The union return type reflects
-   * that runtime shape honestly; the old intersection type was
-   * unconstructable and needed an `as any`.
+   * Hit, miss and entry counts per tier, plus a "batchMode" key with the batch
+   * state, which consumers skip (see aiStatsService).
    */
   getStats(): Record<
     string,
@@ -542,11 +449,7 @@ export const aiCache = {
   },
 };
 
-// =============================================================================
-// Search Result Cache API
-// =============================================================================
-// Convenience wrappers used by searchService.ts and mergeEngine.ts to cache
-// full semantic-search result sets under a dedicated tier.
+// Search result cache, for searchService.ts and mergeEngine.ts.
 
 export interface CachedSearchResult {
   matches: unknown[];
@@ -554,12 +457,8 @@ export interface CachedSearchResult {
 }
 
 /**
- * Return a cached search result for this owner, or null on miss or expiry.
- *
- * The value is a list of hydrated contacts. Before 2c the key was the query
- * text alone, so the first account to search "engineers in Berlin" published
- * its own matches to every other account that typed the same words for the
- * next twelve hours.
+ * A cached search result for this owner, or null on a miss or expiry. The value
+ * lists hydrated contacts, so the key carries the owner.
  */
 export function getCachedSearch(
   scope: Scope,
@@ -580,22 +479,14 @@ export function setCachedSearch(
   aiCache.set("rerank", ownerKey(scope, normalizeKey(query)), value);
 }
 
-/**
- * Invalidate all cached search results.
- * Drop-in replacement for searchCache.invalidateSearchCache().
- */
+/** Invalidate every cached search result. */
 export function invalidateSearchCache(): void {
   aiCache.invalidate("rerank");
 }
 
-// =============================================================================
-// Utility: Content-addressed hashing for mention extraction cache
-// =============================================================================
-
 /**
- * Generate a short content hash for mention extraction caching.
- * Uses the first 16 chars of SHA-256 — collision probability is negligible
- * for the expected mention cache size (~200 entries).
+ * A short content hash for the mention cache: 16 hex characters of SHA-256,
+ * plenty for about 200 entries.
  */
 export function contentHash(text: string): string {
   return crypto.createHash("sha256").update(text).digest("hex").slice(0, 16);

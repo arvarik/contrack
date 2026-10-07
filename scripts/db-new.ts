@@ -1,17 +1,12 @@
-// =============================================================================
 // npm run db:new <name> — start a new migration
-// =============================================================================
 // Writes server/db/migrations/NNNN_<name>.ts from the template below, with
-// the next free number, and adds it to the list in
-// server/db/migrations/index.ts. The number and the template are the two
-// things a person gets wrong by hand.
+// the next free number, and adds it to server/db/migrations/index.ts.
 //
 //   npm run db:new events_and_jobs
 //
-// A name is lower case words joined by "_", at most 40 characters, so the
-// line it adds to the list stays one line. The script refuses a bad name, a
-// name a migration already has, and a file that already exists.
-// =============================================================================
+// A name is lower case words joined by "_", at most 40 characters, so its
+// list line stays one line. The script refuses a bad name, a name a migration
+// already has, and a file that already exists.
 
 import fs from "node:fs";
 import path from "node:path";

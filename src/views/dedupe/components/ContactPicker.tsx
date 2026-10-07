@@ -12,19 +12,13 @@ import { roomAtTop } from "../utils/stickyRoom";
 import { useRovingFocus } from "../../search/useRovingFocus";
 import { SearchField } from "../../../components/ui/SearchField";
 
-// =============================================================================
-// ContactPicker — Searchable multi-select contact selector
+// A searchable multi-select of contacts. The list is virtualized
+// (`VirtualRows`): 5,824 plain rows took 44 s to show. The search filters
+// on a deferred query, so typing stays quick.
 //
-// The list draws only the rows near the screen (`VirtualRows`), in the
-// page's one scroller. It drew every contact before, and 5,824 of them took
-// 44 s to show. The search filters on a deferred copy of the query, so a
-// letter shows in the box before the list catches up.
-//
-// The list is one Tab stop (`useRovingFocus`): ↓ in the search box goes to
-// the first contact, the arrows walk the rest, and Space or Enter picks.
-// The search box does not take focus by itself: the tab that shows it is
-// chosen with the arrows, and the box took the next arrow as a caret move.
-// =============================================================================
+// The list is one Tab stop (`useRovingFocus`): ↓ in the search goes to the
+// first contact. The search does not autofocus: the tab that shows it is
+// chosen with arrows, and the box would take the next arrow.
 
 interface ContactPickerProps {
   selected: Contact[];
@@ -41,7 +35,6 @@ export const ContactPicker = ({
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
 
-  // Filter out ghosts and archived, then apply search
   const filteredContacts = useMemo(() => {
     const pool = allContacts.filter((c) => !c.isGhost && !c.isArchived);
     if (!deferredQuery.trim()) return pool;
@@ -77,11 +70,8 @@ export const ContactPicker = ({
 
   return (
     <div className="flex flex-col">
-      {/* The picked contacts and the search. The page is the one scroller
-          and the list takes its full height, so this block sticks to the
-          top of the page, on its surface, and both stay in reach from far
-          down the list. Its top padding is the gap under the stage's
-          heading. */}
+      {/* Sticks to the top of the page's one scroller, so the picks and the
+          search stay in reach far down the list. */}
       <div ref={roomAtTop} className="sticky top-0 z-10 py-4 bg-surface">
         <AnimatePresence mode="popLayout">
           {selected.length > 0 && (
@@ -89,8 +79,7 @@ export const ContactPicker = ({
               initial={{ height: 0, opacity: 0 }}
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
-              // The padding sits inside the clip the height animation needs,
-              // so the remove buttons' 44px tap boxes are not cut off.
+              // Padding inside the animation's clip keeps the 44 px tap boxes.
               className="flex flex-wrap gap-2 -mx-2 -mt-2 mb-2 p-2 overflow-hidden"
             >
               {selected.map((c) => (
@@ -139,7 +128,6 @@ export const ContactPicker = ({
         />
       </div>
 
-      {/* Selection status */}
       <div className="flex items-center justify-between mb-3 px-1">
         <span className={cn(LABEL, "flex items-center gap-1.5")}>
           <Users className="w-3.5 h-3.5" />
@@ -150,8 +138,8 @@ export const ContactPicker = ({
         </span>
       </div>
 
-      {/* Contact list. It takes its full height and the page scrolls it:
-          a list that scrolled inside the page showed two rows at 900 px. */}
+      {/* Full height, scrolled by the page: an inner scroller showed two
+          rows at 900 px. */}
       {isLoading ? (
         <div className="flex items-center justify-center py-12 text-on-surface-variant">
           <div className="w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />

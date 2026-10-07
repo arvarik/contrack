@@ -1,10 +1,7 @@
-// =============================================================================
 // The seven questions every network can ask, and how a typed question matches
-// =============================================================================
 // Which people each question finds is pinned in
 // tests/integration/search.starterQuestions.test.ts, through the real search.
 // These check the table's rows and the match on the words.
-// =============================================================================
 
 import { describe, expect, it } from "vitest";
 import {

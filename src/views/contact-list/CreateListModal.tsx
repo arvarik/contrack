@@ -23,6 +23,7 @@ import {
   Flag,
   Sparkles,
   Sun,
+  type LucideIcon,
 } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import {
@@ -34,7 +35,7 @@ import {
 } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
-const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
+const ICON_MAP: Record<string, LucideIcon> = {
   star: Star,
   heart: Heart,
   crown: Crown,
@@ -59,7 +60,11 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   sun: Sun,
 };
 
-const ICON_OPTIONS = Object.keys(ICON_MAP);
+/** The icons a list can wear, in the picker's order. */
+export const ICON_OPTIONS = Object.keys(ICON_MAP);
+
+/** A list's icon. An unknown name draws the star. */
+export const listIcon = (icon: string): LucideIcon => ICON_MAP[icon] || Star;
 
 export const ListIcon = ({
   icon,
@@ -68,7 +73,7 @@ export const ListIcon = ({
   icon: string;
   className?: string;
 }) => {
-  const Icon = ICON_MAP[icon] || Star;
+  const Icon = listIcon(icon);
   return <Icon className={className} />;
 };
 

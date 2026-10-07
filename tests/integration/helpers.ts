@@ -1,11 +1,8 @@
-// =============================================================================
 // Integration helpers — real app, real database
-// =============================================================================
 // Importing this module pulls in server/app.ts → server/db.ts, which opens a
 // real SQLite database inside the temp DATA_DIR created by
 // tests/integration-setup.ts (migrations, FTS index, triggers, and indexes
 // all run for real).
-// =============================================================================
 
 import http from "http";
 import type { Express, Response } from "express";
@@ -21,16 +18,11 @@ import {
 } from "../../server/services/research/index.ts";
 import type { AISearchResult } from "../../server/services/aiSearch/types.ts";
 
-// =============================================================================
-// The response check
-// =============================================================================
-// Every 2xx JSON body that a contracted route sends through `makeTestApp()`
-// is parsed with the route's `response` schema from `shared/contracts/`, and
-// its status is compared with the contract's. A body the schema refuses, or a
-// status the contract does not name, is recorded, and the test that caused it
-// fails when it ends, naming the route and what differed, whether or not it
-// looked at the answer. Production never parses a response: the check lives
-// here alone.
+// The response check. Every 2xx JSON body a contracted route sends through
+// `makeTestApp()` is parsed with the route's `response` schema from
+// `shared/contracts/`, and its status is compared with the contract's. A
+// mismatch fails the test that caused it when it ends, whether or not it read
+// the answer. Production never parses a response.
 
 const mismatches: string[] = [];
 
@@ -82,22 +74,11 @@ function checkResponses(app: Express): void {
  * Build the production request pipeline exactly as server.ts does, minus
  * Vite/static SPA handling and the per-IP rate limiter.
  *
- * Returns a server that is ALREADY LISTENING, and that is the point.
- *
- * `request(expressApp)` makes supertest bind a fresh HTTP server and tear it
- * down again for every single request — roughly 500 listen/close cycles per
- * run. Ephemeral ports get recycled far faster than closed sockets leave
- * TIME_WAIT, so a new server occasionally inherits a port a previous
- * connection is still addressing, and a request is answered by the wrong
- * socket. The symptom is a status the route cannot produce: a 404 from a
- * registered path, a 403 from a router with no 403 in it, a 401 on an
- * un-gated instance. Chasing one of those means auditing auth code that was
- * never involved.
- *
- * Supertest reuses a server that already has an address instead of binding
- * one, so listening once per file removes the recycling entirely. `unref()`
- * keeps the open socket from holding the worker process alive after the last
- * test.
+ * Returns a server that is already listening. `request(expressApp)` would
+ * bind and close a server per request, and a recycled ephemeral port can
+ * then answer from the wrong socket, with a status the route cannot produce.
+ * Supertest reuses a server that has an address. `unref()` keeps the socket
+ * from holding the worker alive after the last test.
  */
 export function makeTestApp(): http.Server {
   // A real better-sqlite3 connection reports `open`; the unit project's mock

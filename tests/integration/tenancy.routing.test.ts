@@ -1,13 +1,7 @@
-// =============================================================================
-// Integration Tests — router mount order and the request id on a limiter 429
-// =============================================================================
-// Task 0.11. contactsRouter used to mount before mcpRouter, so the literal
-// path GET /api/contacts/action-items was captured by GET /api/contacts/:id,
-// which looked up "action-items" as a contact id and answered 404. The route
-// was dead. mcpRouter now mounts first, and the test below holds that order
-// in place. The :id route itself is covered by the contact and isolation
-// tests.
-// =============================================================================
+// Integration: router mount order, and the request id on a limiter 429.
+// mcpRouter mounts before contactsRouter, so GET /api/contacts/action-items
+// is not captured by GET /api/contacts/:id as a contact id. The test below
+// holds that order. The contact and isolation tests cover the :id route.
 
 import { describe, it, expect } from "vitest";
 import request from "supertest";

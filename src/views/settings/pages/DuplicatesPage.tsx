@@ -1,45 +1,15 @@
 /**
- * DuplicatesPage — find and merge contacts that are the same person.
- *
- * The tool comes first, and what runs by itself comes after it, the way
- * Google Contacts, HubSpot and Dex lay out their duplicates pages:
- *
- * ```
- * Duplicates                                        [ Merge history ]
- * Find and merge contacts that are the same person
- *
- * ┌ 4 possible duplicates ─────────────────── Review them → ┐   when any wait
- * [ Check | Manual merge ]
- * ┌──────────────────────────────────────────────────────────┐
- * │ Check for duplicates                       [ Check now ] │
- * └──────────────────────────────────────────────────────────┘
- * AUTOMATIC MERGING
- * ┌──────────────────────────────────────────────────────────┐
- * │ Auto-merge sensitivity           [Cautious|Balanced|Eager] │
- * │ Check new contacts automatically                     (•) │
- * │ Check imports automatically                          (•) │
- * └──────────────────────────────────────────────────────────┘
- * ```
- *
- * What a check finds waits in Possible duplicates, which is also where
- * Merge history lives: the header's button opens it there, with its name
- * on it, because the Undo a merge needs must not hide behind a glyph.
- *
- * The page is a block in the shell's one scroller, like every settings
- * page, so the shell draws Reset to defaults under it while a setting here
- * is changed.
- *
- * @module views/settings/pages/DuplicatesPage
+ * DuplicatesPage: the check and the manual merge first, then the automatic
+ * merging settings. The header's Merge history button carries its name,
+ * because the Undo a merge needs must not hide behind a glyph.
  */
 import { ArrowRight, Copy, History } from "lucide-react";
 import { Link } from "react-router-dom";
 import { DedupeView } from "../../dedupe";
-import { SettingRow } from "../SettingRow";
+import { PrefSwitchRow, SettingRow } from "../SettingRow";
 import { SettingsHeaderActions } from "../SettingsHeader";
 import { Segmented } from "../../../components/ui/Segmented";
-import { Switch } from "../../../components/ui/Switch";
 import { useDedupeSettings } from "../../../hooks/useDedupeSettings";
-import { usePreferences } from "../../../contexts/PreferencesContext";
 import { NAMES } from "../../../lib/names";
 import { useDedupeCount } from "../../../api";
 import { cn } from "../../../lib/utils";
@@ -51,10 +21,9 @@ import {
 import { SettingsCallout } from "../SettingsCallout";
 
 /**
- * What each preset merges with nobody asked, in the matches a person knows
- * rather than the confidence each needs (97%, 93% and 88% in
- * server/services/dedupe/policy.ts). A pair with a caveat, such as two
- * first names that differ, merges under none of them.
+ * What each preset merges by itself, in matches a person knows rather than
+ * the confidence each needs (97%, 93% and 88% in
+ * server/services/dedupe/policy.ts).
  */
 const DEDUPE_PRESET_COPY = {
   conservative:
@@ -67,7 +36,6 @@ const DEDUPE_PRESET_COPY = {
 
 export const DuplicatesPage = () => {
   const { preset, setPreset } = useDedupeSettings();
-  const { preferences, setPreference } = usePreferences();
   const { data: dedupeData } = useDedupeCount();
   const dedupeCount =
     typeof dedupeData === "number" ? dedupeData : (dedupeData?.count ?? 0);
@@ -122,33 +90,19 @@ export const DuplicatesPage = () => {
             />
           </SettingRow>
 
-          <SettingRow
+          <PrefSwitchRow
             id="dedupe-on-create"
             title="Check new contacts automatically"
             prefKey="dedupeOnCreate"
             description="A few seconds after you add one"
-            inline
-          >
-            <Switch
-              label="Check new contacts automatically"
-              checked={preferences.dedupeOnCreate}
-              onChange={(next) => setPreference("dedupeOnCreate", next)}
-            />
-          </SettingRow>
+          />
 
-          <SettingRow
+          <PrefSwitchRow
             id="dedupe-on-import"
             title="Check imports automatically"
             prefKey="dedupeOnImport"
             description="When each import finishes"
-            inline
-          >
-            <Switch
-              label="Check imports automatically"
-              checked={preferences.dedupeOnImport}
-              onChange={(next) => setPreference("dedupeOnImport", next)}
-            />
-          </SettingRow>
+          />
         </div>
       </section>
     </div>

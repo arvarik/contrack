@@ -1,20 +1,8 @@
 /**
- * BackupsView — snapshots of the database, and whether they are any good.
- *
- * The backup service has existed since long before 2.0 and nothing in the app
- * has ever shown it. It ran on a schedule, rotated old files, and the only
- * way to know whether any of that was working was to look in the data
- * directory over somebody's shoulder. A backup nobody can see is a backup
- * nobody trusts.
- *
- * Each snapshot is opened again as soon as it is written, and this page shows
- * the answer. That is the difference between a list of filenames and a list
- * of backups: a file of the right size with the right name restores nothing
- * if it is empty, and until 2.0 nothing ever looked.
- *
- * A snapshot is the whole database, so it holds every account's rows. That is
- * why both routes are administration and why this page says so rather than
- * leaving an admin to infer it.
+ * The database snapshots, and whether each one is any good. The service opens
+ * each snapshot again right after it writes it, and this page shows that
+ * check: a file with the right name and size restores nothing if it is empty.
+ * A snapshot holds every account's rows, so both routes are admin-only.
  */
 import { useState } from "react";
 import { toast } from "sonner";
@@ -65,11 +53,8 @@ function verificationDetail(v: BackupVerification): string {
 }
 
 /**
- * The three states a snapshot can be in, and they are three, not two.
- *
- * A snapshot taken before 2.0 has no recorded check. Showing that as a
- * failure would tell an operator their old backups are broken, which is not
- * something this knows.
+ * A snapshot has three states, not two. An older snapshot has no recorded
+ * check, and it does not show as a failure, because nothing says it is broken.
  */
 const VerificationBadge = ({
   verification,
@@ -121,9 +106,8 @@ export const BackupsView = () => {
             create.mutate(undefined, {
               onSuccess: (backup) => {
                 setLatest(backup.filename);
-                // A snapshot that failed its check is not a success with a
-                // footnote. The toast that says "done" for a backup nobody
-                // can read is the thing this whole story is against.
+                // A snapshot that failed its check gets an error, not a
+                // success toast with a footnote.
                 if (backup.verification && !backup.verification.ok) {
                   toast.error(
                     `Snapshot taken but it did not verify: ${backup.verification.problem}`,
@@ -239,13 +223,8 @@ export const BackupsView = () => {
               <Download className="w-4 h-4" />
             </IconButton>
 
-            {/*
-              The reason, in the row rather than in a tooltip. A hover is the
-              one affordance a phone does not have, and the snapshot that
-              failed is the one somebody most needs told about. `col-span-full`
-              puts it under the grid on a desktop; below `sm` the row is a
-              stack and it is simply the last line.
-            */}
+            {/* The reason shows in the row, not in a tooltip, because a phone
+                has no hover. `col-span-full` puts it under the grid. */}
             {backup.verification && !backup.verification.ok && (
               <p className="sm:col-span-full text-xs text-error text-pretty">
                 {backup.verification.problem}

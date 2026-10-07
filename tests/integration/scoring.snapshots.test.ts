@@ -1,6 +1,4 @@
-// =============================================================================
-// Integration Tests — score snapshots for Pulse momentum & history
-// =============================================================================
+// Integration: score snapshots for Pulse momentum & history
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { sqlite } from "../../server/db.ts";
 import {

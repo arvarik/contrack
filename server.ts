@@ -1,9 +1,7 @@
 /**
- * server.ts — Express application entry point.
- *
- * Boots the HTTP server: builds the API app via createApp() (see
- * server/app.ts), attaches Vite dev middleware (or static serving in
- * production), starts listening, and kicks off background tasks.
+ * The entry point: builds the API app (createApp() in server/app.ts), attaches
+ * Vite in development or static files in production, listens, and starts the
+ * background work.
  */
 import "./server/utils/loadEnv.ts";
 import http from "node:http";
@@ -62,12 +60,9 @@ if (process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS === "true") {
   );
 }
 
-// ── AI posture at boot ───────────────────────────────────────────────────────
-// This used to check only the key matching AI_PROVIDER (default gemini), so
-// an OpenAI-only install booted to "GEMINI_API_KEY is not configured!" —
-// telling the user their working setup was broken. Auto-resolution serves
-// every capability from ANY configured provider, so report what is actually
-// configured instead.
+// AI posture at boot: report what is configured, because auto-resolution serves
+// every capability from any configured provider. Checking only AI_PROVIDER's
+// key would warn an OpenAI-only install that its working setup is broken.
 {
   const keyed = (
     [
@@ -106,11 +101,10 @@ const HOST = process.env.HOST ?? "127.0.0.1";
 assertDevHost(HOST, process.env.NODE_ENV === "production");
 
 async function startServer() {
-  // ── Events and jobs ─────────────────────────────────────────────────────
-  // The reactions to writes and the background work that the modules
-  // declare (server/modules/). Both registrations are idempotent, and the
-  // services register their own subscribers as well, so a test or a script
-  // that writes runs them too.
+  // Events and jobs: the reactions to writes and the background work the
+  // modules declare (server/modules/). Both registrations are idempotent, and
+  // the services register their own subscribers too, so a test or a script that
+  // writes runs them.
   registerSubscribers(moduleSubscribers());
   registerJobs(moduleJobs());
   // Boot catches up from the cursors: the reactions to writes that the last
@@ -170,23 +164,21 @@ async function startServer() {
     log.info("Server", "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   });
 
-  // Node closes idle keep-alive sockets after 5 seconds by default. A reverse
-  // proxy (OrbStack, nginx, Caddy) reuses connections for longer than that,
-  // and a request sent down a socket Node has just closed surfaces to the
-  // user as a sporadic 502. The server must always outlast the proxy, so:
-  // longer than any common proxy default, and headersTimeout one second more
-  // so a request already in flight when the keep-alive expires still parses.
+  // Node closes idle keep-alive sockets after 5 seconds. A reverse proxy
+  // (nginx, Caddy, OrbStack) reuses connections longer, and a request sent down
+  // a socket Node just closed surfaces as a sporadic 502. The server must
+  // outlast the proxy, and headersTimeout is one second more so a request in
+  // flight when the keep-alive expires still parses.
   server.keepAliveTimeout = 65_000;
   server.headersTimeout = 66_000;
 
   registerShutdownHandlers(server);
 
-  // ── Background jobs ─────────────────────────────────────────────────────
-  // One runner for the scheduled work (server/jobs/): the connector tick,
-  // the score sweeps, backups, the daily maintenance sweep, the trash purge,
-  // the model catalogs, the planner statistics, and the start-up geocoding
-  // and photo sweep. At boot it queues again what a restart stopped, even
-  // with background jobs off, and runs nothing more in that case.
+  // Background jobs: one runner for the scheduled work (server/jobs/): the
+  // connector tick, score sweeps, backups, daily maintenance, the trash purge,
+  // model catalogs, planner statistics, and the start-up geocoding and photo
+  // sweep. At boot it queues again what a restart stopped, even with background
+  // jobs off, and then runs nothing more in that case.
   if (!startJobRunner()) {
     log.info(
       "Server",
@@ -195,26 +187,19 @@ async function startServer() {
     return;
   }
 
-  // ── Start-up work ────────────────────────────────────────────────────────
-  // Each module's own, in the order of server/modules/index.ts: the search
-  // module warms the starter questions and loads the local models, the
-  // data-lifecycle module checks the age of the newest backup, and the ai
+  // Start-up work, each module's own, in the order of server/modules/index.ts:
+  // the search module warms the starter questions and loads the local models,
+  // the data-lifecycle module checks the age of the newest backup, and the ai
   // module moves an old research setting. None of it holds the server up.
   runModuleStarts();
 }
 
-// =============================================================================
 // Shutdown and failure handling
-// =============================================================================
 
 /**
- * Close cleanly on SIGTERM/SIGINT.
- *
- * `docker stop` sends SIGTERM, waits 10 seconds, then SIGKILLs. Before this
- * handler existed the process took the SIGKILL every time — dropping in-flight
- * requests and closing the database without the WAL checkpoint that a clean
- * `close()` performs. The database is the entire product here; it gets a
- * clean close on every path we control.
+ * Close cleanly on SIGTERM and SIGINT. `docker stop` sends SIGTERM, waits 10
+ * seconds, then SIGKILLs; without this, in-flight requests drop and the
+ * database closes without the WAL checkpoint a clean `close()` does.
  */
 function registerShutdownHandlers(server: import("http").Server): void {
   let shuttingDown = false;
@@ -255,11 +240,10 @@ function registerShutdownHandlers(server: import("http").Server): void {
       process.exit(0);
     };
 
-    // Refuse new connections, let in-flight requests finish, drop idle
-    // keep-alive sockets so they can't hold the close open for 65 seconds.
-    // The database closes last: the jobs and the syncs write to it, and the
-    // CPU worker answers them, so all three stop first. The database used to
-    // close while a job or a snapshot could still be writing.
+    // Refuse new connections, let in-flight requests finish, and drop idle
+    // keep-alive sockets so they cannot hold the close open for 65 seconds. The
+    // database closes last: the jobs and syncs write to it and the CPU worker
+    // answers them, so all three stop first.
     server.close(() => {
       void Promise.all([jobsStopped, syncsStopped])
         .then(() => stopCpuWorker())
@@ -292,10 +276,9 @@ function registerShutdownHandlers(server: import("http").Server): void {
   process.on("SIGINT", shutdown);
 }
 
-// A rejected promise nobody awaited crashes Node with a bare stack by
-// default. Every background chain in startServer carries its own .catch, so
-// anything landing here is a bug — log it loudly and keep serving; the state
-// is not corrupted by a stray rejection.
+// An unawaited rejected promise crashes Node by default. Every background chain
+// in startServer has its own .catch, so anything here is a bug: log it loudly
+// and keep serving, since a stray rejection corrupts no state.
 process.on("unhandledRejection", (reason) => {
   log.error(
     "Server",

@@ -1,16 +1,11 @@
-// =============================================================================
-// Research — the choice: the technique and web search a start runs with
-// =============================================================================
-// A start may name a technique and a web search. What it names is used, or
-// the start is refused. A start that names nothing runs the account's web
-// search engine (`webSearchEngine`, which may be the instance's) while that
-// can run, or else the first engine that can.
-//
-// A start is checked before anything is spent. Research that is off refuses
-// every start. An unknown name, or a web search named with a technique that
-// uses none, answers 400. A choice that is not set up answers 503 with the
-// first need it lacks (`Technique.needs`).
-// =============================================================================
+// The technique and web search a research start runs with. What a start names
+// is used, or the start is refused. A start that names nothing runs the
+// account's web search engine (`webSearchEngine`, which may be the instance's)
+// while it can run, else the first engine that can. A start is checked before
+// anything is spent: research that is off refuses every start, an unknown name
+// or a web search named with a technique that uses none answers 400, and a
+// choice that is not set up answers 503 with its first missing need
+// (`Technique.needs`).
 
 import { z } from "zod";
 import { isResearchOff, resolveCapability } from "../../ai/capabilities.ts";
@@ -144,23 +139,19 @@ function enginesToTry(engine: WebSearchEngine): WebSearchEngine[] {
 }
 
 /**
- * The technique and web search a start runs with: the ones it names, or
- * else the account's engine, or else the first engine that can run.
- *
- * What a start names is used, or the start is refused. A web search named
- * alone goes with the engine's technique when that one searches the web,
- * and with search-and-read when it does not.
- *
- * An engine outlives the setup it needs: an admin can clear the SearXNG
- * address, or the web search model, later. A start that names nothing then
- * searches with an engine that can run, and does not fail. Web search that
- * is off still refuses, and so does a start no engine can run, with the
+ * The technique and web search a start runs with: the ones it names, else the
+ * account's engine, else the first engine that can run. A web search named
+ * alone goes with the engine's technique when that one searches the web, and
+ * with search-and-read when it does not. An admin can later clear the setup an
+ * engine needs (the SearXNG address, the web search model), and then a start
+ * that names nothing uses an engine that can run instead of failing. Web search
+ * that is off still refuses, and so does a start no engine can run, with the
  * engine's first missing need.
  *
  * @param asked - What the start names.
  * @param choice - The account's engine choice: "default" for the instance's.
- * @throws AppError 503 `RESEARCH_OFF`, 400 for an unknown name or a web
- *   search the technique cannot use, or 503 for a choice that is not set up.
+ * @throws AppError 503 `RESEARCH_OFF`, 400 for an unknown name or a web search
+ *   the technique cannot use, or 503 for a choice that is not set up.
  */
 export function chooseResearch(
   asked: Partial<ResearchChoice>,
@@ -194,12 +185,11 @@ export function chooseResearch(
 }
 
 /**
- * Whether each engine can run now, and what it lacks: the settings pages
- * show an engine that cannot run as disabled, with the reason.
- *
- * The needs are the techniques' own (`Technique.needs`), the ones a start is
- * checked against, so the page and the server never disagree. Web search
- * that is off is the first need of every engine.
+ * Whether each engine can run now, and what it lacks, so the settings pages
+ * show an engine that cannot run as disabled, with the reason. The needs are
+ * the techniques' own (`Technique.needs`), the ones a start is checked against,
+ * so the page and the server agree. Web search that is off is every engine's
+ * first need.
  */
 export function engineStates(): Record<WebSearchEngine, EngineState> {
   const off = isResearchOff();

@@ -1,13 +1,9 @@
-// =============================================================================
-// Jobs: contacts
-// =============================================================================
-// Three daily sweeps, at start and every day after:
-// - the trash purge: contacts in the trash past the retention window are
-//   deleted for good, each in its own owner's scope;
-// - the merge purge: a merged-away contact whose merge can no longer be
-//   undone goes, with the merge log entries past the undo window;
+// Contact jobs, three daily sweeps, at start and every day after:
+// - the trash purge: trashed contacts past the retention window are deleted for
+//   good, each in its own owner's scope;
+// - the merge purge: a merged-away contact whose merge can no longer be undone
+//   goes, with the merge log entries past the undo window;
 // - the upload sweep: files under an account's folder that no row uses.
-// =============================================================================
 
 import { defineJob } from "./runner.ts";
 import { contactService } from "../services/contactService.ts";

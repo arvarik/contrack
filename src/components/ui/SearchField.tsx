@@ -1,16 +1,8 @@
 /**
- * SearchField — the search box: the glass, the field in `SEARCH_INPUT`, no
- * spelling help, and one clear button.
- *
- * Names, places and companies are not words. A phone that corrects them
- * turns a surname into a word, a red line sits under each name, and "tag:"
- * gains a capital. Thirteen boxes wrote the three attributes by hand, one
- * map toolbar kept its own copy, and the clear buttons came in six looks,
- * two of them without the 44 px tap box. A new search box takes this one,
- * and `tests/unit/frontend/style/stylesFloor.test.ts` checks that every
- * other field turns the help off through `NO_AUTOCORRECT`.
- *
- * @module components/ui/SearchField
+ * The search box: the glass, the field in `SEARCH_INPUT`, no spelling help,
+ * and one clear button. Names, places and companies are not words, so a
+ * phone must not correct or capitalize them. `stylesFloor.test.ts` checks
+ * that every other such field uses `NO_AUTOCORRECT`.
  */
 import type { InputHTMLAttributes, ReactNode, Ref } from "react";
 import { Search, X } from "lucide-react";
@@ -30,7 +22,7 @@ export const NO_AUTOCORRECT = {
 
 /**
  * The X at the end of a search box: 24 px on screen with a 44 px tap box,
- * centred in a `relative` frame.
+ * centered in a `relative` frame.
  */
 export const ClearButton = ({
   label,

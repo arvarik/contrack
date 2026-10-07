@@ -1,15 +1,7 @@
 /**
- * DossierTab — The "Dossier" tab content: the briefing, the about section,
- * custom attributes, work experience and education, and last the research
- * that filled them in.
- *
- * The briefing card sits at the top. A briefing is a read-before-you-meet
- * summary of the profile and the past notes, which is the same kind of
- * reading as the dossier under it. The research card sits at the bottom: it
- * says where the details above came from, which a reader wants after the
- * details, not before them.
- *
- * Extracted from ContactProfile to keep each section focused and readable.
+ * The Dossier tab: the briefing, about, custom attributes, experience and
+ * education, and last the research card, which says where the details above
+ * came from.
  */
 import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
@@ -45,10 +37,6 @@ import { AiSetupNote } from "../../../components/AiSetupNote";
 import { useBlockedAi } from "../../../hooks/useAiSetup";
 import type { ResearchAnchor } from "../../../lib/research";
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Props
-// ═══════════════════════════════════════════════════════════════════════════
-
 /** The `useGenerateBriefing()` mutation, or anything shaped like it. */
 export interface BriefingMutation {
   mutate: (
@@ -61,10 +49,7 @@ export interface BriefingMutation {
 interface DossierTabProps {
   contact: Contact;
   generateBriefing?: BriefingMutation;
-  /**
-   * Opens the field for a detail that helps research, when research found
-   * no page: the Research card's "Add a city" and the rest.
-   */
+  /** Opens the field for a detail that helps research ("Add a city"). */
   onAddDetail?: (anchor: ResearchAnchor) => void;
   /**
    * A "Catch me up" request from the palette, a new number each time. The
@@ -74,21 +59,11 @@ interface DossierTabProps {
   onBriefHandled?: () => void;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Component
-// ═══════════════════════════════════════════════════════════════════════════
-
 /**
- * Empty state: a contact with no bio, no work history, no education, and no
- * notes to pull a dossier from.
- *
- * An empty state has to answer "what is missing and how do I get it". The
- * answer is here, not on another page: Enrich contact researches this
- * person at the depth chosen from its menu, and the progress panel opens.
- * It linked to the Enrichment settings page when that page was the only
- * place research could start. The hand-made path it names is the one the
- * page has: a city and an email in Details, and a link in the header. It
- * used to offer "paste a bio into a note", and a note fills no field.
+ * Empty state: no bio, work history, education or notes. It says how to
+ * fill the dossier on this page: Enrich contact, or a city and an email in
+ * Details and a link in the header. A note fills no field, so it does not
+ * offer one.
  */
 const EmptyDossier = ({ contact }: { contact: Contact }) => {
   const aiAllowed = useAiAllowed();
@@ -131,12 +106,8 @@ const EmptyDossier = ({ contact }: { contact: Contact }) => {
 const BRIEFING_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 
 /**
- * The briefing: three points to read before a conversation.
- *
- * It was a sparkle button beside the company name that opened a modal. The
- * button had no label, and the modal covered the page the points were about.
- * Here it is a card at the top of the dossier. It has a labelled button, and
- * the points stay on screen while the person scrolls.
+ * The briefing: three points to read before a conversation. It is a card,
+ * not a modal, so the points stay on screen beside the page they are about.
  */
 function BriefingCard({
   contact,
@@ -154,14 +125,12 @@ function BriefingCard({
   /** The request answered last. StrictMode runs a mount effect twice. */
   const answeredRef = useRef<number | null>(null);
   const aiAllowed = useAiAllowed();
-  // No model to write it: the button waits and says why, where it looked
-  // ready and then failed.
+  // No model to write it: the button is disabled and says why.
   const blocked = useBlockedAi("briefings");
   const [failed, setFailed] = useState(false);
   const pending = generateBriefing?.isPending ?? false;
 
-  // The points of a briefing written in the last three days. An older one
-  // counts as no briefing, so the card offers to write a new one.
+  // A stale briefing counts as none, so the card offers a new one.
   const points = useMemo(() => {
     if (!contact.aiBriefing || !contact.aiBriefingAt) return [];
     const age = Date.now() - new Date(contact.aiBriefingAt).getTime();
@@ -179,9 +148,8 @@ function BriefingCard({
     });
   };
 
-  // "Catch me up" from the palette: bring the card into view and give it
-  // focus, so a screen reader reads the briefing next. With no recent
-  // briefing, and AI on, write one: that is what the person asked for.
+  // "Catch me up": focus the card so a screen reader reads the briefing
+  // next, and write one if there is none.
   useEffect(() => {
     if (!briefRequest || answeredRef.current === briefRequest) return;
     answeredRef.current = briefRequest;
@@ -195,8 +163,7 @@ function BriefingCard({
   }, [briefRequest]);
 
   return (
-    // `tabIndex={-1}` lets focus land here for "Catch me up" without adding
-    // a Tab stop. No ring: it is a place, not a control.
+    // `tabIndex={-1}`: focus target for "Catch me up", not a Tab stop.
     <section
       ref={sectionRef}
       tabIndex={-1}
@@ -220,7 +187,7 @@ function BriefingCard({
           <ul className="mt-4 space-y-3">
             {points.map((point, index) => (
               <li key={index} className="flex gap-3">
-                {/* A model wrote the points, so the bullet is the AI colour. */}
+                {/* A model wrote the points, so the bullet is the AI color. */}
                 <span aria-hidden="true" className="text-ai font-bold">
                   •
                 </span>
@@ -233,15 +200,10 @@ function BriefingCard({
         )
       )}
 
-      {/* Always in the page, so a screen reader announces the text when it
-          arrives. The margin is conditional rather than `empty:mt-0`: the
-          row always holds the `<p>` element, so `:empty` never matches it
-          and the gap would never collapse.
-
-          The bird sits beside the live region rather than inside it: a named
-          image within a `role="status"` would be read out as part of every
-          announcement. It is decorative here, because the sentence next to it
-          already says what is happening. */}
+      {/* The live region is always in the page, so a screen reader announces
+          new text. `empty:mt-0` would never match: the row always holds the
+          `<p>`. The bird sits outside the `role="status"`, so it is not read
+          in every announcement. */}
       <div className={cn("flex items-center gap-2", pending && "mt-3")}>
         {pending && (
           <CorvidThinking decorative size={20} className="shrink-0" />
@@ -312,8 +274,6 @@ const DossierTabInner: React.FC<DossierTabProps> = ({
   briefRequest,
   onBriefHandled,
 }) => {
-  // Every section below is conditional, so "nothing to show" needs answering
-  // once, here, rather than as a blank space.
   const hasContent =
     !!contact.aiBackground ||
     !!contact.aiResearch ||
@@ -325,7 +285,6 @@ const DossierTabInner: React.FC<DossierTabProps> = ({
 
   return (
     <div className="flex flex-col gap-6">
-      {/* First, and shown whether or not there is a dossier yet. */}
       <BriefingCard
         contact={contact}
         generateBriefing={generateBriefing}
@@ -349,9 +308,8 @@ const metaLine = (
 ): string => [first, second].filter(Boolean).join(separator);
 
 /**
- * "Dec 2024" for an ISO month or day. An import keeps a date as it found
- * it, so other text shows as written, and the "null" some imports wrote is
- * nothing. The raw "2024-12-07" read as a database field.
+ * "Dec 2024" for an ISO month or day. Other text shows as written, and the
+ * string "null" that some imports write is nothing.
  */
 function monthOf(value: string | null | undefined): string | null {
   if (!value || value === "null") return null;
@@ -366,7 +324,7 @@ function monthOf(value: string | null | undefined): string | null {
 
 /**
  * "Dec 2024 – Present", or whichever end is known. An end alone is "Until
- * Dec 2024": printed bare, it read as the start.
+ * Dec 2024", because a bare date reads as the start.
  */
 const dateSpan = (
   start: string | null,
@@ -379,7 +337,6 @@ const dateSpan = (
   return metaLine(from, to ?? (current ? "Present" : null), " – ");
 };
 
-/** Every dossier section that has something to show. */
 const DossierContent = ({
   contact,
   onAddDetail,
@@ -395,14 +352,12 @@ const DossierContent = ({
     >
       {contact.about && <AboutSection about={contact.about} />}
 
-      {/* AI custom attributes. Enrichment writes them, so each name wears
-          the AI colour. */}
+      {/* Enrichment writes these, so each name wears the AI color. */}
       {contact.attributes && contact.attributes.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {contact.attributes.map(
             (attr: { id: string; name: string; value: string }) => {
-              // "favorite_coffee" reads "Favorite coffee": spaces for the
-              // underscores and hyphens, and sentence case.
+              // "favorite_coffee" reads "Favorite coffee".
               const displayName = attr.name
                 .replace(/[_-]/g, " ")
                 .replace(/^\w/, (c) => c.toUpperCase());
@@ -421,7 +376,6 @@ const DossierContent = ({
         </div>
       )}
 
-      {/* Experience & Education */}
       {((contact.experience?.length ?? 0) > 0 ||
         (contact.education?.length ?? 0) > 0) && (
         <div className={cn(CARD, "p-0 overflow-hidden")}>
@@ -451,8 +405,7 @@ const DossierContent = ({
                           exp.location,
                         )}
                       </p>
-                      {/* All of it. Two lines that opened on hover could
-                          not be read with a finger. */}
+                      {/* In full: a hover-to-expand clamp fails on touch. */}
                       {exp.description && (
                         <p className="text-xs text-on-surface-variant leading-relaxed mt-1">
                           {exp.description}
@@ -500,16 +453,9 @@ const DossierContent = ({
 
 export const DossierTab = React.memo(DossierTabInner);
 
-// ─── AboutSection ────────────────────────────────────────────────────────────
-
 /**
- * The contact's bio, as a card like Briefing, Experience and Education.
- *
- * It had a 4 px primary bar down its left edge and a sparkle in its heading.
- * No other card wears a bar, and in this design the sparkle means "a model
- * wrote this", which a bio need not be. So the card is plain: a heading with
- * a neutral icon, the text at a readable measure, and Show more when the
- * text runs past about ten lines.
+ * The contact's bio. The icon is neutral, not a sparkle: the sparkle means
+ * "a model wrote this", and a bio need not be. Show more past ten lines.
  */
 function AboutSection({ about }: { about: string }) {
   const headingId = useId();
@@ -532,8 +478,7 @@ function AboutSection({ about }: { about: string }) {
         >
           {about}
         </p>
-        {/* The fade is the card's own surface, so the cut reads as the
-            text running on, not as a box drawn over it. */}
+        {/* The fade uses the card's surface, so the text reads as running on. */}
         {collapsed && (
           <div
             aria-hidden="true"

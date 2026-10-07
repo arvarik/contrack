@@ -1,3 +1,4 @@
+/** Hooks for contacts: reads, writes and bulk changes, with optimistic cache updates. */
 import { toast } from "sonner";
 import {
   contactQuery,
@@ -8,14 +9,6 @@ import {
   storeContact,
   writeContactInOrder,
 } from "./contactCache";
-/**
- * Contact API Hooks — React Query hooks for all contact CRUD operations.
- *
- * Provides `useContacts`, `useContact`, `useCreateContact`, `useUpdateContact`,
- * `useDeleteContact`, and bulk operations with optimistic cache updates.
- *
- * @module api/contacts
- */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { STALE_TIMES } from "../lib/queryConfig";
 import { corvidReact } from "../lib/corvid";
@@ -35,17 +28,14 @@ import { watchNewContact } from "../lib/mergeNotice";
 import { errorText } from "../lib/utils";
 
 /**
- * Canonical fetcher for the `['contacts']` query — the single source of truth
- * shared by `useContacts`, `useContactNames`, `useSlimContactsForSearch`, and
- * the cold-boot prefetch in main.tsx. All consumers share one cache slot and
- * project their own shape via `select`.
+ * The one fetcher for the `['contacts']` query. Every reader shares its cache
+ * slot and projects its own shape with `select`.
  */
 export const fetchContactsSlim = async (context?: {
   signal?: AbortSignal;
 }): Promise<Contact[]> =>
-  // The slim view sends `SlimContact` rows: emails and phones as bare values,
-  // and empty child arrays. The views read them as Contacts, so the type is
-  // kept here at the fetch.
+  // The slim view sends `SlimContact` rows, with bare emails and phones and
+  // empty child arrays. The views read them as Contacts.
   (await apiJson(contactRoutes.list, "/contacts?view=slim", {
     signal: context?.signal,
   })) as Contact[];
@@ -54,21 +44,14 @@ export const useContacts = () => {
   return useQuery({
     queryKey: ["contacts"],
     queryFn: fetchContactsSlim,
-    staleTime: 600_000, // 10 minutes — navigating back to Network is now instant
+    staleTime: 600_000, // 10 minutes, so going back to Network is instant
   });
 };
 
 /**
- * Slim contact projection for secondary consumers that only need
- * name + avatar fields (mentions, command palette, etc.).
- *
- * Shares the same query key/cache as `useContacts()` but uses
- * TanStack Query's `select` to project a stable, minimal shape.
- * This prevents re-renders when unrelated contact fields change.
- *
- * The score and the last contact are here for the ring around each avatar.
- * The ring needs both, because a contact with no logged interaction shows no
- * score (see `contactScore` in shared/scoreBand).
+ * The name-and-avatar projection, for mentions, the palette and the like.
+ * The score and the last contact are for the avatar's ring, which shows no
+ * score for a contact never contacted (`contactScore` in shared/scoreBand).
  */
 export interface ContactSlim {
   id: string;
@@ -82,11 +65,9 @@ export interface ContactSlim {
 }
 
 /**
- * The three projections below are module functions, not inline arrows.
- * TanStack Query runs `select` again whenever it gets a new function, so an
- * inline one walked all the contacts on every render of the component that
- * read it: the map, the palette and the note dialog render on each page
- * switch. A module function runs once each time the list itself changes.
+ * The projections are module functions, not inline arrows: TanStack Query
+ * reruns `select` for each new function, so an inline one walks every
+ * contact on each render.
  */
 type SlimContacts = Awaited<ReturnType<typeof fetchContactsSlim>>;
 
@@ -112,13 +93,8 @@ export const useContactNames = () => {
 };
 
 /**
- * Searchable slim contact projection for latency masking (Feature 8).
- *
- * Shares the same query key/cache as useContacts — zero extra network cost.
- * Projects the fields needed for instant client-side search:
- * name, role, company, location, industry, tags, score, updatedAt, avatarUrl.
- *
- * Used by `useInstantSearch()` to deliver 0ms search results on every keystroke.
+ * The projection `useInstantSearch()` searches on each keystroke, in the
+ * browser, from the same cache as `useContacts`.
  */
 export interface SlimSearchContact {
   id: string;
@@ -301,8 +277,8 @@ export const useUpdateContact = () => {
 type ContactLocationInput = BodyOf<typeof contactRoutes.location>;
 
 /**
- * Move a contact's pin by hand, or hand it back to the geocoder. The answer is
- * the whole contact, and it goes straight into both caches.
+ * Moves a contact's pin by hand, or hands it back to the geocoder. The
+ * answer, the whole contact, goes into both caches.
  */
 export const useSetContactLocation = () => {
   const queryClient = useQueryClient();
@@ -370,12 +346,9 @@ interface SetTrackedInput {
 }
 
 /**
- * Track or untrack one contact.
- *
- * The flag lands in both caches before the server answers, so the ring
- * appears or goes as the button is pressed, and the answer then replaces
- * it: a flip to tracked comes back with the cadence the server chose and a
- * fresh score. A failed write puts both caches back.
+ * Tracks or untracks one contact. The flag lands in both caches before the
+ * server answers, and the answer (with the cadence and a fresh score)
+ * replaces it. A failed write puts both caches back.
  */
 export const useSetTracked = () => {
   const queryClient = useQueryClient();

@@ -1,14 +1,6 @@
-// =============================================================================
-// AI Layer — Capability Gateway
-// =============================================================================
-// The single entry point business logic uses to run a generation. Callers say
-// *what kind of work* it is ("quick", "deep", "research") and the gateway
-// resolves the provider and model from the user's capability configuration.
-//
-// This replaces the old pattern of calling a single shared provider with a
-// `routing.prefer` class — that only ever worked when one provider served
-// everything.
-// =============================================================================
+// The single entry point business code uses to run a generation. Callers say
+// what kind of work it is ("quick", "deep", "research"), and the gateway
+// resolves the provider and model from the capability configuration.
 
 import type { AIGenerateOptions, AIGenerateResult } from "./types.ts";
 export type { AIGenerateResult } from "./types.ts";
@@ -41,9 +33,9 @@ export type GatewayOptions = Omit<AIGenerateOptions, "routing"> & {
   lane?: QueueLane;
   /**
    * Runs when the call gets its slot, just before it goes to the provider.
-   * Throw to refuse the call. A call can wait in the queue for a while, so a
-   * caller whose permission can change in that time checks it here: contact
-   * research reads the account's AI switch.
+   * Throw to refuse it. A call can wait in the queue a while, so a caller whose
+   * permission can change meanwhile checks it here: contact research reads the
+   * account's AI switch.
    */
   beforeSend?: () => void;
 };
@@ -132,9 +124,8 @@ function runQueued(
     Number.isFinite(overrideMs) && overrideMs > 0
       ? overrideMs
       : (options.timeoutMs ?? 60_000);
-  // The ceiling was 90 s. Contact research's search pass asks for 120: at
-  // thinking "high", Gemini 3.8 Flash took from 20 s to more than 75 s on
-  // one contact's research prompt (2026-09-26). No other caller asks for
+  // At most 150 s. Contact research asks for 120 (`ASK_TIMEOUT_MS`): one
+  // search ask takes from 15 s to more than 80 s. No other caller asks for
   // more than 90.
   const timeoutMs =
     Number.isFinite(requestedMs) && requestedMs > 0
@@ -144,10 +135,10 @@ function runQueued(
     (signal) =>
       generations.run(
         () => {
-          // Asked again when the slot comes up. A job can wait in the queue
-          // for a while, and an admin who turns AI off in that time expects
-          // the waiting jobs to stop as well. The caller's own check comes
-          // first, so its refusal is the one the caller sees.
+          // Asked again when the slot comes up: a job can wait a while, and an
+          // admin who turns AI off meanwhile expects waiting jobs to stop. The
+          // caller's own check runs first, so its refusal is the one the caller
+          // sees.
           beforeSend?.();
           if (isAiOffForInstance()) throw aiOffError();
           return call(resolved, {

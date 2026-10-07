@@ -1,11 +1,8 @@
-// =============================================================================
-// Unit: a pinned model answers once before the pin is saved
-// =============================================================================
-// On 2026-09-26 OpenAI's model list carried nine deprecated models that answer
-// 404 and seven that Chat Completions refuses, and every one of them could be
-// saved as a pin. The probe sends the model one tiny request, the way its
-// capability will call it, and refuses the pin when it does not answer.
-// =============================================================================
+// Unit: a pinned model answers once before the pin is saved.
+// A provider's model list can carry deprecated models that answer 404 and
+// models Chat Completions refuses (OpenAI listed sixteen). The probe sends the
+// model one tiny request, as its capability will call it, and refuses the pin
+// when it does not answer.
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 

@@ -1,33 +1,24 @@
 /**
- * CorvidMark: the corvid as an inline SVG.
+ * The corvid as an inline SVG. The ring is the C the bird sits in, and
+ * nothing moves it. The bird is everything else, under `[data-bird]`, and
+ * only it animates: a blink, a preen, the thinking tilt, a flight.
  *
- * Two things in one drawing. The ring is the C the bird sits in, and nothing
- * ever moves it. The bird is everything else, grouped under `[data-bird]`,
- * and it is the only thing any animation touches: a blink, a preen, the
- * thinking tilt, a flight. When the bird flies, the ring stays where it is,
- * empty, until the bird lands in it again.
+ * `mark` is the logo at its own weight, the one the rig moves. `glyph` is the
+ * small optical size (`CORVID_OPTICAL.small`) for a bird at 16 to 20 px.
+ * Both stroke with `currentColor`, so a mark on `text-primary` follows the
+ * chosen accent. The eye fills with `--color-corvid-eye`, so a rose bird
+ * keeps its cyan eye.
  *
- * Two variants. `mark` is the logo at its own weight, the one the rig moves.
- * `glyph` is the small optical size (`CORVID_OPTICAL.small`), for a bird at
- * 16 to 20 px: every part, at a heavier stroke and with a larger eye, the
- * same master the favicon draws at 32 px. Both stroke with `currentColor`,
- * so a mark on `text-primary` follows the accent a person chose in Settings.
- * The eye does not: it fills with `--color-corvid-eye`, so a rose bird keeps
- * its cyan eye.
+ * Decorative by default (`aria-hidden`), because the page title names the
+ * app. `decorative={false}` gives `role="img"` named "Contrack". Never
+ * focusable.
  *
- * Decorative by default. The page title already names the app, and a
- * picture that repeats it is noise to a screen reader, so the SVG is
- * `aria-hidden` unless `decorative={false}` asks for `role="img"` with the
- * name "Contrack". It is never focusable.
+ * Every part has an id, `<prefix>-wing` and so on, and a `data-part` without
+ * the prefix. The prefix is unique per instance unless the caller sets it.
+ * The sidebar perch passes `idPrefix="corvid"`.
  *
- * Every part carries an id, `<prefix>-wing`, `<prefix>-eye` and so on, and a
- * `data-part` with the same name without the prefix. The prefix is unique
- * per instance unless the caller sets it. The sidebar perch passes
- * `idPrefix="corvid"`.
- *
- * `alive` gives the bird a life of its own (see `useCorvidLife`). `hop` plays
- * one hop when the mark appears. Both read the motion level themselves, so a
- * caller may pass either without checking it first.
+ * `alive` gives the bird a life of its own (`useCorvidLife`), and `hop` plays
+ * one hop when the mark appears. Both read the motion level themselves.
  */
 import React, { useId, useRef } from "react";
 import {
@@ -66,7 +57,7 @@ interface CorvidMarkProps extends Omit<
    * the mark is decorative, which is the default.
    */
   label?: string;
-  /** A native tooltip, for a mark that stands where a word used to. */
+  /** A native tooltip, for a mark that stands in place of a word. */
   title?: string;
   /** The stem of every part's id. Unique per instance when not given. */
   idPrefix?: string;

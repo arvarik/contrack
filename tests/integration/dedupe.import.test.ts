@@ -1,23 +1,12 @@
-// =============================================================================
-// Integration Tests — one scan after a bulk import
-// =============================================================================
-// The import used to check each new contact on its own, and each of those
-// checks normalized the whole account and built a whole pass context. An
-// import of `n` contacts into a corpus of `m` did about `n × m` work, and
-// almost all of it was the same work done again.
-//
-// Two things have to hold for the replacement to be worth having.
+// Integration: one dedupe scan after a bulk import.
+// Checking each new contact on its own would normalize the whole account per
+// contact, about `n × m` work for `n` new contacts in a corpus of `m`.
 //
 // 1. IT COSTS ONE PASS. The corpus is normalized once per import, whatever
-//    the size of the import. This is asserted by counting, not by timing, so
-//    it cannot pass on a fast machine and fail on a slow one. The wall clock
-//    test at the end is a second opinion with a deliberately loose bound.
-//
-// 2. IT FINDS THE SAME DUPLICATES. A rearrangement of the work that quietly
-//    changed what counts as a duplicate would be a much worse bug than the
-//    slowness it fixed. Each matcher has a case below, at the confidence it
-//    is supposed to carry.
-// =============================================================================
+//    its size. This is asserted by counting, not timing, so machine speed does
+//    not matter. The wall-clock test at the end has a loose bound.
+// 2. IT FINDS THE SAME DUPLICATES. Each matcher has a case below, at the
+//    confidence it should carry.
 
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import request from "supertest";
@@ -134,7 +123,7 @@ describe("dedupeService.runImportScan, the cost", () => {
 
       await dedupeService.runImportScan(scope, imported, "test");
 
-      // The number that matters: one per contact before this change.
+      // The number that matters: once per import, not once per contact.
       expect(calls.normalizeContacts).toBe(1);
       // `buildPassContext` loads and normalizes the account twice over, and
       // the per-contact check called it once per contact for one map out of it.
@@ -197,8 +186,8 @@ describe("dedupeService.runImportScan, what it finds", () => {
     expect(result.autoMerged).toBe(1);
     const rows = suggestions();
     expect(rows[0].matchType).toBe("phone");
-    // 0.95, the scan's number, and not the 0.99 this path used to claim: a
-    // shared number is the weaker of the two anchors on both paths now.
+    // 0.95, the scan's number: a shared number is the weaker of the two
+    // anchors on both paths.
     expect(rows[0].confidence).toBeCloseTo(0.95, 5);
   });
 
@@ -435,10 +424,8 @@ describe("POST /api/contacts/bulk with a stream", () => {
   it("finds a nickname, which the matching it used to carry could not", async () => {
     await seed([{ name: "Robert Nakamura" }]);
 
-    // The streaming branch had its own two hundred and fifty lines of
-    // matching: exact name, email, phone, and nothing else. The same import
-    // through the JSON branch found this and the stream did not, so what
-    // counted as a duplicate depended on the Accept header.
+    // The streaming and JSON branches share one matcher, so what counts as a
+    // duplicate does not depend on the Accept header.
     const summary = await streamImport([{ name: "Bob Nakamura" }]);
 
     expect(summary.needsReview).toBe(1);
@@ -454,12 +441,9 @@ describe("POST /api/contacts/bulk with a stream", () => {
       { name: "David Lee", company: "Meridian Health Trust" },
     ]);
 
-    // A DELIBERATE CHANGE. The matching this branch used to carry scored an
-    // exact name match at 0.95 and merged it, on the reasoning that a name
-    // that already exists is "almost certainly a duplicate". Two people can
-    // share a name, and a merge is how one of them stops existing. Every
-    // path scores a bare name match 0.90, the scan's number, and two
-    // employers on the records cap it at 0.85, below every preset.
+    // Two people can share a name, and a merge is how one of them stops
+    // existing. Every path scores a bare name match 0.90, the scan's number,
+    // and two employers on the records cap it at 0.85, below every preset.
     expect(summary.autoMerged).toBe(0);
     expect(summary.needsReview).toBe(1);
     expect(canonicalIdOf(existing)).toBeNull();

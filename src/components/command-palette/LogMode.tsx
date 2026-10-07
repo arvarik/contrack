@@ -3,18 +3,14 @@
  * line, one step at a time (`actionMode.ts`).
  *
  * 1. `>`: the four kinds. Picking one types `> note `. Words that are no
- *    kind, as the `> Log` chip leaves them, are the name: `> nancy` offers
- *    each kind for Nancy.
- * 2. `> note Tyl`: the contacts whose names match. Picking one types
- *    `> note Tyler Jackson: `.
- * 3. `> note Tyler Jackson: Sent the deck`: the row that logs it, and the
+ *    kind are the name: `> rowan` offers each kind for Rowan.
+ * 2. `> note Row`: the contacts whose names match. Picking one types
+ *    `> note Rowan Vale: `.
+ * 3. `> note Rowan Vale: Sent the deck`: the row that logs it, and the
  *    other people the name could mean.
  *
  * Each step is plain text in the box, so the whole line typed in one go
- * still works. It renders in two parts, as `AiMode` does: `notes` above
- * the list and `rows` inside it, which holds rows only.
- *
- * @module components/command-palette/LogMode
+ * works. It renders `notes` above the list and `rows` inside it.
  */
 import { Command } from "cmdk";
 import {
@@ -78,8 +74,8 @@ export const LogMode = ({
   /** Escape was pressed once on a typed note: the next one discards it. */
   discardArmed: boolean;
   /**
-   * The words the `> Log` chip carried over: a name, even when it starts
-   * like a kind. "cal" for Calvin offered only "Log a call" and lost him.
+   * The words the `> Log` chip carried over: a name, even one that starts
+   * like a kind ("cal").
    */
   nameHint: string;
   /** Puts this text in the input: the next step. */

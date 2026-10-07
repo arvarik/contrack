@@ -1,13 +1,7 @@
-// =============================================================================
-// Settings Service — persisted app configuration (key/value JSON)
-// =============================================================================
-// Backs the AI capability configuration (provider keys, custom endpoints,
-// capability assignments, cached model lists). Values are JSON blobs stored
-// in the `app_settings` table created in db.ts.
-//
-// Reads are cached in memory because they sit on the AI request path; the
-// cache is invalidated on every write (single process, single writer).
-// =============================================================================
+// Persisted app settings: JSON values in `app_settings`, keyed by name
+// (provider keys, custom endpoints, capability assignments, cached model lists,
+// and the rest below). Reads are cached in memory because they sit on the AI
+// request path; every write clears the cache (one process, one writer).
 
 import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
@@ -59,9 +53,7 @@ export function clearSettingsCache(): void {
   cache.clear();
 }
 
-// =============================================================================
 // Known setting keys
-// =============================================================================
 
 export const SETTING_KEYS = {
   /** Record<capability, CapabilityAssignment> */

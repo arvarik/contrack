@@ -1,31 +1,14 @@
 /**
- * a11y.ts — helpers for making non-button elements behave like buttons.
- *
- * The app has a number of places where a `<div>` or `<span>` carries an
- * onClick: clickable cards, click-to-edit text, custom dropdown rows. A real
- * `<button>` is always the better answer and is used where it is possible —
- * but it is not always possible, because a button may not contain another
- * interactive element, and several of these wrappers legitimately do (a card
- * with its own action buttons inside, a row containing a link).
- *
- * For those, the correct markup is the ARIA button pattern: a role, a tab
- * stop, and a key handler that responds to the same keys a real button does.
- * Doing that by hand at twenty call sites invites twenty subtly different
- * versions, so it lives here once.
- *
- * @module lib/a11y
+ * Keyboard helpers for the ARIA patterns the app builds by hand: an element
+ * that acts as a button where a `<button>` cannot be used (it holds another
+ * control), and a radio group.
  */
 import type { KeyboardEvent, PointerEvent } from "react";
 
 /**
- * Run `handler` when the element is activated by keyboard, matching native
- * button behaviour: Enter and Space both fire.
- *
- * Space is prevented from scrolling the page, which is what the browser would
- * otherwise do — and Enter from submitting an enclosing form.
- *
- * Events originating from a nested interactive element are ignored, so a
- * button inside a clickable card does not also trigger the card.
+ * Run `handler` on Enter or Space, as a native button does, without the
+ * page scroll or the form submit. A key from a nested element is ignored, so
+ * a button inside a clickable card does not also fire the card.
  *
  * @example
  * <div role="button" tabIndex={0} onClick={open} onKeyDown={activateOnKey(open)}>
@@ -42,11 +25,8 @@ export function activateOnKey(handler: () => void) {
 /**
  * The arrow keys of an option in a radio group. Right and Down move to the
  * next option, Left and Up to the one before, wrapping at the ends, and the
- * option they reach takes focus and is chosen, by its own click.
- *
- * On each radio rather than on the group, where focus is: a group that
- * listens has to be focusable itself, which a radiogroup is not. `Segmented`
- * and `AccentPicker` do the same with their own values.
+ * option reached takes focus and is chosen by its own click. It sits on each
+ * radio, where focus is, because a radiogroup is not focusable.
  *
  * @example
  * <button role="radio" aria-checked={on} tabIndex={radioTabIndex(on, i, any)} onKeyDown={radioKeys} />
@@ -94,11 +74,9 @@ export function radioTabIndex(
 }
 
 /**
- * Hovering a row in a menu or a list box makes it the current row: it takes
- * focus, as in the system's own menus. The row focused when the menu opened
- * gives up its tint, so a menu opened by a click shows one current row, the
- * one under the pointer, and not two. A touch never moves focus: a finger
- * on a list is scrolling it.
+ * Hovering a row in a menu or a list box focuses it, as in the system's own
+ * menus, so a menu shows one current row, not two. A touch never moves
+ * focus: a finger on a list is scrolling it.
  */
 export function focusOnPointer(event: PointerEvent<HTMLElement>) {
   if (event.pointerType === "touch") return;
@@ -108,10 +86,9 @@ export function focusOnPointer(event: PointerEvent<HTMLElement>) {
 }
 
 /**
- * How a scroll the app starts should move: at once when less motion is asked
- * for, by the account's Motion setting or by the system, and smoothly
- * otherwise. The CSS already stops smooth scrolling for "reduced", but a
- * script that asks for "smooth" overrides the CSS, so it asks here first.
+ * How a scroll the app starts should move: at once when the Motion setting
+ * or the system asks for less motion, smoothly otherwise. A script that asks
+ * for "smooth" overrides the CSS, so it asks here first.
  */
 export function scrollBehavior(): ScrollBehavior {
   const motion = document.documentElement.getAttribute("data-motion");

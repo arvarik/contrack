@@ -1,21 +1,7 @@
 /**
- * DedupeContext — Global state for a check for duplicates.
- *
- * Provides:
- * - startScan(mode): starts a check and connects SSE
- * - scan: the check's progress (live-updated via SSE), and its counts once
- *   it finishes
- * - isScanning: whether a check is in progress
- * - reset(): clear state for a new check
- *
- * A check fills Possible duplicates on the server, and the review list reads
- * it from there, so nothing here holds what a check found.
- *
- * State persists across route changes because this provider is mounted
- * at the App root, allowing the user to navigate away and return.
- *
- * On mount, checks the server for any in-progress scan and recovers
- * the SSE connection — handles page refresh during an active scan.
+ * App-wide state for a check for duplicates: its progress, and its counts
+ * once done. What a check finds lives on the server, in Possible duplicates.
+ * On mount it reattaches to a scan that is still running, after a reload.
  */
 import React, {
   createContext,
@@ -59,44 +45,35 @@ export function useDedupe() {
 }
 
 /**
- * Failed polls in a row before the wait is abandoned.
- *
- * Ten at three seconds is half a minute. The server keeps the booked place
- * either way, so giving up early is worse than waiting: the pre-scan page
- * offers a button the server answers "a scan is already running for your
- * account".
+ * Failed polls in a row (half a minute) before the wait is abandoned. The
+ * server keeps the booked place either way, and the pre-scan page's button
+ * would be refused.
  */
 const QUEUE_POLL_MAX_FAILURES = 10;
 
 export function DedupeProvider({ children }: { children: React.ReactNode }) {
   const [scan, setScan] = useState<DedupeScanProgress | null>(null);
   const [scanId, setScanId] = useState<string | null>(null);
-  // The run lock is global for 2.0, so one account at a time scans and the
-  // rest wait. `queued` is that wait, and it is deliberately not a scan: the
-  // scan record exists on the server but nothing is happening in it.
+  // The run lock is global, so one account scans at a time. `queued` is the
+  // wait, and not a scan: its record exists but nothing runs in it.
   const [queued, setQueued] = useState(false);
-  // The id of the scan the server booked for us. Read only by the poll below,
-  // to recover a scan that started and finished between two of its ticks.
+  // The booked scan's id, for a scan that runs between two poll ticks.
   const queuedScanId = useRef<string | null>(null);
   const startMutation = useStartDedupeScan();
 
-  // The mount-only recovery below must read the scanId AT RESOLVE TIME — a
-  // scan the user starts while the fetch is in flight must win. Depending on
-  // scanId would refire the fetch instead; a ref carries the live value into
-  // the closure without re-running the effect.
+  // The mount-only recovery reads the scanId when it resolves, so a scan
+  // started while the fetch is in flight wins.
   const liveScanId = useRef(scanId);
   useEffect(() => {
     liveScanId.current = scanId;
   }, [scanId]);
 
-  // On mount, check if the server has an in-progress scan and recover state.
-  // This handles page refresh during an active scan — without it, the user
-  // would see the pre-scan page while the server is still processing.
+  // On mount, recover a scan the server is still running.
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     fetchActiveScan()
       .then((active) => {
-        if (cancelled) return;
+        if (canceled) return;
         // Only recover if we don't already have a scan in progress
         if (liveScanId.current) return;
         if (active.queued) {
@@ -112,34 +89,24 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
         }
       })
       .catch(() => {
-        // Nothing to recover, or the server refused. A refusal has already
-        // been announced by the shared client, and this page has no better
-        // answer than the pre-scan view it is already showing.
+        // Nothing to recover, or a refusal the shared client announced.
       });
     return () => {
-      cancelled = true;
+      canceled = true;
     };
   }, []); // Run once on mount only
 
   /**
-   * While queued, ask every three seconds whether our turn has come.
+   * While queued, polls every three seconds. Not the stream: a queued scan
+   * sends nothing, and the stream gives up after three silent retries.
    *
-   * The stream is not an option here. A queued scan emits nothing until it
-   * starts, the dedupe SSE has no heartbeat, and the client gives up after
-   * three silent retries — so attaching it now would end with a connection
-   * that closed itself before the scan began.
-   *
-   * Two answers mean the wait is over and they need different handling.
-   * `active.scan` is our turn having started: adopt it and attach the stream.
-   * No active scan at all means the scan ran *and finished* between two
-   * ticks, because `getActiveScan` skips terminal scans — so the record is
-   * fetched by id, which `GET /api/dedupe/status` still serves. Without that
-   * a short scan simply vanished: the waiting card disappeared, the pre-scan
-   * page came back, and the clusters it found were never shown.
+   * `active.scan` means the turn started: adopt it and attach the stream. No
+   * active scan means it ran and finished between ticks (`getActiveScan`
+   * skips finished scans), so the record is fetched by id.
    */
   useEffect(() => {
     if (!queued) return;
-    let cancelled = false;
+    let canceled = false;
     let failures = 0;
     // Consecutive ticks that found nothing at all.
     let misses = 0;
@@ -153,11 +120,10 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
     const tick = async () => {
       try {
         const active = await fetchActiveScan();
-        if (cancelled) return;
+        if (canceled) return;
         failures = 0;
         if (active.queued) {
-          // The queued record is where the scan id comes from. The 429 that
-          // started this wait does not carry one.
+          // The 429 that started the wait carries no scan id. This does.
           queuedScanId.current = active.scan?.scanId ?? queuedScanId.current;
           misses = 0;
           return; // still waiting
@@ -166,29 +132,22 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
           adopt(active.scan);
           return;
         }
-        // Our turn came and went inside the gap. The id was remembered from
-        // the first tick that saw the booked scan, precisely for this.
+        // The turn came and went between ticks.
         const finishedId = queuedScanId.current;
         if (finishedId) {
           const finished = await fetchScan(finishedId);
-          if (cancelled) return;
+          if (canceled) return;
           if (finished) {
             adopt(finished);
             return;
           }
         }
-        // Nothing queued, nothing running, nothing to recover. That is the
-        // end of the wait — but not on one answer. The first tick fires
-        // immediately after the 429, and a server that has not yet published
-        // the booking would otherwise close a wait that had just opened.
+        // Nothing queued or running ends the wait, but not on one answer:
+        // the first tick can beat the server's booking.
         if (++misses >= 2) setQueued(false);
       } catch {
-        if (cancelled) return;
-        // The server still holds our place in line — only the connection is
-        // failing. Dropping the wait would show the pre-scan page, and
-        // pressing Begin Scan there is answered "a scan is already running
-        // for your account", with no way back to the waiting state.
-        // Ten ticks is half a minute before giving up.
+        if (canceled) return;
+        // Only the connection fails, and the server still holds the place.
         if (++failures >= QUEUE_POLL_MAX_FAILURES) setQueued(false);
       }
     };
@@ -196,7 +155,7 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
     void tick();
     const timer = window.setInterval(() => void tick(), 3000);
     return () => {
-      cancelled = true;
+      canceled = true;
       window.clearInterval(timer);
     };
   }, [queued]);
@@ -214,9 +173,8 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
         { mode },
         {
           onSuccess: (result) => {
-            // Set optimistic scan state BEFORE the SSE event arrives.
-            // This prevents the pre-scan page from briefly flashing back during the
-            // ~100-300ms gap between isStarting going false and the first SSE message.
+            // Set before the first event, so the pre-scan page does not flash
+            // back in the gap after `isStarting` goes false.
             setScan({
               scanId: result.scanId,
               mode: result.mode,
@@ -241,16 +199,11 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
             setQueued(false);
           },
           onError: (err) => {
-            // A 429 whose `details.yours` is false means another account
-            // holds the run lock. The server has already created this
-            // account's scan and booked its turn, so there is nothing to
-            // retry and nothing has failed — which is why this is not an
-            // error toast and why the view shows a waiting state rather than
-            // a stalled progress bar.
+            // `details.yours` false: another account holds the run lock, and
+            // the server has booked this scan's turn. A wait, not an error.
             const facts = rateLimitFacts(err);
             if (facts && !facts.yours && facts.queued) {
-              // The 429 does not name the scan the server just booked, so the
-              // id comes from the next poll of `/dedupe/active`.
+              // The id comes from the next poll of `/dedupe/active`.
               queuedScanId.current = null;
               setQueued(true);
               toast(
@@ -276,11 +229,7 @@ export function DedupeProvider({ children }: { children: React.ReactNode }) {
   const isScanning =
     !!scan && scan.phase !== "complete" && scan.phase !== "error";
 
-  // Memoize the provider value to avoid forcing every consumer to re-render
-  // when the DedupeProvider's parent re-renders for unrelated reasons.
-  // The SSE stream fires frequently during a scan; without this memo any
-  // ancestor change would create a new value reference and double-fire
-  // consumers in addition to the real SSE updates.
+  // Memoized, so a parent's render does not redraw every consumer.
   const value = useMemo(
     () => ({
       startScan,

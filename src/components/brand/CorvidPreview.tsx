@@ -1,18 +1,12 @@
 /**
- * CorvidPreview — the bird the "Corvid motion" row is about, to try.
+ * The bird the "Corvid motion" row is about, to try: in its ring beside the
+ * three choices, living faster than the sidebar's so a person sees what it
+ * does while reading the row. Press it and it does what the chosen level
+ * does: at "full" a flight round the window and back to this ring, at
+ * "subtle" a flutter where it sits. At "off" it is a still picture and not
+ * a button, since a control that does nothing is an empty Tab stop.
  *
- * A setting about motion is hard to choose from a sentence. This is the
- * bird itself, in its ring beside the three choices, living at a faster
- * pace than the sidebar's so a person sees what it does in the time it
- * takes to read the row. It is a perch in its own right: press it and it
- * does what the chosen level does, from here. At "full" it leaves the ring
- * for a flight round the window and lands back in this ring. At "subtle" it
- * flutters where it sits. At "off", from the account or from reduced motion,
- * it is a still picture and not a button: a control that does nothing is a
- * Tab stop with nothing behind it.
- *
- * It is a button named "Try the corvid". The drawing inside stays
- * `aria-hidden`, like every mark.
+ * The button is named "Try the corvid". The drawing stays `aria-hidden`.
  */
 import { useCallback, useRef } from "react";
 import { CorvidMark } from "./CorvidMark";

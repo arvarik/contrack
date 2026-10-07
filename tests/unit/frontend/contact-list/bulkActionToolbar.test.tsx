@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * The Network list's bulk bar rests while nothing is selected. "0 selected"
- * acts on no one, and Delete was live there.
+ * The Network list's bulk bar rests while nothing is selected: "0 selected"
+ * acts on no one, so Delete must not be live there.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen, within } from "@testing-library/react";

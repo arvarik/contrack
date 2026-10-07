@@ -1,18 +1,11 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The contact timeline: one column, grouped by week and month, and a delete
-// that waits for Undo
-// =============================================================================
-// The timeline zigzagged, put a red trash on every card, and deleted on the
-// first click. Now it is one column under "This week" and month headings,
-// each entry has a kebab with Edit and Delete, and Delete asks first.
+// The contact timeline: one column under "This week" and month headings, a
+// kebab with Edit and Delete on each entry, and a Delete that asks first.
 //
-// The server delete is a hard delete with no restore route. So Undo cannot
-// put a row back, and the request has to wait for the undo window to end.
-// These tests hold that promise: nothing is sent before the window ends, it
-// is sent once, Undo sends nothing, and a refetch or leaving the page does
-// not bring the entry back.
-// =============================================================================
+// The server delete is a hard delete with no restore route, so the request
+// waits for the undo window to end. Nothing is sent before then, it is sent
+// once, Undo sends nothing, and a refetch or leaving the page does not bring
+// the entry back.
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -565,9 +558,9 @@ describe("delete", () => {
 });
 
 describe("the entrance", () => {
-  // The contact page is built anew on each return to the Network page. The
-  // tab faded in and every entry slid in again each time, so the page went
-  // on moving for 400 ms after it had drawn.
+  // The contact page is built anew on each return to the Network page, so the
+  // tab and its entries do not animate in again, or the page would keep moving
+  // for 400 ms after it draws.
   it("draws the tab and the entries already there at once", async () => {
     const { view } = await mount();
     expect(view.container.querySelector(".timeline-enter")).toBeNull();

@@ -1,14 +1,11 @@
-/**
- * FeedItem — Single row in the AI Stats activity feed.
- * Shows a cache dot, operation name, model badge, token/latency stats,
- * description, and relative timestamp.
- */
+/** One row of the AI usage activity feed. */
 import React from "react";
 import { cn } from "../../../lib/utils";
 import { motion } from "motion/react";
 import type { AIStatsFeedItem } from "../../../api";
 import { formatDay } from "../../../lib/datetime";
 import { DURATION, EASE } from "../../../lib/motion";
+import { formatCompact } from "../formatCompact";
 
 interface FeedItemProps {
   key?: React.Key;
@@ -17,12 +14,8 @@ interface FeedItemProps {
 }
 
 /**
- * Human-readable labels for operation codes.
- *
- * Covers every entry in AI_OPERATIONS (server/services/aiStatsService.ts).
- * Five were missing, so the feed printed raw keys such as "queryParse" and
- * "aiSearchGrounding" next to properly named rows. Add a label here whenever
- * you add an operation there.
+ * A label for every entry in AI_OPERATIONS (server/services/aiStatsService.ts).
+ * Add one here for each new operation there, or the feed prints the raw key.
  */
 const OP_LABELS: Record<string, string> = {
   briefing: "Briefing",
@@ -48,7 +41,7 @@ function formatRelativeTime(iso: string): string {
   const date = new Date(iso);
   const diffMs = Date.now() - date.getTime();
 
-  // Handle clock skew or very recent items
+  // Under a minute, or in the future from clock skew.
   if (diffMs < 60000) return "just now";
 
   const seconds = Math.floor(diffMs / 1000);
@@ -63,9 +56,7 @@ function formatRelativeTime(iso: string): string {
 
 function formatTokens(n: number | null): string {
   if (n === null || n === undefined) return "—";
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
+  return formatCompact(n);
 }
 
 export const FeedItem = ({ item, index }: FeedItemProps) => {
@@ -77,14 +68,11 @@ export const FeedItem = ({ item, index }: FeedItemProps) => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: DURATION.slow, delay: index * 0.03, ease: EASE }}
       className={cn(
-        // A contained row rather than a ruled one: the bottom-only border read
-        // as an unfinished table, and the app separates things by surface
-        // elsewhere (see the sidebar utility group). A row that is not a
-        // control, so it has no hover.
+        // A contained row, not a ruled one: the app separates things by
+        // surface. It is not a control, so it has no hover.
         "flex items-start gap-3 px-3 py-2.5 rounded-xl bg-surface-container-lowest",
       )}
     >
-      {/* Cache dot */}
       <div className="mt-1.5 shrink-0">
         <div
           className={cn(
@@ -94,12 +82,10 @@ export const FeedItem = ({ item, index }: FeedItemProps) => {
         />
       </div>
 
-      {/* Main content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-bold text-on-surface">{opLabel}</span>
 
-          {/* Model badge or the Reused pill */}
           {item.cached ? (
             <span className="text-[11px] font-bold uppercase tracking-[0.08em] px-1.5 py-0.5 rounded bg-success/10 text-success ring-1 ring-success/20">
               Reused
@@ -114,7 +100,6 @@ export const FeedItem = ({ item, index }: FeedItemProps) => {
             </span>
           ) : null}
 
-          {/* Token + latency stats */}
           <span className="text-[11px] text-on-surface-variant ml-auto shrink-0 tabular-nums">
             {!item.cached && item.tokenCount
               ? `${formatTokens(item.tokenCount)} tokens · `
@@ -123,7 +108,6 @@ export const FeedItem = ({ item, index }: FeedItemProps) => {
           </span>
         </div>
 
-        {/* Description */}
         {item.description && (
           <p className="text-xs text-on-surface-variant mt-0.5 truncate">
             {item.description}
@@ -131,7 +115,6 @@ export const FeedItem = ({ item, index }: FeedItemProps) => {
         )}
       </div>
 
-      {/* Timestamp */}
       <span className="text-[11px] text-on-surface-variant shrink-0 mt-0.5 tabular-nums">
         {formatRelativeTime(item.createdAt)}
       </span>

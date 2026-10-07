@@ -1,10 +1,7 @@
-// =============================================================================
-// Research identity: which of a contact's details help research find them
-// =============================================================================
-// One set of rules for the research prompt and for the dossier's advice when
-// research found no page: an email only at an employer's domain, and a place
-// only when it names a city, not a street.
-// =============================================================================
+// Which of a contact's details help research find them. One set of rules for
+// the research prompt and for the dossier's advice when research found no
+// page: an email only at an employer's domain, a place only when it names a
+// city, not a street.
 
 /** Common free-email domains that offer zero disambiguation signal. */
 const FREE_EMAIL_DOMAINS: ReadonlySet<string> = new Set([
@@ -33,9 +30,8 @@ export function workEmailDomain(
 
 /**
  * Whether an address names a place, such as "San Francisco, CA", and not a
- * street. An address with a digit in it, a house number or a postcode, is
- * not a place: research's place words go into web searches, and a street
- * in a search finds only the few pages that name it.
+ * street. A digit (a house number or a postcode) means a street, which in a
+ * web search finds only the few pages that name it.
  */
 function isPlaceText(text: string | null | undefined): boolean {
   const place = text?.trim();

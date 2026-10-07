@@ -1,10 +1,8 @@
 /**
- * avatarProcessor — Decodes base64 data-URI avatars from VCF imports,
- * resizes them to a reasonable size (256px for 2x retina), converts to
- * JPEG, and saves to the caller's uploads/u/<ownerId>/avatars/. Returns the URL.
- *
- * This prevents 150KB+ raw photos from bloating the SQLite database
- * as enormous base64 strings. A typical processed avatar is ~5-10KB.
+ * Decode a base64 data-URI avatar from a VCF import, resize it to 256 px (2x
+ * retina), convert to JPEG and save it under the caller's
+ * uploads/u/<ownerId>/avatars/, returning the URL. A 150 KB+ photo becomes a 5
+ * to 10 KB file instead of a huge base64 string in the database.
  */
 import crypto from "crypto";
 import fs from "fs";
@@ -16,9 +14,9 @@ import { ensureDir, ownerUploadDir, ownerUploadUrl } from "./paths.ts";
 import { ValidationError } from "./AppError.ts";
 import type { Scope } from "../tenancy/scope.ts";
 
-// Raster image types only. SVG is deliberately excluded — it can carry
-// scripts and is served from the app origin. The extension is derived from
-// the MIME type, never from the client-supplied filename.
+// Raster image types only. SVG is left out on purpose: it can carry scripts and
+// is served from the app origin. The extension comes from the MIME type, never
+// from the client's file name.
 export const AVATAR_MIME_EXTENSIONS: Record<string, string> = {
   "image/jpeg": ".jpg",
   "image/png": ".png",
@@ -34,8 +32,8 @@ const PROFILE_PHOTO_SIZE = 512;
 const PROFILE_PHOTO_QUALITY = 82;
 
 /**
- * Process a base64 data-URI avatar: resize, compress, save to disk.
- * Returns the URL path (e.g. `/uploads/u/<ownerId>/avatars/abc123.jpg`), or null on failure.
+ * Process a base64 data-URI avatar: resize, compress, save. Returns the URL
+ * path (`/uploads/u/<ownerId>/avatars/abc123.jpg`), or null on failure.
  */
 export async function processBase64Avatar(
   scope: Scope,
@@ -67,7 +65,7 @@ export async function processBase64Avatar(
     const info = await sharp(inputBuffer)
       .resize(AVATAR_SIZE, AVATAR_SIZE, {
         fit: "cover",
-        position: "centre",
+        position: "center",
       })
       .jpeg({ quality: JPEG_QUALITY, mozjpeg: true })
       .toFile(outputPath);
@@ -95,13 +93,12 @@ export function isBase64DataUri(url: string | null | undefined): url is string {
 }
 
 /**
- * Normalise and save an account profile photo.
+ * Normalize and save an account profile photo: 512 px cover, rotated by its
+ * EXIF orientation, metadata stripped, JPEG quality 82, saved under
+ * uploads/u/<userId>/profile/.
  *
- * Resizes to 512px cover, auto-rotates by EXIF orientation, strips metadata,
- * converts to JPEG quality 82, and saves to uploads/u/<userId>/profile/.
- * Returns the public URL path (/uploads/u/<userId>/profile/profile-<timestamp>.jpg).
- *
- * Throws ValidationError if sharp cannot decode the buffer.
+ * @returns the URL path (/uploads/u/<userId>/profile/profile-<timestamp>.jpg)
+ * @throws ValidationError if sharp cannot decode the buffer
  */
 export async function processProfilePhoto(
   userId: string,
@@ -118,7 +115,7 @@ export async function processProfilePhoto(
       .rotate()
       .resize(PROFILE_PHOTO_SIZE, PROFILE_PHOTO_SIZE, {
         fit: "cover",
-        position: "centre",
+        position: "center",
       })
       .jpeg({ quality: PROFILE_PHOTO_QUALITY, mozjpeg: true })
       .toFile(outputPath);

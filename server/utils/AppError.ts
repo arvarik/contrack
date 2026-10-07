@@ -1,19 +1,15 @@
 /**
- * AppError — application-level error class with machine-readable code,
- * structured `details`, and original-cause chaining.
- *
- * Design rules:
- * - Every operational error thrown from a service / repository MUST be an
- *   `AppError` (or one of its subclasses). Plain `throw new Error(...)` in
- *   the service layer is a code-review block — it surfaces as a generic 500
- *   and loses both the HTTP status and the machine-readable code.
- * - `statusCode` drives the HTTP response. `code` is the stable identifier
- *   the client can branch on (it never changes between versions). `message`
- *   is the human-readable string and IS allowed to change.
- * - `details` is an arbitrary structured blob — used by `ValidationError`
- *   to carry the Zod issue list, and by other subclasses to carry context.
- * - `cause` preserves the original error for log forensics without leaking
- *   the underlying stack to the client.
+ * An application error with a machine-readable code, structured `details` and a
+ * chained cause.
+ * - Every operational error a service or repository throws is an `AppError` (or
+ *   a subclass). A plain `Error` surfaces as a generic 500 and loses the status
+ *   and the code.
+ * - `statusCode` drives the HTTP response. `code` is the stable identifier a
+ *   client branches on; `message` is for people and may change.
+ * - `details` carries structured context, such as `ValidationError`'s Zod
+ *   issues.
+ * - `cause` keeps the original error for the log without sending its stack to
+ *   the client.
  */
 export class AppError extends Error {
   public readonly statusCode: number;
@@ -72,9 +68,7 @@ function defaultCodeForStatus(status: number): string {
   }
 }
 
-// =============================================================================
 // Named Subclasses — preferred over passing magic numbers
-// =============================================================================
 
 export class NotFoundError extends AppError {
   constructor(entity: string, id?: string) {

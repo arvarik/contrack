@@ -1,8 +1,6 @@
 /**
- * server/connectors/errors.ts — Connector errors hierarchy.
- *
- * Distinguishes authentication errors (which transition connector to `needs_reauth`)
- * from transient network errors and invalid configurations.
+ * Connector errors. An authentication error moves a connector to
+ * `needs_reauth`; network and configuration errors do not.
  *
  * @module server/connectors/errors
  */
@@ -20,8 +18,8 @@ export class ConnectorError extends AppError {
 }
 
 /**
- * Thrown when credentials fail, are rejected by the remote service, or expired.
- * Causes the connector to transition into `needs_reauth` status.
+ * Credentials failed, were refused or expired. The connector moves to
+ * `needs_reauth`.
  */
 export class ConnectorAuthError extends ConnectorError {
   constructor(
@@ -32,9 +30,7 @@ export class ConnectorAuthError extends ConnectorError {
   }
 }
 
-/**
- * Thrown when connector configuration is malformed, invalid, or inaccessible.
- */
+/** The connector configuration is malformed, invalid or unreachable. */
 export class ConnectorConfigError extends ConnectorError {
   constructor(
     message = "Invalid connector configuration",

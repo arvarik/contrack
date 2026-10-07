@@ -1,8 +1,6 @@
 /**
  * A saved map view, as the server stores it and the client applies it. The
  * route and the client check a view's box with the one rule below.
- *
- * @module shared/mapViews
  */
 import { z } from "zod";
 

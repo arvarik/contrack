@@ -1,17 +1,9 @@
-// =============================================================================
-// AI Layer — Provider Registry
-// =============================================================================
-// Resolves and caches every *configured* AI provider, not just one "active"
-// provider. A provider is configured when it has an API key (from env or the
-// settings store) or, for OpenAI-compatible endpoints, a base URL.
-//
-// Instances are cached per provider id so provider-internal state that must
-// be a singleton — Gemini's SmartRouter, QuotaTracker, and circuit breakers —
-// stays singleton per provider.
-//
-// A key saved in Settings is stored sealed with the instance secret, the way
-// SMTP passwords and connector feeds already were (readStoredKey below).
-// =============================================================================
+// Resolves and caches every configured AI provider. A provider is configured
+// when it has an API key (from env or the settings store) or, for an
+// OpenAI-compatible endpoint, a base URL. Instances are cached per provider id,
+// so per-provider singletons (Gemini's SmartRouter, QuotaTracker and circuit
+// breakers) stay single. A key saved in Settings is sealed with the instance
+// secret (readStoredKey below).
 
 import type { AIProvider, ModelInfo } from "./provider.ts";
 import { GeminiAdapter } from "./adapters/gemini.ts";
@@ -89,7 +81,7 @@ function fingerprint(config: ProviderConfig): string {
   return `${config.kind}|${config.baseUrl ?? ""}|${config.apiKey ?? ""}`;
 }
 
-/** Gemini's historical sentinel for "no key configured". */
+/** "dummy_key" is Gemini's sentinel for "no key configured". */
 function isUsableKey(key: string | undefined): key is string {
   return !!key && key.trim().length > 0 && key !== "dummy_key";
 }
@@ -103,15 +95,12 @@ export function isSealed(value: unknown): value is string {
 const unreadable = new Set<string>();
 
 /**
- * A key as the settings store holds it, ready to send.
- *
- * Every saved key is sealed. A value that is not sealed reads as no key.
- *
- * A sealed key that does not open reads as no key too. This happens when the
- * instance secret changed: CONTRACK_SECRET_KEY was set or changed, or
- * DATA_DIR/secret.key was lost. The provider then shows as not connected,
- * and the key can be entered again. Sending the sealed text as a key would
- * fail at the provider with a message that points nowhere near the cause.
+ * A key as the settings store holds it, ready to send. Every saved key is
+ * sealed, so a value that is not sealed reads as no key. So does a sealed key
+ * that does not open, after the instance secret changed (CONTRACK_SECRET_KEY
+ * set or changed, or DATA_DIR/secret.key lost): the provider shows as not
+ * connected and the key can be entered again, instead of failing at the
+ * provider with a message that points nowhere near the cause.
  */
 export function readStoredKey(
   value: unknown,
@@ -134,8 +123,8 @@ export function readStoredKey(
 }
 
 /**
- * All configured providers. Env keys take precedence over settings keys for
- * the same provider so existing deployments keep working exactly as before.
+ * All configured providers. An env key takes precedence over a settings key for
+ * the same provider.
  */
 export function getProviderConfigs(): ProviderConfig[] {
   const settingsKeys =
@@ -185,12 +174,10 @@ export function getProviderConfig(id: string): ProviderConfig | null {
 }
 
 /**
- * Models discovered for a provider, as cached by the settings service when the
- * key or endpoint was saved. Returns an empty list when discovery never ran.
- *
- * This lives here rather than in aiSettingsService because capability
- * resolution needs it, and aiSettingsService already imports this module —
- * the reverse direction would be a cycle.
+ * The models discovered for a provider, as the settings service cached them
+ * when the key or endpoint was saved, or empty. Here and not in
+ * aiSettingsService because capability resolution needs it, and
+ * aiSettingsService imports this module: the reverse would be a cycle.
  */
 export function getCachedModels(providerId: string): ModelInfo[] {
   const cache = getSetting<Record<string, { models?: ModelInfo[] }>>(
@@ -217,16 +204,12 @@ function instantiate(config: ProviderConfig): AIProvider {
 }
 
 /**
- * Resolve (and cache) a provider instance by id.
- * Returns null when the provider isn't configured, and for every provider
- * while AI is off for the instance.
- *
- * This is the one place every outbound AI call gets its provider: each
- * generation (through resolveCapability), each provider embedding
- * (embedWithProvider), model discovery and the model test before a pin. So
- * the instance switch is checked here, and nothing else has to remember it.
- * `getProviderConfigs` does not check it, so Settings → Administration → AI still
- * lists the stored keys and endpoints while AI is off.
+ * Resolve and cache a provider by id. Null when it is not configured, and for
+ * every provider while AI is off for the instance. Every outbound AI call gets
+ * its provider here (generation, provider embedding, model discovery and the
+ * model test before a pin), so the instance switch is checked once, here.
+ * `getProviderConfigs` does not check it, so Settings still lists the stored
+ * keys and endpoints while AI is off.
  */
 export function getProvider(id: string): AIProvider | null {
   if (isAiOffForInstance()) return null;
@@ -251,7 +234,7 @@ export function invalidateProviderCache(): void {
   instances.clear();
 }
 
-/** The provider id implied by the legacy AI_PROVIDER env var. */
+/** The provider id AI_PROVIDER names, Gemini by default. */
 export function defaultProviderId(): string {
   return (process.env.AI_PROVIDER ?? "gemini").toLowerCase();
 }

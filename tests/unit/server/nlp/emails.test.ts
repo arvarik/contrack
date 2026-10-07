@@ -1,21 +1,17 @@
-// =============================================================================
-// isSharedMailbox — the test that keeps an identity anchor honest
-// =============================================================================
-// The dedupe engine merges two contacts that share an email address without
-// asking anybody. This function is the only thing standing between that rule
-// and a team alias, so the cost of each kind of mistake is asymmetric and
-// worth stating:
+// Unit: isSharedMailbox.
+// The dedupe engine merges two contacts that share an email without asking,
+// and this function is what keeps a team alias out of that rule. The costs
+// are asymmetric:
 //
-//   A false positive (calling a personal address shared) costs a real
-//   duplicate its identity anchor. The pair drops to a name-and-company score
-//   and reaches a person instead of merging. Recoverable.
+//   A false positive (a personal address called shared) drops a real
+//   duplicate to a name-and-company score, so a person reviews it.
+//   Recoverable.
 //
-//   A false negative (calling a shared address personal) merges two people.
+//   A false negative (a shared address called personal) merges two people.
 //   One of them stops existing.
 //
-// So the negative cases below matter more than the positive ones, and the list
-// the function reads is short on purpose.
-// =============================================================================
+// So the negative cases matter more, and the list the function reads is
+// short on purpose.
 
 import { describe, it, expect } from "vitest";
 import { isSharedMailbox } from "../../../../server/utils/nlp/emails.ts";

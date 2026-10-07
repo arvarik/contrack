@@ -1,6 +1,6 @@
 /**
- * NotOnMap: the bottom line's count of contacts with an address and no pin,
- * and the list behind it, where "Set location" places a pin by hand.
+ * The count of contacts with an address and no pin, and the list behind it,
+ * where "Set location" places a pin by hand.
  */
 import { useState } from "react";
 import { MapPinOff } from "lucide-react";

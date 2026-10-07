@@ -1,22 +1,17 @@
 /**
- * corvidDom — putting a posed bird onto the paths of a mark.
+ * Paints a posed bird onto a mark's paths. A living mark and the flying bird
+ * draw with one path per stroke and an ellipse for the eye, found by
+ * `data-part`. This writes their attributes directly, sixty times a second
+ * while something moves, with no React render between.
  *
- * A living mark and the flying bird both draw with the same few elements:
- * one path per stroke and an ellipse for the eye, found by `data-part`. This
- * paints a pose onto them by writing attributes directly, sixty times a
- * second while something moves, without a React render in between.
- *
- * At rest a mark shows the logo's own path data, not the rig's copy of it.
- * The rig's copy matches it to a tenth of a unit, but the logo is the logo,
- * so a bird that has finished moving is repainted with `CORVID_PATHS`.
- *
- * @module components/brand/corvidDom
+ * At rest a mark shows the logo's own path data (`CORVID_PATHS`), not the
+ * rig's copy, which matches it only to a tenth of a unit.
  */
 import { CORVID_EYE, CORVID_PATHS } from "../../assets/corvidPaths";
 import {
   HOME_POSE,
   POSE_KEYS,
-  bodyCentre,
+  bodyCenter,
   corvidPathData,
   drawCorvid,
   rollDrawing,
@@ -73,7 +68,7 @@ export function paintPose(
   pose: CorvidPose,
   roll: number = 1,
 ): void {
-  const drawing = rollDrawing(drawCorvid(pose), roll, bodyCentre(pose)[1]);
+  const drawing = rollDrawing(drawCorvid(pose), roll, bodyCenter(pose)[1]);
   const paths = corvidPathData(drawing);
   for (const stroke of BIRD_STROKES) setD(bird.strokes[stroke], paths[stroke]);
   if (bird.eye) {

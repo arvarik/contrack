@@ -1,19 +1,10 @@
-// =============================================================================
-// Facets as SQL
-// =============================================================================
-// A facet used to run as a JavaScript scan over every active contact, with a
-// JSON.parse per row, before the keyword search saw a single row. Here each
-// facet becomes a predicate on the contacts row, alias `c`, so the FTS
-// statement, the approximate-name step and the vector KNN apply it before
-// their LIMIT. No filtered contact is lost to a cut.
-//
-// The server and the palette must agree on every row, so the SQL calls the
-// same JavaScript the palette runs: `facet_contains` is the lower-casing and
-// substring test of `matchesFacet`, `facet_time` is its date reading, and
-// `haversine_km` is `shared/geo.ts`.
-// `tests/unit/server/search/facetSql.test.ts` compares the two on the same
-// rows, facet by facet.
-// =============================================================================
+// Facets as SQL. Each facet becomes a predicate on the contacts row, alias `c`,
+// so the FTS statement, the approximate-name step and the vector KNN apply it
+// before their LIMIT, and no filtered contact is lost to a cut. The server and
+// the palette must agree on every row, so the SQL calls the palette's own
+// JavaScript: `facet_contains` is `matchesFacet`'s lower-casing and substring
+// test, `facet_time` its date reading, and `haversine_km` `shared/geo.ts`.
+// `tests/unit/server/search/facetSql.test.ts` compares the two facet by facet.
 
 import type Database from "better-sqlite3";
 import { sqlite } from "../../db.ts";
@@ -107,12 +98,10 @@ function listIds(scope: Scope, filter: FacetFilter): string[] {
 }
 
 /**
- * `near:` as a box the index can check, then the exact distance.
- *
- * The box is the bounding box of the circle on the same sphere
- * `haversineKm` uses, with a small margin, so it never drops a contact the
- * distance keeps. When the circle reaches a pole or the 180th meridian, the
- * longitude bound is left out and the distance alone decides.
+ * `near:` as a box the index can check, then the exact distance. The box bounds
+ * the circle on `haversineKm`'s sphere with a small margin, so it never drops a
+ * contact the distance keeps. When the circle reaches a pole or the 180th
+ * meridian, the longitude bound goes and the distance alone decides.
  */
 function nearSql(filter: FacetFilter, params: unknown[]): string {
   // Without a point it matches everyone, as in `matchesFacet`.
@@ -221,11 +210,10 @@ function facetSql(
 }
 
 /**
- * Compile facets into one predicate over the contacts alias `c`.
- *
- * Every facet must hold, as in the palette. No facets gives "1". A facet
- * that can match nobody, such as `list:` with a name the owner has no list
- * for, gives "0", as `matchesFacet` gives false.
+ * Compile facets into one predicate over the contacts alias `c`. Every facet
+ * must hold, as in the palette. No facets gives "1". A facet that can match
+ * nobody, such as `list:` with a name the owner has no list for, gives "0", as
+ * `matchesFacet` gives false.
  */
 export function compileFacets(
   scope: Scope,

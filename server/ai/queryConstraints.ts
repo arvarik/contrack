@@ -78,14 +78,11 @@ const industryFamilies = [
 ] as const;
 
 /**
- * The forms a role's last word takes in a job title, so the word a person
- * asks with finds the word a title uses.
- *
- * The planner keeps a role only when its words are in the question, and the
- * filters then matched them as whole words. So "engineer" never found a
- * contact whose role is Engineering, "designers" never found Design, and
- * "who works in marketing" never found a Marketer. Three pairs cover the
- * titles people write:
+ * The forms a role's last word takes in a job title, so the word a person asks
+ * with finds the word a title uses. The planner keeps a role only when its
+ * words are in the question, and whole-word matching alone would miss
+ * "engineer" for Engineering, "designers" for Design and "marketing" for a
+ * Marketer. Three rules cover the titles people write:
  *
  *   - a person and a field: engineer and engineering, designer and design,
  *     marketer and marketing, consultant and consulting;
@@ -93,8 +90,8 @@ const industryFamilies = [
  *   - nothing for an acronym or a short word ("CEO", "GP", "VP").
  *
  * The first words of a phrase stay as they are: "Software Engineer" finds
- * Software Engineering, and not every engineer. A field never takes its bare
- * stem, so "accounting" does not find an Account Executive.
+ * Software Engineering, not every engineer. A field never takes its bare stem,
+ * so "accounting" does not find an Account Executive.
  *
  * @param matcher - A role matcher from the plan, such as "Designer".
  * @returns The matcher and its other forms, lowercased, the matcher first.

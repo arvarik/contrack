@@ -1,64 +1,40 @@
-// =============================================================================
-// Search quality gate
-// =============================================================================
-// Three hundred contacts, seventy-nine queries, five rankings, two numbers
-// each, all compared with a committed baseline.
+// Search quality gate: 300 contacts, 79 queries, five rankings, two numbers
+// each, compared with a committed baseline.
 //
-// WHEN THIS FAILS. Either a change moved search ranking and the baseline has
-// not caught up, or a change moved search ranking and nobody meant it to. The
-// gate cannot tell those apart, which is the point: it asks a person. If the
-// move is intended, run
+// WHEN THIS FAILS, a change moved ranking, on purpose or not. If on purpose,
+// run `npm run eval:record` and commit the baseline diff with the change. If
+// not, the numbers say which kind of query lost ground. The gate fails on an
+// improvement too, so ranking cannot drift up on one kind and down on another
+// while the total passes.
 //
-//   npm run eval:record
+// WHAT IS REAL: the database, FTS5 and its triggers, the BM25 weights, the
+// int8 vec0 store and its scale, the KNN, the rank fusion, and the
+// cross-encoder stage's budget, cut and reorder. The embeddings and the
+// cross-encoder scores are recorded by `scripts/record-search-eval.ts`, so
+// this needs no model and no network.
 //
-// and commit the baseline diff with the change. That diff is the evidence
-// that "better" is better. If the move is not intended, the numbers say which
-// kind of query lost ground, which is usually enough to find the cause.
-//
-// The gate fails on an improvement as well as on a regression. A one-sided
-// gate lets ranking drift upward on one kind of query and downward on another
-// without anybody looking, because the total still passes.
-//
-// WHAT IS REAL HERE. The database, the FTS5 index and its triggers, the BM25
-// weights, the int8 vec0 store and its scale, the KNN, the reciprocal rank
-// fusion, and the cross-encoder stage's budget, cut and reorder. What is
-// recorded is the embedding of each contact and each query, and the
-// cross-encoder's score for each (question, profile) pair it reads: the
-// models run in `scripts/record-search-eval.ts`, not here, so this needs no
-// model, no download and no network.
-//
-// WHAT IT CATCHES, measured by breaking the code on purpose (2026-09-29).
-// Each line names the channels whose test fails. A mutation that changes a
-// candidate list also asks the cross-encoder for pairs the recording does
-// not hold, so all but the name weight fail the replay check as well.
+// WHAT IT CATCHES, by breaking the code on purpose. Each line names the
+// channels that fail. A mutation that changes a candidate list also asks for
+// pairs the recording does not hold, so all but the name weight fail the
+// replay check too.
 //
 //   the BM25 weight string shifted one column      lexical, fused, hybrid
 //   the `broad` OR fallback removed from retrieval fused, hybrid, reranked
 //   the name weight dropped from 10 to 1           lexical
 //   RRF_K changed from 15 to 60                    fused
 //   the vector channel limit cut from 100 to 10    fused
-//
-// The last two move the fused list and nothing after it. The hybrid and
-// reranked answers stay inside the tolerance, which is another way of saying
-// neither changes what a person sees. recall@10 and MRR measure the answer,
-// not the arithmetic that produced it.
-//
-// The address weight, measured the same way (2026-09-30):
-//
 //   the address weight raised from 0.5 to 3        all five
 //   the address weight dropped from 0.5 to 0       all but sidebar
 //   the address text left out of the index         all five, and replay
 //
-// A weight of 0 does not take the column out of the index. FTS5 still
-// matches it and scores it 0, so a street, a postcode or a town that only one
-// address names is still found, and still first. The query that falls is
-// q74, where six contacts share the city and only the address can break the
-// tie. The address collisions fail in turn as the weight rises past the
-// field they share a word with. Of the weights measured, Changi first failed
-// at 1, Seville at 2.5, Danube at 5 and Fleet at 9, and Ferreira still held
-// at 12. From 0.25 to 0.9 nothing moves: the address is the lightest text
-// either way.
-// =============================================================================
+// RRF_K and the vector limit move the fused list only. The hybrid and reranked
+// answers stay inside the tolerance, so neither changes what a person sees.
+//
+// An address weight of 0 still matches the column and scores it 0, so a place
+// only one address names is still found first. q74 falls, where six contacts
+// share the city and only the address breaks the tie. As the weight rises,
+// the address collisions fail: Changi at 1, Seville at 2.5, Danube at 5,
+// Fleet at 9, and Ferreira holds at 12. From 0.25 to 0.9 nothing moves.
 
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -68,9 +44,8 @@ const recorded = vi.hoisted(() => ({
 }));
 
 // `embedText` is the one place a model would be needed, and
-// `isSearchEmbeddingReady` is its gate. Everything else in the module —
-// `upsertSearchEmbeddings`, `findSearchNeighbors`, `getSearchEmbeddingCount` —
-// stays real, because the KNN is a thing under test and not a thing to fake.
+// `isSearchEmbeddingReady` is its gate. The rest of the module stays real,
+// because the KNN is under test.
 vi.mock(
   "../../server/services/search/vectorIndex.ts",
   async (importOriginal) => {
@@ -107,12 +82,9 @@ import {
 } from "./harness.ts";
 
 /**
- * Smaller than one query.
- *
- * A kind holds four to ten queries, so each one is worth at least 0.1 of its
- * kind's recall. A tolerance under that means no query can move into or out
- * of the first ten without this failing, while still absorbing the last-digit
- * float drift that a different CPU could produce in the distance arithmetic.
+ * Smaller than one query. A kind holds four to ten queries, so each is worth
+ * at least 0.1 of its kind's recall. No query can enter or leave the first
+ * ten without failing, and the last-digit float drift of another CPU passes.
  */
 const TOLERANCE = 0.01;
 
@@ -167,10 +139,8 @@ afterAll(() => {
 });
 
 describe("search quality gate", () => {
-  // Every score below is compared with a baseline recorded against one
-  // corpus. A fixture that changed without a new baseline, an index that was
-  // never built, or a vector store nobody wrote to would each move the
-  // numbers for a reason the numbers cannot name. These assertions name it.
+  // A changed fixture, an unbuilt index or an empty vector store would move
+  // the numbers for a reason they cannot name. These assertions name it.
   describe("the corpus is really there", () => {
     it("seeded every contact the baseline was recorded against", () => {
       expect(seededContacts).toBe(baseline.corpus.contacts);
@@ -197,11 +167,9 @@ describe("search quality gate", () => {
     });
   });
 
-  // One test per channel, over the total and over every kind of query. The
-  // total alone hides a trade: a change that wins two typo queries and loses
-  // two company queries moves it by nothing at all. The kinds alone would be
-  // enough, because the total is their weighted mean, but the total is the
-  // number people quote, so a failure names it too.
+  // One test per channel, over the total and every kind of query. The total
+  // alone hides a trade (two typo queries won, two company queries lost), and
+  // it is the number people quote, so a failure names both.
   describe.each(CHANNELS)("%s", (channel) => {
     it("holds its recall at 10 and its MRR, in total and for every kind of query", () => {
       const moved: string[] = [];

@@ -1,14 +1,8 @@
-// =============================================================================
-// Integration Tests — response compression
-// =============================================================================
-// The server compresses an answer with brotli or gzip when the client asks
-// for it and the body gains from it (server/middleware/compression.ts). These
-// tests read the bytes as they cross the wire, so they see the encoding the
-// server chose rather than a body some client already decoded.
-//
-// The streams (Ask, the progress streams and MCP) have a file of their own,
-// api.compression.streams.test.ts, because they need the AI mocks.
-// =============================================================================
+// Integration: response compression.
+// The server compresses with brotli or gzip when the client asks and the body
+// gains from it (server/middleware/compression.ts). These tests read the raw
+// bytes, so they see the encoding the server chose. The streams have their
+// own file, api.compression.streams.test.ts, because they need the AI mocks.
 
 import { describe, it, expect, beforeAll } from "vitest";
 import crypto from "crypto";

@@ -1,18 +1,8 @@
 /**
- * HealthView — one instance, at a glance.
- *
- * `/healthz` answers "ok" or nothing, which is the right answer for a probe
- * anybody who can reach the port may ask. This page is the other half: the
- * questions somebody has when four people share an instance and one of them
- * says it is slow.
- *
- * Every card answers one of those questions and says what the answer means.
- * A number with no sense of what it should be is not an answer: 18 MB of
- * write-ahead log means nothing until you know the sweep truncates at 64, and
- * "0 embedded" means nothing until you can see it is 0 of 431.
- *
- * The page refetches every fifteen seconds. The numbers worth opening it for
- * are the ones that move.
+ * The instance's health for an admin. `/healthz` only answers "ok" to a
+ * probe, and this page says why an instance is slow. Each card shows a number
+ * beside what it should be, such as "0 of 431 embedded". The page refetches
+ * every fifteen seconds.
  */
 import {
   Activity,
@@ -47,18 +37,11 @@ import { cn } from "../../../lib/utils";
 import { AdminPage } from "./AdminShell";
 import { LoadFailed } from "../../../components/ui/LoadFailed";
 
-// ---------------------------------------------------------------------------
-// The card, and the one row inside it
-// ---------------------------------------------------------------------------
-
 /**
- * A card with a list of rows and an optional line of text under them.
- *
- * `children` is rows and nothing else, because it goes inside the `dl`. A
- * `dl` may hold only `dt` and `dd` pairs, bare or wrapped in a `div`, and a
- * `p` in there made axe report the list as broken to a screen reader. Text
- * that is not a row, such as an empty state or a problem, goes in `note`,
- * which renders after the list. A card with no rows renders no list.
+ * A card with a list of rows and an optional `note` under them. `children`
+ * holds only rows, because a `dl` may hold only `dt` and `dd` pairs (bare or
+ * in a `div`), and axe reports a `p` in it as a broken list. Other text goes
+ * in `note`. A card with no rows renders no list.
  */
 const Card = ({
   title,
@@ -95,12 +78,7 @@ const Card = ({
   </section>
 );
 
-/**
- * A label and a value.
- *
- * `dt`/`dd` rather than two spans: this is a list of terms and their
- * definitions, which is what a screen reader should be told it is reading.
- */
+/** A label and a value, as `dt` and `dd` so a screen reader reads a list. */
 const Row = ({
   label,
   children,
@@ -136,7 +114,6 @@ function formatUptime(seconds: number): string {
   return `${seconds}s`;
 }
 
-/** Whose job runs now, or that none does. */
 const account = (who: HealthAccount | null): string =>
   who?.username ?? "Not running";
 
@@ -206,13 +183,12 @@ function formatEvery(ms: number | null): string {
   return `Every ${Math.round(ms / 1000)} seconds`;
 }
 
-/** A run's result, as the card says it. */
 const STATUS_WORDS: Record<JobStatus, string> = {
   queued: "Waiting",
   running: "Running",
   done: "Done",
   failed: "Failed",
-  cancelled: "Cancelled",
+  cancelled: "Canceled",
 };
 
 /** "dailyInsight" as "Daily insight". */
@@ -223,10 +199,6 @@ function words(key: string): string {
     .toLowerCase();
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
-
-// ---------------------------------------------------------------------------
-// The cards
-// ---------------------------------------------------------------------------
 
 const SchemaCard = ({ health }: { health: InstanceHealth }) => {
   const { schema } = health;
@@ -489,9 +461,8 @@ const CacheCard = ({ health }: { health: InstanceHealth }) => {
 };
 
 /**
- * One recurring job: its name and how often it runs, then its last run with
- * the result and its next run. A `dt` and a `dd` in a `div`, the one other
- * shape a `dl` may hold.
+ * One recurring job: its name and interval, then its last and next run. A
+ * `dt` and a `dd` in a `div`, the other shape a `dl` may hold.
  */
 const JobRow = ({ job }: { job: RecurringJob }) => {
   const failed = job.lastStatus === "failed";
@@ -543,9 +514,8 @@ const JobRow = ({ job }: { job: RecurringJob }) => {
 };
 
 /**
- * The background jobs: what runs by itself and when, and what failed in the
- * last day. Read-only. A job that failed has run out of tries, and the
- * error is the one it ended with.
+ * The background jobs, read-only: what runs and when, and what failed in the
+ * last day. A failed job has run out of tries, and shows its last error.
  */
 const JobsCard = () => {
   const { data, isLoading, isError } = useBackgroundJobs();
@@ -632,8 +602,6 @@ const JobsCard = () => {
     </Card>
   );
 };
-
-// ---------------------------------------------------------------------------
 
 export const HealthView = () => {
   const { data: health, isLoading, isError, refetch } = useInstanceHealth();

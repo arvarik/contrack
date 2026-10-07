@@ -5,8 +5,7 @@ import type { PulseColumn } from "../lib/layout";
 
 /**
  * What a card's frame needs to draw its customize controls. `SortableCard`
- * provides it around each card, and outside customize mode a card sees the
- * default, `isEditing: false`, and draws no controls.
+ * provides it. Outside customize mode the default draws no controls.
  */
 export interface CardCustomizeContextValue {
   isEditing: boolean;
@@ -16,15 +15,11 @@ export interface CardCustomizeContextValue {
   /** The drag handle's attributes and listeners, from dnd-kit. */
   attributes?: DraggableAttributes;
   listeners?: SyntheticListenerMap;
-  /**
-   * The handle's element, for dnd-kit: keyboard focus returns to it after a
-   * keyboard drag, in the card's new place.
-   */
+  /** dnd-kit returns keyboard focus to this element after a keyboard drag. */
   setActivatorNodeRef?: (element: HTMLElement | null) => void;
   /**
-   * A press on the handle that has not become a drag yet: a finger still
-   * inside the hold, or a mouse button before the pointer has moved. The
-   * handle shows it, so a person knows to hold on.
+   * A press on the handle that is not a drag yet. The handle shows it, so a
+   * person knows to hold on.
    */
   isPending?: boolean;
   onHide?: (cardId: string) => void;

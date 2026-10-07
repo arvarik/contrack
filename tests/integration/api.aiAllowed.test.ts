@@ -1,14 +1,10 @@
-// =============================================================================
-// Integration: requireAiAllowed middleware & aiAssist preference
-// =============================================================================
-// When an account sets `aiAssist: false`, every endpoint that incurs an AI cost
-// answers 403 AI_OFF_FOR_ACCOUNT for that account, but remains accessible for
-// other accounts and for non-AI routes. Ask Contrack is the exception: its
-// search is local, so it answers with the local results and runs no model.
+// Integration: the requireAiAllowed middleware and the aiAssist preference.
+// With `aiAssist: false`, every endpoint with an AI cost answers 403
+// AI_OFF_FOR_ACCOUNT for that account, and stays open to other accounts and
+// non-AI routes. Ask Contrack answers with local results and runs no model.
 //
-// When an admin turns AI off for the instance, the same endpoints answer 403
+// With AI off for the instance, the same endpoints answer 403
 // AI_OFF_FOR_INSTANCE for every account, and Ask still answers locally.
-// =============================================================================
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";

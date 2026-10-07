@@ -1,20 +1,9 @@
 /**
- * Heatmap: twelve weeks of days, one square each, filling the card.
- *
- * The squares are an SVG that scales to the card's width, so the same
- * twelve columns fill a 350 px phone card and a 430 px desktop column. The
- * month labels above and the weekday letters at the left are HTML, not SVG
- * text: text inside a scaled SVG scales with it, and at a desktop width
- * eleven SVG units render at twenty-two pixels, which is bigger than the
- * card's title. HTML labels stay 12 px at every width. The letters sit in a
- * seven-row grid the same height as the SVG, so each letter is centred on
- * its row.
- *
- * A pointer over a square, or a tap on it, shows one tooltip with the day's
- * words: "Wed, Sep 17: 2 notes, 1 call". A second tap on the same square,
- * or a tap anywhere else, hides it. The squares are not tab stops. The same
- * words sit in a visually hidden list for a screen reader, along with the
- * twelve weekly totals.
+ * Twelve weeks of days, one square each, in an SVG that scales to the card.
+ * The month and weekday labels are HTML: SVG text scales with the SVG and
+ * grew larger than the card's title. A pointer or a tap shows the day in a
+ * tooltip. The squares are not tab stops, so a hidden list carries the same
+ * words and the weekly totals for a screen reader.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { heatmapScale, getHeatmapAlpha } from "../lib/heatmapScale";
@@ -82,7 +71,7 @@ interface Cell {
 interface ActiveCell {
   dayStr: string;
   words: string;
-  /** The square's centre and top, in px from the wrapper's top left. */
+  /** The square's center and top, in px from the wrapper's top left. */
   x: number;
   y: number;
 }
@@ -110,8 +99,7 @@ export const Heatmap = ({
 
   const scaleFn = useMemo(() => heatmapScale(days.map((d) => d.count)), [days]);
 
-  // Twelve columns of seven days, the current week last, each column
-  // starting on the day the account's week starts.
+  // Twelve columns of seven days, the current week last.
   const { grid, monthLabels, weekdayLetters } = useMemo(() => {
     const now = new Date();
     const todayLocal = toLocalDay(now);
@@ -150,9 +138,8 @@ export const Heatmap = ({
       columns.push(colDays);
     }
 
-    // A month label over the first column and over each column whose first
-    // day is in a new month. Two labels one column apart would overlap, so
-    // the later one wins.
+    // A label over each column that starts a month. Of two labels one column
+    // apart, which would overlap, the later one wins.
     const candidates: { col: number; text: string }[] = [];
     for (let col = 0; col < COLS; col++) {
       const month = columns[col][0].date.getMonth();
@@ -172,8 +159,7 @@ export const Heatmap = ({
         candidates[index + 1].col - label.col >= 2,
     );
 
-    // M, W and F, whichever rows they fall on for this week start, in the
-    // person's own language.
+    // M, W and F, in the person's own language.
     const letters = columns[0].map((cell) => {
       const weekday = cell.date.getDay();
       return weekday === 1 || weekday === 3 || weekday === 5
@@ -318,7 +304,7 @@ export const Heatmap = ({
         </div>
       </div>
 
-      {/* The words for a screen reader: the weeks, then the days with anything logged. */}
+      {/* The same words for a screen reader. */}
       <ul className="sr-only">
         {weekTotals.map((tot, idx) => (
           <li key={idx}>

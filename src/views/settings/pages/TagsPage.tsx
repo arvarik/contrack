@@ -1,12 +1,6 @@
 /**
- * TagsPage — Manage, rename, merge, and delete contact tags.
- *
- * Lists all tags across the account's unarchived contacts with contact counts.
- * A tag's name is a link to the Network list filtered to it (`?tag=`), so a
- * person can see who has it. Supports inline renaming, merging tags into
- * another, and deleting tags across all contacts with confirmation.
- *
- * @module views/settings/pages/TagsPage
+ * TagsPage: the account's tags with their counts, to rename, merge or
+ * delete. A tag's name links to the Network list filtered to it (`?tag=`).
  */
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -80,7 +74,6 @@ export const TagsPage = () => {
     focusTag.current = null;
   }, [editingTag, tags]);
 
-  // Filter and sort alphabetically
   const filteredTags = useMemo(
     () =>
       [...tags]
@@ -323,7 +316,6 @@ export const TagsPage = () => {
         </div>
       )}
 
-      {/* Merge Modal */}
       {mergeSource && (
         <Modal
           isOpen={true}
@@ -396,7 +388,6 @@ export const TagsPage = () => {
         </Modal>
       )}
 
-      {/* Delete Confirmation */}
       {tagToDelete && (
         <ConfirmDialog
           isOpen={true}

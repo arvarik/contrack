@@ -1,15 +1,7 @@
-// =============================================================================
-// Integration Tests — what this instance calls itself
-// =============================================================================
-// A single-user install never needed a name: there was one instance and it
-// was yours. An invitation link changes that, because the person clicking one
-// arrives at a sign-in screen belonging to an instance they have never seen,
-// sent by somebody who said "join my Contrack".
-//
-// The name reaches an unauthenticated screen, which is what most of this file
-// is about: who may set it, what it may contain, and what happens to it on
-// the way out.
-// =============================================================================
+// Integration: what this instance calls itself.
+// A person who clicks an invitation lands on the sign-in screen of an instance
+// they have never seen, so the name reaches an unauthenticated screen. Most of
+// this file is about who may set it, what it may contain, and how it is sent.
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import request from "supertest";

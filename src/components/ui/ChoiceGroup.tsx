@@ -1,13 +1,6 @@
 /**
- * ChoiceGroup: one choice from a few, as a radio group of tiles.
- *
- * Settings wrote this group by hand ten times, each copy with the same
- * roles, the same keys and the same tile. Eight are this now: the session
- * length, the Trash window, the backup interval and count, a dedupe scan's
- * mode, a password reset's delivery, and the role of a new account or an
- * invitation (`RolePicker`). The other two, a token's expiry and an
- * invitation's, had no hints, and a short choice with none is a
- * `Segmented`.
+ * One choice from a few, as a radio group of tiles with hints. A short
+ * choice with no hints is a `Segmented`.
  *
  * ```
  * ┌──────────────────────┐ ┌──────────────────────┐
@@ -20,23 +13,17 @@
  *    `role="radio"` with `aria-checked`, one Tab stop for the group (the
  *    checked tile, or the first when none is), and the arrow keys move the
  *    choice (`radioKeys`).
- * 2. The chosen tile wears the selected tint and a filled `RadioDot`, so
- *    "chosen" is a shape as well as a hue (WCAG 1.4.1). The others sit on
- *    the highest container tone with the hover layer.
+ * 2. The chosen tile wears the selected tint and a filled `RadioDot`, a
+ *    shape as well as a hue (WCAG 1.4.1).
  * 3. `pending` holds every tile while a change saves, and `locked` holds
- *    them for good, dimmed, when the environment sets the value. Both use
+ *    them dimmed when the environment sets the value. Both use
  *    `aria-disabled`, not `disabled`, so the focused tile keeps its focus.
- * 4. A tile with a hint puts it under the label, and a `detail`, such as a
- *    time and a cost, on a line of its own under that. Pressing the chosen
- *    tile does nothing, so a click cannot save the same value twice.
- * 5. A `disabled` tile is one that cannot run now, such as an engine with
- *    no setup. It stays in the group, dimmed, with its hint saying why, so
- *    the choice is still there to see. It is `aria-disabled`, which the
- *    arrow keys skip (`radioKeys`), and a press does nothing.
+ * 4. A hint goes under the label, and a `detail` (a time and a cost) on its
+ *    own line under that. Pressing the chosen tile does nothing.
+ * 5. A `disabled` tile cannot run now, such as an engine with no setup. It
+ *    stays, dimmed, its hint saying why. The arrow keys skip it.
  *
  * The columns are the caller's (`className`, a grid), one by default.
- *
- * @module components/ui/ChoiceGroup
  */
 import { radioKeys, radioTabIndex } from "../../lib/a11y";
 import { SELECTED_TINT } from "../../lib/styles";

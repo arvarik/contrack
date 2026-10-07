@@ -1,8 +1,3 @@
-// =============================================================================
-// AI Search — Public Facade
-// =============================================================================
-// Single-entry-point for the AI Search subsystem. Routes import this module,
-// not the internal components directly.
-// =============================================================================
+// The research batch queue's entry point. Routes import this, not the parts.
 
 export { jobQueue } from "./jobQueue.ts";

@@ -1,20 +1,10 @@
-// =============================================================================
-// AI Layer — Gemini Usage Meter
-// =============================================================================
-// An in-memory count of what this process has sent to each Gemini model: the
-// requests and tokens of the last 60 seconds, the requests today, and the
-// grounded requests today. The admin Health page and /api/ai/diagnostics read
-// it.
-//
-// It used to gate requests too, against a free or paid limit per model. Those
-// limits were guesses, because Google sets them per Cloud project, so the
-// gate is gone and the meter only counts. A request is counted when it is
-// sent, corrected to the real token count when it returns, and taken back
-// when the provider refused it.
-//
-// Why in-memory? One Node.js process serves the instance, and the counts are
-// time-windowed, so a restart losing them costs nothing.
-// =============================================================================
+// Gemini usage meter: an in-memory count of what this process sent to each
+// Gemini model (requests and tokens in the last 60 seconds, requests today,
+// grounded requests today), for the admin Health page and /api/ai/diagnostics.
+// It only counts, because Google sets the real limits per Cloud project. A
+// request is counted when sent, corrected to the real token count when it
+// returns, and taken back when the provider refused it. In memory, because one
+// process serves the instance and the counts are time-windowed.
 
 const quotaDate = new Intl.DateTimeFormat("en-CA", {
   timeZone: "America/Los_Angeles",
@@ -23,9 +13,7 @@ const quotaDate = new Intl.DateTimeFormat("en-CA", {
   day: "2-digit",
 });
 
-// ---------------------------------------------------------------------------
 // Internal Types
-// ---------------------------------------------------------------------------
 
 interface UsageWindow {
   /** Timestamps of requests within the current 60s window */
@@ -41,39 +29,32 @@ interface UsageWindow {
   rpd: number;
 }
 
-// ---------------------------------------------------------------------------
 // QuotaTracker
-// ---------------------------------------------------------------------------
 
 export class QuotaTracker {
   private usage = new Map<string, UsageWindow>();
   private nextReservationId = 0;
 
-  // ── Grounded requests today ─────────────────────────────────────────
+  // Grounded requests today
   // Counted apart from generation, because Google bills grounded searches
   // apart from tokens.
   private groundingUsage = { dateKey: "", rpd: 0 };
 
-  // ── Helpers ─────────────────────────────────────────────────────────
+  // Helpers
 
   /** Gemini resets daily quotas at midnight Pacific, including daylight saving time. */
   private getTodayKey(timestamp = Date.now()): string {
     return quotaDate.format(timestamp);
   }
 
-  // ── Token Estimation ────────────────────────────────────────────────
+  // Token Estimation
 
   /**
-   * Fast local token estimation using BPE heuristics.
-   *
-   * ~4 chars ≈ 1 token for English text (well-established BPE approximation).
-   * 10% safety buffer to account for tokenizer variance.
-   * 1.5x multiplier because TPM = input + output combined, and typical
-   * outputs are 30–80% of input length.
-   * +50 token overhead for JSON schema instructions.
-   *
-   * It stands in for the real count only until the response arrives and
-   * `reconcile` replaces it.
+   * Fast local token estimate: about 4 characters a token for English, plus 10
+   * percent for tokenizer variance, times 1.5 because TPM counts input and
+   * output and outputs run 30 to 80 percent of input, plus 50 tokens for JSON
+   * schema instructions. It stands in only until `reconcile` has the real
+   * count.
    */
   estimateTokens(
     prompt: string,
@@ -87,7 +68,7 @@ export class QuotaTracker {
     return totalEstimate + (isJson ? 50 : 0);
   }
 
-  // ── Window Management ───────────────────────────────────────────────
+  // Window Management
 
   private getOrCreateWindow(modelId: string): UsageWindow {
     const today = this.getTodayKey();
@@ -127,12 +108,12 @@ export class QuotaTracker {
     }
   }
 
-  // ── Counting ────────────────────────────────────────────────────────
+  // Counting
 
   /**
-   * Count a request as it is sent, with its estimated tokens. Returns an id
-   * that `reconcile` and `rollback` use to find this request again, so
-   * responses arriving out of order adjust the right entry.
+   * Count a request as it is sent, with its estimated tokens. The returned id
+   * lets `reconcile` and `rollback` find this request again, so responses that
+   * arrive out of order adjust the right entry.
    */
   reserve(modelId: string, estimatedTokens: number): number {
     const now = Date.now();
@@ -155,14 +136,11 @@ export class QuotaTracker {
     return this.groundingUsage.dateKey;
   }
 
-  // ── Post-Response Adjustments ───────────────────────────────────────
+  // Post-Response Adjustments
 
   /**
-   * Reconcile estimated tokens with actual tokens from API response.
-   * Adjusts the most recent token entry to reflect reality.
-   *
-   * This keeps the per-minute token count true to what was billed, even
-   * though individual estimates drift.
+   * Replace a request's estimated tokens with the real count from the response,
+   * so the per-minute count matches what was billed.
    */
   reconcile(
     modelId: string,
@@ -185,8 +163,8 @@ export class QuotaTracker {
   }
 
   /**
-   * Take back a request the provider refused, so it is not counted.
-   * Removes its request and token entries and decrements the day's count.
+   * Take back a request the provider refused: remove its request and token
+   * entries and decrement the day's count.
    */
   rollback(modelId: string, reservationId?: number): void {
     const window = this.usage.get(modelId);
@@ -212,11 +190,11 @@ export class QuotaTracker {
       this.groundingUsage.rpd = Math.max(0, this.groundingUsage.rpd - 1);
   }
 
-  // ── Diagnostics ─────────────────────────────────────────────────────
+  // Diagnostics
 
   /**
-   * Get a snapshot of current usage for all tracked models + grounding.
-   * Used for logging and the /api/ai/diagnostics endpoint.
+   * Current usage for every tracked model and for grounding, for logs and
+   * /api/ai/diagnostics.
    */
   getSnapshot(): {
     models: Record<string, { rpm: number; tpm: number; rpd: number }>;

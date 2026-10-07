@@ -1,6 +1,4 @@
-// =============================================================================
 // Integration: Tags API (/api/tags and /api/tags/summary)
-// =============================================================================
 
 import { describe, it, expect } from "vitest";
 import request from "supertest";

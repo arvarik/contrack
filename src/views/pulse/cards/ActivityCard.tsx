@@ -1,8 +1,6 @@
 /**
- * ActivityCard: the heatmap of the last twelve weeks and the sparkline of
- * their totals. It reads its data from its prop: `PulseView` fetches the
- * activity once for the masthead and this card, so the card does not ask
- * the server a second time.
+ * The heatmap of the last twelve weeks and the sparkline of their totals.
+ * `PulseView` fetches the activity once for the masthead and this card.
  */
 import { CardFrame } from "../components/CardFrame";
 import { Heatmap } from "./Heatmap";

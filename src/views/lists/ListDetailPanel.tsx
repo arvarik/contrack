@@ -1,13 +1,8 @@
 /**
- * ListDetailPanel — one list: its icon and name, who is in it, and Delete.
- *
- *  - The icon saves when chosen. The name saves when the field is left or on
- *    Enter, and Escape puts the saved name back. It used to wait for a Save
- *    button, and a name typed before another list opened was lost.
- *  - "Add people" finds contacts by name and adds them (`AddPeople`).
- *  - Remove takes a member out at once, with Undo in its toast.
- *  - "View in Network" opens the Network page filtered to the list.
- *  - Delete asks first, in a dialog.
+ * One list: its icon and name, its members, and Delete. The icon saves when
+ * chosen, and goes back to the saved one if the save fails. The name saves on
+ * blur or Enter, so a name typed before another list opens is not lost, and
+ * Escape restores it. Remove has Undo in its toast. Delete asks first.
  */
 import { useMemo, useRef, useState } from "react";
 import { X, ExternalLink, Trash2, UserMinus } from "lucide-react";
@@ -22,7 +17,7 @@ import {
 } from "../../api";
 import { type ContactList } from "../../types";
 import type { ListMember } from "../../../shared/contracts/lists";
-import { ListIcon } from "../contact-list/CreateListModal";
+import { ICON_OPTIONS, ListIcon } from "../contact-list/CreateListModal";
 import { cn } from "../../lib/utils";
 import { withUndo } from "../../lib/undoToast";
 import {
@@ -34,45 +29,16 @@ import {
 import { AddPeople } from "./AddPeople";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 
-/** The icons a list can wear, by the names `ListIcon` draws. */
-const ICON_OPTIONS = [
-  "star",
-  "heart",
-  "crown",
-  "flame",
-  "rocket",
-  "target",
-  "gem",
-  "award",
-  "briefcase",
-  "users",
-  "globe",
-  "zap",
-  "shield",
-  "coffee",
-  "music",
-  "camera",
-  "book-open",
-  "trending-up",
-  "anchor",
-  "flag",
-  "sparkles",
-  "sun",
-];
-
 interface ListDetailPanelProps {
   list: ContactList;
   onClose: () => void;
   onDeleted: () => void;
   onViewInNetwork: () => void;
-  /** On mobile, the parent renders its own back button row — hide the panel header */
+  /** The parent draws its own back row, so the panel shows a slim header. */
   hideMobileHeader?: boolean;
 }
 
-/**
- * The panel is keyed by the list it shows (`ListManagerView`), so a
- * different list is a new panel and its fields start from that list.
- */
+/** Keyed by its list (`ListManagerView`), so its fields start from it. */
 export const ListDetailPanel = ({
   list,
   onClose,
@@ -95,6 +61,8 @@ export const ListDetailPanel = ({
   const [removingId, setRemovingId] = useState<string | null>(null);
   // The name last sent, so Enter and the blur that follows save it once.
   const savedName = useRef(list.name);
+  // The icon the server last accepted, put back when a save fails.
+  const savedIcon = useRef(list.icon);
 
   const save = (data: { name?: string; icon?: string }) =>
     updateList
@@ -118,7 +86,10 @@ export const ListDetailPanel = ({
 
   const handleIconChange = (next: string) => {
     setIcon(next);
-    void save({ icon: next });
+    void save({ icon: next }).then((ok) => {
+      if (ok) savedIcon.current = next;
+      else setIcon(savedIcon.current);
+    });
   };
 
   const handleDelete = async () => {
@@ -131,8 +102,7 @@ export const ListDetailPanel = ({
     }
   };
 
-  // Undo puts the member back. `mutateAsync`, so the Undo still works once
-  // this list is closed.
+  // `mutateAsync`, so Undo still works once this list is closed.
   const handleRemoveMember = async (member: ListMember) => {
     setRemovingId(member.id);
     try {
@@ -156,10 +126,9 @@ export const ListDetailPanel = ({
   };
 
   return (
-    // A size container: the panel is a card beside the lists, as narrow as
-    // 360 px on a 1024 px window, so its header reads its own width.
+    // A size container: beside the lists it can be 360 px wide on a 1024 px
+    // window.
     <div className="@container h-full flex flex-col overflow-hidden">
-      {/* ── Panel Header ─────────────────────────────────────────────────── */}
       {!hideMobileHeader && (
         <div className="p-5 bg-surface-container-low shrink-0 flex items-center gap-3">
           <button
@@ -192,7 +161,6 @@ export const ListDetailPanel = ({
         </div>
       )}
 
-      {/* Mobile: show View in Network below the parent back button when header is hidden */}
       {hideMobileHeader && (
         <div className="px-4 pb-3 bg-surface-container-low shrink-0 flex items-center justify-between">
           <div className="min-w-0">
@@ -215,7 +183,6 @@ export const ListDetailPanel = ({
       )}
 
       <div className="flex-1 overflow-y-auto">
-        {/* ── Icon Picker ──────────────────────────────────────────────────── */}
         <section className="p-5 space-y-4">
           <h4 className={cn(SECTION_HEADING, "flex items-center gap-2")}>
             <ListIcon icon={icon} className="w-4 h-4 text-primary" />
@@ -233,9 +200,8 @@ export const ListDetailPanel = ({
                   aria-pressed={active}
                   className={cn(
                     "hit-area state-layer p-2 rounded-xl transition-colors flex items-center justify-center",
-                    // The tint says "chosen" by hue alone, so the swatch
-                    // ring is the second cue. The panel sits on the page
-                    // surface, so the ring's gap takes that colour.
+                    // The tint says "chosen" by hue alone, so the ring is a
+                    // second cue. Its gap takes the surface color.
                     active
                       ? cn(
                           SELECTED_TINT,
@@ -272,9 +238,8 @@ export const ListDetailPanel = ({
           />
         </section>
 
-        {/* ── Members ──────────────────────────────────────────────────────── */}
         <section className="px-5 pb-5 space-y-3">
-          <h4 className={cn(SECTION_HEADING)}>Members · {members.length}</h4>
+          <h4 className={SECTION_HEADING}>Members · {members.length}</h4>
           <AddPeople list={list} memberIds={memberIds} />
 
           {membersLoading ? (
@@ -304,11 +269,9 @@ export const ListDetailPanel = ({
                   initial={{ opacity: 0, y: -4 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, x: 20, height: 0 }}
-                  // A row on the wash, on the panel's white surface, and not
-                  // a card on a card.
+                  // A row on the wash, not a card on a card.
                   className="flex items-center gap-3 p-3 rounded-xl bg-surface-container-low/70 group"
                 >
-                  {/* Avatar */}
                   <div className="w-9 h-9 rounded-full overflow-hidden shrink-0 bg-surface-container-low">
                     {contact.avatarUrl ? (
                       <img
@@ -323,7 +286,6 @@ export const ListDetailPanel = ({
                     )}
                   </div>
 
-                  {/* Info */}
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-sm break-words">
                       {contact.name}
@@ -337,7 +299,6 @@ export const ListDetailPanel = ({
                     )}
                   </div>
 
-                  {/* Remove button */}
                   {/* Hidden until hover only for a mouse: a tablet has no hover. */}
                   <button
                     type="button"
@@ -359,11 +320,9 @@ export const ListDetailPanel = ({
           )}
         </section>
 
-        {/* ── Delete List ──────────────────────────────────────────────────── */}
         <section className="px-5 pb-8">
-          {/* It asks first, in a dialog that names the list. The people on
-              it stay. The inline question that was here took the focus
-              away with the button that opened it. */}
+          {/* A dialog, not an inline question: replacing the button would
+              take focus away with it. */}
           <button
             type="button"
             onClick={() => setShowDeleteConfirm(true)}

@@ -10,7 +10,7 @@ interface SaveViewModalProps {
   onSave: (name: string) => Promise<void>;
   currentQuery?: string;
   currentLayer: MapLayer;
-  /** The overdue filter is on. A view does not save it, so the dialog says so. */
+  /** The overdue filter is on, which a view does not save. */
   overdueOnly?: boolean;
   /** The map shows only the people from Ask, which a view does not save. */
   fromAsk?: boolean;

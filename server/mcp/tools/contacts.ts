@@ -1,11 +1,6 @@
 /**
- * server/mcp/tools/contacts.ts — Contact management MCP tools.
- *
- * Implements:
- * - get_contact
- * - list_contacts
- * - create_contact
- * - update_contact
+ * Contact MCP tools: get_contact, list_contacts, create_contact,
+ * update_contact.
  *
  * @module server/mcp/tools/contacts
  */
@@ -54,11 +49,11 @@ interface Entry {
 }
 
 /**
- * A contact's emails, phones or tags with `add` put on the end and `remove`
- * taken out. `key` says when two are the same one: an email or a tag without
- * regard to case, a phone by its digits. updateContact saves the whole list,
- * as the contact form does, so every entry the caller did not name stays.
- * When the primary one goes, the first one left becomes primary.
+ * A contact's emails, phones or tags with `add` appended and `remove` taken
+ * out. `key` says when two are the same: an email or a tag ignoring case, a
+ * phone by its digits. updateContact saves the whole list, as the contact form
+ * does, so every entry the caller did not name stays. When the primary one
+ * goes, the first one left becomes primary.
  */
 function edit(
   entries: Entry[],
@@ -81,11 +76,10 @@ function edit(
 
 const lower = (value: string) => value.trim().toLowerCase();
 
-// The REST bodies of the same writes. A profile field is checked exactly as
-// `POST /api/contacts` and `PUT /api/contacts/:id` check it. The emails,
-// phones, tags and the tracking flag keep the tools' own shapes: the REST
-// bodies also take bare strings and "true" or "1" for them, which a model
-// does not need to see.
+// The REST bodies of the same writes, so a profile field is checked exactly as
+// `POST /api/contacts` and `PUT /api/contacts/:id` check it. Emails, phones,
+// tags and the tracking flag keep the tools' own shapes: the REST bodies also
+// take bare strings and "true" or "1", which a model does not need to see.
 const createBody = contactRoutes.create.body.shape;
 const updateBody = contactRoutes.replace.body.shape;
 

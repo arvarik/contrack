@@ -1,9 +1,4 @@
-/**
- * The list that opens over a stack of pins: people the geocoder put on one
- * spot, which no zoom can split. Each has a button, the open one marked.
- *
- * @module views/map/StackPopup
- */
+/** The list over a stack of pins on one spot, which no zoom can split. */
 import { Popup } from "@vis.gl/react-maplibre";
 import type { PaddingOptions } from "maplibre-gl";
 import type { MapContact } from "../../../shared/geo";
@@ -17,15 +12,13 @@ export interface ContactStack {
   key: string;
   longitude: number;
   latitude: number;
-  /** Everyone in the cluster, up to {@link STACK_LIMIT}. */
+  /** Up to {@link STACK_LIMIT} of the cluster. */
   contacts: MapContact[];
-  /** The cluster's full size, which can be more than the list holds. */
   total: number;
-  /** The part of the map the list keeps inside. */
   padding?: PaddingOptions;
 }
 
-/** The most people one stack lists. The rest are counted, not listed. */
+/** The most people one stack lists. The rest are only counted. */
 export const STACK_LIMIT = 50;
 
 interface StackPopupProps {

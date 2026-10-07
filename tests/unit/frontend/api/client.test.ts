@@ -1,20 +1,15 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The shared API client is the only way out of the app
-// =============================================================================
-// The server can answer an ordinary request with "your session expired", "your
-// account is disabled", or "change your password first". Each of those needs
-// the whole app to change screen, and only `AuthGate` can do that. A view
-// cannot, and eleven views deciding separately would decide it eleven ways.
+// The shared API client is the only way out of the app.
 //
-// So every call goes through `src/api/client.ts`, which recognises the answer
-// and announces it once on the window. A module that calls `fetch` directly
-// opts out of that silently: it still works, it still shows an error, and the
-// person is left staring at a failed page with no way to sign back in.
+// The server can answer any request with "your session expired", "your
+// account is disabled", or "change your password first". Only `AuthGate` can
+// change screen for those, so every call goes through `src/api/client.ts`,
+// which recognizes the answer and announces it once on the window. A module
+// that calls `fetch` directly still shows an error, but leaves the person with
+// no way to sign back in.
 //
-// The first block below is the scanner that stops that from creeping back.
-// The rest pin the behaviour it is protecting.
-// =============================================================================
+// The first block is the scanner that keeps direct `fetch` calls out. The rest
+// pin the behavior it protects.
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -42,17 +37,13 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-// ---------------------------------------------------------------------------
 // The scanner
-// ---------------------------------------------------------------------------
 
 /**
- * The source root.
- *
- * `process.cwd()` rather than `import.meta.url`: this file runs under jsdom,
- * where `import.meta.url` is resolved against the document base and comes out
- * as an http URL whose pathname is not on disk. Vitest runs from the repo
- * root. `sanity()` below refuses to let the scan pass by finding nothing.
+ * The source root. `process.cwd()` rather than `import.meta.url`, because
+ * under jsdom `import.meta.url` is an http URL whose pathname is not on disk.
+ * Vitest runs from the repo root, and `sanity()` refuses a scan that finds
+ * nothing.
  */
 const SRC = path.resolve(process.cwd(), "src");
 
@@ -76,17 +67,12 @@ function sourceFiles(dir = SRC, prefix = ""): { file: string; text: string }[] {
 /**
  * Every call to `fetch` in a file, as `{ line, argument }`.
  *
- * The pattern rejects `apiFetch(` and `authFetch(` (capital F), and
- * `prefetchQuery` and `refetch` (a letter immediately before `fetch`). It
- * deliberately DOES match `window.fetch(` and `globalThis.fetch(`: a dot is
- * not an identifier character, and the first version of this scanner excluded
- * it, so the one spelling somebody reaches for to dodge a linter was the one
- * spelling that walked straight past.
+ * The pattern skips `apiFetch(`, `authFetch(`, `prefetchQuery` and `refetch`,
+ * and matches `window.fetch(` and `globalThis.fetch(` on purpose: those are
+ * the spellings somebody reaches for to dodge a linter.
  *
- * The scan is over the whole file, not line by line, and `argument` is the
- * text that follows the opening bracket. Prettier breaks a long call across
- * lines, so a line-scoped scanner could not see the path in the exact shape
- * the formatter produces.
+ * The scan is over the whole file, and `argument` is the text after the
+ * opening bracket, because Prettier breaks a long call across lines.
  */
 const FETCH_CALL = /(?<![A-Za-z0-9_$])fetch\s*\(/g;
 
@@ -169,11 +155,10 @@ describe("every call to this app's API goes through the shared client", () => {
   });
 
   it("finds no call anywhere in src/ that reaches /api without the client", () => {
-    // Wider than the directory rule on purpose. Three components used to call
-    // `/api/...` with a bare `fetch` — the bulk import, the link unfurler —
-    // and each one was a route the server can answer with a 403 that nothing
-    // would have acted on. A fetch of a third-party URL is fine and is why
-    // this tests the argument rather than the call.
+    // Wider than the directory rule on purpose: a bare `fetch` to `/api/...`
+    // anywhere is a route whose 403 nothing would act on. A fetch of a
+    // third-party URL is fine, which is why this tests the argument rather
+    // than the call.
     const allowed = new Set(["api/client.ts", "api/auth.ts"]);
     const offenders = sourceFiles()
       .filter(({ file }) => !allowed.has(file))
@@ -186,9 +171,7 @@ describe("every call to this app's API goes through the shared client", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // What the client does with each answer
-// ---------------------------------------------------------------------------
 
 function respondWith(body: unknown, init: ResponseInit) {
   vi.stubGlobal(
@@ -280,12 +263,10 @@ describe("refusals that change which screen the app is", () => {
   });
 
   it("does not treat a wrong typed password as an expired session", async () => {
-    // The one 401 that is not about the browser's own credential.
-    // `POST /api/auth/change-password` answers 401 INVALID_CREDENTIALS when
-    // the *current* password field is wrong, and the cookie is untouched.
-    // Announcing that as an expiry replaced the forced-password-change screen
-    // with "your session expired" for a typo — and signing back in returned
-    // the person to the same form, with no idea what had happened.
+    // The one 401 that is not about the browser's own credential:
+    // `POST /api/auth/change-password` answers 401 INVALID_CREDENTIALS when the
+    // *current* password is wrong, and the cookie is untouched. Read as an
+    // expiry, a typo would replace the forced-password-change screen.
     const expired = listen(AUTH_EXPIRED_EVENT);
     respondWith(
       {
@@ -306,12 +287,10 @@ describe("refusals that change which screen the app is", () => {
   });
 
   it("does not announce ADMIN_REQUIRED at all", async () => {
-    // Task 4.11 asks for a toast here and this deliberately does not raise
-    // one. `useGroundingCapacity` polls an admin-only route every two minutes
-    // from the command palette, which is mounted on every screen, so a member
-    // would have seen a red error on load and again every two minutes for the
-    // life of the tab — for a request they did not make. The caller's own
-    // onError still shows the server's sentence on an action somebody took.
+    // No toast on purpose. `useGroundingCapacity` polls an admin-only route
+    // every two minutes from the command palette, which is on every screen, so
+    // a member would see a red error for a request they did not make. The
+    // caller's own onError still shows the server's sentence on an action.
     const forced = listen(PASSWORD_CHANGE_REQUIRED_EVENT);
     const expired = listen(AUTH_EXPIRED_EVENT);
     respondWith(
@@ -498,9 +477,7 @@ describe("apiJson", () => {
   );
 });
 
-// ---------------------------------------------------------------------------
 // The stream that cannot report why it failed
-// ---------------------------------------------------------------------------
 
 function queryWrapper() {
   const client = new QueryClient({
@@ -513,11 +490,9 @@ function queryWrapper() {
 describe("a dead dedupe stream falls back to polling", () => {
   it("keeps reporting progress after the EventSource gives up", async () => {
     // An `EventSource` error carries no status and no body, so a blip and a
-    // revoked session arrive identically. After the retries the client asks
-    // `/status` which of the two it was; a browser that is still signed in
-    // means the scan is fine and only the transport broke, so progress comes
-    // from polling. Before this, four failures meant a progress bar that
-    // never moved again for a scan that finished normally.
+    // revoked session look the same. After the retries the client asks
+    // `/status` which it was. A browser still signed in means only the
+    // transport broke, so progress comes from polling and never freezes.
     let source!: {
       onmessage?: (e: { data: string }) => void;
       onerror?: () => void;
@@ -576,9 +551,8 @@ describe("a dead dedupe stream falls back to polling", () => {
       ),
     );
 
-    // It has to keep polling, not poll once. The first version of this test
-    // passed against a fallback that fired one request and stopped, which is
-    // the same frozen progress bar the fallback exists to prevent.
+    // It has to keep polling: a fallback that fires one request and stops
+    // leaves the same frozen progress bar the fallback exists to prevent.
     const pollsAfterFirst = () =>
       fetchMock.mock.calls.filter(([u]) => String(u).includes("/dedupe/status"))
         .length;

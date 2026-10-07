@@ -3,6 +3,7 @@ import { log } from "../utils/logger.ts";
 import { dashboardService } from "../services/dashboardService.ts";
 import { zeroStateService } from "../services/zeroStateService.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
+import { abortOnDisconnect, isClientAbort } from "../utils/stream.ts";
 import { scopeOf } from "../tenancy/scope.ts";
 import { readerTimeZone } from "../utils/validators.ts";
 
@@ -42,39 +43,28 @@ router.get(
   "/dashboard/insight",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const controller = new AbortController();
-    const onClose = () => {
-      if (!res.writableEnded) controller.abort();
-    };
-    res.on("close", onClose);
+    const client = abortOnDisconnect(res);
 
     try {
       const insight = await dashboardService.getInsight(
         scopeOf(req),
-        controller.signal,
+        client.signal,
       );
       log.debug("API", `[${rid}] GET /api/dashboard/insight`);
 
       if (!res.destroyed) res.json(insight);
     } catch (err: unknown) {
-      if (
-        controller.signal.aborted ||
-        (err instanceof Error && err.name === "AbortError")
-      ) {
-        return;
-      }
+      if (isClientAbort(err, client.signal)) return;
       throw err;
     } finally {
-      res.off("close", onClose);
+      client.release();
     }
   }),
 );
 
 /**
- * GET /api/command-palette/zero-state
- *
- * Returns deterministic CRM intelligence signals for the Cmd+K zero-state:
- * action items due, catch-ups, ghost alerts. Pure SQLite — sub-10ms.
+ * GET /api/command-palette/zero-state: the palette's empty state (follow-ups
+ * due, catch-ups, ghost alerts), from SQLite alone, under 10 ms.
  */
 router.get(
   "/command-palette/zero-state",

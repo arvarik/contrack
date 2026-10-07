@@ -14,7 +14,11 @@ import { searchInteractions } from "../services/interactionSearchService.ts";
 import { parseInteractionSearchQuery } from "../utils/validators.ts";
 import { AppError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
-import { startStream } from "../utils/stream.ts";
+import {
+  abortOnDisconnect,
+  isClientAbort,
+  startStream,
+} from "../utils/stream.ts";
 import { synthesizeSearchResults } from "../ai/index.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { scopeOf } from "../tenancy/scope.ts";
@@ -72,13 +76,12 @@ router.get(
 );
 
 /**
- * GET /api/search/interactions — notes, with the date and an excerpt.
- *
- * "Who discussed hiring last month?" → the notes that mention hiring, dated
- * last month in the caller's zone, each with the person it is about and the
- * passage that matched. Local FTS5 only; no model is called. Query
- * parameters: `q`, `from`, `to`, `type`, `contactId`, `sort`, `mode`,
- * `limit`, `offset` and `tz`. See docs/api-reference.md.
+ * GET /api/search/interactions: notes, with the date and an excerpt. "Who
+ * discussed hiring last month?" gives the notes that mention hiring, dated last
+ * month in the caller's zone, each with its person and the passage that
+ * matched. Local FTS5 only, no model. Query parameters: `q`, `from`, `to`,
+ * `type`, `contactId`, `sort`, `mode`, `limit`, `offset` and `tz` (see
+ * docs/api-reference.md).
  */
 router.get(
   "/interactions",
@@ -142,16 +145,12 @@ router.post(
       // Two-phase streaming response
       startStream(res, "application/x-ndjson");
 
-      // Create an AbortController bound to request closure
-      const controller = new AbortController();
-      const onClose = () => {
+      const client = abortOnDisconnect(res, () =>
         log.info(
           "API",
           `[${rid}] Client disconnected mid-search stream. Aborting AI operations.`,
-        );
-        if (!res.writableEnded) controller.abort();
-      };
-      res.on("close", onClose);
+        ),
+      );
 
       try {
         await searchService.semanticSearchStream(
@@ -159,58 +158,41 @@ router.post(
           query,
           rid,
           res,
-          controller.signal,
+          client.signal,
           options,
         );
       } catch (err: unknown) {
-        if (
-          controller.signal.aborted ||
-          (err instanceof Error && err.name === "AbortError")
-        ) {
-          return;
-        }
+        if (isClientAbort(err, client.signal)) return;
         throw err;
       } finally {
-        res.off("close", onClose);
+        client.release();
       }
     } else {
-      // Single-response mode (backward compatible)
-      const controller = new AbortController();
-      const onClose = () => {
-        if (!res.writableEnded) controller.abort();
-      };
-      res.on("close", onClose);
+      // Single-response mode
+      const client = abortOnDisconnect(res);
       try {
         const result = await searchService.semanticSearch(
           scope,
           query,
           rid,
-          controller.signal,
+          client.signal,
           options,
         );
         if (!res.destroyed) res.json(result);
       } catch (err: unknown) {
-        if (
-          controller.signal.aborted ||
-          (err instanceof Error && err.name === "AbortError")
-        ) {
-          return;
-        }
+        if (isClientAbort(err, client.signal)) return;
         throw err;
       } finally {
-        res.off("close", onClose);
+        client.release();
       }
     }
   }),
 );
 
 /**
- * POST /api/search/synthesize — Executive Brief (Feature 6)
- *
- * Accepts a query and the already-returned search results, streams an
- * NDJSON executive summary via the AI service.
- *
- * Body: { query: string, contactIds: string[] }. Facts come from the database.
+ * POST /api/search/synthesize: the executive brief over results already
+ * returned, streamed as NDJSON. Body: { query: string, contactIds: string[] };
+ * the facts come from the database.
  *
  * Streams:
  *   { phase: "start" }
@@ -261,11 +243,7 @@ router.post(
         409,
       );
     const source = JSON.stringify(contacts);
-    const controller = new AbortController();
-    const onClose = () => {
-      if (!res.writableEnded) controller.abort();
-    };
-    res.on("close", onClose);
+    const client = abortOnDisconnect(res);
 
     // Stream the response
     startStream(res, "application/x-ndjson");
@@ -292,7 +270,7 @@ router.post(
             (piece) => write({ phase: "delta", text: piece }),
           ),
         10_000,
-        controller.signal,
+        client.signal,
       );
       if (JSON.stringify(readContacts()) !== source)
         throw new Error("Contacts changed. Generate a new summary.");
@@ -307,7 +285,7 @@ router.post(
       settled = true;
     }
 
-    res.off("close", onClose);
+    client.release();
     if (!res.destroyed) res.end();
   }),
 );
@@ -325,10 +303,9 @@ router.get(
 );
 
 /**
- * GET /api/search/starters — the caller's pool of starter questions.
- *
- * Built from the caller's own contacts, and never longer than the number of
- * contacts. The Ask page shows six of them at random under "Try asking".
+ * GET /api/search/starters: the caller's pool of starter questions, built from
+ * their own contacts and never longer than their number of contacts. The Ask
+ * page shows six at random under "Try asking".
  */
 router.get(
   "/starters",
@@ -342,11 +319,10 @@ router.get(
 );
 
 /**
- * POST /api/search/refresh-index — Explicitly trigger indexing for missing or all contacts.
- *
- * For paid providers, requires explicit confirmation ({ allowProvider: true }) to prevent
- * unapproved API charges, and answers 403 AI_OFF_FOR_ACCOUNT while the caller
- * has AI off.
+ * POST /api/search/refresh-index: index the missing contacts, or all of them. A
+ * paid provider needs `{ allowProvider: true }`, so nobody is charged without
+ * saying so, and the route answers 403 AI_OFF_FOR_ACCOUNT while the caller has
+ * AI off.
  */
 router.post(
   "/refresh-index",
@@ -396,9 +372,7 @@ router.post(
   }),
 );
 
-// =============================================================================
 // Search History
-// =============================================================================
 
 router.get(
   "/history",

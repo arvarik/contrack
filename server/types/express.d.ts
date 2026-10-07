@@ -1,8 +1,5 @@
-// Type augmentation for Express's Request.
-//
-// One file for all of it, deliberately: `declare global` blocks scattered
-// across the modules that happen to set each field are invisible to anyone
-// reading `req.` and wondering what is on it.
+// Type augmentation for Express's Request, all in one file, so whoever reads
+// `req.` can find what is on it.
 import type { Principal } from "../middleware/auth.ts";
 
 declare global {
@@ -11,10 +8,9 @@ declare global {
       /** 8-char trace id stamped on every request by the middleware in server/app.ts. */
       requestId: string;
       /**
-       * Who is making this request — set by `attachPrincipal` before any
-       * route runs. Optional because on a gated instance a caller that failed
-       * to authenticate has no principal at all, which is what `requireAuth`
-       * checks for.
+       * Who is making this request, set by `attachPrincipal` before any route
+       * runs. Optional, because on a gated instance a caller that failed to
+       * authenticate has none, which is what `requireAuth` checks.
        */
       principal?: Principal;
     }

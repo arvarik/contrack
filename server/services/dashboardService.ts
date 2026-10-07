@@ -31,10 +31,7 @@ import {
 
 export const insightCoalescer = new RequestCoalescer();
 
-// =============================================================================
-// Local row shapes for the raw SQL queries below (narrow — only the columns
-// each SELECT actually returns).
-// =============================================================================
+// Row shapes for the raw SQL below, only the columns each SELECT returns.
 
 /** Slim contact card columns shared by several dashboard queries. */
 interface ContactCardRow {
@@ -62,14 +59,11 @@ interface TrackingRow {
 
 export const dashboardService = {
   /**
-   * Every number on the dashboard, for one owner.
-   *
-   * Each statement carries the owner. The contact aggregates lead with
-   * `ownerId` so `idx_contacts_owner_status` and its siblings answer them,
-   * and the tracked ones lean on `idx_contacts_owner_tracked`. The
-   * interaction aggregates put the predicate on `interactions.ownerId` rather
-   * than reaching through the contact subselect, which is what
-   * `idx_interactions_owner_date` is for.
+   * Every number on the dashboard, for one owner. Each statement carries the
+   * owner: the contact aggregates lead with `ownerId` for
+   * `idx_contacts_owner_status` and its siblings (`idx_contacts_owner_tracked`
+   * for the tracked ones), and the interaction aggregates filter on
+   * `interactions.ownerId` for `idx_interactions_owner_date`.
    */
   getDashboardPayload(scope: Scope, timeZone?: string) {
     const startMs = Date.now();
@@ -161,11 +155,10 @@ export const dashboardService = {
       overshootDays: row.overshootDays,
     }));
 
-    // 4b. Tracking: the state of the people this owner tracks. The bands
-    // use the same cuts as scoreView, so the bar on Pulse and the rings on
-    // the Tracked contacts page count the same people. The band numbers go
-    // into the SQL text and not in a bound parameter: they are constants
-    // from code and never input.
+    // 4b. Tracking: the state of the people this owner tracks. The bands use
+    // scoreView's cuts, so the bar on Pulse and the rings on the Tracked
+    // contacts page count the same people. The band numbers are constants from
+    // code, written into the SQL text.
     const trackingRow = sqlite
       .prepare(
         `
@@ -335,11 +328,11 @@ export const dashboardService = {
       stale,
     };
 
-    // 12. Meetings (from upcoming_events when that table exists): the ones
-    // not over yet, through the seventh day from today on the reader's
-    // calendar. An all-day event is a day (`2026-10-09`), shown from its day
-    // on. The text compare with `datetime('now')` showed this morning's
-    // meetings and hid the seventh day's.
+    // 12. Meetings (from upcoming_events when that table exists): those not
+    //     over yet, through the seventh day from today on the reader's
+    //     calendar. An all-day event is a day (`2026-10-09`), shown from its
+    //     day on. A text compare with `datetime('now')` would show this
+    //     morning's meetings and hide the seventh day's.
     let meetings: {
       title: string;
       startsAt: string;
@@ -431,18 +424,9 @@ export const dashboardService = {
   },
 
   /**
-   * One owner's daily insight about their own network.
-   *
-   * The cache key leads with the owner id. Before this the key described the
-   * instance, so the first account to open the dashboard generated a paragraph
-   * about their contacts and every other account was served that same
-   * paragraph for the next 24 hours. The tier also held one entry, so a second
-   * owner's insight evicted the first; `maxEntries` is 100 now, which is one
-   * slot per owner on an instance of that size.
-   *
-   * 2f moved the prefix into `ownerKey`, so this key and the per-owner
-   * invalidation that drops it are built by the same function and cannot
-   * disagree.
+   * One owner's daily insight about their own network. The cache key comes from
+   * `ownerKey`, so each owner gets their own paragraph, and the per-owner
+   * invalidation that drops it uses the same function.
    */
   async getInsight(scope: Scope, signal?: AbortSignal) {
     const revision = searchRevision(scope);
@@ -579,11 +563,11 @@ export const dashboardService = {
   },
 
   /**
-   * Deterministic activity aggregates for one owner: 84 days, week totals,
-   * the streak, and today's and this week's counts. Every day is a day on
-   * the reader's calendar (`timeZone`), and every week starts on the
-   * account's week start, as the heatmap draws them. The server's own day
-   * is UTC in Docker, which put an evening's notes on tomorrow.
+   * Activity aggregates for one owner: 84 days, week totals, the streak, and
+   * today's and this week's counts. Every day is a day on the reader's calendar
+   * (`timeZone`), and every week starts on the account's week start, as the
+   * heatmap draws them. The server's own day is UTC in Docker, which would put
+   * an evening's notes on tomorrow.
    */
   getActivity(scope: Scope, timeZone?: string): DashboardActivityResponse {
     const startMs = Date.now();

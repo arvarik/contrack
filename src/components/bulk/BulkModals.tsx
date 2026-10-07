@@ -1,10 +1,4 @@
-/**
- * BulkModals — Shared modal dialogs for bulk operations (Add to List, Bulk Edit Field).
- *
- * Used by both ContactList and MapView.
- *
- * @module components/bulk/BulkModals
- */
+/** The bulk dialogs (Add to list, Edit field) of the contact list and the map. */
 import React, { type RefObject } from "react";
 import type { ContactList } from "../../types";
 import { Modal } from "../ui/Modal";
@@ -26,9 +20,8 @@ interface BulkModalsProps {
   onBulkEditApply: (field: string, value: string | number) => void;
   isBulkEditPending?: boolean;
   /**
-   * Where focus goes when a dialog closes, when it is there: a done action
-   * ends select mode, and the bar button that opened the dialog leaves
-   * with the bar. The Network list passes its Select button.
+   * Where focus goes when a dialog closes, since a done action ends select
+   * mode and the bar button leaves with the bar.
    */
   returnFocusRef?: RefObject<HTMLElement | null>;
 }

@@ -1,10 +1,10 @@
 /**
- * Where the synthetic benchmark contacts live: real neighbourhoods and real
+ * Where the synthetic benchmark contacts live: real neighborhoods and real
  * main streets, so a pin lands on land and an address reads like one.
  *
- * The streets, the neighbourhoods and the postcode prefixes are real. The
+ * The streets, the neighborhoods and the postcode prefixes are real. The
  * house numbers, the rest of each postcode and every phone number are
- * invented. A contact's pin is placed near the neighbourhood's centre, so it
+ * invented. A contact's pin is placed near the neighborhood's center, so it
  * is "in the right part of the city", never a claim that somebody lives at a
  * real door.
  *
@@ -12,8 +12,8 @@
  */
 import type { allFakers } from "@faker-js/faker";
 
-/** One neighbourhood: where its centre is, and a main street in it. */
-export interface Neighbourhood {
+/** One neighborhood: where its center is, and a main street in it. */
+export interface Neighborhood {
   name: string;
   street: string;
   /** The whole postcode where it is fixed for the area, else its first part. */
@@ -24,7 +24,7 @@ export interface Neighbourhood {
 
 /** How a country writes an address and a phone number. */
 export interface Country {
-  /** International dialling code, without the plus. */
+  /** International dialing code, without the plus. */
   calling: string;
   /** Whether the house number follows the street ("Kastanienallee 12"). */
   numberAfter: boolean;
@@ -362,13 +362,13 @@ export interface City {
   area?: string[];
   /** US state or Canadian province, as a person writes it in an address. */
   region?: string;
-  /** Real neighbourhoods. A town with none uses its centre. */
-  neighbourhoods?: Neighbourhood[];
-  /** The middle of a town that has no neighbourhoods, as [lat, lng]. */
-  centre?: [number, number];
-  /** The first characters every postcode near the town's centre shares. */
+  /** Real neighborhoods. A town with none uses its center. */
+  neighborhoods?: Neighborhood[];
+  /** The middle of a town that has no neighborhoods, as [lat, lng]. */
+  center?: [number, number];
+  /** The first characters every postcode near the town's center shares. */
   zip?: string;
-  /** Real main streets near the centre, for a country faker cannot name one in. */
+  /** Real main streets near the center, for a country faker cannot name one in. */
   streets?: string[];
 }
 
@@ -378,19 +378,19 @@ const n = (
   zip: string,
   lat: number,
   lng: number,
-): Neighbourhood => ({ name, street, zip, lat, lng });
+): Neighborhood => ({ name, street, zip, lat, lng });
 
 /**
  * Cities by their name, lowercase and without accents. A contact's
  * `location` ("Boston, MA, USA") is read up to its first comma.
  */
 export const CITIES: Record<string, City> = {
-  // ── The big cities, with neighbourhoods ────────────────────────────────
+  // The big cities, with neighborhoods
   "san francisco": {
     country: "US",
     region: "CA",
     area: ["415", "628"],
-    neighbourhoods: [
+    neighborhoods: [
       n("Mission District", "Valencia St", "94110", 37.7599, -122.4148),
       n("SoMa", "Folsom St", "94103", 37.7785, -122.4056),
       n("Hayes Valley", "Hayes St", "94102", 37.7759, -122.4245),
@@ -403,7 +403,7 @@ export const CITIES: Record<string, City> = {
     country: "US",
     region: "NY",
     area: ["212", "646", "917"],
-    neighbourhoods: [
+    neighborhoods: [
       n("Midtown", "W 42nd St", "10036", 40.7549, -73.984),
       n("Financial District", "Broad St", "10004", 40.7075, -74.0113),
       n("Williamsburg", "Bedford Ave", "11211", 40.7163, -73.9587),
@@ -416,7 +416,7 @@ export const CITIES: Record<string, City> = {
     country: "US",
     region: "MA",
     area: ["617", "857"],
-    neighbourhoods: [
+    neighborhoods: [
       n("Back Bay", "Newbury St", "02116", 42.3503, -71.081),
       n("South End", "Tremont St", "02118", 42.3417, -71.0724),
       n("Beacon Hill", "Charles St", "02114", 42.3588, -71.0707),
@@ -428,7 +428,7 @@ export const CITIES: Record<string, City> = {
     country: "US",
     region: "TX",
     area: ["512", "737"],
-    neighbourhoods: [
+    neighborhoods: [
       n("Downtown", "Congress Ave", "78701", 30.2672, -97.7431),
       n("East Austin", "E 6th St", "78702", 30.262, -97.717),
       n("South Congress", "S Congress Ave", "78704", 30.248, -97.75),
@@ -440,7 +440,7 @@ export const CITIES: Record<string, City> = {
     country: "US",
     region: "IL",
     area: ["312", "773"],
-    neighbourhoods: [
+    neighborhoods: [
       n("The Loop", "W Adams St", "60603", 41.8819, -87.6278),
       n("West Loop", "W Randolph St", "60607", 41.8826, -87.653),
       n("Lincoln Park", "N Clark St", "60614", 41.9214, -87.6513),
@@ -452,7 +452,7 @@ export const CITIES: Record<string, City> = {
     country: "US",
     region: "WA",
     area: ["206"],
-    neighbourhoods: [
+    neighborhoods: [
       n("Capitol Hill", "Broadway", "98102", 47.6253, -122.3222),
       n("Belltown", "1st Ave", "98121", 47.6145, -122.3468),
       n("Fremont", "N 34th St", "98103", 47.651, -122.3501),
@@ -464,7 +464,7 @@ export const CITIES: Record<string, City> = {
     country: "CA",
     region: "ON",
     area: ["416", "647"],
-    neighbourhoods: [
+    neighborhoods: [
       n("Financial District", "King St W", "M5H", 43.651, -79.3832),
       n("Queen West", "Queen St W", "M6J", 43.6476, -79.402),
       n("The Annex", "Bloor St W", "M5S", 43.6706, -79.407),
@@ -474,7 +474,7 @@ export const CITIES: Record<string, City> = {
   },
   london: {
     country: "GB",
-    neighbourhoods: [
+    neighborhoods: [
       n("Shoreditch", "Curtain Rd", "EC2A", 51.5246, -0.078),
       n("Soho", "Wardour St", "W1F", 51.5136, -0.1337),
       n("Islington", "Upper St", "N1", 51.5362, -0.1031),
@@ -485,7 +485,7 @@ export const CITIES: Record<string, City> = {
   },
   dublin: {
     country: "IE",
-    neighbourhoods: [
+    neighborhoods: [
       n("City Centre", "Dawson St", "D02", 53.3418, -6.2603),
       n("Smithfield", "Queen St", "D07", 53.3489, -6.278),
       n("Ranelagh", "Ranelagh Rd", "D06", 53.3265, -6.256),
@@ -501,7 +501,7 @@ export const CITIES: Record<string, City> = {
   },
   paris: {
     country: "FR",
-    neighbourhoods: [
+    neighborhoods: [
       n("Le Marais", "Rue de Bretagne", "75003", 48.8575, 2.3622),
       n("Montmartre", "Rue des Abbesses", "75018", 48.8867, 2.3431),
       n("Saint-Germain", "Boulevard Saint-Germain", "75006", 48.8539, 2.3334),
@@ -511,7 +511,7 @@ export const CITIES: Record<string, City> = {
   },
   berlin: {
     country: "DE",
-    neighbourhoods: [
+    neighborhoods: [
       n("Mitte", "Torstraße", "10119", 52.52, 13.405),
       n("Kreuzberg", "Oranienstraße", "10999", 52.4993, 13.403),
       n("Prenzlauer Berg", "Kastanienallee", "10435", 52.5388, 13.4244),
@@ -521,7 +521,7 @@ export const CITIES: Record<string, City> = {
   },
   amsterdam: {
     country: "NL",
-    neighbourhoods: [
+    neighborhoods: [
       n("Jordaan", "Westerstraat", "1015", 52.3745, 4.881),
       n("De Pijp", "Albert Cuypstraat", "1073", 52.3547, 4.8939),
       n("Oost", "Javastraat", "1094", 52.36, 4.924),
@@ -531,7 +531,7 @@ export const CITIES: Record<string, City> = {
   },
   lisbon: {
     country: "PT",
-    neighbourhoods: [
+    neighborhoods: [
       n("Baixa", "Rua Augusta", "1100", 38.711, -9.139),
       n("Alfama", "Rua de São Miguel", "1100", 38.7119, -9.129),
       n("Bairro Alto", "Rua da Rosa", "1200", 38.7136, -9.146),
@@ -541,7 +541,7 @@ export const CITIES: Record<string, City> = {
   },
   "mexico city": {
     country: "MX",
-    neighbourhoods: [
+    neighborhoods: [
       n("Roma Norte", "Calle Durango", "06700", 19.419, -99.163),
       n("Condesa", "Avenida Amsterdam", "06100", 19.411, -99.172),
       n("Polanco", "Avenida Presidente Masaryk", "11560", 19.433, -99.196),
@@ -551,7 +551,7 @@ export const CITIES: Record<string, City> = {
   },
   "sao paulo": {
     country: "BR",
-    neighbourhoods: [
+    neighborhoods: [
       n("Pinheiros", "Rua dos Pinheiros", "05422", -23.567, -46.692),
       n("Vila Madalena", "Rua Harmonia", "05435", -23.553, -46.691),
       n("Jardins", "Alameda Santos", "01418", -23.57, -46.66),
@@ -561,7 +561,7 @@ export const CITIES: Record<string, City> = {
   },
   nairobi: {
     country: "KE",
-    neighbourhoods: [
+    neighborhoods: [
       n("Westlands", "Waiyaki Way", "00800", -1.268, 36.811),
       n("Kilimani", "Argwings Kodhek Road", "00100", -1.289, 36.788),
       n("Karen", "Karen Road", "00502", -1.319, 36.709),
@@ -571,7 +571,7 @@ export const CITIES: Record<string, City> = {
   },
   singapore: {
     country: "SG",
-    neighbourhoods: [
+    neighborhoods: [
       n("Tiong Bahru", "Tiong Bahru Road", "160", 1.2854, 103.8324),
       n("Marina Bay", "Marina Boulevard", "018", 1.2834, 103.8607),
       n("Orchard", "Orchard Road", "238", 1.3048, 103.8318),
@@ -581,7 +581,7 @@ export const CITIES: Record<string, City> = {
   },
   seoul: {
     country: "KR",
-    neighbourhoods: [
+    neighborhoods: [
       n("Gangnam", "Teheran-ro", "06134", 37.4979, 127.0276),
       n("Hongdae", "Wausan-ro", "04039", 37.5563, 126.9236),
       n("Itaewon", "Itaewon-ro", "04350", 37.5345, 126.9946),
@@ -591,7 +591,7 @@ export const CITIES: Record<string, City> = {
   },
   tokyo: {
     country: "JP",
-    neighbourhoods: [
+    neighborhoods: [
       n("Shibuya", "Dogenzaka", "150-0043", 35.658, 139.7016),
       n("Shinjuku", "Yasukuni-dori", "160-0022", 35.6938, 139.7034),
       n("Roppongi", "Roppongi-dori", "106-0032", 35.6628, 139.731),
@@ -602,7 +602,7 @@ export const CITIES: Record<string, City> = {
   },
   "tel aviv": {
     country: "IL",
-    neighbourhoods: [
+    neighborhoods: [
       n("Rothschild Boulevard", "Rothschild Boulevard", "6688", 32.064, 34.775),
       n("Florentin", "Florentin Street", "6610", 32.056, 34.77),
       n("Neve Tzedek", "Shabazi Street", "6515", 32.06, 34.765),
@@ -612,7 +612,7 @@ export const CITIES: Record<string, City> = {
   },
   stockholm: {
     country: "SE",
-    neighbourhoods: [
+    neighborhoods: [
       n("Södermalm", "Götgatan", "118", 59.315, 18.07),
       n("Östermalm", "Karlavägen", "114", 59.338, 18.085),
       n("Vasastan", "Odengatan", "113", 59.344, 18.045),
@@ -623,7 +623,7 @@ export const CITIES: Record<string, City> = {
   sydney: {
     country: "AU",
     region: "NSW",
-    neighbourhoods: [
+    neighborhoods: [
       n("Surry Hills", "Crown St", "2010", -33.885, 151.211),
       n("Newtown", "King St", "2042", -33.898, 151.179),
       n("Bondi", "Campbell Parade", "2026", -33.8915, 151.2767),
@@ -634,7 +634,7 @@ export const CITIES: Record<string, City> = {
   },
   zurich: {
     country: "CH",
-    neighbourhoods: [
+    neighborhoods: [
       n("Altstadt", "Niederdorfstrasse", "8001", 47.37, 8.544),
       n("Kreis 4", "Langstrasse", "8004", 47.378, 8.524),
       n("Zürich West", "Hardstrasse", "8005", 47.387, 8.517),
@@ -644,7 +644,7 @@ export const CITIES: Record<string, City> = {
   },
   bangalore: {
     country: "IN",
-    neighbourhoods: [
+    neighborhoods: [
       n("Indiranagar", "100 Feet Road", "560038", 12.9719, 77.6412),
       n("Koramangala", "80 Feet Road", "560034", 12.9352, 77.6245),
       n("HSR Layout", "27th Main Road", "560102", 12.9116, 77.6474),
@@ -654,72 +654,72 @@ export const CITIES: Record<string, City> = {
     ],
   },
 
-  // ── Towns: a country, a postcode prefix and a centre. Every pin stands
-  // within 1.8 km of the centre. Every street postcode in that circle starts
-  // with the prefix, checked in September 2026 against postal directories.
+  // Towns: a country, a postcode prefix and a center. Every pin stands
+  // within 1.8 km of the center. Every street postcode in that circle starts
+  // with the prefix, checked against postal directories.
   // In the UK and Ireland the prefix is the outward code or the Eircode
-  // routing key at the centre itself, and the edge of the circle can be in
+  // routing key at the center itself, and the edge of the circle can be in
   // the next district.
-  aarhus: { country: "DK", zip: "8", centre: [56.1629, 10.2039] },
-  abuja: { country: "NG", zip: "900", centre: [9.0765, 7.3986] },
-  antwerp: { country: "BE", zip: "2", centre: [51.2194, 4.4025] },
+  aarhus: { country: "DK", zip: "8", center: [56.1629, 10.2039] },
+  abuja: { country: "NG", zip: "900", center: [9.0765, 7.3986] },
+  antwerp: { country: "BE", zip: "2", center: [51.2194, 4.4025] },
   athens: {
     country: "GR",
     zip: "1",
-    centre: [37.9838, 23.7275],
+    center: [37.9838, 23.7275],
     streets: ["Ermou", "Stadiou", "Panepistimiou", "Akadimias", "Mitropoleos"],
   },
-  barcelona: { country: "ES", zip: "080", centre: [41.3874, 2.1686] },
-  basel: { country: "CH", zip: "40", centre: [47.5596, 7.5886] },
-  belfast: { country: "GB", zip: "BT1", centre: [54.5973, -5.9301] },
-  bergen: { country: "NO", zip: "5", centre: [60.3913, 5.3221] },
-  bilbao: { country: "ES", zip: "480", centre: [43.263, -2.935] },
-  bologna: { country: "IT", zip: "401", centre: [44.4949, 11.3426] },
-  bordeaux: { country: "FR", zip: "33", centre: [44.8378, -0.5792] },
-  bratislava: { country: "SK", zip: "8", centre: [48.1486, 17.1077] },
-  bristol: { country: "GB", zip: "BS1", centre: [51.4545, -2.5879] },
-  budapest: { country: "HU", zip: "1", centre: [47.4979, 19.0402] },
-  cardiff: { country: "GB", zip: "CF10", centre: [51.4816, -3.1791] },
-  cork: { country: "IE", zip: "T12", centre: [51.8985, -8.4756] },
-  edinburgh: { country: "GB", zip: "EH1", centre: [55.9533, -3.1883] },
-  galway: { country: "IE", zip: "H91", centre: [53.2707, -9.0568] },
-  gdansk: { country: "PL", zip: "80", centre: [54.352, 18.6466] },
-  genoa: { country: "IT", zip: "161", centre: [44.4056, 8.9463] },
-  ghent: { country: "BE", zip: "90", centre: [51.0543, 3.7174] },
-  glasgow: { country: "GB", zip: "G1", centre: [55.8642, -4.2518] },
-  gothenburg: { country: "SE", zip: "41", centre: [57.7089, 11.9746] },
-  helsinki: { country: "FI", zip: "00", centre: [60.1699, 24.9384] },
-  innsbruck: { country: "AT", zip: "60", centre: [47.2692, 11.4041] },
-  krakow: { country: "PL", zip: "3", centre: [50.0647, 19.945] },
-  lagos: { country: "NG", zip: "10", centre: [6.5244, 3.3792] },
-  leeds: { country: "GB", zip: "LS1", centre: [53.8008, -1.5491] },
-  limerick: { country: "IE", zip: "V94", centre: [52.6638, -8.6267] },
-  ljubljana: { country: "SI", zip: "1", centre: [46.0569, 14.5058] },
-  lyon: { country: "FR", zip: "6900", centre: [45.764, 4.8357] },
-  malmo: { country: "SE", zip: "21", centre: [55.605, 13.0038] },
-  manchester: { country: "GB", zip: "M2", centre: [53.4808, -2.2426] },
-  milan: { country: "IT", zip: "201", centre: [45.4642, 9.19] },
-  munich: { country: "DE", zip: "8", centre: [48.1351, 11.582] },
-  naples: { country: "IT", zip: "801", centre: [40.8518, 14.2681] },
-  oslo: { country: "NO", zip: "0", centre: [59.9139, 10.7522] },
-  porto: { country: "PT", zip: "4", centre: [41.1579, -8.6291] },
-  prague: { country: "CZ", zip: "1", centre: [50.0755, 14.4378] },
-  riga: { country: "LV", zip: "LV-10", centre: [56.9496, 24.1052] },
-  rotterdam: { country: "NL", zip: "30", centre: [51.9244, 4.4777] },
+  barcelona: { country: "ES", zip: "080", center: [41.3874, 2.1686] },
+  basel: { country: "CH", zip: "40", center: [47.5596, 7.5886] },
+  belfast: { country: "GB", zip: "BT1", center: [54.5973, -5.9301] },
+  bergen: { country: "NO", zip: "5", center: [60.3913, 5.3221] },
+  bilbao: { country: "ES", zip: "480", center: [43.263, -2.935] },
+  bologna: { country: "IT", zip: "401", center: [44.4949, 11.3426] },
+  bordeaux: { country: "FR", zip: "33", center: [44.8378, -0.5792] },
+  bratislava: { country: "SK", zip: "8", center: [48.1486, 17.1077] },
+  bristol: { country: "GB", zip: "BS1", center: [51.4545, -2.5879] },
+  budapest: { country: "HU", zip: "1", center: [47.4979, 19.0402] },
+  cardiff: { country: "GB", zip: "CF10", center: [51.4816, -3.1791] },
+  cork: { country: "IE", zip: "T12", center: [51.8985, -8.4756] },
+  edinburgh: { country: "GB", zip: "EH1", center: [55.9533, -3.1883] },
+  galway: { country: "IE", zip: "H91", center: [53.2707, -9.0568] },
+  gdansk: { country: "PL", zip: "80", center: [54.352, 18.6466] },
+  genoa: { country: "IT", zip: "161", center: [44.4056, 8.9463] },
+  ghent: { country: "BE", zip: "90", center: [51.0543, 3.7174] },
+  glasgow: { country: "GB", zip: "G1", center: [55.8642, -4.2518] },
+  gothenburg: { country: "SE", zip: "41", center: [57.7089, 11.9746] },
+  helsinki: { country: "FI", zip: "00", center: [60.1699, 24.9384] },
+  innsbruck: { country: "AT", zip: "60", center: [47.2692, 11.4041] },
+  krakow: { country: "PL", zip: "3", center: [50.0647, 19.945] },
+  lagos: { country: "NG", zip: "10", center: [6.5244, 3.3792] },
+  leeds: { country: "GB", zip: "LS1", center: [53.8008, -1.5491] },
+  limerick: { country: "IE", zip: "V94", center: [52.6638, -8.6267] },
+  ljubljana: { country: "SI", zip: "1", center: [46.0569, 14.5058] },
+  lyon: { country: "FR", zip: "6900", center: [45.764, 4.8357] },
+  malmo: { country: "SE", zip: "21", center: [55.605, 13.0038] },
+  manchester: { country: "GB", zip: "M2", center: [53.4808, -2.2426] },
+  milan: { country: "IT", zip: "201", center: [45.4642, 9.19] },
+  munich: { country: "DE", zip: "8", center: [48.1351, 11.582] },
+  naples: { country: "IT", zip: "801", center: [40.8518, 14.2681] },
+  oslo: { country: "NO", zip: "0", center: [59.9139, 10.7522] },
+  porto: { country: "PT", zip: "4", center: [41.1579, -8.6291] },
+  prague: { country: "CZ", zip: "1", center: [50.0755, 14.4378] },
+  riga: { country: "LV", zip: "LV-10", center: [56.9496, 24.1052] },
+  rotterdam: { country: "NL", zip: "30", center: [51.9244, 4.4777] },
   sapporo: {
     country: "JP",
     zip: "0",
-    centre: [43.0618, 141.3545],
+    center: [43.0618, 141.3545],
     streets: ["Ekimae-dori", "Odori", "Kita 3-jo-dori", "Soseigawa-dori"],
   },
-  seville: { country: "ES", zip: "410", centre: [37.3891, -5.9845] },
-  sheffield: { country: "GB", zip: "S1", centre: [53.3811, -1.4701] },
-  sligo: { country: "IE", zip: "F91", centre: [54.2766, -8.4761] },
-  stuttgart: { country: "DE", zip: "70", centre: [48.7758, 9.1829] },
+  seville: { country: "ES", zip: "410", center: [37.3891, -5.9845] },
+  sheffield: { country: "GB", zip: "S1", center: [53.3811, -1.4701] },
+  sligo: { country: "IE", zip: "F91", center: [54.2766, -8.4761] },
+  stuttgart: { country: "DE", zip: "70", center: [48.7758, 9.1829] },
   tallinn: {
     country: "EE",
     zip: "1",
-    centre: [59.437, 24.7536],
+    center: [59.437, 24.7536],
     streets: [
       "Narva maantee",
       "Pärnu maantee",
@@ -728,14 +728,14 @@ export const CITIES: Record<string, City> = {
       "Viru",
     ],
   },
-  turin: { country: "IT", zip: "101", centre: [45.0703, 7.6869] },
-  umea: { country: "SE", zip: "90", centre: [63.8258, 20.263] },
-  valencia: { country: "ES", zip: "460", centre: [39.4699, -0.3763] },
-  vienna: { country: "AT", zip: "1", centre: [48.2082, 16.3738] },
+  turin: { country: "IT", zip: "101", center: [45.0703, 7.6869] },
+  umea: { country: "SE", zip: "90", center: [63.8258, 20.263] },
+  valencia: { country: "ES", zip: "460", center: [39.4699, -0.3763] },
+  vienna: { country: "AT", zip: "1", center: [48.2082, 16.3738] },
   vilnius: {
     country: "LT",
     zip: "LT-",
-    centre: [54.6872, 25.2797],
+    center: [54.6872, 25.2797],
     streets: [
       "Gedimino prospektas",
       "Pilies gatvė",
@@ -744,8 +744,8 @@ export const CITIES: Record<string, City> = {
       "Jogailos gatvė",
     ],
   },
-  warsaw: { country: "PL", zip: "0", centre: [52.2297, 21.0122] },
-  zagreb: { country: "HR", zip: "10", centre: [45.815, 15.9819] },
+  warsaw: { country: "PL", zip: "0", center: [52.2297, 21.0122] },
+  zagreb: { country: "HR", zip: "10", center: [45.815, 15.9819] },
 };
 
 /** "Sao Paulo, Brazil" and "São Paulo" both read as "sao paulo". */

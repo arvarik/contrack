@@ -1,13 +1,7 @@
 /**
- * The palette's footer: the keys that work on the highlighted row, and
- * nothing else.
- *
- * It used to show "→ actions" and "Hold Shift to peek" in AI and `>` modes
- * and with no results, where neither did anything, and "Enter to select"
- * where Enter did nothing. Now `Enter` says what it does to this row, and
- * `Esc` says what it does next: back, clear or close.
- *
- * @module components/command-palette/PaletteFooter
+ * The palette's footer: only the keys that work on the highlighted row.
+ * `Enter` says what it does to this row, and `Esc` what it does next: back,
+ * clear or close.
  */
 import { KBD_SM, SECTION_BG } from "../../lib/styles";
 

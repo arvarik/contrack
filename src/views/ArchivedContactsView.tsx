@@ -33,14 +33,8 @@ import { cn, errorText, plural } from "../lib/utils";
 import { FloatingContactCard } from "../components/FloatingContactCard";
 import { SETTINGS_PAGE } from "./settings/layout";
 
-// ---------------------------------------------------------------------------
-// ArchivedContactsView — lists archived contacts with individual + bulk restore
-//
-// One card: a strip that counts the contacts and holds Select, then a row for
-// each contact with Restore. The page's header above says what the page is
-// for. A row opens the contact's card; its name is the button a keyboard
-// reaches, since the row itself is not one.
-// ---------------------------------------------------------------------------
+// Archived contacts: one card with a strip that counts them and holds Select,
+// then a row per contact with Restore. A row opens the contact's card.
 
 export const ArchivedContactsView = () => {
   const { data: contacts = [], isLoading } = useArchivedContacts();
@@ -49,7 +43,7 @@ export const ArchivedContactsView = () => {
   const bulkDelete = useBulkDeleteContacts();
   const bulkRestore = useBulkRestoreContacts();
 
-  // ── Multi-select state ────────────────────────────────────────────────
+  // Select mode
   const [isSelectMode, setIsSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [floatingContactId, setFloatingContactId] = useState<string | null>(
@@ -76,7 +70,6 @@ export const ArchivedContactsView = () => {
   const selectAll = () => setSelectedIds(new Set(contacts.map((c) => c.id)));
   const selectedCount = selectedIds.size;
 
-  // ── Individual restore ────────────────────────────────────────────────
   const handleUnarchive = (id: string, name: string) => {
     unarchive.mutate(id, {
       onSuccess: () => toast.success(`${name} restored to Network`),
@@ -85,7 +78,6 @@ export const ArchivedContactsView = () => {
     });
   };
 
-  // ── Bulk restore ──────────────────────────────────────────────────────
   const handleBulkRestore = () => {
     const ids = Array.from(selectedIds) as string[];
     bulkUpdate.mutate(
@@ -103,12 +95,8 @@ export const ArchivedContactsView = () => {
     );
   };
 
-  // ── Bulk delete ───────────────────────────────────────────────────────
-  /**
-   * Deleting an archived contact is the same soft delete as anywhere else —
-   * it moves to Trash until the retention runs out. This used to report
-   * "Permanently deleted", which was simply untrue.
-   */
+  // A soft delete, as anywhere else: the contacts move to Trash until the
+  // retention runs out.
   const handleBulkDelete = () => {
     const ids = Array.from(selectedIds) as string[];
     bulkDelete.mutate(ids, {
@@ -210,7 +198,6 @@ export const ArchivedContactsView = () => {
                     isSelectMode && isSelected && SELECTED_ROW,
                   )}
                 >
-                  {/* Checkbox */}
                   <AnimatePresence>
                     {isSelectMode && (
                       <motion.div
@@ -235,19 +222,17 @@ export const ArchivedContactsView = () => {
                     )}
                   </AnimatePresence>
 
-                  {/* Avatar. The row is not a control, so the ring keeps its
-                      own name ("Score 72, strong") and its tooltip. */}
+                  {/* The row is not a control, so the ring keeps its own name
+                      and tooltip. */}
                   <div className="relative shrink-0">
                     <ScoreRingAvatar contact={contact} size={44} ring="list" />
-                    {/* The warning ink on the card face, like the contact
-                        page's Archived badge. White on a raw amber measured
-                        about 2 to 1. */}
+                    {/* Warning ink on the card face, like the contact page's
+                        Archived badge: white on raw amber is about 2 to 1. */}
                     <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-surface-container-lowest text-warning rounded-full flex items-center justify-center shadow-sm">
                       <Archive className="w-2.5 h-2.5" />
                     </div>
                   </div>
 
-                  {/* Info */}
                   <div className="flex-1 min-w-0">
                     {/* The row takes a pointer anywhere; the name is the
                         control a keyboard reaches. Its click is the row's. */}
@@ -258,9 +243,8 @@ export const ArchivedContactsView = () => {
                     >
                       {contact.name}
                     </button>
-                    {/* The words wrap rather than cut on a narrow phone. The
-                        date says what it is, so it is not read as the last
-                        edit. */}
+                    {/* "Archived" names the date, so it is not read as the
+                        last edit. */}
                     <p className="text-xs text-on-surface-variant mt-0.5">
                       {[
                         [contact.role, contact.company]
@@ -273,7 +257,6 @@ export const ArchivedContactsView = () => {
                     </p>
                   </div>
 
-                  {/* Individual restore button (hidden in select mode) */}
                   {!isSelectMode && (
                     <button
                       type="button"
@@ -299,7 +282,7 @@ export const ArchivedContactsView = () => {
         </div>
       )}
 
-      {/* ── Bulk Action Bottom Toolbar ──────────────────────────────────────── */}
+      {/* The bulk bar */}
       <AnimatePresence>
         {isSelectMode && selectedCount > 0 && (
           <motion.div
@@ -312,14 +295,12 @@ export const ArchivedContactsView = () => {
             className="sticky bottom-24 md:bottom-6 z-40 mt-6"
           >
             <div className="glass-panel rounded-2xl shadow-2xl px-4 py-3 flex items-center gap-2">
-              {/* Selected count */}
               <span className="text-sm font-bold text-on-surface mr-2 shrink-0">
                 <span className="text-primary">{selectedCount}</span> selected
               </span>
 
               <div className="flex-1" />
 
-              {/* Restore */}
               <button
                 onClick={handleBulkRestore}
                 disabled={bulkUpdate.isPending}
@@ -347,7 +328,6 @@ export const ArchivedContactsView = () => {
         )}
       </AnimatePresence>
 
-      {/* Floating Contact Card overlay */}
       <FloatingContactCard
         contactId={floatingContactId}
         isOpen={!!floatingContactId}

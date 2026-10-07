@@ -1,17 +1,12 @@
-// =============================================================================
 // Contracts: lists
-// =============================================================================
 // A person's own groups of contacts: the lists, their order, and who is in
 // each. Mounted at /api/lists.
-// =============================================================================
 
 import { z } from "zod";
 import { route } from "./route.ts";
 import { idsSchema, INTERNAL, okSchema } from "./common.ts";
 
-// =============================================================================
 // Request bodies
-// =============================================================================
 
 const listCreateSchema = z.object({
   name: z.string().trim().min(1, "List name is required").max(60),
@@ -27,9 +22,7 @@ const listUpdateSchema = z
     message: "At least one of name or icon is required",
   });
 
-// =============================================================================
 // Answers
-// =============================================================================
 
 const listSchema = z
   .strictObject({
@@ -57,9 +50,7 @@ const listMemberSchema = z
   })
   .meta({ id: "ListMember" });
 
-// =============================================================================
 // Routes
-// =============================================================================
 
 export const listRoutes = {
   all: route({

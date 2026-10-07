@@ -1,13 +1,7 @@
 /**
- * A merged contact's old link opens the contact it merged into.
- *
- * A merged contact is hidden, not deleted, so that Undo can bring it back,
- * and its page used to open as if nothing had happened: every edit on it
- * failed, and nothing said why. A link in a note, a bookmark or the page of
- * a contact that merged a moment ago all land here. The page asks where the
- * contact went, goes there, and says so, with Undo.
- *
- * @module views/contact-detail/components/useMergedRedirect
+ * A merged contact's old link opens the contact it merged into, and says so,
+ * with Undo. A merged contact is hidden, not deleted, so Undo can bring it
+ * back, and every edit on its own page would fail.
  */
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -17,11 +11,9 @@ import { announceMergedPage } from "../../../lib/mergeNotice";
 import type { Contact } from "../../../types";
 
 /**
- * True while the page is on its way to the contact this one merged into.
- *
- * It acts only on fresh answers: the contact as the server has it now, and
- * where it went. After an undo the cache still held the merged contact, and
- * the page went straight back to the kept one.
+ * True while the page is on its way to the contact this one merged into. It
+ * acts only on fresh answers: after an undo the cache still holds the merged
+ * contact, which would send the page straight back to the kept one.
  */
 export function useMergedRedirect(
   contact: Contact | undefined,

@@ -12,10 +12,6 @@ import { suggestKeeper } from "../utils/mergeOutcome";
 import { SelectStage } from "./manual/SelectStage";
 import { CompareStage } from "./manual/CompareStage";
 
-// =============================================================================
-// ManualMerge — choose contacts, then compare and merge them
-// =============================================================================
-
 type Stage = "select" | "compare";
 
 const STAGES: { stage: Stage; label: string }[] = [
@@ -24,12 +20,9 @@ const STAGES: { stage: Stage; label: string }[] = [
 ];
 
 /**
- * Two steps. Choose 2 to 5 contacts, then compare them, choose the one to
- * keep, and merge. The comparison is the review list's, with the same
- * "After the merge" lines, so a merge by hand says what it keeps the way a
- * suggested one does. It used to take three steps, and the last one showed
- * a second copy of the same contact. One call merges them all, and the
- * message after it has Undo.
+ * Choose 2 to 5 contacts, then compare them, choose the keeper and merge.
+ * The comparison is the review list's, so a merge by hand says what it keeps
+ * the same way. One call merges them all, and its toast has Undo.
  */
 export const ManualMerge = () => {
   const qc = useQueryClient();
@@ -38,10 +31,9 @@ export const ManualMerge = () => {
   const [primaryId, setPrimaryId] = useState<string | null>(null);
   const mergeCluster = useMergeCluster();
 
-  // The page is one scroller, so a new stage opened where the last one was
-  // scrolled to: Compare landed 998 px down on a phone, its Back above the
-  // screen. On a stage change the top of the tool comes into view. Either
-  // way of asking for less motion makes the jump instant.
+  // The page is one scroller, so a stage change scrolls the tool's top into
+  // view, or a new stage opens far down with Back off screen. Reduced motion
+  // makes the jump instant.
   const rootRef = useRef<HTMLDivElement>(null);
   const shownRef = useRef(stage);
   const reducedMotion = useReducedMotion();
@@ -57,8 +49,7 @@ export const ManualMerge = () => {
     });
   }, [stage, smooth]);
 
-  // The most complete contact is the one kept, as in Possible duplicates,
-  // until a person picks another.
+  // The most complete contact, until a person picks another.
   const keeperId =
     selected.find((c) => c.id === primaryId)?.id ??
     (selected.length > 0 ? suggestKeeper(selected).id : null);
@@ -102,10 +93,8 @@ export const ManualMerge = () => {
   }, [primary, others, mergeCluster, qc]);
 
   return (
-    // The page's column sets the width, so this tab starts on the same left
-    // edge as the settings card above it.
     <div ref={rootRef} className="flex flex-col w-full">
-      {/* The steps, the element a stage change scrolls into view. */}
+      {/* The steps, which a stage change scrolls into view. */}
       <div className="flex items-center gap-2 mb-6 px-1">
         {STAGES.map(({ stage: s, label }, i) => (
           <React.Fragment key={s}>

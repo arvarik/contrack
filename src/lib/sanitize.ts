@@ -1,12 +1,8 @@
 /**
- * Shared DOMPurify configuration for TipTap-authored rich text.
- *
- * Pins ALLOWED_TAGS/ALLOWED_ATTR to exactly what the InteractionComposer
- * (TipTap) emits — paragraphs, basic marks, links, lists, mention spans,
- * headings, blockquotes, and code blocks — so stored HTML cannot smuggle
- * unexpected elements or attributes through render-time sanitization.
- *
- * @module lib/sanitize
+ * The DOMPurify settings for a note's rich text: the tags and attributes the
+ * composer's editor writes, so stored HTML cannot carry anything else through
+ * to the page. Any `data-` attribute passes. A link preview card needs `div`
+ * and `img`, which this does not allow.
  */
 export const TIPTAP_SANITIZE_CONFIG = {
   ALLOWED_TAGS: [
@@ -24,10 +20,14 @@ export const TIPTAP_SANITIZE_CONFIG = {
     "h1",
     "h2",
     "h3",
+    "h4",
+    "h5",
+    "h6",
     "blockquote",
     "code",
     "pre",
+    "hr",
   ],
-  // a[href,target,rel] + span[data-type,data-id,class] (mention nodes)
+  // A link's, and a mention span's.
   ALLOWED_ATTR: ["href", "target", "rel", "data-type", "data-id", "class"],
 };

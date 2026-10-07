@@ -1,14 +1,10 @@
 /**
- * CorrespondentsView — Review unconfirmed correspondents discovered by connectors.
- *
- * Displays people seen in incoming/outgoing messages or calendar meetings who
- * are not yet contacts in Contrack. Provides "Add as contact" and "Ignore".
+ * CorrespondentsView: people that connectors saw in mail or meetings who are
+ * not contacts yet, each with "Add as contact" and "Ignore".
  *
  * "Add as contact" uses the name the mail or meeting gave. With only an
- * address it asks for a name first, filled in from the address ("rowan.vale"
- * gives "Rowan Vale"): it once made a contact named by its email address.
- *
- * @module views/settings/connectors/CorrespondentsView
+ * address it asks for a name first, filled in from the address, so no
+ * contact is named by its email address.
  */
 
 import React, { useState } from "react";
@@ -82,7 +78,7 @@ export const CorrespondentsView: React.FC = () => {
         emails: c.email ? [{ email: c.email, label: "work" }] : [],
         phones: c.phone ? [{ phone: c.phone, label: "mobile" }] : [],
       });
-      // Also automatically mark as ignored/linked in the correspondents link so it vanishes
+      // Mark the correspondent handled, so it leaves the list.
       await ignoreCorrespondent.mutateAsync({
         connectorId: c.connectorId,
         externalId: c.externalId,

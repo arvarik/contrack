@@ -1,15 +1,11 @@
 import { assertOwnedContact } from "./contactGuard.ts";
 /**
- * Action Item Service — CRUD operations for follow-up tasks.
- *
- * Action items are first-class entities linked to contacts. SQL triggers on
- * the `action_items` table automatically keep `contacts.nextFollowUpAt` in
- * sync as MIN(dueAt) of pending items — no manual cache management needed.
- * Every function takes the caller's scope first, and the
- * owner predicate sits on `action_items` rather than on the joined contact.
- * The join stays for the payload columns and the archived filter, but the
- * index that answers the query is `idx_action_items_owner_due` (partial, on
- * pending rows) or `idx_action_items_owner_done`.
+ * Follow-up tasks, linked to contacts. SQL triggers on `action_items` keep
+ * `contacts.nextFollowUpAt` at MIN(dueAt) of the pending items. Every function
+ * takes the caller's scope first, and the owner predicate sits on
+ * `action_items`, not the joined contact, so `idx_action_items_owner_due`
+ * (partial, pending rows) or `idx_action_items_owner_done` answers the query.
+ * The join stays for the payload columns and the archived filter.
  *
  * @module server/services/actionItemService
  */
@@ -90,10 +86,10 @@ export const actionItemService = {
   },
 
   /**
-   * The follow-ups due today or overdue, for the sidebar badge and the
-   * palette. The same rows as Pulse's Overdue and Today groups, on the same
-   * calendar: the reader's, when the request names its zone. The UTC day
-   * made the badge say 20 at 22:00 in California while Pulse said 18.
+   * The follow-ups due today or overdue, for the sidebar badge and the palette:
+   * the rows of Pulse's Overdue and Today groups, on the reader's calendar when
+   * the request names its zone, so the badge and Pulse agree late in the
+   * evening.
    */
   getUrgentCount(scope: Scope, timeZone?: string): number {
     const today = dayInZone(new Date(), timeZone)!;

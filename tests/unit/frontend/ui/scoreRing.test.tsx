@@ -1,17 +1,11 @@
 // @vitest-environment jsdom
-// =============================================================================
-// ScoreRingAvatar: the ring around an avatar shows the relationship score
-// =============================================================================
-// The ring used to be the contact's theme colour, and people read a red ring
-// as trouble. It now says one thing. The arc length is the score, the colour
-// is the band from shared/scoreBand, and the words say the same so colour is
-// never the only sign.
+// ScoreRingAvatar: the ring around an avatar shows the relationship score.
+// The arc length is the score, the color is the band from shared/scoreBand,
+// and the words say the same, so color is never the only sign.
 //
-// A score belongs to a contact somebody tracks. So the ring has three states,
-// and `scoreView` decides between them: no ring at all for a contact nobody
-// tracks, the empty track for a tracked contact with nothing logged, and the
-// arc for a tracked contact with a score.
-// =============================================================================
+// `scoreView` picks one of three states: no ring for a contact nobody tracks,
+// the empty track for a tracked contact with nothing logged, and the arc for a
+// tracked contact with a score.
 import React from "react";
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -76,7 +70,7 @@ describe("the arc", () => {
     [100, "success"],
     [55, "warning"],
     [5, "error"],
-  ])("colours a score of %i with the %s token", (score, token) => {
+  ])("colors a score of %i with the %s token", (score, token) => {
     const { arc, root } = mount({
       contact: person({ relationshipScore: score }),
     });
@@ -88,7 +82,7 @@ describe("the arc", () => {
 
   it("draws no arc and says so when there is no logged interaction", () => {
     // The column defaults to 50, so a never-contacted person still carries a
-    // score. It is a placeholder, not a judgement.
+    // score. It is a placeholder, not a judgment.
     const { arc, circles, root } = mount({
       contact: person({ relationshipScore: 50, lastContactedAt: null }),
     });
@@ -141,8 +135,8 @@ describe("a contact nobody tracks", () => {
 });
 
 describe("the picture", () => {
-  // A list built again, on each return to the Network page, found its
-  // pictures gone from memory and drew grey circles for a frame.
+  // A list built again on each return to the Network page must not find its
+  // pictures gone from memory and draw gray circles for a frame.
   it("holds a picture once it has loaded", () => {
     const img = mount().picture.querySelector("img")!;
     expect(isImageKept(img.src)).toBe(false);

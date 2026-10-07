@@ -1,14 +1,10 @@
 // @vitest-environment jsdom
-// =============================================================================
-// The contact page while it loads, when it fails, and as it renders again
-// =============================================================================
-// A contact opened on a blank "Loading contact..." although its row in the
-// list already had the name, the picture, the role and the company. A timeout
-// or a 500 said "Contact not found". And each render of the page drew the
-// memoized header again, because it was handed new mutation objects.
+// The contact page while it loads, when it fails, and as it renders again. It
+// loads with the name, picture, role and company its list row already had. A
+// timeout or a 500 offers Retry, and only a 404 says not found. A render does
+// not redraw the memoized header, because its mutation objects stay the same.
 //
 // The real API hooks run here, over a stubbed `fetch`.
-// =============================================================================
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";

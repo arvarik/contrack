@@ -1,8 +1,4 @@
-// =============================================================================
-// Module: link-preview
-// =============================================================================
 // Link previews for the URLs in notes.
-// =============================================================================
 
 import { defineModule } from "../module.ts";
 import { linkPreviewRouter } from "../../routes/linkPreview.ts";

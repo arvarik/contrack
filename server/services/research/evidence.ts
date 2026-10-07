@@ -1,10 +1,7 @@
-// =============================================================================
-// Research — evidence: what one source found, in one shape
-// =============================================================================
-// A technique searches the web its own way: with the research model's search
-// tool, or with a web search whose pages a model reads. Each ends in fact
-// lines with their pages, and the extraction reads the lines of all. This
-// module holds what the techniques share:
+// What the research techniques share. A technique searches the web its own
+// way (the research model's search tool, or a web search whose pages a model
+// reads), and each ends in fact lines with their pages, which the extraction
+// reads together.
 //
 //   createMeter       what a run spends, counted over every call
 //   contextWindowFor  the window of the model a call goes to, when small
@@ -13,7 +10,6 @@
 //   mergeEvidence     the facts of several sources as one
 //   foundResult       the result of a run that found facts
 //   noMatchResult     the result of a run that searched and matched nobody
-// =============================================================================
 
 import type { AIGenerateResult } from "../../ai/gateway.ts";
 import { resolveCapability } from "../../ai/capabilities.ts";
@@ -31,16 +27,16 @@ export const CHARS_PER_TOKEN = 3;
 
 /**
  * The context window, in tokens, of a custom endpoint's model that reports
- * none. Ollama gives a model 4,096 on a machine without a large GPU (Ollama
- * 0.35, 2026-10-02), and its OpenAI-compatible API cannot ask for more.
+ * none. Ollama 0.35 gives a model 4,096 on a machine without a large GPU, and
+ * its OpenAI-compatible API cannot ask for more.
  */
 export const UNREPORTED_WINDOW_TOKENS = 4_096;
 
 /**
- * The context window, in tokens, of the model a capability resolves to:
- * what its endpoint reports, or UNREPORTED_WINDOW_TOKENS for a custom
- * endpoint that reports none. A hosted provider's model holds every research
- * prompt, so it has none here unless its catalog names one.
+ * The context window, in tokens, of the model a capability resolves to: what
+ * its endpoint reports, or UNREPORTED_WINDOW_TOKENS for a custom endpoint that
+ * reports none. A hosted model holds every research prompt, so it has none
+ * unless its catalog names one.
  */
 export function contextWindowFor(
   capability: "quick" | "deep",
@@ -68,9 +64,9 @@ export interface Meter {
 }
 
 /**
- * A meter at zero. Every call is counted, the ones that found nothing too:
- * each is paid. A call that runs no search tool, such as reading SearXNG's
- * pages, counts its tokens and no search.
+ * A meter at zero. Every call is counted, empty ones too, since each is paid. A
+ * call without a search tool, such as reading SearXNG's pages, counts its
+ * tokens and no search.
  */
 export function createMeter(): Meter {
   const meter: Meter = {

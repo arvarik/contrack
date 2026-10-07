@@ -1,33 +1,20 @@
-// =============================================================================
-// AI Answer Pipeline Quality Gate ("Ask Contrack")
-// =============================================================================
-// Evaluates the COMPLETE end-to-end AI answer pipeline:
+// AI answer pipeline quality gate ("Ask Contrack"). It covers:
 //   1. Filter interpretation (QueryPlan extraction, confidence, disambiguation)
-//   2. Final results quality (post-FTS/vector retrieval, post-hard filter, post-rerank)
-//   3. Correct empty answers / refusal on non-matching queries
-//   4. Adversarial prompt injection resistance in contact data
-//   5. Grounded synthesis summaries & unsupported claim / hallucination detection
+//   2. Final results (after retrieval, hard filters and rerank)
+//   3. Correct empty answers on non-matching queries
+//   4. Resistance to prompt injection in contact data
+//   5. Grounded synthesis and unsupported-claim detection
 //
-// WHY THIS EXISTS:
-// The search evaluation (search.eval.test.ts) only measures candidate retrieval
-// (BM25 + KNN + RRF). It explicitly excludes AI planning and hard filters, while
-// production later reranks candidates and removes ungrounded matches.
-// Good retrieval scores do not prove that users receive correct answers.
-// Per OpenAI's evaluation best practices, this suite provides task-specific,
-// realistic, adversarial, and continuous evaluation for the answer pipeline.
+// search.eval.test.ts measures retrieval alone (BM25, KNN, RRF), without AI
+// planning, hard filters or the rerank, so it cannot show that people get
+// correct answers. This measures the answer.
 //
-// HERMETIC REPLAY IN CI:
-// Contact & query vectors are read from tests/fixtures/answer-eval/vectors.bin.
-// Model completions are read from tests/fixtures/answer-eval/recorded-responses.json.
-// The database, FTS5 index, KNN, and pipeline logic are 100% real. Zero API keys
-// or network access are required in CI.
+// Hermetic replay: vectors come from tests/fixtures/answer-eval/vectors.bin
+// and model completions from recorded-responses.json. The database, FTS5,
+// KNN and pipeline are real, so CI needs no key or network.
 //
-// RE-RECORDING / LIVE EVALUATION:
-// To update the baseline and fixtures after intentional pipeline improvements:
-//   npm run eval:record:answer
-// To run a live evaluation against configured AI providers:
-//   npm run eval:answer:live
-// =============================================================================
+// After an intended change, re-record with `npm run eval:record:answer`. Run
+// `npm run eval:answer:live` against the configured providers.
 
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -257,10 +244,8 @@ describe("AI Answer Pipeline Quality Gate", () => {
       );
     });
 
-    // Each score is an average over the queries that carry its label, and
-    // an average over no queries is a perfect score. The labels are in the
-    // fixture, so these counts must equal the counts the baseline was
-    // recorded with.
+    // An average over no queries is a perfect score, so the label counts
+    // must equal the counts the baseline was recorded with.
     it("scores each measure over as many queries as the baseline did", () => {
       const counts = (scores: Scores) => ({
         filter: scores.filterScore.evaluatedQueries,

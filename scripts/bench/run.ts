@@ -12,20 +12,16 @@
  *   npm run db:enrich -- --apply --count 500 --owner admin --seed mine
  *
  * `--count` is how many people a new network has, 5,000 by default. The
- * account is `--owner` when given, else the one whose contacts carry the tag.
- * When no contact carries it, the account is the one the app uses when
- * nobody signs in: the local owner on a fresh database, the first admin on
- * an instance with accounts (`ensureLocalOwner` in server/db.ts).
+ * account is `--owner` when given, else the one whose contacts carry the tag,
+ * else the one the app uses when nobody signs in (`ensureLocalOwner`).
  *
- * Run it with the server stopped. It writes the database directly and queues
- * each contact it changes for the search index, which the server reads when
- * it starts. It needs `DATA_DIR` set the way the server has it.
+ * Run it with the server stopped and `DATA_DIR` set as the server has it. It
+ * writes the database directly and queues each changed contact for the
+ * search index, which the server reads when it starts.
  *
  * It can run again. Every row it adds has an id that starts with `be-`, and a
- * run removes those rows and writes them again, so the result does not grow.
- * The same `--seed` and `--now` give the same database, and on another
- * database the same people, ids included. Without `--now` the dates follow
- * the clock, so a second run moves them by the time between runs.
+ * run replaces those rows, so the result does not grow. The same `--seed` and
+ * `--now` give the same database. Without `--now` the dates follow the clock.
  *
  * Words a contact has are never changed. Only its empty fields are filled.
  *
@@ -297,7 +293,7 @@ function writeRun(
   }
 }
 
-// ─── Command line ──────────────────────────────────────────────────────────
+// Command line
 
 /** The options a command line gives, or an error that says what is wrong. */
 export function parseOptions(args: string[]): EnrichOptions {

@@ -1,14 +1,8 @@
 /**
- * InsightCard: the day's AI observation, or one line that names the next step.
- *
- * With an insight the card is the paragraph and the category on a quiet line
- * over it. Without one the card is a line that says why. With no model for
- * the insight it speaks by role: an admin is told to set one up and given
- * the door, a member is told the admin has not yet. With a model set up, the
- * provider failed or wrote nothing, so the line says so and offers Try
- * again: "Add an AI key" was wrong there. An account with AI off is told
- * where the switch is. While the insight loads, the card holds the shape of
- * an insight, its words drawn as bars.
+ * The day's AI observation, or one line that names the next step. With no
+ * model, an admin gets a link to set one up and a member hears the admin has
+ * not. With a model, the provider failed or wrote nothing, so the line
+ * offers Try again.
  */
 import { Link } from "react-router-dom";
 import { Sparkles } from "lucide-react";
@@ -60,9 +54,8 @@ export const InsightCard = ({
     );
   }
 
-  // On its way, the insight is the card the skeleton drew: its paragraph as
-  // bars that wrap like an insight of a common length. With AI on, an
-  // insight is the likely answer, and the page lands at its height.
+  // Loading draws an insight's shape: with AI on, an insight is the likely
+  // answer, so the page lands at its height.
   if (isLoading) {
     return (
       <CardFrame cardId="insight" title="Daily insight">
@@ -106,10 +99,8 @@ export const InsightCard = ({
   return (
     <CardFrame cardId="insight" title="Daily insight">
       <div className="flex flex-col gap-1.5">
-        {/* The category the model gave the insight, whole and in sentence
-            case, on a quiet line over it. Beside the title it was cut to
-            "Relationship Maintenanc…" and pushed the title onto two lines.
-            The AI colour marks what a model wrote. */}
+        {/* The category gets its own line: beside the title it was cut off
+            and wrapped the title. The AI color marks what a model wrote. */}
         {insight.category && (
           <p className={cn(PULSE_TYPE.meta, "flex items-center gap-1.5")}>
             <Sparkles

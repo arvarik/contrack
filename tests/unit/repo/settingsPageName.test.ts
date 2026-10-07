@@ -1,12 +1,8 @@
-// =============================================================================
-// The AI page is named once: Settings → Administration → AI providers
-// =============================================================================
-// Before 2.0 the page was Settings → AI. It moved under Administration, and
-// text that still sent people to "Settings → AI" (a log line an operator reads
-// after a failed boot, a comment in .env.example) sent them to a page that no
-// longer exists. "Settings → AI usage" is a real page, so it stays. The
-// changelog keeps the old name, because it says what each release did.
-// =============================================================================
+// Unit: the AI page is named once: Settings → Administration → AI providers.
+// Text that sends people to "Settings → AI" (a log line an operator reads
+// after a failed boot, a comment in .env.example) points at a page that does
+// not exist. "Settings → AI usage" is a real page, so it stays. The changelog
+// keeps the earlier name, because it says what each release did.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";

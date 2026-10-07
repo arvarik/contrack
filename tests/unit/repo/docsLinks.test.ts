@@ -1,6 +1,4 @@
-// =============================================================================
 // Unit: every link in the docs leads somewhere
-// =============================================================================
 // The docs are flat pages in docs/, and docs/README.md is their index. Pages
 // link to each other by file and anchor, and to images beside them. A renamed
 // heading or a removed page breaks a link without any other test noticing,
@@ -8,7 +6,6 @@
 // the repository README, CONTRIBUTING, AGENTS, SECURITY and the agent notes,
 // and checks each relative link and image: the file exists, and an anchor
 // names a heading in the page it points at.
-// =============================================================================
 
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";

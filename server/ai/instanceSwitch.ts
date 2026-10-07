@@ -1,21 +1,14 @@
-// =============================================================================
-// AI Layer — the instance switch
-// =============================================================================
-// One switch that stops every AI provider call on this instance, for every
-// account. The account switch (`aiAssist`, Settings → Privacy) stops the calls
-// made for one person. This one belongs to the admin.
+// The instance switch: stops every AI provider call on this instance, for every
+// account. The account switch (`aiAssist`, Settings → Privacy) stops one
+// person's; this one is the admin's. It is on when:
+// - AI_DISABLED=true (or 1) is in the environment, which wins: Settings cannot
+//   turn AI back on while it is set;
+// - the `ai.instanceOff` app setting is set, from the AI providers page.
 //
-// Two things turn AI off for the instance:
-//   - AI_DISABLED=true (or 1) in the server's environment. It wins: while it
-//     is set, Settings cannot turn AI back on.
-//   - the `ai.instanceOff` app setting, which an admin sets on the AI
-//     providers page.
-//
-// While it is off, `getProvider` in providerRegistry.ts resolves no provider,
-// so no generation, provider embedding, model discovery or model test can
-// leave the server. Embeddings resolve to the built-in local model, so search
-// by meaning keeps working without a provider.
-// =============================================================================
+// While it is on, `getProvider` (providerRegistry.ts) resolves no provider, so
+// no generation, provider embedding, model discovery or model test leaves the
+// server. Embeddings resolve to the built-in local model, so search by meaning
+// keeps working.
 
 import {
   getSetting,
@@ -40,10 +33,8 @@ export function aiOffLockedByEnv(): boolean {
 }
 
 /**
- * True when AI is off for the whole instance.
- *
- * Read on every provider lookup. The setting read is an in-memory cache hit
- * after the first one (settingsService), so the check costs nothing.
+ * True when AI is off for the whole instance. Read on every provider lookup;
+ * after the first, the setting is an in-memory cache hit (settingsService).
  */
 export function isAiOffForInstance(): boolean {
   return (
@@ -69,11 +60,9 @@ export function instanceAiState(): InstanceAiState {
 }
 
 /**
- * True when Contrack may call an AI provider for this account.
- *
- * Both switches must allow it: the instance switch and the account's own
- * `aiAssist` preference. The request middleware, auto-enrichment and
- * connector email summaries all ask this one question.
+ * True when Contrack may call an AI provider for this account: the instance
+ * switch and the account's `aiAssist` preference both allow it. The request
+ * middleware, auto-enrichment and connector email summaries all ask this.
  */
 export function aiAllowedForUser(userId: string): boolean {
   if (isAiOffForInstance()) return false;

@@ -1,9 +1,6 @@
-// =============================================================================
-// Unit: every place that names a Node version names the same one
-// =============================================================================
-// v2 runs on Node 26.10 or later, and nothing is left on Node 22. The version
-// is written down in seven places, and they drifted before: the Docker image,
-// CI and the docs each said 22 on their own. This test reads all seven.
+// Unit: every place that names a Node version names the same one.
+// v2 runs on Node 26.10 or later. The version is written in seven places, and
+// this test reads all seven:
 //
 //   .nvmrc           the pin for CI (setup-node) and for nvm and fnm
 //   .tool-versions   the same pin for mise and asdf
@@ -12,7 +9,6 @@
 //   Dockerfile       the image's Node line, on Debian 13 (trixie)
 //   devcontainer     the version a dev container or a Codespace installs
 //   @types/node      the types, which must be for the same major
-// =============================================================================
 
 import { readFileSync } from "node:fs";
 import path from "node:path";

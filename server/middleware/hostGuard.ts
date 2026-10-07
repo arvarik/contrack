@@ -1,19 +1,18 @@
 /**
- * hostGuard — the DNS rebinding guard, and the Origin check of /api/mcp.
+ * The DNS rebinding guard, and the Origin check of /api/mcp.
  *
- * With sign-in off, whoever reaches the server acts as the owner. A browser
- * keeps one site from reading another site's answers, but DNS rebinding gets
- * around that: a web page points its own name at this machine, and then reads
- * this server as if it were the same site. Each of its requests carries the
- * page's name in the Host header. So while sign-in is off, the server answers
- * only the names a public DNS name cannot be:
+ * With sign-in off, whoever reaches the server acts as the owner. DNS rebinding
+ * gets around the browser's same-origin rule: a web page points its own name at
+ * this machine and reads this server as if it were the same site, with the
+ * page's name in each Host header. So while sign-in is off, the server answers
+ * only names a public DNS name cannot be:
  * - an IP address, `localhost`, or a name with no dot (`nas`);
  * - a name under a suffix public DNS does not serve (`LOCAL_SUFFIXES`);
  * - the host of `PUBLIC_URL`, and the names in `ALLOWED_HOSTS`.
  *
- * With sign-in on, a rebinding page has no session and no token, so the
- * guard steps aside. It stays until the first account exists, though: until
- * then the setup form is open, and a rebinding page could claim the instance.
+ * With sign-in on, a rebinding page has no session and no token, so the guard
+ * steps aside, but only once the first account exists: until then the setup
+ * form is open, and a rebinding page could claim the instance.
  *
  * @module server/middleware/hostGuard
  */
@@ -105,10 +104,10 @@ export function hostGuard(
   next: NextFunction,
 ): void {
   if (!isOpen()) return next();
-  // Every name must pass. `req.hostname` reads only the first entry of
-  // X-Forwarded-Host from a trusted proxy hop, and a page can write that
-  // header itself. So the raw Host header is checked, and so is every entry a
-  // proxy may have added after the page's own.
+  // Every name must pass. `req.hostname` reads only the first X-Forwarded-Host
+  // entry from a trusted hop, and a page can write that header itself, so the
+  // raw Host header is checked, and so is every entry a proxy added after the
+  // page's own.
   const forwarded = req.app?.get("trust proxy")
     ? String(req.headers["x-forwarded-host"] ?? "")
         .split(",")
@@ -129,10 +128,9 @@ export function hostGuard(
 }
 
 /**
- * The MCP spec asks a server to refuse a request whose Origin it does not
- * know. An MCP client is not a web page and sends no Origin, so a request
- * with one came from a browser. It may come from this app's own origin, from
- * `PUBLIC_URL`, or from `CORS_ORIGIN`.
+ * The MCP spec asks a server to refuse a request whose Origin it does not know.
+ * An MCP client sends no Origin, so a request with one came from a browser, and
+ * may come only from this app's own origin, `PUBLIC_URL` or `CORS_ORIGIN`.
  */
 export function mcpOriginGuard(
   req: Request,

@@ -1,16 +1,12 @@
 /**
- * Playwright — the browser journeys that unit tests cannot walk.
+ * The browser journeys unit tests cannot walk. `npm run test:e2e` after
+ * `npm run build`. Each worker boots its own production-mode Contrack with a
+ * throwaway DATA_DIR (`tests/e2e/fixtures/instance.ts`), so there is no
+ * `webServer` block.
  *
- * `npm run test:e2e` after `npm run build`. Every worker boots its own
- * production-mode Contrack (`tests/e2e/fixtures/instance.ts`) on a free port
- * with a throwaway DATA_DIR, so a run never touches a developer's database
- * and two workers never share state. There is no `webServer` block for that
- * reason: the server is a fixture, not a global.
- *
- * Chromium only. The suite asserts roles, names, focus and live-region text,
- * which the accessibility tree exposes the same way in every engine; what
- * differs between engines is the screen reader, and no automated run can
- * stand in for one. See docs/accessibility.md for the manual pass.
+ * Chromium only: the suite asserts roles, names, focus and live-region text,
+ * which every engine exposes alike. docs/accessibility.md has the manual
+ * screen reader pass.
  */
 import { defineConfig, devices } from "@playwright/test";
 
@@ -43,9 +39,7 @@ export default defineConfig({
   use: {
     trace: "on-first-retry",
     screenshot: "only-on-failure",
-    // The app honours `prefers-reduced-motion`, and so does this suite: an
-    // assertion made mid-transition is a flake waiting to happen, and the
-    // motion itself is not what is under test.
+    // An assertion made mid-transition flakes, and motion is not under test.
     reducedMotion: "reduce",
     locale: "en-US",
     // Date phrases in the notes search are read in the reader's zone. Pinned

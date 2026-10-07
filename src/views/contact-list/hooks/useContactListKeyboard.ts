@@ -1,31 +1,12 @@
 /**
- * useContactListKeyboard — Keyboard navigation for the contact list view.
+ * Page keys for the contact list: `j/k/↑/↓` step through contacts, `/` focuses
+ * search, `n` opens New contact, `v` opens Add from text, `Enter` focuses the
+ * composer and `Escape` leaves select mode. `isPageKeyTaken()` skips keys in a
+ * field, with a modifier, or under a dialog or menu.
  *
- * Handles `j/k/↑/↓` for contact navigation, `/` for search focus,
- * `n` for new contact modal, `v` for smart paste, `Enter` for composer focus,
- * and `Escape` to exit select mode.
- *
- * NOTE: This hook attaches a window-level keydown listener. It checks
- * `isPageKeyTaken()`, so it leaves alone a key typed in a field, a key
- * with a modifier, and every key while a dialog or a menu is open.
- *
- * The listener is attached once and reads the latest values from a ref
- * that is written in the same commit as the page. It used to be attached
- * again after every change, in an effect, which runs after the browser has
- * painted. A second ArrowDown pressed between the paint and that effect ran
- * the listener from before: it still had no open contact, so it opened the
- * first row, the one already open, and the step was lost.
- * `tests/e2e/keyboard.spec.ts` presses the arrows as fast as the page shows
- * the current row.
- *
- * @param params.filteredContacts - Currently visible contacts for index-based nav.
- * @param params.currentId - The active contact ID from route params.
- * @param params.isSelectMode - Whether multi-select is active (for Escape handling).
- * @param params.exitSelectMode - Callback to leave multi-select.
- * @param params.navigate - React Router navigate function.
- * @param params.locationSearch - Current URL search string (preserved during nav).
- * @param params.onNewContact - Callback to open the create contact modal.
- * @param params.onSmartPaste - Callback to open the smart paste modal.
+ * The window listener is attached once and reads a ref written in a layout
+ * effect. A listener re-attached in a plain effect lags a paint behind, so a
+ * fast second ArrowDown repeats the first step (`tests/e2e/keyboard.spec.ts`).
  */
 import { useEffect, useLayoutEffect, useRef } from "react";
 import {
@@ -59,9 +40,7 @@ export function useContactListKeyboard({
 }: UseContactListKeyboardParams) {
   const singleKeys = useSingleKeyShortcuts();
 
-  // The values the listener reads, written before the browser paints the
-  // commit that changed them, so a key pressed as soon as the page shows a
-  // change sees it.
+  // Written before paint, so a key pressed as soon as a change shows sees it.
   const latest = useRef({
     filteredContacts,
     currentId,
@@ -100,9 +79,7 @@ export function useContactListKeyboard({
         onSmartPaste,
         singleKeys,
       } = latest.current;
-      // A row or the letter rail already answered this key (the arrows
-      // move focus inside the list, and a letter is type-ahead there), or
-      // it holds a modifier, or a field, a dialog or a menu has it.
+      // Also skips a key a row or the letter rail already answered.
       if (isPageKeyTaken(e)) return;
       // Caps Lock on: "J" is still j.
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
@@ -113,9 +90,8 @@ export function useContactListKeyboard({
         return;
       }
       if (key === "Enter") {
-        // Enter on a focused link or button is that control's own press.
-        // Only an Enter that would otherwise do nothing jumps to the
-        // composer, which is what the shortcut was for.
+        // Enter on a link or button presses it. Only an idle Enter jumps to
+        // the composer.
         if (isActivationTarget()) return;
         e.preventDefault();
         const editor = document.querySelector(".ProseMirror") as HTMLElement;
@@ -169,7 +145,6 @@ export function useContactListKeyboard({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  // Auto-scroll active item into view
   useEffect(() => {
     if (currentId) {
       const el = document.getElementById(`contact-row-${currentId}`);

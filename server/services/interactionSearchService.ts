@@ -1,16 +1,11 @@
-// =============================================================================
-// Interaction search — "who discussed hiring last month?" answered locally
-// =============================================================================
-// One statement over interactions_fts, joined to the interaction and the
-// contact it belongs to. The owner is in the MATCH expression, on the
-// interaction row and on the contact row, and the contact has to be active,
-// so a note on a trashed or merged contact is not an answer.
+// Interaction search: "who discussed hiring last month?", answered locally.
 //
-// Nothing here calls a model. The date phrase parser, the question-word
-// filter and FTS5 are all the intelligence there is, which is what makes an
-// answer from this service reproducible: the same notes and the same question
-// give the same page.
-// =============================================================================
+// One statement over interactions_fts, joined to the interaction and its
+// contact. The owner is in the MATCH expression, on the interaction row and on
+// the contact row, and the contact must be active, so a note on a trashed or
+// merged contact is no answer. No model runs: the date phrase parser, the
+// question-word filter and FTS5 make the same notes and question give the same
+// page.
 
 import type Database from "better-sqlite3";
 import { sqlite } from "../db.ts";
@@ -32,9 +27,7 @@ import {
 } from "./search/interactionQuery.ts";
 import type { Scope } from "../tenancy/scope.ts";
 
-// =============================================================================
 // Types
-// =============================================================================
 
 export interface InteractionSearchParams {
   /** Free text. A date phrase inside it is lifted out and applied as a filter. */
@@ -108,9 +101,7 @@ export interface InteractionSearchResult {
   hits: InteractionSearchHit[];
 }
 
-// =============================================================================
 // Constants
-// =============================================================================
 
 export const DEFAULT_LIMIT = 20;
 export const MAX_LIMIT = 50;
@@ -139,9 +130,7 @@ const INSTANT_SQL = "strftime('%Y-%m-%dT%H:%M:%fZ', i.date)";
 const OPEN = "\u0001";
 const CLOSE = "\u0002";
 
-// =============================================================================
 // Helpers
-// =============================================================================
 
 /**
  * Compiled statements, by their SQL. The SQL changes only with which
@@ -160,10 +149,9 @@ function prepare(sql: string): Database.Statement {
 }
 
 /**
- * The body text a hit reads when nothing in the body matched: its opening,
- * one character past what `opening` shows, so it can tell a longer body
- * and add the ellipsis. A long email's whole body used to come back for
- * every hit on its title.
+ * The body text a hit reads when nothing in the body matched: its opening, one
+ * character past what `opening` shows, so it can tell a longer body and add the
+ * ellipsis, without sending a long email's whole body for a title hit.
  */
 const OPENING_SQL = `substr(f.content, 1, ${OPENING_LENGTH + 1})`;
 
@@ -289,17 +277,13 @@ function resolveRange(
   return null;
 }
 
-// =============================================================================
 // The search
-// =============================================================================
 
 /**
- * Search the caller's interactions.
- *
- * With text, the page is ranked by bm25 (a title match above a body match)
- * and then by date. Without text but with a filter, it is the caller's notes
- * in that period, newest first. With neither, it is empty: listing every
- * note is what the timeline is for.
+ * Search the caller's interactions. With text, the page is ranked by bm25 (a
+ * title match above a body match), then by date. With only a filter, it is the
+ * caller's notes in that period, newest first. With neither, it is empty:
+ * listing every note is the timeline's job.
  */
 export function searchInteractions(
   scope: Scope,
@@ -417,10 +401,10 @@ function browse(
   limit: number,
   offset: number,
 ): InteractionSearchResult {
-  // The index row is read for its plain text only, which is why it is a
-  // LEFT JOIN by rowid: a note the index has not caught up with still lists,
-  // with no excerpt. The count shares the statement; an outer join to a
-  // table with at most one row per rowid changes nothing about it.
+  // The index row is read for its plain text only, so it is a LEFT JOIN by
+  // rowid: a note the index has not caught up with still lists, without an
+  // excerpt. The count shares the statement, which an outer join to at most one
+  // row per rowid does not change.
   const from = `
     FROM interactions i
     JOIN contacts c ON c.id = i.contactId AND c.ownerId = ? AND ${ACTIVE_CONTACT_SQL}

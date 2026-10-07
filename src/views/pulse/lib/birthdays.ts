@@ -1,9 +1,4 @@
-/**
- * Client-side birthday helpers for Pulse Intelligence and Up Next cards.
- *
- * Scans slim contacts for upcoming birthdays within a window (default 14 days),
- * leveraging the parser and leap-year rules in src/lib/birthday.ts.
- */
+/** Upcoming birthdays for the Pulse cards, by `lib/birthday.ts` rules. */
 import { getUpcomingBirthdayInfo } from "../../../lib/birthday";
 
 export interface UpcomingBirthday {
@@ -29,9 +24,7 @@ interface ContactWithBirthday {
   lastContactedAt?: string | null;
 }
 
-/**
- * Find upcoming birthdays within `maxDays` (default 14 days), sorted by nearest first.
- */
+/** Birthdays within `maxDays`, nearest first. */
 export function getUpcomingBirthdays(
   contacts: readonly ContactWithBirthday[],
   now: Date = new Date(),

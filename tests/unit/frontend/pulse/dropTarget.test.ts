@@ -1,12 +1,10 @@
-// =============================================================================
 // Where a card lands in customize mode
-// =============================================================================
+//
 // `lib/dropTarget.ts` is the geometry of the drag: which column the pointer
 // is in, which place in that column, and one keyboard step at a time. It is
 // pure, so the boxes here are written out by hand, in px, the way the page
 // lays them out at 1440 px (three columns side by side), at 1024 px (the
 // Intelligence column as a grid two across) and on a phone (one column).
-// =============================================================================
 import { describe, expect, it } from "vitest";
 import {
   columnDropId,

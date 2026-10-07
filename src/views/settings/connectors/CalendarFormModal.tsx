@@ -1,17 +1,12 @@
 /**
- * CalendarFormModal — modal form for adding or editing an ICS calendar connector.
- *
- * Captures private ICS URL (masked like a capability), sync interval, lookback period,
- * attendee filter, and description opt-in.
- *
- * @module views/settings/connectors/CalendarFormModal
+ * CalendarFormModal: adds or edits an ICS calendar connector. The URL is
+ * masked, because a private ICS address grants access to the calendar.
  */
 
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Modal } from "../../../components/ui/Modal";
-import { Segmented } from "../../../components/ui/Segmented";
 import { Switch } from "../../../components/ui/Switch";
 import {
   useCreateConnector,
@@ -24,6 +19,12 @@ import type {
 } from "../../../../shared/connectors";
 import { FORM_INPUT, TONE_WASH } from "../../../lib/styles";
 import { cn, errorText } from "../../../lib/utils";
+import {
+  FIELD_HEADING,
+  FormError,
+  LookbackField,
+  SyncScheduleField,
+} from "./ConnectorFormFields";
 
 interface CalendarFormModalProps {
   isOpen: boolean;
@@ -172,7 +173,6 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
       size="md"
     >
       <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-        {/* Privacy line */}
         <div className="rounded-lg bg-surface-container p-3 text-xs text-on-surface-variant leading-relaxed">
           <p>
             <strong>Privacy:</strong> Only event times, titles, and participant
@@ -181,22 +181,10 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           </p>
         </div>
 
-        {/* Error message */}
-        {formError && (
-          <div
-            role="alert"
-            className={cn("rounded-lg p-3 text-xs", TONE_WASH.error)}
-          >
-            {formError}
-          </div>
-        )}
+        <FormError message={formError} />
 
-        {/* Name */}
         <div>
-          <label
-            htmlFor="connector-name"
-            className="block text-xs font-semibold text-on-surface mb-1"
-          >
+          <label htmlFor="connector-name" className={FIELD_HEADING}>
             Connector name
           </label>
           <input
@@ -210,12 +198,8 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           />
         </div>
 
-        {/* ICS URL */}
         <div>
-          <label
-            htmlFor="connector-ics-url"
-            className="block text-xs font-semibold text-on-surface mb-1"
-          >
+          <label htmlFor="connector-ics-url" className={FIELD_HEADING}>
             Private ICS calendar URL
           </label>
           <div className="relative">
@@ -247,50 +231,15 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           </p>
         </div>
 
-        {/* Schedule */}
-        <div>
-          <span className="block text-xs font-semibold text-on-surface mb-1">
-            Sync schedule
-          </span>
-          <Segmented<number>
-            label="Sync schedule"
-            className="sm:w-fit"
-            value={intervalMinutes}
-            onChange={setIntervalMinutes}
-            options={[
-              { value: 15, label: "15 min" },
-              { value: 30, label: "30 min" },
-              { value: 60, label: "Hourly" },
-              { value: 1440, label: "Daily" },
-            ]}
-          />
-        </div>
+        <SyncScheduleField
+          value={intervalMinutes}
+          onChange={setIntervalMinutes}
+        />
+        <LookbackField value={lookbackDays} onChange={setLookbackDays} />
 
-        {/* How far back the first sync goes */}
-        <div>
-          <span className="block text-xs font-semibold text-on-surface mb-1">
-            First sync goes back
-          </span>
-          <Segmented<number>
-            label="First sync goes back"
-            className="sm:w-fit"
-            value={lookbackDays}
-            onChange={setLookbackDays}
-            options={[
-              { value: 30, label: "30 days" },
-              { value: 90, label: "90 days" },
-              { value: 365, label: "1 year" },
-            ]}
-          />
-        </div>
-
-        {/* Max Attendees */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label
-              htmlFor="connector-max-attendees"
-              className="block text-xs font-semibold text-on-surface mb-1"
-            >
+            <label htmlFor="connector-max-attendees" className={FIELD_HEADING}>
               Skip events with more than
             </label>
             <div className="flex items-center gap-2">
@@ -314,7 +263,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           <div>
             <label
               htmlFor="connector-ghost-threshold"
-              className="block text-xs font-semibold text-on-surface mb-1"
+              className={FIELD_HEADING}
             >
               Suggest a new person after
             </label>
@@ -340,7 +289,6 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           </div>
         </div>
 
-        {/* Include description switch */}
         <div className="flex items-center justify-between gap-3 pt-2">
           <div>
             <span className="block text-xs font-semibold text-on-surface">
@@ -357,7 +305,6 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           />
         </div>
 
-        {/* Test Result Indicator */}
         {testResult && (
           <div
             role="status"
@@ -370,7 +317,6 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
           </div>
         )}
 
-        {/* Actions */}
         <div className="flex items-center justify-between gap-3 pt-2">
           <button
             type="button"

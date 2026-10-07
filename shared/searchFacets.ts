@@ -181,8 +181,8 @@ function matchesTrackedFilter(isTracked: boolean, value: string): boolean {
 /**
  * The values a facet takes, when `filter` holds one it does not know: "yes
  * or no" for `tracked:maybe`. Null for a value it knows, and for a facet
- * that takes any text. An unknown value matches nobody, and the list said
- * "Try fewer letters", which was no help.
+ * that takes any text. An unknown value matches nobody, so the list says
+ * what the facet takes.
  */
 export function unknownFacetValue(filter: FacetFilter): string | null {
   const v = facetNeedle(filter);

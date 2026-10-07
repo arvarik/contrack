@@ -1,17 +1,8 @@
 /**
- * ActionSubMenu — Keyboard-first action panel for a focused contact.
- *
- * Activated by pressing `→` on a focused search result.
- * Provides quick actions without leaving the command palette:
- *   👤 View profile (Enter), 📝 Log note (N), 📞 Log call (C),
- *   ✨ Catch me up (B), 📋 Add to list (L), ⟳ Refresh from the web (R, with
- *   AI on and lookups left), ◎ Track or Untrack (T)
- *
- * Track reads the contact's flag from the contact cache, flips it with the
- * same toast and Undo as the header button, and closes the palette. A
- * ghost gets no Track row: it cannot be tracked.
- *
- * @module components/command-palette/ActionSubMenu
+ * A result's actions, opened with `→`: View profile (Enter), Log note (N),
+ * Log call (C), Catch me up (B), Add to list (L), Refresh from the web (R,
+ * with AI on and lookups left), Track or Untrack (T). Track works as the
+ * header button does. A ghost has no Track row.
  */
 import React, {
   useEffect,
@@ -42,8 +33,6 @@ import { useEnrichContact, useGroundingCapacity } from "../../api/enrichment";
 import { InlineNoteComposer } from "./InlineNoteComposer";
 import { ListPicker } from "./ListPicker";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 type SubMenuMode = "actions" | "note" | "call" | "list";
 
 interface ActionSubMenuProps {
@@ -55,9 +44,8 @@ interface ActionSubMenuProps {
   onBack: () => void;
   onClose: () => void;
   /**
-   * Puts the focus back in the palette's input. A note, a call or a list
-   * has a field or keys of its own, and when it closes its focus went with
-   * it, onto the dialog: the next key went nowhere.
+   * Puts the focus back in the palette's input when a note, a call or a list
+   * closes, so the next key lands there.
    */
   onReturnFocus?: () => void;
   /** AI is on for the account: the row can refresh from the web. */
@@ -71,8 +59,6 @@ interface ActionItem {
   shortcut: string;
   handler: () => void;
 }
-
-// ─── Component ────────────────────────────────────────────────────────────────
 
 export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
   contactId,
@@ -98,10 +84,8 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
   const listboxId = useId();
   const actionsRef = useRef<HTMLDivElement>(null);
 
-  // ── Track ───────────────────────────────────────────────────────────────
-  // The result row carries the id, the name and the picture. The flag and
-  // the cadence come from the contact cache, which the palette already
-  // holds for its instant results.
+  // Track. The flag and the cadence come from the contact cache, which the
+  // palette holds for its instant results.
   const { data: contacts } = useContacts();
   const contact = contacts?.find((c) => c.id === contactId);
   const isTracked = contact?.isTracked ?? false;
@@ -124,9 +108,7 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
   ]);
   const canTrack = !contact?.isGhost;
 
-  // ── Refresh from the web ────────────────────────────────────────────────
-  // It was a button inside a stale row's chip, and a row holds no second
-  // control. Here every contact has it, while the day's web lookups last.
+  // Refresh from the web, for every contact, while the day's lookups last.
   const enrich = useEnrichContact();
   const { data: capacity } = useGroundingCapacity();
   const canRefresh =
@@ -137,10 +119,8 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
     onClose();
   }, [canRefresh, enrich, contactId, onClose]);
 
-  // ── Action items ────────────────────────────────────────────────────────
-  // Memoized: this array feeds the keyboard handler's dependency list, and a
-  // fresh array each render re-created the handler and re-bound the document
-  // key listener on every keystroke.
+  // Memoized: it feeds the key handler's dependencies, and a new array would
+  // re-bind the document listener on every keystroke.
   const actions: ActionItem[] = useMemo(
     () => [
       {
@@ -212,7 +192,7 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
     ],
   );
 
-  // ── Keyboard handling ───────────────────────────────────────────────────
+  // Keyboard handling
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       // Don't intercept when in a sub-mode that handles its own keys
@@ -226,12 +206,9 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
         return;
       }
 
-      // A field keeps its own keys. The palette's search box is the
-      // exception: it keeps the focus when → opens this menu, so while the
-      // menu shows, its keys belong to the menu. Before, B typed a "b" into
-      // the box, and the typing closed the menu. A key the menu does not use
-      // still types, and a new search closes the menu.
-      // A focused button, such as Back, keeps Enter and Space as well.
+      // A field keeps its own keys, except the palette's search box, which
+      // keeps the focus while this menu shows: there the menu's keys win, and
+      // other keys still type. A focused button keeps Enter and Space.
       const target = e.target instanceof Element ? e.target : null;
       if (
         target &&
@@ -324,7 +301,7 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [handleKeyDown]);
 
-  // ── Note / Call composer ────────────────────────────────────────────────
+  // Note / Call composer
   if (mode === "note" || mode === "call") {
     return (
       <InlineNoteComposer
@@ -340,7 +317,7 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
     );
   }
 
-  // ── List picker ─────────────────────────────────────────────────────────
+  // List picker
   if (mode === "list") {
     return (
       <ListPicker
@@ -354,7 +331,7 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
     );
   }
 
-  // ── Actions list ────────────────────────────────────────────────────────
+  // Actions list
   return (
     <motion.div
       ref={actionsRef}
@@ -389,10 +366,9 @@ export const ActionSubMenu: React.FC<ActionSubMenuProps> = ({
         </div>
       </div>
 
-      {/* Action items. The one the arrow keys are on is the selected row.
-          A listbox the palette's input names the current row of
-          (`aria-activedescendant`, synced in CommandPalette): a screen
-          reader heard nothing here. The rows are not Tab stops. */}
+      {/* A listbox whose current row the palette's input names
+          (`aria-activedescendant`, synced in CommandPalette). The rows are
+          not Tab stops. */}
       <div
         role="listbox"
         id={listboxId}

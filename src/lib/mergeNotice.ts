@@ -1,16 +1,8 @@
 /**
- * The message a person gets when Contrack merged a contact by itself.
- *
- * A contact added by hand is checked a few seconds later, and when it is
- * the same person as one that existed, it can merge into that one with
- * nobody asked. Imports and checks say what they merged. This did not: the
- * new contact's page stayed on screen, every edit on it failed, and nothing
- * said why. Now the person hears it once, with Undo, wherever they are.
- *
- * An Undo here means the two are different people, so nothing merges them
- * again.
- *
- * @module lib/mergeNotice
+ * The message a person gets when Contrack merged a contact by itself. A
+ * contact added by hand is checked a few seconds later and can merge into
+ * one that existed, so the person hears it once, with Undo, wherever they
+ * are. Undo marks the two as different people, so nothing merges them again.
  */
 import type { QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";

@@ -1,19 +1,13 @@
-// =============================================================================
-// Unit: the runtime image holds every file the server imports
-// =============================================================================
-// The Dockerfile's runtime stage copies a chosen set of paths, and the server
-// grew imports from outside it: `shared/` (searchFacets, dates, connectors,
-// the MCP tool list) and `src/lib/devices.ts`. Nothing ran the image, so it
-// failed at boot with ERR_MODULE_NOT_FOUND on every build since. This test
-// reads the COPY lines and follows the server's runtime imports, so the next
-// such import fails here instead of in somebody's container.
+// Unit: the runtime image holds every file the server imports.
+// The Dockerfile's runtime stage copies a chosen set of paths, and an import
+// from outside them fails at boot with ERR_MODULE_NOT_FOUND. This test reads
+// the COPY lines and follows the server's runtime imports, so such an import
+// fails here instead of in a container.
 //
 // The same walk checks packages. The image installs with --omit=dev, so a
-// package the server loads must be in dependencies, not devDependencies. And
-// the reverse: a package the server never loads, such as React, which the
-// build bundles into dist/, belongs in devDependencies, or it ships in the
-// image for nothing.
-// =============================================================================
+// package the server loads must be in dependencies. A package the server
+// never loads, such as React, which the build bundles into dist/, belongs in
+// devDependencies, or it ships in the image for nothing.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { builtinModules } from "node:module";

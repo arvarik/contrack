@@ -1,9 +1,6 @@
-// =============================================================================
 // Weighted reciprocal rank fusion
-// =============================================================================
 // score(d) = sum over the lists that rank d of weight / (k + rank), with
 // 1-based ranks. Pure computation: no database, no model.
-// =============================================================================
 
 import { describe, it, expect } from "vitest";
 import {

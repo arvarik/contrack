@@ -1,6 +1,4 @@
-// =============================================================================
 // Security utilities — upload path containment, SSRF guards, rate limiting
-// =============================================================================
 
 import { describe, it, expect, vi } from "vitest";
 import path from "path";
@@ -26,9 +24,7 @@ import {
   requireAuth,
 } from "../../../../server/middleware/auth.ts";
 
-// =============================================================================
 // resolveUploadPath — containment
-// =============================================================================
 
 describe("resolveUploadPath", () => {
   it("resolves a valid avatar URL inside the uploads dir", () => {
@@ -60,9 +56,7 @@ describe("resolveUploadPath", () => {
   });
 });
 
-// =============================================================================
 // URL safety — private address detection (SSRF guard)
-// =============================================================================
 
 describe("isPrivateAddress", () => {
   it("flags loopback and private IPv4 ranges", () => {
@@ -141,9 +135,7 @@ describe("assertPublicHttpUrl", () => {
   });
 });
 
-// =============================================================================
 // Rate limiter
-// =============================================================================
 
 /**
  * The limiter reads the caller's address and hands a refusal to `next`. The
@@ -180,12 +172,12 @@ describe("createRateLimiter", () => {
   });
 });
 
-// The per-account window, the wait a refused caller is told, the requests
-// nobody has identified, and the two paths risks question Q16 added go
-// through both real limiters in tests/integration/api.rateLimit.test.ts.
+// The per-account window, the wait a refused caller is told, and the requests
+// nobody has identified go through both real limiters in
+// tests/integration/api.rateLimit.test.ts.
 
 describe("isAiCostPath", () => {
-  it("still covers the paths that were already listed", () => {
+  it("covers the listed AI cost paths", () => {
     for (const path of [
       "/api/search/semantic",
       "/api/search/synthesize",
@@ -202,7 +194,7 @@ describe("isAiCostPath", () => {
     }
   });
 
-  it("leaves the bulk import out, which Q16 decided on purpose", () => {
+  it("leaves the bulk import out on purpose", () => {
     // Rare, already capped at 50 MB, and its AI work runs after the response.
     expect(isAiCostPath("/api/contacts/bulk")).toBe(false);
     expect(isAiCostPath("/api/contacts")).toBe(false);
@@ -210,9 +202,7 @@ describe("isAiCostPath", () => {
   });
 });
 
-// =============================================================================
 // Trailing slashes, on paths that need no sign-in
-// =============================================================================
 
 describe("a path of 200,000 slashes and a letter", () => {
   it("is read in linear time by the guards that trim it", () => {

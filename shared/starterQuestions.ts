@@ -1,10 +1,7 @@
 /**
- * The starter questions under "Try asking" on Ask Contrack, as
+ * The starter questions under "Try asking" on Ask, as
  * `GET /api/search/starters` returns them. The server builds the pool from
- * the account's contacts (`server/services/search/starterQuestions.ts`), and
- * the page shows six of them at random.
- *
- * @module shared/starterQuestions
+ * the account's contacts, and the page shows six at random.
  */
 
 /**

@@ -1,14 +1,9 @@
-// =============================================================================
-// AI Layer — Public Barrel Export
-// =============================================================================
-// Usage:
+// The AI layer's barrel:
 //   import { ai } from "../ai/index.ts";
 //   if (ai.isConfigured) { ... }
-//
-// Each AI task picks its own provider through capability routing. Import
+// Each AI task picks its own provider through capability routing: import
 // `generateFor` and `providerIdFor` from gateway.ts, and the capability
 // functions from capabilities.ts.
-// =============================================================================
 
 import { isAnyProviderConfigured } from "./gateway.ts";
 

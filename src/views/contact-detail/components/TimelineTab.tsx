@@ -1,12 +1,6 @@
 /**
- * TimelineTab: the "Timeline" tab of a contact. It holds the composer, the
- * file drop zone, the empty state, and the timeline itself.
- *
- * The entries, their menus and the delete with undo live in `Timeline`. This
- * file keeps what belongs to the tab: the drop target, the lazy composer, and
- * the `?interaction=<id>` link that opens one entry.
- *
- * Extracted from ContactProfile to keep each section focused and readable.
+ * The Timeline tab: the lazy composer, the file drop target, the empty
+ * state, the `?interaction=<id>` link, and `Timeline` itself.
  */
 import React, { Suspense, useEffect, useState } from "react";
 import { composerChunk } from "../../../components/composerChunk";
@@ -30,50 +24,27 @@ import {
 } from "./Timeline";
 
 /**
- * The composer carries TipTap + ProseMirror, which together are the bulk of
- * the contact detail bundle, and the user cannot type into it during the
- * first paint anyway. Splitting it here means the profile and the timeline
- * render from a much smaller chunk while the editor streams in beside them.
- *
- * The import fires on mount rather than on first click. It is a parallel
- * fetch, not a blocking one, so by the time anyone reaches for the keyboard
- * it has almost always landed, without making the first keystroke wait.
- * Once it has, the composer renders at once on every later contact page
- * (`composerChunk`), with no placeholder in between.
+ * Lazy: TipTap and ProseMirror are the bulk of the contact page bundle. The
+ * import starts on mount, in parallel, so it has usually landed before the
+ * first keystroke. Later contact pages render it at once (`composerChunk`).
  */
 const InteractionComposer = composerChunk.Component;
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Props
-// ═══════════════════════════════════════════════════════════════════════════
-
 export interface TimelineTabProps {
   contactId: string;
-  /**
-   * True in the narrow contact layout. The composer shows one line until it
-   * takes focus.
-   */
+  /** Narrow layout: the composer shows one line until it takes focus. */
   composerCollapsible?: boolean;
   timeline: Interaction[];
   timelineLoading: boolean;
   isDragActive: boolean;
   getRootProps: () => DropzoneRootProps;
   getInputProps: () => DropzoneInputProps;
-  /**
-   * Opens the file picker. Drop is a mouse's way, and a phone or a keyboard
-   * had no way at all to attach a file.
-   */
+  /** Opens the file picker, for a phone or a keyboard, which cannot drop. */
   onAttach: () => void;
-
-  // Mutations passed from parent
   deleteInteraction: DeleteInteraction;
   updateInteraction: UpdateInteraction;
   promoteGhost: PromoteGhost;
 }
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Component
-// ═══════════════════════════════════════════════════════════════════════════
 
 const TimelineTabInner: React.FC<TimelineTabProps> = ({
   contactId,
@@ -89,15 +60,13 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
   promoteGhost,
 }) => {
   const [opened, setOpened] = useState<OpenedInteraction | null>(null);
-  // An entry in its undo window is gone for the reader, so it does not count
-  // against the empty state.
+  // An entry in its undo window does not count against the empty state.
   const hidden = useHiddenPendingIds();
   const hasEntries = timeline.some((item) => !hidden.has(item.id));
 
-  // A note search lands here with `?interaction=<id>`: open that note and
-  // scroll to it, then drop the parameter so Back and a reload show the plain
-  // timeline. Waits for the timeline to load, and does nothing if the note
-  // is not on it, which is what happens after the note is deleted.
+  // `?interaction=<id>` from a note search: once the timeline loads, open
+  // and scroll to that note if it is there, then drop the parameter so Back
+  // and a reload show the plain timeline.
   const [searchParams, setSearchParams] = useSearchParams();
   const wantedInteraction = searchParams.get("interaction");
   useEffect(() => {
@@ -125,18 +94,14 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
 
   return (
     <div className="flex flex-col gap-6 relative" {...getRootProps()}>
-      {/*
-        The drop target's own file input. react-dropzone renders it without a
-        name, and it is the one form control on the timeline a screen reader
-        would otherwise reach as "edit, file".
-      */}
+      {/* react-dropzone renders this input with no name, so a screen reader
+          would read it as "edit, file". */}
       <input
         {...getInputProps()}
         className={DROPZONE_INPUT}
         aria-label="Attach files to this timeline"
       />
 
-      {/* Drop Zone Overlay */}
       <AnimatePresence>
         {isDragActive && (
           <motion.div
@@ -172,7 +137,6 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
         Attach a file
       </button>
 
-      {/* Empty State */}
       {!timelineLoading && !hasEntries && (
         <EmptyState
           icon={MessageSquare}

@@ -1,10 +1,7 @@
-// =============================================================================
-// Integration Tests — tracking through the contact routes
-// =============================================================================
+// Integration: tracking through the contact routes
 // A flip to tracked answers with a fresh score, in one contact and in bulk.
 // The breakdown route refuses an untracked contact. The slim list, the CSV
 // export and the search facet all carry the flag.
-// =============================================================================
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import request from "supertest";
 import { sqlite } from "../../server/db.ts";

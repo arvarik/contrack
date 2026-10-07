@@ -1,26 +1,10 @@
 /**
- * MergeHistory: the latest merges, each with Undo for 90 days.
+ * The latest merges, each with Undo for 90 days. Each entry names both
+ * contacts with what tells them apart. An Undo here means the two are
+ * different people: nothing merges or suggests them again. (The review
+ * list's own Undo only takes the merge back.)
  *
- * ```
- * TODAY
- * ┌───────────────────────────────────────────────┐
- * │ Merged automatically · 3 minutes ago  [ Undo ] │
- * │ Ben Quill · Woodgrove Bank, Miami              │
- * │ into Ada Quill · Adatum, Boston                │
- * │ Same name                                      │
- * └───────────────────────────────────────────────┘
- * ```
- *
- * Each entry names both contacts with what tells them apart, so two
- * entries for one name are two entries a person can tell apart. An Undo
- * here means the two are different people: the contact comes back, and
- * nothing merges or suggests the two again. The review list's own Undo,
- * right after a person's merge, only takes the merge back.
- *
- * The content only. The review page shows it in its side panel, or in a
- * sheet below `lg`, and Settings in a dialog.
- *
- * @module views/dedupe/components/MergeHistory
+ * Content only: the caller supplies the panel, sheet or dialog.
  */
 import { useMemo, useState } from "react";
 import { formatDistanceToNowStrict } from "date-fns";
@@ -36,9 +20,8 @@ import { guessMatchType, plainReason } from "../utils/reason";
 import { parseServerTime } from "../../../lib/datetime";
 
 /**
- * A merge's time. SQLite writes "2026-10-05 22:52:02" in UTC with no zone,
- * which `new Date` would read as local time, so a merge near midnight landed
- * under the wrong day. `parseServerTime` reads both forms.
+ * SQLite writes "2026-10-05 22:52:02" in UTC with no zone, which `new Date`
+ * reads as local time. `parseServerTime` reads it as UTC.
  */
 const mergedAt = (entry: MergeLogEntry) =>
   parseServerTime(entry.mergedAt) ?? new Date(0);

@@ -1,16 +1,11 @@
-// =============================================================================
-// Integration Tests — what a browser and a proxy may keep
-// =============================================================================
-// Express sends no `Cache-Control` of its own on a JSON response, and a
-// response with no caching headers is one a shared cache may store and hand
-// to somebody else using heuristics. Four prefixes carry responses that
-// differ per caller — who is signed in, who else has an account, what the
-// instance has spent, and a whole account's data in one file — and one prefix
-// serves files that belong to exactly one account.
+// Integration: what a browser and a proxy may keep.
+// Express sends no `Cache-Control` on JSON, and a shared cache may store such
+// a response and hand it to somebody else. Four prefixes answer per caller
+// (who is signed in, who else has an account, what the instance has spent, a
+// whole account's export), and one serves files of one account.
 //
-// One test per prefix, plus the two that matter most: that the header is not
-// sprayed across the whole API, and that a 401 carries it too.
-// =============================================================================
+// One test per prefix, plus two: the header is not sprayed across the whole
+// API, and a 401 carries it too.
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import fs from "fs";
@@ -102,13 +97,10 @@ describe("no-store", () => {
 
 describe("uploads", () => {
   /**
-   * A real file in the caller's own upload directory.
-   *
-   * It has to be real. `express.static` calls `setHeaders` only when it is
-   * actually sending a file, so a request for a path that does not exist
-   * produces a 404 with no headers from that layer at all — and a test
-   * asserting "the header is not `public`" against a response that has no
-   * header would pass whatever the code did.
+   * A real file in the caller's own upload directory. `express.static` calls
+   * `setHeaders` only when it sends a file, so a missing path gives a 404 with
+   * no header, and "the header is not `public`" would pass whatever the code
+   * did.
    */
   function writeUpload(name: string, body: string): string {
     const dir = ownerUploadDir(actor.user.id, "files");

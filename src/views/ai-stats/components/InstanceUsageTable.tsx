@@ -1,23 +1,14 @@
 /**
- * Who spent it.
- *
- * The provider key is one key and the bill is one bill, so an operator asking
- * "why is this month expensive" needs the answer broken down by account. This
- * is the whole of what an admin sees about somebody else's AI use: counts,
- * tokens and cost. Not one prompt, not one description — the instance feed
- * omits that column for the same reason.
+ * AI use by account, for an admin: one key pays one bill. It shows counts,
+ * tokens and cost only, never a prompt or a description, and the instance
+ * feed omits descriptions for the same reason.
  */
 import type { AIStatsUserUsage } from "../../../api/aiStats";
 import { SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
+import { formatCompact } from "../formatCompact";
 
 const COLUMNS = "grid-cols-[minmax(0,1fr)_72px_72px_84px]";
-
-function compact(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
 
 export const InstanceUsageTable = ({
   byUser,
@@ -52,25 +43,21 @@ export const InstanceUsageTable = ({
             COLUMNS,
           )}
         >
-          {/*
-            A null username is an account that has been deleted while its
-            invocation rows remain: `ai_invocations.ownerId` is not what the
-            purge removes last, and the LEFT JOIN reports the gap honestly
-            rather than dropping the spend from the total.
-          */}
+          {/* A null username is a deleted account whose invocation rows
+              remain. The LEFT JOIN keeps its spend in the total. */}
           <span className="truncate font-bold text-on-surface">
             {row.username ?? "Deleted account"}
           </span>
           <span className="text-right text-on-surface-variant">
-            {compact(row.totalInvocations)}
+            {formatCompact(row.totalInvocations)}
           </span>
           <span className="text-right text-on-surface-variant">
-            {compact(row.totalTokens)}
+            {formatCompact(row.totalTokens)}
           </span>
           <span className="text-right text-on-surface-variant">
             {showCost
               ? `$${row.estimatedCostUsd.toFixed(row.estimatedCostUsd >= 1 ? 2 : 4)}`
-              : compact(row.cachedCalls)}
+              : formatCompact(row.cachedCalls)}
           </span>
         </div>
       ))}

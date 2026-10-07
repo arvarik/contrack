@@ -1,22 +1,16 @@
-// =============================================================================
-// Research depth: how thoroughly one enrichment researches a contact
-// =============================================================================
-// Two depths, one name each, used the same way by the API, the job queue,
-// the research record and every control that starts research:
+// Research depth: how thoroughly one enrichment researches a contact. The
+// API, the job queue, the research record and every control use these names:
 //
 //   standard  one plain search ask at thinking "medium"
 //   deep      the same ask, and beside it the long prompt with the records
 //             and the searches to run, also at "medium"; what both cite is
 //             kept
 //
-// A deep ask at thinking "high" for a complete profile came back empty for
-// 13 of 64 contacts and wrote a namesake's facts into 3 (2026-10-05), so
-// neither depth asks at "high".
+// Neither asks at "high": a deep ask at "high" came back empty for 13 of 64
+// contacts and wrote a namesake's facts into 3.
 //
-// The web searches are most of the cost. Google bills Gemini 3 each search
-// query the model runs, and the tokens of a pass cost a fraction of its
-// searches.
-// =============================================================================
+// The web searches are most of the cost: Google bills Gemini 3 per search
+// query, and a pass's tokens cost a fraction of that.
 
 import { z } from "zod";
 
@@ -40,15 +34,14 @@ interface ResearchDepthFigures {
 }
 
 /**
- * The measured figures, the Enrichment page's time and cost for each depth.
- * Twenty contacts imported from LinkedIn, with Gemini 3.8 Flash and 3.5
- * Flash-Lite (2026-10-05): the means over the runs that added details, 17 at
- * Standard and 19 at Deep. The cost is $14 per 1,000 web searches, and
- * $0.75 and $3.75 per million input and output tokens, Gemini 3.8 Flash's
- * prices through 2026. Its token prices double in January 2027, so measure
- * again then (the cost tip names 2026 as the year of its prices). The
- * figures describe research on Gemini only, and the controls leave them
- * out on another provider (`depthFiguresApply`).
+ * The Enrichment page's measured time and cost per depth. Twenty contacts
+ * imported from LinkedIn, with Gemini 3.8 Flash and 3.5 Flash-Lite: the
+ * means over the runs that added details, 17 at Standard and 19 at Deep.
+ * The cost is $14 per 1,000 web searches, and $0.75 and $3.75 per million
+ * input and output tokens, Gemini 3.8 Flash's prices through 2026. Its token
+ * prices double in January 2027, so measure again then (the cost tip names
+ * 2026 as the year of its prices). Gemini only: the controls leave them out
+ * on another provider (`depthFiguresApply`).
  */
 export const RESEARCH_DEPTH_FIGURES: Record<
   ResearchDepth,
@@ -58,13 +51,9 @@ export const RESEARCH_DEPTH_FIGURES: Record<
   deep: { seconds: 32, searches: 7, costUsd: 0.13 },
 };
 
-// -----------------------------------------------------------------------------
-// What one contact costs on each provider
-// -----------------------------------------------------------------------------
-// The cost tip beside "Research depth" compares the three providers Contrack
-// can run research on. Google's figures are the measured ones above. The other
-// two are estimates: the same searches and tokens, at their list prices.
-// -----------------------------------------------------------------------------
+// What one contact costs on each provider, for the cost tip beside "Research
+// depth". Google's figures are measured. The other two are estimates: the
+// same searches and tokens, at their list prices.
 
 /** The providers research can run on, by the id the AI settings use. */
 export const RESEARCH_PROVIDERS = ["gemini", "anthropic", "openai"] as const;
@@ -88,15 +77,12 @@ interface ResearchPrices {
 }
 
 /**
- * The prices, read from the providers' own pages on 2026-09-29 (Google's
- * Gemini API pricing page, Anthropic's pricing page and OpenAI's pricing
- * page). Gemini 3.8 Flash's token prices run to December 31, 2026. Google
- * does not bill the first 5,000 searches a month on Gemini 3. The Claude web
- * search page and the OpenAI pricing page list no free searches, so those two
- * have none. Both also bill the tokens of the pages a search returns, and the
- * token volume below is Gemini's, so their estimates can run low or high.
- * `server/ai/pricing.ts` holds the same token prices, and a test keeps the
- * two equal.
+ * The providers' list prices. Gemini 3.8 Flash's token prices run to
+ * December 31, 2026. Google does not bill the first 5,000 searches a month on
+ * Gemini 3. Anthropic and OpenAI list no free searches, and bill the tokens
+ * of the pages a search returns, so their estimates, on Gemini's token
+ * volume, can run low or high. A test holds the token prices equal to
+ * `server/ai/pricing.ts`.
  */
 export const RESEARCH_PRICES: Record<ResearchProvider, ResearchPrices> = {
   gemini: {

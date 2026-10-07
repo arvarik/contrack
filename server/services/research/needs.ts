@@ -1,9 +1,6 @@
-// =============================================================================
-// Research — what a technique needs, in the words the settings page uses
-// =============================================================================
-// One sentence for each thing a start can lack, so every technique that
-// needs it refuses with the same words, and each names where to fix it.
-// =============================================================================
+// What a technique needs, in the settings page's words: one sentence for each
+// thing a start can lack, so every technique refuses with the same words, and
+// each names where to fix it.
 
 /** A web search model: a model that searches the web itself. */
 export const NEEDS_WEB_SEARCH_MODEL =

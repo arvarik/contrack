@@ -1,22 +1,11 @@
 /**
- * VibePickerPopover: the contact colour picker.
+ * VibePickerPopover: the contact color picker, opened by "Change color" in
+ * the contact actions menu and placed under its button.
  *
- * The colour is decoration, so it has no button of its own in the header.
- * The contact actions menu opens it with "Change colour", and it sits under
- * that menu's button.
- *
- * It behaves like the other radiogroups in the app (`Segmented`,
- * `AccentPicker`):
- *
- * 1. Only the checked swatch is a Tab stop. When the panel opens, focus goes
- *    to it.
- * 2. The arrow keys move to the next or previous swatch and choose it, so the
- *    page repaints in that colour as focus moves.
- * 3. Escape closes the panel and returns focus to the menu button. A click
- *    outside the panel closes it, and so does Tab out of it.
- *
- * Choosing a colour keeps the panel open, so a person can try a few colours
- * against the page before they settle on one.
+ * A radiogroup like `Segmented` and `AccentPicker`: only the checked swatch
+ * is a Tab stop, the arrow keys choose the next swatch, and Escape returns
+ * focus to the menu button. Choosing keeps the panel open, so a person can
+ * try a few colors against the page.
  */
 import React, { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Check } from "lucide-react";
@@ -31,7 +20,7 @@ import { FIELD_LABEL } from "../../../lib/styles";
 interface VibePickerPopoverProps {
   open: boolean;
   onClose: () => void;
-  /** The contact's stored colour id. An unknown id shows as the first vibe. */
+  /** The contact's stored color id. An unknown id shows as the first vibe. */
   currentVibeId: string | null | undefined;
   onSelect: (id: string) => void;
   /** The control that opened the panel. Escape returns focus to it. */
@@ -39,7 +28,7 @@ interface VibePickerPopoverProps {
 }
 
 export const VibePickerPopover = (props: VibePickerPopoverProps) =>
-  // The panel mounts on open, so it starts from the stored colour each time.
+  // The panel mounts on open, so it starts from the stored color each time.
   props.open ? <VibePickerPanel {...props} /> : null;
 
 const VibePickerPanel = ({
@@ -50,21 +39,15 @@ const VibePickerPanel = ({
 }: VibePickerPopoverProps) => {
   const panel = useRef<HTMLDivElement>(null);
   const labelId = useId();
-  // The swatch shows what the app will paint, which is not the same colour in
-  // both palettes: a vibe is derived, not stored.
+  // A vibe is derived, not stored, so its swatch differs between modes.
   const { mode } = usePreferences();
 
-  // `vibeTokens` paints an unknown id as the first vibe, so the picker checks
-  // that one too.
   const stored = VIBES.some((vibe) => vibe.id === currentVibeId)
     ? (currentVibeId as string)
     : VIBES[0].id;
   /**
-   * The checked swatch, held here and not read from the contact.
-   *
-   * The save is not optimistic, so the contact keeps its old colour until
-   * the server answers. Two quick arrow presses would both start from the
-   * old colour and land on the same swatch.
+   * The checked swatch, held here: the save is not optimistic, so two quick
+   * arrow presses would both start from the old color.
    */
   const [selected, setSelected] = useState(stored);
 
@@ -127,12 +110,12 @@ const VibePickerPanel = ({
         const next = event.relatedTarget as Node | null;
         if (next && !panel.current?.contains(next)) onClose();
       }}
-      // `w-max`: the wrapper it hangs from is only as wide as the menu
-      // button, and without it the label wrapped and the swatches overlapped.
+      // `w-max`: the wrapper is only as wide as the menu button, so without
+      // it the label wraps and the swatches overlap.
       className="absolute right-0 top-full mt-2 z-50 w-max menu-panel menu-enter p-3 [--menu-origin:top_right]"
     >
       <p id={labelId} className={cn(FIELD_LABEL, "mb-2")}>
-        Contact colour
+        Contact color
       </p>
       {/* 36 px swatches with a 44 px tap box. The 8 px gap keeps the boxes
           from overlapping more than a few pixels. */}
@@ -158,8 +141,7 @@ const VibePickerPanel = ({
                   "ring-2 ring-offset-2 ring-on-surface ring-offset-surface-container-lowest",
               )}
             >
-              {/* The check says which one is chosen without relying on the
-                  ring colour alone. */}
+              {/* The check marks the choice without the ring color alone. */}
               {checked && (
                 <Check
                   aria-hidden="true"

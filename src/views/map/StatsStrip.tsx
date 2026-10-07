@@ -1,23 +1,12 @@
 /**
- * StatsStrip — the map's bottom line: who is in view, and what to do next.
+ * The map's bottom line: who is in view, and what to do next.
  *
- * One line in the bottom-left corner:
- *
- *   - How many people are on the map, which is everyone with a place, and
- *     how many of them are in view when some are off screen. Network counts
- *     everyone, so the words say "on the map". While the contacts load, if
- *     they fail, or if none has a place, it says that instead.
- *   - The overdue among them, as a filter to press: it shows only them.
- *     Hidden when nobody in view is overdue, unless it is on.
- *   - "Fit all" when nobody is in view, so an empty map has a way back.
- *   - With the heat on, its legend, from fewer people to more. Zoomed in
- *     past the heat, a button that zooms back out to it instead.
- *
- * It held five chips: at risk, overdue, an average score and a count of
- * time zones as well. At risk and the average went with the health layer,
- * and the time zones are in the insights panel, by name.
- *
- * @module views/map/StatsStrip
+ * - How many are on the map (everyone with a place), and how many are in
+ *   view when some are off screen. It says "on the map" because Network
+ *   counts everyone.
+ * - The overdue in view, as a filter to press. Hidden at zero unless on.
+ * - "Fit all" when nobody is in view, so an empty map has a way back.
+ * - The heat legend, or a button back out once zoomed in past the heat.
  */
 import { X } from "lucide-react";
 import { LiveStatus } from "../../components/ui/LiveStatus";
@@ -26,7 +15,6 @@ import { cn } from "../../lib/utils";
 import { heatGradient, type HeatStop } from "./heat";
 import type { MapEmpty, MapStats } from "./mapStats";
 
-/** A quiet control on the line: flat, the state layer, 12 px. */
 const LINE_BUTTON =
   "hit-area state-layer inline-flex items-center gap-1 rounded-md px-2 py-1 font-semibold cursor-pointer";
 

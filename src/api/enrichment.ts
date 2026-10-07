@@ -1,45 +1,20 @@
+/** Hooks for one contact's AI enrichment and for grounding capacity. */
 import { apiJson } from "./client";
 import { refreshContact } from "./contactCache";
 import { contactRoutes } from "../../shared/contracts/contacts";
 import { useAuth } from "../components/auth/AuthGate";
 import { rateLimitMessage } from "../lib/rateLimitMessage";
-/**
- * Enrichment API Hooks — React Query hooks for single-contact AI enrichment
- * and grounding capacity checks.
- *
- * - `useGroundingCapacity()` — checks if AI grounding quota is available
- * - `useEnrichContact()`     — triggers single-contact TwoPassStrategy enrichment
- *
- * @module api/enrichment
- */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-
-// =============================================================================
-// Query Keys
-// =============================================================================
 
 const enrichmentKeys = {
   groundingCapacity: ["grounding-capacity"] as const,
 };
 
-// =============================================================================
-// Queries
-// =============================================================================
-
 /**
- * Check grounding RPD capacity — used to enable/disable refresh buttons.
- *
- * Admins only, and not because the number is a secret. The route is class
- * `admin` and has been since Phase 3, while this query is mounted by the
- * command palette on every screen and refetches every two minutes. For a
- * member that is a request per two minutes that can only be refused, for the
- * life of the tab. `enabled` is the honest fix: do not ask a question the
- * answer to which is always no.
- *
- * The `!res.ok` branch that used to sit here could not run either — the
- * shared client throws for any non-2xx — so a member's refusal was already
- * failing the query rather than returning the zeroed shape it pretended to.
+ * Grounding capacity, which enables the refresh buttons. Admins only: the
+ * route is class `admin`, and the command palette mounts this on every
+ * screen, so a member would poll a refusal every two minutes.
  */
 export const useGroundingCapacity = () => {
   const { isAdmin } = useAuth();
@@ -57,25 +32,12 @@ export const useGroundingCapacity = () => {
   });
 };
 
-// =============================================================================
-// Mutations
-// =============================================================================
-
-/**
- * Single-contact enrichment mutation.
- * Fires TwoPassStrategy (grounding → extraction → merge) for one contact.
- */
+/** Enriches one contact: grounding, then extraction, then merge. */
 export const useEnrichContact = () => {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (contactId: string) =>
-      // Three branches used to sit here reading `res.status` for 429, 503 and
-      // "not ok". None of them could run: `apiFetch` throws `ApiError` for
-      // every non-2xx, so the response this function sees is always a 2xx.
-      // The 429 branch in particular claimed every refusal was the daily
-      // grounding quota, which since Phase 3 is usually the per-account AI
-      // limiter instead. The message is now decided in `onError`, from the
-      // code the server actually sent.
+      // A refusal throws `ApiError`, and `onError` words it from the code.
       apiJson(contactRoutes.enrich, `/contacts/${contactId}/enrich`),
     onSuccess: (data, contactId) => {
       void refreshContact(qc, contactId);
@@ -89,9 +51,8 @@ export const useEnrichContact = () => {
       );
     },
     onError: (err: Error) => {
-      // A rate limit gets the sentence that names whose limit it was. Anything
-      // else keeps the server's own words, which are more specific than
-      // anything this file could invent.
+      // A rate limit names whose limit it was. Anything else keeps the
+      // server's own words.
       toast.error(rateLimitMessage(err, "enrichment") ?? err.message);
     },
   });

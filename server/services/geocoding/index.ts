@@ -112,7 +112,7 @@ export function notOnMap(scope: Scope): NotOnMapContact[] {
 }
 
 /**
- * Queue every contact that has an address and no pin. The start-up job
+ * Queue every contact with an address and no pin. The start-up job
  * `geocode.startup` (server/jobs/geocoding.ts) runs it once, shortly after
  * boot.
  *
@@ -137,11 +137,10 @@ export function queueRetroactiveGeocoding(): number {
 const CACHE_UNUSED_DAYS = 1;
 
 /**
- * Delete the geocode cache rows that no contact's address uses, on every
- * account, once they are a day old. The cache is shared by the accounts on
- * the instance, so a row goes when the last contact with that address is
- * deleted or moves, and when its account is deleted. The daily job
- * `geocode.cachePrune` runs it.
+ * Delete the geocode cache rows no contact's address uses, on every account,
+ * once a day old. The cache is shared by the instance's accounts, so a row goes
+ * when the last contact with that address is deleted or moves, or its account
+ * is deleted. The daily job `geocode.cachePrune` runs it.
  *
  * @returns how many rows went.
  */

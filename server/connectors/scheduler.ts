@@ -1,19 +1,17 @@
 /**
- * server/connectors/scheduler.ts — Background sync scheduler for connectors.
+ * The connector sync scheduler. One tick, which the recurring job
+ * `connectors.tick` runs every 60 seconds with background jobs on
+ * (server/jobs/connectors.ts):
+ * - selects due active connectors (nextRunAt <= now)
+ * - runs at most CONNECTOR_SYNC_CONCURRENCY (default 2)
+ * - runs at most one connector per owner per tick
+ * - runs each sync inside runWithContext with the owner's scope
+ * - stops on shutdown through an AbortSignal
+ * - gives each sync a deadline, after which its slots are free
  *
- * One tick, which the recurring job `connectors.tick` runs every 60 seconds
- * when background jobs are enabled (server/jobs/connectors.ts):
- * - Selects due active connectors (nextRunAt <= now)
- * - Limits execution to CONNECTOR_SYNC_CONCURRENCY (default 2)
- * - Restricts to at most one connector per owner per tick
- * - Runs each sync inside runWithContext with owner scope
- * - Respects shutdown via AbortSignal
- * - Gives each sync a deadline, after which its slots are free again
- *
- * A tick starts the syncs and returns. They run on, under these limits, and
- * stopConnectorScheduler aborts them at shutdown. A sync a person starts by
- * hand (`POST /api/connectors/:id/sync`) takes the same lock through
- * `startSync`, so a connector never runs twice at once.
+ * A tick starts the syncs and returns. A sync somebody starts by hand (`POST
+ * /api/connectors/:id/sync`) takes the same lock through `startSync`, so a
+ * connector never runs twice at once.
  *
  * @module server/connectors/scheduler
  */
@@ -26,10 +24,10 @@ import { runWithContext } from "../tenancy/requestContext.ts";
 import { runNow } from "./service.ts";
 
 /**
- * The longest one sync may run. Past it the sync's signal aborts, which ends
- * every Google call and IMAP command it is waiting on. Every call has its own
- * timeout too, so this is the floor under a sync that hangs some other way.
- * A first sync of a large mailbox can take most of an hour.
+ * The longest one sync may run. Past it the sync's signal aborts every Google
+ * call and IMAP command it waits on. Every call has its own timeout too; this
+ * catches a sync that hangs some other way. A first sync of a large mailbox can
+ * take most of an hour.
  */
 const SYNC_DEADLINE_MS = 2 * 60 * 60_000;
 
@@ -51,12 +49,10 @@ const runningPromises = new Set<Promise<void>>();
 type RunResult = Awaited<ReturnType<typeof runNow>>;
 
 /**
- * Run one connector's sync under the scheduler's rules.
- *
- * The connector is locked while it runs, and its owner counts as busy, so a
- * tick starts nothing else for that owner. The sync stops at shutdown and at
- * its deadline. The slots are free when the sync ends, or `ABORT_GRACE_MS`
- * after its deadline if it does not end.
+ * Run one connector's sync under the scheduler's rules. The connector is locked
+ * while it runs, and its owner counts as busy, so a tick starts nothing else
+ * for that owner. The sync stops at shutdown and at its deadline. Its slots
+ * free up when it ends, or `ABORT_GRACE_MS` after its deadline if it does not.
  *
  * @returns The run, or null when the connector is syncing already.
  */

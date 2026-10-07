@@ -1,13 +1,11 @@
 // @vitest-environment jsdom
-// =============================================================================
 // InteractionSearchPanel — what it asks the server, and what it shows back
-// =============================================================================
+//
 // The panel is driven through the DOM with `fetch` stubbed to answer the way
 // GET /api/search/interactions does. The requests are recorded, because
 // "which question, which period and which zone reached the server" is the
 // contract, and the highlight ranges the server sends back have to land on
 // the right letters.
-// =============================================================================
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cleanup,

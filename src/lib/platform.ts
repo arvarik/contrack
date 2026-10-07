@@ -1,34 +1,22 @@
 /**
- * platform.ts: which keys this computer has, and the chords built on them.
+ * Which keys this computer has, and the chords built on them.
  *
- * A Mac has a ⌘ key, and Windows and Linux do not. The navigation keys and
- * Log an interaction were ⌘ ⇧ and a letter, and the handlers read `metaKey`
- * alone, so on Windows and Linux they answered only to the Windows key or
- * the Super key, which the system keeps for itself. `Ctrl ⇧` is not the
- * answer there: the browser keeps `Ctrl ⇧ I` (developer tools), `Ctrl ⇧ P`
- * (a private window in Firefox) and `Ctrl ⇧ M` (the profile menu in Chrome,
- * the device view in Firefox), and a page cannot take them back.
+ * The navigation chords are ⌘ ⇧ and a letter on a Mac, and `Ctrl Alt` and
+ * the letter on Windows and Linux. `Ctrl ⇧` cannot work there: the browser
+ * keeps `Ctrl ⇧ I`, `Ctrl ⇧ P` and `Ctrl ⇧ M` for itself.
  *
- * So Windows and Linux use `Ctrl Alt` and the letter. Chrome, Edge and
- * Firefox leave those chords to the page.
- *
- * 1. `isNavChord` accepts both forms on every platform. A handler needs no
- *    platform branch, and a test that presses ⌘ ⇧ works on a Linux runner.
- * 2. `navChordKey` reads the letter. It reads the character first, so a
- *    Dvorak layout keeps its own letters. When the character is no letter,
- *    it reads the physical key: Shift turns "," into "<" on a US keyboard,
- *    and on a European layout `Ctrl Alt` is AltGr and types "ś" or "µ". In a
- *    field only the character counts, so AltGr still types there.
- * 3. Only the labels depend on the platform. A Mac shows ⌘, and every other
- *    platform shows Ctrl.
+ * 1. `isNavChord` accepts both forms on every platform, so a handler needs
+ *    no platform branch.
+ * 2. `navChordKey` reads the character first, so a Dvorak layout keeps its
+ *    letters. When the character is no letter it reads the physical key:
+ *    Shift turns "," into "<", and on a European layout `Ctrl Alt` is AltGr
+ *    and types "ś". In a field only the character counts, so AltGr types.
+ * 3. Only the labels depend on the platform: ⌘ on a Mac, Ctrl elsewhere.
  *
  * The platform comes from `navigator.userAgentData.platform`, then
- * `navigator.platform`, and never from `navigator.userAgent`. jsdom writes
- * the host system into its user agent, so a test would print ⌘ on a Mac and
- * Ctrl on the Linux CI runner. jsdom reports an empty platform, and an
- * unknown platform counts as a Mac, so the unit tests print ⌘ everywhere.
- *
- * @module lib/platform
+ * `navigator.platform`, never from the user agent, which jsdom fills with
+ * the host system. An unknown platform counts as a Mac, so the unit tests
+ * print ⌘ everywhere.
  */
 
 import { isTypingTarget } from "./keyboard";
@@ -43,10 +31,8 @@ const APPLE = /mac|iphone|ipad|ipod/i;
 const NOT_APPLE = /win|linux|x11|cros|chrome os|android/i;
 
 /**
- * True on a Mac, an iPhone or an iPad: the platforms with a ⌘ key.
- *
- * @param nav - The navigator to read. The default is the browser's own.
- * @returns True when the platform is Apple's, or when it cannot be told.
+ * True on a Mac, an iPhone or an iPad: the platforms with a ⌘ key. Also
+ * true when the platform cannot be told.
  */
 export function isApplePlatform(nav?: Navigator | PlatformSource): boolean {
   const source = (nav ??
@@ -89,11 +75,8 @@ export function chordLabel(keys: readonly string[]): string {
 }
 
 /**
- * True when the event holds the modifiers of a navigation chord.
- *
- * ⌘ ⇧ with no Alt is the Mac form. `Ctrl Alt` with no ⌘ and no ⇧ is the
- * Windows and Linux form. Both work on every platform. `navChordKey` then
- * reads the letter.
+ * True when the event holds the modifiers of a navigation chord: ⌘ ⇧ with no
+ * Alt, or `Ctrl Alt` with no ⌘ and no ⇧, on every platform.
  */
 export function isNavChord(
   event: Pick<KeyboardEvent, "metaKey" | "ctrlKey" | "altKey" | "shiftKey">,
@@ -118,12 +101,9 @@ export function navChordKey(event: KeyboardEvent): string {
 }
 
 /**
- * True on a touch screen: the main pointer is a finger. A field that takes
- * focus there opens the on-screen keyboard over the page, so a screen puts
- * focus in its first field only for a mouse or a trackpad.
- *
- * @returns False where the browser cannot tell, such as a test without
- *   `matchMedia`.
+ * True on a touch screen, where a focused field opens the on-screen keyboard
+ * over the page, so a screen focuses its first field only for a mouse. False
+ * where the browser cannot tell, such as a test without `matchMedia`.
  */
 export function touchFirst(): boolean {
   return (

@@ -1,6 +1,4 @@
-// =============================================================================
 // Name Tokenization & Similarity
-// =============================================================================
 
 import { jaroWinkler, damerauLevenshtein } from "./distances.ts";
 import { areNicknameEquivalent } from "./nicknames.ts";
@@ -36,16 +34,11 @@ const TITLE_SUFFIXES = new Set([
 
 /**
  * Fold accents onto the base letter: "García" → "Garcia", "Søren" → "Soren".
- *
  * NFD splits an accented character into its base letter and a combining mark,
- * and the range below is those marks. Without this, the `[^\w\s'-]` class
- * further down treated every accent as punctuation and replaced it with a
- * space, so "María García" tokenized to ["mar", "a", "garc", "a"] — four
- * fragments, a surname of "a", and a blocking key nothing else could match.
- *
- * Two of the three letters that do not decompose are handled by hand. "ø" and
- * "ł" carry their stroke inside the code point rather than as a combining
- * mark, so NFD leaves them alone and `\w` then drops them.
+ * and the range below is those marks. Without it, the `[^\w\s'-]` class below
+ * would turn every accent into a space ("María García" into ["mar", "a",
+ * "garc", "a"]). "ø", "ł", "đ", "ß", "æ" and "œ" have no decomposition, so NFD
+ * leaves them alone and they are mapped by hand.
  */
 function foldDiacritics(value: string): string {
   return value
@@ -60,10 +53,10 @@ function foldDiacritics(value: string): string {
 }
 
 /**
- * Tokenize and clean a name: lowercase, fold accents, strip titles/suffixes,
- * remove punctuation.
- * "Dr. Sarah Chen III" → ["sarah", "chen"]
- * "María García"       → ["maria", "garcia"]
+ * Tokenize and clean a name: lowercase, fold accents, strip titles and
+ * suffixes, remove punctuation.
+ *   "Dr. Sarah Chen III" → ["sarah", "chen"]
+ *   "María García"       → ["maria", "garcia"]
  */
 export function tokenizeName(name: string): string[] {
   return foldDiacritics(name.toLowerCase())
@@ -78,12 +71,10 @@ export function tokenizeName(name: string): string[] {
 }
 
 /**
- * Generational suffixes, each spelling mapped to one canonical form.
- *
- * `tokenizeName` strips these, which is right for matching "Robert Hale Jr."
- * against "Robert Hale". It is wrong for "Robert Hale Sr." against "Robert
- * Hale Jr.", which the stripped tokens make identical and which are two
- * people by definition. This reads the suffix before it is stripped.
+ * Generational suffixes, each spelling mapped to one form. `tokenizeName`
+ * strips them, which is right for "Robert Hale Jr." against "Robert Hale" and
+ * wrong for "Robert Hale Sr." against "Robert Hale Jr.", two people by
+ * definition, so this reads the suffix before it is stripped.
  */
 const GENERATIONS: Record<string, string> = {
   jr: "jr",
@@ -99,11 +90,9 @@ const GENERATIONS: Record<string, string> = {
 };
 
 /**
- * The generational suffix a raw name carries, or null.
- *
- * "Robert Hale Jr." → "jr", "Robert Hale III" → "iii", "Robert Hale" → null.
- * Only a trailing token counts, so a surname that happens to spell one of
- * these is not read as a suffix.
+ * The generational suffix a raw name carries, or null: "Robert Hale Jr." →
+ * "jr", "Robert Hale III" → "iii", "Robert Hale" → null. Only a trailing token
+ * counts, so a surname that spells one is not a suffix.
  */
 export function generationOf(name: string): string | null {
   const tokens = name
@@ -206,22 +195,18 @@ function singleTokenScore(a: string, b: string): number {
 /**
  * Whether one name is the other with middle names added.
  *
- * "Anton Kovacs" and "Anton Peter Kovacs" are one person written down twice.
- * Jaro-Winkler on the joined strings scores that pair 0.879 to 0.955, which
- * lands it between the discard and the auto thresholds, so with no AI provider
- * configured the engine found 0 of 15 such pairs in the eval corpus. The shape
- * is exact, so it is worth testing for exactly rather than approximating with
- * a distance.
- *
- * Three conditions, and each one refuses a pair that the subsequence test
- * alone would accept:
+ * "Anton Kovacs" and "Anton Peter Kovacs" are one person written twice, but
+ * Jaro-Winkler scores them 0.879 to 0.955, between the discard and auto
+ * thresholds, so with no AI provider the engine would find 0 of 15 such pairs
+ * in the eval corpus. The shape is exact, so it is tested exactly. Each
+ * condition refuses a pair the subsequence test alone would accept:
  *
  * 1. The first tokens agree. "Peter Kovacs" inside "Anton Peter Kovacs" is
- *    somebody going by their middle name, or somebody else entirely.
+ *    somebody going by a middle name, or somebody else.
  * 2. The last tokens agree. A shared surname is the anchor.
  * 3. The shorter name's tokens appear in the longer one in order, and the
- *    longer one is strictly longer. "Robert Lee Smith" against "Robert Ann
- *    Smith" is two people, and equal lengths refuse it.
+ *    longer is strictly longer. "Robert Lee Smith" against "Robert Ann Smith"
+ *    is two people, and equal lengths refuse it.
  *
  * A one-token name never qualifies: "Kovacs" is not evidence of anything.
  *
@@ -252,12 +237,10 @@ export function nameSimilarity(a: string, b: string): number {
 }
 
 /**
- * `nameSimilarity` against one name, for scoring many names against it.
- *
- * Search scores a few hundred candidates against one query. The query is
- * tokenized once, and each token pair is scored once: candidates share
- * first names and surnames, so most pairs repeat. The scores are the ones
- * `nameSimilarity` gives.
+ * `nameSimilarity` against one name, for scoring many names against it. Search
+ * scores a few hundred candidates against one query: the query is tokenized
+ * once, and each token pair is scored once, since candidates share first names
+ * and surnames. The scores equal `nameSimilarity`'s.
  */
 export function nameScorer(a: string): (b: string) => number {
   const la = a ? a.toLowerCase().trim() : "";

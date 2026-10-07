@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
-// =============================================================================
 // Unit: the two research depths, wherever research starts
-// =============================================================================
+//
 // Standard and Deep, named and timed the same way in the dossier's enrich
 // menus, the empty dossier, the Enrichment page and its confirmation, and
 // the progress panel. The figures come from shared/researchDepth.ts, so the
 // tests read them from there rather than copy them.
-// =============================================================================
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 // AI is set up: the Enrich buttons ask `useAiSetup`.
@@ -282,7 +280,7 @@ describe("the empty dossier", () => {
         "Enrichment searches the web for Rowan’s work, schools and profiles, and links each fact to its page",
       ),
     ).toBeTruthy();
-    // Not a link to the Enrichment page any more: the research starts here.
+    // Not a link to the Enrichment page: the research starts here.
     expect(screen.queryByRole("link", { name: /Enrich/ })).toBeNull();
     fireEvent.click(
       screen.getByRole("button", { name: /^Enrich contact, choose how deep/ }),
@@ -761,7 +759,7 @@ describe("the progress panel", () => {
         batch={batch}
         onDismiss={vi.fn()}
         onCancel={vi.fn()}
-        isCancelling={false}
+        isCanceling={false}
         connectionError={false}
       />,
     );

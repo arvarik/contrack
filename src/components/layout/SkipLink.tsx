@@ -1,17 +1,9 @@
 /**
- * SkipLink — the first Tab stop on every page.
+ * The first Tab stop on every page (WCAG 2.4.1), past the sidebar and the
+ * tab bar. Hidden until it has focus, then in the top-left corner.
  *
- * WCAG 2.4.1 (Bypass Blocks). The sidebar is six stops and the mobile tab
- * bar five, and a keyboard user paid them on every page before this. The
- * link is visually hidden until it has focus, so a pointer user never sees
- * it, and it appears in the top-left corner over everything else the moment
- * Tab reaches it.
- *
- * It moves focus itself rather than leaving the fragment to the browser. A
- * fragment navigation writes `#main-content` into the address bar and the
- * history, so Back would return to the same page with the hash removed,
- * which reads as a navigation that did nothing. Focusing the element
- * directly does the one thing the link promises and nothing else.
+ * It moves focus itself: a fragment navigation would add `#main-content` to
+ * the history, and Back would seem to do nothing.
  */
 import { useLocation } from "react-router-dom";
 
@@ -31,15 +23,9 @@ export const SETTINGS_CONTENT_ID = "settings-content";
 const CONTACT_LIST_ID = "contact-list";
 
 /**
- * Where "the content" is on this route.
- *
- * A single fixed target was wrong on the two busiest pages. On a wide screen
- * the Network page's main pane is "No contact selected" while the list beside
- * it is what a person came for, and on a contact page the main pane starts
- * with an avatar button and a colour picker before the name. So the link
- * follows the route: the contact's name on a contact page, the list's current
- * row on the Network page, the page beside the rail in Settings, and the main
- * landmark everywhere else.
+ * Where "the content" is on this route: the contact's name on a contact
+ * page, the list's current row on the Network page, the page beside the rail
+ * in Settings, and the main landmark elsewhere.
  */
 function skipTarget(pathname: string): HTMLElement | null {
   if (/^\/(map\/)?contact\//.test(pathname)) {
@@ -49,7 +35,7 @@ function skipTarget(pathname: string): HTMLElement | null {
   if (pathname === "/") {
     const list = document.getElementById(CONTACT_LIST_ID);
     // The row that owns the list's Tab stop, or the list itself while that
-    // row is scrolled out of the virtualised range.
+    // row is scrolled out of the virtualized range.
     const row =
       list?.querySelector<HTMLElement>('[tabindex="0"]') ??
       (list?.getAttribute("tabindex") === "0" ? list : null);

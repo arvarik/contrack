@@ -61,7 +61,7 @@ const THIN_SHARE = 0.95;
 /** A name worth a line: starts with a letter, then letters, marks, ' or -. */
 const NAME_SHAPE = /^\p{L}[\p{L}\p{M}'’-]*$/u;
 
-/** Split one CSV line, honouring double-quoted fields. */
+/** Split one CSV line, honoring double-quoted fields. */
 function splitCsv(line: string): string[] {
   const fields: string[] = [];
   let field = "";

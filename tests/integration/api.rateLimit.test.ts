@@ -1,33 +1,18 @@
-// =============================================================================
-// Integration Tests — the two AI rate limiters, with both switched on
-// =============================================================================
-// Every other integration file builds its app with `disableRateLimit: true`,
-// because a fixed window shared by a whole test file turns an unrelated
-// assertion into a 429. This file is the exception: it builds the app with
-// both limiters mounted, which is the only way to prove the second one is
-// wired at all.
+// Integration: the two AI rate limiters, both switched on.
+// Every other file builds its app with `disableRateLimit: true`, so this is
+// the one place that proves both are wired. The per-IP limiter runs before
+// anybody is identified. The per-account one runs after `attachPrincipal`, so
+// several people behind one office address cannot spend each other's share.
 //
-// The two answer different questions. The per-IP limiter asks whether one
-// machine is hammering the instance and runs before anybody is identified.
-// The per-account one asks whether one person is spending more than their
-// share of a shared provider key, and can only run once `attachPrincipal` has
-// said who is asking. The case that matters is several people behind one
-// office address: the per-IP limiter alone lets one of them exhaust
-// everybody's budget.
-//
-// The requests go to a path that matches the cost patterns and has no route
-// behind it. Both limiters are app-level middleware mounted ahead of the
-// routers, so a request is counted before routing, and counting is the whole
-// of what this file is about. Sending thirty real provider calls to prove a
-// counter would be slower and would test the provider.
-// =============================================================================
+// The requests go to a cost path with no route behind it: both limiters are
+// app-level middleware ahead of the routers, and counting is all this checks.
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import request from "supertest";
 import http from "http";
 import { createApp, finalizeApp, notFoundHandler } from "../../server/app.ts";
 import { sqlite } from "../../server/db.ts";
-import { resetAccounts } from "./tenancy/helpers.ts";
+import { cookieFrom, resetAccounts } from "./tenancy/helpers.ts";
 import { __resetAuthRateLimits } from "../../server/routes/auth.ts";
 import { __resetAuthWarnings } from "../../server/middleware/auth.ts";
 import { __resetAiRateLimits } from "../../server/middleware/rateLimit.ts";
@@ -52,10 +37,6 @@ interface Handle {
   id: string;
   username: string;
   cookie: string[];
-}
-
-function cookieFrom(res: request.Response): string[] {
-  return (res.headers["set-cookie"] as unknown as string[]) ?? [];
 }
 
 const as = (who: Handle) => (r: request.Test) => r.set("Cookie", who.cookie);
@@ -243,7 +224,7 @@ describe("a path spelled with different capitals", () => {
   it("is counted, because Express routes it to the same handler", async () => {
     // Express routes case-insensitively unless the app sets
     // `case sensitive routing`, and this one does not: GET /API/Contacts
-    // returns 200. So a capitalised AI path reaches the same billable handler,
+    // returns 200. So a capitalized AI path reaches the same billable handler,
     // and matching the cost patterns against the path as it arrived let one
     // capital letter escape both limiters entirely.
     const reachable = await as(alice)(request(app).get("/API/Contacts"));

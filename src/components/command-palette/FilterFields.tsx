@@ -1,12 +1,6 @@
 /**
  * "Filter by": the facets as rows, for a person who does not know them.
- *
- * The Filter chip and the "Filter by tag, role or company" row show it.
  * Picking a field types `tag:` in the box, and its values open under it.
- * The facets used to be in the docs only: no row, chip or hint named them,
- * and a phone, with no footer, had no way to learn them.
- *
- * @module components/command-palette/FilterFields
  */
 import { Command } from "cmdk";
 import { ListFilter } from "lucide-react";

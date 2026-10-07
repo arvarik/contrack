@@ -1,10 +1,6 @@
 /**
- * RunHistoryDrawer — shows recent sync runs for a connector.
- *
- * Displays up to 20 past runs with trigger source, duration, imported counts,
- * error messages, and a "Copy details" button for debugging.
- *
- * @module views/settings/connectors/RunHistoryDrawer
+ * RunHistoryDrawer: a connector's last 20 sync runs, with "Copy details"
+ * for a bug report.
  */
 
 import React, { useState } from "react";
@@ -167,12 +163,10 @@ export const RunHistoryDrawer: React.FC<RunHistoryDrawerProps> = ({
                   </div>
                 </div>
 
-                {/* Stats */}
                 <div className="text-xs text-on-surface-variant">
                   {formatStats(run.stats as Record<string, number> | null)}
                 </div>
 
-                {/* Error */}
                 {run.error && (
                   <div
                     role="alert"

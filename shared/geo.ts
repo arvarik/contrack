@@ -1,8 +1,6 @@
 /**
  * The map's rows and their GeoJSON source. The Map page builds the rows from
  * `GET /api/contacts?view=slim`. `GET /api/contacts/map` is for API clients.
- *
- * @module shared/geo
  */
 
 /**
@@ -49,8 +47,7 @@ export interface MapContact {
   geoSource?: GeoSource;
   /**
    * The map's `updated:`, `missing:email` and `missing:phone` facets read
-   * these three. Without them `updated:` matched nobody and the two
-   * `missing:` facets matched everybody.
+   * these three.
    */
   updatedAt?: string | null;
   emails?: { email: string }[];
@@ -61,7 +58,7 @@ export interface MapContact {
  * The properties of one contact point in the map source.
  *
  * Absent fields are left out rather than set to null: the source is
- * serialised into MapLibre's worker, and a missing key reads the same on
+ * serialized into MapLibre's worker, and a missing key reads the same on
  * both sides.
  */
 interface ContactPointProperties {
@@ -100,10 +97,7 @@ export function isValidLatLng(lat: unknown, lng: unknown): boolean {
   );
 }
 
-/**
- * Distance between two coordinates in kilometers using the Haversine formula.
- * Earth radius R = 6371 km.
- */
+/** Distance in kilometers by the Haversine formula, Earth's radius 6371 km. */
 export function haversineKm(
   a: { lat: number; lng: number },
   b: { lat: number; lng: number },
@@ -124,11 +118,9 @@ export function haversineKm(
 }
 
 /**
- * Build the map source from the map's rows.
- *
- * GeoJSON orders a position longitude first. The contact id is the feature
- * id and the `id` property, because MapLibre keeps properties through
- * clustering and does not keep a string feature id.
+ * Builds the map source from the map's rows. The contact id is the feature
+ * id and the `id` property: MapLibre keeps properties through clustering,
+ * not a string feature id.
  */
 export function toFeatureCollection(
   contacts: readonly MapContact[],

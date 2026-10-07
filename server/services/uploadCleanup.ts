@@ -1,25 +1,18 @@
-// =============================================================================
-// Upload cleanup: the files a delete leaves on disk
-// =============================================================================
-// A contact's photo, its attachments and its link-preview images are files
-// under `uploads/u/<ownerId>/`. Rows cascade when a contact is deleted for
-// good, files do not, and a file left behind is still served to its owner.
+// The files a delete leaves on disk. A contact's photo, attachments and
+// link-preview images live under `uploads/u/<ownerId>/`. Rows cascade when a
+// contact is deleted for good, files do not, and a leftover file is still
+// served to its owner. Two paths remove them:
 //
-// Two paths remove them:
+// - A purge collects the upload URLs of the rows it deletes, and
+//   `removeUploads` unlinks them after the commit.
+// - `sweepOrphanUploads` runs daily and removes old enough files no row uses,
+//   which a crash, a failed request or a replaced photo left behind.
 //
-// - A purge collects the upload URLs of the rows it deletes before the
-//   delete, and `removeUploads` unlinks them after the commit.
-// - `sweepOrphanUploads` runs once a day and removes the files that no row
-//   uses any more and that are old enough. It catches what a crash, a failed
-//   request or a replaced photo left behind.
-//
-// Both ask the same question before they unlink: does any row still point at
-// this file? Two contacts can share one photo (a merge copies the URL, and a
-// connector reuses a file for the same remote photo), a merge log entry keeps
-// the URLs that its undo puts back, and a note keeps its preview image in its
-// HTML. Deleting a file that a row still uses is data loss, so a file that
-// any of them names stays.
-// =============================================================================
+// Both first ask whether any row still points at the file. Two contacts can
+// share a photo (a merge copies the URL, a connector reuses a file for the same
+// remote photo), a merge log entry keeps the URLs its undo puts back, and a
+// note keeps its preview image in its HTML. Deleting a file a row still uses is
+// data loss, so such a file stays.
 
 import fs from "fs";
 import path from "path";
@@ -69,11 +62,9 @@ export function ownerUploadUrls(
 }
 
 /**
- * Every upload URL of this owner that a row still names.
- *
- * Read once per cleanup, not once per file. The text columns are read only
- * where they contain the owner's folder, so a note without an upload costs a
- * LIKE and no parse.
+ * Every upload URL of this owner that a row still names, read once per cleanup.
+ * Text columns are read only where they contain the owner's folder, so a note
+ * without an upload costs a LIKE and no parse.
  */
 function referencedUploads(ownerId: string): Set<string> {
   const pattern = `%/uploads/u/${ownerId}/%`;
@@ -152,12 +143,11 @@ function ownedFile(ownerId: string, url: string): string | null {
 }
 
 /**
- * Unlink the files these URLs name, after the rows that used them are gone.
- *
- * Call it after the transaction commits: an unlink cannot be rolled back.
- * A file that any row still names stays, and so does a file outside this
- * owner's folders. Never throws: the delete has already happened, and a file
- * this leaves behind is the daily sweep's.
+ * Unlink the files these URLs name, after the rows that used them are gone:
+ * call it after the commit, because an unlink cannot be rolled back. A file any
+ * row still names stays, as does one outside this owner's folders. Never
+ * throws: the delete already happened, and a leftover file is the daily
+ * sweep's.
  *
  * @returns how many files were removed.
  */
@@ -197,12 +187,10 @@ export function removeUploads(
 }
 
 /**
- * Remove the files under each account's folder that no row names.
- *
- * Only a regular file older than its folder's minimum age goes (two days, or
- * 31 for a link preview, which a note draft can hold that long), so a file
- * written a moment ago, whose row is not written yet, is never touched. Only
- * the folders of accounts that exist are read.
+ * Remove the files under each account's folder that no row names. Only a
+ * regular file older than its folder's minimum age goes (two days, or 31 for a
+ * link preview, which a note draft can hold that long), so a file whose row is
+ * not written yet is never touched. Only existing accounts' folders are read.
  *
  * @returns how many files were removed.
  */

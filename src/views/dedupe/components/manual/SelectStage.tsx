@@ -38,11 +38,8 @@ export const SelectStage = ({
         maxSelection={5}
       />
 
-      {/* The page is the one scroller and the picker takes its full height,
-          so the button sticks to the bottom of the screen and stays in
-          reach while a person picks. Below md it sits on top of the tab
-          bar, and the offset is the bar's height, as in
-          InteractionComposer. */}
+      {/* Sticks to the bottom of the screen while a person picks. Below md
+          the offset is the tab bar's height, as in InteractionComposer. */}
       <div
         ref={roomAtBottom}
         className="sticky bottom-[calc(3.375rem+max(0.75rem,env(safe-area-inset-bottom)))] md:bottom-0 z-10 pt-4 pb-4 bg-surface"

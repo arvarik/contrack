@@ -21,20 +21,16 @@ import type { ContactRow, MergeSnapshotData } from "./types.ts";
 import { recomputeLastContacted } from "../lastContacted.ts";
 
 /**
- * Load both sides of a merge in one statement that names the owner.
+ * Load both sides of a merge in one statement that names the owner. The whole
+ * file rests on this: the statements below re-parent child rows by contact id
+ * alone, which is safe only because both contacts came from this one read.
+ * Another owner's row is simply not in the result, so the caller sees what it
+ * sees for a row that never existed.
  *
- * This is the gate the whole file rests on. Sixty statements below re-parent
- * child rows by contact id alone, and they are safe to do that only because
- * both contacts came out of this one read: one statement, both ids, the owner
- * beside them. A row that belongs to somebody else is simply not in the
- * result, so the caller sees exactly what it sees for a row that never
- * existed, which is rule 4.
- *
- * It also makes the child re-parenting legal at the database level. Moving an
- * interaction between two contacts keeps its `ownerId`, and the owner
- * mismatch trigger accepts that only when both contacts share the owner. That
- * is precisely what this statement proves, so it has to run before any child
- * statement, not alongside them.
+ * It also makes re-parenting legal in the database: a moved interaction keeps
+ * its `ownerId`, and the owner mismatch trigger accepts that only when both
+ * contacts share the owner, which this proves. So it runs before any child
+ * statement.
  */
 function loadMergePair(
   scope: Scope,
@@ -51,30 +47,21 @@ function loadMergePair(
 }
 
 /**
- * Move the duplicate's follow-up tasks onto the primary and settle both
- * caches.
+ * Move the duplicate's follow-up tasks onto the primary and settle both caches.
+ * Without this the hard merge's final DELETE would cascade away every task the
+ * duplicate carried, and a soft merge would strand them on a hidden contact.
  *
- * Tasks are the one child row a merge lost. Every other child table was
- * re-parented below, and `action_items` was not, so the hard merge's final
- * DELETE took every task the duplicate carried through ON DELETE CASCADE. A
- * soft merge left the rows in place, on a contact the list no longer shows,
- * which is the same loss with a longer fuse.
- *
- * Every row moves, completed ones included, and none is deleted. A task is a
- * commitment somebody made, and two that look alike are still two: the
- * merge is not the place to decide which of them to keep.
+ * Every row moves, completed ones included, and none is deleted: two tasks that
+ * look alike are still two commitments, and a merge is not the place to choose.
  *
  * `contacts.nextFollowUpAt` is MIN(dueAt) over the pending tasks, held by
- * trigger. The UPDATE trigger recomputes both sides of a move, so the two
- * statements after the transfer are the merge saying so itself rather than
- * leaning on a trigger it cannot see: the survivor must show the earliest
- * pending task of the pair, and the duplicate, whether it is about to be
- * deleted or to become a tombstone, must show none.
+ * trigger. The two statements after the transfer say explicitly what the merge
+ * needs: the survivor shows the pair's earliest pending task, and the
+ * duplicate, deleted or a tombstone, shows none.
  *
- * Runs inside the caller's transaction. The owner predicate is on the
- * statement even though `loadMergePair` already proved both contacts belong
- * to this account, because a row written by an older version could carry an
- * owner that disagrees, and a row like that must not move.
+ * Runs inside the caller's transaction. The owner predicate stays on the
+ * statement although `loadMergePair` proved both contacts are this account's,
+ * because a row with a disagreeing owner must not move.
  */
 function transferActionItems(
   scope: Scope,
@@ -139,9 +126,8 @@ export function executeMerge(
     throw new ConflictError("The primary contact was already merged");
   }
 
-  // A duplicate that is gone, or already merged away, is a merge that cannot
-  // happen, and the caller hears so. It used to answer with the primary as if
-  // it had merged, so a stale pair in the review "merged successfully" and
+  // A duplicate that is gone, or already merged away, cannot be merged, and the
+  // caller hears so, instead of a stale pair "merging successfully" with
   // nothing changed.
   if (!duplicate) {
     throw new NotFoundError("Duplicate contact", duplicateId);

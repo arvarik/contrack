@@ -1,12 +1,6 @@
-// =============================================================================
-// Routes — AI Stats (Invocation History & Usage Dashboard)
-// =============================================================================
-// Two endpoints for the AI Stats Page (/settings/ai-stats):
-//   GET /api/ai/stats/summary  — aggregate KPIs, quota, cache tiers
-//   GET /api/ai/stats/feed     — paginated, filterable invocation history
-//
-// Mounted in server.ts at /api/ai/stats.
-// =============================================================================
+// AI usage routes, mounted at /api/ai/stats:
+//   GET /api/ai/stats/summary  totals, quota, cache tiers
+//   GET /api/ai/stats/feed     the paginated, filterable call history
 
 import { Router, type Request } from "express";
 import { z } from "zod";
@@ -25,12 +19,11 @@ const router = Router();
 
 /**
  * Whether this request asked for the instance rather than the caller.
- *
- * `?scope=all` is an admin read, and `requireAdmin` cannot sit on the route
- * because the same route without the parameter is every member's own billing
- * page. The manifest classes both routes `scoped` for that reason and the
- * check happens here, on the one shape that crosses accounts. It is the same
- * check as `requireAdmin`, so an admin's token cannot read it either.
+ * `?scope=all` is an admin read, but `requireAdmin` cannot sit on the route,
+ * which without the parameter is every member's own usage page. So the manifest
+ * classes both routes `scoped`, and the check is here, on the one shape that
+ * crosses accounts. It is `requireAdmin`'s check, so an admin's token cannot
+ * read it either.
  */
 function wantsInstance(req: Request): boolean {
   if (req.query.scope !== "all") return false;
@@ -39,24 +32,19 @@ function wantsInstance(req: Request): boolean {
   return true;
 }
 
-// =============================================================================
 // Valid operation vocabulary — derived from the canonical AI_OPERATIONS list
-// =============================================================================
 
 const VALID_OPERATIONS = new Set<string>(AI_OPERATIONS);
 
-// =============================================================================
 // GET /summary
-// =============================================================================
 
 router.get(
   "/summary",
   asyncHandler(async (req, res) => {
-    // The invocation counts are the caller's own. `cacheTiers` describes the
-    // instance's shared in-process cache, so it is admin-only and simply
-    // absent for a member. `?scope=all` replaces the caller's counts with the
-    // instance's and adds the per-account breakdown, for the operator whose
-    // provider key paid for all of it.
+    // The counts are the caller's own. `cacheTiers` describes the instance's
+    // shared cache, so a member does not get it. `?scope=all` puts the
+    // instance's counts in place of the caller's and adds the per-account
+    // breakdown, for the operator whose provider key paid for it.
     const admin = req.principal?.user.role === "admin";
     const summary = getSummary(scopeOf(req), { admin });
     if (!wantsInstance(req)) return res.json(summary);
@@ -66,9 +54,7 @@ router.get(
   }),
 );
 
-// =============================================================================
 // GET /feed
-// =============================================================================
 
 const feedQuerySchema = z.object({
   offset: z.coerce.number().int().min(0).default(0),

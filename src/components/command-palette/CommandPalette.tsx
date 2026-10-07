@@ -86,16 +86,13 @@ const MODE_CHIPS = [
 /** No pills: one array, so a question without pills keeps one identity. */
 const NO_FILTERS: FacetFilter[] = [];
 
-// ─── Main component ───────────────────────────────────────────────────────────
-
 export const CommandPalette = () => {
   const { preferences } = usePreferences();
   const aiAllowed = preferences.aiAssist;
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  // The highlighted row, by its cmdk value. The palette holds it, rather
-  // than cmdk alone, so it can put the highlight back on a row when the row
-  // it was on leaves the list (see the layout effect below).
+  // The highlighted row, by its cmdk value, held here so the highlight can
+  // return when its row leaves the list (see the layout effect below).
   const [activeRow, setActiveRow] = useState("");
   // Escape hid the facet suggestions. Typing shows them again.
   const [facetMenuDismissed, setFacetMenuDismissed] = useState(false);
@@ -117,10 +114,9 @@ export const CommandPalette = () => {
   const pointerMovedRef = useRef(false);
   const routerNavigate = useNavigate();
 
-  // ── Mode detection ──
   const mode = getMode(search);
 
-  // ── Faceted filter tokenizer (Feature 5) ──
+  // Typed facets become pills
   const {
     parsed,
     addFilter,
@@ -130,7 +126,7 @@ export const CommandPalette = () => {
     hasFilters,
   } = useQueryTokenizer(search, setSearch, { takeTyped: mode === "normal" });
 
-  // ── Instant search (Feature 8) — 0ms client filter + FTS handover ──
+  // Instant search: a filter in the browser, then the server's FTS answer
   const instantSearch = useInstantSearch(
     mode === "normal" ? parsed.freeText : "",
     parsed.filters,
@@ -143,7 +139,7 @@ export const CommandPalette = () => {
     .filter(Boolean)
     .join(" ");
 
-  // ── Action Sub-Menu state (Feature 4) ──
+  // The actions menu
   const [subMenuContactId, setSubMenuContactId] = useState<string | null>(null);
   const [subMenuContactName, setSubMenuContactName] = useState("");
   const [subMenuContactAvatar, setSubMenuContactAvatar] = useState<
@@ -161,10 +157,8 @@ export const CommandPalette = () => {
   const searchHistory = useSearchHistory();
   const { data: zeroState } = useZeroState();
 
-  // Both hooks return a FRESH object every render around methods that are
-  // themselves stable useCallbacks. Effects and callbacks below depend on
-  // the destructured methods, which satisfies exhaustive-deps without
-  // re-firing on every render the way depending on the wrapper object would.
+  // Both hooks return a new object each render around stable methods, so
+  // the effects below depend on the methods.
   const { mutate: runSemanticSearch, reset: resetSemanticSearch } =
     semanticSearch;
   const { addEntry } = searchHistory;
@@ -172,7 +166,7 @@ export const CommandPalette = () => {
   // Why AI cannot answer, while the palette is in `?` mode.
   const aiSetup = useAiSetup("ask", open && mode === "ai");
 
-  // ── Shift-to-peek state ──
+  // Shift peeks
   const [peekVisible, setPeekVisible] = useState(false);
   const peekTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -204,9 +198,7 @@ export const CommandPalette = () => {
   // Derive the raw NL query from the ? prefix
   const aiQuery = mode === "ai" ? search.replace(/^\?+\s*/, "").trim() : "";
 
-  // Derive AI results directly from mutation data (reactive, no extra
-  // useState). Memoized so downstream memos/effects see a stable identity —
-  // the bare conditional produced a new [] every render.
+  // Memoized, so the memos and effects below see a stable identity.
   const aiResults: SemanticMatch[] = useMemo(
     () =>
       mode === "ai" && semanticSearch.data ? semanticSearch.data.matches : [],
@@ -215,9 +207,8 @@ export const CommandPalette = () => {
   const aiFallback: boolean = mode === "ai" && !!semanticSearch.data?.fallback;
   // A question of facets alone can hold thousands, and the list stops at 30.
   const aiTotal = semanticSearch.data?.total ?? aiResults.length;
-  // The question `aiResults` answer, stamped on the results by the hook. The
-  // synthesis brief reads this rather than the debounced input, which is a
-  // different string for the whole of the debounce window.
+  // The question `aiResults` answer, stamped by the hook. The synthesis
+  // brief reads this, not the debounced input, which lags the answer.
   const aiAnsweredQuery: string =
     mode === "ai" ? (semanticSearch.data?.query ?? "") : "";
 
@@ -235,8 +226,8 @@ export const CommandPalette = () => {
     return map;
   }, [instantSearch.results, aiResults, mode]);
 
-  // ── The highlighted contact: Shift peeks at it, → opens its actions ──
-  // A people row's value is its id and name, an AI row's `ai_<id>_<name>`.
+  // The highlighted contact: Shift peeks at it, → opens its actions. A
+  // people row's value is its id and name, an AI row's `ai_<id>_<name>`.
   const peekContact = useMemo(() => {
     if (!open) return null;
     for (const [id, contact] of resultMap) {
@@ -251,10 +242,8 @@ export const CommandPalette = () => {
   const aiFilterKey = JSON.stringify(aiFilters);
 
   /**
-   * Ask AI, on purpose: Enter on the "Ask AI" row, a starter, a recent
-   * question, or the people search's "Ask AI" row. It used to ask by itself
-   * 900 ms after the typing stopped, so a pause mid-question sent half a
-   * question, which costs money and answers worse, and saved it to Recent.
+   * Asks AI only on purpose: Enter on an "Ask AI" row, a starter or a recent
+   * question. Asking on a typing pause would send half a question.
    */
   const askAi = useCallback(
     (question: string, filters: FacetFilter[]) => {
@@ -271,8 +260,8 @@ export const CommandPalette = () => {
     mode === "ai" &&
     aiQuery.length >= 3 &&
     `${aiQuery}\u0000${aiFilterKey}` !== askedKey;
-  // The question on screen failed. Its error shows with an Ask row to try
-  // again: there was no row, so Enter did nothing after "Try again".
+  // The question on screen failed. Its error shows with an Ask row, so
+  // Enter can try again.
   const askFailed = mode === "ai" && !aiPending && semanticSearch.isError;
 
   // Leaving AI mode while open cancels the question. Closing the palette
@@ -308,7 +297,6 @@ export const CommandPalette = () => {
   ]);
 
   // What had the focus before the palette opened, to give it back on close.
-  // It went to the page's body, and a keyboard user lost their place.
   const returnFocusRef = useRef<HTMLElement | null>(null);
   // Leaving for another page: the opener belongs to the page left behind,
   // so the focus does not go back to it.
@@ -324,11 +312,9 @@ export const CommandPalette = () => {
   // The latest `handleClose`, for the key listener below, which binds once.
   const closeRef = useRef<() => void>(() => {});
 
-  // Global ⌘K / Ctrl+K listener. It opens with an empty box, as Spotlight,
-  // Linear and Raycast do, and closes the way Escape does on an empty box:
-  // ⌘K used to hide the palette with its text, answer and menu, and bring
-  // them all back on the next ⌘K. A touch screen has no ⌘K: each page
-  // header's button sends `OPEN_PALETTE_EVENT` (`openCommandPalette`).
+  // ⌘K / Ctrl+K opens the palette with an empty box and closes it as Escape
+  // does on an empty box. A touch screen has no ⌘K: each page header's
+  // button sends `OPEN_PALETTE_EVENT` (`openCommandPalette`).
   useEffect(() => {
     const openPalette = () => {
       if (openRef.current) return;
@@ -354,9 +340,8 @@ export const CommandPalette = () => {
     };
   }, []);
 
-  // The result row the actions menu opened from. The menu takes the rows'
-  // place, and cmdk forgets the highlight when they go, so going back put
-  // it on the top row: a second → then opened another contact's menu.
+  // The row the actions menu opened from. cmdk forgets the highlight when
+  // the menu replaces the rows, so going back restores it from here.
   const subMenuRowRef = useRef("");
 
   const openSubMenu = useCallback(
@@ -381,8 +366,7 @@ export const CommandPalette = () => {
       setActiveRow(subMenuRowRef.current);
       subMenuRowRef.current = "";
     }
-    // "Back to results" goes away with the menu: the focus it held went to
-    // the dialog, where the arrows and the letters did nothing.
+    // "Back to results" goes away with the menu, so the input takes the focus.
     inputRef.current?.focus();
   }, []);
 
@@ -405,8 +389,7 @@ export const CommandPalette = () => {
   closeRef.current = handleClose;
 
   // Another shortcut that opens a dialog of its own closes the palette
-  // first (`closeCommandPalette`). It used to send an Escape, which now
-  // clears the input before it closes anything.
+  // first (`closeCommandPalette`). An Escape would only clear the input.
   useEffect(() => {
     window.addEventListener(CLOSE_PALETTE_EVENT, handleClose);
     return () => window.removeEventListener(CLOSE_PALETTE_EVENT, handleClose);
@@ -448,8 +431,7 @@ export const CommandPalette = () => {
       setFacetMenuDismissed(false);
       setDiscardArmed(false);
       setLogNameHint("");
-      // Back to the box: from a chip Tab reached, the next words went
-      // nowhere.
+      // Back to the box, so the next words land there.
       inputRef.current?.focus();
       return true;
     }
@@ -457,10 +439,9 @@ export const CommandPalette = () => {
   };
 
   /**
-   * cmdk takes Enter from everything inside the palette and runs the
-   * highlighted row. A focused button (a mode chip, a pill's ×, a link
-   * under the answer, an action Tab reached) ran the highlighted contact
-   * instead of itself. Now it runs itself: cmdk skips a prevented key.
+   * cmdk runs the highlighted row on any Enter inside the palette. A focused
+   * button (a mode chip, a pill's ×, a link) runs itself instead: cmdk skips
+   * a prevented key.
    */
   const handleRootKeyDown = (e: React.KeyboardEvent) => {
     if (e.key !== "Enter" || e.target === inputRef.current) return;
@@ -478,7 +459,7 @@ export const CommandPalette = () => {
     if (stepBack()) e.preventDefault();
   };
 
-  // Android's Back. It used to leave the page under the open palette.
+  // Android's Back steps back inside the palette, not out of the page.
   useCloseRequest(open, () => {
     if (!stepBack(true)) handleClose();
   });
@@ -520,8 +501,7 @@ export const CommandPalette = () => {
           date: new Date().toISOString(),
         },
       });
-      // Not kept as a recent search: it is not one. The note's text sat in
-      // "Recent searches", and picking it filled the box to log it again.
+      // Not kept as a recent search: it is not one.
       handleClose();
       toast.success(`Logged ${kind} for ${contact.name}`);
     } catch (e: unknown) {
@@ -529,7 +509,7 @@ export const CommandPalette = () => {
     }
   };
 
-  // ── Zero-state handlers ──
+  // Zero-state handlers
 
   const handleSelectContact = useCallback(
     (id: string) => {
@@ -556,9 +536,8 @@ export const CommandPalette = () => {
     [navigate, handleClose, askAi],
   );
 
-  // Commit-on-selection recording for normal-mode contact picks.
-  // This is the single place a contact-search query becomes a "recent" — no
-  // debounced auto-record, so the user only sees queries they actually acted on.
+  // The one place a people search becomes a recent search: when a person
+  // picks a result.
   const handleSelectFtsContact = useCallback(
     (contactId: string) => {
       if (fullQuery.length >= 2) searchHistory.addEntry(fullQuery, "normal");
@@ -590,12 +569,7 @@ export const CommandPalette = () => {
     [navigate, handleClose],
   );
 
-  // ── Keys in the input ──
-  //
-  // ↑ and ↓ always move the highlight, which cmdk does. ↑ on an empty input
-  // used to bring back the last search instead, so ↓ then ↑ in the empty
-  // palette swapped its list for that search's results. The recent searches
-  // are rows in the empty palette instead.
+  // Keys in the input. ↑ and ↓ always move the highlight (cmdk does that).
 
   const handleSearchInputKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -645,16 +619,14 @@ export const CommandPalette = () => {
     ) &&
     (instantSearch.results.length > 0 || !instantSearch.isFtsLoading);
 
-  // ── → key handler: enter sub-menu on focused result ──
+  // → opens the highlighted result's actions
   useEffect(() => {
     if (!open || subMenuContactId) return;
 
     const handleArrowRight = (e: KeyboardEvent) => {
       if (e.key !== "ArrowRight") return;
-      // If the user is mid-edit inside the input, let → move the caret.
-      // Only intercept once the caret has reached the end of the input — at
-      // that point the user has finished typing and → naturally means "expand
-      // into the action sub-menu for the highlighted result".
+      // → moves the caret until it reaches the end of the input. There it
+      // opens the highlighted result's actions.
       const activeEl = document.activeElement as HTMLInputElement | null;
       if (
         activeEl &&
@@ -731,20 +703,12 @@ export const CommandPalette = () => {
   }, [search, parsed.filters]);
 
   /**
-   * Keep one row highlighted, and keep it on the top row until the person
-   * moves it.
+   * Keeps one row highlighted, on the top row until the person moves it.
+   * cmdk highlights nothing when its row leaves the list (it re-checks only
+   * the last row to unmount), and follows a row the server ranks lower.
    *
-   * cmdk follows the highlighted row by its value. When the server's people
-   * replace the instant ones, that row can leave the list, and cmdk then
-   * highlights nothing, because it re-checks only the last row to unmount.
-   * Enter did nothing until an arrow key picked a row. And when the server
-   * ranks a row the instant list had on top lower down, the highlight went
-   * with it, so Enter opened a row that was no longer on top.
-   *
-   * After every commit, once cmdk has given each row its value: the rows
-   * come from a dozen sources. No list of dependencies on purpose. It
-   * cannot loop: it saves the top row only when the highlight is elsewhere,
-   * and the next commit finds it there.
+   * Runs after every commit, because the rows come from a dozen sources. It
+   * cannot loop: it saves the top row only when the highlight is elsewhere.
    */
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
@@ -764,15 +728,10 @@ export const CommandPalette = () => {
   });
 
   /**
-   * The input names the highlighted row in `aria-activedescendant`, which a
-   * screen reader announces. cmdk works it out before the rows show a new
-   * highlight, so it was missing on open, after typing and after the
-   * server's answer, until an arrow key was pressed. This follows the rows
-   * themselves, and puts it back when cmdk writes a stale one. It keeps the
-   * row in view as well.
-   *
-   * The list mounts a render after the palette opens, inside a portal, so
-   * this runs after every render and watches the nodes it finds.
+   * Keeps `aria-activedescendant` on the highlighted row, and the row in
+   * view. cmdk sets it before the rows show a new highlight, so it goes
+   * stale. The list mounts a render late, in a portal, so this runs after
+   * every render.
    */
   useLayoutEffect(() => {
     const input = inputRef.current;
@@ -801,10 +760,8 @@ export const CommandPalette = () => {
       const row = list.querySelector('[cmdk-item][aria-selected="true"]');
       point("aria-activedescendant", row?.id);
       if (!row) return;
-      // And in view: cmdk scrolls to the row it last chose, which can be
-      // one the highlight has already left. The top row shows its heading.
-      // Not for the pointer, as cmdk does not: a row half in view would
-      // jump under it.
+      // In view, as cmdk scrolls to a row the highlight may have left. The
+      // top row shows its heading. Not for the pointer: the row would jump.
       if (pointerMovedRef.current) return;
       if (row === list.querySelector("[cmdk-item]")) {
         if (scrollRef.current) scrollRef.current.scrollTop = 0;
@@ -827,9 +784,8 @@ export const CommandPalette = () => {
   const isAiLoading = mode === "ai" && semanticSearch.isPending;
 
   /**
-   * What a screen reader hears about the list (WCAG 4.1.3, as on the Ask
-   * page): the count once it settles, not the instant rows that change
-   * with each key, and the AI wait. The palette said nothing at all.
+   * What a screen reader hears about the list (WCAG 4.1.3): the count once
+   * it settles, not the instant rows, and the AI wait.
    */
   const peopleCount = (n: number) =>
     n === 0 ? "No people found" : `${n} ${n === 1 ? "person" : "people"} found`;
@@ -856,11 +812,7 @@ export const CommandPalette = () => {
           ? peopleCount(instantSearch.results.length)
           : "";
 
-  // Shift-to-peek.
-  // We originally bound this to Space, but the input always has focus inside
-  // cmdk and Space is a valid text character, so the gesture could never fire
-  // without inserting a space. Shift is a modifier that produces no text on
-  // its own, so holding it while the input is focused is safe.
+  // Shift peeks: the input always has focus, and Shift types nothing.
   useEffect(() => {
     if (!open) return;
 
@@ -985,17 +937,12 @@ export const CommandPalette = () => {
                 value={activeRow}
                 onValueChange={setActiveRow}
                 onKeyDown={handleRootKeyDown}
-                // Every row arrives filtered: the people by the instant filter
-                // or the server, the rest by this component. cmdk's own fuzzy
-                // filter scores only a row's value against the whole input. It
-                // hid every match on a company, a nickname or a phone number,
-                // and it hid the row a one-line `>` action had built.
+                // Every row arrives filtered. cmdk's fuzzy filter scores only
+                // a row's value, so it would hide a match on a company, a
+                // nickname or a phone, and a `>` action's row.
                 shouldFilter={false}
-                // Backdrop click-to-dismiss. The dialog content fills the viewport
-                // (inset-0) which means Radix's built-in pointer-down-outside never
-                // fires — there's nothing outside it. We close manually when the
-                // click target is the backdrop itself (not the inner panel, which
-                // stops propagation through its own click handlers / motion.div).
+                // A click on the backdrop closes. The content fills the
+                // viewport, so Radix's pointer-down-outside never fires.
                 onMouseDown={(e) => {
                   if (e.target === e.currentTarget) {
                     handleClose();
@@ -1011,11 +958,8 @@ export const CommandPalette = () => {
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: -20 }}
                   transition={{ duration: DURATION.fast, ease: EASE }}
-                  // A press on the panel keeps the focus in the input, as a
-                  // press on a row does. A heading or a gap took the focus,
-                  // and then the page behind took the keys: `j` opened a
-                  // contact and `n` a new contact under the open palette.
-                  // A field, such as the note composer's, still takes it.
+                  // A press on the panel keeps the focus in the input, or the
+                  // page behind takes the keys. A field still takes it.
                   onMouseDownCapture={(e) => {
                     const target = e.target as HTMLElement;
                     if (
@@ -1027,12 +971,11 @@ export const CommandPalette = () => {
                     }
                   }}
                   // Never taller than the space above the keyboard
-                  // (`--keyboard-inset`, from `useSoftKeyboard`): the list
-                  // in it scrolls instead. It ended 150 px under a phone's
-                  // keyboard, where the last rows could not be reached.
+                  // (`--keyboard-inset`, from `useSoftKeyboard`). The list
+                  // scrolls instead.
                   className="w-full max-w-2xl max-h-[calc(100dvh-var(--keyboard-inset,0px)-var(--viewport-offset,0px)-15vh-1rem)] pointer-coarse:max-h-[calc(100dvh-var(--keyboard-inset,0px)-var(--viewport-offset,0px)-max(0.5rem,env(safe-area-inset-top))-0.5rem)] [@media(max-height:560px)]:max-h-[calc(100dvh-var(--keyboard-inset,0px)-var(--viewport-offset,0px)-1rem)] glass-panel shadow-2xl rounded-3xl overflow-hidden flex flex-col font-body"
                 >
-                  {/* ── Facet pills (Feature 5) ── */}
+                  {/* Facet pills */}
                   <FacetPills
                     filters={parsed.filters}
                     // The × goes with its pill: the focus goes back to the
@@ -1044,12 +987,9 @@ export const CommandPalette = () => {
                   />
 
                   {/*
-              Search input row: the mode icon, the input and the Escape hint.
-              The input draws no ring, the one exception to the app's focus
-              ring besides menu rows: the palette is a dialog with one field
-              that has focus for as long as it is open, so a ring would never
-              go away and would say nothing. Its caret and the open panel say
-              where the typing goes.
+              The mode icon, the input and the Escape hint. The input draws no
+              ring: it has the focus for as long as the palette is open, so a
+              ring would say nothing.
             */}
                   <div className="flex items-center px-4 py-2 pointer-fine:py-4 bg-surface-container-low gap-3">
                     <AnimatePresence mode="wait">
@@ -1090,8 +1030,7 @@ export const CommandPalette = () => {
                       aria-describedby={`${modeChipsId}-hint`}
                       className="flex-1 min-w-0 min-h-[44px] pointer-fine:min-h-0 bg-transparent border-none outline-none text-on-surface placeholder:text-on-surface-variant text-lg"
                     />
-                    {/* What a screen reader hears after the box's name. It
-                        read out the chips: "Search ? Ask AI > Log Filter". */}
+                    {/* What a screen reader hears after the box's name. */}
                     <span id={`${modeChipsId}-hint`} className="sr-only">
                       Type ? to ask AI, or &gt; to log a note, a call, a meeting
                       or an email
@@ -1113,10 +1052,8 @@ export const CommandPalette = () => {
                   </div>
 
                   {/*
-                    The modes, as buttons: a touch screen could reach `?`
-                    and `>` only by switching keyboards, and a label that
-                    looks like a tab but does nothing taught nobody. Each
-                    puts its sign in front of the words already typed.
+                    The modes, as buttons: a touch keyboard hides `?` and `>`.
+                    Each puts its sign in front of the words already typed.
                   */}
                   <div
                     id={modeChipsId}
@@ -1157,27 +1094,22 @@ export const CommandPalette = () => {
                     </button>
                   </div>
 
-                  {/* ── Facet autocomplete dropdown (Feature 5) ── */}
+                  {/* Facet autocomplete dropdown */}
                   {facetMenuOpen && parsed.activePrefix && (
                     <FacetAutocomplete
                       field={parsed.activePrefix.field}
                       partial={parsed.activePrefix.partial}
-                      // `addFilter` also clears the partial from the input. A second
-                      // clear here used `\S*`, which stops at a space, so a quoted
-                      // partial such as `industry:"Venture Cap` stayed in the box.
+                      // `addFilter` also clears the partial, quoted ones too.
                       onSelect={addFilter}
-                      // Escape hides the suggestions and leaves the text. It used
-                      // to strip a bare `role:` and do nothing to `role:eng`, so
-                      // the suggestions stayed and took every Escape after it.
+                      // Escape hides the suggestions and leaves the text.
                       onDismiss={() => setFacetMenuDismissed(true)}
                     />
                   )}
 
                   {/*
                     The scroll area: notes above the list, the list, and the
-                    links below it. The list is a listbox and holds rows only
-                    (axe's aria-required-children): the actions menu, the
-                    waits, the hints and the links sat inside it before.
+                    links below it. The listbox holds rows only (axe's
+                    aria-required-children).
                   */}
                   <div
                     ref={scrollRef}
@@ -1279,10 +1211,10 @@ export const CommandPalette = () => {
                     {statusText}
                   </div>
 
-                  {/* ── Shift-to-peek, in a portal on the body ── */}
+                  {/* Shift-to-peek, in a portal on the body */}
                   <ResultPeek contact={peekContact} visible={peekVisible} />
 
-                  {/* ── Footer: the keys that work on this row ── */}
+                  {/* Footer: the keys that work on this row */}
                   <PaletteFooter
                     enter={
                       facetMenuOpen

@@ -1,13 +1,7 @@
 // @vitest-environment jsdom
-// =============================================================================
-// Settings pages start loading before their link is pressed
-// =============================================================================
-// Each settings page is its own module. The first click on a page waited for
-// its code, and the Account page then showed "Loading devices…" while its
-// lists arrived. `warm.ts` loads a page's code, and its first data, when a
-// person points at its link, and every page's code in idle moments. These
-// tests pin what is loaded, when, and for whom.
-// =============================================================================
+// Each settings page is its own module. `warm.ts` loads a page's code, and
+// its first data, when a person points at its link, and every page's code in
+// idle moments. These tests pin what is loaded, when, and for whom.
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
@@ -15,13 +9,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const idle = vi.hoisted(() => ({
   tasks: [] as Array<() => void>,
-  cancelled: 0,
+  canceled: 0,
 }));
 vi.mock("../../../../src/lib/idle", () => ({
   whenIdle: (task: () => void) => {
     idle.tasks.push(task);
     return () => {
-      idle.cancelled += 1;
+      idle.canceled += 1;
       const index = idle.tasks.indexOf(task);
       if (index >= 0) idle.tasks.splice(index, 1);
     };
@@ -75,7 +69,7 @@ const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 beforeEach(() => {
   idle.tasks.length = 0;
-  idle.cancelled = 0;
+  idle.canceled = 0;
   passkeys.supported = true;
 });
 

@@ -1,26 +1,12 @@
 /**
- * RailTooltip: the label beside an icon on the rail, or beside a button at
- * the window's right edge.
+ * The label of an icon-only control: its name, and its key when it has one,
+ * after a 250 ms hover. Beside the rail's icons and the side panel's button,
+ * on the side away from the window's edge. Below other controls
+ * (`side="bottom"`, or `bottom-end` and `bottom-start` at a header's edges).
  *
- * The left nav is a column of icons with no text, and the right-hand panel's
- * button (`SidePanel`) sits at the window's right edge. On hover, after a
- * 250 ms pause, the icon's name (and its key, when it has one) appears
- * beside it, on the side away from the window's edge: to the right of the
- * left nav, to the left of the panel's button.
- *
- * Any other icon-only control uses it too, with the label below it
- * (`side="bottom"`): the list's Select and Import, the composer's kinds.
- * A control at a header's right edge takes `bottom-end`, so its label
- * opens leftward and stays on screen, and one at the left edge
- * `bottom-start`.
- *
- * A finger has no hover, so a long press shows the label for a moment
- * instead, and that press does not also press the control
- * (`useLongPress`). A tap still acts at once.
- *
- * It is a hover-rendered `<div>`, so it is worth nothing to a screen reader
- * or to a keyboard user. Every icon it labels carries its own `aria-label`
- * with the same words.
+ * A long press shows it on a touch screen without pressing the control
+ * (`useLongPress`). It is hover-only, so every icon it labels carries an
+ * `aria-label` with the same words.
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
@@ -101,10 +87,8 @@ export const RailTooltip = ({
     timerRef.current = setTimeout(() => setVisible(false), TOUCH_SHOW_MS);
   });
 
-  // While disabled it forgets the hover. The panel's button is disabled
-  // while its panel is open, and the pointer that closes the panel rests on
-  // it: the label waits for the pointer to come back, and does not appear
-  // under a pointer that has just used the button.
+  // While disabled it forgets the hover, so the label does not appear under
+  // the pointer that just closed the side panel.
   useEffect(() => {
     if (disabled) hide();
   }, [disabled, hide]);
@@ -117,9 +101,9 @@ export const RailTooltip = ({
   );
 
   const { box, caret, from } = SIDES[side];
-  // Centred under the control: Motion owns the transform, so the half-width
+  // Centered under the control: Motion owns the transform, so the half-width
   // shift is its `x`, not a class.
-  const centre = side === "bottom" ? { x: "-50%" } : {};
+  const center = side === "bottom" ? { x: "-50%" } : {};
 
   return (
     <div
@@ -127,8 +111,7 @@ export const RailTooltip = ({
         "relative flex items-center [-webkit-touch-callout:none]",
         className,
       )}
-      // A mouse only: a tap sends a mouse enter too, and the label then
-      // stayed until the next tap somewhere else.
+      // A mouse only: a tap's mouse enter would leave the label up.
       onPointerEnter={(event) => event.pointerType === "mouse" && show()}
       onPointerLeave={hide}
       {...longPress}
@@ -137,9 +120,9 @@ export const RailTooltip = ({
       <AnimatePresence>
         {visible && !disabled && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.95, ...from, ...centre }}
-            animate={{ opacity: 1, x: 0, y: 0, scale: 1, ...centre }}
-            exit={{ opacity: 0, scale: 0.95, ...from, ...centre }}
+            initial={{ opacity: 0, scale: 0.95, ...from, ...center }}
+            animate={{ opacity: 1, x: 0, y: 0, scale: 1, ...center }}
+            exit={{ opacity: 0, scale: 0.95, ...from, ...center }}
             transition={{ duration: DURATION.fast, ease: EASE }}
             className={cn("absolute z-50 pointer-events-none", box)}
           >

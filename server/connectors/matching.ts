@@ -1,10 +1,8 @@
 /**
- * server/connectors/matching.ts — Participant matching engine for connectors.
- *
- * Builds per-run in-memory maps from normalized email and phone to contact ID
- * in two queries. Applies the self-address exclusion rule, selects the primary
- * contact (first non-self match) to own the interaction, and routes additional
- * matches to interaction mentions.
+ * Participant matching for connectors. Per run, two queries build in-memory
+ * maps from normalized email and phone to contact id. It applies the
+ * self-address exclusion, gives the interaction to the primary contact (the
+ * first match that is not the owner), and records other matches as mentions.
  *
  * @module server/connectors/matching
  */

@@ -1,5 +1,5 @@
 /**
- * tests/unit/server/connectors/matching.test.ts — Unit tests for participant matching.
+ * Unit: participant matching.
  *
  * Verifies email case-folding, phone normalization, self-address exclusion,
  * primary contact ownership vs mention routing, and unknown participant collection.

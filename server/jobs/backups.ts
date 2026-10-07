@@ -1,13 +1,8 @@
-// =============================================================================
-// Jobs: database snapshots
-// =============================================================================
-// The startup snapshot, 15 seconds after boot so the migrations and
-// backfills settle first, and the scheduled backup every
-// BACKUP_INTERVAL_HOURS. The interval is a setting that can change at run
-// time: the runner reads it each time it schedules the next run, and
-// `rescheduleBackups` (backupService) moves the queued run when it changes.
-// 0 turns the scheduled backup off. The startup snapshot runs either way.
-// =============================================================================
+// Snapshot jobs: the startup snapshot, 15 seconds after boot so migrations and
+// backfills settle first, and the scheduled backup every BACKUP_INTERVAL_HOURS.
+// The interval is a setting: the runner reads it at each scheduling, and
+// `rescheduleBackups` (backupService) moves the queued run when it changes. 0
+// turns the scheduled backup off; the startup snapshot runs either way.
 
 import { defineJob } from "./runner.ts";
 import {

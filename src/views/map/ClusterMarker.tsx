@@ -1,11 +1,6 @@
 /**
- * A group of contacts too close to tell apart at this zoom.
- *
- * A button with the count, named for what a click does: "12 contacts, zoom
- * in". The click zooms to the level where the group splits. A hover or focus
- * previews who is in it.
- *
- * @module views/map/ClusterMarker
+ * A group of contacts too close to tell apart at this zoom: a count button
+ * that zooms until the group splits. A hover or focus previews who is in it.
  */
 import { memo, useId } from "react";
 import { Marker } from "@vis.gl/react-maplibre";
@@ -33,7 +28,7 @@ interface ClusterMarkerProps {
   stacked?: boolean;
   /** How many of its people have a follow-up overdue: a red dot. */
   overdue?: number;
-  /** It holds the open contact, a card's or a list row's: the pin's halo. */
+  /** It holds the open contact, a card's or a list row's. */
   halo?: boolean;
   /** Another contact is open, so this cluster steps back. */
   dimmed?: boolean;
@@ -60,11 +55,8 @@ export const ClusterMarker = memo(function ClusterMarker({
       anchor="center"
       style={halo ? { zIndex: 2 } : undefined}
     >
-      {/*
-        The count is text, and scaling text blurs it, so a hover lifts the
-        cluster the way it lifts a pin instead of growing it. The hairline
-        edge keeps the white disc apart from a pale basemap.
-      */}
+      {/* A hover lifts rather than scales, since scaling blurs the count. The
+          hairline ring keeps the disc apart from a pale basemap. */}
       <button
         type="button"
         aria-label={clusterLabel(cluster.count, selectedCount, stacked)}

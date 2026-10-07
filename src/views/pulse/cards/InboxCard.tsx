@@ -1,16 +1,7 @@
 /**
- * InboxCard: what needs cleaning up, one row per job.
- *
- * Every row is a link to the place where the job is done: the duplicates
- * page, the list filtered to the people who miss a field, the connectors
- * page. The first row is the tracking action: "6 new this month, 2
- * untracked" opens the list at `added:<30d tracked:no`, the two people it
- * counts, which is where a person decides who to keep up with. It opened
- * every untracked contact. It replaced the New people card, whose number was a
- * vanity count with a modal behind it.
- *
- * With nothing to do the card is one line, "Nothing to clean up.", because
- * nobody reads a framed box that says nothing.
+ * What needs cleaning up, one row per job, each a link to where the job is
+ * done. The first row, "6 new this month, 2 untracked", opens the list at
+ * `added:<30d tracked:no`, the people it counts. Empty, the card is one line.
  */
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
@@ -50,10 +41,7 @@ interface InboxCardProps {
     stale: number;
   };
   correspondents?: number;
-  /**
-   * The contacts added in the last 30 days, and how many of them nobody
-   * tracks yet. Computed on the client from the slim rows.
-   */
+  /** Contacts added in the last 30 days, and how many nobody tracks yet. */
   newPeople?: { total: number; untracked: number };
 }
 
@@ -62,11 +50,7 @@ const N = ({ children }: { children: React.ReactNode }) => (
   <span className="font-semibold text-on-surface tabular-nums">{children}</span>
 );
 
-/**
- * A row's glyph in a 28 px tile of its tone: new people are the success
- * green, possible duplicates the warning amber, correspondents the primary,
- * and the clean-up jobs neutral.
- */
+/** A row's glyph in a tile of its tone. */
 const RowIcon = ({ icon: Icon, tone }: { icon: LucideIcon; tone: Tone }) => (
   <span
     className={cn(
@@ -79,10 +63,7 @@ const RowIcon = ({ icon: Icon, tone }: { icon: LucideIcon; tone: Tone }) => (
   </span>
 );
 
-/**
- * One row: a glyph, a sentence that wraps rather than truncates, and a
- * chevron that says the row goes somewhere. The whole row is the link.
- */
+/** One row, all one link. Its sentence wraps rather than truncates. */
 const InboxRow = ({
   to,
   icon,
@@ -151,7 +132,6 @@ export const InboxCard = ({
   return (
     <CardFrame cardId="inbox" title="Inbox" count={totalItems}>
       <ul className="flex flex-col gap-1.5">
-        {/* The tracking action first: the new people nobody follows yet. */}
         {newPeople && untracked > 0 && (
           <InboxRow
             to={`/?q=${encodeURIComponent("added:<30d tracked:no")}`}
@@ -186,9 +166,8 @@ export const InboxCard = ({
               aria-expanded={ghostsExpanded}
               aria-controls="ghosts-list"
               className={cn(
-                // Closed, the row is a tile like the others and lifts. Open,
-                // the item's face holds the names too, so the button is one
-                // part of it and takes the state layer alone.
+                // Closed, the row lifts like the others. Open, the item holds
+                // the names too, so the button takes the state layer alone.
                 ghostsExpanded
                   ? `state-layer group ${PULSE_ROW_STATIC}`
                   : PULSE_ROW,
@@ -229,8 +208,7 @@ export const InboxCard = ({
                   <Link
                     key={g.id}
                     to={`/contact/${g.id}`}
-                    // A chip that opens a contact: a control as a whole, so
-                    // it lifts.
+                    // A chip that opens a contact is a whole control: it lifts.
                     className="hit-area state-layer lift inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-surface-container text-xs font-medium text-on-surface"
                   >
                     <img

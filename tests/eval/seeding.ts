@@ -1,11 +1,7 @@
-// =============================================================================
-// Seeding and vector reading shared by the eval harnesses
-// =============================================================================
-// The search, dedupe and answer harnesses all write a fixture corpus through
-// the product's create path with ids that are the same on every run, and the
-// search, answer and passage gates all read a flat file of recorded vectors.
-// Each used to carry its own copy of both.
-// =============================================================================
+// Seeding and vector reading shared by the eval harnesses. The search, dedupe
+// and answer harnesses write a fixture corpus through the product's create
+// path with stable ids, and the search, answer and passage gates read a flat
+// file of recorded vectors.
 
 import crypto from "crypto";
 import { contactService } from "../../server/services/contactService.ts";
@@ -22,22 +18,16 @@ export interface SeededIds {
  * Write fixture contacts into a real database under one owner, with ids that
  * are the same on every run.
  *
- * Through `bulkCreateContacts`, not through INSERT: the FTS rows, the child
- * rows, the source platform and the phonetic hash all come from the create
- * path, and a hand-written row would index and normalize differently from a
- * row the product writes.
+ * Through `bulkCreateContacts`, not INSERT, so the FTS rows, child rows,
+ * source platform and phonetic hash come from the product's create path.
  *
- * The ids must not change between runs because the product breaks ties on
- * them. `lexicalSearch` orders by `bm25(...), c.id`, so two contacts on one
- * BM25 score swap places, and at the tenth position that moves a contact in
- * and out of recall@10. The dedupe self-join emits `idA < idB`, so a random
- * id changes which record a failure message names. A gate that fails at
- * random teaches everybody to re-run it until it passes.
+ * The ids must not change between runs, because the product breaks ties on
+ * them: `lexicalSearch` orders by `bm25(...), c.id`, which can move a contact
+ * in and out of recall@10, and the dedupe self-join emits `idA < idB`.
  *
- * Each id is a valid v4 UUID made from a hash of `salt` and a counter. The
- * service picks its own ids and takes no argument for one, which is correct
- * for the product. So the generator is replaced for the insert and put back
- * afterwards.
+ * Each id is a valid v4 UUID from a hash of `salt` and a counter. The service
+ * takes no id argument, so the generator is replaced for the insert and put
+ * back afterwards.
  */
 export async function seedWithStableIds<T extends { key: string }>(
   scope: Scope,

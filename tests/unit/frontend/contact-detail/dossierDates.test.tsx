@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
 /**
- * The dates on a dossier's jobs and schools.
- *
- * A span with only its end printed the end alone, "Dec 2024", which reads
- * as the start. It says "Until Dec 2024" now. A start alone, a current job
- * and a full span keep their forms.
+ * The dates on a dossier's jobs and schools. A span with only its end says
+ * "Until Dec 2024", because "Dec 2024" alone reads as the start. A start
+ * alone, a current job and a full span keep their forms.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 // AI is set up unless a test says otherwise.

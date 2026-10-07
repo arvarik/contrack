@@ -170,8 +170,8 @@ test("Escape in a list inside a dialog closes the list and keeps the dialog", as
   await page.keyboard.press("ArrowDown");
   await expect(listbox.getByRole("option", { name: "Company" })).toBeFocused();
 
-  // Escape is the list's to take. The dialog listens for it on the document
-  // in the capture phase, and used to close as well.
+  // Escape is the list's to take, though the dialog listens for it on the
+  // document in the capture phase.
   await page.keyboard.press("Escape");
   await expect(listbox).toBeHidden();
   await expect(dialog).toBeVisible();

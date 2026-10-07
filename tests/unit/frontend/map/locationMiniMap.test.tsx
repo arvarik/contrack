@@ -1,28 +1,20 @@
 // @vitest-environment jsdom
 /**
- * The map block on the contact page, without a map.
+ * The map block on the contact page. `ContactMap` and the pin dialog are
+ * stubbed, because the map needs WebGL and jsdom has none. A placed contact
+ * gets a map on their pin, an address the geocoder has not placed gets a line
+ * of text, neither gets nothing, and either of the first two can open the
+ * dialog.
  *
- * `ContactMap` is replaced here by a div that reports the props it was
- * given, because the map needs WebGL and jsdom has none, and the dialog that
- * moves the pin is replaced the same way. What is left is the decision this
- * component makes: a placed contact gets a map opened on their pin, a
- * contact with an address the geocoder has not placed gets a line of text,
- * a contact with neither gets nothing at all, and either of the first two
- * can open the dialog.
+ * Each contact page builds a new WebGL canvas, so two timing rules, pinned on
+ * a fake clock in the "timing" block, keep that from showing:
  *
- * And when it asks for the map. A contact page is built fresh for each
- * person, so this map is a new WebGL canvas every time somebody moves down
- * the list. Two rules keep that from showing, and both are timing, which the
- * "timing" block pins down on a fake clock:
+ *   1. The map is built only once the same pin holds still for SETTLE_MS.
+ *   2. The placeholder holds until the map says it has loaded, and the map
+ *      fades up through it.
  *
- *   1. The map is built only once the same pin has held still for
- *      SETTLE_MS. Pass through a person and nothing is built at all.
- *   2. The placeholder holds until the map says it has loaded. The map fades
- *      up through it, so the empty canvas is never on screen.
- *
- * A check that no map is drawn proves nothing before that wait is over, so
- * the two such checks that are not about timing (over the map page, and
- * for an address with no pin) run on the fake clock too.
+ * A check that no map is drawn proves nothing before that wait, so the two
+ * such checks that are not about timing run on the fake clock too.
  */
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -189,11 +181,9 @@ describe("LocationMiniMap", () => {
 
   describe("timing", () => {
     /**
-     * Move time on by `ms` and let React finish.
-     *
-     * The map is behind `React.lazy`, which resolves in a microtask rather
-     * than on a timer, so the flush has to follow the clock. `waitFor` is no
-     * use here: it polls on the same fake clock this test is driving.
+     * Move time on by `ms` and let React finish. The map is behind
+     * `React.lazy`, which resolves in a microtask, so the flush follows the
+     * clock. `waitFor` would poll on the same fake clock.
      */
     async function tick(ms: number) {
       await act(async () => {

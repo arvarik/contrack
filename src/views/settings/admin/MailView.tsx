@@ -1,8 +1,6 @@
 /**
- * MailView — the Outgoing mail admin page at /settings/admin/mail.
- *
- * Configures the SMTP server that sends invitations, password resets,
- * and magic links.
+ * The Outgoing mail admin page: the SMTP server that sends invitations,
+ * password resets and magic links.
  */
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -280,8 +278,7 @@ export const MailView = () => {
             />
           </div>
 
-          {/* The destructive act on the left, apart from the others. Save,
-              the form's one call to action, ends the row. */}
+          {/* The destructive act sits apart on the left. Save ends the row. */}
           <div className="flex flex-wrap items-center justify-end gap-3 pt-1">
             {isSettings && (
               <button

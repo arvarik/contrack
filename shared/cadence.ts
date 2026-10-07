@@ -1,32 +1,17 @@
 /**
- * How often a person wants to keep up with a tracked contact.
+ * How often a person wants to keep up with a tracked contact. Every menu
+ * offers `CADENCE_CHOICES`: Weekly, Monthly, Quarterly (90 days, the account
+ * default) and Yearly.
  *
- * Track says who. Cadence says how often. The app offers four cadences, one
- * word each: Weekly, Monthly, Quarterly and Yearly. The Track menu on a
- * contact page, the bulk cadence menu on the Tracked page and the Default
- * cadence preference all read `CADENCE_CHOICES`.
+ * The API takes any positive number of days. A value off the four choices
+ * has words of its own ("Every 2 months"), and a menu shows it as one more
+ * row (`cadenceOptions`), so a menu never claims a cadence the contact does
+ * not have.
  *
- * Quarterly stays on purpose. Ninety days is the account default
- * (`DEFAULT_CADENCE_DAYS`) and most tracked contacts already have it, so a
- * list without it would leave most contacts on a cadence the menu has no
- * name for.
- *
- * Before 2.0 the menus offered every 2 months (60 days) and every 6 months
- * (180 days) as well. What was saved then keeps working. The preference
- * still accepts both (`CADENCE_DAYS`, the accepted days, is a longer list
- * than the four choices), and the API takes any positive number of days for
- * a contact. A value off the four choices has words of its own ("Every 2
- * months"), and a menu shows it as one more row in its place in the order
- * (`cadenceOptions`), so a menu never claims a cadence the contact or the
- * account does not have.
- *
- * The cadence is set when a contact is tracked (see
- * `applyTrackingRules` in server/services/contactService), and the score's
- * recency signal and the catch-up clock both read it.
- *
- * This file imports nothing, so the server and the client both read it.
- *
- * @module shared/cadence
+ * Set when a contact is tracked (`applyTrackingRules` in
+ * server/services/contactService). The score's recency signal and the
+ * catch-up clock read it. This file imports nothing, so the server and the
+ * client both read it.
  */
 
 interface CadenceChoice {
@@ -44,10 +29,9 @@ export const CADENCE_CHOICES: readonly CadenceChoice[] = [
 ] as const;
 
 /**
- * Every value the Default cadence preference accepts, as a tuple the
- * preference schema can use: the four choices, and 60 and 180, which the
- * menus offered before 2.0. A preference saved at either still loads, and
- * the Default cadence select shows it as a fifth option until it changes.
+ * Every value the Default cadence preference accepts: the four choices, and
+ * 60 and 180 for preferences saved at either. The select shows such a value
+ * as a fifth option until it changes.
  */
 export const CADENCE_DAYS = [7, 30, 60, 90, 180, 365] as const;
 export type CadenceDays = (typeof CADENCE_DAYS)[number];
@@ -92,12 +76,9 @@ const listedLabel = (days: number): string | null =>
   CADENCE_CHOICES.find((choice) => choice.days === days)?.label ?? null;
 
 /**
- * A cadence in words.
- *
- * "Quarterly" for a listed value, "Every 2 months" or "Every 45 days" for
- * one off the list. `sentence: true` gives the lowercase form for the middle
- * of a sentence: "Tracking Ada Lovelace, quarterly" and "Ada Lovelace,
- * every 2 months".
+ * A cadence in words: "Quarterly", or "Every 2 months" off the list.
+ * `sentence: true` lowercases it for mid-sentence use: "Tracking Rowan Vale,
+ * quarterly".
  */
 export function describeCadence(
   days: number,
@@ -116,11 +97,9 @@ export function shortCadence(days: number): string {
 }
 
 /**
- * The days a menu of cadences lists: the four choices, and each extra value
- * the menu has to show as well, such as a contact's cadence or a stored
- * preference off the list. In order, from the most often to the least, with
- * no value twice. An extra that is not a positive whole number of days is
- * left out.
+ * The days a cadence menu lists: the four choices and each extra value it
+ * must show, most often first, none twice. An extra that is not a positive
+ * whole number is left out.
  */
 export function cadenceOptions(...extra: number[]): number[] {
   const days = new Set(CADENCE_CHOICES.map((choice) => choice.days));

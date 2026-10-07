@@ -13,23 +13,9 @@ import { ProvidersSection } from "./ProvidersSection";
 import { ModelsSection } from "./ModelsSection";
 import { WebSearchSection } from "./WebSearchSection";
 
-// ---------------------------------------------------------------------------
-// AISettingsView — Settings → Administration → AI
-// ---------------------------------------------------------------------------
-// Every AI setting of the instance, in one place, in the order a person
-// reads them:
-//
-//   1. Use AI on this instance: the switch that overrules everything below.
-//   2. What each feature uses: whether each feature works, and what it runs
-//      on, with a link from each part to its control. With no provider it
-//      is the page's empty state.
-//   3. Providers: the keys and the OpenAI-compatible servers.
-//   4. Models: the Fast, Strong and embedding models, and the reranker.
-//   5. Web search: the switch, the web search model, SearXNG and the engine.
-//
-// Every model defaults to Automatic, so someone who pastes one key and never
-// opens this page gets sensible behavior with zero configuration.
-// ---------------------------------------------------------------------------
+// Settings → Administration → AI: every AI setting of the instance, in reading
+// order. Every model defaults to Automatic, so one pasted key works with no
+// other setup.
 
 export const AISettingsView = () => {
   const { data: settings, isLoading } = useAISettings();
@@ -59,9 +45,8 @@ export const AISettingsView = () => {
 
   return (
     <div className={cn(SETTINGS_PAGE, "space-y-8")}>
-      {/* Above everything, because it overrules everything: while it is off,
-        no key below is used, for any account. AI_DISABLED on the server
-        holds it off, so the switch cannot turn AI on and says why. */}
+      {/* First, because it overrules everything below. AI_DISABLED on the
+          server locks it off, and the row says why. */}
       <div className={SETTINGS_CARD}>
         <SettingRow
           id="ai-instance"

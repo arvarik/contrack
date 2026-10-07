@@ -1,33 +1,19 @@
 /**
- * VirtualRows: a long list that draws only the rows near the screen.
+ * A long list that draws only the rows near the screen. Drawing every row,
+ * 5,824 contacts took 44 s to show the Manual merge tab.
  *
- * The Duplicates picker and the Enrichment list drew every contact. With
- * 5,824 contacts that was 5,824 rows and 5,824 avatar images, and the
- * Manual merge tab took 44 s to show its search box. This list draws the
- * rows in and near the scroller's view, about twenty, and moves them as the
- * scroller moves.
+ * 1. Up to `VIRTUAL_ROWS` rows it is a plain list, so jsdom (no layout) sees
+ *    every row.
+ * 2. Past that it draws the rows the virtualizer asks for, in the nearest
+ *    scrolling ancestor (`lib/scrollParent`). The box keeps the full height,
+ *    so the scrollbar is true. With no scrolling ancestor it is a plain list.
+ * 3. The list's distance from the scroller's top is `scrollMargin`. Content
+ *    above can change height, so it is measured after every commit and saved
+ *    only when it moves.
+ * 4. Each drawn row is measured, so a tall row pushes the rows under it.
  *
- * 1. Up to `VIRTUAL_ROWS` rows it is a plain list: every row is in the DOM,
- *    in order, so a short list needs no measuring, and a unit test in jsdom
- *    (which has no layout) sees every row.
- * 2. Past that it finds the nearest ancestor that scrolls
- *    (`lib/scrollParent`), the page's one scroller or a box of its own, and
- *    draws the rows the virtualizer asks for. The box keeps the list's full
- *    height, so the scrollbar is true to the whole list. The first render
- *    draws the empty box, and the rows follow before the first paint. With
- *    no ancestor that scrolls, the list is a plain list again.
- * 3. The list's distance from the top of the scroller's content is the
- *    virtualizer's `scrollMargin`. Something above the list can change
- *    height (the picker's chips), so the distance is measured again after
- *    every commit, and saved only when it moves.
- * 4. Each row is measured once it is drawn, so a row taller than the
- *    estimate pushes the rows under it down, and nothing overlaps.
- *
- * The gap between rows is `gap`, in px, and not a `space-y` class: a margin
- * on a row that is placed by `transform` moves the row without moving the
- * next one.
- *
- * @module components/ui/VirtualRows
+ * The gap is `gap` in px, not `space-y`: a margin on a row placed by
+ * `transform` does not move the next row.
  */
 import React, { useLayoutEffect, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -70,9 +56,8 @@ export function VirtualRows<T>({
     }
   }, [long]);
 
-  // After every commit: something above the list may have changed height.
-  // No list of dependencies on purpose. It cannot loop: the offset does not
-  // depend on the margin, and the margin is saved only when it moves.
+  // After every commit: something above may have changed height. It cannot
+  // loop: the offset does not depend on the margin, saved only when it moves.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useLayoutEffect(() => {
     const list = listRef.current;

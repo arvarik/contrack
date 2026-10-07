@@ -1,11 +1,6 @@
 /**
- * ConnectorCard — displays a single configured connector.
- *
- * Shows kind icon, name, status badge, sync schedules, last run statistics,
- * inline error or reauth states, and an action menu (Sync now, Pause/Resume,
- * Edit, Run history, Remove).
- *
- * @module views/settings/connectors/ConnectorCard
+ * ConnectorCard: one connector, with its status, schedule, last run, any
+ * error or sign-in state, and its action menu.
  */
 
 import React, { useState } from "react";
@@ -183,7 +178,6 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
   return (
     <>
       <div className={cn(CARD, "p-4 space-y-3")}>
-        {/* Header row */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div
@@ -249,7 +243,6 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
           />
         </div>
 
-        {/* Syncing indicator */}
         {sync.isPending && (
           <div
             role="status"
@@ -260,14 +253,12 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
           </div>
         )}
 
-        {/* Last run stats */}
         {statsLine && !sync.isPending && (
           <p className="text-xs text-on-surface-variant">
             Last sync: {statsLine}
           </p>
         )}
 
-        {/* Error state */}
         {connector.status === "error" && connector.lastError && (
           <div
             role="alert"
@@ -299,7 +290,6 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
           </div>
         )}
 
-        {/* Needs reauth state */}
         {connector.status === "needs_reauth" && (
           <div
             role="alert"
@@ -332,7 +322,6 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
         )}
       </div>
 
-      {/* Delete confirmation dialog */}
       <ConfirmDialog
         isOpen={deleteConfirmOpen}
         onClose={() => setDeleteConfirmOpen(false)}

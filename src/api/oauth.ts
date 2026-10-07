@@ -1,8 +1,4 @@
-/**
- * The consent page's two calls (server/routes/oauth.ts).
- *
- * @module api/oauth
- */
+/** The consent page's two calls (server/routes/oauth.ts). */
 
 import { apiJson, jsonBody } from "./client";
 import { oauthRoutes } from "../../shared/contracts/oauth";

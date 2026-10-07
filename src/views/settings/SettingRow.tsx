@@ -1,30 +1,11 @@
 /**
- * SettingRow — an addressable row for one setting or preference.
+ * One setting, addressable by its id. A hash link scrolls to the row and
+ * flashes the selected tint for 1.2 s, with no ring, since a ring is the
+ * focus ring's look. Rows space themselves 32 px apart with no line.
  *
- * Each setting sits in a SettingRow with an id. Hash links scroll to the row
- * and flash its background once for 1.2 seconds: the selected tint, with no
- * ring, since a ring is the focus ring's look.
- *
- * Rows sit on a card and space themselves apart: 32 px between two rows and
- * no line, since "Lines are a failure of hierarchy". The flash reaches 12 px
- * past the text on each side, so the words do not touch its edge.
- *
- * The control sits at the row's right edge from `sm`. On a phone a wide
- * control (a `Segmented`, a `Select`) drops under the text and takes the
- * row's width, and a small one (a `Switch`, a stepper) stays beside the
- * title when the row is `inline`, the way a phone's own settings draw it.
- * A control too wide for the edge at any width (a grid of choices, a field
- * and its button) sits under the text when the row is `below`.
- *
- * A preference whose value is not its default says so with one quiet mark:
- * a 6 px accent dot after the title (`CHANGED_MARK`), named "Changed from
- * the default" for a screen reader and a pointer. The row tells the page
- * which key it holds (`useResetScopeKey`), and the page ends with one
- * "Reset to defaults" button while any of its keys is changed
- * (`ResetToDefaults`). A value set back to its default by hand takes its
- * dot away, and the button goes with the last one.
- *
- * That pair is the app's one way of showing a value that is off its default.
+ * A preference off its default shows a dot after the title (`CHANGED_MARK`)
+ * and registers its key for the page's `ResetToDefaults` button. That pair
+ * is the app's one way to show a value off its default.
  */
 import React, {
   createContext,
@@ -39,31 +20,24 @@ import type { Preferences } from "../../api/preferences";
 import { cn } from "../../lib/utils";
 import { CHANGED_MARK } from "../../lib/styles";
 import { useResetScopeKey } from "./ResetToDefaults";
+import { Switch } from "../../components/ui/Switch";
 
 interface SettingRowProps {
-  /** Stable kebab-case fragment id. */
+  /** Stable kebab-case hash id. */
   id: string;
   title: string;
   description: React.ReactNode;
   children?: React.ReactNode;
-  /** Key in Preferences if this row controls an account preference. */
   prefKey?: keyof Preferences;
-  /**
-   * The control is small (a switch, a stepper), so on a phone it stays at
-   * the right of the title instead of dropping under the text.
-   */
+  /** A small control (a switch, a stepper) stays beside the title on a phone. */
   inline?: boolean;
-  /** The control is wide, so it sits under the text at every width. */
+  /** A wide control sits under the text at every width. */
   below?: boolean;
 }
 
 const CHANGED_LABEL = "Changed from the default";
 
-/**
- * The level of a row's title. A row straight under the page's h1 is an h2,
- * so headings never skip a level. A section with its own h2 wraps its rows
- * in `RowsUnderHeading`, and they become h3.
- */
+/** Row titles are h2 under the page's h1, so headings never skip a level. */
 const RowHeading = createContext<"h2" | "h3">("h2");
 
 /** Rows under a section's h2: their titles are h3. */
@@ -74,11 +48,8 @@ export const RowsUnderHeading = ({
 }) => <RowHeading.Provider value="h3">{children}</RowHeading.Provider>;
 
 /**
- * The target of a settings search result: when the location's hash is `id`,
- * scroll the element into view, give it focus for a screen reader, and
- * flash it for 1.2 seconds. `SettingRow` uses it, and so does any other
- * element a search result links to (an Account section, a General card).
- * Give the element `tabIndex={-1}` so it can take the focus.
+ * A search result's target: when the hash is `id`, scroll to the element,
+ * focus it and flash it for 1.2 s. The element needs `tabIndex={-1}`.
  */
 export function useHashTarget<T extends HTMLElement>(id: string) {
   const location = useLocation();
@@ -124,13 +95,11 @@ export const SettingRow = ({
       ref={rowRef}
       tabIndex={-1}
       className={cn(
-        // No outline: the row is a scroll target that takes focus for a
-        // screen reader, not a control, and the flash below is its
-        // highlight.
+        // No outline: the row takes focus for a screen reader, not as a
+        // control, and the flash is its highlight.
         "scroll-mt-20 outline-none rounded-xl transition-colors duration-(--dur-slow)",
-        // 12 px of room each side for the flash, taken back by the margin,
-        // and 32 px between two rows. The first and the last row keep 8 px
-        // above and below for the flash, inside the card's own padding.
+        // 12 px each side for the flash, taken back by the margin. The first
+        // and last rows keep 8 px for the flash inside the card's padding.
         "-mx-3 px-3 py-4 first:-mt-2 first:pt-2 last:-mb-2 last:pb-2",
         flashing && "flash bg-primary/10",
       )}
@@ -174,5 +143,39 @@ export const SettingRow = ({
           ))}
       </div>
     </div>
+  );
+};
+
+type BooleanPref = {
+  [K in keyof Preferences]: Preferences[K] extends boolean ? K : never;
+}[keyof Preferences];
+
+/** A row whose control is one on/off preference, named by the row's title. */
+export const PrefSwitchRow = ({
+  id,
+  title,
+  prefKey,
+  description,
+}: {
+  id: string;
+  title: string;
+  prefKey: BooleanPref;
+  description: string;
+}) => {
+  const { preferences, setPreference } = usePreferences();
+  return (
+    <SettingRow
+      id={id}
+      title={title}
+      prefKey={prefKey}
+      description={description}
+      inline
+    >
+      <Switch
+        label={title}
+        checked={preferences[prefKey]}
+        onChange={(next) => setPreference(prefKey, next)}
+      />
+    </SettingRow>
   );
 };

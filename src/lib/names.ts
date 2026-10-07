@@ -1,18 +1,11 @@
 /**
- * names.ts — one name per destination.
- *
- * The same page used to carry three names depending on where you met it:
- * "Ask AI" in the tab bar, "AI Search" in the sidebar and the palette, "Ask
- * Contrack" on the page itself. A person who learns a place by one label and
- * then looks for it under another is lost in their own app. Every surface that
- * names a destination reads it from here: the sidebar, the tab bar, the command
- * palette, the shortcuts dialog, document titles and the page headings.
+ * One name per destination, so a page is called the same in the sidebar,
+ * the tab bar, the palette, the shortcuts dialog, the document title and its
+ * heading.
  *
  *   label        the visible text and the accessible name of a link to it
  *   title        the document title while the page is open
  *   description  one plain sentence about what the page is for
- *
- * @module lib/names
  */
 
 interface DestinationName {

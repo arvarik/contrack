@@ -9,7 +9,7 @@ npm run brand:icons   # writes public/ and docs/brand/, then commit what it writ
 ```
 
 Never edit a generated file by hand. Change the drawing, the sizes or the
-colours in `src/assets/corvidPaths.ts`, run the script, and commit the result.
+colors in `src/assets/corvidPaths.ts`, run the script, and commit the result.
 `tests/unit/frontend/brand/icons.test.ts` fails when a committed SVG differs from a
 fresh render.
 
@@ -50,16 +50,16 @@ Strokes are in the mark's 100-unit box.
   512 px launcher icon shows at about 48 dp, so it takes `medium`.
 - **`tiny` keeps the silhouette.** At 16 pixels there is room for the C, the
   head with its beak, the wing and the long outer tail. The chest and the
-  inner feather merge with their neighbours, and the eye is less than a pixel.
+  inner feather merge with their neighbors, and the eye is less than a pixel.
 - **The two smallest favicons are fitted to the pixel grid.** The script
   tries the bird at every eighth of a pixel and keeps the shift that leaves
   the least blur.
 - The mark in the app keeps the logo's own weight, because the rig animates
   those strokes. The thinking bird, at 16 to 20 px, is `small`.
 
-## Colour
+## Color
 
-| Colour             | Hex       | Token                        | Use                                        |
+| Color              | Hex       | Token                        | Use                                        |
 | ------------------ | --------- | ---------------------------- | ------------------------------------------ |
 | Primary            | `#006a91` | `--color-primary`, light     | The mark on a light ground                 |
 | Primary, dark      | `#6ec6ee` | `--color-primary`, dark      | The mark on a dark ground                  |
@@ -97,12 +97,12 @@ the soft edge of a thin stroke.
 
 ![The four versions of the mark on their grounds](corvid-mark-variants.png)
 
-| File                    | Use                                                   |
-| ----------------------- | ----------------------------------------------------- |
-| `corvid-mark.svg`       | A light ground. The primary, with the cyan eye.       |
-| `corvid-mark-dark.svg`  | A dark ground. The dark primary and the dark eye.     |
-| `corvid-mark-black.svg` | One colour: print, embossing, a surface with one ink. |
-| `corvid-mark-white.svg` | One colour, reversed out of a photograph or a colour. |
+| File                    | Use                                                  |
+| ----------------------- | ---------------------------------------------------- |
+| `corvid-mark.svg`       | A light ground. The primary, with the cyan eye.      |
+| `corvid-mark-dark.svg`  | A dark ground. The dark primary and the dark eye.    |
+| `corvid-mark-black.svg` | One color: print, embossing, a surface with one ink. |
+| `corvid-mark-white.svg` | One color, reversed out of a photograph or a color.  |
 
 `corvid-mark.png` and `corvid-mark-dark.png` are the first two at 512 px.
 
@@ -116,7 +116,7 @@ and `contrack-lockup-dark.svg` for a dark one. Each has a PNG at 240 px tall.
 
 - The name is set in Manrope ExtraBold, tracked at -0.025 em, as every
   heading in the app.
-- The name is 0.7 of the mark's height, and its ink is centred on the mark.
+- The name is 0.7 of the mark's height, and its ink is centered on the mark.
 - The gap between the mark's box and the name is 0.29 of the mark's height.
   These are the proportions of `<Wordmark>` in the app.
 - The words are outlines, not text, so the lockup looks the same on every
@@ -142,9 +142,9 @@ strokes and the name are the static lockup's. Only the bird moves.
 - **It moves inside an `<img>`.** A README image runs no script, so each
   stroke and the eye are animated with SMIL `<animate>`, which every current
   browser plays. The script samples the loop at 60 frames a second and keeps
-  a frame only where a straight line between its neighbours would miss it by
+  a frame only where a straight line between its neighbors would miss it by
   more than a quarter unit. Each file is about 100 KB.
-- **It honours reduced motion.** With `prefers-reduced-motion: reduce`, the
+- **It honors reduced motion.** With `prefers-reduced-motion: reduce`, the
   file shows the still bird in place of the moving one.
 
 ## The app icon
@@ -227,11 +227,11 @@ The kit, in this folder:
 
 - ✅ Use the generated files, at the size their master is for.
 - ✅ Use the dark version on a dark ground, and the white one on a photograph.
-- ✅ Keep the eye cyan in the colour versions.
+- ✅ Keep the eye cyan in the color versions.
 - ❌ Do not redraw, stretch, rotate or slant the mark.
-- ❌ Do not recolour the eye, or add a shadow, an outline or a gradient to
+- ❌ Do not recolor the eye, or add a shadow, an outline or a gradient to
   the mark.
-- ❌ Do not put the colour mark on a busy photograph. Use the white one.
+- ❌ Do not put the color mark on a busy photograph. Use the white one.
 - ❌ Do not put white on the branding gradient's end, `#47befd`. The tile
   stops at `#2795c9` for that reason.
 - ❌ Do not scale one weight to every size. Each size has its master.

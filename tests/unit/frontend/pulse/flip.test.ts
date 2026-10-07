@@ -1,12 +1,10 @@
 // @vitest-environment jsdom
-// =============================================================================
 // The slides of the Pulse grid
-// =============================================================================
+//
 // `createFlip` measures the cards before a change and slides each one that
 // moved from its old place to its new one, on the Web Animations API, with
 // `transform` alone. jsdom lays nothing out and animates nothing, so the
 // boxes and `animate` are stand-ins here.
-// =============================================================================
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EASE_CSS, createFlip } from "../../../../src/views/pulse/lib/flip";
 import { DURATION } from "../../../../src/lib/motion";

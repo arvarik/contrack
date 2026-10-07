@@ -1,16 +1,10 @@
-// =============================================================================
-// AI Layer — the web search policy
-// =============================================================================
-// Two choices an admin makes about contact research's web searches, in
-// Settings → Administration → AI → Web search:
-//
-//   - "Allow web search". Off stops every web search: the web search model's
-//     own and SearXNG's. Research refuses to start (`isResearchOff`).
-//   - "Web search engine": what research searches with when an account keeps
-//     "Instance default": the web search model, SearXNG, or both.
-//
-// Both live in one app setting, `ai.webSearch`.
-// =============================================================================
+// The web search policy: two choices an admin makes about contact research in
+// Settings → Administration → AI → Web search, kept in one app setting,
+// `ai.webSearch`.
+// - "Allow web search": off stops every web search, the web search model's and
+//   SearXNG's, and research refuses to start (`isResearchOff`).
+// - "Web search engine": what research uses when an account keeps "Instance
+//   default": the web search model, SearXNG, or both.
 
 import {
   getSetting,

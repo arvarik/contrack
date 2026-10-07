@@ -1,11 +1,6 @@
 /**
- * MagicLinkLanding — screen where `/signin-link?token=` lands.
- *
- * Automatically redeems the token on mount and signs the user in.
- * If the link is dead (expired or already used), shows a dead-link message
- * with a button to return to the sign-in screen.
- *
- * @module components/auth/MagicLinkLanding
+ * Where `/signin-link?token=` lands: redeems the token on mount. A spent or
+ * expired link says so, with a way back to sign-in.
  */
 
 import { useEffect, useState } from "react";

@@ -1,16 +1,8 @@
 /**
- * AuditView — what has been done on this instance, newest first.
- *
- * The log answers one question: who did that, and when. It is read when
- * something has gone wrong or somebody has asked, which is why it pages
- * rather than truncating and why the filter narrows on the server rather than
- * on the page — an audit log that quietly stops at fifty rows is worse than
- * one that says it has more.
- *
- * `details` never carries a password, a token, an invitation secret or a
- * provider key. `auditService` redacts anything credential-shaped beside the
- * insert rather than trusting each call site, so what arrives here is already
- * safe to show. It is still rendered as plain text and never as markup.
+ * The instance's audit log, newest first: who did what, and when. It pages
+ * and filters on the server, so it never quietly stops at one page.
+ * `auditService` redacts credentials from `details` before the insert, and
+ * this page still renders `details` as plain text, never as markup.
  */
 import { useState } from "react";
 import {
@@ -49,11 +41,9 @@ const filterClass = (active: boolean) =>
   );
 
 /**
- * What each action looks like at a glance.
- *
- * The tone is about consequence, not about success. `auth.login.failed` is
- * amber because a run of them is the thing worth spotting; `user.deleted` is
- * red because it cannot be undone.
+ * Each action's icon, tone and label. The tone shows consequence, not
+ * success: a run of failed sign-ins is worth spotting, so it is amber, and a
+ * deleted user is red because it cannot be undone.
  */
 const LOOK: Record<
   string,
@@ -227,11 +217,8 @@ function actorLine(entry: AuditEntry): string {
 const FALLBACK = { icon: ScrollText, tone: "neutral" as BadgeTone, label: "" };
 
 /**
- * The `details` object, in one readable line.
- *
- * Rendered from the object rather than from a stored sentence, so a row
- * written by a version that recorded a different set of keys still shows what
- * it has instead of nothing.
+ * The `details` object as one line. It is built from the keys, not from a
+ * stored sentence, so a row with an older set of keys still shows what it has.
  */
 function describeDetails(details: Record<string, unknown> | null): string {
   if (!details) return "";
@@ -244,10 +231,8 @@ function describeDetails(details: Record<string, unknown> | null): string {
 const EntryRow = ({ entry }: { entry: AuditEntry }) => {
   const look = LOOK[entry.action] ?? FALLBACK;
   const Icon = look.icon;
-  // `details` is deliberately null for a settings change: the service records
-  // the key that changed and never the value, and the key is in `targetId`.
-  // Reading only `details` therefore rendered every settings row as the
-  // identical line "Setting changed by ada", whatever it was that changed.
+  // A settings change has null `details`, because the service never records
+  // the value. The changed key is in `targetId`, so the row falls back to it.
   // A failed sign-in says all it has in `actorLine`.
   const detail =
     entry.action === "auth.login.failed"
@@ -284,7 +269,7 @@ const EntryRow = ({ entry }: { entry: AuditEntry }) => {
           </p>
         )}
         {entry.ip && (
-          // Not `/80`. The variant colour at 80 percent measures 4.01:1 on
+          // Not `/80`. The variant color at 80 percent measures 4.01:1 on
           // white and 3.87:1 on the zebra row, both under AA.
           <p className="text-xs text-on-surface-variant font-mono mt-0.5">
             {entry.ip}

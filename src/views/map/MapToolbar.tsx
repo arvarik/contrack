@@ -1,24 +1,11 @@
 /**
- * MapToolbar — Top-left filter toolbar and mobile sheet for MapView.
+ * The map's filter toolbar at the top left, and its sheet below `lg`: the
+ * filter box with facet pills and suggestions, "Go to" place search, Fit
+ * all, the layer switch, Views and Select.
  *
- * Provides:
- * - Search & facet filter input powered by `useMapFilter`
- * - Facet pills for locked filters (including `list:`, `near:`), and "Clear
- *   all" beside them while any filter is on, the overdue filter too
- * - Autocomplete dropdown for facet prefixes (including `list:` and `tag:`)
- * - "Go to" place search mode with `flyTo` zoom 10, a toast naming the
- *   place it found, and the server's own words inline when it fails
- * - "Fit all" button, which the page fits (F does the same)
- * - Mobile filter sheet via Modal below `lg` breakpoint
- * - "0 of N match" empty state
- * - "Select" menu (all in view, box, lasso) as an `ActionMenu`, so it reads
- *   and behaves like every other menu in the app. Box and lasso need a
- *   pointer, so a touch screen gets only All in view, and Box select names
- *   the keyboard's way: move the map to the people, then All in view
- * - Focus follows the field that shows: "Go to" puts it in the place box,
- *   and Enter or Escape there puts it back in the filter box
- *
- * @module views/map/MapToolbar
+ * Box and lasso select need a pointer, so a touch screen gets only All in
+ * view. Focus follows the field that shows: "Go to" puts it in the place
+ * box, and Enter or Escape there puts it back in the filter box.
  */
 import React, {
   useCallback,
@@ -69,11 +56,7 @@ export interface MapToolbarHandle {
   focusFilter: () => void;
 }
 
-/**
- * A toolbar toggle's resting and selected looks. Selected is the tint and its
- * ink. The border turns transparent rather than going away, so the toggle
- * keeps its size.
- */
+// A selected toggle keeps a transparent border, so it keeps its size.
 const TOGGLE_ON = cn(SELECTED_TINT, "border-transparent");
 const TOGGLE_OFF =
   "state-layer bg-surface-container-high/60 text-on-surface border-outline-variant/30";
@@ -94,9 +77,8 @@ interface MapToolbarProps {
   /** The page's handle on the toolbar, for the "/" key. */
   handleRef?: React.Ref<MapToolbarHandle>;
   /**
-   * How much map an open contact leaves at the toolbar's left, in px. Null
-   * or left out: the whole page. The toolbar keeps inside it, 16 px clear
-   * of the contact, and steps aside under `MIN_OPEN_PX`.
+   * How much map an open contact leaves at the toolbar's left, in px, or
+   * null for the whole page. Under `MIN_OPEN_PX` the toolbar steps aside.
    */
   room?: number | null;
   onFitAll: () => void;
@@ -133,23 +115,18 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
   const [gotoLoading, setGotoLoading] = useState(false);
   const [gotoError, setGotoError] = useState<string | null>(null);
   const [isMobileSheetOpen, setIsMobileSheetOpen] = useState(false);
-  /**
-   * "/" focuses the filter, and the placeholder says so where a key can be
-   * pressed: under a mouse or a trackpad. A touch screen does not show it,
-   * and has no Shift+drag or lasso either.
-   */
+  // A fine pointer gets the "/" hint, Shift+drag and the lasso. A touch
+  // screen gets none of them.
   const keyHint = useMediaQuery("(pointer: fine)");
   const isWide = useMediaQuery(WIDE_QUERY);
-  // The filter box that mounts next takes the focus: back from Go to, or
-  // in the sheet that "/" opened below `lg`. The box that takes it clears
-  // the ask. The sheet's box mounts a render later than the sheet.
+  // Asks the filter box that mounts next to take the focus (back from Go to,
+  // or in the sheet "/" opened). The sheet's box mounts a render late.
   const [focusFilter, setFocusFilter] = useState(false);
-  // The facet suggestions show under the box that has the focus, and only
-  // there: open under a box that had lost it, they took Enter from a pin.
+  // The facet suggestions show only under the focused box: under a box that
+  // lost the focus, they take Enter from a pin.
   const [suggestIn, setSuggestIn] = useState<"bar" | "sheet" | null>(null);
 
-  // `ActionMenu` owns the Select menu. This mirrors its open state so the
-  // trigger keeps its active look while the menu is open.
+  // Mirrors the Select `ActionMenu`'s open state for the trigger's look.
   const [selectMenuOpen, setSelectMenuOpen] = useState(false);
 
   const selectItems: ActionMenuItem[] = [
@@ -207,7 +184,6 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
     [barShows, leaveGoto, mode],
   );
 
-  // Go to place search
   const handleGoTo = useCallback(async () => {
     // The place search needs two characters, as the pin dialog's Find does.
     if (!map || gotoQuery.trim().length < 2) return;
@@ -243,7 +219,6 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
 
   const renderToolbarContent = (isMobile = false) => (
     <div className="flex flex-col gap-2 w-full">
-      {/* Top Input Row */}
       <div className="flex items-center gap-1.5 w-full">
         {/* Opaque while it has focus, so the map's labels do not show
             through the words being typed. */}
@@ -302,8 +277,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
                 key="goto"
                 type="text"
                 {...NO_AUTOCORRECT}
-                // It mounts when a person asks for it, so it takes the
-                // focus: the toggle kept it, and typing went nowhere.
+                // It mounts on request, so it takes the focus from the toggle.
                 // eslint-disable-next-line jsx-a11y/no-autofocus
                 autoFocus
                 value={gotoQuery}
@@ -341,7 +315,6 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
           )}
         </div>
 
-        {/* Go to Button */}
         <button
           type="button"
           onClick={() => {
@@ -358,7 +331,6 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
           {mode === "goto" ? "Filter" : "Go to"}
         </button>
 
-        {/* Fit All Button */}
         <button
           type="button"
           onClick={onFitAll}
@@ -377,7 +349,6 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
         {!isMobile && <PaletteButton className="shrink-0" />}
       </div>
 
-      {/* Place Not Found Error */}
       {mode === "goto" && gotoError && (
         <div
           role="alert"
@@ -387,8 +358,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
         </div>
       )}
 
-      {/* Facet Pills, and Clear all while a filter is on: text, pills or
-          the overdue filter on the bottom line */}
+      {/* Clear all shows for any filter, the bottom line's overdue one too. */}
       {mode === "filter" && filter.hasActiveFilter && (
         <div className="flex items-end gap-2 w-full">
           <div className="flex-1 min-w-0">
@@ -422,7 +392,6 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
         </div>
       )}
 
-      {/* Autocomplete Dropdown, under the box that has the focus */}
       {mode === "filter" &&
         filter.parsed.activePrefix &&
         suggestIn === (isMobile ? "sheet" : "bar") && (
@@ -436,16 +405,13 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
           </div>
         )}
 
-      {/* 0 of N match empty state. Clear all is beside the pills. */}
       {filter.hasActiveFilter && filter.matchCount === 0 && (
         <div className="text-xs px-3 py-1.5 text-on-surface-variant bg-surface-container-highest/80 rounded-xl border border-outline-variant/30">
           0 of {filter.totalCount} match
         </div>
       )}
 
-      {/* Desktop Row 2: Layer Segmented Control + Views Menu + Select Menu.
-          It wraps, Views and Select under the layers, when an open contact
-          leaves the toolbar narrow. */}
+      {/* Views and Select wrap under the layers in a narrow toolbar. */}
       {!isMobile && (
         <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
           <Segmented<MapLayer>
@@ -489,7 +455,6 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
         </div>
       )}
 
-      {/* Mobile Layer Control */}
       {isMobile && (
         <div className="pt-2 border-t border-outline-variant/20 flex flex-col gap-1.5">
           <span className="text-xs font-semibold text-on-surface">
@@ -504,7 +469,6 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
         </div>
       )}
 
-      {/* Mobile Views Menu */}
       {isMobile && onOpenSaveModal && (
         <div className="pt-2 border-t border-outline-variant/20 flex items-center justify-between">
           <span className="text-xs font-semibold text-on-surface">
@@ -529,7 +493,6 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
         </div>
       )}
 
-      {/* Mobile Select all in view */}
       {isMobile && onSelectInView && (
         <div className="pt-2 border-t border-outline-variant/20">
           <button
@@ -549,7 +512,6 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
 
   return (
     <>
-      {/* Desktop Toolbar */}
       {!cramped && (
         <div
           data-map-chrome="top"
@@ -564,7 +526,6 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
         </div>
       )}
 
-      {/* Mobile Toolbar Button */}
       {!cramped && (
         <div
           data-map-chrome="top"
@@ -607,7 +568,6 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
         </div>
       )}
 
-      {/* Mobile Filter Sheet Modal */}
       <Modal
         isOpen={isMobileSheetOpen}
         onClose={() => setIsMobileSheetOpen(false)}

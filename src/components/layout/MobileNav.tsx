@@ -1,17 +1,8 @@
 /**
- * MobileNav: the phone's tab bar, below `md`.
- *
- * Two things it did not do before: reserve room for the iOS home indicator
- * (the last row of pixels sat under it, so the labels were clipped on any
- * notched phone), and give each tab a real 44pt target — the taps landed on
- * a `px-3 py-1.5` box roughly 32pt tall. Both are fixed by `min-h-[3rem]`
- * plus `env(safe-area-inset-bottom)` padding.
- *
- * It marks the page a person pressed at once, before that page can draw
- * (`lib/pendingNav`). It is its own component, as the sidebar is, so the
- * mark re-renders the bar and not the page under it.
- *
- * @module components/layout/MobileNav
+ * The phone's tab bar, below `md`. Each tab is at least 44pt tall
+ * (`min-h-[3rem]`), and the bar pads for the home indicator. It marks the
+ * pressed page at once (`lib/pendingNav`), and is its own component so the
+ * mark redraws only the bar.
  */
 import { useContext } from "react";
 import { Link, useLocation, useMatch } from "react-router-dom";
@@ -52,15 +43,13 @@ export const MobileNav = () => {
   return (
     <nav
       aria-label="Primary"
-      // The map reads this to keep its centre above the bar (`insets.ts`).
+      // The map reads this to keep its center above the bar (`insets.ts`).
       data-covers-map="bottom"
       // `mobile-tabbar`: index.css hides the bar while a person types.
       className="mobile-tabbar md:hidden fixed bottom-0 left-0 w-full z-50 flex justify-around items-stretch px-1 pt-1.5 glass-panel rounded-t-2xl shadow-[0_-4px_16px_rgba(0,0,0,0.05)]"
       style={{
-        // The largest inset the home indicator or the browser's own bar can
-        // take, where the browser reports it (Chrome 135). The current
-        // inset changes as Chrome's bottom bar slides away, which made the
-        // tab bar jump while the page scrolled.
+        // The largest inset, where the browser reports it (Chrome 135): the
+        // current one changes as Chrome's bottom bar slides away.
         paddingBottom:
           "max(0.75rem, env(safe-area-max-inset-bottom, env(safe-area-inset-bottom)))",
         paddingLeft: "max(0.25rem, env(safe-area-inset-left))",
@@ -124,9 +113,8 @@ export const MobileNav = () => {
             active ? "text-primary" : "state-layer text-on-surface-variant",
           )}
         >
-          {/* Active pill sits behind the icon rather than recolouring the
-              whole tab, so the current tab is legible at a glance. It is the
-              selected tint, the same as the sidebar's current link. */}
+          {/* The current tab's pill sits behind the icon, in the selected
+              tint, like the sidebar's current link. */}
           <span
             className={cn(
               "flex items-center justify-center w-10 h-6 rounded-lg transition-colors",
@@ -135,9 +123,8 @@ export const MobileNav = () => {
           >
             <Icon className="w-5 h-5" />
           </span>
-          {/* 11 px bold, tight. "Ask Contrack" is about 69 px wide at this
-              tracking, and a 390 px phone gives each of the five tabs 72 px
-              inside its padding, so the label stays on one line. */}
+          {/* 11 px bold, tight: "Ask Contrack" (69 px) fits a 390 px phone's
+              72 px tab on one line. */}
           <span className="text-[11px] font-bold tracking-tight whitespace-nowrap">
             {label}
           </span>

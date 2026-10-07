@@ -1,11 +1,4 @@
-/**
- * Passkeys API client.
- *
- * Provides WebAuthn registration and authentication ceremonies using
- * `@simplewebauthn/browser`, and manages existing passkeys for an account.
- *
- * @module api/passkeys
- */
+/** Passkeys: the WebAuthn ceremonies, and the account's saved passkeys. */
 
 import {
   browserSupportsWebAuthn,
@@ -45,8 +38,8 @@ function isIpHost(hostname: string): boolean {
 }
 
 /**
- * Returns whether passkeys (WebAuthn) are supported in this browser context.
- * Needs secure context, PublicKeyCredential, and HTTPS or localhost (not an IP address).
+ * Whether this browser context can use passkeys: a secure context,
+ * PublicKeyCredential, and HTTPS or localhost (not an IP address).
  */
 export function passkeysSupported(): boolean {
   if (typeof window === "undefined") return false;
@@ -65,24 +58,17 @@ export function passkeysSupported(): boolean {
   return browserSupportsWebAuthn();
 }
 
-/**
- * Returns whether WebAuthn conditional UI (autofill) is supported.
- */
+/** Whether WebAuthn autofill (conditional UI) is supported. */
 export async function passkeyAutofillSupported(): Promise<boolean> {
   if (!passkeysSupported()) return false;
   return browserSupportsWebAuthnAutofill();
 }
 
-/**
- * Fetch all passkeys registered to the signed-in user and nudge status.
- */
+/** The account's passkeys, and whether to show the nudge. */
 export async function listPasskeys(): Promise<ListPasskeysResponse> {
   return apiJson<ListPasskeysResponse>("/auth/passkeys");
 }
 
-/**
- * Rename an existing passkey.
- */
 export async function renamePasskey(
   id: string,
   name: string,
@@ -97,27 +83,20 @@ export async function renamePasskey(
   return result.passkey;
 }
 
-/**
- * Delete a passkey.
- */
 export async function removePasskey(id: string): Promise<void> {
   await apiJson<{ ok: boolean }>(`/auth/passkeys/${id}`, {
     method: "DELETE",
   });
 }
 
-/**
- * Dismiss the first-run passkey nudge so it is not shown again.
- */
+/** Dismisses the first-run passkey nudge for good. */
 export async function dismissPasskeyNudge(): Promise<void> {
   await apiJson<{ ok: boolean }>("/auth/passkey-nudge/dismiss", {
     method: "POST",
   });
 }
 
-/**
- * Run the WebAuthn registration ceremony for the current user.
- */
+/** Runs the WebAuthn registration ceremony for the signed-in account. */
 export async function registerPasskey(): Promise<PasskeySummary> {
   const { ceremonyId, options } = await apiJson<{
     ceremonyId: string;
@@ -148,9 +127,7 @@ interface SignInWithPasskeyOptions {
   useBrowserAutofill?: boolean;
 }
 
-/**
- * Run the WebAuthn authentication ceremony to sign in.
- */
+/** Runs the WebAuthn sign-in ceremony. */
 export async function signInWithPasskey(
   options?: SignInWithPasskeyOptions,
 ): Promise<AccountUser> {

@@ -1,47 +1,30 @@
 /**
- * usePanelPlacement: a panel that opens over everything, where it fits.
+ * A panel (a menu or a listbox) that opens over everything, where it fits.
  *
- * A menu or a listbox drawn under its trigger has two enemies in the page
- * around it. The first is the window's edge: near the bottom or the side
- * the panel would run off screen, and a row nobody can reach is a row
- * nobody can choose. The second is the stacking order. A panel drawn inside
- * its trigger's box can be painted over by anything later in the page with
- * a z-index of its own, whatever z-index the panel carries: the Network
- * header is `sticky z-10`, the selected contact row is `z-10` too and comes
- * later, so the sort menu opened under the row and looked transparent.
+ * The panel goes into the browser's top layer through the Popover API
+ * (`popover="manual"` and `showPopover()`), above every stacking context and
+ * every `overflow: hidden`, so a later `z-10` in the page cannot paint over
+ * it. It stays where it is in the DOM, so a click inside it is a click inside
+ * its trigger's wrapper, a dialog's focus trap still sees its rows, and a
+ * screen reader finds it after its trigger. A browser without the API gets a
+ * fixed panel.
  *
- * So the panel goes into the browser's top layer, through the Popover API
- * (`popover="manual"` plus `showPopover()`). The top layer paints above every
- * stacking context and every `overflow: hidden`, and the panel stays where
- * it is in the DOM, so a click inside it is still a click inside its
- * trigger's wrapper, a dialog's focus trap still sees its rows, and a screen
- * reader still finds it right after its trigger. A browser without the API
- * ignores the attribute and gets the panel fixed in place, which is what it
- * had before.
+ * Placement is measured before the first paint, and again when `measureKey`
+ * changes, because a panel that loads its content grows:
  *
- * Placement is measured right after the panel opens and before the browser
- * paints it, and again when `measureKey` changes: a panel that loads its
- * content after it opens grows, and its first box no longer fits.
- *
- * 1. It sits under the trigger with a 4 px gap. Past the bottom of the
- *    window, with room above the trigger, it opens upwards.
- * 2. It lines up with the trigger's `align` edge. Past the side of the
- *    window, with room the other way, it lines up with the other edge.
- * 3. Whatever is left is clamped 8 px inside the window.
+ * 1. Under the trigger with a 4 px gap, or above it when the panel would
+ *    pass the bottom of the window and there is room above.
+ * 2. Lined up with the trigger's `align` edge, or the other edge when the
+ *    panel would pass the side of the window.
+ * 3. Clamped 8 px inside the window.
  *
  * A fixed panel does not move with the page, so a scroll that moves the
- * trigger closes the panel, and so does a resize that changes the width. A
- * resize that changes only the height, a phone's keyboard, places the panel
- * again a frame later. A scroll inside the panel (its own rows) does not.
- *
- * Escape inside the panel closes the panel and returns focus to the trigger,
- * and nothing else happens: the hook takes the key in the window's capture
- * phase, before a dialog around the panel (Radix listens on the document,
- * also in the capture phase) can read it as its own dismissal.
+ * trigger closes it, and so does a width change. A height change alone (a
+ * phone's keyboard) places it again a frame later. Escape in the panel
+ * closes it and returns focus to the trigger, taken in the window's capture
+ * phase before a Radix dialog around it can read it as its own dismissal.
  *
  * `ActionMenu` and `Select` share this, so the two open the same way.
- *
- * @module hooks/usePanelPlacement
  */
 import {
   useCallback,
@@ -190,12 +173,11 @@ export function usePanelPlacement({
 
   useEffect(() => {
     if (!open) return;
-    // A new height alone is a phone's keyboard coming or going. The sheet
-    // the trigger sits in moves with it, and a list left where it opened
-    // ended up far from its trigger. So the list is placed again one frame
-    // later, once the sheet has moved. Android resizes the window for the
-    // keyboard and iOS only the visual viewport, so both are heard. A new
-    // width closes the panel instead, in the effect below.
+    // A new height alone is a phone's keyboard coming or going, and the
+    // sheet the trigger sits in moves with it. So the list is placed again
+    // one frame later, once the sheet has moved. Android resizes the window
+    // for the keyboard and iOS only the visual viewport, so both are heard.
+    // A new width closes the panel instead, in the effect below.
     const width = window.innerWidth;
     let frame = 0;
     const onResize = () => {

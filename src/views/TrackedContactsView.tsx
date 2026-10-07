@@ -1,54 +1,14 @@
 /**
- * TrackedContactsView: the people you keep up with, and the people you don't.
+ * TrackedContactsView: the people you keep up with, and the people you don't,
+ * at `/settings/tracked`. The Tracked chip's Manage link and Pulse's Keeping
+ * up card also open it. The page scrolls itself, so the virtualized list has
+ * its own scroller.
  *
- * A settings page, under Your data, at `/settings/tracked`: the rail stays
- * beside it, the way it does beside every other settings page. It has two
- * more doors, the Tracked chip's Manage link on the Network page and the
- * Keeping up card on Pulse. It scrolls itself, so the virtualised list has
- * its own scroller, and the shell draws its header with Select in the
- * header's actions.
- *
- * From the top:
- *
- * 1. The shell's heading and one sentence.
- * 2. One card with the search box (name, company or role), the order, and
- *    two rows of filter pills, as on the Enrichment page
- *    (`lib/trackedFilters`):
- *
- *    ```
- *    [ Search by name, company or role ]  [Name|Last spoke|Recently tracked]
- *    TRACKING     All 5824 · Tracked 79 · Not tracked 5745
- *    LAST SPOKE   Any · Past month 12 · Past year 80 · Over a year ago 31 · Never
- *    ```
- *
- *    Each pill counts what it would show beside the other row's choice, so
- *    "Not tracked" and "Past month" together are the people most worth
- *    tracking next. The filters and the order live in the address, so Back
- *    from a contact returns to the same list, and a new filter clears the
- *    selection. Name is A to Z, Last spoke is the last interaction, newest
- *    first, and Recently tracked is `trackedAt`, newest first (Not tracked
- *    stays A to Z).
- * 3. The groups, each a section with a heading and a count: At risk,
- *    Fading, Strong, No interactions yet, Not tracked. The first four are
- *    the tracked contacts by `scoreView`. Each heading has an id
- *    (`#at-risk`, `#fading`, `#strong`, `#unscored`, `#not-tracked`) for
- *    the Keeping up card's links. An empty group is left out.
- * 4. A row: the ring, the name as a link, the company, the cadence in words
- *    ("quarterly", or "every 2 months" for a cadence off the four words),
- *    "3 weeks past due" when it is, "spoke 2 months ago" when there is
- *    an interaction, and a 44 px toggle named "Stop tracking Ada Lovelace" or
- *    "Track Ada Lovelace".
- * 5. Select mode, as on the Archived page: Select, Select all in each
- *    group's heading, Done, and a bar with Track, Stop tracking, a Cadence menu
- *    (the four cadences the app offers: Weekly, Monthly, Quarterly and
- *    Yearly) and the count. The same Undo toasts as the Network bar.
- * 6. Past 200 rows the list is virtualised, the way the Network list is:
- *    the groups flatten into one list of headings and rows.
- * 7. When no one is tracked, an `EmptyState` says so, and the Not tracked
- *    group under it is the way in. When the filters leave no one, an
- *    `EmptyState` offers to clear them.
- *
- * @module views/TrackedContactsView
+ * The groups are At risk, Fading, Strong, No interactions yet and Not
+ * tracked, by `scoreView`, with the empty ones left out. Each heading id
+ * (`#at-risk`, `#fading`, `#strong`, `#unscored`, `#not-tracked`) is a target
+ * for the Keeping up card's links. Past 200 rows the groups flatten into one
+ * virtualized list of headings and rows.
  */
 import React, {
   useCallback,
@@ -124,9 +84,7 @@ import { SettingsHeaderActions } from "./settings/SettingsHeader";
 import { SETTINGS_BOX } from "./settings/layout";
 import { SearchField } from "../components/ui/SearchField";
 
-// ═══════════════════════════════════════════════════════════════════════════
 // The groups
-// ═══════════════════════════════════════════════════════════════════════════
 
 type TrackedGroupId =
   "at-risk" | "fading" | "strong" | "unscored" | "not-tracked";
@@ -186,12 +144,8 @@ interface GroupOptions {
 
 /**
  * The five groups, in order, each sorted, with the empty ones left out.
- *
- * `query` narrows every group by name, company or role, and the two filters
- * (`lib/trackedFilters`) narrow them by tracking and by the last
- * interaction. `order` sorts the groups: by name, by the last interaction
- * (newest first, and never last), or by `trackedAt` (newest first). Not
- * tracked keeps A to Z for `recent`: nobody in it has a `trackedAt`.
+ * The `spoke` order puts no interaction last. Not tracked keeps A to Z for
+ * `recent`: nobody in it has a `trackedAt`.
  */
 export function groupContacts(
   contacts: readonly Contact[],
@@ -269,9 +223,7 @@ export function pastDue(
   return overshoot > 0 ? describePastDue(overshoot) : null;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
 // A row
-// ═══════════════════════════════════════════════════════════════════════════
 
 interface RowProps {
   contact: Contact;
@@ -305,9 +257,8 @@ const TrackedRow = React.memo(function TrackedRow({
     );
   }
   if (due) facts.push(<span key="due">{due}</span>);
-  // When you last spoke, "spoke 3 weeks ago" or "spoke last week": the
-  // fact that decides whom to track next. A row with no interaction says
-  // nothing, so a list of 5,000 new people is not 5,000 lines of "never".
+  // A row with no interaction says nothing, so a list of 5,000 new people
+  // is not 5,000 lines of "never".
   if (contact.lastContactedAt) {
     facts.push(
       <span key="spoke" title={formatDay(contact.lastContactedAt)}>
@@ -316,9 +267,8 @@ const TrackedRow = React.memo(function TrackedRow({
     );
   }
 
-  // In select mode the checkbox is the control: a real one, named for the
-  // contact, with the 44 px box from `hit-area`. The row itself is not a
-  // button, so the name inside it stays a link.
+  // The row is not a button, so the name inside it stays a link. In select
+  // mode the checkbox is the control.
   return (
     <div
       data-contact-id={contact.id}
@@ -356,11 +306,8 @@ const TrackedRow = React.memo(function TrackedRow({
         >
           {contact.name}
         </Link>
-        {/* The facts, a middle dot between two. Each dot sits in the gap
-            before its fact, and the line clips what falls outside it, so a
-            fact that wraps takes its dot out of sight: no line ends, or
-            starts, with a dot. The dot is decoration, and a screen reader
-            skips it. */}
+        {/* Each dot sits in the gap before its fact and the line clips it, so
+            a fact that wraps hides its dot: no line starts or ends with a dot. */}
         {facts.length > 0 && (
           <p className="flex flex-wrap items-center gap-x-3 overflow-hidden text-xs text-on-surface-variant">
             {facts.map((fact, index) => (
@@ -397,9 +344,7 @@ const TrackedRow = React.memo(function TrackedRow({
   );
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
 // A group heading
-// ═══════════════════════════════════════════════════════════════════════════
 
 const GroupHeading = ({
   group,
@@ -433,9 +378,7 @@ const GroupHeading = ({
   </div>
 );
 
-// ═══════════════════════════════════════════════════════════════════════════
 // The bar
-// ═══════════════════════════════════════════════════════════════════════════
 
 const BarButton = ({
   icon,
@@ -459,14 +402,11 @@ const BarButton = ({
   </button>
 );
 
-// ═══════════════════════════════════════════════════════════════════════════
 // The page
-// ═══════════════════════════════════════════════════════════════════════════
 
 type Item =
   { kind: "heading"; group: TrackedGroup } | { kind: "row"; contact: Contact };
 
-/** Who: everyone, the tracked people, or the rest. */
 const TRACKING_PILLS: readonly FilterPill<TrackingFilter>[] = [
   { id: "all", label: "All", icon: <Users className="w-3 h-3" /> },
   { id: "tracked", label: "Tracked", icon: <Radar className="w-3 h-3" /> },
@@ -477,7 +417,6 @@ const TRACKING_PILLS: readonly FilterPill<TrackingFilter>[] = [
   },
 ];
 
-/** When you last spoke, by the last logged interaction. */
 const SPOKE_PILLS: readonly FilterPill<SpokeFilter>[] = [
   { id: "any", label: "Any", icon: <Globe className="w-3 h-3" /> },
   { id: "month", label: "Past month", icon: <Clock className="w-3 h-3" /> },
@@ -544,8 +483,7 @@ export const TrackedContactsView = () => {
     return { trackingCounts, spokeCounts };
   }, [contacts, deferredQuery, tracking, spoke]);
 
-  // What a row's link hands the contact page: Back returns to this list,
-  // with its filters, and says so.
+  // Back on the contact page returns to this list, with its filters.
   const openState = useMemo(
     () => ({
       back: {
@@ -566,10 +504,9 @@ export const TrackedContactsView = () => {
   );
   const nobodyTracked = !isLoading && trackedCount === 0;
 
-  // ── One contact at a time ─────────────────────────────────────────────
   const { toggle: flip, isPending: flipPending } = useTrackToggle();
 
-  // ── Select mode ───────────────────────────────────────────────────────
+  // Select mode
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const exitSelectMode = useCallback(() => {
@@ -596,7 +533,7 @@ export const TrackedContactsView = () => {
     });
   }, []);
   // A new filter is a new list, and a selection kept from the old one would
-  // change people the person can no longer see.
+  // change people the person cannot see.
   const chooseTracking = (next: TrackingFilter) => {
     setView({ tracking: next });
     setSelectedIds(new Set());
@@ -623,10 +560,9 @@ export const TrackedContactsView = () => {
   });
   const { handleBulkCadence } = bulk;
   const selectedCount = selectedIds.size;
-  // The bar's room: its height, its sticky offset and a gap. While the bar
-  // shows, the scroller keeps it as scroll padding, so a checkbox that Tab
-  // reaches stops above the bar, not under it. Measured, as in ContactList:
-  // the offset changes at `md`.
+  // While the bar shows, its height, sticky offset and a gap are scroll
+  // padding, so Tab stops on a checkbox above the bar, not under it.
+  // Measured, as in ContactList, because the offset changes at `md`.
   const [barRoom, setBarRoom] = useState(0);
   const measureBar = useCallback((bar: HTMLDivElement | null) => {
     if (!bar) return;
@@ -646,9 +582,8 @@ export const TrackedContactsView = () => {
   /** No one picked, or a change on its way: the bar's buttons wait. */
   const nothingToAct = bulk.isPending || selectedCount === 0;
 
-  // The four cadences, one word each. A cadence off the list (60 or 180
-  // days, saved before 2.0) stays on the rows that have it, and is not
-  // offered here: one choice for many people is one of the four.
+  // A row keeps a cadence off the list (60 or 180 days), but the bar offers
+  // only the four.
   const cadenceItems = useMemo(
     () =>
       CADENCE_CHOICES.map((choice) => ({
@@ -659,7 +594,7 @@ export const TrackedContactsView = () => {
     [handleBulkCadence],
   );
 
-  // ── The rows, flat, for the virtualised list ──────────────────────────
+  // The rows, flat, for the virtualized list
   const items = useMemo(
     (): Item[] =>
       groups.flatMap((group): Item[] => [
@@ -673,18 +608,16 @@ export const TrackedContactsView = () => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
-  // Off until the list is long enough to need it. An enabled virtualizer
-  // takes over the scroller when it attaches and puts it back at its own
-  // offset, which sent a hash link's group (`#fading`) back to the top
-  // when the page opened with the contacts already loaded.
+  // Off until the list needs it. An enabled virtualizer resets the
+  // scroller's offset when it attaches, which undoes a hash link's jump
+  // (`#fading`) when the page opens with the contacts already loaded.
   const virtualizer = useVirtualizer({
     enabled: virtual,
     count: virtual ? items.length : 0,
     getScrollElement: () => scrollRef.current,
     scrollMargin,
     estimateSize: (index) => (items[index]?.kind === "heading" ? 48 : 60),
-    // The room under the last row, which the card's padding cannot give a
-    // list of placed rows.
+    // The card's padding does not reach placed rows.
     paddingEnd: 8,
     overscan: 8,
   });
@@ -703,7 +636,7 @@ export const TrackedContactsView = () => {
     );
   }, [virtual, isLoading, nobodyTracked, selectMode]);
 
-  // ── A hash link lands on its group ────────────────────────────────────
+  // A hash link lands on its group
   const scrolledTo = useRef<string | null>(null);
   useEffect(() => {
     const hash = location.hash.replace(/^#/, "");
@@ -747,9 +680,8 @@ export const TrackedContactsView = () => {
       className="h-full overflow-y-auto [scrollbar-gutter:stable]"
       style={barRoom ? { scrollPaddingBottom: barRoom } : undefined}
     >
-      {/* Select sits with the title, in the header's actions, as on the
-          Network list. In the row below it wrapped to a line of its own on
-          a phone, under the full-width order control. */}
+      {/* Select sits in the header's actions, as on the Network list: in the
+          filter card it wraps to a line of its own on a phone. */}
       <SettingsHeaderActions>
         {selectMode ? (
           // The count is in the bar, once.
@@ -779,8 +711,6 @@ export const TrackedContactsView = () => {
       </SettingsHeaderActions>
 
       <div className={cn(SETTINGS_BOX, "pt-4 pb-24 md:pb-6 space-y-5")}>
-        {/* The search, the order, and two rows of filters, each pill with
-            the number it would show, as on the Enrichment page. */}
         <div className={cn(CARD, "p-4 space-y-3")}>
           <div className="flex flex-wrap items-center gap-2">
             <SearchField
@@ -901,7 +831,7 @@ export const TrackedContactsView = () => {
           </div>
         )}
 
-        {/* Past 200 rows: one flat list of headings and rows, virtualised. */}
+        {/* Past 200 rows: one flat list of headings and rows, virtualized. */}
         {!isLoading && virtual && (
           <div
             ref={listRef}
@@ -918,9 +848,8 @@ export const TrackedContactsView = () => {
                   key={virtualItem.key}
                   data-index={virtualItem.index}
                   ref={virtualizer.measureElement}
-                  // A heading spans the card, as it does on a group's own
-                  // card, and a row sits 8 px in from each side. A child
-                  // placed this way ignores the card's padding.
+                  // A heading spans the card and a row sits 8 px in: a
+                  // placed child ignores the card's padding.
                   style={{
                     position: "absolute",
                     top: 0,
@@ -953,13 +882,10 @@ export const TrackedContactsView = () => {
           </div>
         )}
 
-        {/* The bar: the count, Track, Stop tracking and the cadence. It is the
-            column's last child and sticks to the bottom of the scroller, so
-            it is exactly as wide as the cards above it, beside the rail at
-            every width. Fixed to the window, it was centred on the window
-            instead: past the cards on a desktop, and over the rail's
-            Settings gear at 768 px. The column's bottom padding is the gap
-            it sticks at, so the last row scrolls clear of it. */}
+        {/* The bar is the column's last child and sticks to the scroller's
+            bottom, so it is as wide as the cards. A bar fixed to the window
+            centers on the window and covers the rail's Settings gear at
+            768 px. The column's bottom padding lets the last row scroll clear. */}
         <AnimatePresence>
           {selectMode && (
             <motion.div
@@ -1006,8 +932,7 @@ export const TrackedContactsView = () => {
                     title="One cadence for the selection"
                     heading="Keep up"
                     items={cadenceItems}
-                    // The bar button's look and the primary ink, at rest and
-                    // on hover, so the three buttons in the bar look alike.
+                    // Primary ink at rest and on hover, like the other two.
                     triggerClassName={cn(
                       BAR_BUTTON,
                       "text-primary hover:text-primary",

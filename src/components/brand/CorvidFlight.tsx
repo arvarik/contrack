@@ -1,36 +1,29 @@
 /**
- * CorvidFlight — the one place the bird leaves its ring.
- *
- * Mounted once, beside the Toaster, and silent until something calls
- * `flyCorvid()`. One overlay rather than an animation per surface: two birds
- * in the air at once would be a bug, and a component that owns the whole
- * flight can cancel it on a route change without every caller remembering to.
+ * The one place the bird leaves its ring. Mounted once, beside the Toaster,
+ * and silent until something calls `flyCorvid()`. One overlay, not an
+ * animation per surface, so two birds are never in the air at once and a
+ * route change cancels a flight without every caller remembering to.
  *
  * How a flight runs:
  *
- * 1. The event arrives. At level "off" nothing happens. At "subtle" the
- *    bird on the perch flutters its wings and stays in its ring. Otherwise:
- * 2. `planFlight` draws a new route: a lap, an outing or a celebration pass,
- *    each one different (see `lib/corvidFlight.ts`).
- * 3. The perch's bird is hidden, and only the bird: the ring stays where it
- *    is, empty. In the same frame a bird drawn by the same rig takes its
- *    place, in the same pose, at the same size, so the swap cannot be seen.
- * 4. Each frame paints the plan's pose and places the bird with one
- *    transform on a fixed, `aria-hidden`, `pointer-events-none` layer at
- *    `z-[60]`. The layer sits under the contact overlay and the palette
- *    (`z-[100]`) and under `Modal` (`z-[200]`): a flight never covers a
- *    control, and it could not swallow a click if it did.
- * 5. The bird lands back in its ring as the logo, the overlay goes, and the
- *    perch's own bird is shown again.
+ * 1. At level "off" nothing happens. At "subtle" the perched bird flutters
+ *    its wings and stays in its ring.
+ * 2. `planFlight` draws a new route (`lib/corvidFlight.ts`).
+ * 3. The perch's bird is hidden, and the ring stays. In the same frame a
+ *    bird drawn by the same rig takes its place in the same pose and size,
+ *    so the swap cannot be seen.
+ * 4. Each frame paints the plan's pose with one transform on a fixed,
+ *    `aria-hidden`, `pointer-events-none` layer at `z-[60]`, under the
+ *    contact overlay and the palette (`z-[100]`) and under `Modal`
+ *    (`z-[200]`), so a flight never covers a control.
+ * 5. The bird lands in its ring as the logo, and the perch's own bird shows
+ *    again.
  *
- * A second press while it is out asks it home by a short way, and so does
- * `recallCorvid()`: the Ask page's search flight hunts beside and above the
- * search column until the answer arrives, then comes home, round the column
- * rather than across the answer. A recall that arrives while the bird is
- * still leaving its ring waits until it is in the air. Escape and a
- * route change land it at once. Nothing here announces: the bird is
- * decoration, and a screen reader that said "Contrack" every time somebody
- * pressed the logo would be worse than saying nothing.
+ * A second press, or `recallCorvid()`, asks it home the short way. The Ask
+ * page's search flight hunts beside and above the column until the answer
+ * arrives, then comes home round it. A recall during takeoff waits until
+ * the bird is in the air. Escape and a route change land it at once.
+ * Nothing announces: the bird is decoration.
  */
 import {
   useCallback,
@@ -41,7 +34,7 @@ import {
 } from "react";
 import { useLocation } from "react-router-dom";
 import { useCorvidLevel } from "../../hooks/useCorvidLevel";
-import { bodyCentre } from "../../assets/corvidRig";
+import { bodyCenter } from "../../assets/corvidRig";
 import {
   BIRD_PART_ORDER,
   CORVID_EYE,
@@ -74,16 +67,11 @@ export const PERCH_ATTRIBUTE = "data-corvid-perch";
 export const perchProps = { [PERCH_ATTRIBUTE]: "" } as const;
 
 /**
- * The perch that is actually on screen.
- *
- * There is more than one. The sidebar's stays in the DOM below `md`, hidden
- * by CSS rather than unmounted, and the Settings footer carries a second one
- * that only exists below `md`. A plain `querySelector` would hand back the
- * sidebar's on a phone: a rectangle of zeros, so the bird would leave from
- * the top left corner and land back there.
- *
- * A hidden element has no layout box, so its width is the test. Exported for
- * the test that holds this rule.
+ * The perch on screen. The sidebar's stays in the DOM below `md`, hidden by
+ * CSS, and the Settings footer has a second one below `md`. A plain
+ * `querySelector` would return the hidden one on a phone, a rectangle of
+ * zeros, and the bird would fly from the top left corner. A hidden element
+ * has no layout box, so its width is the test.
  */
 function findPerch(): HTMLElement | null {
   const perches = [
@@ -196,7 +184,7 @@ export const CorvidFlight = () => {
     if (!el || !canvas) return;
     if (!bird.current) bird.current = birdElements(canvas);
     const k = frame.size / 100;
-    const [cx, cy] = bodyCentre(frame.pose);
+    const [cx, cy] = bodyCenter(frame.pose);
     // The roll is not a transform: a squash here would thin the strokes
     // with the bird. The rig turns the points and the pen keeps its width.
     el.style.transform =

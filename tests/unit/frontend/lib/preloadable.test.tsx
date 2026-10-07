@@ -1,13 +1,9 @@
 // @vitest-environment jsdom
-// =============================================================================
-// preloadable: a lazy component that renders at once when its code is here
-// =============================================================================
+// preloadable: a lazy component that renders at once when its code is here.
 // `React.lazy` suspends on its first render even with the module in memory,
-// and React then holds a new Suspense boundary's content for 300 ms. That
-// made Settings take 350 ms to open with its code already downloaded. These
+// and React then holds a new Suspense boundary's content for 300 ms. These
 // tests pin the three rules: one download, a component that renders at once
 // once it is loaded, and a pick that never changes while mounted.
-// =============================================================================
 import React, { Suspense, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {

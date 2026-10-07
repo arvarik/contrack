@@ -1,26 +1,14 @@
-// =============================================================================
-// Integration Tests — status columns inside the vector index
-// =============================================================================
-// The vector channel has to return contacts somebody can actually see: not a
-// ghost, not archived, not in the trash, not merged away. Until 2.0 that was
-// `contactId IN (SELECT c.id FROM contacts c WHERE ...)` wrapped around the
-// KNN, which gave the right answers and made SQLite materialize a list of
-// every active contact the account has, on every search.
+// Integration: status columns inside the vector index.
+// The vector channel returns only contacts somebody can see: not a ghost,
+// archived, trashed or merged away. The four states are sqlite-vec metadata
+// columns, filtered while sqlite-vec picks the k nearest rows. Two things
+// must hold:
 //
-// Now the four states are sqlite-vec METADATA columns, which sqlite-vec
-// evaluates while it is choosing the k nearest rows rather than afterwards.
-// Two things have to hold for that to be safe, and this file is both:
-//
-// 1. The filter really is inside the scan. The test for that asks for k = 1
-//    against a corpus whose nearest rows are all hidden and whose only
-//    visible row is the furthest away. A filter applied after the scan
-//    returns nothing.
-//
-// 2. The columns agree with the contact. A vector is written once and the
-//    contact is archived, restored, trashed and merged later, from code that
-//    has never heard of the vector store. A trigger is what keeps them equal,
-//    for the same reason the FTS index uses one.
-// =============================================================================
+// 1. The filter is inside the scan. k = 1 against a corpus whose nearest rows
+//    are all hidden and whose only visible row is the furthest away: a filter
+//    after the scan returns nothing.
+// 2. The columns agree with the contact. A trigger keeps them equal as the
+//    contact is archived, restored, trashed and merged, as the FTS index does.
 
 import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 
@@ -134,9 +122,7 @@ beforeEach(() => {
   clearContacts();
 });
 
-// ---------------------------------------------------------------------------
 // The shape of the table
-// ---------------------------------------------------------------------------
 
 describe("the vec0 tables", () => {
   it("declare the three status columns on both tables", () => {
@@ -174,9 +160,7 @@ describe("the vec0 tables", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // The filter is inside the scan
-// ---------------------------------------------------------------------------
 
 describe("filtering inside the KNN", () => {
   /**
@@ -258,9 +242,7 @@ describe("filtering inside the KNN", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // The columns keep up with the contact
-// ---------------------------------------------------------------------------
 
 describe("the status trigger", () => {
   beforeEach(() => {
@@ -391,9 +373,7 @@ describe("the status trigger", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // The query plan
-// ---------------------------------------------------------------------------
 
 describe("the query plan", () => {
   it("has no subquery over contacts left in it", () => {
@@ -418,6 +398,4 @@ describe("the query plan", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
 // The upgrade
-// ---------------------------------------------------------------------------

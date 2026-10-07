@@ -1,14 +1,9 @@
 /**
- * KeyboardPage — Single-key shortcuts and keyboard reference table.
- *
- * Switch for singleKeyShortcuts, plus the full SHORTCUTS table grouped
- * by SHORTCUT_GROUP_ORDER, clearly marking which keys the switch turns off.
- *
- * @module views/settings/pages/KeyboardPage
+ * KeyboardPage: the single-key shortcuts switch, and every shortcut by
+ * group, marked where the switch turns it off.
  */
 import { usePreferences } from "../../../contexts/PreferencesContext";
-import { SettingRow } from "../SettingRow";
-import { Switch } from "../../../components/ui/Switch";
+import { PrefSwitchRow } from "../SettingRow";
 import { groupedShortcuts, type Shortcut } from "../../../lib/shortcuts";
 import { ShortcutKeys } from "../../../components/ui/ShortcutKeys";
 import {
@@ -25,7 +20,7 @@ const CHIP =
   "text-[11px] font-semibold px-2 py-0.5 rounded-md bg-surface-container text-on-surface-variant";
 
 export const KeyboardPage = () => {
-  const { preferences, setPreference } = usePreferences();
+  const { preferences } = usePreferences();
   const singleKeysEnabled = preferences.singleKeyShortcuts;
   const groups = groupedShortcuts();
   // A phone with no keyboard has none of these keys. A tablet with one does,
@@ -35,19 +30,12 @@ export const KeyboardPage = () => {
   return (
     <div className={cn(SETTINGS_PAGE, "space-y-8")}>
       <div className={SETTINGS_CARD}>
-        <SettingRow
+        <PrefSwitchRow
           id="single-key-shortcuts"
           title="Single-key shortcuts"
           prefKey="singleKeyShortcuts"
           description="Use keys like /, N, V, J and K without holding a modifier. Turn this off if you press them by mistake"
-          inline
-        >
-          <Switch
-            label="Single-key shortcuts"
-            checked={singleKeysEnabled}
-            onChange={(next) => setPreference("singleKeyShortcuts", next)}
-          />
-        </SettingRow>
+        />
       </div>
 
       <section aria-labelledby="all-shortcuts">

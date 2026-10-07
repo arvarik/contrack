@@ -1,15 +1,7 @@
 /**
- * ContactList — Left-pane master view for browsing and filtering contacts.
- *
- * This is a thin composition shell that wires together:
- * - {@link useContactListFilters} — Search, filter, sort logic
- * - {@link useMultiSelect} — Multi-select state and bulk actions
- * - {@link useContactListKeyboard} — Keyboard navigation (j/k/↑/↓)
- * - {@link useRovingList} — The list as one Tab stop, arrows inside it
- * - {@link ContactListModals} — All modal dialogs (create, import, bulk ops)
- *
- * The component itself handles only layout rendering and UX hooks
- * (scroll restoration, pull-to-refresh, context menus, drag-to-reorder).
+ * The left-pane list of contacts. Search, filters and sort live in
+ * `useContactListFilters`, selection in `useMultiSelect`, keys in
+ * `useContactListKeyboard` and `useRovingList`, dialogs in `ContactListModals`.
  */
 import React, {
   useState,
@@ -113,9 +105,8 @@ import { LoadFailed } from "../../components/ui/LoadFailed";
 import { SearchField } from "../../components/ui/SearchField";
 
 /**
- * What to try when a search matches no one. A facet value the search does
- * not know (`tracked:maybe`) gets the values it takes. Fewer letters would
- * not help that one.
+ * What to try when a search matches no one. An unknown facet value
+ * (`tracked:maybe`) gets the values the facet takes.
  */
 function searchHint(query: string): string {
   for (const filter of parseFacetQuery(query).filters) {
@@ -127,10 +118,6 @@ function searchHint(query: string): string {
 
 /** The space under each row of the list, in px: `space-y-2`. */
 const ROW_GAP = 8;
-
-// ---------------------------------------------------------------------------
-// FilterButton — Pill-style filter tab for the contact list header
-// ---------------------------------------------------------------------------
 
 const FilterButton = ({
   label,
@@ -147,17 +134,15 @@ const FilterButton = ({
 }) => (
   <button
     onClick={onClick}
-    // 28 px on screen, a 44 px tap box from hit-area. The row it sits in
-    // scrolls sideways, so the row carries the padding the box needs.
+    // 28 px on screen, a 44 px tap box from hit-area. The sideways-scrolling
+    // row carries the padding the box needs.
     className={cn(filterPill(active), "hit-area")}
     aria-label={`Filter: ${label} (${count})`}
     aria-pressed={active}
   >
     {icon}
     {label}
-    {/* On the selected pill the count takes the pill's own ink, which is
-        the one that reads on the tint. On the others it is the variant ink
-        at full strength: at half opacity it measured 2.2 to 1. */}
+    {/* Variant ink at full strength: at half opacity it measured 2.2 to 1. */}
     <span
       className={cn("ml-0.5 text-[11px]", !active && "text-on-surface-variant")}
     >
@@ -165,10 +150,6 @@ const FilterButton = ({
     </span>
   </button>
 );
-
-// ---------------------------------------------------------------------------
-// ListChip — a list's chip, which a mouse drags and a menu moves
-// ---------------------------------------------------------------------------
 
 type OpenMenu = ReturnType<typeof useContextMenu>["handleContextMenu"];
 
@@ -213,8 +194,7 @@ const ListChip = ({
       onClick: () => onMove(index, index + 1),
     },
   ];
-  // The menu opens where the finger is. A press is no mouse event, so it
-  // passes the place the menu reads.
+  // A press is no mouse event, so it passes the point the menu opens at.
   const longPress = useLongPress(({ clientX, clientY }) =>
     openMenu(
       { clientX, clientY, preventDefault: () => {} } as React.MouseEvent,
@@ -239,10 +219,7 @@ const ListChip = ({
   );
 };
 
-// ---------------------------------------------------------------------------
-// ContactRowWrapper — attaches context menu + long-press + recordVisit to a row
-// ---------------------------------------------------------------------------
-
+// A row with its context menu, long press and recordVisit.
 interface ContactRowWrapperProps {
   contact: Contact;
   density: ListDensity;
@@ -320,22 +297,17 @@ const ContactRowWrapper = React.memo(
 
     return (
       <div
-        // Presentational: the interactive element is the <Link> inside
-        // ContactListItem. Enter on that link fires a click that bubbles to
-        // this handler, so keyboard users record a visit without this wrapper
-        // needing to be focusable itself. A click in select mode picks the
-        // row and opens nothing, so it is no visit: each one used to add a
-        // row to Recent and push the list down under the pointer.
+        // Presentational: Enter on the <Link> inside bubbles a click here, so
+        // keyboard users record a visit too. A click in select mode is no
+        // visit, or it would add to Recent and push the list under the pointer.
         role="presentation"
         onContextMenu={(e) => handleContextMenu(e, contextItems)}
         onClick={isSelectMode ? undefined : () => recordVisit(contact.id)}
-        // A press that lasts selects the row (`useLongPress`), so a finger
-        // gets no link preview (iOS), no menu, and no selected text.
+        // A long press selects the row, so a finger gets no link preview
+        // (iOS), no menu and no selected text.
         {...longPress}
         className={cn(
           "[-webkit-touch-callout:none] pointer-coarse:select-none",
-          // The flash arrives and leaves at the slow duration. Its glow is
-          // mixed from the primary, so it follows the accent and the palette.
           "rounded-xl transition-all duration-(--dur-slow)",
           isFlashing &&
             "ring-2 ring-primary/40 shadow-[0_0_12px_color-mix(in_srgb,var(--color-primary)_20%,transparent)]",
@@ -357,10 +329,6 @@ const ContactRowWrapper = React.memo(
     );
   },
 );
-
-// ---------------------------------------------------------------------------
-// ContactRows — the scroller: Recent, the virtual rows and the letter rail
-// ---------------------------------------------------------------------------
 
 interface ContactRowsProps {
   /** What the scroller shows above Recent: loading, empty states, the count. */
@@ -387,13 +355,9 @@ interface ContactRowsProps {
 }
 
 /**
- * The list's scroller, and all that changes as it scrolls.
- *
- * The virtualizer renders the component that holds it on each scroll. In
- * ContactList that was the whole page: the header, its menus, the chips and
- * the dialogs. Here a scroll renders this and the rows it brings in. The
- * page's content above the rows comes as `children`, the same elements on
- * each of these renders, so React skips them.
+ * The scroller: Recent, the virtual rows and the letter rail. The virtualizer
+ * renders its holder on each scroll, so it lives here and not in the page.
+ * The content above the rows comes as `children`, which React skips.
  */
 const ContactRows = ({
   children,
@@ -425,7 +389,6 @@ const ContactRows = ({
   // The rows rise toward the pointer. Nothing renders while it moves.
   useProximityLift(scrollRef);
 
-  // Merge containerRefs — both pullRef and scrollRef point to the same element
   const listScrollRef = useCallback(
     (el: HTMLDivElement | null) => {
       (scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
@@ -436,11 +399,8 @@ const ContactRows = ({
 
   const { density, metrics } = useListDensity();
 
-  /**
-   * The rows' navigate. `useNavigate` gives a new function on each change of
-   * path, so opening a contact drew every row again. This one keeps one
-   * identity and calls the latest.
-   */
+  // `useNavigate` changes on each path change and would redraw every row.
+  // This one keeps one identity and calls the latest.
   const navigate = useNavigate();
   const navigateRef = useRef(navigate);
   useLayoutEffect(() => {
@@ -451,29 +411,16 @@ const ContactRows = ({
     [],
   );
 
-  /**
-   * Who the list itself shows. A Recent copy takes the selected look only
-   * for a contact missing from it, a ghost or one a filter leaves out, so the
-   * open contact is marked somewhere, and in one place.
-   */
+  // A Recent copy takes the selected look only for a contact missing from the
+  // list, so the open contact is marked in exactly one place.
   const listedIds = useMemo(
     () => new Set(filteredContacts.map((c) => c.id)),
     [filteredContacts],
   );
 
-  // ── Virtualization ──────────────────────────────────────────────────
-  /**
-   * How far the virtual list starts below the top of the scroll container.
-   *
-   * The "Recent" block and the pull-to-refresh indicator live inside the same
-   * scroller, above the virtual list. Without telling the virtualizer about
-   * that gap, its offsets are correct *relative to its own container* — so
-   * rows render in the right place — but `scrollToIndex` computes a scrollTop
-   * as if the list began at the top of the scroller, and every jump lands
-   * short by exactly the height of whatever is above it. That is invisible
-   * until something actually jumps, which is why the alphabet rail is what
-   * surfaced it.
-   */
+  // How far the virtual list starts below the top of the scroller (Recent
+  // and the pull indicator sit above it). Without it `scrollToIndex` lands
+  // short by that height.
   const virtualListRef = useRef<HTMLDivElement>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
 
@@ -487,25 +434,17 @@ const ContactRows = ({
     scrollMargin,
     // A jump to a row stops above the bulk bar, not under it.
     scrollPaddingEnd: barRoom,
-    // Only an estimate — rows are measured for real by `measureElement`
-    // below — but it must track density or the scrollbar jumps as the user
-    // scrolls into rows that have not been measured yet.
-    // The row and the 8 px under it (`ROW_GAP`). Without the gap each first
-    // measure of a row above the view moved the list 8 px, and on iOS the
-    // virtualizer makes that move once the scroll stops: after Back, the
-    // list jumped a beat after it came back.
+    // An estimate that tracks density, or the scrollbar jumps into unmeasured
+    // rows. It includes `ROW_GAP`, or each first measure above the view moves
+    // the list 8 px (on iOS, a beat after Back).
     estimateSize: () => metrics.rowHeight + ROW_GAP,
-    overscan: 5, // Render 5 items outside viewport for smooth scrolling
-    // The list is built anew on each return to the Network page, and the
-    // scroller is put back where it was before paint. The rows start there
-    // too, or the first frame drew the top rows out of sight and showed an
-    // empty list.
+    overscan: 5,
+    // The scroller is restored before paint, so the rows start there too, or
+    // the first frame shows an empty list.
     initialOffset: () => savedScroll(scrollKey),
     // Below `lg` the list is hidden while a contact is open, and a hidden
-    // list reads 0 for its height, its offset and each row. The virtualizer
-    // then drew no rows, and Back had no row to find. These three keep the
-    // last real values while the list is hidden, so the rows it showed stay
-    // drawn and in place (see `restoreScrollAnchor` below).
+    // list reads 0 for every size. These three keep the last real values, so
+    // the rows stay drawn and Back finds its row (`restoreScrollAnchor`).
     observeElementRect: (instance, onRect) =>
       observeElementRect(instance, (rect) => {
         if (rect.height > 0) onRect(rect);
@@ -537,13 +476,11 @@ const ContactRows = ({
     setScrollMargin((previous) =>
       Math.abs(previous - offset) > 1 ? offset : previous,
     );
-    // Recomputed whenever the block above the list can change height: the
-    // page's content above it, which is new `children` on each render of
-    // the page, the Recent rows, their density and the pull.
+    // Each dependency can change the height above the list. `children` is new
+    // on each render of the page, so this runs on each render.
   }, [children, recentContacts.length, density, pullDistance, scrollRef]);
 
-  // ── Alphabet rail ───────────────────────────────────────────────────
-  /** Bucket → index of its first contact. Rebuilt only when the list changes. */
+  /** Bucket → index of its first contact. */
   const bucketIndex = useMemo(() => {
     const map = new Map<string, number>();
     if (!showAlphabetRail) return map;
@@ -554,12 +491,8 @@ const ContactRows = ({
     return map;
   }, [filteredContacts, showAlphabetRail]);
 
-  /**
-   * Which letter is at the top of the viewport, for the rail's highlight.
-   *
-   * Derived from the virtualizer's own first visible item rather than from a
-   * scroll listener, so it cannot drift out of step with what is rendered.
-   */
+  // The letter at the top of the view, from the virtualizer's first visible
+  // item, so it cannot drift from what is rendered.
   const virtualItems = rowVirtualizer.getVirtualItems();
   const activeBucket = showAlphabetRail
     ? (() => {
@@ -573,17 +506,13 @@ const ContactRows = ({
 
   const jumpToIndex = useCallback(
     (index: number) => {
-      // By index, never by offset: offsets for unmeasured rows are estimates,
-      // and jumping to one lands in the wrong place.
+      // By index, never by offset: unmeasured offsets are estimates.
       rowVirtualizer.scrollToIndex(index, { align: "start" });
     },
     [rowVirtualizer],
   );
 
-  // ── Roving Tab stop ─────────────────────────────────────────────────
-  // The Recent rows and the full list are one list to the keyboard: Recent
-  // first, then everyone. Arrow Down from the last recent contact carries on
-  // into the list rather than stopping at an invisible seam.
+  // Recent and the full list are one list to the keyboard, Recent first.
   const recentCount = recentContacts.length;
   const rowAt = (index: number) =>
     index < recentCount
@@ -619,15 +548,9 @@ const ContactRows = ({
       virtualItems.some((item) => item.index === index - recentCount),
   });
 
-  /**
-   * Back from a contact puts focus on the row it was opened from.
-   *
-   * On a phone, and on a tablet in portrait, the list and the contact take
-   * turns on screen. Leaving the contact removes the element that had focus,
-   * so focus fell to the document and the next Tab started from the top of
-   * the page. Only when focus really was lost: a sidebar link that navigated
-   * here keeps its own focus.
-   */
+  // Back from a contact focuses the row it was opened from. On a narrow
+  // screen the contact's removal drops focus to the document. Only when focus
+  // was lost: a sidebar link that navigated here keeps its own.
   const { lastContactId } = useRecent();
   const previousId = useRef(openId);
   const { focusIndex } = roving;
@@ -639,9 +562,8 @@ const ContactRows = ({
     if (active && active !== document.body) return;
     const index = filteredContacts.findIndex((c) => c.id === lastContactId);
     if (index < 0) return;
-    // The row is in view already (the place came back, see below): focus it
-    // where it is. `focusIndex` scrolls, and from offsets the virtualizer
-    // read before the list came back.
+    // A row already in view is focused in place: `focusIndex` would scroll
+    // from offsets read while the list was hidden.
     const row = document.getElementById(`contact-row-${lastContactId}`);
     const scroller = scrollRef.current;
     if (row && scroller) {
@@ -662,17 +584,10 @@ const ContactRows = ({
     scrollRef,
   ]);
 
-  /**
-   * Back to the list on a phone puts the same row at the same place.
-   *
-   * Below `lg` the list is hidden while a contact is open, and a hidden
-   * scroller forgets its offset. The row that was at the top comes back to
-   * the top, the same distance from it (`restoreScrollAnchor`). Before
-   * paint, so the first frame is the right one, and again a frame later,
-   * after the rows have measured. With no row saved (the top showed
-   * Recent), or a row not drawn yet, the saved pixel offset comes back
-   * first, and the frame after it finds the row.
-   */
+  // Below `lg` a hidden scroller forgets its offset, so Back puts the top row
+  // back at the top (`restoreScrollAnchor`): before paint, and again a frame
+  // later once rows have measured. With no anchor row, the saved pixel
+  // offset comes back first.
   const previousOpen = useRef(openId);
   useLayoutEffect(() => {
     const wasOpen = previousOpen.current;
@@ -688,16 +603,10 @@ const ContactRows = ({
     return () => cancelAnimationFrame(frame);
   }, [openId, scrollKey, scrollRef]);
 
-  /**
-   * The open contact's row comes into view when the open id changes: a deep
-   * link to `/contact/:id`, the palette, a Pulse row. Its tint was off
-   * screen. `auto` scrolls the least that shows it, and nothing when it
-   * shows already. Once per id, so a person who scrolls away is left there,
-   * and not at all when the row was opened from the list itself, which is
-   * where the person is looking. A frame late, because the Recent strip's
-   * height reaches the virtualizer's margin in the commit after the
-   * contacts arrive, and a jump before it lands short.
-   */
+  // A new open id from outside the list (a deep link, the palette) scrolls
+  // its row into view, once per id. A frame late: the Recent strip's height
+  // reaches `scrollMargin` a commit after the contacts, and an earlier jump
+  // lands short.
   const scrolledTo = useRef<string | null>(null);
   useEffect(() => {
     if (!openId) {
@@ -716,38 +625,16 @@ const ContactRows = ({
     return () => cancelAnimationFrame(frame);
   }, [openId, openIndex, rowVirtualizer, scrollRef]);
 
-  /*
-    Contact list.
-
-    The wrapper exists so the alphabet rail can be positioned against the
-    *visible* list area. Rendered inside the scroller, an absolutely
-    positioned rail resolves its `top-0 bottom-0` against the full scroll
-    height and then scrolls away with the content — so it both disappears
-    and maps pointer positions against a box thousands of pixels tall.
-  */
+  // The wrapper places the rail against the visible area. Inside the
+  // scroller it would size to the full scroll height and scroll away.
   return (
     <div className="relative flex-1 min-h-0">
       {/*
-        The scroller is right-to-left and its content is left-to-right
-        again. That one trick moves the scrollbar to the left edge, away
-        from the letter rail on the right: the two used to share the same
-        strip, and a thumb aimed at "M" landed on the bar. Only the box
-        flips. The `dir="ltr"` child puts every row back the way it reads.
-        The thumb shows only while the pointer is over the list or the
-        keyboard is in it (`scrollbar-on-hover`), so it does not sit
-        against the sidebar all the time.
-
-        With the rail on screen the scroller keeps a 2 rem gutter on the
-        right. Rows end before it, so a selected row's tint and the hover
-        layer stop short of the letters instead of running under them.
-
-        The top padding is 4 px, the room the first row's focus ring needs,
-        and the header's own bottom padding is the rest of the space under
-        the chips. Two full paddings left 34 px of nothing above the first
-        row, where the rows themselves are 8 px apart.
-
-        While the bulk bar shows, the bottom padding is its room (see
-        `measureBar`), and so is the scroll padding a focused row keeps.
+        `dir="rtl"` moves the scrollbar to the left edge, away from the
+        letter rail, and the `dir="ltr"` child puts the rows back. With the
+        rail on, a 2 rem right gutter keeps row tints off the letters. The
+        4 px top padding is room for the first row's focus ring. While the
+        bulk bar shows, the bottom padding is its room (`measureBar`).
       */}
       <div
         ref={listScrollRef}
@@ -766,7 +653,6 @@ const ContactRows = ({
         }
       >
         <div dir="ltr" className="space-y-2">
-          {/* Pull to refresh, on a touch screen */}
           <PullIndicator
             isPulling={isPulling}
             isRefreshing={isRefreshing}
@@ -776,14 +662,12 @@ const ContactRows = ({
 
           {children}
 
-          {/* ── Recent contacts strip ─────────────────────────────────────── */}
           {recentCount > 0 && (
             <div>
               <div className="flex items-center gap-1.5 px-1 mb-2">
                 <Clock className="w-3 h-3 text-on-surface-variant" />
                 <span className={LABEL}>Recent</span>
               </div>
-              {/* 8 px apart, like the rows of the list under it. */}
               <div className="space-y-2">
                 {recentContacts.map((contact, index) => {
                   const item = roving.getItemProps(index);
@@ -806,9 +690,7 @@ const ContactRows = ({
                   );
                 })}
               </div>
-              {/* Where Recent ends and everyone begins. A hairline said
-                    it, and this app divides a surface with words and
-                    space, not lines. */}
+              {/* The app divides a surface with words and space, not lines. */}
               <div className="flex items-center gap-1.5 px-1 mt-5">
                 <Users className="w-3 h-3 text-on-surface-variant" />
                 <span className={LABEL}>All contacts</span>
@@ -839,7 +721,7 @@ const ContactRows = ({
                     left: 0,
                     width: "100%",
                     transform: `translateY(${virtualItem.start - scrollMargin}px)`,
-                    paddingBottom: ROW_GAP, // Replaces space-y-2
+                    paddingBottom: ROW_GAP,
                   }}
                 >
                   <ContactRowWrapper
@@ -879,32 +761,18 @@ const ContactRows = ({
   );
 };
 
-// ---------------------------------------------------------------------------
-// ContactList — Main component
-// ---------------------------------------------------------------------------
-
 export const ContactList = () => {
   const { data: contacts = [], isLoading, isError, refetch } = useContacts();
 
   const { data: lists = [] } = useLists();
-  /**
-   * The open contact, read from the address.
-   *
-   * The list is mounted on the catch-all route (`path="*"`), so `useParams`
-   * had no `:id` to give it and this was always undefined. That meant no row
-   * was ever marked current — no selected look, no `aria-current` — and the
-   * j/k keys, which step from the current row, went to the first contact
-   * every time.
-   */
+  // The list mounts on the catch-all route, so `useParams` has no `:id`.
   const id = useMatch("/contact/:id")?.params.id;
   const navigate = useNavigate();
   const location = useLocation();
 
-  // ── Extracted hooks ─────────────────────────────────────────────────
   const filters = useContactListFilters(contacts);
   const multiSelect = useMultiSelect(filters.filteredContacts);
 
-  // ── UX hooks ────────────────────────────────────────────────────────
   usePageTitle(NAMES.network.title);
   const scrollKey = `contact-list:${filters.filterMode}:${filters.searchQuery}`;
   const { contextMenu, handleContextMenu, closeContextMenu } = useContextMenu();
@@ -913,8 +781,7 @@ export const ContactList = () => {
   const { recentIds, recordVisit } = useRecentContacts();
   const { limit: recentLimit } = useRecentContactsLimit();
 
-  // Stable archive handler — an inline closure here would defeat
-  // ContactRowWrapper's React.memo (new function identity every render).
+  // Stable, so ContactRowWrapper's React.memo holds.
   const archiveContactMutateAsync = archiveContact.mutateAsync;
   const unarchiveContactMutate = unarchiveContact.mutate;
   const handleArchiveContact = useCallback(
@@ -932,10 +799,9 @@ export const ContactList = () => {
     [archiveContactMutateAsync, unarchiveContactMutate],
   );
 
-  // ── Visual flash: highlight newly created contact for 2s ────────────
+  // A new contact's row flashes for 2 s.
   const [flashId, setFlashId] = useState<string | null>(null);
 
-  // ── Modal visibility state ──────────────────────────────────────────
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [isSmartPasteOpen, setIsSmartPasteOpen] = useState(false);
@@ -944,12 +810,9 @@ export const ContactList = () => {
   const createList = useCreateList();
   const reorderLists = useReorderLists();
 
-  /**
-   * The control that opened New contact or Add from text: the New button,
-   * or whatever had focus for the N and V keys. Both dialogs give focus
-   * back to it, and so does the form that a successful extraction opens,
-   * where the dialog's own memory held the gone Extract button.
-   */
+  // The control that opened New contact or Add from text. Both dialogs, and
+  // the form an extraction opens, return focus here: the dialog's own memory
+  // would hold the removed Extract button.
   const createOpener = useRef<HTMLElement | null>(null);
   const openCreate = useCallback((open: (value: boolean) => void) => {
     const focused = document.activeElement;
@@ -965,7 +828,7 @@ export const ContactList = () => {
     [openCreate],
   );
 
-  // Support ?new=1 query param (e.g. from Pulse "New contact" button)
+  // `?new=1` opens New contact (from Pulse).
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get("new") === "1") {
@@ -982,7 +845,6 @@ export const ContactList = () => {
     }
   }, [location.search, location.pathname, navigate, openNewContact]);
 
-  // ── Keyboard navigation ─────────────────────────────────────────────
   useContactListKeyboard({
     filteredContacts: filters.filteredContacts,
     currentId: id,
@@ -994,7 +856,7 @@ export const ContactList = () => {
     onSmartPaste: openSmartPaste,
   });
 
-  // ── Reorder lists: a mouse drags a chip, its menu moves it ──────────
+  // Reorder lists: a mouse drags a chip, its menu moves it.
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const finePointer = useMediaQuery("(pointer: fine)");
@@ -1023,8 +885,7 @@ export const ContactList = () => {
     onDragEnd: endDrag,
     className: cn(
       "transition-all cursor-grab active:cursor-grabbing",
-      // The drop target's dashed line, as on the Lists page. A solid ring
-      // read as keyboard focus.
+      // Dashed: a solid ring reads as keyboard focus.
       dragOverIdx === idx &&
         dragIdx !== idx &&
         "outline-2 outline-dashed outline-primary/60 rounded-xl",
@@ -1032,10 +893,8 @@ export const ContactList = () => {
     ),
   });
 
-  // ── The chip row's edge ─────────────────────────────────────────────
-  // The fade at the right says more chips sit past the edge, so it shows
-  // only while they do. A mouse wheel scrolls the row sideways: the row
-  // hides its bar, and a plain wheel could not reach the last chips.
+  // The right fade shows only while more chips sit past the edge. A wheel
+  // scrolls the row sideways, since the row hides its scrollbar.
   const pillsRef = useRef<HTMLDivElement>(null);
   const [moreRight, setMoreRight] = useState(false);
   const measurePills = useCallback(() => {
@@ -1052,7 +911,6 @@ export const ContactList = () => {
     return () => observer.disconnect();
   }, [measurePills]);
 
-  // ── Shorthand refs ──────────────────────────────────────────────────
   const {
     filteredContacts,
     inputValue,
@@ -1111,14 +969,8 @@ export const ContactList = () => {
     [openNewContact, openSmartPaste],
   );
 
-  /**
-   * Cmd/Ctrl+A selects every visible contact while in select mode.
-   *
-   * Only while selecting, and only when focus is not in a field: outside those
-   * two conditions Cmd+A means "select all text", and stealing that is the
-   * kind of shortcut hijack that makes an app feel hostile. Selects the
-   * *filtered* set, matching what the "Select all" button already does.
-   */
+  // Cmd/Ctrl+A selects the filtered contacts, only in select mode and outside
+  // a field, where it would otherwise select text.
   useEffect(() => {
     if (!isSelectMode) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -1137,7 +989,6 @@ export const ContactList = () => {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isSelectMode, selectAll]);
 
-  // ── Derived data (hoisted out of JSX to avoid recomputing per render) ──
   const activeContactCount = useMemo(
     () => contacts.filter((c) => !c.isArchived).length,
     [contacts],
@@ -1171,12 +1022,9 @@ export const ContactList = () => {
     [recentIds, contacts, recentLimit],
   );
 
-  // ── The bulk bar's room ─────────────────────────────────────────────
-  // The bar floats over the end of the list. While it shows, the scroller
-  // keeps room under its last row for the bar and a gap, so a full scroll
-  // brings every row above it, and a row the keys move to stops above it
-  // too. Measured, not a class: the bar wraps to a second row in the
-  // narrow pane and on a phone, and sits over the tab bar there.
+  // The room the floating bulk bar takes under the last row, so every row
+  // can scroll above it. Measured: the bar wraps in a narrow pane and sits
+  // over the tab bar on a phone.
   const [barRoom, setBarRoom] = useState(0);
   const measureBar = useCallback((bar: HTMLDivElement | null) => {
     if (!bar) return;
@@ -1197,18 +1045,9 @@ export const ContactList = () => {
   const doneButtonRef = useRef<HTMLButtonElement>(null);
   useSwapFocus(isSelectMode, doneButtonRef, selectButtonRef);
 
-  // ── The search's count ──────────────────────────────────────────────
-  /**
-   * How many rows a search leaves, said where the results start: in the
-   * slot the Recent strip and "All contacts" take while nobody searches,
-   * in the same small label, "12 matches". The eye goes from the box to the
-   * first row, and the count sits between them. Inside the box it cost the
-   * query its room in a narrow pane, and "3/12" there reads as a find bar
-   * that Enter steps through. With no match, the empty state says so.
-   *
-   * A screen reader hears the count once the typing pauses, not on every
-   * letter: the status waits a second (WCAG 4.1.3, status messages).
-   */
+  // The search's count shows above the first result, not in the box, where
+  // it takes the query's room and reads as a find bar. A screen reader hears
+  // it once typing pauses for a second (WCAG 4.1.3).
   const matchCount = filteredContacts.length;
   const showMatchCount = !isLoading && Boolean(searchQuery) && matchCount > 0;
   const searchAnnouncement = useDebounce(
@@ -1220,48 +1059,34 @@ export const ContactList = () => {
     1000,
   );
 
-  // ── Alphabet rail ───────────────────────────────────────────────────
-  // Only meaningful when the list is actually alphabetical, and only worth
-  // the screen width once scrolling is a chore.
+  // Only for an alphabetical list long enough to need it.
   const showAlphabetRail =
     sortBy === "name" && !searchQuery && filteredContacts.length >= 15;
 
-  // Back from a contact slides the list in (`views/settings/slide`), and
-  // the slide waits for this: the list on screen, its rows back in place.
-  // A child's layout effects run first, so the place is back by now.
+  // The Back slide (`views/settings/slide`) waits for the rows to be back in
+  // place. A child's layout effects run first, so they are.
   useLayoutEffect(() => {
     if (!id) settleSlide(location.pathname);
   }, [id, location.pathname]);
 
   return (
-    // `settings-stage`: below `lg` the list is the picture that slides when
-    // a contact opens or closes, as the settings list does.
+    // `settings-stage`: below `lg` the list slides when a contact opens or
+    // closes.
     <div className="settings-stage flex flex-col h-full overflow-hidden">
-      {/*
-        The pane is narrow, so it keeps `px-4` where a page has `PAGE_X`, and
-        its title starts at the same height as every other page's.
-
-        One h1 per page: the list's title is the page heading on the Network
-        page, and a section heading beside an open contact, whose name is the
-        h1.
-
-        The title stays the page's name in select mode. The count is the
-        first thing in the bulk bar, where it sits beside what it acts on.
-      */}
+      {/* One h1 per page: beside an open contact, its name is the h1. */}
       <PageHeader
         title={NAMES.network.label}
         titleAs={id ? "h2" : "h1"}
-        // Select all and Done are 32 px, and the icon buttons they replace
-        // are 36. The row keeps 36 px, so select mode moves no row.
+        // Keeps the 36 px of the icon buttons, so select mode's 32 px buttons
+        // move no row.
         actionsClassName="min-h-9"
         className={cn(
           "px-4 pb-3 bg-surface-container-lowest sticky top-0 z-10",
           PAGE_TOP,
         )}
         actions={
-          // Keyed, so Select and Done are new buttons and not the old ones
-          // relabelled: focus follows the mode to Done and back to Select
-          // (`useSwapFocus`), where it sat on "Select all" and "Import".
+          // Keyed, so focus follows the mode to Done and back to Select
+          // (`useSwapFocus`) and does not stay on a relabeled button.
           isSelectMode ? (
             <>
               <button
@@ -1290,16 +1115,6 @@ export const ContactList = () => {
             </>
           ) : (
             <>
-              {/*
-                Select and Import are icon buttons, and New is the page's
-                call to action. Each is named for a screen reader and labelled
-                under its glyph for a pointer or a long press, so the row
-                costs one word of space per action and still says what it
-                does. The gap keeps the three 44 px tap boxes apart.
-
-                A touch screen also gets the command palette's button first,
-                from PageHeader, as on every page.
-              */}
               <RailTooltip key="select" label="Select" side="bottom">
                 <button
                   ref={selectButtonRef}
@@ -1349,9 +1164,8 @@ export const ContactList = () => {
                 setSearchQuery("");
                 e.currentTarget.blur();
               } else if (e.key === "ArrowDown" && !e.altKey) {
-                // ↓ goes on to the results: the list's current row, or
-                // the list itself while that row is scrolled out, which
-                // hands focus to the row.
+                // ↓ goes to the current row, or to the list while that row
+                // is scrolled out, which hands focus on to the row.
                 const list = document.getElementById("contact-list");
                 const row =
                   list?.querySelector<HTMLElement>('[tabindex="0"]') ??
@@ -1363,8 +1177,7 @@ export const ContactList = () => {
             }}
             onClear={() => setSearchQuery("")}
           />
-          {/* Sort ActionMenu. The trigger shows the order, and its name says
-              what the control is: "A to Z" alone does not. */}
+          {/* The label names the control: "A to Z" alone does not. */}
           <ActionMenu
             label={`Sort: ${currentSort.label}`}
             title="Sort the list"
@@ -1386,12 +1199,10 @@ export const ContactList = () => {
           />
         </div>
 
-        {/* Filter chips: All, Tracked, then one per list. A horizontal
-            scroll row. It shows with no lists too, because the Tracked chip
-            is the way into tracking. In select mode it stays, faded and
-            out of reach (`inert`): the selection is of the rows it shows.
-            It used to leave, and the header lost 44 px, so a long press
-            moved every row up under the finger. */}
+        {/* Filter chips: All, Tracked, then one per list. The row shows with no
+            lists too, because the Tracked chip is the way into tracking. In
+            select mode the chips stay, faded and `inert`: removing them
+            shrinks the header 44 px and moves every row under the finger. */}
         <div
           className={cn(
             "relative transition-opacity",
@@ -1410,10 +1221,9 @@ export const ContactList = () => {
               if (Math.abs(e.deltaY) > Math.abs(e.deltaX))
                 e.currentTarget.scrollLeft += e.deltaY;
             }}
-            // A scroller clips what sits outside its padding box, so the
-            // 8 px above and below give each pill's 44 px tap box room,
-            // and 4 px at each side give its focus ring room. The negative
-            // margins keep the row where it was.
+            // A scroller clips outside its padding box: the padding is room
+            // for the 44 px tap boxes and focus rings, and the negative
+            // margins cancel it.
             className="flex gap-1.5 overflow-x-auto scrollbar-hide -my-2 pt-2 pb-2.5 -mx-1 px-1"
           >
             <FilterButton
@@ -1423,9 +1233,7 @@ export const ContactList = () => {
               active={filterMode === "all"}
               onClick={() => setFilterMode("all")}
             />
-            {/* A tag, from a tag on the Tags settings page. The chip is
-                  there only while it filters, and pressing it shows
-                  everyone again, as pressing a pressed list chip does. */}
+            {/* A tag from the Tags page, shown only while it filters. */}
             {tagFilter && (
               <FilterButton
                 label={tagFilter}
@@ -1468,8 +1276,6 @@ export const ContactList = () => {
       <ContactRows
         filteredContacts={filteredContacts}
         recentContacts={
-          // Recent shows on the plain list: not while loading, searching or
-          // filtering.
           !isLoading && !searchQuery && filterMode === "all"
             ? recentContacts
             : []
@@ -1509,10 +1315,7 @@ export const ContactList = () => {
           </div>
         )}
 
-        {/*
-          A failed load. The connection banner speaks only when the server
-          cannot be reached, so a 500 left the list blank.
-        */}
+        {/* The connection banner says nothing about a 500. */}
         {!isLoading && isError && activeContactCount === 0 && (
           <LoadFailed
             what="your contacts"
@@ -1521,19 +1324,8 @@ export const ContactList = () => {
           />
         )}
 
-        {/*
-          Empty state: 0 contacts total (onboarding).
-
-          Gated on `!isError` because a failed fetch also produces zero
-          contacts, and telling someone their network is empty when the
-          server merely went away is the most alarming thing this app could
-          say. The error state above says what happened instead.
-        */}
-        {/*
-          Import leads. Nobody builds a personal CRM by typing four hundred
-          people in by hand: they arrive with an export from Apple, Google
-          or LinkedIn. Adding one by hand stays on the header's + button.
-        */}
+        {/* No contacts at all. Not on error: a failed fetch is not an empty
+            network. Import leads, since people arrive with an export. */}
         {!isLoading && !isError && activeContactCount === 0 && (
           <EmptyState
             illustration={<CorvidMark size={64} className="text-primary/60" />}
@@ -1548,7 +1340,6 @@ export const ContactList = () => {
           />
         )}
 
-        {/* Empty state: search/filter has no results */}
         {!isLoading &&
           activeContactCount > 0 &&
           filteredContacts.length === 0 &&
@@ -1593,7 +1384,6 @@ export const ContactList = () => {
             />
           ))}
 
-        {/* The search's count, where the results start. */}
         {showMatchCount && (
           <div className="flex items-center gap-1.5 px-1">
             <Search
@@ -1606,7 +1396,7 @@ export const ContactList = () => {
           </div>
         )}
       </ContactRows>
-      {/* Context menu — portal-rendered, shared across all rows */}
+      {/* One context menu, shared by all rows. */}
       <ContextMenu {...contextMenu} onClose={closeContextMenu} />
       <AnimatePresence>
         {isSelectMode && (
@@ -1625,7 +1415,6 @@ export const ContactList = () => {
           />
         )}
       </AnimatePresence>
-      {/* ── All Modals ───────────────────────────────────────────────── */}
       <ContactListModals
         selectedCount={selectedCount}
         isAddToListOpen={multiSelect.isAddToListOpen}
@@ -1646,8 +1435,7 @@ export const ContactList = () => {
           setTimeout(() => setFlashId(null), 2000);
         }}
         isSmartPasteOpen={isSmartPasteOpen}
-        // Closing "Add from text" only closes it. The form opens when the
-        // text was read, filled in with what it found.
+        // The form opens only after an extraction, filled in.
         onCloseSmartPaste={() => setIsSmartPasteOpen(false)}
         onSmartPasteExtracted={() => {
           setIsSmartPasteOpen(false);

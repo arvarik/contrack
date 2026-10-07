@@ -1,10 +1,6 @@
-// =============================================================================
-// Unit Tests — tenant-lint scanner
-// =============================================================================
-// The scanner is what stops an unscoped query reaching production in Phase 2,
-// so its own rules are pinned here. A scanner that silently stops flagging is
-// worse than no scanner, because the report keeps printing a reassuring zero.
-// =============================================================================
+// Unit: the tenant-lint scanner. It stops an unscoped query reaching
+// production, so its own rules are pinned here. A scanner that silently stops
+// flagging is worse than none, because the report keeps printing zero.
 
 import { describe, it, expect } from "vitest";
 import {
@@ -123,10 +119,9 @@ describe("tenant-lint: allow comments", () => {
 describe("tenant-lint: regular expressions do not desync the scanner", () => {
   it("keeps scanning after a regex that contains a quote", () => {
     // The CSV escaper is /[",\n\r]/ and the mention matcher is
-    // /data-type="mention".../. A quote inside a regex body used to open a
-    // string that ran to the next quote anywhere in the file, so every
-    // statement after it read as code and was never scanned. A file could
-    // pass --strict while holding an unscoped statement further down.
+    // /data-type="mention".../. A quote inside a regex body must not open a
+    // string that runs to the next quote, or every statement after it goes
+    // unscanned and the file passes --strict.
     const src = [
       'const cell = (t) => /[",\\n]/.test(t) ? t : t;',
       'sqlite.prepare("SELECT * FROM contacts WHERE deletedAt IS NULL");',
@@ -190,8 +185,7 @@ describe("tenant-lint: glob matching for --strict", () => {
   it("lets **/ match no directory at all", () => {
     // This is what makes `npm run lint` cover server/db.ts. `**` alone reads
     // as ".*", which needs the following slash to be a real one, so
-    // server/**/*.ts used to skip every file sitting directly in server/ —
-    // including the file with every boot migration in it.
+    // server/**/*.ts would skip every file directly in server/.
     const re = globToRegExp("server/**/*.ts");
     expect(re.test("server/db.ts")).toBe(true);
     expect(re.test("server/app.ts")).toBe(true);

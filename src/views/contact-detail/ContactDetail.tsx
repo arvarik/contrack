@@ -18,18 +18,14 @@ export const ContactDetail = () => {
   const back = backTarget(location.pathname, location.state, location.search);
 
   /**
-   * On the network's own route, below `lg`, the contact and the list take
-   * turns on the screen. A row slides the contact in, and Back slides it
-   * out (`views/settings/slide`). The root is the moving picture
-   * (`settings-stage`), and the slide waits until the contact has drawn.
-   * Over the map and in Settings the contact is a panel, and nothing
-   * slides.
+   * Below `lg` on the network route, a row slides the contact in and Back
+   * slides it out (`views/settings/slide`). Over the map and in Settings the
+   * contact is a panel, and nothing slides.
    */
   const slide = useSlideNavigate();
   const handleClose = () =>
-    // The slide waits for the page it goes to, and only the list and the
-    // Settings pages finish one. Any other target navigates. The list's
-    // address can carry its search and its filter ("/?q=ada").
+    // Only the list and the Settings pages finish a slide, so any other
+    // target navigates. The list's address can carry a query ("/?q=ada").
     isOverlayActive ||
     !(/^\/(\?|$)/.test(back.to) || back.to.startsWith("/settings"))
       ? navigate(back.to)
@@ -42,16 +38,12 @@ export const ContactDetail = () => {
     <div
       className={cn(
         "h-full w-full relative bg-surface",
-        // The stage stays opaque at every width: from 768 px it was clear,
-        // and the list showed through the contact while it slid.
+        // Opaque at every width, or the list shows through the sliding contact.
         isOverlayActive ? "md:bg-transparent" : "settings-stage",
       )}
     >
-      {/* In the Back bar's height below `lg`. From `lg`, 2 px from the top:
-          inside the 44 px follow-up banner when there is one, where 16 px
-          left it half on the banner and half off. No fill of its own: it
-          wears the surface under it, the banner's wash or the page, where a
-          page-coloured square sat on the red wash. */}
+      {/* From `lg`, 2 px from the top, so it sits inside the 44 px follow-up
+          banner. No fill of its own: it takes the banner's wash. */}
       {isOverlayActive && (
         <button
           onClick={handleClose}

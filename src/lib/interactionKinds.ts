@@ -1,11 +1,7 @@
 /**
- * The four kinds of interaction a person logs by hand, and their names.
- *
- * Its own small module so the quick interaction dialog, which is mounted on
- * every page, can name a saved interaction without importing the composer and
- * the editor that comes with it.
- *
- * @module lib/interactionKinds
+ * The four kinds of interaction a person logs by hand, and their names. Its
+ * own module, so the quick interaction dialog on every page does not import
+ * the composer and its editor.
  */
 import type { DraftKind } from "./composerDrafts";
 

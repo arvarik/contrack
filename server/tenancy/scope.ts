@@ -1,14 +1,8 @@
-// =============================================================================
-// Scope — the owner a request or a job acts for
-// =============================================================================
-// Every repository and service function that reads or writes an owned table
-// takes a Scope as its first argument, and puts the owner in the same SQL
-// statement as the id. The request context in requestContext.ts carries a
-// Scope for attribution only. It is never the isolation mechanism.
-//
-// Phase 0 builds these names so Phase 1 and Phase 2 have one place to change.
-// Nothing on the data path calls scopeOf yet.
-// =============================================================================
+// Scope: the owner a request or a job acts for. Every repository and service
+// function that reads or writes an owned table takes a Scope first, and puts
+// the owner in the same SQL statement as the id. The request context
+// (requestContext.ts) carries a Scope for attribution only; it is never the
+// isolation mechanism.
 
 import type { Request } from "express";
 import { AppError } from "../utils/AppError.ts";
@@ -35,10 +29,9 @@ export function scopeForOwnerId(id: string): Scope {
 export function scopeOf(req: Request): Scope {
   const p = req.principal;
   if (p) return scopeForUser(p.user);
-  // Phase 1 removed the anonymous and service kinds, so every principal that
-  // exists has an owner. The only way to reach this is a request that
+  // Every principal has an owner, so this is reached only by a request that
   // authenticated as nobody on a gated instance, which requireAuth has already
-  // refused for every route that would call this.
+  // refused on every route that calls this.
   throw new AppError("Authentication required", 401, { code: "UNAUTHORIZED" });
 }
 

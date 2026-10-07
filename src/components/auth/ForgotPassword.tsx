@@ -1,12 +1,7 @@
 /**
- * ForgotPassword — panel opened when a user clicks "Forgot your password?".
- *
- * Has two shapes depending on whether outgoing mail is configured:
- * - With mail: email field to request a self-service password reset link.
- * - Without mail: ask an admin, and the server command behind "I run this
- *   server".
- *
- * @module components/auth/ForgotPassword
+ * "Forgot your password?". With outgoing mail, a field that asks for a reset
+ * link. Without, ask an admin, or the server command behind "I run this
+ * server".
  */
 
 import React, { useState } from "react";

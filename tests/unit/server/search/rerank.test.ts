@@ -1,19 +1,16 @@
-// =============================================================================
 // The rerank stage and the cross-encoder
-// =============================================================================
 // `rerankLocal` reorders the top of the local list by reranker score, inside
 // a time budget. Past the budget the list keeps its fused order and the late
 // scores are dropped. The worker is replaced here: scores come from a
 // reranker the test controls, through the same seam the search gate uses to
 // replay recorded scores, or from a mocked worker host.
-// =============================================================================
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const host = vi.hoisted(() => ({
   active: true,
   jobs: [] as { id: number; job: Record<string, unknown> }[],
-  cancelled: [] as number[],
+  canceled: [] as number[],
   answer: null as null | ((job: Record<string, unknown>) => Promise<unknown>),
 }));
 
@@ -27,7 +24,7 @@ vi.mock("../../../../server/workers/cpuHost.ts", () => ({
       result: host.answer ? host.answer(job) : new Promise(() => {}),
     };
   },
-  cancelJob: (id: number) => host.cancelled.push(id),
+  cancelJob: (id: number) => host.canceled.push(id),
 }));
 
 import {
@@ -77,7 +74,7 @@ function scoresByName(scores: Record<string, number>, delayMs = 0) {
 beforeEach(() => {
   host.active = true;
   host.jobs = [];
-  host.cancelled = [];
+  host.canceled = [];
   host.answer = null;
   delete process.env.SEARCH_RERANK_MODEL;
   delete process.env.SEARCH_RERANK_BUDGET_MS;
@@ -276,7 +273,7 @@ describe("the worker", () => {
     const late = new AbortController();
     void crossEncoder("m").score("q", ["a"], late.signal);
     late.abort();
-    expect(host.cancelled).toEqual([host.jobs[0].id]);
+    expect(host.canceled).toEqual([host.jobs[0].id]);
   });
 
   it("loads the model at boot with one pair, and is ready after", async () => {

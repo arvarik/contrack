@@ -1,27 +1,10 @@
 /**
- * ModelRow: one model choice on Administration → AI: the Fast model, the
- * Strong model, the embedding model, or the web search model.
- *
- * ```
- * Fast model                                                       Unsaved
- * Quick, frequent work. A small, cheap model fits.
- * Used by Ask Contrack, Contact research, Briefings and insights, …
- * [ Automatic                                        ▾ ] [Cancel] [Save]
- * ✓ Google Gemini · gemini-3.5-flash-lite
- * ```
- *
- * The select is local until Save: a click while reading the list never
- * re-points a model, and for the embedding model never starts a rebuild of
- * the search index. The line under it names what runs now. The select
- * already says how it was chosen (Automatic, the `AI_*_MODEL` variable, or
- * a pin), so the line says it only when the two differ: a pinned model that
- * cannot run now, and what runs in its place. A pin the catalog no longer
- * lists stays visible, so the field never goes blank.
- *
- * The "Used by" line comes from the feature table (`lib/aiFeatures`), the
- * one the "What each feature uses" list reads, so the two never disagree.
- *
- * @module views/ai-settings/ModelRow
+ * One model choice on Administration → AI. The select is local until Save, so
+ * a stray click never re-points a model or, for the embedding model, starts a
+ * search index rebuild. The line under it names what runs now, and explains
+ * only when that differs from the select. A pin the catalog does not list
+ * stays visible, so the field never goes blank. "Used by" comes from the
+ * feature table (`lib/aiFeatures`), so it matches "What each feature uses".
  */
 import { useState } from "react";
 import { AlertTriangle, Check, Loader2 } from "lucide-react";
@@ -55,20 +38,17 @@ interface ModelRowProps {
   noModels: string;
 }
 
-/** An assignment as a select value. */
 const toValue = (assignment: CapabilityAssignment): string =>
   assignment.mode === "pinned" && assignment.providerId && assignment.model
     ? `${assignment.providerId}::${assignment.model}`
     : "auto";
 
-/** A select value back as an assignment. */
 const fromValue = (value: string): CapabilityAssignment =>
   value.includes("::")
     ? {
         mode: "pinned",
         providerId: value.split("::")[0],
-        // Model ids can contain "::" in principle; only the first is a
-        // separator.
+        // A model id may contain "::", so only the first one separates.
         model: value.split("::").slice(1).join("::"),
       }
     : { mode: "auto" };

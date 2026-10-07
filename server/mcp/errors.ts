@@ -75,9 +75,9 @@ export function toMcpError(
 
 /**
  * A failed tool call as a result. A refusal the caller can act on (a 4xx
- * AppError) says why, with its code. Anything else is a fault in the server.
- * Its message can hold internals, so the client gets the request ID and the
- * log gets the cause.
+ * AppError) says why, with its code. Anything else is a server fault whose
+ * message may hold internals, so the client gets the request ID and the log
+ * gets the cause.
  */
 export function toolFailure(
   err: unknown,

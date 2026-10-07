@@ -1,6 +1,4 @@
-// =============================================================================
 // Unit: contact research — prompts, parsers and the research record
-// =============================================================================
 // The two passes of contact research, and what their answers are read into:
 //
 //   buildQuickSearchPrompt the plain ask every run starts with
@@ -18,7 +16,6 @@
 //   linkedInHandle         the profile a LinkedIn address names
 //   resolveRedirects       Gemini's redirect links, as the pages they name
 //   shared/researchRecord  the record the dossier's Research card reads
-// =============================================================================
 
 import { afterEach, describe, it, expect, vi } from "vitest";
 import type { HydratedContact } from "../../../../server/repositories/types.ts";
@@ -168,7 +165,7 @@ describe("the search prompt", () => {
   it("asks for fact lines with their sites, and has no reply for nobody found", () => {
     const prompt = buildSearchPrompt(contact());
     expect(prompt).toContain("- <Topic>: <fact> [<site>]");
-    // Gemini took that exit without searching (2026-10-05).
+    // Gemini takes that exit without searching.
     expect(prompt).not.toContain(NO_MATCHING_PAGES);
     // No field list to fill with nulls: that is what a model answered with
     // when it ran no search.
@@ -206,7 +203,7 @@ describe("the search prompt", () => {
         /relatives|health|religion|politics|sexuality|home purchases/i,
       );
     }
-    // A firm's switchboard saved as the person's own was wrong (2026-10-05).
+    // A firm's switchboard is not the person's own number.
     expect(buildSearchPrompt(contact())).toContain(
       "- Email, Phone, Address: only their own, never an employer's main line, a general mailbox or an office address",
     );
@@ -260,7 +257,7 @@ describe("the search prompt", () => {
       "location",
       "public profiles",
       "a professional summary",
-      "awards, publications, talks or licences",
+      "awards, publications, talks or licenses",
       "interests",
     ]);
     expect(

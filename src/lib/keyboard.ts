@@ -1,20 +1,9 @@
-/**
- * keyboard.ts — Shared keyboard utilities.
- *
- * Centralizes the keyboard input guard that was previously copy-pasted
- * across 5 different components with inconsistent coverage. This ensures
- * keyboard shortcuts never fire when the user is typing in a text field,
- * contenteditable region, select, or ARIA textbox/combobox.
- */
+/** The guards a keyboard shortcut checks before it fires. */
 
 /**
- * Returns `true` when the current focus target is a text-input element,
- * meaning keyboard shortcuts should NOT fire.
- *
- * Coverage:
- * - `<input>`, `<textarea>`, `<select>` (native)
- * - `contentEditable` divs (e.g. Tiptap editor)
- * - ARIA roles: `textbox`, `combobox` (e.g. cmdk input)
+ * True when focus is where a person types: a native field, a
+ * `contentEditable` (the Tiptap editor), a `textbox` or `combobox` role, or
+ * the command palette. A shortcut must not fire there.
  */
 export function isTypingTarget(e?: KeyboardEvent): boolean {
   const el = (document.activeElement || e?.target) as HTMLElement | null;
@@ -27,27 +16,19 @@ export function isTypingTarget(e?: KeyboardEvent): boolean {
   const role = el.getAttribute("role");
   if (role === "textbox" || role === "combobox") return true;
 
-  // cmdk search input (used by CommandPalette)
   if (el.closest("[cmdk-input]")) return true;
 
-  // Anywhere in the open command palette: its keys are its own. Focus can
-  // land on the dialog itself, and then `j` opened a contact behind it.
+  // Anywhere in the open palette, the dialog itself included: its keys are
+  // its own.
   if (el.closest("[cmdk-dialog]")) return true;
 
   return false;
 }
 
 /**
- * Returns `true` when the element with focus is a control that Enter or
- * Space activates on its own — a link, a button, a menu item, a radio — so
- * a page-level Enter shortcut must leave the key alone.
- *
- * `isTypingTarget` answers the question for letters: do not fire `n` while
- * somebody types an n. This answers it for Enter: do not swallow the press
- * that would have followed a link or pressed a button. Before this, the
- * contact list's Enter-to-compose shortcut called `preventDefault()` on
- * every Enter outside a field, so a keyboard user who tabbed to a sidebar
- * link on the Network page and pressed Enter went nowhere.
+ * True when focus is on a control that Enter or Space activates on its own,
+ * such as a link, a button or a menu item. A page's Enter shortcut must not
+ * swallow that press.
  */
 export function isActivationTarget(): boolean {
   const el = document.activeElement as HTMLElement | null;
@@ -87,14 +68,9 @@ export function overlayIsOpen(): boolean {
 }
 
 /**
- * Returns `true` when a page's own shortcut must leave this key alone.
- *
- * - Another control used it first (`defaultPrevented`): an arrow that moved
- *   a radio, a letter in a menu.
- * - It holds ⌘, Ctrl or Alt: ⌘↑ is the browser's, ⌘V is a paste.
- * - Focus is in a field (`isTypingTarget`).
- * - A dialog or a menu is open: J behind the avatar picker opened the next
- *   contact and closed the picker with its work.
+ * True when a page's own shortcut must leave this key alone: another control
+ * used it first, it holds ⌘, Ctrl or Alt (⌘V is a paste), focus is in a
+ * field, or a dialog or a menu is open over the page.
  */
 export function isPageKeyTaken(e: KeyboardEvent): boolean {
   return (

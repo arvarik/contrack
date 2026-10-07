@@ -1,11 +1,4 @@
-/**
- * mapStats — client-side reduction over contacts in the map viewport.
- *
- * Visible means inside `bounds` (or all if bounds is null) and passing any active filter.
- * Pure computation with no DOM dependency so it can run anywhere (even a Web Worker).
- *
- * @module views/map/mapStats
- */
+/** Statistics for the contacts in the map's viewport. Pure, with no DOM. */
 import tzlookup from "@photostructure/tz-lookup";
 import { isPastDay } from "../../../shared/dates";
 import { type MapContact, isValidLatLng } from "../../../shared/geo";
@@ -32,11 +25,9 @@ export interface MapStats {
   matching: number;
   /** In-view contacts whose next follow-up's day is before today. */
   overdue: number;
-  /** Top 5 industries in view, sorted by count descending then name ascending. */
+  /** Top 5 in view by count, then name. The same for companies and tags. */
   topIndustries: TopBucket[];
-  /** Top 5 companies in view, sorted by count descending then name ascending. */
   topCompanies: TopBucket[];
-  /** Top 5 tags in view, sorted by count descending then name ascending. */
   topTags: TopBucket[];
   /** Time zones for in-view contacts, bucketed by UTC offset. */
   timeZones: TimeZoneBucket[];
@@ -61,12 +52,8 @@ function parseOffsetMinutes(tzPart: string): number {
 }
 
 /**
- * A zone's UTC offset at `now`, as a label such as "GMT-4".
- *
- * Building an `Intl.DateTimeFormat` is the slow part: one per contact took
- * about 130 ms for 5,800 people. The map holds a few dozen zones, so each
- * call of `computeMapStats` builds one formatter per zone and keeps its
- * label in `labels`.
+ * A zone's UTC offset at `now`, such as "GMT-4", cached per zone in `labels`.
+ * One `Intl.DateTimeFormat` per contact took about 130 ms for 5,800 people.
  */
 function offsetLabel(zone: string, now: Date, labels: Map<string, string>) {
   let label = labels.get(zone);
@@ -88,9 +75,7 @@ function topFive(counts: Map<string, number>): TopBucket[] {
     .slice(0, 5);
 }
 
-/**
- * Filter contacts to those within the viewport bounds.
- */
+/** Contacts with a valid place inside `bounds`, or every placed one. */
 export function getInViewContacts(
   contacts: readonly MapContact[],
   bounds?: MapBounds | null,
@@ -105,13 +90,7 @@ export function getInViewContacts(
   });
 }
 
-/**
- * Pure reduction over contacts computing viewport statistics.
- *
- * @param contacts Contacts matching current filter (or all placed contacts).
- * @param bounds Viewport bounding box (null means treat all placed contacts as in view).
- * @param now Current clock time for overdue / time zone calculations.
- */
+/** `contacts` already match the filter. Null `bounds` puts all in view. */
 export function computeMapStats(
   contacts: readonly MapContact[],
   bounds?: MapBounds | null,
@@ -145,24 +124,20 @@ export function computeMapStats(
   const offsetLabels = new Map<string, string>();
 
   for (const c of inViewContacts) {
-    // Overdue: the follow-up's day is before today, as the contact page's
-    // banner counts it. Compared as instants, a follow-up set to "Tomorrow"
-    // was one overdue by 6 PM in Los Angeles.
+    // By day, as the contact page's banner counts it. As instants, a follow-up
+    // set to "Tomorrow" is overdue by 6 PM in Los Angeles.
     if (isPastDay(c.nextFollowUpAt, now)) overdue++;
 
-    // Industry
     if (c.industry && c.industry.trim()) {
       const ind = c.industry.trim();
       industryCounts.set(ind, (industryCounts.get(ind) ?? 0) + 1);
     }
 
-    // Company
     if (c.company && c.company.trim()) {
       const comp = c.company.trim();
       companyCounts.set(comp, (companyCounts.get(comp) ?? 0) + 1);
     }
 
-    // Tags
     if (c.tags && Array.isArray(c.tags)) {
       for (const tag of c.tags) {
         const t = (
@@ -174,7 +149,6 @@ export function computeMapStats(
       }
     }
 
-    // Timezone
     if (isValidLatLng(c.lat, c.lng)) {
       try {
         const tz = tzlookup(c.lat as number, c.lng as number);
