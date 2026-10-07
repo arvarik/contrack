@@ -15,7 +15,9 @@ and the pull request checklist are in `CONTRIBUTING.md`.
 
 Vitest 5 runs the first four (`vitest.config.ts`) in the Node environment. A
 unit test that renders React starts with the comment
-`// @vitest-environment jsdom`.
+`// @vitest-environment jsdom`. Playwright (`playwright.config.ts`) has two
+projects: `chromium`, a desktop browser, and `phone`, a 390 by 844 touch
+screen that runs `phone-pages.spec.ts` only.
 
 ## 2. Where a test goes
 
@@ -82,9 +84,13 @@ the change. Say why in the pull request.
   functions 74, lines 76, and a separate floor for `server/**`. Raise it when
   the real number rises. Lowering it is a decision for the pull request text.
 - **Source scans that run as unit tests**: the style floor and copy rules
-  (`tests/unit/frontend/style/`), environment docs (`repo/envDocs.test.ts`),
-  docs links and API docs coverage (`repo/docs*.test.ts`), native TypeScript
-  imports, the Docker runtime, and the route manifest.
+  (`tests/unit/frontend/style/`), and in `tests/unit/repo/` the environment
+  docs (`envDocs.test.ts`), docs links and API docs coverage
+  (`docs*.test.ts`), native TypeScript imports, the Node version, the Docker
+  runtime, the settings page name and test database isolation.
+- **Logging** (`logging.test.ts`): at `LOG_LEVEL=debug`, a new contact, a
+  note, a palette search and an Ask question leave no name, title or question
+  in the log, and no query string.
 - **Tenancy**: every `scoped` route has a case in
   `tenancy.isolation.test.ts`; `tenancy.queryPlans.test.ts` keeps the owner
   predicate an index seek; `npm run lint:tenant` scans the server's SQL.
@@ -117,7 +123,8 @@ the change. Say why in the pull request.
 `npm run build && npm run test:e2e`. The first run needs
 `npx playwright install chromium`. It drives the production build: axe scans of
 every screen in both palettes, the keyboard, dialog, search announcement,
-phone form and account journeys, and the 44 px and 11 px measurements. See
+phone form, account, MCP and OAuth journeys, and the 44 px and 11 px
+measurements. CI retries a failed test twice and keeps its trace. See
 `docs/accessibility.md`.
 
 Screenshots that belong in the docs are written to `docs/screenshots/` only

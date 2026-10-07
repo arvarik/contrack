@@ -8,32 +8,36 @@ sends, how to connect a provider and research contacts, and how to turn AI off.
 Each AI feature runs on one or two models. An admin picks each model once, and
 every feature that uses it follows (see [Models](#models)).
 
-| Feature                                | What it does                                                                                                                             | Model                       | What it sends                                                                                                                                  |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Ask Contrack](search.md#ask-contrack) | Plans the search for a question, checks each match, and gives the reason                                                                 | Fast model                  | The question, and the profile fields, addresses and matching note passages of up to 30 candidates                                              |
-| Group brief                            | **Synthesize these results** writes a short brief about the people a question found                                                      | Fast model                  | The question, and each match's name, role, company, industry, location and reason                                                              |
-| Briefing                               | Writes three points to read before a conversation, on the contact's **Dossier** tab                                                      | Fast model                  | The contact's name, role, company, headline, summary, location and last contact date, and its latest 15 notes                                  |
-| Daily insight                          | Writes one observation about your network on **Pulse**                                                                                   | Fast model                  | Contact counts, the industry mix, and the names of your most and least active contacts and of those not reached in 60 days                     |
-| **Add from text**                      | Reads pasted text, such as an email signature, into the new contact form                                                                 | Fast model                  | The text you paste                                                                                                                             |
-| People named in notes                  | Finds the people a saved note names, and links each one to a contact or a new [ghost](contacts.md#ghosts)                                | Fast model                  | The note text                                                                                                                                  |
-| Email file summary                     | Summarizes an `.eml` file that you attach to a contact's timeline                                                                        | Strong model                | The email's text                                                                                                                               |
-| Mail summaries                         | Writes a short note for each matched email, when a **Mailbox (IMAP)** or **Google Workspace** connector has **Generate AI summaries** on | Fast model                  | Each email's subject and body                                                                                                                  |
-| [Contact research](#research-contacts) | Searches the web for a contact and fills empty fields                                                                                    | Web search, then Fast model | The contact's name, role, company, headline, city, addresses, industry, website, summary, emails, profiles, jobs, schools, interests and facts |
-| Duplicate checks                       | **Check now** on **Settings → Duplicates** asks about pairs that look alike but are not certain                                          | Strong model                | Both contacts' names, companies, roles, locations, emails, phones and import sources                                                           |
-| Search by meaning                      | Turns each contact into numbers, so Ask Contrack and duplicate checks can compare people by meaning                                      | Embedding model             | Nothing with the built-in model. A hosted model gets each contact's profile text, but not for an account with AI off                           |
+| Feature                                | What it does                                                                                                                             | Model                       | What it sends                                                                                                                                                  |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Ask Contrack](search.md#ask-contrack) | Plans the search for a question, checks each match, and gives the reason                                                                 | Fast model                  | The question. For up to 30 candidates: the profile fields, tags, addresses, and the matching passages of the summary, jobs and schools                         |
+| Group brief                            | **Synthesize these results** writes a short brief about the people a question found                                                      | Fast model                  | The question, and each match's name, role, company, industry, location and reason                                                                              |
+| Briefing                               | Writes three points to read before a conversation, on the contact's **Dossier** tab                                                      | Fast model                  | The contact's name, role, company, headline, summary, location, preferences and last contact date, and its latest 15 timeline entries                          |
+| Daily insight                          | Writes one observation about your network on **Pulse**                                                                                   | Fast model                  | Contact counts, the industry mix, and the names of your most and least active contacts and of those not reached in 60 days                                     |
+| **Add from text**                      | Reads pasted text, such as an email signature, into the new contact form                                                                 | Fast model                  | The text you paste                                                                                                                                             |
+| People named in notes                  | Finds the people a saved note names, and links each one to a contact or a new [ghost](contacts.md#ghosts)                                | Fast model                  | The note text                                                                                                                                                  |
+| Email file summary                     | Summarizes an `.eml` file that you attach to a contact's timeline                                                                        | Strong model                | The email's text                                                                                                                                               |
+| Mail summaries                         | Writes a short note for each matched email, when a **Mailbox (IMAP)** or **Google Workspace** connector has **Generate AI summaries** on | Fast model                  | Each email's subject and body                                                                                                                                  |
+| [Contact research](#research-contacts) | Searches the web for a contact and fills empty fields                                                                                    | Web search, then Fast model | The contact's name, role, company, headline, city, addresses, industry, website, summary, emails, profiles, jobs, schools, interests, facts and import sources |
+| Duplicate checks                       | **Check now** on **Settings → Duplicates** asks about pairs that look alike but are not certain                                          | Strong model                | Both contacts' names, companies, roles, locations, emails, phones and import sources                                                                           |
+| Search by meaning                      | Turns each contact into numbers, so Ask Contrack and duplicate checks can compare people by meaning                                      | Embedding model             | Nothing with the built-in model. A hosted model gets each contact's profile text, but not for an account with AI off                                           |
 
 Research never sends your notes or phone numbers.
 
 ## What works without AI
 
-With no provider connected, Contrack keeps working. Ask Contrack answers from
-the local index with the built-in model, and marks its answers **Not verified
-by AI**. The command palette, facets and
-[note search](search.md#search-your-notes) run on the server. Duplicate checks
-run, and **Check now** finds exact matches only.
+With no provider connected, Contrack keeps working:
 
-The other features in the table need a provider. Without one, an `.eml` file
-that you attach is saved with no summary.
+- Ask Contrack answers from the local index with the built-in model. It marks
+  the results that no model checked **Not verified by AI**.
+- The command palette, facets and [note search](search.md#search-your-notes)
+  run on the server.
+- Duplicate checks run with no model. **Check now** keeps the strongest close
+  pairs for you to review, see
+  [What counts as a duplicate](duplicates.md#what-counts-as-a-duplicate).
+- An `.eml` file that you attach is saved with no summary.
+
+The other features in the table need a provider.
 
 ## The AI page
 
@@ -79,10 +83,10 @@ One key is enough: every task then runs on **Automatic**. Get a key from
 [Anthropic Console](https://console.anthropic.com/settings/keys). Contrack
 stores the key encrypted and sends it only to its own provider.
 
-A provider row shows the end of the key, the number of models, and **Web
-search** when the provider's models can search the web. A key in
-`GEMINI_API_KEY`, `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` wins over a saved
-key, and its row says which, such as **Set by GEMINI_API_KEY** (see
+A provider row shows the last four characters of the key, the number of
+models, and **Web search** when the provider's models can search the web. A
+key in `GEMINI_API_KEY`, `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` wins over a
+saved key, and its row says which, such as **Set by GEMINI_API_KEY** (see
 [Environment Variables](configuration.md#environment-variables)).
 
 > **Note:** On Google's free tier, Google may use prompts and responses,
@@ -93,8 +97,8 @@ key, and its row says which, such as **Set by GEMINI_API_KEY** (see
 ### Add an OpenAI-compatible server
 
 An OpenAI-compatible server speaks the OpenAI API format, such as Ollama, vLLM,
-LM Studio, llama.cpp, OpenRouter, xAI or Mistral. A model server on your own
-network is always one.
+LM Studio, llama.cpp, OpenRouter, xAI, DeepSeek or Mistral. Add a model server
+on your own network this way.
 
 1. Under **OpenAI-compatible servers**, choose **Add an OpenAI-compatible
    server**.
@@ -142,8 +146,9 @@ once a day, so new models appear without an update.
 
 To pin a model, choose it and then **Save**. For Gemini, OpenAI and Anthropic,
 Contrack first sends the model one small test request, and keeps the old
-choice when the model does not answer. When a pinned model cannot run later,
-the line under it says so, and names what runs in its place.
+choice when the model does not answer. An embedding model on any provider must
+first return one test embedding. When a pinned model cannot run later, the line
+under it says so, and names what runs in its place.
 
 The `AI_QUICK_MODEL`, `AI_DEEP_MODEL`, `AI_RESEARCH_MODEL` and
 `AI_EMBEDDINGS_MODEL` variables set a model from the environment. A set
@@ -155,15 +160,19 @@ wins over the variable (see [AI](configuration.md#ai)).
 
 The built-in model runs on the server, costs nothing and works offline. A
 hosted model can rank better on a large network, but it gets every contact's
-profile text. With Gemini, Contrack says what each text is for, a question, a
-contact or a duplicate check, so the model ranks each one the right way. When
-you save a different model, Contrack rebuilds the search
-and duplicate indexes in the background, and results are incomplete until it
-finishes. The **Search by meaning** card under the model shows the progress. With a
-hosted model, new and changed contacts wait until you choose **Index missing**
-or **Refresh index**, then **Confirm & refresh**. The provider bills each one.
-A hosted model never gets the contacts of an account with its AI switch off.
-Ask Contrack finds that account's people by their words only.
+profile text. With Gemini, Contrack tells the model what each text is for: a
+question, a contact or a duplicate check. The model then ranks each one the
+right way.
+
+When you save a different model, Contrack rebuilds the search and duplicate
+indexes in the background. Results are incomplete until it finishes. The
+**Search by meaning** card under the model shows the progress.
+
+A hosted model's provider bills each contact it reads, so Contrack asks first.
+New and changed contacts wait until you choose **Index missing** or **Refresh
+index** on the card, then **Update the index**. A hosted model never gets the
+contacts of an account with its AI switch off. Ask Contrack finds that
+account's people by their words only.
 
 ## Research contacts
 
@@ -196,10 +205,12 @@ Only Google gives free web searches: the first 5,000 each month.
    links**, **Has email** and **No data**. The **Research** row offers **Any**,
    **Not yet**, **6+ months ago** and **Found nothing**. A contact shows when
    it matches both rows.
-5. Select contacts, or choose **Select all**.
-6. Read the time and cost under the button, and choose **Start enrichment**.
-   Check the dialog, and choose **Search** with the number of contacts. With
-   SearXNG or both, the dialog names the engine and what it costs.
+5. Select up to 100 contacts, or choose **Select all**.
+6. Choose **Start enrichment**. With Gemini's own search, the line under the
+   button shows the time and cost of the batch.
+7. Check the dialog, and choose **Search** with the number of contacts, such as
+   **Search 12 contacts**. With SearXNG or both, the dialog names the engine and
+   what it costs.
 
 A row's badge says **New**, the date of the last research, **No page** or
 **Error**. The progress panel opens at the bottom right, and each update saves
@@ -207,6 +218,8 @@ as its contact finishes. **Stop research** stops the batch, but a provider may
 still bill a request that it already took.
 
 ### Research one contact, or every new one
+
+![Enrich contact on the Dossier tab: the run, then the Research card with what it found and its sources](images/flow-enrich.gif)
 
 - In the contact's actions menu, choose **Enrich contact** (Standard) or
   **Enrich deeply** (Deep). On the **Dossier** tab, **Enrich contact** and
@@ -240,34 +253,36 @@ A run that finds nothing beyond what the contact already says records **No
 web page about this person**. It saves no headline, industry or tags of its
 own, and no pages.
 
-The **Research** card on the **Dossier** tab lists each run, each fact beside
-its page, and every page under **Sources**. Check a fact against its page.
+The **Research** card on the **Dossier** tab lists each run under **History**,
+each fact beside its page, and every page under **Sources**. Check a fact
+against its page.
 
-When research finds no page, or two details or fewer, the card says **No web
-page matched** or **Research found little**, and offers the details that tell
-the person apart from others with the name: **Add a school**, **Add a city**
-and **Add a former name**, then a work email and a link. A school and a
-former name are typed in the card: **Save and search** saves the detail and
-searches again at once, at the last search's depth. A city, a work email and
-a link open their field on the page, and **Search again** appears in the card
-once you add one. **Enrich again** looks in new places and adds only new
-facts.
+When the last run found no page, or two details or fewer, the card says **No
+web page matched** or **Research found little**. It then offers up to three
+details that tell the person apart from others with the name, in this order:
+**Add a school**, **Add a city**, **Add a former name**, **Add a work email**
+and **Add a link**. A school and a former name are typed in the card. **Save
+and search** saves the detail and searches again at once, at the last search's
+depth. A city, a work email and a link open their field on the page, and
+**Search again** appears in the card once you add one. **Enrich again** looks
+in new places and adds only new facts.
 
 ### Not this person
 
 When a search found someone else with the same name, open the menu beside
-that search under **History** and choose **Not** and the contact's name. The
-dialog says what the search added. **Take back** removes each detail it
-added that you have not changed since, and later searches leave out its
-pages and never add those details again. The card then offers a detail to
-add and **Search again**.
+that search under **History**. Choose **Not** and the contact's first name,
+such as **Not Rowan**. The dialog says what the search added. **Take back**
+removes each detail it added that you have not changed since. Later searches
+leave out its pages and never add those details again. The card then offers a
+detail to add and **Search again**.
 
 Research says no page matched only after the web search model searched.
 When the model answers without a search, Contrack asks once more. When it
 still does not search, Contrack records nothing and shows "The web search
-model did not run a web search for this contact". Try again, choose another
-**Web search model**, or search with SearXNG or both. A contact never
-researched stays under **Not yet**.
+model did not run a web search for this contact". When the model sends no
+answer at all, the message is "The web search model returned no answer". Try
+again, choose another **Web search model**, or search with SearXNG or both. A
+contact never researched stays under **Not yet**.
 
 Research searches the name the way pages write it. It leaves out
 credentials such as ", CPA", tries the name without a middle initial, and
@@ -317,7 +332,8 @@ With AI off for you or for the instance:
   they say that AI is off.
 - On the **Duplicates** page, **Check now** finds exact matches only, and the
   card says why. The automatic checks of new contacts and imports still run.
-- Link previews in notes do not load.
+- A link that you paste into a note gets no preview: its card shows only the
+  address.
 - An `.eml` file that you attach is saved with no summary.
 - A search that an MCP client runs with your token answers from the local
   index, as Ask Contrack does.
@@ -335,8 +351,13 @@ The page shows **AI calls**, **Tokens used** with an estimated cost, and
 **Reused answers**, the share of calls answered from saved answers. A reused
 answer costs nothing. The **Activity feed** lists each call of the last 30
 days, and **Saved answers by feature** shows the saved answers of each
-feature. The badge **Simulated calls** means that no call reached a provider. Admins also see **Research runs, last 24
-hours** on the **Contact enrichment** page.
+feature. In **All users**, the feed names the account of each call, but not
+what the call was about.
+
+Two badges can show at the top. **Simulated calls** means that no call reached
+a provider. **Gemini free tier** means that Google answered with a free-tier
+limit, and the page then shows no cost. Admins also see **Research runs, last
+24 hours** on the **Contact enrichment** page.
 
 Limits and busy answers:
 
@@ -345,16 +366,18 @@ Limits and busy answers:
 - The server runs two AI calls at a time, and Ask Contrack has two more of its
   own. Up to 16 more calls wait. Past that, Contrack says "AI is busy. Please
   try again shortly."
-- When Gemini says that a model is over its limit, Contrack pauses that model
-  for the time that Google asks, and uses another model. **Instance health**
-  shows **Models paused** and **Gemini web searches today**.
+- When Gemini says that a model on **Automatic** is over its limit, Contrack
+  pauses that model for the time that Google asks, and uses another model. A
+  pinned model is not paused. **Instance health** shows **Models paused** and
+  **Gemini web searches today**.
 
 ## Privacy
 
 ### What leaves the server
 
 - A provider gets data only when an AI feature runs, and only for its own task.
-  [What AI does](#what-ai-does) lists what each feature sends.
+  [What AI does](#what-ai-does) lists what each feature sends. A model list
+  request and a model test send no contact data.
 - Full-text search and search by meaning run on the server, unless an admin
   picks a hosted embedding model.
 - For web search, the provider searches the web with the contact's details.
@@ -366,8 +389,11 @@ Limits and busy answers:
 - A download of the local search models sends no contact data.
 - With **Use AI for my account** off, nothing goes to a provider for you,
   even while AI is on for the instance. This includes the notes that you save,
-  the `.eml` files that you attach, the searches that an MCP client runs with
-  your token, and your contacts' text for a hosted embedding model.
+  the `.eml` files that you attach, your connectors' mail summaries, the
+  searches that an MCP client runs with your token, and your contacts' text for
+  a hosted embedding model.
+- [Privacy](privacy.md#what-leaves-the-server) lists every outside service
+  that Contrack can reach, AI and others.
 
 ### How Contrack guards prompts and answers
 
@@ -410,9 +436,9 @@ The engine is one choice, shown where it is set and where it is used:
 
 An engine that cannot run stays in the list, dimmed, and says what it lacks,
 such as "Needs a SearXNG address". The line under the tiles says what research
-does about it, with a link for an admin and "Ask your admin to set it up" for
-a member. When the chosen engine cannot run, research searches with one that
-can, and does not fail.
+does about it. On **Contact enrichment**, it also says what to do: a link for an
+admin, and "Ask your admin to set it up" for a member. When the chosen engine
+cannot run, research searches with one that can, and does not fail.
 
 ### SearXNG
 
@@ -442,8 +468,9 @@ pages in full at Standard and ten at Deep, from public addresses, and up to
 twenty more by their snippet. A page that does not load, such as a LinkedIn
 profile, keeps its snippet and gives its place to the next result, up to three
 tries for each page. The **Strong model** reads them into facts, each beside
-the address of its page, and the **Fast model** fills the fields. The
-**Research** card shows those facts and pages, as it does for a provider.
+the address of its page, and the **Fast model** fills the fields. With no Fast
+model, the Strong model fills them too. The **Research** card shows those
+facts and pages, as it does for a provider.
 
 A model on an OpenAI-compatible server reads within its context window: the
 window that the server reports, as vLLM does, or 4,096 tokens when it reports
@@ -452,11 +479,11 @@ in up to three calls, the snippets first. A larger window reads more pages
 in fewer calls.
 
 With both, research runs the web search model's search and SearXNG's at once,
-and keeps the facts of both. One is enough: when the model does not search, SearXNG's
-facts stand alone, and when SearXNG finds nothing, the model's do. Research
-records no web page only when one of them searched and matched nobody. Each
-search stops 40 seconds before the run's time ends, so a slow one leaves time
-to read the other's facts.
+and keeps the facts of both. One is enough: when the model does not search,
+SearXNG's facts stand alone, and when SearXNG finds nothing, the model's do.
+Research records no web page only when neither found facts and one of them
+searched and matched nobody. Each search stops 40 seconds before the run's
+time ends, so a slow one leaves time to read the other's facts.
 
 ## Related
 

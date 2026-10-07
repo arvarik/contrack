@@ -37,7 +37,8 @@ code rules are in `STYLE.md`, test rules in `TESTING.md`.
 | `server/connectors/`   | ICS, IMAP and Google sync: scheduler, ingest, matching                                                                            |
 | `server/mcp/`          | The MCP server: tools, resources, prompts                                                                                         |
 | `server/tenancy/`      | `Scope`, the request context, `ROUTE_MANIFEST`                                                                                    |
-| `server/middleware/`   | Auth, rate limits, AI switches, uploads guard, errors, cache headers                                                              |
+| `server/middleware/`   | Auth, the host guard, rate limits, AI switches, compression, uploads guard, errors, cache headers                                 |
+| `server/mail/`         | Mail templates                                                                                                                    |
 | `server/workers/`      | The CPU worker that runs the local models                                                                                         |
 | `server/utils/`        | `AppError`, validators, `aiCache`, `secretBox`, `urlSafety`, paths, logger                                                        |
 | `server/db.ts`         | The connection, the call to the migration runner and the index installers, every-boot steps                                       |
@@ -47,7 +48,7 @@ code rules are in `STYLE.md`, test rules in `TESTING.md`.
 | `server/jobs/`         | The job runner, `runJobNow`, the recurring and start-up jobs                                                                      |
 | `shared/`              | Code both sides import: the API contracts and event payloads (`contracts/`), facets, score bands, research records, MCP tool list |
 | `src/api/`             | React Query hooks, one file per domain                                                                                            |
-| `src/views/`           | Pages: `pulse/`, `contact-list/`, `contact-detail/`, `ai-search/`, `map/`, `settings/`, `dedupe/`                                 |
+| `src/views/`           | Pages: `pulse/`, `contact-list/`, `contact-detail/`, `search/` (Ask), `ai-search/` (research), `map/`, `settings/`, `dedupe/`     |
 | `src/components/`      | Shared UI: `ui/` primitives, `layout/`, `command-palette/`, `brand/` (the corvid), `auth/`                                        |
 | `src/lib/`             | Tokens (`styles.ts`), names, shortcuts, theme, the corvid's motion                                                                |
 | `scripts/`             | Seeds, model fetch, eval recorders, brand icons, password reset                                                                   |
@@ -106,10 +107,16 @@ SQL, and tests prove it.
 - Sign-in is off by default (`AUTH_REQUIRED=false`): one local owner holds the
   data. `POST /api/auth/setup` turns that owner into the first admin in place.
   Sessions are server-side rows keyed by the SHA-256 of the cookie secret.
-  Personal API tokens start with `ctk_`. Passkeys use
-  `@simplewebauthn/server`. Mailed links need `PUBLIC_URL`. An admin route
-  needs a session: a token is refused, an admin's included. A cookie write
-  from another site's page is refused (`refuseCrossSiteWrites`).
+  Personal API tokens start with `ctk_`, and a read-only token sends only
+  `GET`, `HEAD`, `OPTIONS` and MCP requests. An OAuth grant (an MCP client
+  such as Claude) is an `api_tokens` row with `kind = 'oauth'`, and its access
+  token reaches `/api/mcp` only. Passkeys use `@simplewebauthn/server`. Mailed
+  links need `PUBLIC_URL`. An admin route needs a session: a token is
+  refused, an admin's included. A cookie write from another site's page is
+  refused (`refuseCrossSiteWrites`).
+- While sign-in is off, and until the first account exists, `hostGuard`
+  answers only local names, the `PUBLIC_URL` host and `ALLOWED_HOSTS`, so DNS
+  rebinding cannot reach the owner's data.
 
 ## 5. Data
 
@@ -132,11 +139,13 @@ SQL, and tests prove it.
     `contact_embeddings` (float vectors for duplicate detection).
   - The FTS triggers keep the index in step (deletes by `rowid`, never by
     `contactId`).
-- The baseline's triggers stamp `updatedAt` with named columns, stamp
-  `trackedAt`, keep `nextFollowUpAt` equal to the earliest open follow-up,
-  and mark contacts whose score must be recomputed. A migration that adds a
-  `contacts` column rebuilds `contacts_auto_updated_at` and
-  `contacts_score_dirty` with the new column list.
+- The triggers stamp `updatedAt` with named columns, stamp `trackedAt` and
+  `archivedAt`, keep `nextFollowUpAt` equal to the earliest open follow-up,
+  and mark contacts whose score must be recomputed. A pin (`lat`, `lng`,
+  `geoSource`) and the score columns are not edits, so they stay out of
+  those column lists. A migration that adds a `contacts` column rebuilds
+  `contacts_auto_updated_at` and `contacts_score_dirty` with the new column
+  list, as `0007_archived_at` does.
 - `vec0` tables do not cascade. Deleting or merging a contact must delete its
   rows in `search_embeddings`, `contact_embeddings` and
   `dedupe_embedding_meta`. Never `UPDATE` a partition key or rename a `vec0`
@@ -159,7 +168,8 @@ SQL, and tests prove it.
 People search (`server/services/searchService.ts`, `runSearch`) answers as
 cheaply as it can:
 
-1. The L1 cache, keyed by owner, `search_revision`, facets, model and query.
+1. The L1 cache, keyed by owner, `search_revision`, `notes_revision`, facets,
+   model and query.
 2. Facets (typed in the question or sent as `filters`) compile to one SQL
    predicate (`search/facetSql.ts`). A facet-only question is answered from the
    database.
@@ -222,12 +232,13 @@ measured in CI without keys.
   never a `setInterval`. At boot: migrations and the local owner, the
   runner requeues `running` rows, the search module loads the local models
   and runs the embedding backfills, and the start-up jobs geocode missing
-  pins and copy stored photos. Recurring jobs: the connector tick (60 s), the
-  score sweeps (hourly, daily), backups (`BACKUP_INTERVAL_HOURS`), the trash
-  purge, the merge purge, the upload sweep, the geocode cache prune,
-  maintenance, model catalogs and planner statistics. The duplicate
-  check is an on-demand job. `DISABLE_BACKGROUND_JOBS=true` runs none of
-  them, and `runJobNow` still works.
+  pins, copy stored photos and take a snapshot. Recurring jobs: the connector
+  tick (60 s), the score sweeps (hourly, daily), backups
+  (`BACKUP_INTERVAL_HOURS`), the trash purge, the merge purge, the upload
+  sweep, the geocode cache prune, maintenance, the OAuth sweep (hourly),
+  model catalogs and planner statistics. The duplicate check is an on-demand
+  job. `DISABLE_BACKGROUND_JOBS=true` runs none of them, and `runJobNow`
+  still works.
 
 ## 9. Rules that are easy to break
 
@@ -250,6 +261,9 @@ measured in CI without keys.
 - Log with `log.info` for state changes, `log.warn` for retries and
   degradation, `log.error` for failures. Never `console.log` in app code, and
   never an empty `.catch(() => {})`.
+- A log line holds ids, counts and times. Never log a name, an email, a
+  phone, an address, a note, a search, a file name, a pasted link or what a
+  model wrote. `tests/integration/logging.test.ts` holds this.
 - A new route gets a contract in `shared/contracts/` beside its manifest row.
   A response schema is strict and lists every field the route sends: every
   integration test checks the answers against it. After a contract change,

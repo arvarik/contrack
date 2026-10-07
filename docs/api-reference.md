@@ -6,20 +6,34 @@ write scripts and tools against your own instance.
 The routes with a contract are also in [`openapi.json`](openapi.json), an
 OpenAPI 3.1 file with the JSON Schema of each request and answer. They are the
 contacts, notes, follow-ups, lists, tags and personal tokens, the read-only
-query routes and the background jobs route. `npm run api:openapi` writes the
-file from `shared/contracts/`, and a test fails when it is out of date. This
-page stays the reference for every route, for signing in and for errors.
+query routes, the OAuth routes, and a few more, such as the background jobs
+route. `npm run api:openapi` writes the file from `shared/contracts/`, and a
+test fails when it is out of date. This page stays the reference for every
+route, for signing in and for errors.
 
 ## Conventions
 
 ### Base URL
 
 A local install listens on `http://localhost:3210`. Every API path starts with
-`/api`. Two paths live outside `/api`: the health probe `GET /healthz` and the
-uploaded files under `/uploads`.
+`/api`, except three groups: the health probe `GET /healthz`, the uploaded
+files under `/uploads`, and the OAuth routes under `/.well-known` and
+`/oauth`.
 
 Requests and responses are JSON unless an endpoint says otherwise. Send
 `Content-Type: application/json` with every JSON body.
+
+While sign-in is off, and until the first account exists, the server answers
+only to names that a web page cannot own. These are an IP address,
+`localhost`, a name with no dot, a name under a local suffix such as `.local`,
+`.lan` or `.internal`, the `PUBLIC_URL` host, and the names in `ALLOWED_HOSTS`
+(see [Configuration](configuration.md#environment-variables)). Another name
+gets `403 HOST_NOT_ALLOWED` under `/api` and `/uploads`, and a plain-text `403`
+elsewhere. `GET /healthz` answers to every name.
+
+The server sends no CORS headers. To call the API from a page on another
+origin, set `CORS_ORIGIN` to that one origin. The OAuth metadata, token,
+register and revoke routes allow every origin.
 
 ### Credentials
 
@@ -32,38 +46,50 @@ request then needs one of two credentials:
 
 - **A personal token.** Send `Authorization: Bearer ctk_...`. Create one in
   **Settings → Account**, or with `POST /api/auth/tokens`. A token acts as
-  the account that created it. A read-only token may send `GET` and `HEAD`
-  requests and call the MCP server, which then lists only its read-only
-  tools. Every other request gets `403 TOKEN_READ_ONLY`, and so does the
-  Google sign-in at `/api/connectors/google/`, which adds a connector.
+  the account that created it. A read-only token may send `GET`, `HEAD` and
+  `OPTIONS` requests and call the MCP server, which then lists only its
+  read-only tools. Every other request gets `403 TOKEN_READ_ONLY`, and so does
+  the Google sign-in at `/api/connectors/google/`, which adds a connector.
 - **The session cookie.** The browser gets `contrack_session` when it signs in.
-  The cookie is `HttpOnly` and `SameSite=Strict`. It is `Secure` when the
-  request arrived over HTTPS. A `POST`, `PUT`, `PATCH` or `DELETE` with the
-  cookie must come from this server's own pages. It gets
-  `403 CROSS_SITE_REQUEST` when its `Origin` names another host than the
-  request's own or `PUBLIC_URL`, or, with no `Origin`, when `Sec-Fetch-Site`
-  is `cross-site` or `same-site`.
+  The cookie is `HttpOnly`, `SameSite=Strict` and `Path=/`. It is `Secure`
+  when the request arrived over HTTPS, or when a proxy sends
+  `X-Forwarded-Proto: https`. A session lasts 30 days by default, and an admin
+  sets 1 to 365 days. A sign-in with `remember: false` gets a cookie that ends
+  with the browser, and its session lasts at most one day.
 
-A request with no valid credential gets `401 UNAUTHORIZED`.
+An MCP client may also send an OAuth access token to `/api/mcp` (see
+[Apps that sign in with OAuth](#apps-that-sign-in-with-oauth)).
 
-An account whose password an admin set gets `403 PASSWORD_CHANGE_REQUIRED` on
-every route until it sets its own password. Six routes stay open for that
-flow: `GET /api/auth/status`, `POST /api/auth/setup`, `POST /api/auth/login`,
-`POST /api/auth/logout`, `GET /api/auth/me` and `POST /api/auth/change-password`.
+A `POST`, `PUT`, `PATCH` or `DELETE` with the cookie must come from this
+server's own pages. It gets `403 CROSS_SITE_REQUEST` when its `Origin` names
+another host than the request's own or `PUBLIC_URL`, or, with no `Origin`,
+when `Sec-Fetch-Site` is `cross-site` or `same-site`.
+
+A request with no valid credential gets `401 UNAUTHORIZED`. The answer carries
+`WWW-Authenticate: Bearer`, with `error="invalid_token"` when the request sent
+a token that failed.
+
+An account whose password an admin set gets `403 PASSWORD_CHANGE_REQUIRED`
+until it sets its own password, with a session or a token. Every route outside
+the [Sign in and sign up](#sign-in-and-sign-up) and
+[Your account](#your-account) tables refuses it, and so does `/uploads`. In
+those two tables, `POST /api/auth/tokens` and the two passkey registration
+routes refuse it too. The other routes there stay open, so the account can
+read and change its settings and call `POST /api/auth/change-password`.
 
 ### Access
 
 The **Access** column in each table uses these words. They come from the route
 manifest, `server/tenancy/routeManifest.ts`.
 
-| Access               | Who can call it                                                                                                                                                                                |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| public               | Anyone who can reach the port. No credential.                                                                                                                                                  |
-| your session         | You, for your own account. It needs the session cookie: a personal token gets `403 SESSION_REQUIRED`. With sign-in off, the local owner passes. The three preference routes also take a token. |
-| your data            | You, for the data your account owns. An id that belongs to another account answers `404` with the same body as an id that does not exist.                                                      |
-| admin                | An account with the admin role, signed in. Other accounts get `403 ADMIN_REQUIRED`. A token gets `403 SESSION_REQUIRED`, an admin's too. With sign-in off, the local owner passes.             |
-| any signed-in caller | Any caller with a valid credential. The route reads no owned data.                                                                                                                             |
-| dev only             | Registered only when `NODE_ENV` is not `production`.                                                                                                                                           |
+| Access               | Who can call it                                                                                                                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| public               | Anyone who can reach the port. No credential.                                                                                                                                                          |
+| your session         | You, for your own account. It needs the session cookie: a personal token gets `403 SESSION_REQUIRED`. With sign-in off, the local owner passes. The three preference routes also take a token.         |
+| your data            | You, for the data your account owns. An id that belongs to another account answers `404` with the same body as an id that does not exist.                                                              |
+| admin                | An account with the admin role, signed in. Other accounts get `403 ADMIN_REQUIRED`, with a session or a token. An admin's token gets `403 SESSION_REQUIRED`. With sign-in off, the local owner passes. |
+| any signed-in caller | Any caller with a valid credential. The route reads no owned data.                                                                                                                                     |
+| dev only             | Registered only when `NODE_ENV` is not `production`.                                                                                                                                                   |
 
 Some "your data" routes also need a session, because they store external
 credentials. The tables say so in the description.
@@ -84,44 +110,62 @@ Every error uses one envelope:
 ```
 
 - `code` is stable. Branch on it, not on `message`.
-- `details` is optional. For `VALIDATION_ERROR` it holds the list of Zod issues.
+- `details` is optional. When a schema refused the request, `details` holds
+  the list of Zod issues. Other `VALIDATION_ERROR` answers have only a
+  `message`.
 - `stack` is added outside production. The server never sends the cause of an
   unexpected error.
 - A `429` that knows when to retry sends a `Retry-After` header in seconds.
 
-| Code                       | Status | Meaning                                                          |
-| -------------------------- | ------ | ---------------------------------------------------------------- |
-| `VALIDATION_ERROR`         | 400    | The body, query or path failed validation.                       |
-| `INVALID_JSON`             | 400    | The body is not valid JSON.                                      |
-| `BAD_REQUEST`              | 400    | A rule the route checks itself, such as child arrays on `PATCH`. |
-| `DB_CONSTRAINT`            | 400    | A database constraint refused the write.                         |
-| `INVALID_UPLOAD`           | 400    | A multipart upload had bad fields.                               |
-| `UNSUPPORTED_FILE_TYPE`    | 400    | The attachment type is not allowed.                              |
-| `UNAUTHORIZED`             | 401    | No valid credential.                                             |
-| `SESSION_REQUIRED`         | 403    | The route needs the session cookie, not a token.                 |
-| `CROSS_SITE_REQUEST`       | 403    | A change with the session cookie came from another site's page.  |
-| `ADMIN_REQUIRED`           | 403    | The route needs an admin account.                                |
-| `PASSWORD_CHANGE_REQUIRED` | 403    | Set your own password first.                                     |
-| `TOKEN_READ_ONLY`          | 403    | A read-only token sent a request that changes data.              |
-| `AI_OFF_FOR_ACCOUNT`       | 403    | You turned AI off for your account.                              |
-| `AI_OFF_FOR_INSTANCE`      | 403    | An admin turned AI off for the instance.                         |
-| `NOT_FOUND`                | 404    | The row does not exist, or it is not yours.                      |
-| `ROUTE_NOT_FOUND`          | 404    | No route has this method and path.                               |
-| `CONFLICT`                 | 409    | The request conflicts with the current state.                    |
-| `PAYLOAD_TOO_LARGE`        | 413    | The body or the file is over its limit.                          |
-| `RATE_LIMITED`             | 429    | A rate limit or a run lock refused the request.                  |
-| `AI_BUSY`                  | 429    | The AI queue is full. Try again shortly.                         |
-| `INTERNAL`                 | 500    | An unexpected error. The server logs it.                         |
-| `SERVICE_UNAVAILABLE`      | 503    | A dependency is missing, for example no AI provider.             |
-| `DB_BUSY`                  | 503    | The database stayed locked. Retry.                               |
-| `DB_READONLY`              | 503    | The database is read-only.                                       |
-| `UPSTREAM_TIMEOUT`         | 504    | A call to a provider ran out of time.                            |
+| Code                        | Status | Meaning                                                                                                                                |
+| --------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `VALIDATION_ERROR`          | 400    | The body, query or path failed validation.                                                                                             |
+| `INVALID_JSON`              | 400    | The body is not valid JSON.                                                                                                            |
+| `BAD_REQUEST`               | 400    | A rule the route checks itself, such as child arrays on `PATCH`.                                                                       |
+| `DB_CONSTRAINT`             | 400    | A database constraint refused the write.                                                                                               |
+| `INVALID_UPLOAD`            | 400    | A multipart upload had bad fields.                                                                                                     |
+| `UNSUPPORTED_FILE_TYPE`     | 400    | The attachment type is not allowed.                                                                                                    |
+| `UNAUTHORIZED`              | 401    | No valid credential.                                                                                                                   |
+| `AI_BILLING`                | 402    | The AI provider refused the call for billing.                                                                                          |
+| `SESSION_REQUIRED`          | 403    | The route needs the session cookie, not a token.                                                                                       |
+| `CROSS_SITE_REQUEST`        | 403    | A change with the session cookie came from another site's page.                                                                        |
+| `HOST_NOT_ALLOWED`          | 403    | The server does not answer to this host name (see [Base URL](#base-url)).                                                              |
+| `ORIGIN_NOT_ALLOWED`        | 403    | A page on another origin called `POST /api/mcp`. `CORS_ORIGIN` allows one origin.                                                      |
+| `ADMIN_REQUIRED`            | 403    | The route needs an admin account.                                                                                                      |
+| `PASSWORD_CHANGE_REQUIRED`  | 403    | Set your own password first.                                                                                                           |
+| `TOKEN_READ_ONLY`           | 403    | A read-only token sent a request that changes data.                                                                                    |
+| `AI_OFF_FOR_ACCOUNT`        | 403    | You turned AI off for your account.                                                                                                    |
+| `AI_OFF_FOR_INSTANCE`       | 403    | An admin turned AI off for the instance. The AI settings routes answer it with `409`, and a model call outside an AI route with `503`. |
+| `NOT_FOUND`                 | 404    | The row does not exist, or it is not yours.                                                                                            |
+| `ROUTE_NOT_FOUND`           | 404    | No route has this method and path.                                                                                                     |
+| `CONFLICT`                  | 409    | The request conflicts with the current state.                                                                                          |
+| `PAYLOAD_TOO_LARGE`         | 413    | The body or the file is over its limit.                                                                                                |
+| `RATE_LIMITED`              | 429    | A rate limit, a run lock or the AI provider's own limit refused the request.                                                           |
+| `AI_BUSY`                   | 429    | The AI queue is full. Try again shortly.                                                                                               |
+| `INTERNAL`                  | 500    | An unexpected error. The server logs it. A fetch of an outside page that failed answers it with `502`.                                 |
+| `AI_MODEL_UNAVAILABLE`      | 502    | The AI provider has no such model for this key.                                                                                        |
+| `AI_REQUEST_REJECTED`       | 502    | The AI provider refused the request.                                                                                                   |
+| `AI_INVALID_JSON`           | 502    | The model answered empty or malformed JSON.                                                                                            |
+| `AI_SCHEMA_MISMATCH`        | 502    | The model's answer had the wrong shape.                                                                                                |
+| `RESPONSE_TOO_LARGE`        | 502    | An outside page was over the size limit.                                                                                               |
+| `SERVICE_UNAVAILABLE`       | 503    | A dependency is missing, for example no AI provider.                                                                                   |
+| `AI_CAPABILITY_UNAVAILABLE` | 503    | No AI provider serves this task.                                                                                                       |
+| `AI_AUTH_FAILED`            | 503    | The AI provider refused its key.                                                                                                       |
+| `DB_BUSY`                   | 503    | The database stayed locked. Retry.                                                                                                     |
+| `DB_READONLY`               | 503    | The database is read-only.                                                                                                             |
+| `UPSTREAM_TIMEOUT`          | 504    | A call to a provider ran out of time.                                                                                                  |
 
 Routes add their own codes, such as `NOT_TRACKED` or `USER_HAS_DATA`. The
 tables name them. A few answers do not use the envelope:
 
 - `GET /api/mcp` and `DELETE /api/mcp` answer `405` with `{ "error", "message" }`.
-- `GET /api/ai/stats/feed` answers a bad query with `400 { "error", "details" }`.
+- `GET /api/ai/stats/feed` answers a bad query with
+  `400 { "error", "details" }`, and an unknown `operation` with
+  `400 { "error" }`.
+- `GET /api/logos/:domain` answers its errors as plain text.
+- The OAuth routes under `/.well-known` and `/oauth` answer
+  `{ "error", "error_description" }`, as OAuth asks.
+- The host check answers a plain-text `403` outside `/api` and `/uploads`.
 - `POST /api/search/refresh-index` answers `400` with a confirmation request,
   not an error (see [Search](#search)).
 - MCP errors are JSON-RPC errors.
@@ -129,25 +173,36 @@ tables name them. A few answers do not use the envelope:
 ### Request IDs
 
 Every response carries `X-Request-Id`, an 8-character id. An error body repeats
-it in `error.requestId`. The server log prints the same id on every line for
-that request, so quote it when you report a problem.
+it in `error.requestId`. The server log writes the same id in brackets on each
+error line and on most route log lines, so quote it when you report a
+problem. The access log line does not carry it.
 
 ### Rate limits
 
 Each limit counts requests in a fixed window. An exceeded limit answers
 `429 RATE_LIMITED` with `Retry-After`.
 
-| What                                                                                    | Limit           | Counted per                       |
-| --------------------------------------------------------------------------------------- | --------------- | --------------------------------- |
-| Routes that call an AI provider or fetch a URL (list below)                             | 60 a minute     | client address                    |
-| The same routes                                                                         | 30 a minute     | account                           |
-| `POST /api/mcp`                                                                         | 120 a minute    | account (address with no account) |
-| `GET /api/geo/search`                                                                   | 30 a minute     | account (address with no account) |
-| Sign-in routes: login, register, invitation, passkeys, password change, link completion | 10 a minute     | client address                    |
-| `POST /api/auth/setup`                                                                  | 5 a minute      | client address                    |
-| `POST /api/auth/tokens`                                                                 | 10 an hour      | account                           |
-| `POST /api/auth/password-reset/request`, `POST /api/auth/magic-link/request`            | 3 in 15 minutes | client address                    |
-| `POST /api/admin/mail/test`                                                             | 5 in 10 minutes | account                           |
+| What                                                                                    | Limit            | Counted per                       |
+| --------------------------------------------------------------------------------------- | ---------------- | --------------------------------- |
+| Routes that call an AI provider or fetch a URL (list below)                             | 60 a minute      | client address                    |
+| The same routes                                                                         | 30 a minute      | account                           |
+| `POST /api/mcp`                                                                         | 120 a minute     | account (address with no account) |
+| `GET /api/geo/search`                                                                   | 30 a minute      | account (address with no account) |
+| Sign-in routes: login, register, invitation, passkeys, password change, link completion | 10 a minute      | client address                    |
+| `POST /api/auth/setup`                                                                  | 5 a minute       | client address                    |
+| `POST /api/auth/tokens`                                                                 | 10 an hour       | account                           |
+| `POST /api/auth/password-reset/request`, `POST /api/auth/magic-link/request`            | 3 in 15 minutes  | client address                    |
+| `POST /api/admin/mail/test`                                                             | 5 in 10 minutes  | account                           |
+| `GET /oauth/authorize`, and `POST /oauth/token`                                         | 60 a minute each | client address                    |
+| `POST /oauth/revoke`                                                                    | 30 a minute      | client address                    |
+| `POST /oauth/register`                                                                  | 10 an hour       | client address                    |
+| `POST /api/auth/oauth/requests/:id`                                                     | 20 a minute      | account (address with no account) |
+
+The sign-in routes share one count for each address. The two link requests
+share one count, and so do the AI and fetch routes. Behind a reverse proxy,
+set `TRUST_PROXY_HOPS`, or every client counts as the proxy's address. The
+OAuth token, register and revoke routes refuse with
+`429 {"error":"temporarily_unavailable"}` and `Retry-After`.
 
 The AI and fetch limits cover these paths, in any letter case:
 `POST /api/search/semantic`, `POST /api/search/synthesize`,
@@ -160,8 +215,12 @@ Two other answers look like rate limits:
 
 - `429 AI_BUSY`: the AI queue holds 2 running calls and 16 waiting calls, and
   Ask Contrack has 2 slots of its own. A full queue refuses new work.
-- `429 RATE_LIMITED` with `details.yours` and `details.queued`: a duplicate scan
-  or a research batch of another account holds the run lock.
+- `429 RATE_LIMITED` with `details.yours` and `details.queued`: the run lock
+  refused a duplicate scan or a research batch. A scan is refused while your
+  own scan runs (`yours: true`) or another account's scan runs
+  (`yours: false`). Then `queued: true` means the server booked your scan a
+  turn, so do not send it again. A research batch is refused only while
+  another account's batch runs, with `Retry-After: 60`.
 
 ### Body sizes and uploads
 
@@ -174,20 +233,26 @@ Two other answers look like rate limits:
 | An attachment, field `attachment`     | 50 MB. `.eml`, `.txt`, `.md`, `.csv`, `.pdf`, `.png`, `.jpg`, `.jpeg`, `.gif` or `.webp`. |
 
 A body or file over its limit answers `413 PAYLOAD_TOO_LARGE`. Uploads use
-`multipart/form-data`.
+`multipart/form-data`. The server checks a photo by the `Content-Type` of its
+part, and refuses another type with `400 VALIDATION_ERROR`. It checks an
+attachment by its file name extension, and refuses another type with
+`400 UNSUPPORTED_FILE_TYPE`. A file under another field name gets
+`400 INVALID_UPLOAD`.
 
 ### Bulk limits
 
-| What                                                                | Limit                                |
-| ------------------------------------------------------------------- | ------------------------------------ |
-| Id lists: bulk delete, bulk update, bulk restore, bulk list members | 1 to 5,000 ids. Duplicates collapse. |
-| `POST /api/contacts/bulk`                                           | 5,000 contacts                       |
-| Child arrays on a contact (emails, phones, tags and the rest)       | 100 items each                       |
-| `POST /api/contacts/merge-cluster`                                  | 10 duplicates                        |
-| `POST /api/contacts/merge-clusters`                                 | 250 merges in all                    |
-| `POST /api/ai-search`                                               | 1 to 100 unique contact ids          |
-| `POST /api/search/synthesize`                                       | 1 to 30 contact ids                  |
-| Search facets                                                       | 8 per request                        |
+| What                                                                | Limit                                      |
+| ------------------------------------------------------------------- | ------------------------------------------ |
+| Id lists: bulk delete, bulk update, bulk restore, bulk list members | 1 to 5,000 ids. Duplicates collapse.       |
+| `POST /api/contacts/bulk`                                           | 5,000 contacts                             |
+| Child arrays on a contact (emails, phones, tags and the rest)       | 100 items each                             |
+| `POST /api/contacts/merge-cluster`                                  | 10 duplicates                              |
+| `POST /api/contacts/merge-clusters`                                 | 250 merges in all                          |
+| `POST /api/action-items/bulk`                                       | 1 to 500 contact ids. Duplicates collapse. |
+| `PUT /api/lists/reorder`                                            | 5,000 ids                                  |
+| `POST /api/ai-search`                                               | 1 to 100 unique contact ids                |
+| `POST /api/search/synthesize`                                       | 1 to 30 contact ids                        |
+| Search facets                                                       | 8 per request                              |
 
 A bulk route acts only on ids you own and reports the number of rows it changed.
 
@@ -213,13 +278,17 @@ Most list routes return the whole list. These routes page:
 | `GET /api/search/interactions` | `offset` (0 to 5,000) and `limit` (1 to 50, default 20)       |
 | `GET /api/query/contacts`      | `offset` and `limit` (1 to 200, default 50)                   |
 
+`GET /api/query/contacts` reads a value past a bound as that bound, and a
+value that is not a number as the default. The other routes answer a value out
+of range with `400`.
+
 ### Streaming
 
 Two routes stream NDJSON, one JSON object per line:
 
 - `POST /api/search/semantic` when you send `Accept: application/x-ndjson`.
   Without that header it answers with one JSON object.
-- `POST /api/search/synthesize`, always.
+- `POST /api/search/synthesize`, once its body passes its checks.
 
 Three routes stream Server-Sent Events. Each event is one `data: <json>` line
 and a blank line:
@@ -229,42 +298,49 @@ and a blank line:
   every 15 seconds.
 - `GET /api/dedupe/stream?scanId=`.
 
-A stream that fails after its first byte ends without an error body. For
-the search stream, the server writes a final `error` line when it can.
+`POST /api/mcp` also answers with an event stream, in the MCP Streamable HTTP
+format (see [MCP and read-only routes](#mcp-and-read-only-routes)).
+
+A stream that fails after its first byte ends without an error body. The two
+NDJSON routes write a last line `{"phase":"error","error":"..."}` in place of
+`complete`, when they can.
 
 ### Caching
 
 Responses under `/api/auth`, `/api/admin`, `/api/ai/stats` and `/api/export`
-send `Cache-Control: no-store`. Uploaded files send
-`Cache-Control: private, max-age=0, must-revalidate`.
+send `Cache-Control: no-store, no-cache, must-revalidate`, `Pragma: no-cache`
+and `Expires: 0`. Uploaded files send
+`Cache-Control: private, max-age=0, must-revalidate`. The OAuth metadata
+documents send `public, max-age=300`, and a company logo sends
+`public, max-age=2592000` (30 days).
 
 ## Health
 
-| Endpoint       | What it does                                                                                                                                                                                                                                                                                                                                                                                                                   | Access |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
-| `GET /healthz` | Liveness probe. Runs one query and answers `{ "status": "ok", "schema": { "migration", "expects" }, "vec" }`. `schema.migration` is the last migration the database applied, such as `0002_events_and_jobs`, and `schema.expects` is the last one this build holds. They are equal when an upgrade is complete. `vec` is the sqlite-vec version. Answers `503 { "status": "unavailable" }` when the database does not respond. | public |
+| Endpoint       | What it does                                                                                                                                                                                                                                                                                                                                                                                                                       | Access |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `GET /healthz` | Liveness probe. Runs one query and answers `{ "status": "ok", "schema": { "migration", "expects" }, "vec" }`. `schema.migration` is the last migration the database applied, such as `0008_correspondent_names`, and `schema.expects` is the last one this build holds. They are equal when an upgrade is complete. `vec` is the sqlite-vec version. Answers `503 { "status": "unavailable" }` when the database does not respond. | public |
 
 For sizes, queues, backups and the version of each search index, use
 `GET /api/admin/health`.
 
 ## Authentication
 
-Every route under `/api/auth` stays reachable with no credential, so sign-in
-works. Each route then checks what it needs.
+The routes in the two tables below stay reachable with no credential, so
+sign-in works. Each route then checks what it needs.
 
 ### Sign in and sign up
 
 | Endpoint                                 | What it does                                                                                                                                                                                                                                                                                                                                         | Access |
 | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| `GET /api/auth/status`                   | Everything the sign-in screen needs: `authRequired`, `authenticated`, `setupRequired`, `hasAccounts`, `user`, `registrationOpen`, `mailConfigured`, `magicLinkSignIn`, `localOwnerPresent`, `publicUrl`, `instanceName`, `deviceContacts`, and the basemap style URLs in `map`.                                                                      | public |
+| `GET /api/auth/status`                   | Everything the sign-in screen needs: `authRequired`, `authenticated`, `setupRequired`, `hasAccounts`, `user`, `registrationOpen`, `mailConfigured`, `magicLinkSignIn`, `localOwnerPresent`, `publicUrl`, `instanceName`, `deviceContacts`, `mcpOAuth` (whether an MCP client can sign in with OAuth), and the basemap style URLs in `map`.           | public |
 | `POST /api/auth/setup`                   | Create the first account: `email`, `username`, `password`, `displayName`. The account is an admin and is signed in (`201 { user }`). On a used instance it takes over the local owner and keeps its data. `409 SETUP_COMPLETE` once an account with a password exists.                                                                               | public |
 | `POST /api/auth/login`                   | Sign in with `identifier` (username or email) and `password`. `remember: false` sets a cookie that ends with the browser. Answers `{ user }`. `401 INVALID_CREDENTIALS` for a wrong password and for an unknown account alike. `403 ACCOUNT_DISABLED` for a disabled account. With sign-in off it answers `{ "authRequired": false, "user": null }`. | public |
 | `POST /api/auth/logout`                  | End this session and clear the cookie.                                                                                                                                                                                                                                                                                                               | public |
-| `POST /api/auth/register`                | Create a member account without an invitation. `403 REGISTRATION_CLOSED` unless an admin opened registration.                                                                                                                                                                                                                                        | public |
+| `POST /api/auth/register`                | Create a member account without an invitation: `email`, `username`, `password` and `displayName` (optional). The account is signed in (`201 { user }`). `403 REGISTRATION_CLOSED` unless an admin opened registration.                                                                                                                               | public |
 | `POST /api/auth/accept-invitation`       | Turn an invitation into an account: `token`, `email`, `username`, `password`, `displayName`. The account takes the invitation's role and is signed in. `404 INVITATION_NOT_FOUND`, or `410 INVITATION_USED`, `INVITATION_REVOKED` or `INVITATION_EXPIRED`.                                                                                           | public |
 | `POST /api/auth/invitations/check`       | Whether an invitation link can still make an account, for the join page before it shows the form: `token`. `200 { ok: true }`, or the same `404` and `410` codes as accepting it.                                                                                                                                                                    | public |
-| `POST /api/auth/password-reset/request`  | Send a reset link to `email`. Always answers `202 {}`. It sends mail only when outgoing mail and `PUBLIC_URL` are set. The link lasts 1 hour, and an account gets at most 3 links an hour.                                                                                                                                                           | public |
-| `POST /api/auth/password-reset/complete` | Set a new `password` with the link's `token`. Ends your other sessions and signs you in. `404 LINK_INVALID`, `410 LINK_EXPIRED` or `410 LINK_USED`.                                                                                                                                                                                                  | public |
+| `POST /api/auth/password-reset/request`  | Send a reset link to `email`. Always answers `202 {}`. It sends mail only when outgoing mail and `PUBLIC_URL` are set. The link lasts 1 hour. An account gets at most 3 links an hour, reset and sign-in links together.                                                                                                                             | public |
+| `POST /api/auth/password-reset/complete` | Set a new `password` with the link's `token`. Ends every session, revokes every personal token and app grant, and signs you in. `404 LINK_INVALID`, `410 LINK_EXPIRED`, `410 LINK_USED` or `403 ACCOUNT_DISABLED`.                                                                                                                                   | public |
 | `POST /api/auth/magic-link/request`      | Send a sign-in link to `email`. Answers `202 {}`. `404 MAGIC_LINK_OFF` when the instance has emailed sign-in links off, or cannot send them. The link lasts 15 minutes.                                                                                                                                                                              | public |
 | `POST /api/auth/magic-link/complete`     | Sign in with the link's `token`. Same errors as the reset link.                                                                                                                                                                                                                                                                                      | public |
 | `POST /api/auth/passkeys/login/options`  | Start a passkey sign-in. Answers `{ ceremonyId, options }`.                                                                                                                                                                                                                                                                                          | public |
@@ -272,27 +348,33 @@ works. Each route then checks what it needs.
 
 ### Your account
 
-| Endpoint                                   | What it does                                                                                                                                                                     | Access       |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
-| `GET /api/auth/me`                         | Your account as `{ user, via }`.                                                                                                                                                 | your session |
-| `PATCH /api/auth/me`                       | Change `displayName`, `username` or `email`. Fields you leave out stay.                                                                                                          | your session |
-| `POST /api/auth/me/avatar`                 | Upload your account photo. The server stores a 512 px JPEG.                                                                                                                      | your session |
-| `DELETE /api/auth/me/avatar`               | Remove your account photo.                                                                                                                                                       | your session |
-| `POST /api/auth/change-password`           | Change your password with `currentPassword` and `newPassword`. Ends every other session.                                                                                         | your session |
-| `GET /api/auth/sessions`                   | Your live sessions, with `current: true` on this one.                                                                                                                            | your session |
-| `DELETE /api/auth/sessions`                | Sign out everywhere else. Answers `{ "revoked": n }`.                                                                                                                            | your session |
-| `GET /api/auth/preferences`                | Every preference with its default, as `{ preferences, stored }`. `stored` names the keys you chose. A token may call it.                                                         | your session |
-| `PATCH /api/auth/preferences`              | Change one or more preferences. An unknown key refuses the request with `400`. A token may call it.                                                                              | your session |
-| `DELETE /api/auth/preferences/:key`        | Reset one preference to its default. `404` for an unknown key. A token may call it.                                                                                              | your session |
-| `GET /api/auth/tokens`                     | Your personal tokens, newest first. Never shows a token again.                                                                                                                   | your session |
-| `POST /api/auth/tokens`                    | Create a personal token: `name` (1 to 60 characters), `expiresInDays` (1 to 3,650, optional) and `readOnly` (optional, default `false`). The answer holds the token once. `201`. | your session |
-| `DELETE /api/auth/tokens/:id`              | Revoke one of your tokens. Answers `{ "revoked": true }`. The row stays with `revokedAt` set.                                                                                    | your session |
-| `POST /api/auth/passkeys/register/options` | Start adding a passkey. Answers `{ ceremonyId, options }`.                                                                                                                       | your session |
-| `POST /api/auth/passkeys/register/verify`  | Finish adding a passkey with `{ ceremonyId, response, name }`. `201 { passkey }`.                                                                                                | your session |
-| `GET /api/auth/passkeys`                   | Your passkeys, and whether you dismissed the passkey prompt.                                                                                                                     | your session |
-| `PATCH /api/auth/passkeys/:id`             | Rename a passkey with `{ name }`.                                                                                                                                                | your session |
-| `DELETE /api/auth/passkeys/:id`            | Remove a passkey.                                                                                                                                                                | your session |
-| `POST /api/auth/passkey-nudge/dismiss`     | Stop the prompt that suggests a passkey.                                                                                                                                         | your session |
+| Endpoint                                   | What it does                                                                                                                                                                                                         | Access       |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| `GET /api/auth/me`                         | Your account as `{ user, via }`.                                                                                                                                                                                     | your session |
+| `PATCH /api/auth/me`                       | Change `displayName`, `username` or `email`. Fields you leave out stay.                                                                                                                                              | your session |
+| `POST /api/auth/me/avatar`                 | Upload your account photo. The server stores a 512 px JPEG.                                                                                                                                                          | your session |
+| `DELETE /api/auth/me/avatar`               | Remove your account photo.                                                                                                                                                                                           | your session |
+| `POST /api/auth/change-password`           | Change your password with `currentPassword` and `newPassword`. Ends every other session.                                                                                                                             | your session |
+| `GET /api/auth/sessions`                   | Your live sessions, with `current: true` on this one.                                                                                                                                                                | your session |
+| `DELETE /api/auth/sessions`                | Sign out everywhere else. Answers `{ "revoked": n }`.                                                                                                                                                                | your session |
+| `GET /api/auth/preferences`                | Every preference with its default, as `{ preferences, stored }`. `stored` names the keys you chose. A token may call it.                                                                                             | your session |
+| `PATCH /api/auth/preferences`              | Change one or more preferences. An unknown key refuses the request with `400`. A token may call it.                                                                                                                  | your session |
+| `DELETE /api/auth/preferences/:key`        | Reset one preference to its default. `404` for an unknown key. A token may call it.                                                                                                                                  | your session |
+| `GET /api/auth/tokens`                     | Your tokens and approved apps, newest first, revoked and expired ones included. Never shows a token again.                                                                                                           | your session |
+| `POST /api/auth/tokens`                    | Create a personal token: `name` (1 to 60 characters), `expiresInDays` (1 to 3,650, optional: with none, the token never expires) and `readOnly` (optional, default `false`). The answer holds the token once. `201`. | your session |
+| `DELETE /api/auth/tokens/:id`              | Revoke one of your tokens. Answers `{ "revoked": true }`. The row stays with `revokedAt` set.                                                                                                                        | your session |
+| `POST /api/auth/passkeys/register/options` | Start adding a passkey. Answers `{ ceremonyId, options }`.                                                                                                                                                           | your session |
+| `POST /api/auth/passkeys/register/verify`  | Finish adding a passkey with `{ ceremonyId, response, name }`. `201 { passkey }`.                                                                                                                                    | your session |
+| `GET /api/auth/passkeys`                   | Your passkeys, and whether you dismissed the passkey prompt.                                                                                                                                                         | your session |
+| `PATCH /api/auth/passkeys/:id`             | Rename a passkey with `{ name }`.                                                                                                                                                                                    | your session |
+| `DELETE /api/auth/passkeys/:id`            | Remove a passkey.                                                                                                                                                                                                    | your session |
+| `POST /api/auth/passkey-nudge/dismiss`     | Stop the prompt that suggests a passkey.                                                                                                                                                                             | your session |
+
+The passkey routes answer `400 PASSKEY_UNSUPPORTED_ORIGIN` when the server's
+address is an IP address. They answer `410 CEREMONY_EXPIRED` when the ceremony
+is unknown or older than 5 minutes, `401 PASSKEY_VERIFICATION_FAILED` when the
+browser's answer does not verify, and `404 PASSKEY_NOT_FOUND` for an unknown
+passkey.
 
 ### Personal tokens
 
@@ -329,26 +411,29 @@ in from. `DELETE /api/auth/tokens/:id` disconnects such an app.
 
 An MCP client such as Claude or ChatGPT can sign in with OAuth 2.1 instead of
 a token. OAuth is on when sign-in is on and `PUBLIC_URL` is an `https`
-address, or an `http` address on `localhost` for a local client. While it is
-off, every route below answers `404`. Each answer to a client uses OAuth's
-own field names and errors, such as `{"error":"invalid_grant"}`.
+address, or an `http` address on `localhost`, `127.0.0.1` or `[::1]` for a
+local client. While it is off, every route below answers `404`. Each answer to
+a client uses OAuth's own field names and errors, such as
+`{"error":"invalid_grant"}`. The two consent routes need a signed-in session,
+and the others are public.
 
-| Route                                               | What it does                                                                                                                             |
-| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /.well-known/oauth-protected-resource/api/mcp` | The MCP endpoint's metadata (RFC 9728): its resource, its authorization server and its scopes. A `401` from `/api/mcp` names this URL    |
-| `GET /.well-known/oauth-protected-resource`         | The same metadata at the root                                                                                                            |
-| `GET /.well-known/oauth-authorization-server`       | The authorization server's metadata (RFC 8414)                                                                                           |
-| `GET /oauth/authorize`                              | Starts a sign-in with PKCE (S256). It sends the browser to the consent page, or back to the client with an error                         |
-| `POST /oauth/token`                                 | A form body. Trades a code for an access token and a refresh token, or rotates a refresh token                                           |
-| `POST /oauth/register`                              | Registers a public client (RFC 7591). A client may instead use the https URL of its metadata document as its `client_id`                 |
-| `POST /oauth/revoke`                                | Gives a token back (RFC 7009). The whole grant ends                                                                                      |
-| `GET /api/auth/oauth/requests/:id`                  | For the consent page: the app, where it sends you back, and whether it asked to write                                                    |
-| `POST /api/auth/oauth/requests/:id`                 | For the consent page: `{"decision":"allow","access":"read"}` or `"deny"`. Answers `{ redirectTo }`, the address the browser goes to next |
+| Route                                               | What it does                                                                                                                                                                                                                                             |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /.well-known/oauth-protected-resource/api/mcp` | The MCP endpoint's metadata (RFC 9728): its resource, its authorization server and its scopes. A `401` from `/api/mcp` names this URL                                                                                                                    |
+| `GET /.well-known/oauth-protected-resource`         | The same metadata at the root                                                                                                                                                                                                                            |
+| `GET /.well-known/oauth-authorization-server`       | The authorization server's metadata (RFC 8414)                                                                                                                                                                                                           |
+| `GET /oauth/authorize`                              | Starts a sign-in with PKCE (S256). It sends the browser to the consent page, or back to the client with an error                                                                                                                                         |
+| `POST /oauth/token`                                 | A form body. Trades a code for an access token and a refresh token, or rotates a refresh token                                                                                                                                                           |
+| `POST /oauth/register`                              | Registers a public client (RFC 7591). A client may instead use the https URL of its metadata document as its `client_id`                                                                                                                                 |
+| `POST /oauth/revoke`                                | Gives a token back (RFC 7009). The whole grant ends                                                                                                                                                                                                      |
+| `GET /api/auth/oauth/requests/:id`                  | For the consent page: the app, where it sends you back, and whether it asked to write                                                                                                                                                                    |
+| `POST /api/auth/oauth/requests/:id`                 | For the consent page: `{"decision":"allow","access":"read"}` or `"deny"`. Answers `{ redirectTo }`, the address the browser goes to next. `access` is `read` when left out, and an app that did not ask to write gets read access whatever `access` says |
 
 The scopes are `contrack:read` and `contrack:write`. An access token lasts an
-hour and works on `/api/mcp` only. A refresh token lasts 30 days from its last
-use and works once: the next one replaces it. A refresh token that comes back
-after its replacement was used ends the grant.
+hour and works on `/api/mcp` only. A refresh token works once and lasts 30
+days. Each refresh returns a new pair, so a grant lasts 30 days past its last
+refresh. A used refresh token that comes back within 60 seconds gets a new
+pair, for a retry. One that comes back later ends the grant.
 
 The examples below use a token in the `CONTRACK_TOKEN` variable. With sign-in
 off, leave out the `Authorization` header.
@@ -359,31 +444,31 @@ A contact carries its child records: `emails`, `phones`, `addresses`,
 `socialLinks`, `education`, `experience`, `sources`, `tags`, `interests` and
 `attributes`. It also carries `lists` and `interactionCount`.
 
-| Endpoint                                 | What it does                                                                                                                                                              | Access               |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| `GET /api/contacts`                      | Every contact that is not archived, trashed or merged, ghosts included, newest first. `?view=slim` returns lighter rows for caches and pickers.                           | your data            |
-| `POST /api/contacts`                     | Create a contact. `201` with the contact.                                                                                                                                 | your data            |
-| `GET /api/contacts/:id`                  | One contact with all its child records. Archived contacts are included. A trashed contact answers `404`.                                                                  | your data            |
-| `PATCH /api/contacts/:id`                | Change scalar fields, such as `company`, `role` or `isTracked`. Child arrays answer `400`: use `PUT`.                                                                     | your data            |
-| `PUT /api/contacts/:id`                  | Change fields and child arrays. Each child array you send replaces the old one. Fields you leave out stay.                                                                | your data            |
-| `DELETE /api/contacts/:id`               | Move a contact to the trash. Answers `{ success, retentionDays }`. Restore it with `POST /api/trash/:id/restore`.                                                         | your data            |
-| `GET /api/contacts/archived`             | Archived contacts, most recently changed first.                                                                                                                           | your data            |
-| `GET /api/contacts/map`                  | Your placed contacts, for API clients: `id`, `name`, `company`, `avatarUrl`, `location`, `lat`, `lng` and `geoSource`. Archived, trashed, merged and ghosts are left out. | your data            |
-| `PATCH /api/contacts/:id/location`       | Place the pin by hand with `{ lat, lng }`, or give it back to the geocoder with `{ "regeocode": true }`. Nothing else may be in the body. Answers the contact.            | your data            |
-| `POST /api/contacts/:id/avatar`          | Upload a contact photo in the field `avatar`. Answers the contact.                                                                                                        | your data            |
-| `GET /api/contacts/:id/score`            | The score breakdown: `{ score, components }`, one entry for each of the five signals. `404 NOT_TRACKED` for a contact you do not track.                                   | your data            |
-| `GET /api/contacts/:id/relationships`    | Contacts linked to this one by @mentions. `limit` 1 to 200, default 50.                                                                                                   | your data            |
-| `POST /api/contacts/:id/promote`         | Turn a ghost into a full contact. Answers the contact.                                                                                                                    | your data            |
-| `POST /api/contacts/:id/briefing`        | Write an AI briefing from the timeline. Answers `{ points }`, a list of strings. `409` when the contact changes during the run. `503` with no AI provider.                | your data            |
-| `POST /api/contacts/:id/enrich`          | Research one contact on the web. Body `{ "depth": "standard" }` or `"deep"`, or no body. See [Contact enrichment](#contact-enrichment).                                   | your data            |
-| `POST /api/contacts/:id/research/reject` | Not this person: take back what one research run added. Body `{ "runAt": "<the run's at>" }`. See [Contact enrichment](#contact-enrichment).                              | your data            |
-| `POST /api/contacts/bulk`                | Import many contacts. See [Imports](#imports).                                                                                                                            | your data            |
-| `POST /api/contacts/bulk-delete`         | Move many contacts to the trash: `{ ids }`. Answers `{ success, count, retentionDays }`.                                                                                  | your data            |
-| `PUT /api/contacts/bulk-update`          | Set the same scalar fields on many contacts: `{ ids, data }`. Child arrays are refused. Answers `{ success, count }`.                                                     | your data            |
-| `POST /api/contacts/merge`               | Merge two contacts: `{ primaryId, duplicateId }`. Answers `{ success, contact, mergeLogId }`. `409` when the duplicate was merged away already.                           | your data            |
-| `POST /api/contacts/merge-cluster`       | Merge up to 10 contacts into one: `{ primaryId, duplicateIds }`. Answers `{ success, merged, failed, contact, mergeLogIds }`.                                             | your data            |
-| `POST /api/contacts/merge-clusters`      | Merge many clusters: `{ clusters: [{ primaryId, duplicateIds }] }`, 250 merges at most. Each result has its `mergeLogIds`.                                                | your data            |
-| `POST /api/parse-contact`                | Read a contact out of free text with AI: `{ text }`. Answers the parsed fields and saves nothing.                                                                         | any signed-in caller |
+| Endpoint                                 | What it does                                                                                                                                                                                                                                                                | Access               |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `GET /api/contacts`                      | Every contact that is not archived, trashed or merged, ghosts included, newest first. `?view=slim` returns lighter rows for caches and pickers.                                                                                                                             | your data            |
+| `POST /api/contacts`                     | Create a contact. `201` with the contact.                                                                                                                                                                                                                                   | your data            |
+| `GET /api/contacts/:id`                  | One contact with all its child records. Archived contacts are included. A trashed contact answers `404`. A contact merged into another still answers for 90 days, until its merge can no longer be undone.                                                                  | your data            |
+| `PATCH /api/contacts/:id`                | Change scalar fields, such as `company`, `role` or `isTracked`. Child arrays answer `400`: use `PUT`.                                                                                                                                                                       | your data            |
+| `PUT /api/contacts/:id`                  | Change fields and child arrays. Each child array you send replaces the old one. Fields you leave out stay.                                                                                                                                                                  | your data            |
+| `DELETE /api/contacts/:id`               | Move a contact to the trash. Answers `{ success, retentionDays }`. Restore it with `POST /api/trash/:id/restore`.                                                                                                                                                           | your data            |
+| `GET /api/contacts/archived`             | Archived contacts, most recently archived first.                                                                                                                                                                                                                            | your data            |
+| `GET /api/contacts/map`                  | Your placed contacts, for API clients: `id`, `name`, `company`, `avatarUrl`, `location`, `lat`, `lng` and `geoSource`. Archived, trashed, merged and ghosts are left out.                                                                                                   | your data            |
+| `PATCH /api/contacts/:id/location`       | Place the pin by hand with `{ lat, lng }`, or give it back to the geocoder with `{ "regeocode": true }`. Nothing else may be in the body. Answers the contact.                                                                                                              | your data            |
+| `POST /api/contacts/:id/avatar`          | Upload a contact photo in the field `avatar`. Answers the contact.                                                                                                                                                                                                          | your data            |
+| `GET /api/contacts/:id/score`            | The score breakdown: `{ score, components }`, one entry for each of the five signals. `404 NOT_TRACKED` for a contact you do not track.                                                                                                                                     | your data            |
+| `GET /api/contacts/:id/relationships`    | Contacts that share notes with this one through mentions, most shared first. A mention is an @mention in the editor or a person AI found in the note. Each row has `sharedInteractions`. `limit` 1 to 200, default 50.                                                      | your data            |
+| `POST /api/contacts/:id/promote`         | Turn a ghost into a full contact. Answers the contact.                                                                                                                                                                                                                      | your data            |
+| `POST /api/contacts/:id/briefing`        | Write an AI briefing from the timeline. Answers `{ points }`, a list of strings. `409` when the contact changes during the run. `503` with no AI provider.                                                                                                                  | your data            |
+| `POST /api/contacts/:id/enrich`          | Research one contact on the web. Body `{ "depth": "standard" }` or `"deep"`, or no body. See [Contact enrichment](#contact-enrichment).                                                                                                                                     | your data            |
+| `POST /api/contacts/:id/research/reject` | Not this person: take back what one research run added. Body `{ "runAt": "<the run's at>" }`. See [Contact enrichment](#contact-enrichment).                                                                                                                                | your data            |
+| `POST /api/contacts/bulk`                | Import many contacts. See [Imports](#imports).                                                                                                                                                                                                                              | your data            |
+| `POST /api/contacts/bulk-delete`         | Move many contacts to the trash: `{ ids }`. Answers `{ success, count, retentionDays }`.                                                                                                                                                                                    | your data            |
+| `PUT /api/contacts/bulk-update`          | Set the same scalar fields on many contacts: `{ ids, data }`. Child arrays are refused. Answers `{ success, count }`.                                                                                                                                                       | your data            |
+| `POST /api/contacts/merge`               | Merge two contacts: `{ primaryId, duplicateId }`. Answers `{ success, contact, mergeLogId }`. `409` when the primary or the duplicate was merged away already. `404` when either one is not yours or does not exist.                                                        | your data            |
+| `POST /api/contacts/merge-cluster`       | Merge up to 10 contacts into one: `{ primaryId, duplicateIds }`. Answers `{ success, merged, failed, contact, mergeLogIds }`. A duplicate that cannot merge counts in `failed`, and the others still merge. With none merged, `success` is `false` and `contact` is `null`. | your data            |
+| `POST /api/contacts/merge-clusters`      | Merge many clusters: `{ clusters: [{ primaryId, duplicateIds }] }`, 250 merges at most. Answers `{ results, totalMerged, totalFailed }`. Each result is `{ primaryId, merged, failed, mergeLogIds }`.                                                                       | your data            |
+| `POST /api/parse-contact`                | Read a contact out of free text with AI: `{ text }`. Answers the parsed fields and saves nothing.                                                                                                                                                                           | any signed-in caller |
 
 The timeline, follow-up and attachment routes under `/api/contacts/:id/` are in
 [Timeline and notes](#timeline-and-notes) and [Follow-ups](#follow-ups).
@@ -391,8 +476,9 @@ The timeline, follow-up and attachment routes under `/api/contacts/:id/` are in
 ### Tracking
 
 Only a tracked contact has a score, a place in Pulse and a ring. A contact you
-create starts untracked, unless your **Track new contacts** preference is on.
-An imported contact starts untracked unless its row sets `isTracked`.
+create starts untracked, unless the body sets `isTracked` or your **Track new
+contacts** preference is on. An imported contact starts untracked unless its
+row sets `isTracked`.
 
 - `PATCH` with `{ "isTracked": true }` starts tracking. `cadenceDays` comes
   from the body, or from your default cadence. The server stamps `trackedAt`
@@ -427,8 +513,11 @@ curl "http://localhost:3210/api/contacts?view=slim" \
 ]
 ```
 
-A slim row has fewer fields than a full contact. Its child arrays hold only the
-values that search and pickers read.
+A slim row has fewer fields than a full contact. `emails` and `phones` hold
+only the value, and a tag's `id` is the tag itself. `addresses`,
+`socialLinks`, `education`, `experience`, `sources`, `interests` and
+`attributes` are always empty. A slim row adds `socialLinkCount` and
+`researchOutcome`.
 
 ### Get a contact
 
@@ -465,8 +554,10 @@ is false.
 
 ### Create a contact
 
-`name` is required, up to 300 characters. Every other field is optional. A
-child item is a plain string or an object:
+`name` is required, up to 300 characters. Every other field is optional.
+`cadenceDays` is a whole number from 1 to 3,650. A child item is a plain
+string or an object. `education`, `experience` and `attributes` take the object
+only:
 
 | Array         | Object form                                                                             |
 | ------------- | --------------------------------------------------------------------------------------- |
@@ -526,20 +617,23 @@ Both answer the whole contact. An empty body answers `400`.
 ## Imports
 
 `POST /api/contacts/bulk` takes a JSON array of contacts in the create shape.
+An email or a phone that a row cannot use is left out, and the row saves.
 Every import has an id and a record.
 
-| Endpoint                      | What it does                                                                                                                                                                | Access    |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `POST /api/contacts/bulk`     | Import up to 5,000 contacts. Send `X-Import-Id: <uuid>` to make a retry safe. JSON mode answers `201 { success, count, failed, importId }`. Stream mode sends SSE progress. | your data |
-| `GET /api/imports`            | Your newest 50 imports: `{ imports }`.                                                                                                                                      | your data |
-| `GET /api/imports/:id`        | One import record: `status`, `phase`, counts, `summary` and `error`.                                                                                                        | your data |
-| `GET /api/imports/:id/rows`   | Rows in one `status`: `failed` (default) or `done`. `limit` 1 to 500, default 200.                                                                                          | your data |
-| `POST /api/imports/:id/retry` | Run the failed rows again from the payload the server kept. `400 NOTHING_TO_RETRY` when no row can run again.                                                               | your data |
+| Endpoint                      | What it does                                                                                                                                                                                                                                                        | Access    |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `POST /api/contacts/bulk`     | Import up to 5,000 contacts. Send `X-Import-Id: <uuid>` to make a retry safe. A header that is not a UUID answers `400`. JSON mode answers `201 { success, count, failed, importId }`. Stream mode sends SSE progress.                                              | your data |
+| `GET /api/imports`            | Your newest 50 imports: `{ imports }`.                                                                                                                                                                                                                              | your data |
+| `GET /api/imports/:id`        | One import record: `status`, `phase`, counts, `summary` and `error`.                                                                                                                                                                                                | your data |
+| `GET /api/imports/:id/rows`   | Rows in one `status`: `failed` (default) or `done`. `limit` 1 to 500, default 200. Answers `{ rows }`, in file order. Each row is `{ index, status, name, error, contactId }`.                                                                                      | your data |
+| `POST /api/imports/:id/retry` | Run the failed rows again from the payload the server kept. Answers `{ importId, status, retried, imported, failed }`. The duplicate check runs after the answer. `400 NOTHING_TO_RETRY` when no row can run again, `409 IMPORT_IN_PROGRESS` while the import runs. | your data |
 
 How an import behaves:
 
-- **Same id twice.** A known id writes nothing and answers from the record,
-  with `"repeated": true`. `409 IMPORT_IN_PROGRESS` while that import runs.
+- **Same id twice.** An id whose import saved contacts writes nothing. JSON
+  mode answers `200` with `"repeated": true`, `status`, `count` and `failed`.
+  Stream mode sends the `done` event with `"repeated": true`. An id whose
+  import failed runs again. `409 IMPORT_IN_PROGRESS` while that import runs.
   `409 IMPORT_ID_IN_USE` when another account used the id.
 - **A failed row.** The other rows save. The row keeps its error, and
   `POST /api/imports/:id/retry` runs it again.
@@ -554,15 +648,16 @@ How an import behaves:
 - **Stream mode.** Send `Accept: text/event-stream`. The stream sends
   `{"phase":"accepted","importId":"..."}`, then `importing`, `embedding` and
   `scanning` events, then a last event with `"done": true`, `status`, `count`,
-  `failed` and `summary`. A stream with no `done` event lost its connection.
-  Read `GET /api/imports/:id` to see what happened.
+  `failed` and `summary`. A stream that ends with no `done` event lost its
+  connection, or failed before it saved a contact. Read
+  `GET /api/imports/:id` to see what happened.
 
-| `status`   | Meaning                                                          |
-| ---------- | ---------------------------------------------------------------- |
-| `running`  | The contacts are being written.                                  |
-| `imported` | The contacts are saved, and the duplicate check runs.            |
-| `complete` | Everything finished.                                             |
-| `failed`   | Nothing was saved. Send the same request again with the same id. |
+| `status`   | Meaning                                                                                                                                                           |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `running`  | The contacts are being written.                                                                                                                                   |
+| `imported` | The contacts are saved, and the duplicate check runs.                                                                                                             |
+| `complete` | Everything finished. `summary` holds `imported`, `autoMerged`, `needsReview`, `newUnique` and `failed`. A duplicate check that failed puts its reason in `error`. |
+| `failed`   | Nothing was saved. Send the same request again with the same id.                                                                                                  |
 
 ## Timeline and notes
 
@@ -570,14 +665,14 @@ An interaction is one timeline entry: a note, a call, a meeting or an email.
 The app logs `note`, `call`, `meeting` and `email`. Connectors write `meeting`
 and `email`. The server accepts any non-empty `type`.
 
-| Endpoint                              | What it does                                                                                                                                                       | Access    |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- |
-| `GET /api/contacts/:id/timeline`      | The contact's interactions. Each entry carries its linked `actionItems`.                                                                                           | your data |
-| `POST /api/contacts/:id/interactions` | Log an interaction. `actionItem: { title, dueAt }` also creates a linked follow-up. `201` with the interaction.                                                    | your data |
-| `POST /api/contacts/:id/attachments`  | Attach a file in the field `attachment`. An `.eml` file becomes an `email` entry, with an AI summary while AI is on for you. Any other file becomes a note. `201`. | your data |
-| `PATCH /api/interactions/:id`         | Change `title` or `content`. Nothing else can change.                                                                                                              | your data |
-| `DELETE /api/interactions/:id`        | Delete an interaction.                                                                                                                                             | your data |
-| `GET /api/timeline`                   | Your whole timeline, newest first, with `contactName`. `limit` 1 to 200 (default 50), `since` (a date) and `type`.                                                 | your data |
+| Endpoint                              | What it does                                                                                                                                                                                      | Access    |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `GET /api/contacts/:id/timeline`      | The contact's interactions and the notes on other contacts that mention it, newest first. A note from another contact has `isViaId` and `isViaName`. Each entry carries its linked `actionItems`. | your data |
+| `POST /api/contacts/:id/interactions` | Log an interaction. `actionItem: { title, dueAt }` also creates a linked follow-up. `201` with the interaction.                                                                                   | your data |
+| `POST /api/contacts/:id/attachments`  | Attach a file in the field `attachment`. An `.eml` file becomes an `email` entry, with an AI summary while AI is on for you. Any other file becomes a note. `201`.                                | your data |
+| `PATCH /api/interactions/:id`         | Change `title` or `content`. Nothing else can change.                                                                                                                                             | your data |
+| `DELETE /api/interactions/:id`        | Delete an interaction.                                                                                                                                                                            | your data |
+| `GET /api/timeline`                   | Your whole timeline, newest first, with `contactName`. `limit` 1 to 200 (default 50), `since` (a date) and `type`.                                                                                | your data |
 
 ### Log an interaction
 
@@ -612,7 +707,9 @@ curl -X POST http://localhost:3210/api/contacts/f60e8536-37f4-41d7-ac09-ac16f701
 }
 ```
 
-A `date` in the future answers `400` with "Date cannot be in the future".
+The real answer has more fields, such as `fileName`, `fileType` and `source`.
+A `date` in the future answers `400 VALIDATION_ERROR`, and its `details` say
+"Date cannot be in the future".
 
 ### Read the timeline
 
@@ -650,7 +747,7 @@ A follow-up (an action item) is a task with a due date on one contact.
 | `GET /api/action-items`                | Your open follow-ups, soonest due first, with `contactName`, `contactCompany`, `contactAvatarUrl` and `contactThemeColor`. Follow-ups on archived, trashed, merged and ghost contacts are left out. | your data |
 | `GET /api/action-items/completed`      | Your 50 most recently completed follow-ups.                                                                                                                                                         | your data |
 | `GET /api/action-items/count`          | The number of open follow-ups due today or earlier: `{ count }`. `tz` is your IANA time zone, for the day that is today. Without it, the server's zone.                                             | your data |
-| `GET /api/contacts/:id/action-items`   | One contact's follow-ups.                                                                                                                                                                           | your data |
+| `GET /api/contacts/:id/action-items`   | One contact's follow-ups: the open ones first, and each group soonest due first.                                                                                                                    | your data |
 | `POST /api/contacts/:id/action-items`  | Create a follow-up: `{ title, dueAt }`. `201`.                                                                                                                                                      | your data |
 | `POST /api/action-items/bulk`          | The same follow-up for many contacts: `{ contactIds, title, dueAt }`, up to 500 ids. `201 { count }`. An id you cannot use refuses the whole call, and nothing is written.                          | your data |
 | `PATCH /api/action-items/:id`          | Change `title` or `dueAt`. A later `dueAt` snoozes it.                                                                                                                                              | your data |
@@ -686,34 +783,34 @@ curl -X PATCH http://localhost:3210/api/action-items/52b907e9-6f64-478a-8ec0-d16
 
 The answer is the follow-up with `completedAt` set. A contact's
 `nextFollowUpAt` always holds the earliest due date of its open follow-ups.
-A contact write (`POST`, `PUT`, `PATCH` or a bulk update) that sends
-`nextFollowUpAt` changes the follow-ups, and the field follows them. A date
-moves the earliest open follow-up to that date, or adds a "Follow up" when
-there is none. `null` completes the open follow-ups.
+A contact write (`POST`, `PUT`, `PATCH`, a bulk update or an import row) that
+sends `nextFollowUpAt` changes the follow-ups, and the field follows them. A
+date moves the earliest open follow-up to that date, or adds a "Follow up"
+when there is none. `null` completes the open follow-ups.
 
 ## Lists
 
-| Endpoint                                   | What it does                                                                      | Access    |
-| ------------------------------------------ | --------------------------------------------------------------------------------- | --------- |
-| `GET /api/lists`                           | Your lists in order, each with `memberCount`.                                     | your data |
-| `POST /api/lists`                          | Create a list: `name` (1 to 60 characters) and `icon`. `201`.                     | your data |
-| `PATCH /api/lists/:id`                     | Change `name` or `icon`.                                                          | your data |
-| `DELETE /api/lists/:id`                    | Delete a list. Its contacts stay. A list that is already gone also answers `200`. | your data |
-| `PUT /api/lists/reorder`                   | Set the order: `{ orderedIds }`.                                                  | your data |
-| `GET /api/lists/:id/contacts`              | Each member's name, photo, role and company, without archived or trashed ones.    | your data |
-| `POST /api/lists/:id/members`              | Add one contact: `{ contactId }`.                                                 | your data |
-| `DELETE /api/lists/:id/members/:contactId` | Remove one contact from the list.                                                 | your data |
-| `POST /api/lists/:id/members/bulk`         | Add many contacts: `{ contactIds }`. Answers `{ success, count }`.                | your data |
+| Endpoint                                   | What it does                                                                                                                                                        | Access    |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `GET /api/lists`                           | Your lists in order, each with `memberCount`. The count leaves out archived, trashed, merged and ghost contacts.                                                    | your data |
+| `POST /api/lists`                          | Create a list: `name` (1 to 60 characters) and `icon` (optional, `star` by default). `201`.                                                                         | your data |
+| `PATCH /api/lists/:id`                     | Change `name` or `icon`.                                                                                                                                            | your data |
+| `DELETE /api/lists/:id`                    | Delete a list. Its contacts stay. A list that is already gone also answers `200`.                                                                                   | your data |
+| `PUT /api/lists/reorder`                   | Set the order: `{ orderedIds }`. Name each of your lists exactly once, or the call answers `400`.                                                                   | your data |
+| `GET /api/lists/:id/contacts`              | Each member's `id`, `name`, `avatarUrl`, `role` and `company`, newest first. Archived, trashed, merged and ghost contacts are left out.                             | your data |
+| `POST /api/lists/:id/members`              | Add one contact: `{ contactId }`.                                                                                                                                   | your data |
+| `DELETE /api/lists/:id/members/:contactId` | Remove one contact from the list.                                                                                                                                   | your data |
+| `POST /api/lists/:id/members/bulk`         | Add many contacts: `{ contactIds }`. Answers `{ success, count }`, where `count` is how many were not in the list yet. An id you cannot use refuses the whole call. | your data |
 
 ## Tags
 
-| Endpoint                | What it does                                                                                                                                                                                                   | Access    |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `GET /api/tags`         | Every tag you use, as a plain array of strings.                                                                                                                                                                | your data |
-| `GET /api/tags/summary` | Each tag with the number of contacts that carry it, by name: `{ tags: [{ tag, count, total }] }`. `count` leaves out archived and trashed contacts, and `total`, which a rename or a delete changes, has them. | your data |
-| `PATCH /api/tags/:tag`  | Rename a tag on all your contacts: `{ "to": "new-name" }`. A contact that already has the new tag keeps one copy. Answers `{ affected }`.                                                                      | your data |
-| `DELETE /api/tags/:tag` | Remove a tag from all your contacts. Answers `{ affected }`.                                                                                                                                                   | your data |
-| `GET /api/industries`   | Every industry your contacts name, as a plain array of strings.                                                                                                                                                | your data |
+| Endpoint                | What it does                                                                                                                                                                                                                                                                   | Access    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- |
+| `GET /api/tags`         | Every tag you use, as a plain array of strings.                                                                                                                                                                                                                                | your data |
+| `GET /api/tags/summary` | Each tag with the number of contacts that carry it, by name: `{ tags: [{ tag, count, total }] }`. `count` leaves out archived and trashed contacts, and `total`, which a rename or a delete changes, has them. A tag that only archived or trashed contacts carry is left out. | your data |
+| `PATCH /api/tags/:tag`  | Rename a tag on all your contacts: `{ "to": "new-name" }`. A contact that already has the new tag keeps one copy. Answers `{ affected }`.                                                                                                                                      | your data |
+| `DELETE /api/tags/:tag` | Remove a tag from all your contacts. Answers `{ affected }`.                                                                                                                                                                                                                   | your data |
+| `GET /api/industries`   | Every industry your contacts name, as a plain array of strings.                                                                                                                                                                                                                | your data |
 
 ## Search
 
@@ -722,20 +819,20 @@ search. All of them hide archived, trashed, merged and ghost contacts. For how
 the pipeline works, see [Search](architecture.md#search) in the architecture
 page.
 
-| Endpoint                         | What it does                                                                                                                         | Access    |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------- |
-| `GET /api/search`                | Keyword search over your contacts: `q` (up to 500 characters) and `filters`. At most 20 results. An empty `q` answers `[]`.          | your data |
-| `POST /api/search/semantic`      | Ask Contrack: `{ query, filters }`. Answers JSON, or NDJSON with `Accept: application/x-ndjson`. Works with AI off.                  | your data |
-| `POST /api/search/synthesize`    | Stream a short brief about 1 to 30 contacts: `{ query, contactIds }`. `409` when a contact is gone.                                  | your data |
-| `GET /api/search/interactions`   | Search your notes. No model runs.                                                                                                    | your data |
-| `GET /api/search/starters`       | Your pool of starter questions for **Try asking**. See [Starter questions](#starter-questions).                                      | your data |
-| `GET /api/search/coverage`       | How much of your data the local search index covers.                                                                                 | your data |
-| `POST /api/search/refresh-index` | Queue your contacts for indexing: `{ allowProvider, forceAll }`.                                                                     | your data |
-| `GET /api/search/history`        | Your past questions, newest first. `mode` (`people`, `notes` or `palette`), `q`, `pinned`, `cursor` and `limit`.                     | your data |
-| `POST /api/search/history`       | Record a question: `query`, `mode`, `resultCount`, `resultIds` and `fallback`. The same question in the same mode updates its entry. | your data |
-| `PATCH /api/search/history/:id`  | Pin or unpin an entry: `{ pinned }`.                                                                                                 | your data |
-| `DELETE /api/search/history/:id` | Delete one entry.                                                                                                                    | your data |
-| `DELETE /api/search/history`     | Clear your history, or one `mode`. Answers `{ deleted }`.                                                                            | your data |
+| Endpoint                         | What it does                                                                                                                                                        | Access    |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `GET /api/search`                | Keyword search over your contacts: `q` (up to 500 characters) and `filters`. At most 20 results. An empty `q` answers `[]`.                                         | your data |
+| `POST /api/search/semantic`      | Ask Contrack: `{ query, filters }`. Answers JSON, or NDJSON with `Accept: application/x-ndjson`. Works with AI off.                                                 | your data |
+| `POST /api/search/synthesize`    | Stream a short brief about 1 to 30 contacts: `{ query, contactIds }`. `409` when a contact is gone.                                                                 | your data |
+| `GET /api/search/interactions`   | Search your notes. No model runs.                                                                                                                                   | your data |
+| `GET /api/search/starters`       | Your pool of starter questions for **Try asking**. See [Starter questions](#starter-questions).                                                                     | your data |
+| `GET /api/search/coverage`       | How much of your data the local search index covers.                                                                                                                | your data |
+| `POST /api/search/refresh-index` | Queue your contacts for indexing: `{ allowProvider, forceAll }`.                                                                                                    | your data |
+| `GET /api/search/history`        | Your past questions, the most recently asked first: `{ entries, nextCursor, total }`. `mode` (`people`, `notes` or `palette`), `q`, `pinned`, `cursor` and `limit`. | your data |
+| `POST /api/search/history`       | Record a question: `query`, `mode`, `resultCount`, `resultIds` and `fallback`. The same question in the same mode updates its entry. Answers `{ entry }`.           | your data |
+| `PATCH /api/search/history/:id`  | Pin or unpin an entry: `{ pinned }`. Answers `{ entry }`.                                                                                                           | your data |
+| `DELETE /api/search/history/:id` | Delete one entry.                                                                                                                                                   | your data |
+| `DELETE /api/search/history`     | Clear your history, or the history of one `mode`. Pinned entries go too. Answers `{ deleted }`.                                                                     | your data |
 
 ### Facets
 
@@ -743,9 +840,10 @@ page.
 facet is `{ field, value, operator, km, point }`:
 
 - `field` is one of `role`, `company`, `location`, `industry`, `tag`, `score`,
-  `updated`, `contacted`, `missing`, `list`, `near` and `tracked`.
+  `updated`, `added`, `contacted`, `missing`, `list`, `near` and `tracked`.
 - `value` holds 1 to 100 characters.
-- `operator` is `>` or `<`, for `score`, `updated` and `contacted`.
+- `operator` is `>` or `<`, for `score`, `updated`, `added` and `contacted`.
+  A facet with no operator uses `>`.
 - A `near` facet carries its resolved `point`, `{ lat, lng, km }`. Without a
   point, `near` keeps everyone.
 
@@ -788,8 +886,10 @@ The stream sends one JSON object per line:
 - `instant` is the local list: keyword and vector search, fused, at most 30.
   Nothing verified it.
 - `complete` is the final answer, and the last line. It replaces `instant`.
-  For a question made only of facets it also holds `total`, how many
-  contacts the facets find. The list stops at 30. `facets` holds the same
+  For a question that facets answer alone, it also holds `total`, how many
+  contacts the facets find. That is a question of typed facets only, of one
+  company, place or industry your contacts have, or a `general` starter
+  question. The list stops at 30. `facets` holds the same
   question as a Network query, for example `tracked:yes`, when the Network
   list can read it. When the list stops short of `total`, `refine` holds at
   most six facets that split it, each as `{ facet, label, count }`. `count`
@@ -800,13 +900,13 @@ The stream sends one JSON object per line:
 The JSON answer is the `complete` object without `phase`. Each match is a full
 contact with these fields added:
 
-| Field                      | Meaning                                                                                                                                               |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `verified`                 | `true` when a local exact match, a facet, a database filter or the reranker proved the match.                                                         |
-| `aiReason`                 | One sentence built from the proven fields, or `null`.                                                                                                 |
-| `aiEvidence`               | The passage a verified match quoted: `passageId`, `field`, `sourceId`, `startOffset`, `endOffset` and `quote`. Present only when a passage proved it. |
-| `approximate`, `matchType` | Only on a local name answer. They mark a close name.                                                                                                  |
-| `matchedOn`                | The fields that answer the question, at most three, the most telling first. See below.                                                                |
+| Field                      | Meaning                                                                                                                                                                          |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `verified`                 | `true` when a local answer, a facet, a database filter or the reranker proved the match. A close name in a local answer is `true` too.                                           |
+| `aiReason`                 | One sentence built from the proven fields, or `null`.                                                                                                                            |
+| `aiEvidence`               | The passage a verified match quoted: `passageId`, `contactId`, `field`, `sourceId`, `sourceHash`, `startOffset`, `endOffset` and `quote`. Present only when a passage proved it. |
+| `approximate`, `matchType` | Only on a local answer: a name, an email, a phone number or a quoted phrase. A close name has `matchType: "approximate"`.                                                        |
+| `matchedOn`                | The fields that answer the question, at most three, the most telling first. See below.                                                                                           |
 
 `matchedOn` says why each person is in the list, with no model call. Each
 entry is `{ field, text, marks, how }`:
@@ -815,15 +915,16 @@ entry is `{ field, text, marks, how }`:
   `interest`, `tag`, `about`, `preferences`, `experience`, `education`,
   `address` or `lastContact`.
 - `text` is the contact's own text for the field, cut to one line. A list
-  field joins its matching items.
+  field joins its matching items. For `lastContact`, `text` is the time
+  since, such as `3 months ago`, or `None logged`.
 - `marks` holds `[start, end)` offsets into `text` where the question's words
   are. Matching ignores case and accents, and finds a word's other forms.
 - `how` is `filter` when a facet or the plan's filter proved the field, `ai`
   when the reranker cited it, `words` when the question's words are in it,
   and `meaning` for a passage close in meaning. Proven fields come first.
 
-A name, an email or a phone number gets `[]`. Every match carries the list,
-the `instant` ones too.
+A match found by a name, an email or a phone number has no `matchedOn`
+field. Every other match carries it, the `instant` ones too.
 
 `fallback: true` means no model verified the list. `cached: true` means a cache
 answered. These questions get a `complete` line only, with no model call:
@@ -832,8 +933,11 @@ answered. These questions get a `complete` line only, with no model call:
 - A question that is only facets, such as `tag:founder`.
 - A question that only names a company, a place or an industry your contacts
   have, such as "people in Lisbon".
+- A `general` starter question, such as "Who do I track?".
 - Any question while AI is off for you or for the instance, or with no
   provider. The local list is then the answer, with `fallback: true`.
+
+A cached answer also comes as one `complete` line, with `cached: true`.
 
 The model stages share a 12-second budget. An error, a timeout or an edit in
 your account during that time ends with a fresh local list and
@@ -844,16 +948,16 @@ your account during that time ends with a fresh local list and
 `GET /api/search/interactions` and `GET /api/interactions/search` run the same
 note search. All parameters are optional.
 
-| Parameter         | Meaning                                                                                                      |
-| ----------------- | ------------------------------------------------------------------------------------------------------------ |
-| `q`               | The question, up to 500 characters. A date phrase in it, such as `last month`, becomes a date filter.        |
-| `from`, `to`      | A calendar date or an ISO timestamp. `from` is inclusive and `to` is exclusive. They override a date phrase. |
-| `type`            | One interaction type, such as `call`.                                                                        |
-| `contactId`       | One contact's notes only.                                                                                    |
-| `sort`            | `relevance` (default) or `date`.                                                                             |
-| `mode`            | `auto` (default: every word, then any word), `all` or `any`.                                                 |
-| `limit`, `offset` | 1 to 50 (default 20), and 0 to 5,000.                                                                        |
-| `tz`              | Your IANA time zone, so `last month` is your month. Default `UTC`.                                           |
+| Parameter         | Meaning                                                                                                                                                                                                      |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `q`               | The question, up to 500 characters. A date phrase in it, such as `last month`, becomes a date filter.                                                                                                        |
+| `from`, `to`      | A calendar date, read as a whole day in `tz`, or an ISO timestamp with `Z` or an offset. `from` is inclusive. A `to` timestamp is exclusive, and a `to` date includes that day. They override a date phrase. |
+| `type`            | One interaction type, such as `call`.                                                                                                                                                                        |
+| `contactId`       | One contact's notes only.                                                                                                                                                                                    |
+| `sort`            | `relevance` (default) or `date`.                                                                                                                                                                             |
+| `mode`            | `auto` (default: every word, then any word), `all` or `any`.                                                                                                                                                 |
+| `limit`, `offset` | 1 to 50 (default 20), and 0 to 5,000.                                                                                                                                                                        |
+| `tz`              | Your IANA time zone, so `last month` is your month. Default `UTC`.                                                                                                                                           |
 
 ```bash
 curl -G http://localhost:3210/api/search/interactions \
@@ -866,15 +970,19 @@ The answer is `{ query, total, limit, offset, hits }`. `query` says how the
 server read the question: `text`, `tokens`, `mode`, `phrase`, `range` and
 `timeZone`. Each hit has `id`, `contactId`, `type`, `title`, `date`, a plain
 text `excerpt`, `highlights` and a short `contact`. `highlights` holds
-`[start, end]` offsets into `title` and `excerpt`.
+`[start, end]` offsets into `title` and `excerpt`. With no words and no filter,
+`hits` is empty. With filters and no words, `hits` holds the matching notes,
+newest first.
 
 `GET /api/interactions/search` answers the `hits` array alone, and each hit adds
 `contactName`.
 
 ### The brief
 
-`POST /api/search/synthesize` always streams NDJSON: `{"phase":"start"}`, then
-`delta` lines with the next piece of text, then `complete` with the whole brief.
+`POST /api/search/synthesize` streams NDJSON once the body passes its checks:
+`{"phase":"start"}`, then `delta` lines with the next piece of text, then
+`complete` with the whole brief. A bad body (`400`) and a contact that is gone
+(`409`) answer JSON before the stream starts.
 An `error` line takes the place of `complete` when the model fails, when the
 contacts change during the run, or when the text fails the output check. A
 cached brief sends no `delta` lines.
@@ -887,12 +995,16 @@ as `{ "text": "Who do I know in Lisbon?", "kind": "city" }`. The kinds are
 industry and a city together) and `general`.
 
 - Each question names a value that two of your active contacts share, or one
-  contact in an account of under ten. A `general` question names no value.
-  There are seven, such as `Who do I track?`, and each is in the pool only
-  when its facets find a contact. The search reads each as its facets.
+  contact in an account of under ten. A `pair` always needs two contacts. In
+  an account of ten or more, a tag that more than 60% of your active contacts
+  carry makes no question.
+- A `general` question names no value. There are seven, such as
+  `Who do I track?`, and each is in the pool only when its facets find a
+  contact. The search reads each as its facets.
 - The pool holds at most 500 questions, and no more than you have contacts,
   except a `general` question that finds some of your contacts and not all,
-  which is in the pool whatever its size. With no contacts it is `[]`.
+  which is in the pool whatever its size. With no active contacts,
+  `questions` is `[]`.
 - The server keeps the pool per account and search revision, and builds it
   again after an import.
 
@@ -908,8 +1020,8 @@ industry and a city together) and `general`.
 provider model makes the embeddings, send `allowProvider: true`. Without it the
 route answers `400` with `requiresExplicitConfirmation: true`, the provider,
 the model and `missingCount`, and queues nothing. With a paid provider model
-and AI off for you, it answers `403 AI_OFF_FOR_ACCOUNT`. Success answers
-`{ ok, queued, message }`.
+and AI off for you or for the instance, it answers `403 AI_OFF_FOR_ACCOUNT`.
+Success answers `{ ok, queued, message }`.
 
 ## Contact enrichment
 
@@ -924,6 +1036,15 @@ a web search model, or SearXNG and a Strong model. See
 | `GET /api/ai-search/stream`           | The batch as SSE: `?batchId=`. It closes when the batch stops.                                                                                                                                                                                                                                                                                                                                                                                      | your data |
 | `POST /api/ai-search/:batchId/cancel` | Stop a batch. Queued jobs never start. Answers the batch.                                                                                                                                                                                                                                                                                                                                                                                           | your data |
 
+A start is checked like the one-contact route below, before any job runs, and
+it gives the same `400` and `503` answers. With AI off for you or for the
+instance, it answers `403 AI_OFF_FOR_ACCOUNT` or `403 AI_OFF_FOR_INSTANCE`.
+Each id must be one of your active contacts: an archived, trashed, merged or
+ghost contact answers `409`, and no batch starts. A join adds only the
+contacts that are not queued or running. A batch holds 100 jobs at most, and
+`jobCount` is the number of jobs that joined. A join to a batch that is
+finishing answers `409`.
+
 One batch runs at a time on the instance, one contact at a time. Another
 account's batch answers `429 RATE_LIMITED`. A batch lives in memory, so a
 restart loses its progress. Finished contact updates stay.
@@ -937,10 +1058,13 @@ When an AI switch turns off during a batch, the job that runs fails with the
 switch's message and the `errorType` `auth`. The batch stops there: each job
 not started yet fails with the same reason, and the batch is `complete`.
 
-`POST /api/contacts/:id/enrich` researches one contact and answers
-`{ success, fieldsUpdated, outcome, latencyMs, models, tokenCount }`:
+`POST /api/contacts/:id/enrich` researches one contact. The body is optional:
+`depth` (`standard`, the default, or `deep`), `technique` and `webSearch`. It
+answers `{ success, fieldsUpdated, outcome, latencyMs, models, tokenCount }`:
 
 - `outcome` is `added`, `nothing-new` or `no-public-info`.
+- With AI off for you or for the instance, it answers `403 AI_OFF_FOR_ACCOUNT`
+  or `403 AI_OFF_FOR_INSTANCE` before it runs.
 - The run has 240 seconds at Standard and 290 seconds at Deep.
 - It searches with your web search engine, unless the body names a
   `technique` (`provider-search`, `search-and-read` or `combined`) or a
@@ -956,10 +1080,11 @@ not started yet fails with the same reason, and the batch is `complete`.
   `503 SEARXNG_NOT_CONFIGURED`.
 - `403 AI_OFF_FOR_ACCOUNT`, `503 AI_OFF_FOR_INSTANCE` or `503 RESEARCH_OFF`
   when a switch turns off during the run.
-- `409` when research on the contact is already running, or the contact
-  changed. `502 AI_NO_SEARCH` when the web search model ran no search, after
-  one more ask. `502 AI_NO_ANSWER` when it answered nothing. `503` when no
-  engine can run, and `503 RESEARCH_OFF` while an admin has web search off.
+- `409` for an archived contact or a ghost, while research on the contact
+  runs, or when the contact changed during the run. `502 AI_NO_SEARCH` when
+  the web search model ran no search, after one more ask. `502 AI_NO_ANSWER`
+  when it answered nothing. `503` when no engine can run, and
+  `503 RESEARCH_OFF` while an admin has web search off.
 - `no-public-info` means the model searched and no page said anything the
   contact does not already have. The run then saves no fields and no pages.
 - Research fills empty fields and adds missing child records. It never
@@ -976,62 +1101,66 @@ someone else with the same name. It answers
   `sources` to `rejectedSources`. Later runs leave those pages out, and never
   add the run's values again.
 - `404 RESEARCH_RUN_NOT_FOUND` when the contact has no such run, or it was
-  taken back already. `409` while research runs for the contact.
+  taken back already. `409` while research runs for the contact, or for an
+  archived contact or a ghost.
   `409 RESEARCH_RUN_UNTRACKED` for a run recorded before each added entry
   named its run: what it added cannot be told apart, so remove it by hand.
 
 ## Duplicates
 
-| Endpoint                                    | What it does                                                                                                                                                                                                                                                 | Access    |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------- |
-| `POST /api/dedupe/scan`                     | Start a scan: `mode` is `quick`, `deep` (default) or `full`. `autoMergeThreshold` (0.88 to 0.99) overrides your preset for this scan. Answers `{ scanId, mode }`.                                                                                            | your data |
-| `GET /api/dedupe/stream`                    | A scan's progress as SSE: `?scanId=`. It closes when the scan completes or fails.                                                                                                                                                                            | your data |
-| `GET /api/dedupe/status`                    | A scan's progress: `?scanId=`.                                                                                                                                                                                                                               | your data |
-| `GET /api/dedupe/active`                    | Your running scan: `{ active, queued, scan }`.                                                                                                                                                                                                               | your data |
-| `GET /api/dedupe/suggestions`               | Pending suggestions: `{ suggestions, total }`. `limit` up to 500, default 100. Each has a plain `reasoning`, a `caveat` or null, and `contactA` and `contactB` with `openFollowUpCount`.                                                                     | your data |
-| `GET /api/dedupe/suggestions/count`         | `{ count, pairs }`: the groups the review shows, and the raw pairs.                                                                                                                                                                                          | your data |
-| `GET /api/dedupe/suggestion-for/:contactId` | The pending suggestion that includes a contact: `{ suggestion }`.                                                                                                                                                                                            | your data |
-| `POST /api/dedupe/suggestions/:id/merge`    | Merge a suggestion: `{ primaryId }`, one of its two contacts. Answers `{ success, contact, mergeLogId }`. `409` when one of the two was merged away already.                                                                                                 | your data |
-| `POST /api/dedupe/suggestions/:id/dismiss`  | Keep the pair separate. It is not suggested or merged again.                                                                                                                                                                                                 | your data |
-| `POST /api/dedupe/suggestions/:id/restore`  | Undo a dismiss: the pair is pending again, and scans see it. `409` when it is not dismissed, or one of its contacts was merged, archived or deleted since.                                                                                                   | your data |
-| `GET /api/dedupe/merge-log`                 | Past merges: `{ entries, total }`. `limit` up to 200, default 50. Each entry names both contacts with `primaryName`, `primaryCompany` and `primaryLocation`, and the same for the duplicate.                                                                 | your data |
-| `POST /api/dedupe/merge-log/:id/undo`       | Undo a merge. `{ keepSeparate }` is `true` by default: the two are also kept separate, as a dismiss does. `false` puts the pair back in the review. Answers `{ success, restoredContactId, conflicts, keptSeparate }`. `409 ALREADY_UNDONE` the second time. | your data |
-| `GET /api/dedupe/merged-into/:contactId`    | Where a merged-away contact lives now: `{ merge: { mergeLogId, primaryId, primaryName, mergedBy, mergedAt } }`, at the end of its merge chain. `{ merge: null }` while the contact is live.                                                                  | your data |
-| `GET /api/dedupe/embedding-status`          | Your duplicate-index coverage: `{ embedded, total, missing, coverage }`.                                                                                                                                                                                     | your data |
-| `POST /api/dedupe/backfill-embeddings`      | Fill missing duplicate vectors for every account. Answers `{ "started": true }`.                                                                                                                                                                             | admin     |
+| Endpoint                                    | What it does                                                                                                                                                                                                                                                                                                                                                                             | Access    |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `POST /api/dedupe/scan`                     | Start a scan: `mode` is `quick`, `deep` (default) or `full`. `autoMergeThreshold` (0.88 to 0.99) overrides your preset for this scan. Answers `{ scanId, mode }`. With AI off for you or for the instance, a `deep` or `full` scan answers `403`. A `quick` scan uses no model, so it runs with AI off.                                                                                  | your data |
+| `GET /api/dedupe/stream`                    | A scan's progress as SSE: `?scanId=`. It closes when the scan completes or fails.                                                                                                                                                                                                                                                                                                        | your data |
+| `GET /api/dedupe/status`                    | A scan's progress: `?scanId=`.                                                                                                                                                                                                                                                                                                                                                           | your data |
+| `GET /api/dedupe/active`                    | Your running scan: `{ active, queued, scan }`.                                                                                                                                                                                                                                                                                                                                           | your data |
+| `GET /api/dedupe/suggestions`               | Pending suggestions: `{ suggestions, total }`, where `total` counts the suggestions in this answer. `limit` up to 500, default 100. Each has a plain `reasoning`, a `caveat` or null, and `contactA` and `contactB` with `openFollowUpCount`.                                                                                                                                            | your data |
+| `GET /api/dedupe/suggestions/count`         | `{ count, pairs }`: the groups the review shows, and the raw pairs.                                                                                                                                                                                                                                                                                                                      | your data |
+| `GET /api/dedupe/suggestion-for/:contactId` | The pending suggestion that includes a contact: `{ suggestion }`.                                                                                                                                                                                                                                                                                                                        | your data |
+| `POST /api/dedupe/suggestions/:id/merge`    | Merge a suggestion: `{ primaryId }`, one of its two contacts. Answers `{ success, contact, mergeLogId }`. `404` for a suggestion that is not yours. `400` when it is not pending, or when `primaryId` is not one of its two contacts. `409` when one of the two was merged away already.                                                                                                 | your data |
+| `POST /api/dedupe/suggestions/:id/dismiss`  | Keep the pair separate. It is not suggested or merged again. `409` when the suggestion is not pending.                                                                                                                                                                                                                                                                                   | your data |
+| `POST /api/dedupe/suggestions/:id/restore`  | Undo a dismiss: the pair is pending again, and scans see it. `409` when it is not dismissed, or one of its contacts was merged, archived or deleted since.                                                                                                                                                                                                                               | your data |
+| `GET /api/dedupe/merge-log`                 | Merges of the last 90 days: `{ entries, total }`, where `total` counts the entries in this answer. `limit` up to 200, default 50. Each entry names both contacts with `primaryName`, `primaryCompany` and `primaryLocation`, and the same for the duplicate.                                                                                                                             | your data |
+| `POST /api/dedupe/merge-log/:id/undo`       | Undo a merge. `{ keepSeparate }` is `true` by default: the two are also kept separate, as a dismiss does. `false` puts the pair back in the review. Answers `{ success, restoredContactId, conflicts, keptSeparate }`. `409 ALREADY_UNDONE` the second time. `410 GONE` when the merged-away contact no longer exists, and `409 SNAPSHOT_UNREADABLE` when the saved copy cannot be read. | your data |
+| `GET /api/dedupe/merged-into/:contactId`    | Where a merged-away contact lives now: `{ merge: { mergeLogId, primaryId, primaryName, mergedBy, mergedAt } }`, at the end of its merge chain. `{ merge: null }` while the contact is live.                                                                                                                                                                                              | your data |
+| `GET /api/dedupe/embedding-status`          | Your duplicate-index coverage: `{ embedded, total, missing, coverage }`.                                                                                                                                                                                                                                                                                                                 | your data |
+| `POST /api/dedupe/backfill-embeddings`      | Fill missing duplicate vectors for every account. Answers `{ "started": true }`.                                                                                                                                                                                                                                                                                                         | admin     |
 
 A scan runs in the background. One scan runs at a time on the instance, and a
 scan by another account books your turn: the answer is `429 RATE_LIMITED`
 with `details.queued`. The merge routes for two or more contacts are in
 [Contacts](#contacts).
 
+A merge can be undone for 90 days. After that, a daily job deletes the
+merged-away contact and its merge log entry.
+
 ## Pulse
 
-| Endpoint                              | What it does                                                                                                                                                                                                                                                                                                           | Access    |
-| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `GET /api/dashboard`                  | The Pulse data: `overdue`, `dueToday`, `upcoming`, `ghosts`, `metrics`, `catchUp`, `tracking`, `recentlyAdded`, the composition lists, 30-day timelines, `hygiene`, `meetings` and `correspondents`. `tz` is your IANA time zone, for the days of `overdue`, `dueToday` and `upcoming`. Without it, the server's zone. | your data |
-| `GET /api/dashboard/activity`         | Activity counts: 84 `days`, 12 `weekTotals` from your week start (this week last), `streak`, `today` and `thisWeek`. `tz` is your IANA time zone, for the days. Without it, the server's zone.                                                                                                                         | your data |
-| `GET /api/dashboard/insight`          | The daily insight, written by AI. Answers `null` with no provider.                                                                                                                                                                                                                                                     | your data |
-| `GET /api/command-palette/zero-state` | What the command palette shows before you type: `{ insights }`, such as follow-ups due, catch-ups and ghosts. No model runs. `tz` is your IANA time zone, for the follow-ups due today.                                                                                                                                | your data |
+| Endpoint                              | What it does                                                                                                                                                                                                                                                                                                                                                                                                            | Access    |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `GET /api/dashboard`                  | The Pulse data: `overdue`, `dueToday`, `upcoming` (the next 7 days), `ghosts`, `metrics`, `catchUp`, `tracking`, `recentlyAdded`, `industryComposition`, `locationComposition`, `roleComposition`, `interactionBreakdown30d`, `networkGrowthTimeline30d`, `hygiene`, `meetings` and `correspondents`. `tz` is your IANA time zone, for the days of `overdue`, `dueToday` and `upcoming`. Without it, the server's zone. | your data |
+| `GET /api/dashboard/activity`         | Activity counts: 84 `days`, 12 `weekTotals` from your week start (this week last), `streak`, `today` and `thisWeek`. `tz` is your IANA time zone, for the days. Without it, the server's zone.                                                                                                                                                                                                                          | your data |
+| `GET /api/dashboard/insight`          | The daily insight, written by AI: `{ text, category, generatedAt }`, kept for the day. Answers `null` with no provider or no contacts. With AI off for you or for the instance, it answers `403`.                                                                                                                                                                                                                       | your data |
+| `GET /api/command-palette/zero-state` | What the command palette shows before you type: `{ insights }`, such as follow-ups due, catch-ups and ghosts. No model runs. `tz` is your IANA time zone, for the follow-ups due today.                                                                                                                                                                                                                                 | your data |
 
 In `GET /api/dashboard`, `catchUp` lists up to ten tracked contacts past their
 cadence, the furthest first. `tracking` holds `count`, the score `bands`,
-`catchUpCount`, `startedLast30d`, `snapshotWeeks`, and three `rising` and three
-`cooling` contacts. `rising` and `cooling` stay empty until four weekly
-snapshots exist.
+`catchUpCount`, `startedLast30d`, `snapshotWeeks`, and up to three `rising`
+and three `cooling` contacts, whose score moved 3 points or more in four
+weeks. `rising` and `cooling` stay empty until four weekly snapshots exist.
 
 ## Map and places
 
-| Endpoint                    | What it does                                                                                                                                                                     | Access               |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| `GET /api/geo/search`       | Find a place by name: `q` (2 to 120 characters). See the answers below. It reads no contacts.                                                                                    | any signed-in caller |
-| `GET /api/geo/status`       | Your contacts with address text and no pin: `{ contacts }`. See the rows below.                                                                                                  | your data            |
-| `GET /api/geo/lookups`      | Whether the server sends addresses to Nominatim: `{ off, lockedByEnv, host }`.                                                                                                   | admin                |
-| `PUT /api/geo/lookups`      | Turn address lookups off or on for every account: `{ off }`. `409 SET_BY_ENVIRONMENT` while `GEOCODING_DISABLED` holds them off or `NOMINATIM_URL` is not a URL.                 | admin                |
-| `GET /api/map/views`        | Your saved map views: `{ views }`.                                                                                                                                               | your data            |
-| `POST /api/map/views`       | Save a view: `name` (1 to 60 characters), `query` (up to 200), `layer` (`pins` or `heat`) and `bounds` `[west, south, east, north]`. `201`. `409 TOO_MANY_VIEWS` past 100 views. | your data            |
-| `PATCH /api/map/views/:id`  | Change `name`, `query`, `layer` or `bounds`. `sortOrder` moves the view to that place in the list (0 is first), and the others keep their order.                                 | your data            |
-| `DELETE /api/map/views/:id` | Delete a saved view.                                                                                                                                                             | your data            |
+| Endpoint                    | What it does                                                                                                                                                                                                                                             | Access               |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `GET /api/geo/search`       | Find a place by name: `q` (2 to 120 characters). See the answers below. It reads no contacts.                                                                                                                                                            | any signed-in caller |
+| `GET /api/geo/status`       | Your contacts with address text and no pin: `{ contacts }`. See the rows below.                                                                                                                                                                          | your data            |
+| `GET /api/geo/lookups`      | Whether the server sends addresses to Nominatim: `{ off, lockedByEnv, host }`.                                                                                                                                                                           | admin                |
+| `PUT /api/geo/lookups`      | Turn address lookups off or on for every account: `{ off }`. Answers `{ off, lockedByEnv, host }`. Turning them on answers `409 SET_BY_ENVIRONMENT` while `GEOCODING_DISABLED` holds them off, or while `NOMINATIM_URL` is not an `http` or `https` URL. | admin                |
+| `GET /api/map/views`        | Your saved map views: `{ views }`.                                                                                                                                                                                                                       | your data            |
+| `POST /api/map/views`       | Save a view: `name` (1 to 60 characters), `query` (up to 200), `layer` (`pins` or `heat`) and `bounds` `[west, south, east, north]`. `201`. `409 TOO_MANY_VIEWS` past 100 views.                                                                         | your data            |
+| `PATCH /api/map/views/:id`  | Change `name`, `query`, `layer` or `bounds`. `sortOrder` moves the view to that place in the list (0 is first), and the others keep their order.                                                                                                         | your data            |
+| `DELETE /api/map/views/:id` | Delete a saved view.                                                                                                                                                                                                                                     | your data            |
 
 In `bounds`, west must be less than east, and south less than north. The Map
 page reads its contacts from `GET /api/contacts?view=slim`.
@@ -1061,11 +1190,11 @@ Google. Stored credentials are encrypted. See [Connectors](import-and-sync.md#co
 | `GET /api/connectors/kinds`                  | The connector kinds this server offers: `{ platform, docker, kinds }`. The Google kind says whether an admin set its OAuth client.                                                                   | any signed-in caller |
 | `GET /api/connectors`                        | Your connectors, without secrets: `{ connectors }`.                                                                                                                                                  | your data            |
 | `POST /api/connectors`                       | Create a connector: `kind`, `name`, `config`, `secret` and `intervalMinutes` (5 to 10,080). The server tests the credentials first. `201`. Needs a session.                                          | your data            |
-| `POST /api/connectors/test`                  | Test `kind`, `config` and `secret` without saving. Needs a session.                                                                                                                                  | your data            |
+| `POST /api/connectors/test`                  | Test `kind`, `config` and `secret` without saving. With `connectorId`, it tests with that connector's saved secret. Answers `{ ok, detail }`. Needs a session.                                       | your data            |
 | `GET /api/connectors/:id`                    | One connector, with its recent runs.                                                                                                                                                                 | your data            |
 | `PATCH /api/connectors/:id`                  | Change `name`, `config`, `secret`, `intervalMinutes` or `status` (`active` or `paused`). Needs a session.                                                                                            | your data            |
 | `DELETE /api/connectors/:id`                 | Delete a connector. `deleteImported: true` (body or query) also deletes what it imported. Answers `204`. Needs a session.                                                                            | your data            |
-| `POST /api/connectors/:id/sync`              | Sync now. Answers `202 { runId }`. Needs a session.                                                                                                                                                  | your data            |
+| `POST /api/connectors/:id/sync`              | Sync now. Answers `202 { runId }`. `runId` is `run-queued` when the run has no row yet. Needs a session.                                                                                             | your data            |
 | `GET /api/connectors/:id/runs`               | Run history: `{ runs }`. `limit` up to 100, default 20.                                                                                                                                              | your data            |
 | `GET /api/connectors/correspondents`         | People your connectors saw who are not contacts yet, most seen first: `{ correspondents }`. `limit` up to 100, default 50.                                                                           | your data            |
 | `POST /api/connectors/correspondents/ignore` | Ignore a correspondent, so they do not become a ghost: `{ connectorId, externalId }`. Answers `{ ok, updated }`. `updated` is false when nothing matched. Needs a session.                           | your data            |
@@ -1078,18 +1207,18 @@ must list it.
 
 ## Trash, backups, and export
 
-| Endpoint                       | What it does                                                                                                  | Access    |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------- | --------- |
-| `GET /api/trash`               | Your trashed contacts and the retention: `{ items, retentionDays }`.                                          | your data |
-| `POST /api/trash/:id/restore`  | Restore a trashed contact. Answers the contact. `404` when it is not in the trash.                            | your data |
-| `POST /api/trash/bulk-restore` | Restore many: `{ ids }`. Skips ids that are not in the trash. Answers `{ success, count }`.                   | your data |
-| `DELETE /api/trash/:id`        | Delete a trashed contact and its history now.                                                                 | your data |
-| `DELETE /api/trash`            | Empty the trash: delete every trashed contact and its history now. Answers `{ count }`.                       | your data |
-| `GET /api/backups`             | Every database snapshot, with its `verification`: `{ backups }`.                                              | admin     |
-| `POST /api/backups`            | Take a snapshot now. `201` with its details.                                                                  | admin     |
-| `GET /api/export/json`         | Your data as one JSON file: `contacts`, `interactions`, `lists`, `listMembers`, `actionItems` and `mergeLog`. | your data |
-| `GET /api/export/csv`          | Your contacts as CSV, trashed contacts left out.                                                              | your data |
-| `GET /api/export/vcard`        | Your contacts as a vCard 3.0 file, trashed and ghost contacts left out.                                       | your data |
+| Endpoint                       | What it does                                                                                                                                                                                 | Access    |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `GET /api/trash`               | Your trashed contacts and the retention: `{ items, retentionDays }`.                                                                                                                         | your data |
+| `POST /api/trash/:id/restore`  | Restore a trashed contact. Answers the contact. `404` when it is not in the trash.                                                                                                           | your data |
+| `POST /api/trash/bulk-restore` | Restore many: `{ ids }`. Skips ids that are not in the trash. Answers `{ success, count }`.                                                                                                  | your data |
+| `DELETE /api/trash/:id`        | Delete a trashed contact now. The contacts merged into it, their merge history and their files go with it. Answers `{ success: true }`. `404` when it is not in the trash.                   | your data |
+| `DELETE /api/trash`            | Empty the trash: delete every trashed contact now, in the same way. Answers `{ count }`, the number of trashed contacts deleted.                                                             | your data |
+| `GET /api/backups`             | Every database snapshot, with its `verification`: `{ backups }`.                                                                                                                             | admin     |
+| `POST /api/backups`            | Take a snapshot now. `201` with its details. Then the server deletes the oldest snapshots past the keep count.                                                                               | admin     |
+| `GET /api/export/json`         | Your data as one JSON file: `contacts`, `interactions`, `lists`, `listMembers`, `actionItems` and `mergeLog`. It holds every contact row: trashed, archived, ghost and merged-away rows too. | your data |
+| `GET /api/export/csv`          | Your contacts as CSV. Trashed, ghost and merged-away contacts are left out. Archived contacts stay, with `Archived` set to `yes`.                                                            | your data |
+| `GET /api/export/vcard`        | Your contacts as a vCard 3.0 file. Trashed, ghost and merged-away contacts are left out.                                                                                                     | your data |
 
 A trashed contact is deleted for good after the retention period, 30 days by
 default. A snapshot holds every account, so the backup routes are for admins.
@@ -1106,9 +1235,9 @@ curl -OJ http://localhost:3210/api/export/json \
 ```
 
 The JSON file starts with `exportedAt` and `version`. Its contacts keep their
-import sources, experience and education. The CSV has one row per contact, with
-emails, phones and tags joined by `; `. A cell that could run as a spreadsheet
-formula starts with `'`.
+import sources, experience and education. The CSV has one row per contact.
+Emails, phones, addresses, social links and tags are joined by `; `. A cell
+that could run as a spreadsheet formula starts with `'`.
 
 ## AI settings
 
@@ -1121,29 +1250,30 @@ search model) and `embeddings` (the embedding model). See
 | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
 | `GET /api/settings/ai`                               | The whole view: connected `providers` with a masked key and the `envVariable` that set an environment key, `availableProviders`, `customEndpoints`, and each capability's assignment and what it resolves to. `resolved.source` says what chose the model (`pinned`, `env` or `auto`), and `envDefault` names a set `AI_*_MODEL` variable. `webSearch` holds the switch (`allowed`), the instance's `engine`, whether each of the `engines` can run and what it lacks, and `searxng`. Then the read-only `reranker`, `multipleAccounts` and the instance switch. Only an admin gets the SearXNG address. It never returns a key. | any signed-in caller |
 | `GET /api/settings/ai/models/:capability`            | The models a capability can use, grouped by provider: `{ groups }`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | any signed-in caller |
-| `PUT /api/settings/ai/providers/:id/key`             | Save a key for `gemini`, `openai` or `anthropic`: `{ apiKey }`. The server lists the models to test it and answers `{ success, modelCount }`. A failed test keeps the key.                                                                                                                                                                                                                                                                                                                                                                                                                                                       | admin                |
-| `DELETE /api/settings/ai/providers/:id/key`          | Remove a saved key. A key from the environment stays.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | admin                |
+| `PUT /api/settings/ai/providers/:id/key`             | Save a key for `gemini`, `openai` or `anthropic`: `{ apiKey }`. The server lists the models to test it and answers `{ success, modelCount }`. A failed test answers `502 DISCOVERY_FAILED`, and AI off for the instance answers `409 AI_OFF_FOR_INSTANCE`. The key stays saved in both cases.                                                                                                                                                                                                                                                                                                                                    | admin                |
+| `DELETE /api/settings/ai/providers/:id/key`          | Remove a saved key. A key from the environment stays. A capability pinned to this provider goes back to `auto`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | admin                |
 | `POST /api/settings/ai/providers/:id/refresh-models` | List the provider's models again: `{ modelCount, fetchedAt }`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | admin                |
-| `PUT /api/settings/ai/capabilities/:capability`      | Assign a capability: `mode` (`auto` or `pinned`), `providerId` and `model`. A pin is tested first. A new embeddings model rebuilds both vector indexes in the background. `disabled` answers `400`: web search has its own switch.                                                                                                                                                                                                                                                                                                                                                                                               | admin                |
-| `PUT /api/settings/ai/endpoints`                     | Add or change an OpenAI-compatible server: `id`, `label`, `baseUrl` and `apiKey`. Its provider id is `custom:<id>`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | admin                |
-| `DELETE /api/settings/ai/endpoints/:id`              | Remove an OpenAI-compatible server.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | admin                |
+| `PUT /api/settings/ai/capabilities/:capability`      | Assign a capability: `mode` (`auto` or `pinned`), `providerId` and `model`. Answers `{ success, view }`. A pin is tested first: a failed test answers `502 MODEL_PROBE_FAILED` or `502 EMBEDDINGS_PROBE_FAILED`, and the server saves nothing. A pin while AI is off for the instance answers `409 AI_OFF_FOR_INSTANCE`. A new embeddings model rebuilds both vector indexes in the background. `disabled` answers `400`: web search has its own switch.                                                                                                                                                                         | admin                |
+| `PUT /api/settings/ai/endpoints`                     | Add or change an OpenAI-compatible server: `id`, `label`, `baseUrl` and `apiKey` (optional). Its provider id is `custom:<id>`. Answers `{ success, modelCount }`, with the same test answers as a key.                                                                                                                                                                                                                                                                                                                                                                                                                           | admin                |
+| `DELETE /api/settings/ai/endpoints/:id`              | Remove an OpenAI-compatible server. A capability pinned to it goes back to `auto`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | admin                |
 | `PUT /api/settings/ai/web-search`                    | Turn web search on or off, or set the instance's engine: `{ allowed, engine }`, one or both. `engine` is `provider`, `searxng` or `combined`. Answers `{ success, view }`, the whole view.                                                                                                                                                                                                                                                                                                                                                                                                                                       | admin                |
 | `PUT /api/settings/ai/searxng`                       | Set the SearXNG address for web search: `{ url }`. An empty string clears it. A cloud metadata or a link-local address answers `400`. `409 SET_BY_ENVIRONMENT` when `SEARXNG_URL` is set.                                                                                                                                                                                                                                                                                                                                                                                                                                        | admin                |
-| `PUT /api/settings/ai/instance`                      | Turn AI off or on for every account: `{ aiOff }`. `409 AI_LOCKED_BY_ENV` when `AI_DISABLED` holds it off.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | admin                |
+| `PUT /api/settings/ai/instance`                      | Turn AI off or on for every account: `{ aiOff }`. Answers `{ success, instance }`. Turning AI on answers `409 AI_LOCKED_BY_ENV` while `AI_DISABLED` holds it off.                                                                                                                                                                                                                                                                                                                                                                                                                                                                | admin                |
 
 An OpenAI-compatible server's `baseUrl` must include the API prefix it serves,
 for example `http://localhost:11434/v1` for Ollama. Every write records an
-audit entry with the setting name, never its value.
+audit entry with the setting name, never a key or an address. The AI switch,
+the web search switch and the engine also record their new value.
 
 ## AI usage and diagnostics
 
-| Endpoint                         | What it does                                                                                                                                                                | Access               |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| `GET /api/ai/instance`           | Whether AI is off for the instance: `{ aiOff, lockedByEnv }`.                                                                                                               | any signed-in caller |
-| `GET /api/ai/stats/summary`      | Your AI usage: calls, cached calls, tokens and an estimated cost. An admin also sees the cache tiers, and `?scope=all` gives a signed-in admin the whole instance.          | your data            |
-| `GET /api/ai/stats/feed`         | Your AI calls, newest first: `offset`, `limit`, `operation` (a comma list), `cached` (`true` or `false`) and `sort` (`newest` or `oldest`). An admin can send `?scope=all`. | your data            |
-| `GET /api/ai/diagnostics`        | What `quick`, `deep` and `research` resolve to, Gemini's usage meter and the paused Gemini models.                                                                          | admin                |
-| `GET /api/ai/grounding-capacity` | Whether contact research can run now: `{ hasCapacity, provider, researchRuns24h }`.                                                                                         | admin                |
+| Endpoint                         | What it does                                                                                                                                                                       | Access               |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `GET /api/ai/instance`           | Whether AI is off for the instance: `{ aiOff, lockedByEnv }`.                                                                                                                      | any signed-in caller |
+| `GET /api/ai/stats/summary`      | Your AI usage: calls, cached calls, tokens and an estimated cost. An admin also sees the cache tiers, and `?scope=all` gives a signed-in admin the whole instance.                 | your data            |
+| `GET /api/ai/stats/feed`         | Your AI calls, newest first: `offset`, `limit`, `operation` (a comma list), `cached` (`true` or `false`) and `sort` (`newest` or `oldest`). An admin can send `?scope=all`.        | your data            |
+| `GET /api/ai/diagnostics`        | What `quick`, `deep` and `research` resolve to, Gemini's usage meter and the paused Gemini models.                                                                                 | admin                |
+| `GET /api/ai/grounding-capacity` | Whether a web search model, or SearXNG with a Strong model, is set up: `{ hasCapacity, provider, researchRuns24h }`. For Gemini, it also checks that a search model is not paused. | admin                |
 
 `?scope=all` from a member answers `403 ADMIN_REQUIRED`. The cost is an
 estimate from list prices.
@@ -1154,66 +1284,71 @@ estimate from list prices.
 HTTP transport with no session, and it takes JSON-RPC 2.0. For clients and
 tools, see [Connect a client](mcp.md#connect-a-client).
 
-| Endpoint                         | What it does                                                                                                                                                                                                                 | Access    |
-| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
-| `POST /api/mcp`                  | The MCP endpoint. Send `Accept: application/json, text/event-stream`. 120 requests a minute per account.                                                                                                                     | your data |
-| `GET /api/mcp`                   | Answers `405` with `Allow: POST`.                                                                                                                                                                                            | your data |
-| `DELETE /api/mcp`                | Answers `405` with `Allow: POST`.                                                                                                                                                                                            | your data |
-| `GET /api/query/contacts`        | Your contacts as raw rows, newest first. Filters `role` and `company` (contains) and `industry` (exact). `fields` is a comma list of columns to keep. `limit` and `offset`. Trashed, merged and ghost contacts are left out. | your data |
-| `GET /api/contacts/action-items` | Your contacts that are due for contact: a follow-up date that has come, or a tracked contact past its cadence, by the rule Pulse uses. Archived, trashed, merged and ghost contacts are left out. Answers full contacts.     | your data |
+| Endpoint                         | What it does                                                                                                                                                                                                                           | Access    |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| `POST /api/mcp`                  | The MCP endpoint. Send `Accept: application/json, text/event-stream`. 120 requests a minute per account. A request with an `Origin` header from another site answers `403 ORIGIN_NOT_ALLOWED`, unless `CORS_ORIGIN` names that origin. | your data |
+| `GET /api/mcp`                   | Answers `405` with `Allow: POST`.                                                                                                                                                                                                      | your data |
+| `DELETE /api/mcp`                | Answers `405` with `Allow: POST`.                                                                                                                                                                                                      | your data |
+| `GET /api/query/contacts`        | Your contacts as raw rows, newest first. Filters `role` and `company` (contains) and `industry` (exact). `fields` is a comma list of columns to keep. `limit` and `offset`. Trashed, merged and ghost contacts are left out.           | your data |
+| `GET /api/contacts/action-items` | Your contacts that are due for contact: a follow-up date that has come, or a tracked contact past its cadence, by the rule Pulse uses. Archived, trashed, merged and ghost contacts are left out. Answers full contacts.               | your data |
 
 An MCP client and a script share the token rules: a token reads and writes the
 data of the account that created it.
 
 ## Avatars, logos, and link previews
 
-| Endpoint                       | What it does                                                                                                                                                                                         | Access               |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| `GET /api/avatar/:style`       | A generated avatar as SVG. Styles: `avataaars`, `lorelei`, `bottts` and `initials`. `seed` is required. Optional `bg=1`, `theme` (`light` or `dark`) and `look` (`f`, `m` or `n`). Cached for a day. | any signed-in caller |
-| `GET /api/logos/:domain`       | A company logo as PNG, at most 128 px. The server fetches it once and keeps it. `204` with no body when the domain has no logo, and `503` for a failure that may pass.                               | any signed-in caller |
-| `GET /api/link-preview/unfurl` | The title, description and image of a web page: `?url=`. The server fetches the page, keeps the image in your uploads, and answers a local `image` path.                                             | your data            |
+| Endpoint                       | What it does                                                                                                                                                                                                                                                                                                            | Access               |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| `GET /api/avatar/:style`       | A generated avatar as SVG. Styles: `avataaars`, `lorelei`, `bottts` and `initials`. `seed` is required. Optional `bg=1`, `theme` (`light` or `dark`) and `look` (`f`, `m` or `n`). Cached for a day.                                                                                                                    | any signed-in caller |
+| `GET /api/logos/:domain`       | A company logo as PNG, at most 128 px. The server asks Google's favicon service once for each domain and keeps the file. `204` with no body when the domain has no logo, and `503` for a failure that may pass.                                                                                                         | any signed-in caller |
+| `GET /api/link-preview/unfurl` | The title, description and image of a web page: `?url=`. The server fetches the page, keeps the image in your uploads, and answers `{ title, description, image, url }`. `image` is a local path, or an empty string. `502` when the page cannot be fetched. With AI off for you or for the instance, it answers `403`. | your data            |
 
 The server fetches pages and logos, so the browser never contacts those sites.
-Every fetch goes to public addresses only, with at most 3 redirects.
+Google's favicon service sees each company domain. Every fetch goes to public
+addresses only, with at most 3 redirects.
 
 ## Administration
 
-Every route below needs an admin account. An admin also needs a current
-password: an account with a temporary password gets
+Every route below needs an admin account and a signed-in session. Another
+account gets `403 ADMIN_REQUIRED`, and an admin's token gets
+`403 SESSION_REQUIRED`. An admin also needs a current password: an account
+with a temporary password gets
 `403 PASSWORD_CHANGE_REQUIRED`. See [Administration](accounts.md#administration).
 
-| Endpoint                                   | What it does                                                                                                                                                                               | Access |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
-| `GET /api/admin/users`                     | Every account, with contact, session and token counts: `{ users }`.                                                                                                                        | admin  |
-| `POST /api/admin/users`                    | Create an account: `email`, `username`, `displayName`, `role` and `temporaryPassword`. The answer holds the temporary password once. `201`.                                                | admin  |
-| `GET /api/admin/users/:id`                 | One account and what it owns.                                                                                                                                                              | admin  |
-| `PATCH /api/admin/users/:id`               | Change `role` or `displayName`.                                                                                                                                                            | admin  |
-| `POST /api/admin/users/:id/reset-password` | Set a new temporary password. Ends the account's sessions and revokes its tokens.                                                                                                          | admin  |
-| `POST /api/admin/users/:id/reset-link`     | Email a reset link that lasts 24 hours. Answers `{ sentTo, expiresAt }`. `409 MAIL_NOT_CONFIGURED`, or `409 PUBLIC_URL_REQUIRED`.                                                          | admin  |
-| `POST /api/admin/users/:id/disable`        | Disable an account. Its sessions end and its tokens stop working.                                                                                                                          | admin  |
-| `POST /api/admin/users/:id/enable`         | Enable an account again. Its tokens work again. Its old sessions do not come back.                                                                                                         | admin  |
-| `GET /api/admin/users/:id/export`          | The account's data as a JSON file.                                                                                                                                                         | admin  |
-| `GET /api/admin/backups/:filename`         | One snapshot from `GET /api/backups`, as a file. Any other name is `404 BACKUP_NOT_FOUND`. Each download writes a `backup.downloaded` audit row.                                           | admin  |
-| `DELETE /api/admin/users/:id`              | Delete an account in two steps. The first call answers `409 USER_HAS_DATA` with the counts. Send `{ "decision": "purge" }` to delete.                                                      | admin  |
-| `GET /api/admin/invitations`               | Every invitation with its status: `{ invitations }`.                                                                                                                                       | admin  |
-| `POST /api/admin/invitations`              | Create an invitation: `email`, `role`, `expiresInDays` (1 to 90, default 7) and `send`. Answers `{ id, link, expiresAt, sent }`. `201`.                                                    | admin  |
-| `DELETE /api/admin/invitations/:id`        | Revoke an invitation.                                                                                                                                                                      | admin  |
-| `GET /api/admin/settings`                  | Instance settings: registration, session length, instance name, emailed sign-in links, trash retention and backups. Each lifecycle value says where it comes from.                         | admin  |
-| `PUT /api/admin/settings`                  | Change one or more settings. `409 SET_BY_ENVIRONMENT` for a value the environment sets.                                                                                                    | admin  |
-| `GET /api/admin/integrations`              | The Google OAuth client, with the secret masked. The SearXNG address is under `GET /api/settings/ai`.                                                                                      | admin  |
-| `PUT /api/admin/integrations`              | Set `googleOAuth: { clientId, clientSecret }` (`null` clears it). The SearXNG address is set with `PUT /api/settings/ai/searxng`.                                                          | admin  |
-| `GET /api/admin/mail`                      | Outgoing mail settings without the password, and `publicUrl`.                                                                                                                              | admin  |
-| `PUT /api/admin/mail`                      | Save SMTP settings: `host`, `port`, `secure`, `user`, `password`, `from` and `replyTo`. A blank `password` keeps the saved one. `409 MAIL_CONFIGURED_BY_ENV` when `SMTP_URL` is set.       | admin  |
-| `DELETE /api/admin/mail`                   | Remove the saved SMTP settings.                                                                                                                                                            | admin  |
-| `POST /api/admin/mail/test`                | Send a test message to `to`, or to you. Answers `{ sentTo }`. `502 MAIL_SEND_FAILED` with the reason.                                                                                      | admin  |
-| `GET /api/admin/audit`                     | The audit log, newest first: `{ entries, nextBefore }`. `limit`, `before` and `action` (a comma list of known actions).                                                                    | admin  |
-| `GET /api/admin/health`                    | The instance's state: uptime, schema versions, database and WAL size, the last backup, the queues, index coverage per account, cache tiers and the AI provider state. It holds no secrets. | admin  |
-| `GET /api/admin/jobs`                      | The background jobs: `{ recurring, failed }`. Each recurring job with `every` in milliseconds, its last run, its result and its next run, then the jobs that failed in the last day.       | admin  |
+| Endpoint                                   | What it does                                                                                                                                                                                                                                           | Access |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------ |
+| `GET /api/admin/users`                     | Every account, with contact, session and token counts: `{ users }`.                                                                                                                                                                                    | admin  |
+| `POST /api/admin/users`                    | Create an account: `email`, `username`, `displayName`, `role` (`member` by default) and `temporaryPassword` (optional: the server makes one when it is absent). The answer holds the temporary password once. `201`.                                   | admin  |
+| `GET /api/admin/users/:id`                 | One account and what it owns.                                                                                                                                                                                                                          | admin  |
+| `PATCH /api/admin/users/:id`               | Change `role` or `displayName`.                                                                                                                                                                                                                        | admin  |
+| `POST /api/admin/users/:id/reset-password` | Set a new temporary password. Ends the account's sessions and revokes its tokens.                                                                                                                                                                      | admin  |
+| `POST /api/admin/users/:id/reset-link`     | Email a reset link that lasts 24 hours. Answers `{ sentTo, expiresAt }`. `409 MAIL_NOT_CONFIGURED`, or `409 PUBLIC_URL_REQUIRED`. `400` when the account has no email address. `502 MAIL_SEND_FAILED` when the mail fails, and the link does not work. | admin  |
+| `POST /api/admin/users/:id/disable`        | Disable an account. Its sessions end and its tokens stop working.                                                                                                                                                                                      | admin  |
+| `POST /api/admin/users/:id/enable`         | Enable an account again. Its tokens work again. Its old sessions do not come back.                                                                                                                                                                     | admin  |
+| `GET /api/admin/users/:id/export`          | The account's data as a JSON file.                                                                                                                                                                                                                     | admin  |
+| `GET /api/admin/backups/:filename`         | One snapshot from `GET /api/backups`, as a file. Any other name is `404 BACKUP_NOT_FOUND`. Each download writes a `backup.downloaded` audit row.                                                                                                       | admin  |
+| `DELETE /api/admin/users/:id`              | Delete an account in two steps. The first call answers `409 USER_HAS_DATA` with the counts. Send `{ "decision": "purge" }` to delete.                                                                                                                  | admin  |
+| `GET /api/admin/invitations`               | Every invitation with its status: `{ invitations }`.                                                                                                                                                                                                   | admin  |
+| `POST /api/admin/invitations`              | Create an invitation: `email`, `role`, `expiresInDays` (1 to 90, default 7) and `send`. Answers `{ id, link, expiresAt, sent }`. `201`.                                                                                                                | admin  |
+| `DELETE /api/admin/invitations/:id`        | Revoke an invitation. `409 INVITATION_USED` when somebody accepted it already.                                                                                                                                                                         | admin  |
+| `GET /api/admin/settings`                  | Instance settings: registration, session length, instance name, emailed sign-in links, trash retention and backups. Each lifecycle value says where it comes from.                                                                                     | admin  |
+| `PUT /api/admin/settings`                  | Change one or more settings. `409 SET_BY_ENVIRONMENT` for a value the environment sets.                                                                                                                                                                | admin  |
+| `GET /api/admin/integrations`              | The Google OAuth client, with the secret masked. The SearXNG address is under `GET /api/settings/ai`.                                                                                                                                                  | admin  |
+| `PUT /api/admin/integrations`              | Set `googleOAuth: { clientId, clientSecret }` (`null` clears it). `409 SET_BY_ENVIRONMENT` while `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` are set. The SearXNG address is set with `PUT /api/settings/ai/searxng`.                    | admin  |
+| `GET /api/admin/mail`                      | Outgoing mail settings without the password, and `publicUrl`.                                                                                                                                                                                          | admin  |
+| `PUT /api/admin/mail`                      | Save SMTP settings: `host`, `port`, `secure`, `user`, `password`, `from` and `replyTo`. A blank `password` keeps the saved one. `409 MAIL_CONFIGURED_BY_ENV` when `SMTP_URL` is set.                                                                   | admin  |
+| `DELETE /api/admin/mail`                   | Remove the saved SMTP settings. `409 MAIL_CONFIGURED_BY_ENV` when `SMTP_URL` is set.                                                                                                                                                                   | admin  |
+| `POST /api/admin/mail/test`                | Send a test message to `to`, or to you. Answers `{ sentTo }`. `502 MAIL_SEND_FAILED` with the reason.                                                                                                                                                  | admin  |
+| `GET /api/admin/audit`                     | The audit log, newest first: `{ entries, nextBefore }`. `limit`, `before` and `action` (a comma list of known actions).                                                                                                                                | admin  |
+| `GET /api/admin/health`                    | The instance's state: uptime, schema versions, database and WAL size, the last backup, the queues, index coverage per account, cache tiers and the AI provider state. It holds no secrets.                                                             | admin  |
+| `GET /api/admin/jobs`                      | The background jobs: `{ recurring, failed }`. Each recurring job with `every` in milliseconds (`null` while it is off), its last run, its result and its next run. Then up to 50 jobs that failed in the last day, newest first.                       | admin  |
 
-`PUT /api/admin/settings` takes `registrationOpen`, `sessionTtlDays`,
-`instanceName` (up to 60 characters, an empty string clears it),
+`PUT /api/admin/settings` takes `registrationOpen`, `sessionTtlDays` (1 to
+365), `instanceName` (up to 60 characters, an empty string clears it),
 `magicLinkSignIn`, `trashRetentionDays` (1 to 365), `backupIntervalHours`
-(0 to 168) and `backupKeep` (1 to 50).
+(0 to 168, where 0 turns scheduled backups off) and `backupKeep` (1 to 50). It
+answers the same view as `GET`. `magicLinkSignIn: true` answers
+`409 MAIL_NOT_CONFIGURED` while outgoing mail is not set up.
 
 Three guards keep the instance manageable, checked in this order:
 
@@ -1221,8 +1356,9 @@ Three guards keep the instance manageable, checked in this order:
    deleted: `409 LOCAL_OWNER_PROTECTED`.
 2. The last active admin cannot be demoted, disabled or deleted:
    `409 LAST_ADMIN`.
-3. An admin cannot disable or delete their own account:
-   `400 CANNOT_TARGET_SELF`.
+3. An admin cannot disable or delete their own account, or reset its
+   password: `400 CANNOT_TARGET_SELF`. To change your own password, use
+   `POST /api/auth/change-password`.
 
 An invitation link has the form `<origin>/join?token=...`. A mailed link always
 uses `PUBLIC_URL`, never the request's host.

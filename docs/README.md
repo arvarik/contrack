@@ -16,7 +16,7 @@ is optional.
 - [Contacts](contacts.md): the Network list, the contact page, notes, follow-ups, lists, tags, archive, and trash
 - [Pulse and tracking](pulse.md): choose who to keep up with, read the score, and work through each day
 - [Search and Ask Contrack](search.md): the command palette, filters, questions in plain words, and note search
-- [Map](map.md): see your network by place, select people, and plan a trip
+- [Map](map.md): see your network by place, and select people to act on them
 - [Duplicates](duplicates.md): find and merge contacts that are the same person
 - [Import, sync, and export](import-and-sync.md): bring contacts in from files, calendars, mail, and Google, and take them out again
 - [AI](ai.md): what AI does, how to connect a provider, how to research contacts, and how to turn AI off
@@ -43,7 +43,7 @@ is optional.
 - Each page is plain Markdown with relative links. The folder reads the same
   on GitHub, in an editor such as Obsidian, and in a wiki.
 - `npm run docs:wiki -- <folder>` writes the pages as a GitHub wiki:
-  `Home.md`, a `_Sidebar.md` built from this index, and one page per entry,
-  with every link rewritten for the wiki.
-- Screenshots show fictional people and live in `images/`.
+  `Home.md`, a `_Sidebar.md` built from this index, a `_Footer.md`, and one
+  page per entry, with every link rewritten for the wiki.
+- Screenshots and GIFs show fictional people and live in `images/`.
 - What changed in each release is in the [changelog](../CHANGELOG.md).

@@ -1,8 +1,8 @@
 # Architecture
 
 This page explains how Contrack is built, for contributors. It covers the
-parts, the path of one request, the data model, and the rules that keep each
-account's data apart.
+parts, the path of one request, the data model, the background work, and the
+rules that keep each account's data apart.
 
 ## Overview
 
@@ -20,7 +20,7 @@ flowchart LR
     MW["Express middleware: server/app.ts"]
     Routes["Routes: server/routes"]
     MCP["MCP server: server/mcp"]
-    Jobs["Background jobs and connectors"]
+    Jobs["Events, jobs and connectors"]
     Services["Services: server/services"]
     Data["Repositories and SQL with a Scope"]
     Gateway["AI gateway and queue: server/ai"]
@@ -50,25 +50,25 @@ flowchart LR
 
 ## Repository layout
 
-| Folder                                              | What it holds                                                                                                                                                                         |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/`                                              | The React app: `api/` (query hooks and `apiFetch`), `views/` (pages), `components/`, `hooks/` and `lib/`.                                                                             |
-| `shared/`                                           | Code that the server and the browser both run: the API contracts and event payloads (`contracts/`), facets, search history, dates, cadence, score bands, vCard and the MCP tool list. |
-| `server/modules/`                                   | One module for each area: its routers, MCP tools, jobs and event subscribers, and the ordered list that the core reads.                                                               |
-| `server/routes/`                                    | The Express routers, one file for each area.                                                                                                                                          |
-| `server/middleware/`                                | Authentication, rate limits, the AI switch, cache headers, compression, the uploads guard and the error handler.                                                                      |
-| `server/services/`                                  | The business logic, with `search/`, `dedupe/`, `research/` and `aiSearch/` (contact research), and `geocoding/`.                                                                      |
-| `server/repositories/`                              | Contact reads and writes, and the hydration of child records.                                                                                                                         |
-| `server/ai/`                                        | Capabilities, the gateway, the queue, the provider adapters, prompt safety, and the AI features in `services/`.                                                                       |
-| `server/connectors/`                                | Calendar, mailbox and Google sync: adapters, the scheduler and the ingest step.                                                                                                       |
-| `server/mcp/`, `server/tenancy/`, `server/workers/` | The MCP server; `Scope`, the request context and the route manifest; the CPU worker for local models.                                                                                 |
-| `server/utils/`                                     | Errors, validators, paths, the secret box, URL safety, the AI cache and the logger.                                                                                                   |
-| `server/db/`                                        | The migrations and their runner, the derived indexes and their versions, and the Drizzle schema.                                                                                      |
-| `server/events/`, `server/jobs/`                    | The event log and its dispatcher; the job runner.                                                                                                                                     |
-| `server/db.ts`, `server/app.ts`                     | The connection and the steps that run on every boot; the Express app that `server.ts` starts.                                                                                         |
-| `scripts/`                                          | Command-line tools: seed data, `db:enrich` (a test network), `reset-password`, `fetch-models`, the tenant lint, eval recorders and benchmarks.                                        |
-| `tests/`                                            | `unit/`, `integration/`, `eval/`, `contract/`, `e2e/` and `fixtures/`.                                                                                                                |
-| `public/`                                           | Icons, fonts and the web manifest.                                                                                                                                                    |
+| Folder                                                                | What it holds                                                                                                                                                                         |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/`                                                                | The React app: `api/` (query hooks and `apiFetch`), `views/` (pages), `components/`, `contexts/`, `hooks/` and `lib/`.                                                                |
+| `shared/`                                                             | Code that the server and the browser both run: the API contracts and event payloads (`contracts/`), facets, search history, dates, cadence, score bands, vCard and the MCP tool list. |
+| `server/modules/`                                                     | One module for each area: its routers, MCP tools, jobs and event subscribers, and the ordered list that the core reads.                                                               |
+| `server/routes/`                                                      | The Express routers, one file for each area.                                                                                                                                          |
+| `server/middleware/`                                                  | Authentication, the host guard, rate limits, the AI switch, cache headers, compression, the uploads guard and the error handler.                                                      |
+| `server/services/`                                                    | The business logic, with `search/`, `dedupe/`, `research/` and `aiSearch/` (contact research), and `geocoding/`.                                                                      |
+| `server/repositories/`                                                | Contact reads and writes, and the hydration of child records.                                                                                                                         |
+| `server/ai/`                                                          | Capabilities, the gateway, the queue, the provider adapters, prompt safety, and the AI features in `services/`.                                                                       |
+| `server/connectors/`                                                  | Calendar, mailbox and Google sync: adapters, the scheduler and the ingest step.                                                                                                       |
+| `server/events/`, `server/jobs/`                                      | The event log, its dispatcher and the contact subscribers; the job runner and the job kinds.                                                                                          |
+| `server/db/`                                                          | The migrations and their runner, the derived indexes and their versions, and the Drizzle schema.                                                                                      |
+| `server/mcp/`, `server/tenancy/`, `server/workers/`, `server/mail/`   | The MCP server; `Scope`, the request context and the route manifest; the CPU worker for local models; the mail templates.                                                             |
+| `server/utils/`                                                       | Errors, validators, paths, the secret box, URL safety, the AI cache and the logger.                                                                                                   |
+| `server.ts`, `server/app.ts`, `server/db.ts`, `server/serveClient.ts` | The process (boot, listen, shut down); the Express app; the connection and the steps that run on every boot; Vite in development or `dist/` in production.                            |
+| `scripts/`                                                            | Command-line tools: seed data, `db:enrich` (a test network), `db:new`, `reset-password`, `fetch-models`, `model-smoke`, `openapi`, the tenant lint, eval recorders and benchmarks.    |
+| `tests/`                                                              | `unit/`, `integration/`, `eval/`, `contract/`, `e2e/` and `fixtures/`.                                                                                                                |
+| `public/`                                                             | Icons, fonts and the web manifest.                                                                                                                                                    |
 
 ## A request from click to database
 
@@ -77,38 +77,49 @@ This is the path of one edit, from a click to a saved row.
 1. A view calls a React Query hook in `src/api/`, such as `useUpdateContact()`.
    The hook calls `apiFetch` in `src/api/client.ts`. A unit test fails when a
    module in `src/api/` calls `fetch` directly.
-2. The browser sends the session cookie. A script sends a personal token.
+2. The browser sends the session cookie. A script sends a personal token, and
+   an MCP client sends a personal token or an OAuth access token.
 3. `server/app.ts` runs the middleware in this order:
-   1. A request id (`X-Request-Id`) and the security headers, then
-      compression (`server/middleware/compression.ts`): brotli or gzip, as
-      the request's `Accept-Encoding` allows. It comes before everything
-      that can answer, so it covers the static files and `dist/` too.
-      Streams, byte ranges, photos and fonts, and bodies under 1 KB go out
-      as they are.
-   2. The JSON parser: 1 MB, or 50 MB for `POST /api/contacts/bulk`.
-   3. The AI rate limit for each client address.
-   4. `GET /healthz`, which sits outside the credential gate.
-   5. `attachPrincipal`: a token, a cookie, or the local owner. Then
+   1. A request id (`X-Request-Id`) and the security headers.
+   2. Compression (`server/middleware/compression.ts`): brotli or gzip, as
+      the request's `Accept-Encoding` allows. It comes before everything that
+      can answer, so it covers the static files too. Streams, byte ranges,
+      photos and fonts, and bodies under 1 KB go out as they are.
+   3. CORS, only when `CORS_ORIGIN` is set.
+   4. The JSON parser: 1 MB, or 50 MB for `POST /api/contacts/bulk`.
+   5. The AI rate limit for each client address, then the request log.
+   6. `GET /healthz`, which sits outside every guard below.
+   7. `hostGuard`: while sign-in is off, and until the first account exists,
+      a name that is not local gets `403 HOST_NOT_ALLOWED`.
+   8. `attachPrincipal`: a token, a cookie, or the local owner. Then
       `refuseCrossSiteWrites`: a write with the cookie from another site's
-      page gets `403`.
-   6. `attachRequestContext`, which puts the caller in AsyncLocalStorage.
-   7. The AI rate limit for each account, and `requireAiAllowed`.
-   8. `Cache-Control: no-store` for four prefixes.
-   9. The `/api/auth` router, then `requireAuth` and `requirePasswordCurrent`.
-   10. The uploads guard and the static files, then the API routers.
+      page gets `403 CROSS_SITE_REQUEST`.
+   9. `attachRequestContext`, which puts the caller in AsyncLocalStorage.
+   10. The AI rate limit for each account, and `requireAiAllowed`.
+   11. `Cache-Control: no-store` for four prefixes, then
+       `guardReadOnlyToken`.
+   12. The `/api/auth` router, then `requireAuth` and `requirePasswordCurrent`.
+   13. The uploads guard and the static files, then every module's routers.
+
+   `server.ts` adds the rest: `404 ROUTE_NOT_FOUND` for an unknown `/api`
+   path, then Vite or the `dist/` files, then the error handler.
+
 4. The route checks its input with a Zod schema from `shared/contracts/`
    (`validateBody` or `parseQuery` in `server/utils/validators.ts`), reads
    `scopeOf(req)`, and calls a service.
 5. The service does the work. Every read and write takes the Scope and names
-   the owner in the same SQL statement as the id.
+   the owner in the same SQL statement as the id. A write also records an
+   event in the same transaction (see [Events](#events)).
 6. SQLite triggers update the derived data in the same transaction: the
-   full-text rows, `updatedAt`, `trackedAt`, `nextFollowUpAt`, the score's
-   dirty flag and the search revision.
-7. The route answers with JSON. A thrown error goes to `errorHandler`, which
+   full-text rows, `updatedAt`, `trackedAt`, `archivedAt`, `nextFollowUpAt`,
+   the score's dirty flag and the search revision.
+7. After the commit, the write dispatches its events. The subscribers queue
+   their work, such as the search index or a duplicate check.
+8. The route answers with JSON. A thrown error goes to `errorHandler`, which
    writes the error envelope with the request id.
-8. `apiFetch` turns an error answer into an `ApiError`. A `401`, a disabled
+9. `apiFetch` turns an error answer into an `ApiError`. A `401`, a disabled
    account or a password-change answer makes the whole app change screen. A
-   mutation invalidates the queries whose data it changed.
+   mutation refreshes the queries whose data it changed.
 
 ## Frontend
 
@@ -122,8 +133,8 @@ This is the path of one edit, from a click to a saved row.
 - **Code loading.** The Network list and the contact page are in the first
   bundle. The map, Pulse, Ask Contrack, the note composer and each settings
   page are chunks of their own. The app warms them in idle moments
-  (`src/views/pages.ts`, `src/views/settings/warm.ts`, `src/lib/idle.ts`),
-  and pointing at a link starts its page's code and first data, except in a
+  (`src/views/pages.ts`, `src/views/settings/warm.ts`, `src/lib/idle.ts`).
+  Pointing at a link starts its page's code and first data, except in a
   browser that asks to save data. `src/lib/preloadable.tsx` renders a loaded
   view in the same frame.
 - **Page switches.** One Suspense boundary in `src/App.tsx` holds every route.
@@ -163,8 +174,8 @@ This is the path of one edit, from a click to a saved row.
   rejected promise reaches it. It maps Zod errors, bad JSON, size limits,
   upload limits and SQLite errors (`DB_CONSTRAINT`, `DB_BUSY`, `DB_READONLY`).
   An unknown error answers `500 INTERNAL` with a generic message, and only a
-  server outside production adds the stack. An unknown `/api` path answers
-  `404 ROUTE_NOT_FOUND`.
+  server outside production adds the stack. It logs each error with the
+  request id.
 - **Validation.** The request schemas live in `shared/contracts/`.
   `server/utils/validators.ts` runs them: `validateBody(schema)` replaces
   `req.body` with the parsed value or throws a `ValidationError`, and
@@ -192,8 +203,7 @@ contract, so they cannot disagree.
   `Contact`, `Interaction`, `ActionItem`, `ContactList` and their parts under
   the names the views use. `apiJson(contract, path, init)` in
   `src/api/client.ts` sends the contract's method and types the answer by its
-  `response`. `apiJson<T>(path, init)` still works for a route with no
-  contract.
+  `response`. `apiJson<T>(path, init)` serves a route with no contract.
 - **The MCP tools** build their inputs from the same field schemas, plus
   fields of their own such as `allowDuplicate` and `mentionContactIds`. A tool
   checks a name, a date or an id list exactly as the REST route that does the
@@ -205,17 +215,19 @@ contract, so they cannot disagree.
   sends, internal columns such as `ownerId` included, and has no transforms
   and no defaults. Every integration test that builds its app with
   `makeTestApp()` (`tests/integration/helpers.ts`) checks each 2xx JSON
-  answer of a contracted route against it, and its status too, so an
-  undeclared or a missing field fails the test that caused it.
-- **What has a contract.** The contacts, notes, follow-ups, lists, tags and
-  personal tokens, the read-only query routes beside them
-  (`/api/query/contacts`, `/api/industries`, `/api/timeline`), and the
-  background jobs route (`GET /api/admin/jobs`). `UNCONTRACTED` in `index.ts` lists
-  every other route in the manifest, and `UNCONTRACTED_CEILING` stops the list
-  from growing: a new route gets a contract. The request schemas that were in
-  `server/utils/validators.ts` are in the same folder already, as named
-  exports, those of routes with no contract yet included. A few of those
-  routes still check a body that their route file writes itself.
+  answer of a contracted route against it, and its status too. An undeclared
+  or a missing field fails the test that caused it.
+- **What has a contract.** The contacts, notes, follow-ups, lists, tags,
+  personal tokens and OAuth routes; the read-only query routes
+  (`/api/query/contacts`, `/api/industries`, `/api/timeline` and
+  `/api/interactions/search`); and a few more, such as the background jobs
+  route, the address lookup routes (`/api/geo/status` and `/api/geo/lookups`),
+  and the routes that undo a merge or restore a dismissed duplicate.
+  `UNCONTRACTED` in `index.ts` lists every other route in the manifest, and
+  `UNCONTRACTED_CEILING` stops the list from growing: a new route gets a
+  contract. The request schemas of the routes
+  with no contract live in the same folder, as named exports. A few of those
+  routes check a body that their route file writes itself.
 - **Paths stay `/api`.** A breaking change to a route adds a new path beside
   the old one. There is no `/api/v1`.
 
@@ -223,23 +235,23 @@ contract, so they cannot disagree.
 
 The Drizzle schema is `server/db/schema.ts`. It names every table and column
 that the migrations create, and `tests/integration/db.migrations.test.ts`
-holds the two equal. At boot, `server/db.ts` applies the migrations in
-`server/db/migrations/` that the database has not run, then installs the
-derived indexes. [Migrations, events and jobs](#migrations-events-and-jobs)
-says how.
+holds the two equal. [Migrations, events and jobs](#migrations-events-and-jobs)
+says how the schema changes.
 
-| Group            | Tables                                                                                                                                                                                                                                                                                                        |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Accounts         | `users` (the local owner has `credentialState = 'none'`), `sessions` (keyed by the SHA-256 of the cookie secret), `api_tokens` (the SHA-256 of each token), `passkeys`, `auth_challenges`, `auth_links` (reset and sign-in links), `invitations`, `user_settings` (one row for each preference), `audit_log`. |
-| Instance         | `app_settings`: instance settings, and saved AI keys sealed by the secret box.                                                                                                                                                                                                                                |
-| Contacts         | `contacts`, with the flags `isGhost`, `isArchived`, `isTracked`, `deletedAt` (the trash) and `canonicalId` (the losing side of a merge).                                                                                                                                                                      |
-| Contact details  | `contact_emails`, `contact_phones`, `contact_addresses`, `contact_social_links`, `contact_education`, `contact_experience`, `contact_sources` (import origin and raw payload), `contact_tags`, `contact_interests`, `contact_attributes`.                                                                     |
-| Timeline         | `interactions`, `interaction_mentions` (@mention links), `action_items` (follow-ups).                                                                                                                                                                                                                         |
-| Lists and scores | `lists`, `list_members`, `score_snapshots` (one score a week for each tracked contact).                                                                                                                                                                                                                       |
-| Duplicates       | `dedupe_suggestions`, `dedupe_exclusions` (pairs never to suggest again), `dedupe_merge_log` (with the data an undo needs), `dedupe_embedding_meta`.                                                                                                                                                          |
-| Search           | `search_passages` (slices of long fields, with offsets and a source hash), `search_passage_state` (the marker of a finished index), `search_index_queue`, `search_revision` (a counter for each owner), `search_history`.                                                                                     |
-| Imports and sync | `imports`, `import_rows`, `connectors` (secret sealed), `connector_runs`, `connector_links` (external ids and correspondents), `upcoming_events`, `oauth_states`.                                                                                                                                             |
-| Other            | `map_views`, `ai_invocations` (the AI usage log), `geocode_cache`.                                                                                                                                                                                                                                            |
+| Group            | Tables                                                                                                                                                                                                                                                                                                                                                                          |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Accounts         | `users` (the local owner has `credentialState = 'none'`), `sessions` (keyed by the SHA-256 of the cookie secret), `api_tokens` (the SHA-256 of each personal token, and one row for each OAuth grant, with `kind = 'oauth'`), `passkeys`, `auth_challenges`, `auth_links` (reset and sign-in links), `invitations`, `user_settings` (one row for each preference), `audit_log`. |
+| OAuth            | `oauth_clients` (the apps that may sign in), `oauth_requests` (one sign-in in progress, its code stored as a SHA-256), `oauth_tokens` (the access and refresh tokens of a grant, as SHA-256).                                                                                                                                                                                   |
+| Instance         | `app_settings`: instance settings, and saved credentials sealed by the secret box.                                                                                                                                                                                                                                                                                              |
+| Contacts         | `contacts`, with the flags `isGhost`, `isArchived` (with `archivedAt`), `isTracked`, `deletedAt` (the trash) and `canonicalId` (the losing side of a merge).                                                                                                                                                                                                                    |
+| Contact details  | `contact_emails`, `contact_phones`, `contact_addresses`, `contact_social_links`, `contact_education`, `contact_experience`, `contact_sources` (import origin and raw payload), `contact_tags`, `contact_interests`, `contact_attributes`.                                                                                                                                       |
+| Timeline         | `interactions`, `interaction_mentions` (@mention links), `action_items` (follow-ups).                                                                                                                                                                                                                                                                                           |
+| Lists and scores | `lists`, `list_members`, `score_snapshots` (one score a week for each tracked contact).                                                                                                                                                                                                                                                                                         |
+| Duplicates       | `dedupe_suggestions`, `dedupe_exclusions` (pairs never to suggest again), `dedupe_merge_log` (with the data an undo needs), `dedupe_embedding_meta`.                                                                                                                                                                                                                            |
+| Search           | `search_passages` (slices of long fields, with offsets and a source hash), `search_passage_state` (the marker of a finished index), `search_index_queue`, `search_revision` and `notes_revision` (a counter for each owner), `search_history`.                                                                                                                                  |
+| Imports and sync | `imports`, `import_rows`, `connectors` (secret sealed), `connector_runs`, `connector_links` (external ids and correspondents), `upcoming_events`, `oauth_states` (the state of a Google sign-in).                                                                                                                                                                               |
+| Core             | `schema_migrations` (the applied migrations and the version of each derived index), `events`, `event_cursors`, `jobs`.                                                                                                                                                                                                                                                          |
+| Other            | `map_views`, `ai_invocations` (the AI usage log), `geocode_cache`.                                                                                                                                                                                                                                                                                                              |
 
 | Virtual table            | Kind | What it holds                                                                                                                                                                                     |
 | ------------------------ | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -250,10 +262,10 @@ says how.
 | `search_passage_vectors` | vec0 | One int8 vector for each passage, partitioned by `ownerId`.                                                                                                                                       |
 | `contact_embeddings`     | vec0 | One vector for each contact, for duplicate detection. Its width follows the embeddings model.                                                                                                     |
 
-`schema_migrations` records the version of each derived index: `contacts_fts`
-is 6, and covers `interactions_fts` too. A new version rebuilds both FTS
-tables once at boot. A new embeddings model rebuilds the vector tables and
-embeds every contact again.
+Each derived index has an `index` row in `schema_migrations` with its version.
+`contacts_fts` is at 6, and its row covers `interactions_fts` too. A new
+version rebuilds both FTS tables once at boot. The other rows are at 1. A new
+embeddings model rebuilds the vector tables and embeds every contact again.
 
 The triggers that matter:
 
@@ -265,10 +277,13 @@ The triggers that matter:
 - **Vectors.** A change to a searchable field deletes the contact's vectors and
   passages and queues it for indexing. Status triggers copy the ghost, archive
   and trash flags into the vector tables.
-- **Search revision.** A contact change bumps its owner's `search_revision`.
-  The search caches include the revision, so an edit makes older answers stale.
-- **Stamps and derived columns.** Triggers stamp `updatedAt`, and set or clear
-  `trackedAt` with `isTracked`. `nextFollowUpAt` is always the earliest due
+- **Search revision.** A contact change bumps its owner's `search_revision`,
+  and a note change bumps `notes_revision`. The search caches include both,
+  so an edit makes older answers stale.
+- **Stamps and derived columns.** Triggers stamp `updatedAt`, set or clear
+  `trackedAt` with `isTracked`, and set or clear `archivedAt` with
+  `isArchived`. A pin (`lat`, `lng`, `geoSource`) and the score are not
+  edits, so they stamp nothing. `nextFollowUpAt` is always the earliest due
   date of the open follow-ups. Writes set `scoreDirty` for the hourly sweep.
 
 ## Migrations, events and jobs
@@ -284,31 +299,31 @@ has no row in `schema_migrations`.
   keeps nothing, and the boot stops with an error that names it.
 - A database that holds a migration this build does not have refuses to
   start. A newer build wrote it.
-- `0001_baseline` is the schema of a new database: its tables, indexes and
-  triggers, and the local owner.
-  `tests/fixtures/schema/v2.0-d67c8a9.sql` is that schema, and the migration
-  test compares the stored SQL of every table, index and trigger with it.
 - A database that has tables but no `schema_migrations` refuses to start,
   before anything is written. Contrack 1, or another program, made it.
+- `0001_baseline` is the schema of a new database: its tables, indexes and
+  triggers, and the local owner. `tests/fixtures/schema/v2.0-d67c8a9.sql` is
+  that schema. The migration test compares the stored SQL of every table,
+  index and trigger with it, plus what later migrations add.
 - `npm run db:new <name>` writes the next file from a template and adds it to
-  the list. A migration writes its own SQL and imports no service.
+  the list. A migration writes its own SQL, imports no service, and never
+  reads a list that later code extends.
 - The derived structures are rebuilt from code, not migrated: the FTS tables,
   the vector stores, the passage index and the triggers that feed them.
   `server/db/indexes.ts` runs their installers on every boot, after the
-  migrations, and records the version of each as an `index` row in
-  `schema_migrations`. A new version rebuilds the structure.
+  migrations.
 - Four steps run on every boot, after the installers, because live code
   needs them: the `nextFollowUpAt` backfill, the check that every owned table
   has `ownerId`, `ANALYZE` with `PRAGMA optimize`, and the phonetic hash of
-  new ghost contacts.
+  contacts that have none, such as new ghost contacts.
 - Drizzle stays for typed queries. It does not manage the schema.
 
 ### Events
 
 A write records what it changed in its own transaction.
 `recordEvent(scope, type, subjectId, payload)` (`server/events/record.ts`)
-inserts one row in `events`. A write that rolls back leaves no row, and a
-crash after the commit loses nothing.
+inserts one row in `events`, and throws outside a transaction. A write that
+rolls back leaves no row, and a crash after the commit loses nothing.
 
 - `shared/contracts/events.ts` holds the types and their payload schemas:
   `contact.created`, `contact.updated` (with `changed`, the names of the
@@ -333,14 +348,13 @@ crash after the commit loses nothing.
   vector, the duplicate check, the geocoder, the score, the owner's AI caches
   and auto-enrichment. Each one decides from the event, so every write path
   that records the event gets the same reactions. An import
-  (`origin: "import"`) and a bulk edit (`bulk: true`) skip the per-row work,
-  as they did before.
-- The write paths that record events are `contactService`,
-  `interactionService`, `actionItemService`, `listService` and the merge in
-  `dedupe/merging.ts`. Some writers do not record one yet, and keep their own
-  follow-up calls: the ghost contacts a connector adds, tag edits
-  (`tagService`), the research merge (`aiSearch/mergeEngine.ts`), and the list
-  memberships a merge or an undo moves.
+  (`origin: "import"`) and a bulk edit (`bulk: true`) skip the per-row work.
+- These write paths record events: `contactService`, `interactionService`,
+  `actionItemService`, `listService`, the merge in `dedupe/merging.ts`, and
+  taking back a research run (`aiSearch/mergeEngine.ts`). These writers
+  record none and make their own follow-up calls: the ghost contacts a
+  connector adds, tag edits (`tagService`), the research merge itself, and the
+  list memberships that a merge or an undo moves.
 - Daily maintenance deletes events older than 30 days that every cursor has
   passed.
 
@@ -352,29 +366,64 @@ Background work is a row in `jobs`, and `server/jobs/runner.ts` runs it.
   `defineJob({ kind, run, every, atStart, maxAttempts })`, and a module lists
   it. `every` makes the job recurring. `atStart` runs it when the server
   starts, at once or after a delay.
-- With background jobs on, the runner polls every second and runs at most
-  `JOB_CONCURRENCY` jobs at once, 2 by default. It takes turns between
-  accounts, and the instance's own jobs take one turn together. An account's
-  job runs in that account's scope.
+- The runner polls every second and runs at most `JOB_CONCURRENCY` jobs at
+  once, 2 by default. It takes turns between accounts, and the instance's own
+  jobs take one turn together. An account's job runs in that account's scope.
 - A job that throws runs again after a wait that starts at 30 seconds and
-  doubles, up to its `maxAttempts` (3 by default). Then it ends `failed`,
-  with its error.
+  doubles, up to an hour, until its `maxAttempts` (3 by default). Then it ends
+  `failed`, with its error.
 - At boot, a row left `running` goes back to the queue, because the process
-  that ran it is gone.
+  that ran it is gone. A row that was on its last try ends `failed`.
 - A recurring kind keeps one queued row through `dedupeKey`, and that row
-  survives a restart. A finished run stays for the health page until
-  maintenance removes it.
+  survives a restart. So a server that restarts every day still runs its
+  daily jobs. A finished run stays for the health page until maintenance
+  removes it.
 - `runJobNow(kind, payload)` runs a job in the calling process, also when
   `DISABLE_BACKGROUND_JOBS=true`. `enqueueJob` puts one in the queue.
-- `GET /api/admin/jobs` and the Background jobs card on Instance health show
-  each recurring job and the jobs that failed in the last 24 hours.
+- `GET /api/admin/jobs` and the **Background jobs** card on **Instance health**
+  show each recurring job and the jobs that failed in the last 24 hours.
+
+`server.ts` starts the runner after the server listens.
+`DISABLE_BACKGROUND_JOBS=true` starts no job and no start-up work, which the
+integration tests use. The runner still puts back in the queue a job that a
+restart stopped. These are the job kinds:
+
+| Work                                                                                                                                                                                                                                     | Job                                  | When                                                                                                |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------- |
+| Geocode contacts that have an address and no pin, one Nominatim request every 1.1 seconds                                                                                                                                                | `geocode.startup`                    | Once, 2 seconds after start                                                                         |
+| Delete the cached address lookups that no contact uses, once they are a day old                                                                                                                                                          | `geocode.cachePrune`                 | A minute after start, then daily                                                                    |
+| Copy stored Google photo URLs into uploads                                                                                                                                                                                               | `connectors.photoSweep`              | Once, 5 seconds after start                                                                         |
+| Sync the due connectors, 2 at a time and one for each account                                                                                                                                                                            | `connectors.tick`                    | At start, then every minute                                                                         |
+| Take a database snapshot, check it, and rotate old ones                                                                                                                                                                                  | `backup.startup`, `backup.scheduled` | 15 seconds after start, then every 24 hours by default                                              |
+| Purge trashed contacts after the retention period, 30 days by default                                                                                                                                                                    | `contacts.trashPurge`                | At start, then daily                                                                                |
+| Delete a merged-away contact once its merge can no longer be undone (90 days), and the merge log entries past that window                                                                                                                | `contacts.mergePurge`                | At start, then daily                                                                                |
+| Delete the files under an account's upload folder that no row uses, 2 days after they were written (31 for a link preview)                                                                                                               | `uploads.orphanSweep`                | A minute after start, then daily                                                                    |
+| Delete expired and old rows (audit entries, sessions, sign-in links, revoked tokens, dead invitations, AI usage, finished imports, old score snapshots, OAuth states, connector runs, old events, finished jobs), and checkpoint the WAL | `maintenance.daily`                  | At start, then daily                                                                                |
+| Delete expired OAuth sign-in requests and tokens, and app registrations that nobody uses                                                                                                                                                 | `oauth.sweep`                        | Hourly                                                                                              |
+| Refresh the model lists of the AI providers                                                                                                                                                                                              | `ai.modelCatalogs`                   | At start, then daily                                                                                |
+| Run `PRAGMA optimize`                                                                                                                                                                                                                    | `database.plannerStats`              | Daily. Shutdown and each search index drain run it too.                                             |
+| Score the contacts marked dirty, and take this week's snapshot when it is missing                                                                                                                                                        | `scores.stale`                       | At start, then hourly                                                                               |
+| Score every tracked contact and take the weekly snapshot                                                                                                                                                                                 | `scores.all`                         | Daily                                                                                               |
+| Check one contact for duplicates, when **Check new contacts automatically** is on                                                                                                                                                        | `dedupe.check`                       | 5 seconds after a contact is added on its own, or after its name, company, role or location changes |
+
+The search module's start-up work is not a job. It loads the local models,
+rebuilds the vector tables when the model changed, and fills missing vectors
+for search and duplicates. The duplicate vector backfill takes turns between
+accounts in rounds of 200 contacts.
+
+On `SIGTERM` or `SIGINT` the server stops taking connections, lets open
+requests finish, stops the job runner and the connector syncs, and closes the
+database. It forces a close after 8 seconds.
 
 ### Modules
 
 Each area of the server is a module: a folder in `server/modules/` whose
 `index.ts` exports
 `defineModule({ id, routers, mcpTools, jobs, subscribers, onStart })`.
-`server/modules/index.ts` holds the ordered list.
+`server/modules/index.ts` holds the ordered list: `admin`, `avatar`,
+`link-preview`, `search`, `lists`, `mcp`, `taxonomy`, `contacts`,
+`connectors`, `imports`, `interactions`, `dedupe`, `action-items`,
+`dashboard`, `ai-search`, `data-lifecycle`, `ai`, `logos`, `map` and `oauth`.
 
 - `createApp()` mounts every module's routers in list order, after the auth
   middleware. Express matches in mount order, so the order is part of the
@@ -382,8 +431,9 @@ Each area of the server is a module: a folder in `server/modules/` whose
   `GET /contacts/:id` would capture `GET /contacts/action-items`.
 - `registerAllTools` registers every module's MCP tools.
 - `server.ts` registers every module's jobs and subscribers, starts the job
-  runner, and runs each module's `onStart` work, such as the search module
-  loading the local models.
+  runner, and runs each module's `onStart` work. The search module loads the
+  local models, and the data-lifecycle module checks the age of the newest
+  snapshot.
 - The route manifest, the migration list, the auth router and the middleware
   stay central. They hold for every module.
 
@@ -393,9 +443,9 @@ Many accounts can share one instance. These rules keep each account's data
 apart.
 
 - **Every request has a principal.** `attachPrincipal`
-  (`server/middleware/auth.ts`) resolves a session, a personal token, or the
-  local owner when sign-in is off. The local owner is a real account, so every
-  row has an owner.
+  (`server/middleware/auth.ts`) resolves a personal token, an OAuth access
+  token on `/api/mcp`, a session, or the local owner when sign-in is off. The
+  local owner is a real account, so every row has an owner.
 - **The Scope is the isolation.** `scopeOf(req)` returns a `Scope` with a typed
   `ownerId` (`server/tenancy/scope.ts`). Every function that reads or writes an
   owned table takes a Scope first.
@@ -448,9 +498,9 @@ The code is in `server/services/searchService.ts` and `server/services/search/`.
 `runSearch` in `searchService.ts` answers `POST /api/search/semantic`, for the
 JSON and the streaming callers alike.
 
-1. **L1 cache.** The key holds the owner, the search revision, a five-minute
-   bucket, the model that answers (or `local`), the cross-encoder state, the
-   facets and the normalized question.
+1. **L1 cache.** It is kept for each owner. The key holds the search revision,
+   the notes revision, a five-minute bucket, the model that answers (or
+   `local`), the cross-encoder state, the facets and the normalized question.
 2. **Facets.** `parseFacetQuery` (`shared/facetQuery.ts`) reads facets typed in
    the question and adds the request's facets. `compileFacets` (`facetSql.ts`)
    turns them into one SQL predicate that every stage applies before its limit.
@@ -467,7 +517,7 @@ JSON and the streaming callers alike.
    keyword list and the vector list by weighted reciprocal rank, with
    `RRF_K = 15`. Keyword and vector weigh 0.7 and 0.3 for the local kinds, 0.3
    and 0.7 for `conceptual`, and 0.5 each for `mixed`. A `conceptual` question
-   adds a passage list, and the cross-encoder reorders its top 30 within 25 ms.
+   adds a passage list. The cross-encoder reorders the top 30 within 25 ms.
    The list streams as the `instant` chunk.
 7. **AI off or no provider.** The local list is the answer, with
    `fallback: true`.
@@ -492,25 +542,26 @@ fields that answer the question, with the question's words marked in the
 contact's own text. Proven fields come first, then fields that hold the
 words, then a passage close in meaning. It runs no model.
 
-The **Try asking** questions come from `search/starterQuestions.ts`: a pool of
-up to 500 questions about values that two of the account's contacts share,
-and seven general questions from `shared/generalQuestions.ts`. The pool is
-kept per account and search revision, and built again after boot and after an
-import. A general question is in the pool only when its facets find a
-contact, and `implicitFacets.ts` reads the same question as those facets, so
-the search answers it with no model. The page draws six with `suggestions.ts`
-and the palette's AI mode draws four, both through `useStarterDraw`. A draw
-takes one question from each kind before it takes a second from any.
+The **Try asking** questions come from `search/starterQuestions.ts`. The pool
+holds up to 500 questions about values that two of the account's contacts
+share, and the seven general questions of `shared/generalQuestions.ts`. A
+general question is in the pool only when its facets find a contact.
+`implicitFacets.ts` reads the same question as those facets, so the search
+answers it with no model. The pool is kept per account and search revision,
+and built again after boot and after an import. Ask Contrack draws six
+questions (`src/views/search/suggestions.ts`) and the palette's AI mode draws
+four, both through `useStarterDraw`. A draw takes one question from each kind
+before it takes a second from any.
 
 ### Indexes and local models
 
 - **Contacts.** `contacts_fts` ranks with BM25 weights (`WEIGHTS` in
   `lexical.ts`): name 10, company 5, role 3, tags 3, headline 2, location 2,
   about 1, industry 1, extras 1, addresses 0.5, search expansion 0.5. An
-  address is the least of the text, so a street finds a contact while a name,
-  a company or a role that holds the same word ranks first. A phone number is
-  indexed with all its digits, its last 10 and its last 7, so a number with or
-  without a country code finds its contact.
+  address weighs least, so a street finds a contact while a name, a company
+  or a role with the same word ranks first. A phone number is indexed with
+  all its digits, its last 10 and its last 7, so a number with or without a
+  country code finds its contact.
 - **Passages.** `passages.ts` cuts the about text, preferences, jobs and
   schools into slices of 480 characters that overlap by 80. Each slice keeps
   its source, a hash and its offsets, so a reranker quote can be checked.
@@ -551,70 +602,77 @@ search), `server/services/research/` (contact research) and
 
 - **Capabilities.** Code asks for a kind of work, not a model
   (`server/ai/capabilities.ts`). The settings name each one by its model.
-  `quick`, the Fast model, covers parsing, mentions, briefings, the daily
-  insight, mail summaries, search planning and checking, and the fields that
-  research fills. `deep`, the Strong model, covers `.eml` summaries, duplicate
-  checks, and the pages that SearXNG finds. `research`, the web search model,
-  covers a provider's own web search. `embeddings`, the embedding model,
-  covers the search and duplicate vectors (`server/ai/embeddings.ts`).
   `src/lib/aiFeatures.ts` maps the models to the features for the settings
   pages.
-- **Embedder and reranker.** Search and dedupe turn text into vectors through
-  one interface, `Embedder` (`server/ai/embedder.ts`), and search reorders its
-  local list through another, `Reranker` (`server/ai/reranker.ts`). A local
-  embedding model and the cross-encoder run on the CPU worker, and a provider
-  embedder calls `AIProvider.embed`. Each one says whether it is local, and
-  the privacy rules read that: a model that is not local reads nothing of an
-  account with AI off, and a run asks again before every call. Each
-  embedding call says what its texts are for: a
-  question, a document, or a text to compare for duplicates. Both vector
-  stores record the embedder's id and width, so an embedder with a new id
-  rebuilds them. A new model is a new adapter, and search does not change.
-  `scripts/benchmark-search.ts --embedder <model>` compares a local model
-  with the bundled one.
-- **Research.** Every contact research request runs through one function,
-  `research()` (`server/services/research/`). The batch queue, the
-  one-contact route and auto-enrichment call it, and no other code runs a
-  technique. A request names a technique and a web search, or gets the
-  account's web search engine (`webSearchEngine`, or the instance's engine
-  when it is `default`). A technique finds facts and returns evidence, never
-  fields: `provider-search` (the web search model's own search),
-  `search-and-read` (a web search, whose pages the deep model reads) or
-  `combined` (both at once). One extraction reads the evidence
-  into fields, and every technique's result has the same fields. A web
-  search (`WebSearch`) is a port too, and SearXNG is its only adapter. Both
-  ports have a registry and a `set*` seam for tests. Each technique's
-  `needs()` says what a start needs set up. A start with an unknown name
-  answers 400, and one with a missing need answers 503, before anything is
-  spent. Before every model call and every web search, a run reads the
-  instance switch, the account switch and **Allow web search**
-  (`server/ai/webSearchPolicy.ts`). A model call reads them again when it
-  gets its slot in the queue (`beforeSend`). A refusal ends the run for that
-  contact, and the batch queue stops the rest of that account's batch.
+  - `quick`, the Fast model: parsing, mentions, briefings, the daily insight,
+    mail summaries, search planning and checking, and the fields that
+    research fills.
+  - `deep`, the Strong model: `.eml` summaries, duplicate checks, and the
+    pages that SearXNG finds.
+  - `research`, the web search model: a provider's own web search.
+  - `embeddings`, the embedding model: the search and duplicate vectors
+    (`server/ai/embeddings.ts`).
 - **Resolution.** At call time a capability takes a pin from Settings, then an
   environment pin (`AI_QUICK_MODEL`, `AI_DEEP_MODEL`, `AI_RESEARCH_MODEL`,
-  `AI_EMBEDDINGS_MODEL`), then Auto: `AI_PROVIDER` first, then a fixed order.
-  The providers come from environment keys, keys saved in Settings and
-  OpenAI-compatible servers (`server/ai/providerRegistry.ts`). While AI is off for the
-  instance, no provider resolves.
+  `AI_EMBEDDINGS_MODEL`), then Automatic: `AI_PROVIDER` first, then a fixed
+  order. The providers come from environment keys, keys saved in Settings and
+  OpenAI-compatible servers (`server/ai/providerRegistry.ts`). While AI is off
+  for the instance, no provider resolves.
 - **Gateway.** `generateFor` and `streamFor` (`server/ai/gateway.ts`) are the
   only way to run a generation. They check the instance switch, resolve the
-  capability, and run the call in the queue under one deadline. The deadline is
-  60 seconds by default and 150 at most, and it counts the wait for a slot. The
-  default output cap is 4,096 tokens.
+  capability, and run the call in the queue under one deadline. The deadline
+  is 60 seconds by default and 150 at most, and it counts the wait for a
+  slot. The default output cap is 4,096 tokens.
 - **Queue.** `GenerationQueue` (`server/ai/workQueue.ts`) runs 2 calls at once
   and holds at most 16 waiting. Interactive work goes first, and the accounts
   take turns. Ask Contrack's planner, reranker and brief use the search lane,
   which has 2 slots of its own. A full queue answers `429 AI_BUSY`.
 - **Adapters.** `server/ai/adapters/` holds `gemini.ts`, `openai.ts`,
-  `anthropic.ts` and `openaiCompatible.ts`. The Gemini adapter picks its model
-  with `routing/SmartRouter.ts`, and pauses a model that answers 429, a 5xx or
-  a timeout for the delay Google names (30 seconds by default). The
-  OpenAI-compatible adapter falls back from a JSON schema to a JSON object to a
-  prompt when a server refuses the format.
-- **Resilience.** `server/ai/resilience.ts` gives every adapter `withTimeout`,
-  `withRetry` (at most one retry, with jittered backoff) and `parseAIJson`. The
-  SDKs' own retries are off. A canceled request stops its queued work.
+  `anthropic.ts` and `openaiCompatible.ts`.
+  - The Gemini adapter picks its model with `routing/SmartRouter.ts`. It
+    pauses a model that answers 429, a 5xx or a timeout for the delay Google
+    names, 30 seconds by default.
+  - The OpenAI-compatible adapter falls back from a JSON schema to a JSON
+    object to a prompt when a server refuses the format.
+  - `server/ai/resilience.ts` gives every adapter `withTimeout`, `withRetry`
+    (at most one retry, with jittered backoff) and `parseAIJson`. The SDKs'
+    own retries are off. A canceled request stops its queued work.
+- **Embedder and reranker.** Search and dedupe turn text into vectors through
+  one interface, `Embedder` (`server/ai/embedder.ts`). Search reorders its
+  local list through another, `Reranker` (`server/ai/reranker.ts`).
+  - A local embedding model and the cross-encoder run on the CPU worker. A
+    provider embedder calls `AIProvider.embed`.
+  - Each one says whether it is local, and the privacy rules read that. A
+    model that is not local reads nothing of an account with AI off, and a
+    run asks again before every call.
+  - Each embedding call says what its texts are for: a question, a document,
+    or a text to compare for duplicates.
+  - Both vector stores record the embedder's id and width, so an embedder
+    with a new id rebuilds them. A new model is a new adapter, and search does
+    not change. `scripts/benchmark-search.ts --embedder <model>` compares a
+    local model with the bundled one.
+- **Research.** Every contact research request runs through one function,
+  `research()` (`server/services/research/`). The batch queue, the
+  one-contact route and auto-enrichment call it, and no other code runs a
+  technique.
+  - A request names a technique and a web search, or gets the account's web
+    search engine (`webSearchEngine`, or the instance's engine when it is
+    `default`).
+  - A technique finds facts and returns evidence, never fields:
+    `provider-search` (the web search model's own search), `search-and-read`
+    (a web search, whose pages the Strong model reads) or `combined` (both at
+    once). One extraction reads the evidence into fields, so every
+    technique's result has the same fields.
+  - A web search (`WebSearch`) is a port too, and SearXNG is its only adapter.
+    Both ports have a registry and a `set*` seam for tests.
+  - Each technique's `needs()` says what a start needs set up. A start with an
+    unknown name answers 400, and one with a missing need answers 503, before
+    anything is spent.
+  - Before every model call and every web search, a run reads the instance
+    switch, the account switch and **Allow web search**
+    (`server/ai/webSearchPolicy.ts`). A model call reads them again when it
+    gets its slot in the queue (`beforeSend`). A refusal ends the run for that
+    contact, and the batch queue stops the rest of that account's batch.
 - **Prompt safety.** `wrapUntrusted` (`server/ai/promptSafety.ts`) fences
   contact fields, files and web text inside `<untrusted_data>` tags, and each
   such prompt carries `UNTRUSTED_DATA_RULE`. `sanitizeAiOutputValue` checks
@@ -639,46 +697,23 @@ search), `server/services/research/` (contact research) and
 
 For the settings a person sees, see [The AI page](ai.md#the-ai-page).
 
-## Background work
-
-The work below is a job (see [Jobs](#jobs)), except the last row, which is
-the search module's start-up work. `server.ts` starts the job runner and the
-start-up work after the server listens. `DISABLE_BACKGROUND_JOBS=true` starts
-neither, which the integration tests use. The runner still puts back in the
-queue a job that a restart stopped.
-
-| Work                                                                                                                                                                                                                                     | Job                                  | When                                                                                       |
-| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------ |
-| Geocode contacts that have an address and no pin, one Nominatim request every 1.1 seconds                                                                                                                                                | `geocode.startup`                    | Once, 2 seconds after start                                                                |
-| Delete the cached address lookups that no contact uses, a day after the lookup                                                                                                                                                           | `geocode.cachePrune`                 | A minute after start, then daily                                                           |
-| Copy stored Google photo URLs into uploads                                                                                                                                                                                               | `connectors.photoSweep`              | Once, 5 seconds after start                                                                |
-| Sync the due connectors, 2 at a time and one for each account                                                                                                                                                                            | `connectors.tick`                    | At start, then every minute                                                                |
-| Take a database snapshot, check it, and rotate old ones                                                                                                                                                                                  | `backup.startup`, `backup.scheduled` | 15 seconds after start, then every 24 hours by default                                     |
-| Purge trashed contacts after the retention period, 30 days by default                                                                                                                                                                    | `contacts.trashPurge`                | At start, then daily                                                                       |
-| Delete a merged-away contact once its merge can no longer be undone (90 days), and the merge log entries past that window                                                                                                                | `contacts.mergePurge`                | At start, then daily                                                                       |
-| Delete the files under an account's upload folder that no row uses, 2 days after they were written (31 for a link preview)                                                                                                               | `uploads.orphanSweep`                | A minute after start, then daily                                                           |
-| Delete expired and old rows (audit entries, sessions, sign-in links, revoked tokens, dead invitations, AI usage, finished imports, old score snapshots, OAuth states, connector runs, old events, finished jobs), and checkpoint the WAL | `maintenance.daily`                  | At start, then daily                                                                       |
-| Refresh the model lists of the AI providers                                                                                                                                                                                              | `ai.modelCatalogs`                   | At start, then daily                                                                       |
-| Run `PRAGMA optimize`                                                                                                                                                                                                                    | `database.plannerStats`              | Daily. Shutdown and each search index drain run it too.                                    |
-| Score the contacts marked dirty, and take this week's snapshot when it is missing                                                                                                                                                        | `scores.stale`                       | At start, then hourly                                                                      |
-| Score every tracked contact and take the weekly snapshot                                                                                                                                                                                 | `scores.all`                         | Daily                                                                                      |
-| Check one contact for duplicates, when "Check for duplicates" is on                                                                                                                                                                      | `dedupe.check`                       | 5 seconds after the contact is added, or after its name, company, role or location changes |
-| Load the local models, rebuild the vector tables when the model changed, and fill missing vectors for search and duplicates                                                                                                              | Search start-up                      | At start                                                                                   |
-
-A recurring job keeps its next run across a restart, so a server that
-restarts every day still runs its daily jobs.
-
-The embedding backfills take turns between accounts in rounds of 200
-contacts. On `SIGTERM` or `SIGINT` the server stops taking connections, lets
-open requests finish, and closes the database. It forces a close after 8
-seconds.
-
 ## Security
 
 - **Headers.** Every response carries `X-Content-Type-Options: nosniff`,
   `X-Frame-Options: DENY`, a referrer policy, a permissions policy and a
   Content-Security-Policy (`server/utils/securityHeaders.ts`). An HTTPS request
   also gets `Strict-Transport-Security`.
+- **Host guard.** While sign-in is off, and until the first account exists,
+  `hostGuard` (`server/middleware/hostGuard.ts`) answers only local names, the
+  `PUBLIC_URL` host and the names in `ALLOWED_HOSTS`. So a page on another
+  site cannot use DNS rebinding to act as the owner. `mcpOriginGuard` refuses
+  an MCP request whose `Origin` is not this app's, `PUBLIC_URL` or
+  `CORS_ORIGIN`.
+- **Cookies and tokens.** The session cookie is `HttpOnly` and
+  `SameSite=Strict`, and `refuseCrossSiteWrites` checks `Origin` and
+  `Sec-Fetch-Site` on every write that the cookie signs. A read-only token may
+  send only `GET`, `HEAD`, `OPTIONS` and MCP requests. Admin routes need a
+  signed-in session, so a token cannot administer the instance.
 - **Outgoing requests.** `safeFetch` (`server/utils/urlSafety.ts`) fetches only
   public `http` and `https` addresses. It checks the address again at connect
   time and on each of at most 3 redirects, and it caps the response size. Link
@@ -687,10 +722,13 @@ seconds.
   caller's own folder, shared logos and account photos, and answers `404` for
   everything else. Files that are not images download instead of rendering.
 - **Secrets and credentials.** `server/utils/secretBox.ts` seals SMTP
-  passwords, AI keys and connector credentials with AES-256-GCM. The key is
-  `CONTRACK_SECRET_KEY`, or `secret.key` in the data folder, which the server
-  creates. Passwords use scrypt. Sessions, tokens and emailed links are stored
-  only as hashes.
+  passwords, AI keys, connector credentials and the Google client secret with
+  AES-256-GCM. The key is `CONTRACK_SECRET_KEY`, or `secret.key` in the data
+  folder, which the server creates. Passwords use scrypt. Sessions, tokens and
+  emailed links are stored only as hashes.
+- **The log.** `redactUrlForLog` drops the query string from every logged
+  URL, because it can hold a token or a search. A log line names ids and
+  counts, never a contact's name, a note or a question.
 - **File modes.** At boot the server sets its umask to `077` and removes group
   and other access from the database, its WAL files, `secret.key`, `uploads/`,
   `backups/`, `.cache/` and `models/` (`server/utils/privateFiles.ts`).
@@ -708,8 +746,9 @@ seconds.
 | `npm run api:openapi`   | Writes `docs/openapi.json` from the route contracts. A test fails when the committed file differs.                 |
 
 CI runs the lint, the format check, the tests with coverage, a production
-build and the Playwright journeys. For the workflow, see the
-[contributing guide](../CONTRIBUTING.md).
+build and the Playwright journeys. A push to `main` or a version tag also
+builds the image for `linux/amd64` and `linux/arm64`, signs its provenance and
+scans it. For the workflow, see the [contributing guide](../CONTRIBUTING.md).
 
 ## Related
 

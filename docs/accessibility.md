@@ -32,6 +32,10 @@ Every page works with no pointer. See
   the part of the page you clicked.
 - `Alt T` (`⌥ T` on a Mac) moves focus to the notifications. After **Undo**,
   focus goes back to where it was.
+- Speech input or a stray press can set off a shortcut that is one key, such
+  as `N`. Turn off **Single-key shortcuts** in **Settings → Keyboard** to
+  stop all of them but `?` and the Network list's letters. See
+  [Turn off single-key shortcuts](keyboard-shortcuts.md#turn-off-single-key-shortcuts).
 
 ### Screen readers
 
@@ -47,7 +51,8 @@ Every page works with no pointer. See
 - An error interrupts, a field's error is read with the field, and a score is
   said in words, such as "Score 72, strong".
 - The map is a region named "Contact map". Each pin is a button named for the
-  person and the company, and each cluster says how many people it holds.
+  person and the company. Each cluster says how many people it holds and
+  what a press does, such as "12 contacts, zoom in".
 
 ### Motion, text and themes
 
@@ -73,6 +78,9 @@ focus. The tab bar marks the current page.
   sheet or menu instead of leaving the page, in browsers that have
   `CloseWatcher` (Chrome, Edge and Samsung Internet). While a sheet is open,
   notifications show at the top of the screen, clear of its buttons.
+- On a touch screen, a dialog takes focus itself, not its first field.
+  **Ask Contrack** and the sign-in screens put no cursor in a field either.
+  The on-screen keyboard opens only when you tap a field.
 - On a touch screen, controls keep their 44 px size at every width, a tablet
   too, and no control waits for a hover. A long press on an icon button shows
   its name.
@@ -98,18 +106,18 @@ CSP on) on a free port, with a new temporary `DATA_DIR`. The suite runs with
 reduced motion, the `en-US` locale and the `America/Los_Angeles` time zone.
 The report is uploaded on every run.
 
-| Spec                           | What it holds                                                                                                                         |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `axe.spec.ts`                  | Eight screens against WCAG 2.2 AA, four of them in dark too. Landmark and heading rules on six screens and two phone screens          |
-| `keyboard.spec.ts`             | The skip link, the sidebar in order with a visible ring in both themes, `/`, the list's arrow keys and the Tab budget                 |
-| `contact.spec.ts`              | Focus when a contact opens, the list keys, the header menu, tracking, the timeline, the composer and Back on a phone                  |
-| `dialogs.spec.ts`              | Four dialogs: focus in, `Tab` kept inside, `Esc`, focus back, and a scan while open                                                   |
-| `search-announcements.spec.ts` | The status messages and alerts of People and Notes searches                                                                           |
-| `palette-keys.spec.ts`         | The command palette: the arrows, `Esc` one layer at a time, `aria-activedescendant` in every list it shows, focus kept and given back |
-| `mobile-forms.spec.ts`         | A Pixel 7: the tab bar, the new contact sheet with 16 px fields, and setup errors tied to their fields                                |
-| `metrics.spec.ts`              | A 390 px phone: 44 px targets and 11 px text on seven screens                                                                         |
-| `phone-shell.spec.ts`          | Typing hides the tab bar and keeps Save in view, a sheet drags closed, the browser bar's theme, asset caching, the rail on its side   |
-| `account-transitions.spec.ts`  | A gated instance: setup, sign out, sign in, an expired session and a forced password change                                           |
+| Spec                           | What it holds                                                                                                                                                          |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `axe.spec.ts`                  | Eight screens against WCAG 2.2 AA, four of them in dark too. Landmark and heading rules on six screens and two phone screens                                           |
+| `keyboard.spec.ts`             | The skip link, the sidebar in order with a visible ring in both themes, `/`, the list's arrow keys, the `Ctrl Alt` keys and the Tab budget                             |
+| `contact.spec.ts`              | Focus when a contact opens, the list keys, the header menu, tracking, the timeline and the composer. On a phone: Back, the call and mail links, Share and a long press |
+| `dialogs.spec.ts`              | Five dialogs: focus in, `Tab` kept inside, `Esc` (a list inside a dialog closes first), focus back, and a scan while open                                              |
+| `search-announcements.spec.ts` | The status messages and alerts of People and Notes searches                                                                                                            |
+| `palette-keys.spec.ts`         | The command palette: the arrows, `Esc` one layer at a time, `aria-activedescendant` in every list it shows, focus kept and given back                                  |
+| `mobile-forms.spec.ts`         | A Pixel 7: the tab bar, the new contact sheet with 16 px fields, and setup errors tied to their fields                                                                 |
+| `metrics.spec.ts`              | A 390 px phone: 44 px targets and 11 px text on seven screens                                                                                                          |
+| `phone-shell.spec.ts`          | Typing hides the tab bar and keeps Save in view, a sheet drags closed, the browser bar's theme, asset caching, the rail on its side                                    |
+| `account-transitions.spec.ts`  | A gated instance: setup, sign out, sign in, an expired session and a forced password change                                                                            |
 
 Most other specs, such as Pulse, the map and Settings, also scan the screens
 they reach. In the unit suite, `tests/unit/frontend/style/stylesFloor.test.ts`
@@ -127,10 +135,10 @@ npm run test:e2e:ui              # pick a test and watch it
 npx playwright test -g "skip link" --headed
 ```
 
-A failure writes `playwright-report/`. Open it with
-`npx playwright show-report`. It holds each axe scan as JSON, the screenshot
-of a failed test, and the server's log as `server.log`. Specs that take docs
-screenshots save them in `test-results/docs-screenshots/`, or in
+Every run writes `playwright-report/`. Open it with
+`npx playwright show-report`. It holds each axe scan as JSON and, for a
+failed test, its screenshot and the server's log as `server.log`. Specs that
+take docs screenshots save them in `test-results/docs-screenshots/`, or in
 `docs/screenshots/` when `DOCS_SCREENSHOTS=1` is set.
 
 ### The rules the suite holds
@@ -153,7 +161,7 @@ screenshots save them in `test-results/docs-screenshots/`, or in
   the pull request.
 - **Phones**: 44 px targets on every touch screen (`sm:pointer-fine:` drops
   them only for a mouse), with `hit-area` for a small control, and 16 px
-  fields below `sm`. See `.agent/STYLE.md`.
+  fields on a touch screen, which `src/index.css` sets. See `.agent/STYLE.md`.
 
 ## What a person still checks
 
@@ -169,7 +177,7 @@ pass. Record the date and the screen reader and browser in the release notes.
    opening anyone, and `Enter` opens the contact with focus on its name.
 2. Tab through the sidebar. Every stop shows a ring, in light and in dark.
 3. Press `/`, type a name and press `Esc`: the list filters, then clears.
-   Press `N`, fill the form with `Tab` and `Enter`, and close it with `Esc`.
+   Press `N`, move through the form with `Tab`, and close it with `Esc`.
 4. Open the shortcuts dialog from the sidebar's **Keyboard shortcuts**
    button. Focus stays inside on `Tab`, and `Esc` puts it back on the button.
 5. On **Ask Contrack**, open a result with `Enter`, `Tab` inside the card,
@@ -184,8 +192,9 @@ Windows. Do steps 1 to 4 with both.
 1. On **Ask Contrack**, ask a question. You hear "Searching your network
    for …", then "N matches for …" or "No matches for …". Nothing is read
    twice, and nothing is read while you type.
-2. Switch to **Notes** with the arrow keys and type a word. You hear "N notes
-   for …". Choose **Last 30 days**, and you hear the new count once.
+2. Switch to **Notes** with the arrow keys, type a word and press `Enter`.
+   You hear "N notes for …". Choose **Last 30 days**, and you hear the new
+   count once.
 3. Stop the server and ask again. You hear "Could not search" as an
    interruption, and nothing from the status region.
 4. Leave the page and come back. The results show, and nothing is read.

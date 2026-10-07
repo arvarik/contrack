@@ -1,16 +1,16 @@
 # Accounts and sign-in
 
-This page covers sign-in: when Contrack asks for it, and how people sign in.
-It also covers your own account, password resets, and what an admin manages.
+This page says when Contrack asks people to sign in, and how they sign in. It
+also covers your own account, password resets, and what an admin manages.
 
 ![The sign-in screen: Username or email, Password, Keep me signed in on this device, Sign in, and Sign in with a passkey](images/sign-in.png)
 
 ## Sign-in is off by default
 
-Out of the box, Contrack asks no one to sign in. It runs as one built-in
-account, **Local account**, which owns your data and is an admin. **Settings →
-Account** is not shown, a link to it says **No account needed**, and MCP
-clients connect without a token.
+By default, Contrack asks no one to sign in. It runs as one built-in account,
+**Local account**, which owns your data and is an admin. **Settings →
+Account** is hidden, and a link to it opens a page that says **No account
+needed**. MCP clients connect without a token.
 
 This suits one person on one machine. A native install listens on `127.0.0.1`
 only, and the Docker command in
@@ -18,24 +18,37 @@ only, and the Docker command in
 too. The server log warns when Contrack listens on a network address with
 sign-in off.
 
+While sign-in is off, and until the first account exists, Contrack answers
+only local names: `localhost`, an IP address, a name with no dot such as
+`nas`, a name under a private suffix such as `.local` or `.lan`, and the host
+of `PUBLIC_URL`. To use another name, add it to `ALLOWED_HOSTS` (see
+[Environment Variables](configuration.md#environment-variables)).
+
 ## Turn on sign-in
 
-Turn on sign-in before any other device can reach Contrack.
+Turn on sign-in before any other device can reach Contrack, and before you
+create a second account.
 
 1. Set `AUTH_REQUIRED=true` for the server. In Docker, add
    `-e AUTH_REQUIRED=true` to the `docker run` command, or set it in the
    `.env` file that Docker Compose reads. In a native install, add it to the
    `.env` file.
-2. Restart Contrack, and open it in your browser. The setup screen appears.
+2. Restart Contrack, and open it by a local name, such as `localhost`. The
+   setup screen appears.
 3. Create your account, see [First setup](#first-setup).
 4. Only then let other devices reach Contrack, see
    [Remote access](self-hosting.md#remote-access).
 
-Until the first account exists, Contrack refuses every request for data.
-After that, a person signs in, and a script uses a personal token. Only the
-health check and the app's own page load without either. Once an account with
-a password exists, sign-in stays on, even if `AUTH_REQUIRED` is false. The
-server log says so at start.
+Until the first account exists, Contrack refuses every request for data. After
+that, a person signs in, and a script or an MCP client uses a personal token
+or OAuth (see [MCP and API tokens](mcp.md)). Without either, only the health
+check, the app's own page and its sign-in steps answer.
+
+Once an account with a password exists, sign-in stays on, even if
+`AUTH_REQUIRED` is false. The server log says so at start. So an account
+created while sign-in is off, by an admin or with an invitation, turns sign-in
+on at the next start. Setup then never runs, and your contacts stay with
+**Local account**, which nobody can sign in to.
 
 ## First setup
 
@@ -47,8 +60,9 @@ everything attached to it, so the contacts already there stay.
 
 Enter **Your name** (optional), your **Email**, a **Username**, and a
 **Password** of at least 8 characters. Contrack suggests the username from
-your email. It takes 2 to 32 lowercase letters, numbers, dots, dashes, or
-underscores. A photo is optional.
+your email. A username has 2 to 32 lowercase letters, numbers, dots, dashes, or
+underscores, and starts and ends with a letter or a number. A photo is
+optional.
 
 Select **Secure this instance**. The first account is an admin, and it is
 signed in at once. When the browser supports passkeys, Contrack then offers
@@ -65,9 +79,9 @@ With **Keep me signed in on this device** on, a sign-in lasts for the
 instance's session length, 30 days by default. With it off, the sign-in ends
 when you close the browser, and after one day at most.
 
-Contrack remembers your username in this browser. **Not you?** clears it. A
-wrong username and a wrong password get the same message. After 10 tries in a
-minute from one address, Contrack asks you to wait.
+Contrack remembers your username or email in this browser. **Not you?** clears
+it. A wrong username and a wrong password get the same message. After 10 tries
+in a minute from one address, Contrack asks you to wait.
 
 The sign-in screen can also show:
 
@@ -90,15 +104,17 @@ key. Your password still works.
 2. Under **Sign-in methods**, find **Passkeys** and select **Add a passkey**.
 3. Follow your device's prompt.
 
-Each passkey shows **Synced** or **This device only**, when you added it, and
-when you last used it. The pencil renames it. The bin removes it, after you
-confirm with **Remove passkey**.
+To sign in with it, select **Sign in with a passkey**. The browser can also
+offer the passkey when you select the **Username or email** field.
 
-Passkeys need HTTPS or `localhost`, and a domain name. An IP address, such as
-`http://192.168.1.50:3210`, cannot hold a passkey, and the **Passkeys** card
-says so. Behind a reverse proxy, set `PUBLIC_URL` to the address in the
-browser's address bar, see [Remote access](self-hosting.md#remote-access). An
-account with a temporary password must choose its own password first.
+Each passkey shows **Synced** or **This device only**, when you added it, and
+when you last used it. The pencil renames it. The trash can removes it, after
+you confirm with **Remove passkey**.
+
+Passkeys need HTTPS or `localhost`. They do not work on an IP address, such as
+`http://192.168.1.50:3210`, and the **Passkeys** card then says why. Behind a
+reverse proxy, set `PUBLIC_URL` to the address in the browser's address bar,
+see [Remote access](self-hosting.md#remote-access).
 
 ## Your account
 
@@ -111,15 +127,17 @@ account with a temporary password must choose its own password first.
   goes back to your initials. **Display name**, **Username**, and **Email**
   save with **Save changes**.
 - **Sign-in methods.** Your password and your **Passkeys**. **Change
-  password** signs out every other device.
+  password** asks for your current password and signs out every other device.
+  Your API tokens keep working.
 - **Devices.** Each browser where you are signed in, how it signed in
   (**Password**, **Passkey** or **Emailed link**), and when it was last used.
   **This device** marks the one you are using. **Sign out other devices**
   ends the others.
-- **API tokens.** Tokens for MCP clients and scripts, see
-  [Create a token](mcp.md#create-a-token).
-- **Session.** **Sign out** signs out this device. An admin also sees a link
-  to the instance's **Session length**.
+- **API tokens.** Tokens for MCP clients and scripts, and the apps you
+  approved with OAuth, see [Create a token](mcp.md#create-a-token).
+- **Session length**, for an admin only. A link to the instance's setting,
+  which applies to every account.
+- **Session.** **Sign out** signs out this device.
 
 ## Reset a password
 
@@ -131,11 +149,11 @@ is set.
 3. Open the link in the email. It works once, for one hour.
 4. Choose a new password.
 
-You are then signed in. Every other session ends, and your API tokens stop.
-One address can ask 3 times in 15 minutes, and one account gets at most 3
-links an hour. When mail cannot carry links, the screen says **This Contrack
-cannot send email, so an admin resets it for you**, and **I run this server**
-shows the reset command.
+You are then signed in. Every other session ends, and your API tokens and MCP
+apps stop working. One address can ask 3 times in 15 minutes, and one account
+gets at most 3 links an hour. When mail cannot carry links, the screen says
+"This Contrack cannot send email, so an admin resets it for you", and **I run
+this server** shows the reset command.
 
 **Ask an admin.** An admin can send you a reset link or give you a temporary
 password, see [Accounts](#accounts).
@@ -151,25 +169,26 @@ docker exec -it contrack node scripts/reset-password.ts <username-or-email>
 ```
 
 The command prints a temporary password. It also signs the account out
-everywhere and stops its API tokens. Use it when you are the only admin and
-you lost your password. The built-in **Local account** has no password
-to reset.
+everywhere, and its API tokens and MCP apps stop working. Use it when you are
+the only admin and you lost your password. The built-in **Local account** has
+no password to reset.
 
 After a temporary password, the next sign-in opens **Choose your own
-password**. Enter the temporary password and a new one. Nothing else works
-until you do.
+password**. Enter the temporary password, then the new one twice. Nothing else
+works until you do.
 
 ## Roles
 
-| Role       | What it can do                                                 |
-| ---------- | -------------------------------------------------------------- |
-| **Member** | Its own contacts, and nothing else                             |
-| **Admin**  | Also manages accounts, instance settings, and AI configuration |
+| Role       | What it can do                                                |
+| ---------- | ------------------------------------------------------------- |
+| **Member** | Its own contacts, and nothing else                            |
+| **Admin**  | Also manages accounts and every page under **Administration** |
 
-Each account, an admin's included, sees only its own contacts. An admin sees
-facts about other accounts: the name, the role, the number of contacts, and
-the last sign-in. The one exception is **Export data**, and the audit log
-records it.
+Each account, an admin's included, sees only its own contacts. An admin also
+sees facts about the other accounts: the name, the role, the number of
+contacts, the last sign-in, and AI usage. Two downloads give an admin other
+accounts' contacts: **Export data**, for one account, and a snapshot on the
+**Backups** page, which holds every account. The audit log records both.
 
 ## Administration
 
@@ -195,17 +214,18 @@ Each row's menu holds these actions:
 - **Reset password**: with outgoing mail set up and `PUBLIC_URL` set, choose
   **Email a reset link**, which works for 24 hours, or **Show a temporary
   password**. Otherwise Contrack shows a temporary password. A temporary
-  password signs the person out everywhere and stops their API tokens and MCP
-  apps at once. A link does the same when they set the new password. When the
-  mail does not go, the dialog says so and the link is deleted.
+  password signs the person out everywhere at once, and their API tokens and
+  MCP apps stop working. A link does the same when they set the new password.
+  When the mail does not go, Contrack says why and deletes the link.
 - **Export data**: downloads the account's data as one JSON file, for someone
   who leaves. The audit log records it.
-- **Disable**: asks first, then signs the person out everywhere and stops
-  their API tokens. **Enable** undoes it at once, and their tokens work again.
-  Disable an account before you delete it.
+- **Disable**: asks first, then signs the person out everywhere. Their API
+  tokens and MCP apps stop working while the account is disabled. **Enable**
+  undoes it at once, and their tokens work again. Disable an account before
+  you delete it.
 - **Delete**: two steps. The first shows what the account owns: contacts,
   interactions, lists, and files. **Export their data first** downloads it.
-  Tick **I understand this cannot be undone**, and select **Delete account
+  Check **I understand this cannot be undone**, and select **Delete account
   and data**.
 
 ### Invitations
@@ -215,18 +235,18 @@ An invitation is a link that creates one account, once.
 1. Open **Settings → Administration → Invitations**, and select **New
    invitation**.
 2. Optionally enter an **Email**, as a reminder. The person picks their own.
-   **Send it by email** mails the link when mail is set up.
+   With outgoing mail set up, **Send it by email** also mails the link there.
 3. Choose the **Role**, and when it **Expires**: **3 days**, **7 days** (the
    default), or **30 days**.
 4. Select **Create invitation**. Copy the link, and select **I've copied
    it**.
 
 Send the link the way you would send a password. The person who opens it sees
-**You've been invited**, and the new account starts empty. A link that was
-used, revoked or expired says so before the form shows. The list shows each
-invitation as **Pending**, **Accepted**, **Revoked**, or **Expired**.
-**Revoke** stops a pending link at once. Deleting the admin who created a
-pending invitation revokes it too.
+**You've been invited**, and chooses an email, a username and a password. The
+new account starts empty. A link that was used, revoked or expired says so
+before the form shows. The list shows each invitation as **Pending**,
+**Accepted**, **Revoked**, or **Expired**. **Revoke** stops a pending link at
+once. Deleting the admin who created a pending invitation revokes it too.
 
 ### Sign-in settings
 
@@ -237,27 +257,30 @@ pending invitation revokes it too.
 - **Anyone can create an account**: adds **Create one** to the sign-in screen.
   A new account is a member and starts empty. On a server open to the
   internet, send invitations instead.
-- **Sign in by emailed link**: lets members sign in with an emailed link. Set
-  up outgoing mail and `PUBLIC_URL` first. Until both are set, the switch
-  cannot turn on.
+- **Sign in by emailed link**: lets people sign in with a link sent to their
+  email. Set up outgoing mail and `PUBLIC_URL` first. Until both are set, the
+  switch cannot turn on.
 - **Session length**: **1 day**, **1 week**, **30 days** (the default), or **1
   year**, for every account. A change applies to new sign-ins. To end a
   session now, disable the account or reset its password.
 
-The same page holds the Trash, backup, and Google settings, see
-[Google Workspace](import-and-sync.md#google-workspace).
+The same page holds the Trash and backup settings, **Look up addresses for the
+map** (see [Geocoding](configuration.md#geocoding)), and the Google OAuth
+client (see [Google Workspace](import-and-sync.md#google-workspace)).
 
 ### Audit log
 
-**Settings → Administration → Audit log** lists every administrative action
-and every sign-in, newest first. Filter it with **Everything**, **Accounts**,
-**Invitations**, **Sign-in**, or **Tokens**. **Load more** shows older
-entries. The log never holds a password, a token, or an invitation secret. A
-failed sign-in records whether the name typed matched an account, and which
-account, never the text typed, so a password typed into the wrong field does
-not reach the log. Its row says **for an existing account** or **for a name
-with no account**. A row by an account that was since deleted says **by a
-deleted account**. Contrack deletes an entry after 90 days.
+**Settings → Administration → Audit log** lists sign-ins, and changes to
+accounts, tokens, apps, connectors and instance settings, newest first.
+Filter it with **Everything**, **Accounts**, **Invitations**, **Sign-in**,
+**Tokens**, or **Instance**. **Load more** shows older entries.
+
+The log never holds a password, a token, or an invitation secret. A failed
+sign-in records whether the name typed matched an account, and which account,
+never the text typed. So a password typed into the wrong field does not reach
+the log. Its row says **for an existing account** or **for a name with no
+account**. A row by an account that was since deleted says **by a deleted
+account**. Contrack deletes an entry after 90 days.
 
 ### What keeps an instance administrable
 
@@ -284,21 +307,25 @@ tests. An admin sets it up once.
 
 A badge shows **Set up here**, **Set by the environment**, or **Not set up**.
 **Clear settings** removes what you saved. You can send 5 tests in 10 minutes.
-The environment can set mail instead: `SMTP_URL`, such as
-`smtp://user:password@smtp.example.com:587`, or `smtps://` for TLS on port 465. `MAIL_FROM` and `MAIL_REPLY_TO` set the From and Reply-to addresses.
-While `SMTP_URL` is set, the page is read-only.
+
+The environment can set mail instead. `SMTP_URL` holds the server, such as
+`smtp://user:password@smtp.example.com:587`. For TLS on port 465, it starts
+with `smtps://`. `MAIL_FROM` and `MAIL_REPLY_TO` set the From and Reply-to
+addresses. While `SMTP_URL` is set, the page is read-only.
 
 **Links in mail need `PUBLIC_URL`.** A reset, sign-in, or invitation link goes
 to someone's inbox. Contrack builds its address from `PUBLIC_URL` only, never
 from the request, because a request can claim any address. Without
 `PUBLIC_URL`:
 
-- A reset request sends nothing, and the server log says why.
-- The sign-in screen offers no emailed link.
-- **Email a reset link** fails with a message that asks for `PUBLIC_URL`.
+- **Forgot your password?** offers no reset link, and says to ask an admin.
+- The sign-in screen offers no emailed link, and **Sign in by emailed link**
+  cannot turn on.
+- **Reset password** in **Accounts** offers only a temporary password.
 - An invitation is created, but not mailed. Copy its link and send it.
 
-The **Outgoing mail** page shows a warning while `PUBLIC_URL` is missing. See
+The **Outgoing mail** page shows a warning while `PUBLIC_URL` is missing, and
+the server log warns at start. See
 [Remote access](self-hosting.md#remote-access) and the
 [Configuration reference](configuration.md#environment-variables).
 
