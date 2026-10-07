@@ -250,7 +250,6 @@ with an empty `DATA_DIR`.
 - The built files under `/assets` are cached for a year, as their names
   change with their content, so a phone loads the app with far fewer
   requests. The Home Screen app has shortcuts to Pulse, Ask and the map.
-
 - Node.js 26.10 or later is required. Node runs the TypeScript itself, so the
   server has no build step.
 - The Docker image holds the local search models, so a container downloads
@@ -266,6 +265,8 @@ with an empty `DATA_DIR`.
 - Backups are checked against the live database after each snapshot, and
   responses are compressed.
 - The docs are rewritten as task pages, which also build as a GitHub wiki.
+- A GitHub Codespace opens a running Contrack with 400 fictional people and
+  no sign-in.
 
 ### Removed
 

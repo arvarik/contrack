@@ -8,9 +8,14 @@
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
   "containerEnv": {
-    "ONNXRUNTIME_NODE_INSTALL": "skip"
+    "ONNXRUNTIME_NODE_INSTALL": "skip",
+    "ALLOWED_HOSTS": ".app.github.dev",
+    "__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS": ".app.github.dev"
   },
-  "postCreateCommand": "npm ci && npm run db:seed",
+  "postCreateCommand": "npm ci && npm run db:enrich -- --apply --count 400 --tag demo",
+  "postAttachCommand": {
+    "contrack": "npm run dev"
+  },
   "forwardPorts": [3210],
   "portsAttributes": {
     "3210": {
