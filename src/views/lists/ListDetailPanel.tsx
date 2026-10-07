@@ -1,8 +1,8 @@
 /**
  * One list: its icon and name, its members, and Delete. The icon saves when
- * chosen. The name saves on blur or Enter, so a name typed before another
- * list opens is not lost, and Escape restores it. Remove has Undo in its
- * toast. Delete asks first.
+ * chosen, and goes back to the saved one if the save fails. The name saves on
+ * blur or Enter, so a name typed before another list opens is not lost, and
+ * Escape restores it. Remove has Undo in its toast. Delete asks first.
  */
 import { useMemo, useRef, useState } from "react";
 import { X, ExternalLink, Trash2, UserMinus } from "lucide-react";
@@ -61,6 +61,8 @@ export const ListDetailPanel = ({
   const [removingId, setRemovingId] = useState<string | null>(null);
   // The name last sent, so Enter and the blur that follows save it once.
   const savedName = useRef(list.name);
+  // The icon the server last accepted, put back when a save fails.
+  const savedIcon = useRef(list.icon);
 
   const save = (data: { name?: string; icon?: string }) =>
     updateList
@@ -84,7 +86,10 @@ export const ListDetailPanel = ({
 
   const handleIconChange = (next: string) => {
     setIcon(next);
-    void save({ icon: next });
+    void save({ icon: next }).then((ok) => {
+      if (ok) savedIcon.current = next;
+      else setIcon(savedIcon.current);
+    });
   };
 
   const handleDelete = async () => {
