@@ -30,7 +30,6 @@ import {
   Trash2,
   type LucideIcon,
 } from "lucide-react";
-import DOMPurify from "dompurify";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { weekStartsOn } from "../../../../shared/dates";
 import { connectorViaLabel } from "../../../../shared/connectors";
@@ -43,7 +42,7 @@ import {
   TIMELINE_CARD,
   TONE_WASH,
 } from "../../../lib/styles";
-import { TIPTAP_SANITIZE_CONFIG } from "../../../lib/sanitize";
+import { sanitizeNote } from "../../../lib/sanitize";
 import { formatDay, parseServerTime } from "../../../lib/datetime";
 import {
   startPendingDelete,
@@ -230,12 +229,9 @@ const titleButton = (id: string) =>
     .getElementById(`interaction-${id}`)
     ?.querySelector<HTMLButtonElement>("h3 button") ?? null;
 
-/** Memoized so DOMPurify runs only when the entry's HTML changes. */
+/** Memoized so the sanitizer runs only when the entry's HTML changes. */
 const InteractionContent = React.memo(({ html }: { html: string }) => {
-  const sanitized = useMemo(
-    () => DOMPurify.sanitize(html, TIPTAP_SANITIZE_CONFIG),
-    [html],
-  );
+  const sanitized = useMemo(() => sanitizeNote(html), [html]);
   return (
     <div
       className="prose prose-sm max-w-none text-on-surface-variant leading-relaxed prose-p:my-1 prose-headings:my-2 prose-headings:text-on-surface prose-strong:text-on-surface line-clamp-3 pointer-events-none"
