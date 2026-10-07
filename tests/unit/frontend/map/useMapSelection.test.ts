@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
 import { renderHook, act } from "@testing-library/react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import type { Map as MapLibreMap } from "maplibre-gl";
+import { clearBounds } from "../../../../src/views/map/insets";
 import { useMapSelection } from "../../../../src/views/map/useMapSelection";
 import type { MapContact } from "../../../../shared/geo";
+
+vi.mock("../../../../src/views/map/insets", () => ({ clearBounds: vi.fn() }));
 
 describe("useMapSelection", () => {
   const contacts: MapContact[] = [
@@ -62,6 +66,40 @@ describe("useMapSelection", () => {
     expect(result.current.selectedIds.has("c1")).toBe(false);
     expect(result.current.selectedIds.has("c4")).toBe(false);
     expect(result.current.selectedCount).toBe(2);
+  });
+
+  it("selects only the people the open panels leave in view", () => {
+    // The map spans the world. The part nothing covers is Virginia, the box
+    // "N in view" counts, so a person under a panel is not selected.
+    vi.mocked(clearBounds).mockReturnValue([-83.6, 36.5, -75.2, 39.5]);
+    const wholeMap = {
+      getWest: () => -180,
+      getSouth: () => -90,
+      getEast: () => 180,
+      getNorth: () => 90,
+    };
+    const map = { getBounds: () => wholeMap } as unknown as MapLibreMap;
+    const { result } = renderHook(() => useMapSelection({ contacts }));
+
+    act(() => {
+      result.current.selectInView(map, undefined, { contactOpen: true });
+    });
+
+    expect(clearBounds).toHaveBeenCalledWith(map, { contactOpen: true });
+    expect([...result.current.selectedIds].sort()).toEqual(["c2", "c3"]);
+  });
+
+  it("selects in view only from the list it is given", () => {
+    vi.mocked(clearBounds).mockReturnValue([-83.6, 36.5, -75.2, 39.5]);
+    const map = {} as MapLibreMap;
+    const { result } = renderHook(() => useMapSelection({ contacts }));
+
+    // c3 is in the box, but the filter left it out of the list.
+    act(() => {
+      result.current.selectInView(map, [contacts[1]], { contactOpen: false });
+    });
+
+    expect([...result.current.selectedIds]).toEqual(["c2"]);
   });
 
   it("selects points using lasso polygon ring", () => {

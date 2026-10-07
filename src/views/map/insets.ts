@@ -137,8 +137,9 @@ export function measureInsets(
 
 /**
  * The part of the map that nothing covers, as `[west, south, east, north]`,
- * so "N in view" counts only people a person can see. The map never rotates,
- * so the clear rectangle is a box of longitude and latitude.
+ * so "N in view" counts only people a person can see, and "All in view"
+ * selects only them. The map never rotates, so the clear rectangle is a box of
+ * longitude and latitude.
  */
 export function clearBounds(
   map: {

@@ -127,7 +127,7 @@ Select people by area, then act on all of them at once.
 
 ![The map with a box selection, the selection bar and the bulk bar at the bottom](images/map-selection.png)
 
-- **All in view**: choose **Select** → **All in view**. On a phone, open **Filters** and select **Select all in view**. With the keyboard, move the map to the people with the arrow keys, `+` and `-`, then choose **All in view**.
+- **All in view**: choose **Select** → **All in view**. On a phone, open **Filters** and select **Select all in view**. With the keyboard, move the map to the people with the arrow keys, `+` and `-`, then choose **All in view**. It picks the people the "in view" count shows, so it leaves out anyone under the open contact or the Map insights panel.
 - **Box**: hold `Shift` and drag across the map. **Select** → **Box select** tells you how.
 - **Lasso**: press `L`, or choose **Select** → **Lasso select**. Then drag a shape around the people. The lasso ends when you let go. `Esc` cancels it.
 

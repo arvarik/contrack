@@ -1,12 +1,15 @@
 /**
  * Multi-selection on the map: box, lasso and all in view. It tests contact
- * rows, not rendered tiles, so people inside clusters count. A selection
- * survives filter changes, and the announcement counts the hidden ones.
+ * rows, not rendered tiles, so people inside clusters count. All in view is
+ * the part of the map that nothing covers, the box the "N in view" count
+ * uses. A selection survives filter changes, and the announcement counts the
+ * hidden ones.
  */
 import { useState, useCallback, useEffect, useMemo } from "react";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import type { MapContact } from "../../../shared/geo";
 import { isValidLatLng } from "../../../shared/geo";
+import { clearBounds } from "./insets";
 import { boundsContain, pointInPolygon, type Point } from "./mapMath";
 
 interface UseMapSelectionOptions {
@@ -34,25 +37,6 @@ export function useMapSelection({
     setSelectedIds(new Set());
   }, []);
 
-  const selectInView = useCallback(
-    (map: MapLibreMap | null, candidates?: MapContact[]) => {
-      if (!map) return;
-      const list = candidates ?? activeContacts;
-      const bounds = map.getBounds();
-      const insideIds: string[] = [];
-
-      for (const c of list) {
-        if (!isValidLatLng(c.lat, c.lng)) continue;
-        if (boundsContain(bounds, { lat: c.lat, lng: c.lng })) {
-          insideIds.push(c.id);
-        }
-      }
-
-      addMany(insideIds);
-    },
-    [activeContacts, addMany],
-  );
-
   const selectBox = useCallback(
     (
       bounds: [west: number, south: number, east: number, north: number],
@@ -71,6 +55,18 @@ export function useMapSelection({
       addMany(insideIds);
     },
     [activeContacts, addMany],
+  );
+
+  const selectInView = useCallback(
+    (
+      map: MapLibreMap | null,
+      candidates: MapContact[] | undefined,
+      options: { contactOpen: boolean },
+    ) => {
+      if (!map) return;
+      selectBox(clearBounds(map, options), candidates);
+    },
+    [selectBox],
   );
 
   const selectLasso = useCallback(

@@ -772,7 +772,9 @@ export const MapView = () => {
           onFitAll={handleFitAll}
           onToggleInsights={() => toggleInsightsPane(true)}
           onSelectInView={() =>
-            selection.selectInView(map, filter.filteredContacts)
+            selection.selectInView(map, filter.filteredContacts, {
+              contactOpen: openId !== null,
+            })
           }
           onStartLasso={() => setIsLassoMode(true)}
           isLassoActive={isLassoMode}
