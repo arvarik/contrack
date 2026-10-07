@@ -25,7 +25,11 @@ npm run dev            # http://localhost:3210, with hot reload
 - A dev container does all of this for you. Open the repository in a GitHub
   Codespace, or in VS Code with the Dev Containers extension.
   `.devcontainer/devcontainer.json` installs the Node version in `.nvmrc`,
-  runs `npm ci` and `npm run db:seed`, and forwards port 3210.
+  runs `npm ci`, adds 400 fictional people tagged `demo` with
+  `npm run db:enrich`, and starts `npm run dev`. Port 3210 opens in your
+  browser, with sign-in off. The container adds `.app.github.dev` to
+  `ALLOWED_HOSTS` and to Vite's allowed hosts, so a Codespace's forwarded
+  address gets through the host checks.
 - Copy `.env.example` to `.env` only to change a default or add a key. The
   [Configuration reference](docs/configuration.md) lists every variable.
 - Your data is `curator.db` in the project root. For a second, test instance,
@@ -164,10 +168,13 @@ with its own floor for `server/`. `.agent/TESTING.md` has the rest.
 ## Docs, the database and the brand
 
 - **Docs** are flat pages in `docs/`, listed in `docs/README.md`, with
-  screenshots of fictional data in `docs/images/`. Tests fail on a broken link
-  or anchor, when `configuration.md`, `api-reference.md` or
+  screenshots and GIFs of fictional data in `docs/images/`. Tests fail on a
+  broken link or anchor, when `configuration.md`, `api-reference.md` or
   `keyboard-shortcuts.md` misses a variable, a route or a shortcut, and when
   `openapi.json` is not what `npm run api:openapi` writes.
+  - Take a screenshot from a production build on a scratch `DATA_DIR` that
+    `npm run db:enrich -- --apply --count 400` filled with fictional people.
+    Never use real contacts. Docs images are 8-bit palette PNGs.
 - **A schema change** is a new migration. `npm run db:new <name>` writes
   `server/db/migrations/NNNN_<name>.ts` and adds it to the list. Write the
   SQL in its `up(db)`, mirror each new table and column in

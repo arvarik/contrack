@@ -22,6 +22,9 @@ Then open `http://localhost:3210` in your browser.
   [Where your data lives](self-hosting.md#where-your-data-lives).
 - The port is open to this machine only.
 - You need no AI key to start. You can connect one later, in the app.
+- On Linux, the container runs as user ID 1000 and cannot write to a folder
+  that Docker creates for root. Create the folder first:
+  `mkdir contrack-data && sudo chown 1000:1000 contrack-data`.
 
 To install with Docker Compose or without Docker, see
 [Install with Docker](self-hosting.md#install-with-docker) and
@@ -30,11 +33,11 @@ To install with Docker Compose or without Docker, see
 ## Open Contrack and create your account
 
 Sign-in is off by default. Contrack opens on the **Network** page, and
-everything you add belongs to the one account of this device. That is safe
-while only this machine can reach Contrack.
+everything you add belongs to one built-in account, **Local account**. That
+is safe while only this machine can reach Contrack.
 
-To ask for an account, add `-e AUTH_REQUIRED=true` to the `docker run`
-command. Turn on sign-in before other devices can reach Contrack. See
+To turn on sign-in, add `-e AUTH_REQUIRED=true` to the `docker run` command.
+Do this before other devices can reach Contrack. See
 [Turn on sign-in](accounts.md#turn-on-sign-in).
 
 ![The first-run setup screen, with the photo, name, email, username and password fields](images/setup.png)
@@ -66,8 +69,10 @@ The sidebar on a wide screen, and the tab bar on a phone, lead to five places:
 
 - The Pulse icon shows a red dot when a follow-up is due today or late.
   Possible duplicates show their count on the **Inbox** card on Pulse.
-- The foot of the sidebar holds **Keyboard shortcuts**, **Settings** and,
-  when sign-in is on, your account with **Sign out**.
+- The foot of the sidebar holds **Command palette** and **Keyboard
+  shortcuts** (with a mouse or a trackpad), then **Settings**. When sign-in
+  is on, your picture comes last. It opens **Account settings** and
+  **Sign out**.
 - The corvid at the top of the sidebar is Contrack's mark. Press it to let
   the bird fly. **Corvid motion** in **Settings → Appearance** sets how much
   it moves.
@@ -79,12 +84,16 @@ The sidebar on a wide screen, and the tab bar on a phone, lead to five places:
 ![Two phone screens side by side: Pulse and a contact page](images/phone.png)
 
 - The tab bar at the bottom holds the same five places.
+- **Command palette**, at the top of each page, opens the palette.
 - A contact opens full screen, with **Timeline**, **Details** and **Dossier**
   tabs, and **Call**, **Message**, **Email** and **Log note** under its name.
   It slides in over the list, and **Back** slides it out to the same place
   in the list.
-- Dialogs rise from the bottom of the screen.
+- Dialogs rise from the bottom of the screen. Drag one down by its handle to
+  close it.
 - Pull the Network list down to refresh it.
+- With sign-in on, your account and **Sign out** are at the top of
+  **Settings**.
 
 ### Settings
 
@@ -111,15 +120,18 @@ find a single setting.
 
 - **Import a file**: press **Import**, the upload button above the Network
   list, or open **Settings → Import**. Choose **Apple**, **LinkedIn**,
-  **Google** or **Facebook**, and drop the file you exported. The page says
-  how to export from each. See [Import a file](import-and-sync.md#import-a-file).
+  **Google** or **Facebook**, and drop the file you exported. Each choice
+  says how to export the file. See
+  [Import a file](import-and-sync.md#import-a-file).
 - **Connect a calendar, a mailbox or Google**: open **Settings → Connectors**.
-  Contrack then adds the people you meet and write to. See
-  [Connectors](import-and-sync.md#connectors).
+  A connector adds your meetings and email to your contacts' timelines, and
+  suggests the people you meet or write to often. Google also brings in your
+  Google Contacts. See [Connectors](import-and-sync.md#connectors).
 - **Add one person**: press **New**, the plus button above the list, then
   **New contact**. Or press `N` in the list.
 - **Add from text**: press **New**, then **Add from text**, and paste an email
-  signature or a bio. AI fills in the form for you. Or press `V`.
+  signature or a bio. AI fills in the form for you, so it needs an AI
+  provider. Or press `V`.
 
 Contacts from an import or a connector start untracked. See
 [Contacts](contacts.md) for everything you can do with a contact.
@@ -132,7 +144,7 @@ and Pulse tells you when you are due to talk.
 1. Open a contact.
 2. Press **Track**, beside the actions menu.
 3. Under **Keep up**, choose **Weekly**, **Monthly**, **Quarterly** or
-   **Yearly**.
+   **Yearly**. **Custom…** asks for a number of days.
 
 On a contact page, `T` tracks the contact at your default cadence, which is
 **Quarterly** until you change **Default cadence** in
@@ -144,14 +156,16 @@ them in the Network list and press **Track**. See
 
 1. Open a contact. The composer is at the top of the **Timeline** tab.
 2. Write what you talked about.
-3. In the next action line, write the next step with a date, such as
+3. In the **Follow-up** line, write the next step with a date, such as
    "Send the deck next Tuesday".
 4. Press **Save**, or `Cmd+Enter` (`Ctrl+Enter` on Windows and Linux).
 
-The note joins the timeline. The next action becomes a follow-up due next
-Tuesday, and Pulse lists it under **Up next**. See
+The note joins the timeline. The follow-up is due next Tuesday, and Pulse
+lists it under **Up next**. See
 [Notes and the timeline](contacts.md#notes-and-the-timeline) and
 [Follow-ups](contacts.md#follow-ups).
+
+![A note saved with the follow-up "Send the deck next Tuesday", then the contact tracked monthly](images/flow-track.gif)
 
 ## Ask a question
 
@@ -159,8 +173,9 @@ Open **Ask Contrack**, type a question in plain words, such as "Who do I know
 in Sydney?", and press `Enter`. Contrack answers from your own contacts. You
 can also press `Cmd+K` (`Ctrl+K` on Windows and Linux) and start with `?`.
 
-Search works without AI. With an AI provider, Contrack also checks the answer
-and says why each person matches. See [Ask Contrack](search.md#ask-contrack).
+Search works without AI, and each person in the answer shows the fields that
+match. With an AI provider, Contrack also checks which people fit the
+question. See [Ask Contrack](search.md#ask-contrack).
 
 ## Turn on AI
 
@@ -194,8 +209,8 @@ On Windows and Linux, `Cmd+K` is `Ctrl+K`, and `Cmd+Shift+I` is
 
 - **Contact**: a person in your network.
 - **Ghost**: a person Contrack saw in a note, a calendar or a mailbox, but
-  that you have not added. Promote a ghost to make it a contact. See
-  [Ghosts](contacts.md#ghosts).
+  that you have not added. Open a ghost and press **Add to Network** to make
+  it a contact. See [Ghosts](contacts.md#ghosts).
 - **Tracked**: a contact you chose to keep up with. Only tracked contacts get
   a score and a place in Pulse's catch-ups. Everyone else is **Not tracked**.
 - **Cadence**: how often you want to talk to a tracked contact, such as
@@ -214,8 +229,7 @@ On Windows and Linux, `Cmd+K` is `Ctrl+K`, and `Cmd+Shift+I` is
   contact can be on many lists.
 - **Tag**: a short label on a contact, such as "advisor".
 - **Research record**: what a contact research run found and added to a
-  contact.
-  It shows on the **Research** card of the **Dossier** tab.
+  contact. It shows on the **Research** card of the **Dossier** tab.
 
 ## Next steps
 

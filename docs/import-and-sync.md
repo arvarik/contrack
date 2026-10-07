@@ -15,25 +15,30 @@ calendar, mail, and Google account with connectors, and export your data.
    file on the box.
 
 Contrack remembers the tab you used last in this browser. The tabs take the
-arrow keys. The file type is read in any case, so `Contacts.VCF` works.
+arrow keys. Contrack reads the file type in any case, so `Contacts.VCF` works.
 
 ### Supported files
 
-| Tab          | File                | What comes in                                                                                                                |
-| ------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **Apple**    | vCard (`.vcf`)      | Names, emails, phones, addresses, company, job title, birthday, notes, websites, social profiles, groups as tags, and photos |
-| **LinkedIn** | `Connections.csv`   | Name, company, position, email, profile URL, and the date you connected                                                      |
-| **Google**   | Google CSV (`.csv`) | Name, emails and phones, company, role, addresses, birthday, notes, website, and labels as tags                              |
-| **Facebook** | `friends.json`      | Friend names and the date you connected. Facebook exports no emails or phone numbers                                         |
+| Tab          | File                | What comes in                                                                                                                                    |
+| ------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Apple**    | vCard (`.vcf`)      | Names, emails, phones, addresses, company, job title, birthday, the note as **About**, websites, social profiles, categories as tags, and photos |
+| **LinkedIn** | `Connections.csv`   | Name, company, position, email, profile URL, and the date you connected                                                                          |
+| **Google**   | Google CSV (`.csv`) | Name, emails and phones, company, role, addresses, birthday, notes as **About**, website, and labels as tags                                     |
+| **Facebook** | `friends.json`      | Friend names and the date you connected. Facebook exports no emails or phone numbers                                                             |
 
 A vCard from any other address book, such as Outlook or an Android phone,
 works on the **Apple** tab. The **Google** tab reads the current Google CSV
 (with **First Name** and **Last Name** columns) and the older one (with
-**Given Name** and **Family Name**). One import holds up to 5,000 contacts.
-Split a larger file.
+**Given Name** and **Family Name**).
 
-An entry with no name is not imported. The summary says how many entries had
-no name. A Google entry with only a company takes the company as its name.
+- One import holds up to 5,000 contacts, and up to 50 MB with the photos.
+  Split a larger file.
+- Contrack skips an entry with no name, and the summary counts these
+  entries. A Google entry with no name takes its nickname or its company as
+  its name.
+- A photo inside a vCard is saved on your server. A photo that the vCard
+  gives as a web address stays a link to that site, see
+  [Privacy](privacy.md#what-leaves-the-server).
 
 ### Export from your address book
 
@@ -41,8 +46,8 @@ Select **How to export from** under the drop zone to see these steps in the
 app.
 
 - **Apple Contacts:** open the Contacts app on your Mac. Select the contacts,
-  or press `⌘A` for all. Choose **File > Export > Export vCard…**, and
-  save the `.vcf` file.
+  or press `⌘A` for all. Choose **File > Export > Export vCard…**, and save
+  the `.vcf` file.
 - **LinkedIn:** open **Settings & Privacy**, then **Data privacy** > **Get a
   copy of your data**. Choose **Connections** and request the archive.
   Download it, extract it, and use `Connections.csv`.
@@ -55,44 +60,60 @@ app.
 
 ### What happens during an import
 
+![A contacts file dropped on the Import page: the import runs, merges one duplicate by itself, and lists three to review](images/flow-import.gif)
+
 Your browser reads the file and sends the contacts to your Contrack server.
 The import then runs in up to three steps:
 
-1. **Importing contacts.** Contrack saves each contact.
+1. **Importing contacts.** Contrack saves each photo in the file on your
+   server, then saves the contacts.
 2. **Preparing the contacts for search.** Contrack makes the embeddings that
-   search and the duplicate check use.
+   the duplicate check compares. This step shows only when an embedding model
+   is ready.
 3. **Looking for duplicates.** This step runs when **Check imports
    automatically** is on in **Settings → Duplicates**.
 
-The summary counts the contacts imported and the duplicates that merged by
-themselves. It also counts the likely matches to review and the new
-contacts. If the duplicate check did not finish, the summary says so, and the
-contacts stay saved: select **Check now** in **Settings → Duplicates** to run
-it again. Imported contacts start untracked, see
-[Track a contact](pulse.md#track-a-contact).
+The summary counts the contacts imported, the duplicates that merged by
+themselves, the possible duplicates to review, and the new contacts. If the
+duplicate check did not finish, the summary says so, and the contacts stay
+saved. Select **Check now** in **Settings → Duplicates** to look for
+duplicates again.
+
+Imported contacts start untracked, see
+[Track a contact](pulse.md#track-a-contact). **Enrich new contacts
+automatically** does not research them.
 
 If the connection drops, the import goes on, and nothing is imported twice.
 Contrack shows **Reconnecting to your import**, or **Lost contact with the
-server** with **Check again**. If you leave the page, open the import again to
-see where it got to. If nothing could be saved, the panel shows **Import did
-not finish**, with **Try again**. If the import stopped part way, the
-contacts it saved stay, and the rest wait for **Retry failed rows**.
+server** with **Check again**. If you leave the page, open the import again
+to see where it got to.
+
+If nothing could be saved, the panel shows **Import did not finish**. **Try
+again** sends the file again while the page still holds it. After a reload,
+choose the file again. If the import stopped part way, the contacts it saved
+stay, and the rest wait for **Retry failed rows**.
 
 ### Retry failed rows
 
 A row that cannot be saved stays on the server with its reason, and the
 summary lists it. **Retry failed rows** runs these rows again, with no need
-for the file. **Settings → Import** also lists **Recent imports**, newest
-first, with each status (**Complete**, **Checking**, **Running**, or
-**Failed**) and its counts. Select **Try again** on a row with failed rows. If an
-import saved nothing, import the file again.
+for the file.
+
+**Settings → Import** also lists **Recent imports**, newest first, with each
+status and its counts. **Checking** means that the contacts are saved and the
+duplicate check still runs. The other statuses are **Complete**, **Running**,
+and **Failed**. Select **Try again** on a row with failed rows. If an import
+saved nothing, import the file again. Contrack keeps an import's record for
+30 days after the import ends.
 
 ### Duplicates at import
 
 The import's duplicate check compares the new contacts with your other
-contacts and with each other. A pair at or above your auto-merge sensitivity
-merges by itself. Every other pair waits in **Possible duplicates**. The
-summary's button with the count, such as **Review 3 possible duplicates**, goes there,
+contacts and with each other. It sends no pair to an AI model. A pair at or
+above your auto-merge sensitivity merges by itself, and
+[Merge history](duplicates.md#merge-history-and-undo) can undo each merge.
+The other pairs it finds wait in **Possible duplicates**. The summary's
+button with the count, such as **Review 3 possible duplicates**, goes there,
 see [Review possible duplicates](duplicates.md#review-possible-duplicates).
 
 ## Connectors
@@ -116,6 +137,11 @@ To add a connector:
 
 The first sync starts within about a minute. **Sync now** starts one at once.
 
+The **Calendar** and **Mailbox (IMAP)** connectors refuse an address on a
+private network, such as a server in your home. The server variable
+`CONNECTORS_ALLOW_PRIVATE_HOSTS=true` turns this check off for both, see the
+[Configuration reference](configuration.md#environment-variables).
+
 ### Calendar (ICS)
 
 The Calendar connector reads a private calendar address in iCalendar format.
@@ -136,10 +162,7 @@ Find the private address:
   calendars** > **Publish a calendar**. Copy the ICS link.
 
 Paste it into **Private ICS calendar URL**. Contrack reads only `http://` and
-`https://` addresses. It refuses a private network address, such as a server
-in your home, unless the server sets `CONNECTORS_ALLOW_PRIVATE_HOSTS=true`,
-see the [Configuration reference](configuration.md#environment-variables).
-That variable turns the check off for every connector.
+`https://` addresses, and a feed of up to 5 MB.
 
 ### Mailbox (IMAP)
 
@@ -152,8 +175,9 @@ with a contact becomes an email on that contact's timeline.
 2. Enter **IMAP host**, **Port**, **Username / email**, and **App password**.
    Port 993 connects over TLS.
 3. In **Folders to sync**, list the folders to read, separated by commas. The
-   default is `INBOX` only. Add your sent folder, such as `INBOX, Sent`, so the
-   mail you send counts too. **Test connection** names the folders it finds.
+   default is `INBOX` only. Add your sent folder, such as `INBOX, Sent`, so
+   the mail you send counts too. **Test connection** names the folders it
+   finds.
 4. In **Also treat these addresses as mine**, list your other addresses and
    aliases. Mail from them counts as sent by you.
 
@@ -198,16 +222,28 @@ stops every Google connector on the instance.
    the link to go to the app. This is normal for a self-hosted server.
 
 Contrack asks for read-only access to your contacts, calendar events, email
-address, and Gmail headers, or whole messages with summaries. Each Google
-account has its own connector: connect a second account and it gets a second
-connector, and the first keeps its own access. To add summaries later, connect
-the same account again with **Generate AI summaries** on, and Contrack updates
-its connector. When a sign-in does not finish, for example because you did not
-give access or it took too long, the Connectors page says why, and nothing
-changes. **Edit** sets
-**Synced data types** (**Google Contacts (People API)**, **Gmail messages**,
-**Google Calendar events**) and the options below. Google Contacts become
-untracked contacts, with their photos copied to your server.
+address, and Gmail headers, or whole messages with summaries. A sign-in can
+fail, for example when you do not give access or take longer than 15 minutes.
+The Connectors page then says why, and nothing changes.
+
+Each Google account has its own connector: connect a second account and it
+gets a second connector, and the first keeps its own access. To add summaries
+later, connect the same account again with **Generate AI summaries** on, and
+Contrack updates its connector. The **AI message summaries** switch under
+**Edit** works only after such a sign-in. Without one, Google refuses the
+message bodies, and the sync writes no summary.
+
+**Edit** also sets **Synced data types** (**Google Contacts (People API)**,
+**Gmail messages**, **Google Calendar events**) and the options below.
+
+Google Contacts become untracked contacts, with their photos copied to your
+server. A Google contact that shares an email address or a phone number with
+one of your contacts is linked to that contact, not added again. When Google
+sends a synced person again, such as after a change in Google, the sync
+writes Google's details over the linked contact, its emails and phones
+included. Change those details in Google, not in Contrack. A new contact from
+Google gets the same duplicate check as a contact you add, when **Check new
+contacts automatically** is on.
 
 ### Sync options
 
@@ -218,25 +254,28 @@ untracked contacts, with their photos copied to your server.
 | **Skip events with more than** a number of attendees                             | Calendar        | 25      |
 | **Include event descriptions**: copy agenda and notes into the meeting           | Calendar        | Off     |
 | **Roll up emails per contact per day**: one timeline entry a day for each person | Mailbox, Google | On      |
-| **Suggest a new person after** a number of meetings or messages                  | All             | 3       |
+| **Suggest a new person after** a number of meetings or messages, from 1 to 10    | All             | 3       |
 | **Generate AI summaries** (Google: **AI message summaries**)                     | Mailbox, Google | Off     |
 
-An AI summary is a note of one or two sentences about a message with one of
-your contacts. It needs the connector's summary switch and an AI provider. AI
-must also be on for your account and for the instance, see
-[Turn AI off](ai.md#turn-ai-off). Otherwise the sync downloads no message
-body and sends nothing to a provider. A sync writes at most 50 summaries.
+An AI summary is one or two sentences about a message with one of your
+contacts. The [Fast model](ai.md#models) writes it into the message's timeline
+entry. It needs the connector's summary switch and an AI provider. AI must
+also be on for your account and for the instance, see
+[Turn AI off](ai.md#turn-ai-off). Otherwise the sync downloads no message body
+and sends nothing to a provider. A sync writes at most 50 summaries.
 
 ### Who becomes a contact
 
 - Contrack matches each person in a meeting or message to your contacts by
   email address or phone number. The first match owns the meeting or email.
   Other matched contacts are mentioned in it.
-- Your own addresses never become a contact: your account's email, and the
-  addresses you list as yours.
-- When a meeting or message has none of your contacts in it, Contrack counts
-  the people in it. After the number of times set in **Suggest a new person
-  after**, the person becomes a ghost, see [Ghosts](contacts.md#ghosts).
+- Your own addresses never become a contact: your account's email, the
+  address of the connected mailbox or Google account, and the addresses you
+  list as yours.
+- A meeting or message with none of your contacts in it goes on no timeline.
+  Contrack counts the people in it. After the number of times set in
+  **Suggest a new person after**, the person becomes a ghost, see
+  [Ghosts](contacts.md#ghosts).
 - Meetings and email from a connector carry a badge on the timeline, such as
   "via Calendar", "via Email", or "via Google".
 
@@ -245,8 +284,8 @@ seen first. The **Correspondents** button on the Connectors page shows how
 many wait. For each person:
 
 - **Add as contact** makes a contact with their email or phone and the name
-  their mail or meeting gave, for example "Rowan Vale". When there was only
-  an address, it asks for the name first, filled in from the address, for
+  their mail or meeting gave, for example "Rowan Vale". When there was only an
+  address, it asks for the name first, filled in from the address, for
   example "Rowan Vale" for `rowan.vale@example.com`.
 - **Ignore** hides them. They do not come back, and they never become a
   ghost.
@@ -260,14 +299,16 @@ Each connector card shows a status:
 | **Active**     | It syncs on its schedule.                                                                                                   |
 | **Paused**     | It does not sync until you select **Resume**.                                                                               |
 | **Error**      | The last sync failed. The card shows why, with **Retry now**. Each failure waits longer before the next try, up to 4 hours. |
-| **Signed out** | The service refused the password or the sign-in. Select **Reconnect**.                                                      |
+| **Signed out** | The service refused the password or the sign-in, or the server cannot open the stored credentials. Select **Reconnect**.    |
 
 The card's menu holds **Sync now**, **Pause** or **Resume**, **Edit**, **Run
 history**, and **Remove**. **Run history** lists the last 20 syncs: how and
 when each started, how long it took, what it brought in, and any error.
+
 **Remove** stops the connector and keeps what it brought in. To delete that
 too, tick "Also delete the interactions it brought in, and the people it found
-who are not contacts".
+who are not contacts". The contacts that a Google connector brought in from
+Google Contacts stay either way.
 
 ### What connectors read and store
 
@@ -283,24 +324,28 @@ instance's key. The key is the file `secret.key` in the data folder, or the
 `CONTRACK_SECRET_KEY` variable. Backups hold the database but not the key, so
 keep a copy of `secret.key` with them, see
 [Backups and restore](self-hosting.md#backups-and-restore). Without the key,
-connectors cannot read their stored credentials. The private calendar address
-is stored in the database as it is. Treat it like a password.
+connectors cannot read their stored credentials, and they show **Signed out**.
+Contrack stores the private calendar address in the database as it is. Treat
+it like a password.
 
 ## Export
 
 Open **Settings → Export** and select a format. Each file holds your own data
 only, never another account's on the instance.
 
-| Format                 | What it holds                                                                                            | Use it for                                                                         |
-| ---------------------- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| **vCard (.vcf)**       | Your contacts, archived ones included. Not the Trash, ghosts, or contacts merged into another            | Apple Contacts, Google Contacts, Outlook, a phone, or an import back into Contrack |
-| **Spreadsheet (.csv)** | The same contacts as the vCard file, one row each. Emails, phones, and tags are joined into single cells | A spreadsheet                                                                      |
-| **Everything (.json)** | Every contact, including archived and trashed ones, with interactions, lists, follow-ups, and merges     | A record of your contacts and notes                                                |
+| Format                 | What it holds                                                                                                       | Use it for                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| **vCard (.vcf)**       | Your contacts, archived ones included. Not the Trash, ghosts, or contacts merged into another                       | Apple Contacts, Google Contacts, Outlook, a phone, or an import back into Contrack |
+| **Spreadsheet (.csv)** | The same contacts as the vCard file, one row each                                                                   | A spreadsheet                                                                      |
+| **Everything (.json)** | Every contact, archived, trashed, ghost, and merged ones included, with interactions, lists, follow-ups, and merges | A record of your contacts and notes                                                |
 
 The CSV has the columns Name, First Name, Last Name, Company, Role, Location,
 Industry, Website, Emails, Phones, Addresses, Social Links, Birthday, About,
 and Tags. Then come Archived, Tracked, Cadence Days, Tracked At, Added At, and
-Last Contacted At.
+Last Contacted At. A contact's emails, phones, addresses, links, and tags each
+share one cell, separated by semicolons. A cell that starts with `=`, `+`, `-`,
+or `@`, such as the phone number `+1 555 0100`, gets a `'` in front, so a
+spreadsheet does not run it as a formula.
 
 The JSON file holds your contacts with every field, their notes and
 interactions, your lists and who is on them, your follow-ups, and the merges
@@ -308,11 +353,11 @@ you can still undo. It does not hold your search history, saved map views,
 settings, connectors, imports, AI usage, or API tokens. Attached files and
 photos appear as their addresses on the server, not as the files.
 
-vCard is the only format that Contrack imports again. The JSON file is a
-record to keep, not a restore: to restore an instance, use a backup. An admin
-also sees a link to the **Backups** page, for a copy of the whole database.
-Scripts can download the same files with a personal token, see the
-[REST API reference](api-reference.md).
+vCard is the only format that Contrack imports again, on the **Apple** tab.
+The JSON file is a record to keep, not a restore: to restore an instance, use
+a backup. An admin also sees a link to the **Backups** page, for a copy of the
+whole database. Scripts can download the same files with a personal token, see
+the [REST API reference](api-reference.md).
 
 ## Related
 

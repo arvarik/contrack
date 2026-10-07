@@ -9,24 +9,33 @@ Contrack has three ways to find people: the search box on the Network list, the 
 | Where                      | How to open it                                                                                     | Use it to                                           |
 | -------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
 | The **Network** search box | Select the box, or press `/` on the Network list                                                   | Narrow the list you are looking at                  |
-| The command palette        | Press `Cmd+K` (`Ctrl+K` on Windows and Linux) on any page                                          | Jump to a person and act on them                    |
+| The command palette        | Press `Cmd+K` (`Ctrl+K` on Windows and Linux) on any page                                          | Jump to a person or a page, and act on a person     |
 | **Ask Contrack**           | Select **Ask Contrack** in the sidebar, or press `Cmd+Shift+S` (`Ctrl+Alt+S` on Windows and Linux) | Ask a question in plain words, or search your notes |
 
 All three read the same [facets](#facets), such as `tag:investor` or `tracked:no`.
 
 ## Search the Network list
 
-Type in the search box at the top of the **Network** list. It matches names, companies, roles, locations, industries, tags, email addresses, phone numbers and street addresses. The best name matches come first, and an address ranks below every other field, so a street name finds a person without burying the people whose name or company matches, and the list shows the count, for example "12 matches".
+Type in the search box at the top of the **Network** list. It matches names, companies, roles, locations, industries, tags, email addresses and phone numbers. Name matches come first, and the list shows the count, for example "12 matches".
 
-The box reads facets too, except `near:`. The page address keeps your search, so the address `/?q=tracked:no` opens the list already filtered. See [The Network list](contacts.md#the-network-list).
+The box reads facets too, except `near:`. The page address keeps your search, so the address `/?q=tracked:no` opens the list already filtered. The box does not read street addresses. To find a person by a street or a postcode, use the command palette or Ask Contrack. See [The Network list](contacts.md#the-network-list).
 
 ## Command palette
 
-Press `Cmd+K` on any page to open the palette. Press it again to close it. `Esc` steps back one layer at a time: it closes the facet values, the actions or **Filter by**, asks once before it discards a typed note, then clears the box and its pills, and on an empty box it closes the palette. The palette opens with an empty box each time.
+Press `Cmd+K` on any page to open the palette, and press it again to close it. With a mouse, the **Command palette** button at the foot of the sidebar opens it too. The palette opens with an empty box each time.
 
-On a touch screen, press **Command palette**, the search button at the top of every page: in the page header, at the top right of an open contact, and in the top bar of the map. Android's Back steps back as `Esc` does. The palette sits at the top of the screen, and its list stops above the on-screen keyboard.
+![The command palette: part of a name typed, a company chosen from the facet's values, and the matching contact opened](images/palette.gif)
 
-The first character you type sets the mode. The chips under the box show the mode, and a click or a tap on one switches to it and keeps the words you typed. **Filter** lists the facets.
+`Esc` steps back one layer at a time:
+
+1. It closes the facet values, the actions menu or **Filter by**.
+2. On a typed note, it asks once before it discards the note.
+3. It clears the box and its pills.
+4. On an empty box, it closes the palette.
+
+On a touch screen, press **Command palette**, the ⌘ button in the page header. An open contact has it at the top right, and the map has it in its top bar. The X beside the box closes the palette, and Android's Back steps back as `Esc` does. The palette sits at the top of the screen, and its list stops above the on-screen keyboard.
+
+The first character you type sets the mode. The chips under the box show the mode. A click or a tap on a chip switches to that mode and keeps the words you typed.
 
 | You type           | Mode         | What happens                                  |
 | ------------------ | ------------ | --------------------------------------------- |
@@ -34,13 +43,15 @@ The first character you type sets the mode. The chips under the box show the mod
 | `?` and a question | **? Ask AI** | Ask Contrack answers inside the palette       |
 | `>`                | **> Log**    | You log a note, a call, a meeting or an email |
 
-The footer names the keys that work on the highlighted row: what `Enter` does to it, `→` and `Shift` on a contact, and what `Esc` does next. A touch screen shows no keys.
+**Filter**, after the mode chips, lists the facets (see [Facets](#facets)).
 
-With `?` and nothing after it, the palette shows four questions drawn from the same pool as **Try asking** on the Ask Contrack page. Select one to ask it.
+The footer names the keys that work on the highlighted row: what `Enter` does to it, `→` and `Shift` on a contact, and what `Esc` does next. A touch screen shows no keys.
 
 ### Find a contact
 
-Type part of a name, company, role, place, industry or tag. The first results come from your browser at once. A moment later, the server's keyword search replaces them, and the top row stays highlighted until you move the highlight. The server search also reads the headline, the about text, interests, email addresses, phone numbers and every address a contact has, at the lowest rank, and it finds:
+Type part of a name, company, role, place, industry or tag. The first results come from your browser at once. A moment later, the server's keyword search replaces them, and the top row stays highlighted until you move the highlight.
+
+The server search also reads the headline, the about text, interests, email addresses and phone numbers. It reads every address a contact has too, at the lowest rank, so a street name finds a person without burying the people whose name or company matches. It also finds:
 
 - misspelled and sound-alike names, marked **Approximate**
 - nicknames, so "Bob Castellanos" finds Robert Castellanos
@@ -50,15 +61,15 @@ Each result takes two lines: the name, a dot in the band color for a tracked con
 
 Use `↑`/`↓` to move and `Enter` to open the contact. While the box holds text, `Home` and `End` move the cursor in it.
 
-**Show all in Network**, under the people, opens the Network list with the same words and pills.
+The palette lists up to 20 people. **Show all in Network**, under them, opens the Network list with the same words and pills.
 
-The words also find pages: "pulse" lists **Pulse**, and "backup" lists the Settings page for export. Each word must start a word of the page's name or of a word it is known by, and a Settings page needs three letters. At most five Settings pages show. When the words are a page's whole name, that page comes first.
+The words also find pages: "pulse" lists **Pulse**, and "backup" lists **Settings → Export**. Each word must start a word of the page's name or of a word it is known by. A Settings page needs three letters, and at most five Settings pages show.
 
 **Create contact** makes a contact with the name you typed. It is not there when a contact already has that name, when pills are set, or when the words read as a question, such as "who works at Stripe".
 
-**Ask AI**, last, asks the words as a question with the pills (see [Ask from the palette](#ask-from-the-palette)). It is not there for a name a contact already has.
+**Ask AI**, last, asks the words as a question with the pills (see [Ask from the palette](#ask-from-the-palette)). It needs three characters or more, and it is not there for a name a contact already has.
 
-The groups keep this order as you type: the people, **Show all in Network**, the pages, **Create contact** and **Ask AI**.
+The groups keep this order as you type: the people, **Show all in Network**, the pages, **Create contact** and **Ask AI**. When the words are the whole name of one of the five places, such as "map", the pages come first.
 
 ### Act on a result
 
@@ -66,21 +77,23 @@ Press `→` on a result, in the people search or in AI's answer, to open its act
 
 ![The palette's action menu for one contact, with a key beside each action](images/palette-actions.png)
 
-| Key     | Action                   | What it does                                                                                                                     |
-| ------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
-| `Enter` | **View profile**         | Opens the contact                                                                                                                |
-| `N`     | **Log note**             | Opens a small composer in the palette. `Cmd+Enter` saves the note                                                                |
-| `C`     | **Log call**             | The same, for a call                                                                                                             |
-| `B`     | **Catch me up**          | Opens the contact on its **Dossier** tab, at the **Briefing** card. With AI on, it writes a briefing when there is no recent one |
-| `L`     | **Add to list**          | Shows your lists, with a check on each list the contact is in. `Enter` adds or removes the contact                               |
-| `R`     | **Refresh from the web** | Researches the contact on the web (see [Research contacts](ai.md#research-contacts)). Only with AI on and lookups left today     |
-| `T`     | **Track** or **Untrack** | Tracks the contact at your default cadence, or untracks it, with **Undo**. A ghost has no Track row                              |
+| Key     | Action                         | What it does                                                                                                                                      |
+| ------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Enter` | **View profile**               | Opens the contact                                                                                                                                 |
+| `N`     | **Log note**                   | Opens a small composer in the palette. `Cmd+Enter` or **Save** saves the note                                                                     |
+| `C`     | **Log call**                   | The same, for a call                                                                                                                              |
+| `B`     | **Catch me up**                | Opens the contact on its **Dossier** tab, at the **Briefing** card. With AI on, it writes a briefing when there is no recent one                  |
+| `L`     | **Add to list**                | Shows your lists, with a check on each list the contact is in. `Enter` adds or removes the contact                                                |
+| `R`     | **Refresh from the web**       | Researches the contact on the web (see [Research contacts](ai.md#research-contacts)). Only for an admin, when AI is on and web research is set up |
+| `T`     | **Track** or **Stop tracking** | Tracks the contact at your default cadence, or stops tracking it, with **Undo**. A ghost has no Track row                                         |
 
 `↑`/`↓` move through the actions. `←` or `Esc` goes back to the results.
 
+The composer keeps your text as a draft in this browser until you save it. If the palette closes first, the draft comes back the next time you open the composer for that contact.
+
 ### Peek at a result
 
-Hold `Shift` while a result is highlighted. A card opens beside the palette. It shows the role and company, the score and its band (or "Not tracked"), the last contact and up to five tags. Let go of `Shift` to close it.
+Hold `Shift` for a moment while a result is highlighted. A card opens beside the palette. It shows the role and company, the score and its band (or "Not tracked"), the last contact and up to five tags. Let go of `Shift` to close it.
 
 ### Log an interaction
 
@@ -102,24 +115,33 @@ For the name, the palette takes the contact with that whole name, then the first
 
 With the box empty, the palette shows these groups:
 
-- **Start here**, until you have opened a contact or searched: rows to ask AI and to log an interaction. **Filter**, beside the mode chips, lists the facets.
-- **Recent**: the last contacts you opened, then your latest searches from the palette and from Ask Contrack, six rows at most. A question shows its `?`, and a notes search starts with "Notes:". Select a search to run it again.
-- **Insights**: the follow-ups that are due, and the two tracked contacts furthest past their cadence. It also names a person you mention often who is not in your network, and it counts the contacts with stale data and the possible duplicates.
+- **Start here**, until you have opened a contact or searched: **Ask AI about your network** and **Log a note, call, meeting or email**.
+- **Recent**: up to three contacts you opened last, then your latest searches from the palette and from Ask Contrack, six rows at most. A question shows its `?`, and a notes search starts with "Notes:". Select a search to run it again.
+- **Insights**: how many follow-ups are due today or late, and the two tracked contacts furthest past their cadence. It also names the [ghost](contacts.md#ghosts) that your notes mention most, once they mention it twice. It counts the contacts with stale data and the possible duplicates. Select a row to go where you act on it.
 - **Go to**: the five destinations. Type a word to find a page in Settings.
 
 ### Ask from the palette
 
-Type `?` and a question of three characters or more, then press `Enter` on the **Ask** row, or press `↓` to a question under **Try asking** and press `Enter`. The palette asks only when you press `Enter`, never while you type, and it shows "Asking AI…" while it waits. The answer is the same as on the [Ask Contrack](#ask-contrack) page, under **AI answer**. When AI did not check the list, the heading reads **Not verified by AI**, with one line that says why.
+With `?` and nothing after it, the palette shows four questions drawn from the same pool as **Try asking** on the Ask Contrack page. Press `↓` to one and press `Enter`, or select it.
 
-When no AI model is set up, or AI is off for the instance or your account, the palette says so, and the answer comes from keyword and meaning search only: the closest matches to your words, which may not fit. Its heading then reads **Answer**, not **AI answer**. For an administrator, and for your own AI switch, a **Set up AI** row opens the page that turns it on, **Connect a provider** first when none is connected. Without AI, the palette offers no brief.
+To ask your own question, type `?` and a question of three characters or more, then press `Enter` on the **Ask** row. The palette asks only when you press `Enter`, never while you type, and it shows "Asking AI…" while it waits.
+
+The answer is the same as on the [Ask Contrack](#ask-contrack) page, under **AI answer**. When AI did not check the list, the heading reads **Not verified by AI**, with one line that says why. A list cut at 30 people shows the total in its heading, for example "AI answer · 30 of 1,501".
+
+When no AI model is set up, or AI is off for the instance or for your account, the palette says so:
+
+- An answer that Contrack proved by itself, such as a name or facets, has the heading **Answer**, not **AI answer**.
+- Any other answer holds the closest matches to your words, which may not fit, under **Not verified by AI**.
+- A row under **Set up AI** opens the page that fixes it. For your own switch, it reads **Turn AI on in Settings → Privacy and AI**. An admin gets a row such as **Connect a provider in Settings → Administration → AI**. A member reads a line such as "No AI model is set up. Ask an admin to set one up".
+- The palette offers no brief.
 
 Facet pills go with the question. When you add or remove a pill, press `Enter` to ask again. Under the answer, **Search notes** opens the same words in Notes mode, and **Open in Ask Contrack** opens the Ask Contrack page.
 
 ## Facets
 
-A facet is a filter that you type as `name:value`. Type a facet and then a space, and it becomes a pill and leaves the box. `Backspace` in an empty box removes the last pill. Select the × on a pill to remove it. **Filter**, beside the mode chips, lists every facet with what it keeps, and a pick types the facet for you.
+A facet is a filter that you type as `name:value`. In the palette and on the map, a facet becomes a pill when you type a space after it, and it leaves the box. `Backspace` in an empty box removes the last pill. Select the × on a pill to remove it. In the palette, **Filter** lists every facet except `added:` and `near:`, each with what it keeps. Pick one to type it into the box.
 
-Type a facet name and its colon to see values to pick. The text facets list the values in your contacts. Use `↑`/`↓` to choose, `Enter` or `Tab` to pick a value, and `Esc` to close the list. Type again to see it again.
+Type a facet name and its colon to see values to pick. The text facets list the values in your contacts. `score:`, `updated:`, `contacted:`, `tracked:` and `missing:` offer set choices. Use `↑`/`↓` to choose, `Enter` or `Tab` to pick a value, and `Esc` to close the list. Type again to see it again.
 
 | Facet        | Example            | Keeps the contacts                                                                                       |
 | ------------ | ------------------ | -------------------------------------------------------------------------------------------------------- |
@@ -138,10 +160,10 @@ Type a facet name and its colon to see values to pick. The text facets list the 
 | `tracked:`   | `tracked:yes`      | that you track. `tracked:no` keeps everybody else                                                        |
 
 - Text facets ignore case and match any part of the value: `company:acme` finds "Acme Corp".
-- A value with a space goes in double quotes, for example `industry:"Venture Capital"` or `list:"Board members"`. The facet becomes a pill at the space after the closing quote.
+- A value with a space goes in double quotes, for example `industry:"Venture Capital"` or `list:"Board members"`. In the palette, the facet becomes a pill at the space after the closing quote.
 - A contact must match every facet you add.
 - `score:` reads the score a contact shows. Only a tracked contact with a logged interaction has one.
-- `near:` needs the Map's place lookup, so it narrows only the Map (see [Filter the map](map.md#filter-the-map)).
+- `near:` needs the Map's place lookup, so it narrows only the Map (see [Filter the map](map.md#filter-the-map)). Everywhere else it keeps everyone.
 
 ### Last contact
 
@@ -163,11 +185,18 @@ Open **Ask Contrack** in the sidebar, or press `Cmd+Shift+S` (`Ctrl+Alt+S` on Wi
 
 1. Type a question in the box, with at least three characters. A shorter one shows "Type 3 or more letters to ask".
 2. Press `Enter`, or select the search button.
-3. Select a result to see the contact in a card over the page. The results are one `Tab` stop: `↑`/`↓` move between them, and `Home` and `End` go to the first and the last.
+3. Select a result to see the contact in a card over the page. **Open in Network** in the card opens the contact's own page, and `Esc` closes the card.
+
+The results are one `Tab` stop: `↑`/`↓` move between them, and `Home` and `End` go to the first and the last. The count over the results says how many matched, for example "12 matches". **Show on map**, beside it, opens the map on these people (see [Show Ask results on the map](map.md#show-ask-results-on-the-map)). When nobody fits, the page says "No one matches". When the search fails, it says "Could not search" and offers **Try again**.
 
 ![Ask Contrack in People mode, with verified matches and the fields that match under each name](images/ask.png)
 
-Before a search, **Try asking** shows six questions drawn from a pool of up to 500. The pool is built from your own contacts: industries, cities, companies, roles, interests and tags that two of them share, and an industry with a city. It also holds seven questions that any network can ask: who you have not contacted in over 3 months, who you track and who you do not, whose details are over 6 months old, and who is missing an email address, a phone number or a location. A question is in the pool only when it finds someone. A small network gets one question for each contact, and beside them every general question that finds some of its people and not all, such as who is missing an email address. Each set of six takes one question from each of six different kinds when it can, so the general questions show up among the long lists of companies and roles. A new set shows each time you open the page and after you clear the box. Select one to ask it. With no one in your network yet, the page offers **Import contacts** instead.
+Before a search, **Try asking** shows six questions to start from. Select one to ask it. Contrack draws them from a pool of up to 500 questions, built from your own contacts:
+
+- the industries, cities, companies, roles, interests and tags your contacts hold, and an industry with a city. In a network of 10 people or more, two contacts must share a value.
+- seven questions that any network can ask: who you have not contacted in over 3 months, who you track and who you do not, whose details are over 6 months old, and who is missing an email address, a phone number or a location.
+
+A question is in the pool only when it finds someone. The pool holds no more questions than you have contacts, except the general questions that find some of your people and not all. Each set of six takes one question from each of six different kinds when it can, so the general questions show up among the long lists of companies and roles. A new set shows each time you open the page and after you clear the box. With no one in your network yet, the page offers **Import contacts** instead.
 
 Questions that work well:
 
@@ -187,15 +216,13 @@ Contrack answers these questions on your server, with no AI call, and every matc
 - a name, an email address, a phone number, or a phrase in quotes
 - a question made only of facets, such as `tag:investor contacted:>90d`
 - a place, a company or an industry from your contacts, with nothing else asked: "people in Lisbon", "who works at Northwind Logistics", "who works in fintech"
-- one of the seven general questions, written exactly as **Try asking** writes it, such as "Who do I track?" or "Who is missing an email address?". Each is the same list as its facet: `tracked:yes`, `missing:email`
+- one of the seven general questions, written as **Try asking** writes it, such as "Who do I track?" or "Who is missing an email address?". Case and punctuation do not matter. Each is the same list as its facet: `tracked:yes`, `missing:email`
 
-The answer lists 30 people at most. When a question made only of facets finds more, the count says so, for example "30 of 1,501 matches". **See all in Network** opens the whole list there, unless the question asks for a distance with `near:`, which the Network list cannot read.
+Facets, places, companies, industries and the general questions can find more than 30 people. The count then says so, for example "30 of 1,501 matches", and **See all in Network** opens the whole list there.
 
-Chips under the count narrow a long answer. Each chip is a facet that splits the list, with the number of people it keeps: tracking, the most common industries, cities, companies and tags, and a contact in the last 30 days. A press asks the question again with that facet added, for example "Who do I track? industry:Fintech".
+Under the count of such a long answer, the **Narrow** row offers up to six chips. Each chip is a facet that splits the list, with the number of people it keeps: tracking, the most common industries, cities, companies and tags, and a contact in the last 30 days. A press asks the question again with that facet added, for example "Who do I track? industry:Fintech".
 
-For every other question, Contrack first finds candidates by their words and their meaning, on your server. Then AI checks which of them fit.
-
-AI checks a contact's addresses too. A street or a postcode in a question, such as "Who lives on Kastanienallee?", finds the people whose address names it, and the reason names that address.
+For every other question, Contrack first finds candidates by their words and their meaning, on your server. Then AI checks which of them fit. AI checks a contact's addresses too. A street or a postcode in a question, such as "Who lives on Kastanienallee?", finds the people whose address names it, and the reason names that address.
 
 ### Verified answers and reasons
 
@@ -207,21 +234,23 @@ Under each name, one line for each field that answers the question says why the 
 
 ### Not verified by AI
 
-When AI is off for your account, or AI could not answer, you get the list that Contrack found by itself. **Not verified by AI** shows over the list, and each card has an orange question mark. Select the mark to read why: the person matches your words or their meaning, but AI did not check the match. When AI is on, **Ask AI again** beside the words asks once more.
+When AI is off for your account, no AI model is set up, or AI could not answer, you get the list that Contrack found by itself. **Not verified by AI** shows over the list, and each card has an orange question mark. Select the mark to read why: the person matches your words or their meaning, but AI did not check the match. With AI off for your account, the mark beside **Not verified by AI** says where to turn it on. When AI is on for your account, **Ask AI again** beside the words asks once more.
 
 ### While AI works
 
-If you leave Ask while it searches, the search goes on, and the answer is there when you come back. A quick answer shows nothing in between. A longer wait shows "Searching your network…" and "AI is checking who fits your question". The corvid leaves the search box and hunts beside or above the search column, never over the results, until the answer lands. With **Corvid motion** at **Subtle** or **Off** in **Settings → Appearance**, with reduced motion, or in a window with no room beside the column, the bird stays still.
+If you leave Ask while it searches, the search goes on, and the answer is there when you come back. A quick answer shows nothing in between. A longer wait shows "Searching your network…" and "AI is checking who fits your question", or "Finding people who fit your question" with AI off.
+
+The corvid leaves the search box and hunts beside or above the search column, never over the results, until the answer lands. With **Corvid motion** at **Subtle** or **Off** in **Settings → Appearance**, with reduced motion, or in a window with no room beside the column, a still bird shows over the words instead.
 
 ### The index status line
 
-People search reads an index of your contacts. One line shows under the box while contacts are missing from the index, while indexing runs, or after a contact failed. It says, for example, "12 of 30 contacts indexed" or "Indexing 12 of 30…". Failed contacts add, for example, "· 2 failed" to the line.
+People search reads an index of your contacts. One line shows under the box while contacts are missing from the index, while indexing runs, or after a contact failed. It says, for example, "12 of 30 contacts indexed", "Indexing 12 of 30…" or "Updating the search index…". Failed contacts add, for example, "· 2 failed" to the line.
 
 - **Index missing** adds the missing contacts to the index.
-- **Retry failed** tries the failed contacts again.
-- **Show failed** lists the failed contacts, each with its error and how many tries it took.
+- **Retry failed** takes its place when a contact failed. It tries the failed contacts again, and adds any missing ones.
+- **Show failed** opens **Contacts not in the search index**, with each failed contact, its error and how many tries it took.
 
-When your instance indexes with a paid AI provider, Contrack asks first in **Update the search index**, because the provider may charge for it. When the index is complete, the line goes away.
+When your instance indexes with a paid AI provider, Contrack asks first in **Update the search index**, because the provider may charge for it. With AI off for your account, that provider does not index your contacts, and the line does not show. When the index is complete, the line goes away.
 
 ### The group brief
 
@@ -292,14 +321,14 @@ Ask Contrack keeps the questions you ask. It keeps them on your account, so they
 
 ![Ask Contrack with the History panel open beside the results](images/ask-history.png)
 
-- On a wide screen, the **History** button in the top right corner opens the panel beside the page. On a narrow screen, the **History** button beside the switch opens the history as a sheet.
-- `H` opens and closes the history. `Esc` inside the panel closes it. Contrack remembers whether you left the panel open.
+- On a wide screen, the **History** button in the top right corner opens the panel at the right of the page. On a narrow screen, the **History** button beside the switch opens the history as a sheet.
+- `H` opens the history. On a wide screen, it also closes the panel. `Esc` inside the panel closes it. Contrack remembers whether you left the panel open.
 - The questions come in groups: **Pinned**, **Today**, **Yesterday**, **This week**, and then one group for each month.
 - Each row shows the question and a line such as "7 people · 18 hours ago". The line says "no matches" when nothing matched, and "not verified by AI" when AI did not check the answer. "×3" means that you asked the question three times.
 - Select a row to ask the question again.
 - The pin and delete buttons show when you point at a row or focus it, and always on a touch screen. A pinned question stays at the top. Delete offers **Undo** for 10 seconds.
 - **Filter questions** narrows the list by words. **All**, **People** and **Notes** narrow it by mode.
-- **Clear** deletes every question in the mode you chose, after you confirm. You cannot undo it.
+- **Clear** deletes every question in the mode you chose, after you confirm in **Clear search history?**. You cannot undo it.
 
 The command palette shares this history. A palette search goes into the history when you open a result from it, and it shows under **All**. A question you ask with `?` in the palette shows as a People question. Your Ask Contrack questions show in the palette under **Recent**.
 
@@ -310,11 +339,11 @@ To delete the whole history, open **Settings → Privacy and AI** and select **C
 Most search works with no AI at all:
 
 - The Network search box, the palette's search, the facets and Notes search never use AI.
-- Ask Contrack answers names, email addresses, phone numbers, quoted phrases, facets, and known places, companies and industries by itself. See [Questions Contrack answers without AI](#questions-contrack-answers-without-ai).
+- Ask Contrack answers names, email addresses, phone numbers, quoted phrases, facets, known places, companies and industries, and the seven general questions by itself. See [Questions Contrack answers without AI](#questions-contrack-answers-without-ai).
 - For every other question, you get the list that Contrack finds by words and meaning, marked **Not verified by AI**.
 - A built-in model on your server finds people by meaning, with no key. When your instance indexes with a provider's model instead, AI off for your account leaves search with words only.
 
-The AI check, **Synthesize these results** and the refresh button on stale contacts need AI. To turn AI off for your account, see [Turn AI off](ai.md#turn-ai-off). [Architecture](architecture.md#search) describes how people search works inside.
+The AI check, **Synthesize these results** and **Refresh from the web** need AI. To turn AI off for your account, see [Turn AI off](ai.md#turn-ai-off). [Architecture](architecture.md#search) describes how people search works inside.
 
 ## Automate it
 

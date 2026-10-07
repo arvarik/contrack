@@ -23,8 +23,8 @@ tests win, and this file needs a fix.
   data (enriched interests and tags, the AI note glyph), never AI features or
   controls, which use the primary. No vibe or accent preset sits within 30
   degrees of its hue.
-- ❌ `violet-*`, `fuchsia-*`, `purple-*`, `indigo-*`, or any raw palette color
-  for a category.
+- Never `violet-*`, `fuchsia-*`, `purple-*`, `indigo-*`, or any raw palette
+  color for a category.
 
 ### Tones
 
@@ -48,8 +48,8 @@ A search match is a plain `<mark>`, painted by the base layer
 Lines are a failure of hierarchy. Sections are told apart by a surface step,
 not a border.
 
-- ❌ `border-*` for sectioning.
-- ✅ Allowed lines: the focus ring, a `.btn-*` edge, a floating panel's hairline
+- Never `border-*` for sectioning.
+- Allowed lines: the focus ring, a `.btn-*` edge, a floating panel's hairline
   (`.menu-panel`), a drag-and-drop outline, the timeline's rail.
 
 ### Type
@@ -67,9 +67,8 @@ not a border.
   `tests/e2e/metrics.spec.ts` measures the rendered text on a phone.
 - Uppercase labels track at `0.08em` (`LABEL`, `SECTION_HEADING`,
   `FORM_LABEL`). Never `tracking-widest`.
-- Use the class tokens in `styles.ts` (`LABEL`, `FIELD_LABEL`, `META_LINE`,
-  `PAGE_TITLE`, `PAGE_DESCRIPTION`, `SEARCH_INPUT` and the others) instead of
-  ad hoc sizes. A link inside a sentence is `TEXT_LINK`, underlined at rest.
+- Use the class tokens in `styles.ts` (`LABEL`, `FIELD_LABEL`, `PAGE_TITLE`,
+  `PAGE_DESCRIPTION`, `SEARCH_INPUT` and the others) instead of ad hoc sizes. A link inside a sentence is `TEXT_LINK`, underlined at rest.
   A value's field opened in its place is `INLINE_INPUT`.
 
 ### Radius
@@ -82,7 +81,7 @@ only: avatars, dots, rings, switch tracks.
 
 One curve (`--ease`) and three durations: `--dur-fast` 120 ms (a press, a
 menu), `--dur-base` 160 ms (a hover), `--dur-slow` 240 ms (arrival).
-`src/lib/motion.ts` mirrors them for `motion/react`. ❌ A numeric
+`src/lib/motion.ts` mirrors them for `motion/react`. Never a numeric
 `duration-*` class. Reduced motion, from the system or the **Motion**
 setting, turns movement off.
 
@@ -97,7 +96,7 @@ Use the primitives in `src/components/ui/` and the classes in
   (an irreversible act), with `.btn-sm` and `.btn-icon`. A button has a face on
   a darker edge: it rises on hover and sinks on press. The call site adds
   layout only.
-- ❌ A background, size, padding, shadow, ring or hover class on a `.btn-*`,
+- Never a background, size, padding, shadow, ring or hover class on a `.btn-*`,
   an ad hoc filled button, or `rounded-full` on a filled button or a chip.
   `stylesFloor.test.ts` fails on these.
 - `.btn-latch` for a button that opens a panel and closes it again
@@ -112,7 +111,7 @@ Use the primitives in `src/components/ui/` and the classes in
 | A card that is a control                                  | `card-interactive` (rises 2 px)            |
 | A static card or row                                      | None                                       |
 
-❌ `hover:bg-*` beside the state layer, or a shadow, ring, scale or translate
+Never `hover:bg-*` beside the state layer, or a shadow, ring, scale or translate
 hover on a card.
 
 ### Elevation
@@ -120,17 +119,17 @@ hover on a card.
 A lift says "this whole thing opens something". A self-contained surface that
 acts as one control lifts. A row in a list, a button and a static card never
 lift. The Network list is the one exception: its rows rise toward the pointer
-(`useProximityLift`). ❌ A hand-rolled `hover:-translate-y-*`.
+(`useProximityLift`). Never a hand-rolled `hover:-translate-y-*`.
 
 ### Selection and focus
 
 - A selected row is `SELECTED_ROW` (a 10 percent primary tint) with its name in
   `text-on-primary-wash`. A selected pill or chip is `SELECTED_TINT`. A radio
   option adds a `RadioDot`, through `ChoiceGroup` or `Segmented`.
-- ❌ A colored bar down a box's edge, a ring on a selected row, a filled
+- Never a colored bar down a box's edge, a ring on a selected row, a filled
   primary pill for a selection.
 - **One focus ring**: the base layer's 2 px primary outline. A composite field
-  uses `focus-frame`. ❌ `focus:ring-*`, `focus-visible:ring-*`,
+  uses `focus-frame`. Never `focus:ring-*`, `focus-visible:ring-*`,
   `focus:outline-none`.
 
 ### Menus, switches, dialogs
@@ -183,7 +182,7 @@ pixels. Use `IconButton` for an icon button. Add `hit-area` to a control that
 looks smaller (a chip's remove button, a swatch). Give rows and inputs
 `min-h-[44px]`, and drop it only for a mouse: `sm:pointer-fine:min-h-0`, never
 `sm:min-h-0`. A tablet and a phone on its side are wider than `sm` and still
-touch screens. ❌ `hit-area` on a form field or inside `overflow-hidden`.
+touch screens. Never `hit-area` on a form field or inside `overflow-hidden`.
 `tests/e2e/metrics.spec.ts` measures every visible control on a 390 px phone.
 
 ### Other phone rules
@@ -201,9 +200,10 @@ touch screens. ❌ `hit-area` on a form field or inside `overflow-hidden`.
 ## 4. Code conventions
 
 - **Data fetching** goes through React Query hooks in `src/api/`. Defaults are
-  in `src/main.tsx` (`staleTime` 30 s, `gcTime` 10 min, `retry` 1, no refetch
-  on focus). Overrides are in `src/lib/queryConfig.ts`. A mutation invalidates
-  what it changed.
+  in `src/main.tsx`: `staleTime` 30 s, `gcTime` 10 min, no refetch on focus,
+  and one retry, only after a network or server error (`retryApiQuery`).
+  Overrides are in `src/lib/queryConfig.ts`. A mutation invalidates what it
+  changed.
 - **State**: server state in React Query, local state in `useState` or
   `useReducer`, shared state in the contexts in `src/contexts/`.
 - **Types**: `strict` is on and `any` is an error. Use `Record<string,
@@ -229,14 +229,14 @@ unknown>` and narrow. Cast a better-sqlite3 row once, to a narrow row type.
 
 ## 5. Anti-patterns
 
-- ❌ Borders for sectioning, a second focus ring, a hover fill beside the state
+- Borders for sectioning, a second focus ring, a hover fill beside the state
   layer.
-- ❌ `useEffect` fetch loops.
-- ❌ A provider SDK import outside `server/ai/adapters/`.
-- ❌ Business logic in a route.
-- ❌ An empty `.catch(() => {})` or `console.log` in app code.
-- ❌ Relying on a `vec0` cascade.
-- ❌ A raw read of `contact.relationshipScore` in the UI (see section 7).
+- `useEffect` fetch loops.
+- A provider SDK import outside `server/ai/adapters/`.
+- Business logic in a route.
+- An empty `.catch(() => {})` or `console.log` in app code.
+- Relying on a `vec0` cascade.
+- A raw read of `contact.relationshipScore` in the UI (see section 7).
 
 ## 6. Brand
 
@@ -294,7 +294,7 @@ states:
 - A control keeps one shape and one width whatever its state says.
 - The words: Track, Tracked, Not tracked, Stop tracking, Keeping up, Catch
   up, cadence. "Stop tracking" is the action everywhere: the Track menu, the
-  bulk bars, the palette and the toasts. ❌ "Untrack". Strong, Fading and At
+  bulk bars, the palette and the toasts. Never "Untrack". Strong, Fading and At
   risk are band words only.
 
 ## 8. Pulse
@@ -344,7 +344,7 @@ the Undo.
   only the rows that differ at first, the rest in one "Same:" line with **Show
   all fields**. A value the action drops is struck through, with "not kept"
   for a screen reader. The comparison ends with what moves, what is not kept,
-  and how to undo it. ❌ KEPT and DISCARDED labels.
+  and how to undo it. Never KEPT and DISCARDED labels.
 - **Undo over confirm.** A reversible decision ends with a toast with Undo
   (`withUndo`), one at a time, and `Z` takes back the last one. A durable
   history has Undo too. An undo of a machine's decision records the person's
@@ -365,7 +365,7 @@ the Undo.
 - **List and detail.** From `lg` the list and the open item sit side by side,
   with the item's actions at the top of its pane. Below `lg` each row carries
   its actions, and the item opens in a sheet with its actions at the bottom.
-- ❌ A swipe card for a decision that changes data. It hides the comparison
+- Never a swipe card for a decision that changes data. It hides the comparison
   and rewards speed. A swipe may speed up a row action that a button also
   does, never replace it.
 - The AI color and glyph mark a reason a model wrote. A reason from a fixed

@@ -28,7 +28,8 @@ run it on their own machine or server, alone or with a few trusted accounts.
 - Each account on an instance sees only its own contacts. Isolation is
   enforced in SQL and proven by tests, not by the UI.
 - The app works with no AI provider at all. Search runs on two small local
-  models that ship with the app, so an offline instance still finds people.
+  models. The Docker image ships them and a native install fetches them once,
+  so an offline instance still finds people.
 - AI is a choice at two levels: each account can turn it off, and an admin
   can turn it off for the whole instance. A request reaches a provider only
   when both allow it.

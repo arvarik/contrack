@@ -1,8 +1,8 @@
 # MCP and API tokens
 
-Contrack has an MCP server, so an AI assistant such as Claude or Cursor can
-use your CRM. This page covers personal API tokens, how to connect a client,
-and the tools, resources, and prompts the server offers.
+Contrack has an MCP server, so an AI assistant such as Claude, ChatGPT or
+Cursor can use your CRM. This page covers personal API tokens, how to connect
+a client, and the tools, resources, and prompts the server offers.
 
 ![Settings, MCP and API: the server address, the client picker, the token step, the setup to copy, and the tools table](images/mcp.png)
 
@@ -19,19 +19,22 @@ talk to it. It works as your account and sees only your data.
    Contrack's address with `/api/mcp` after it, such as
    `http://localhost:3210/api/mcp`. When `PUBLIC_URL` is set, the page uses
    it. When the address works only on this computer, the page says so.
-2. **Where do you use it?**: Claude Code, Claude, ChatGPT, Claude Desktop,
-   Cursor, VS Code, Codex, Gemini CLI, or another client.
+2. **Where do you use it?**: **Claude Code**, **Claude**, **ChatGPT**,
+   **Claude Desktop (local)**, **Cursor**, **VS Code**, **Codex**, **Gemini
+   CLI**, or **Other**.
 3. **Give it access**, when your Contrack asks people to sign in. When OAuth
-   is on, a client can **Sign in with the browser**, and you copy no token.
-   Otherwise, or with **Use a token**, select **Create a token for** the
-   client, as **Read and write** or **Read only**.
-   The token lasts 90 days and is named after the client. It fills in the
-   setup, and the page shows it only once. **Use a token I have** takes a
-   token you made before. The page never saves a token.
-4. **Add it** shows the command or the config for that client, with the
-   address and the token in it, and **Copy**. For Cursor and VS Code, **Add
-   to Cursor** and **Add to VS Code** add the server in one press. Copy and
-   the install button wait until the setup has a token.
+   is on, a client can **Sign in with the browser**, and you copy no token
+   (see [Sign in with the browser](#sign-in-with-the-browser)). Otherwise, or
+   with **Use a token**, choose **Read and write** or **Read only**, and
+   select **Create a token for** the client. The token lasts 90 days and is
+   named after the client. It fills in the setup, and the page shows it only
+   once. **Use a token I have** takes a token you made before. The page never
+   saves a token.
+4. **Add it to** the client shows the command, the config, or the address,
+   with **Copy**. **Add to Cursor** and **Add to VS Code** add the server in
+   one press, and **Open Claude connectors** opens Claude's connector
+   settings. While the setup still needs a token, **Copy** and these buttons
+   wait.
 
 **Tools** lists every tool a client can call.
 
@@ -41,16 +44,16 @@ session to keep open.
 ## Create a token
 
 A client needs a personal API token when your Contrack asks people to sign
-in.
+in, unless it signs in with the browser.
 
 1. Open **Settings → Account** and go to **API tokens**. The **MCP and API**
    page also makes one for the client you set up, as above.
 2. Select **Create token**.
 3. In **What is it for**, name the machine or the script, such as "Claude
    Desktop on the laptop".
-4. Choose when it expires: **30 days**, **90 days**, **1 year**, or **Never**.
-   The default is 90 days.
-5. Choose its **Access**: **Read and write**, the default, or **Read only**.
+4. Under **Expires**, choose **30 days**, **90 days**, **1 year**, or
+   **Never**. The default is 90 days.
+5. Under **Access**, choose **Read and write**, the default, or **Read only**.
    A read-only token can search and read your data, and cannot change
    anything. Its MCP client sees only the read-only tools.
 6. Select **Create token**, and copy the token. It starts with `ctk_`.
@@ -58,12 +61,12 @@ in.
 
 The **API tokens** list shows each token's name, its state, and its first
 characters. The state is active, revoked, or expired. A read-only token also
-shows **Read-only**. The list also shows when each token was last used and
+shows **read-only**. The list also shows when each token was last used and
 when it expires.
 
 To revoke a token, select **Revoke** on its row, then **Revoke token**. It
-stops working at once. The row stays, marked revoked, so you can see later why
-a script stopped.
+stops working at once. The row stays for 30 days, marked revoked, so you can
+see later why a script stopped.
 
 - You create tokens while signed in. A token cannot create another token.
 - An account with a temporary password must choose its own password first.
@@ -78,17 +81,21 @@ token, and **Settings → Account** is not shown. See
 Claude on the web, Claude Desktop, the Claude app on your phone, and ChatGPT
 connect by address and sign in with OAuth. You copy no token. They connect
 from the internet, so your Contrack needs sign-in on, `PUBLIC_URL` set to its
-`https` address, and that address open to the internet. See
+`https` address, and that address open to the internet. Until sign-in is on
+and `PUBLIC_URL` is `https`, **Claude** and **ChatGPT** on **Settings → MCP
+and API** say what is missing. See
 [Claude on the web, Claude on your phone, and ChatGPT](self-hosting.md#claude-on-the-web-claude-on-your-phone-and-chatgpt).
 
 In Claude:
 
 1. Open **Customize → Connectors**, and select **Add custom connector**.
+   **Open Claude connectors** on **Settings → MCP and API** opens that page.
 2. Paste `https://<your address>/api/mcp` and select **Add**. Keep **Use
    Claude's published identity** if Claude asks.
 3. Claude opens Contrack. Sign in if you are not signed in.
 4. Contrack shows the app, where you go back to, and the account. Choose
-   **Read and write** or **Read only**, and select **Allow**.
+   **Read and write** or **Read only**, and select **Allow**. When an app
+   asks only to read, **Read and write** cannot be chosen.
 
 On a Team or Enterprise plan, an Owner adds the connector for the
 organization. Once added, it works in Claude on the web, in Claude Desktop
@@ -100,31 +107,52 @@ same address and OAuth sign-in, and approve it the same way.
 ### What an app sees, and how to disconnect it
 
 - An approved app shows in **Settings → Account → API tokens** with an
-  **app** badge and the host it signs in from. **Disconnect** stops it at
-  once. Connect it again from the app to use it again.
-- **Read only** gives the app the read-only tools only, as a read-only token
+  **app** badge and the host it signs in from. To stop it, select
+  **Disconnect**, then **Disconnect app**. It stops at once. To use it again,
+  connect it again from the app.
+- Each approval adds its own row. Two computers that run Claude Code show as
+  two rows, and you can disconnect one and keep the other.
+- **Read only** gives the app only the read-only tools, as a read-only token
   does.
 - The consent page says when an app named itself, which any app can do, and
   when its details come from its own web address, which a name cannot fake.
   It always says where your browser goes after you choose.
-- An app's access token lasts an hour and works on `/api/mcp` only. Its
-  refresh token lasts 30 days from its last use and works once. A used
-  refresh token that comes back within a minute is a retry, and gets a
-  pair of its own. Later, someone else has it, and Contrack disconnects the
-  app.
-
-Claude Code, Cursor, VS Code, Gemini CLI and the Claude Desktop config can
-sign in with OAuth too, when it is on. On **Settings → MCP and API**, choose
-**Sign in with the browser** instead of **Use a token**. The command then has
-no token, and the client opens Contrack in your browser the first time it
-connects.
+- An app's access token lasts an hour and works on `/api/mcp` only. The app
+  renews it with a refresh token, which works once and lasts 30 days. Each
+  renewal brings a new refresh token, so an app that does not connect for 30
+  days must sign in again.
+- A refresh token that comes back within a minute of its use is a retry, and
+  gets a new pair. One that comes back later means that someone else may
+  hold it, so Contrack disconnects the app, and the audit log records it.
 
 ## Connect a client
 
 **Settings → MCP and API** builds each of these for you. The examples below
 use `http://localhost:3210` and `<your-token>`. Use your own address and
-token instead. When your Contrack does not ask anyone to sign in, leave out
-the token and the `Authorization` header.
+token instead. When your Contrack does not ask anyone to sign in, or the
+client signs in with the browser, leave out the token and the
+`Authorization` header.
+
+### Sign in with the browser
+
+Claude Code, Claude Desktop (local), Cursor, VS Code, Codex and Gemini CLI
+can sign in with OAuth, as Claude does, so you copy no token. OAuth is on
+when sign-in is on and `PUBLIC_URL` is an `https` address, or an `http`
+address on `localhost` or `127.0.0.1`, such as `http://localhost:3210`.
+
+1. On **Settings → MCP and API**, choose the client, then **Sign in with the
+   browser**.
+2. Add the setup that the page shows to the client. It holds no token.
+3. Start the sign-in:
+   - In Claude Code, run `/mcp`, choose `contrack`, and choose
+     **Authenticate**.
+   - For Codex, run `codex mcp login contrack`.
+   - In Gemini CLI, run `/mcp auth contrack`.
+   - Cursor, VS Code and Claude Desktop open your browser by themselves the
+     first time they connect.
+4. Sign in to Contrack, choose the access, and select **Allow**. The app then
+   shows in your token list (see
+   [What an app sees](#what-an-app-sees-and-how-to-disconnect-it)).
 
 ### Claude Code
 
@@ -139,6 +167,11 @@ Claude Code adds it to the current project only. `/mcp` in Claude Code lists
 it.
 
 ### Claude Desktop
+
+This is **Claude Desktop (local)** on the settings page. It runs Contrack
+through a bridge on your computer, so a local address works. With a public
+`https` address, Claude Desktop can use the Claude connector instead (see
+[Connect Claude or ChatGPT](#connect-claude-or-chatgpt)).
 
 In Claude Desktop, open **Settings → Developer → Edit Config**. In
 `claude_desktop_config.json`, add the `contrack` entry inside `mcpServers`:
@@ -162,17 +195,17 @@ In Claude Desktop, open **Settings → Developer → Edit Config**. In
 ```
 
 The config runs the `mcp-remote` bridge with `npx`, so the machine needs
-Node.js. For a plain `http` address on another computer, the settings page
-adds `--allow-http`, because `mcp-remote` refuses one without it. The token
-goes in `env`, because Claude Desktop on Windows passes each argument to
-`npx` without quotes, and a space would split it. Restart Claude Desktop
-after you change the file.
+Node.js. For a plain `http` address other than `localhost` or `127.0.0.1`,
+the settings page adds `--allow-http`, because `mcp-remote` refuses one
+without it. The token goes in `env`, because Claude Desktop on Windows passes
+each argument to `npx` without quotes, and a space would split it. Without a
+token, leave out `--header`, the line after it, and `env`. Restart Claude
+Desktop after you change the file.
 
 ### Cursor
 
 Select **Add to Cursor** on the settings page. Or add the `contrack` entry
-inside `mcpServers` in `~/.cursor/mcp.json` for every project, or in
-`.cursor/mcp.json` in one project:
+inside `mcpServers` in `~/.cursor/mcp.json`, which every project reads:
 
 ```json
 {
@@ -214,6 +247,9 @@ export CONTRACK_TOKEN=<your-token>
 codex mcp add contrack --url http://localhost:3210/api/mcp --bearer-token-env-var CONTRACK_TOKEN
 ```
 
+Without a token, run only
+`codex mcp add contrack --url http://localhost:3210/api/mcp`.
+
 ### Gemini CLI
 
 ```bash
@@ -251,20 +287,21 @@ other name to `ALLOWED_HOSTS`. See
 
 ## Tools
 
-The server offers 18 tools. A read-only tool changes nothing. A read-only
-token sees only the read-only tools. Each tool has a title, such as "Search
-people", and hints that tell a client whether it reads, only adds, or can
-overwrite or remove. A client may ask you before it runs a tool that can
-overwrite: `update_contact`, `update_action_item`, and `remove_from_list`.
+The server offers 18 tools: 9 that read and 9 that write. A read-only tool
+changes nothing. A read-only token, or an app allowed **Read only**, sees only
+the read-only tools. Each tool has a title, such as "Search people", and hints
+that tell a client whether it reads, only adds, or can overwrite or remove. A
+client may ask you before it runs a tool that can overwrite:
+`update_contact`, `update_action_item`, and `remove_from_list`.
 
 | Tool                   | What it does                                                                                                                                                                  | Access         |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
 | `search_people`        | Searches contacts with a question in plain words, and returns up to 30 ranked matches. Filters for role, company, location, industry, tag, and list narrow those matches      | Read-only      |
 | `get_contact`          | Returns one contact's full profile, with the score explanation when the contact is tracked                                                                                    | Read-only      |
-| `list_contacts`        | Pages through contacts, with filters for role, company, location, industry, tag, list, email, phone, last update, and tracked. Email and phone match exactly                  | Read-only      |
-| `get_timeline`         | Returns a contact's interactions and timeline                                                                                                                                 | Read-only      |
+| `list_contacts`        | Pages through contacts, newest first, with filters for role, company, location, industry, tag, list, email, phone, last update, and tracked. Email and phone match exactly    | Read-only      |
+| `get_timeline`         | Pages through a contact's notes, meetings, calls, and emails, newest first                                                                                                    | Read-only      |
 | `search_notes`         | Searches notes and interactions by words, date range, and type                                                                                                                | Read-only      |
-| `list_action_items`    | Lists open follow-ups: overdue, today, this week, or all                                                                                                                      | Read-only      |
+| `list_action_items`    | Lists open follow-ups, soonest due first: overdue, due today, due in 7 days or sooner, or all                                                                                 | Read-only      |
 | `get_pulse`            | Returns the Pulse figures: tracked contacts and their bands, catch-ups past their cadence, and follow-ups due                                                                 | Read-only      |
 | `list_tags`            | Lists the tags used in your network                                                                                                                                           | Read-only      |
 | `list_lists`           | Lists your lists and how many contacts each holds                                                                                                                             | Read-only      |
@@ -284,10 +321,10 @@ entries at a time. A result with more has a `nextCursor`. Pass it as `cursor`
 for the next page. `search_notes` pages the same way.
 
 `search_people` and `list_contacts` return the main profile fields of each
-contact, and `get_contact` returns the whole profile. No tool returns the
-fields only the server reads, such as the search index and the research
-record. Each result has one line for a person to read, then the same data as
-JSON.
+contact, and `get_contact` returns the whole profile. No tool returns what
+only the server or the app reads, such as the search index, the research
+record, or the photo. Each result has one line for a person to read, then the
+same data as JSON.
 
 Dates are ISO 8601: a day, such as `2026-11-03`, or a date and time.
 `log_interaction` refuses a date in the future, because an interaction has
@@ -302,7 +339,7 @@ offset, for `from` and `to`.
 When a client connects, the server also sends instructions for its model.
 They say where contact IDs come from, to check for a contact with
 `list_contacts` before `create_contact`, how to write dates, and how to get
-the next page.
+the next page. A read-only client is also told that it can only read.
 
 With AI off for your account or for the instance, `search_people` answers from
 the local index, as Ask Contrack does. **Enrich new contacts automatically**
@@ -321,18 +358,21 @@ And two prompts, which a client can offer you as commands:
 
 - `catch_me_up`: a briefing on one contact. It takes the contact's name or
   ID, and a client completes the name as you type. It includes the profile
-  and the latest 20 timeline entries. A name that more than one contact holds
-  gets a list of them, so you can give the whole name.
-- `weekly_review`: a weekly review of overdue follow-ups, follow-ups due this
-  week, and the tracked contacts to catch up with.
+  and the latest 20 timeline entries. A name that matches more than one
+  contact gets a list of them, each with its ID, so you can give the right
+  one.
+- `weekly_review`: a weekly review of overdue follow-ups, the follow-ups due
+  today and this week, and the tracked contacts to catch up with.
 
 ## Limits and errors
 
 - Each account can send 120 requests a minute. Past that, the server answers
   `429` with a `Retry-After` header that says how many seconds to wait.
 - A request with no token, on a Contrack that asks people to sign in, gets
-  `401` with `WWW-Authenticate: Bearer`. A token that is revoked or expired
-  gets `401` with `error="invalid_token"` and a message that says so.
+  `401` with `WWW-Authenticate: Bearer`. When OAuth is on, that header also
+  points to the OAuth details, so a client finds the sign-in from the address
+  alone. A token that is revoked or expired gets `401` with
+  `error="invalid_token"` and a message that says so.
 - A request from a web page gets `403` unless the page is Contrack itself or
   `CORS_ORIGIN`. An MCP client sends no `Origin` header, so this never
   stops one.
@@ -346,8 +386,9 @@ And two prompts, which a client can offer you as commands:
   future, also returns `isError`, with the field and the rule in its text.
 - A fault in the server returns `isError` with the request ID. The server
   log has the cause.
-- A prompt that cannot find its contact returns an MCP error with the code in
-  its data.
+- A prompt or a resource that cannot find its contact returns an MCP error
+  with Contrack's code in its data. For a resource, the error code is
+  `-32002`.
 
 ## Keep your tokens safe
 
@@ -360,12 +401,14 @@ And two prompts, which a client can offer you as commands:
   devices. Those need you signed in.
 - Give each client its own token. Then you can revoke one without the others.
 - Revoke a token you no longer use, or one you think someone else has seen.
-- A password reset stops every token of the account. Changing your own
-  password in **Settings → Account** does not.
-- Disabling an account stops its tokens until an admin enables it again.
+- A password reset stops every token and app of the account. Changing your
+  own password in **Settings → Account** does not.
+- Disabling an account stops its tokens and apps until an admin enables it
+  again.
 
-The same tokens work for the REST API, see the
-[REST API reference](api-reference.md#authentication).
+The same personal tokens work for the REST API, see the
+[REST API reference](api-reference.md#authentication). An app's OAuth token
+works on `/api/mcp` only.
 
 ## Related
 

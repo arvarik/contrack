@@ -58,9 +58,9 @@
   `lastContactedAt` is clamped to now). The formula is unchanged, because
   smoothing it moves every score and no eval shows which numbers are better.
 - **Large components.** `src/components/command-palette/CommandPalette.tsx`
-  (1,269 lines) needs a refactor of its own. The duplicates screens were
-  rebuilt as one review list, and their largest file is now
-  `src/views/dedupe/components/DuplicateQueue.tsx` (about 750).
+  (about 1,260 lines) needs a refactor of its own. The largest file of the
+  duplicates review is `src/views/dedupe/components/DuplicateQueue.tsx`
+  (about 800).
 - **Archive and Trash.** A delete marks the contact archived as well, and a
   restore clears both, so a contact archived before it was deleted comes back
   unarchived.

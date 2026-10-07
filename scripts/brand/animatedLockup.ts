@@ -22,6 +22,8 @@
  * static lockup exactly. `CorvidBrain` does not direct the loop: it plans for
  * a long session, so it cannot promise variety in half a minute or a still
  * ending, and Node cannot load its extensionless imports.
+ *
+ * `readmeScenes.ts` draws the README's other pictures with the same tracks.
  */
 import { CORVID_PATHS } from "../../src/assets/corvidPaths.ts";
 import {
@@ -39,8 +41,11 @@ import {
   makeCaw,
   makeCock,
   makeGlance,
+  makeHop,
   makeLookBack,
+  makeNod,
   makePreen,
+  makeRuffle,
   makeStretch,
   sampleMotion,
   type Motion,
@@ -64,7 +69,7 @@ export const BLINK_EVERY: readonly [number, number] = [2_800, 7_200];
 /** A still moment before each act, and after the last one, in ms. */
 const PAUSE: readonly [number, number] = [1_400, 2_600];
 
-/** The acts the loop plays, by name, and the maker of each. */
+/** The acts a loop can play, by name, and the maker of each. */
 const MAKERS = {
   glance: makeGlance,
   cock: makeCock,
@@ -72,7 +77,12 @@ const MAKERS = {
   preen: makePreen,
   caw: makeCaw,
   stretch: makeStretch,
+  ruffle: makeRuffle,
+  nod: makeNod,
+  hop: makeHop,
 } satisfies Record<string, (rng: Rng) => Motion>;
+
+export type ActName = keyof typeof MAKERS;
 
 /**
  * The acts, in the order they play: the three ways of looking about, and
@@ -80,7 +90,7 @@ const MAKERS = {
  * preen takes the head into the wing, the caw opens the beak and the
  * stretch opens the wing.
  */
-export const SCORE: readonly (keyof typeof MAKERS)[] = [
+export const SCORE: readonly ActName[] = [
   "glance",
   "preen",
   "cock",
@@ -108,19 +118,26 @@ export interface PerchLoop {
 const onFrame = (ms: number) =>
   (Math.round((ms * FRAME_RATE) / 1000) * 1000) / FRAME_RATE;
 
-/** The loop the seed gives. The same seed always gives the same loop. */
-export function perchLoop(seed: number = LOOP_SEED): PerchLoop {
+/**
+ * The loop the seed gives, playing `score` with a still moment of `pause`
+ * before each act. The same arguments always give the same loop.
+ */
+export function perchLoop(
+  seed: number = LOOP_SEED,
+  score: readonly ActName[] = SCORE,
+  pause: readonly [number, number] = PAUSE,
+): PerchLoop {
   const rng = createRng(seed);
   const acts: Cue[] = [];
   let end = 0;
-  for (const name of SCORE) {
-    const start = onFrame(end + between(rng, ...PAUSE));
+  for (const name of score) {
+    const start = onFrame(end + between(rng, ...pause));
     const motion = MAKERS[name](rng);
     acts.push({ motion, start });
     end = start + motion.duration;
   }
   // A tenth of a second is six frames, so the loop ends on a frame.
-  const duration = Math.ceil((end + between(rng, ...PAUSE)) / 100) * 100;
+  const duration = Math.ceil((end + between(rng, ...pause)) / 100) * 100;
 
   // The first blink comes sooner than the rest, as the brain's does. A
   // blink that would still be open when the loop ends is not played.
@@ -174,7 +191,7 @@ const STROKES = ["nape", "chest", "wing", "tail1", "tail2", "head"] as const;
 type Stroke = (typeof STROKES)[number];
 
 /** One attribute's value in every frame of the loop. */
-interface Track {
+export interface Track {
   attribute: string;
   values: string[];
   /** The numbers a value draws with, to measure how far apart two are. */
@@ -182,10 +199,12 @@ interface Track {
   tolerance: number;
   /** Held until the next value, never blended: `visibility`. */
   discrete?: boolean;
+  /** A `transform` of this type, written as `<animateTransform>`. */
+  transform?: "translate" | "rotate" | "scale";
 }
 
 /** One element of the bird and what its attributes do over the loop. */
-interface BirdPart {
+export interface BirdPart {
   tag: "path" | "ellipse";
   tracks: Track[];
 }
@@ -197,7 +216,7 @@ const pathNumbers = (d: string) =>
   (d.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number);
 
 /** A number to `places` decimals, written short. */
-const fixed = (n: number, places: number) =>
+export const fixed = (n: number, places: number) =>
   String(Number(n.toFixed(places)) || 0);
 
 /**
@@ -235,15 +254,23 @@ function evenOut(drawings: readonly CorvidDrawing[]): CorvidDrawing[] {
   });
 }
 
-/**
- * What every part of the bird is in every frame of the loop. At rest, a
- * stroke is the logo's own path data, as long as it kept the logo's points.
- */
-function loopTracks(loop: PerchLoop): BirdPart[] {
-  const frames = loopFrames(loop);
-  const drawings = Array.from({ length: frames + 1 }, (_, i) =>
-    drawCorvid(loopPose(loop, (i * loop.duration) / frames)),
+/** What every part of the bird is in every frame of the loop. */
+const loopTracks = (loop: PerchLoop): BirdPart[] =>
+  birdTracks(
+    Array.from({ length: loopFrames(loop) + 1 }, (_, i) =>
+      drawCorvid(loopPose(loop, (i * loop.duration) / loopFrames(loop))),
+    ),
   );
+
+/**
+ * What every part of the bird is in each of `drawings`, one per frame. At
+ * rest, a stroke is the logo's own path data, as long as it kept the logo's
+ * points.
+ */
+export function birdTracks(
+  drawings: readonly CorvidDrawing[],
+  tolerance: number = TOLERANCE,
+): BirdPart[] {
   const home = drawCorvid(HOME_POSE);
   const [homeData, ...data] = evenOut([home, ...drawings]).map(corvidPathData);
 
@@ -268,7 +295,7 @@ function loopTracks(loop: PerchLoop): BirdPart[] {
             : frame[stroke],
         ),
         numbers: pathNumbers,
-        tolerance: TOLERANCE,
+        tolerance,
       },
     ];
     if (drawn.includes(false)) {
@@ -288,7 +315,7 @@ function loopTracks(loop: PerchLoop): BirdPart[] {
       attribute,
       values: drawings.map((drawing) => fixed(drawing.eye[attribute], 2)),
       numbers: (value) => [Number(value)],
-      tolerance: EYE_TOLERANCE,
+      tolerance: (tolerance * EYE_TOLERANCE) / TOLERANCE,
     })),
   });
   return parts;
@@ -372,14 +399,23 @@ export const REDUCED_MOTION_STYLE: readonly string[] = [
   `</style>`,
 ];
 
-/** One attribute over the loop, as an `<animate>` element. */
-function animate(track: Track, loop: PerchLoop): string {
-  const frames = loopFrames(loop);
+/**
+ * One attribute over `frames` frames of a loop `duration` ms long, as an
+ * `<animate>` element, or an `<animateTransform>` for a transform track.
+ */
+export function animate(
+  track: Track,
+  frames: number,
+  duration: number,
+): string {
   const kept = keyframes(track);
   const keyTimes = kept.map((i) => fixed(i / frames, 4)).join(";");
   const values = kept.map((i) => track.values[i]).join(";");
   const discrete = track.discrete ? ` calcMode="discrete"` : "";
-  return `<animate attributeName="${track.attribute}" dur="${loop.duration / 1000}s" repeatCount="indefinite"${discrete} keyTimes="${keyTimes}" values="${values}" />`;
+  const element = track.transform
+    ? `animateTransform attributeName="transform" type="${track.transform}"`
+    : `animate attributeName="${track.attribute}"`;
+  return `<${element} dur="${duration / 1000}s" repeatCount="indefinite"${discrete} keyTimes="${keyTimes}" values="${values}" />`;
 }
 
 /**
@@ -393,9 +429,27 @@ export function livingBird(
   indent: string,
   loop: PerchLoop = perchLoop(),
 ): string[] {
-  const inner = `${indent}  `;
-  const lines = [`${indent}<g class="alive">`];
-  for (const { tag, tracks } of loopTracks(loop)) {
+  return [
+    `${indent}<g class="alive">`,
+    ...birdLines(loopTracks(loop), eye, `${indent}  `, (track) =>
+      animate(track, loopFrames(loop), loop.duration),
+    ),
+    `${indent}</g>`,
+  ];
+}
+
+/**
+ * The bird's strokes and eye as SVG lines: each at rest as frame 0 has it,
+ * with an animation for each attribute that changes.
+ */
+export function birdLines(
+  parts: readonly BirdPart[],
+  eye: string,
+  inner: string,
+  animation: (track: Track) => string,
+): string[] {
+  const lines: string[] = [];
+  for (const { tag, tracks } of parts) {
     // Each attribute at rest, as frame 0 has it, which is the logo's. A
     // stroke is visible unless it says otherwise.
     const rest = tracks
@@ -410,10 +464,9 @@ export function livingBird(
     }
     lines.push(
       `${inner}<${tag}${rest}${paint}>`,
-      ...moving.map((track) => `${inner}  ${animate(track, loop)}`),
+      ...moving.map((track) => `${inner}  ${animation(track)}`),
       `${inner}</${tag}>`,
     );
   }
-  lines.push(`${indent}</g>`);
   return lines;
 }

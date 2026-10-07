@@ -30,8 +30,11 @@ Open `http://localhost:3210`.
   folder, never a folder over `/app`, which holds the app itself.
 - The image holds the two local search models, so the container downloads
   nothing.
-- `latest` follows the main branch. Each release also has version tags, such
-  as `X.Y.Z` and `X.Y`.
+- `latest` follows the main branch. A release also gets the tags `X.Y.Z`,
+  `X.Y` and `X`, and every image gets a tag with its short commit hash.
+- Each image carries a list of its packages (an SBOM) and a signed record of
+  the build. [Verify the Docker image](../SECURITY.md#verify-the-docker-image)
+  says how to check it.
 - Add settings with `-e`, such as `-e GEMINI_API_KEY=your-key`, or set them in
   the app.
 
@@ -56,7 +59,7 @@ docker compose up -d --build
 The data goes to `./data`, and the port is published on `127.0.0.1:3210`. Put
 settings in `.env`. Compose passes most of them to the container
 ([Environment Variables](configuration.md#environment-variables) names the
-eight that it does not). The first build installs the dependencies and
+seven that it does not). The first build installs the dependencies and
 downloads the search models, so it takes a few minutes.
 
 ## Install without Docker
@@ -93,13 +96,14 @@ NODE_ENV=production node server.ts
 
 ## What happens on first boot
 
-1. Contrack checks `PUBLIC_URL`, `CONTRACK_SECRET_KEY` and `TRUST_PROXY_HOPS`.
-   A bad value stops the start with a message.
-2. It creates the database, or applies the migrations a newer release added,
-   and limits its data files to its own user. A database it did not create,
-   such as one from Contrack 1, stops the start, and nothing in it changes.
-3. It starts to listen, and logs `Contrack CRM running on http://localhost:3210`.
-4. In the background, it loads the search models and indexes your contacts,
+1. Contrack creates the database, or applies the migrations that a newer
+   release added. A database that it did not create, such as one from
+   Contrack 1, stops the start, and nothing in it changes.
+2. It checks `PUBLIC_URL`, `CONTRACK_SECRET_KEY` and `TRUST_PROXY_HOPS`. A bad
+   value stops the start with a message.
+3. It limits its data files to its own user.
+4. It starts to listen, and logs `Contrack CRM running on http://localhost:3210`.
+5. In the background, it loads the search models and indexes your contacts,
    places addresses on the map, loads the AI model lists, starts connector
    syncs and scores contacts. About 15 seconds after the start, it takes a
    snapshot.
@@ -147,6 +151,14 @@ access. Turn on sign-in before other devices can reach Contrack.
 
 The server logs a warning when it listens beyond this machine with sign-in
 off.
+
+While sign-in is off, and until the first account exists, Contrack answers
+only to local names. These are an IP address, `localhost`, a name with no dot,
+a name under a local suffix such as `.lan` or `.local`, and the `PUBLIC_URL`
+host. This stops a web page from using DNS rebinding to act as you. For any
+other name, add it to `ALLOWED_HOSTS` (see
+[Contrack does not answer to a name](#contrack-does-not-answer-to-a-name)).
+`/healthz` answers to every name.
 
 ### Behind a reverse proxy
 
@@ -232,17 +244,19 @@ only that range at the proxy, limit `/api/mcp`, `/oauth/token`,
 own browser: it opens `/oauth/authorize`, the consent page and the sign-in
 page itself.
 
-Claude Code, Cursor, VS Code and Gemini CLI run on your own computer. They
-can sign in with OAuth too, and they need only an address that computer can
-reach. For a local test, `PUBLIC_URL=http://localhost:3210` turns OAuth on
-for them.
+Claude Code, Claude Desktop (local), Cursor, VS Code, Codex and Gemini CLI run
+on your own computer. They can sign in with OAuth too, and they need only an
+address that computer can reach. For a local test,
+`PUBLIC_URL=http://localhost:3210` turns OAuth on for them.
 
 ## Backups and restore
 
 By default, Contrack takes a snapshot of the whole database every 24 hours,
-and one about 15 seconds after each start. It keeps the newest 7. It checks each snapshot at
-once: the file must pass SQLite's integrity check and hold rows in every
-table.
+and one about 15 seconds after each start. It keeps the newest 7. It checks
+each snapshot at once. The file must pass SQLite's integrity check, hold every
+table, and hold rows in each table that has rows in the database. At start,
+the log warns when no snapshot has passed its check, or when the newest one
+that passed is older than two intervals.
 
 - **Settings → Administration → Backups** lists each snapshot with its check:
   **Verified**, **Failed** or **Not checked**. **Snapshot now** takes one at
@@ -324,11 +338,10 @@ Contrack works on a machine with no internet access, with a few limits.
 
 - **Search models.** The Docker image holds them. Without Docker, run
   `npm run models:fetch` once while online, then set `MODEL_DOWNLOADS=false`.
-  `npm run models:fetch -- --check` checks the files, and `HF_ENDPOINT` points
-  the script at a mirror.
-- **The script does not read `.env`.** When `.env` sets `DATA_DIR` or
-  `MODEL_DIR`, give the script the folder:
-  `npm run models:fetch -- /srv/contrack/models`.
+  The script reads `.env` as the server does, so it fills the folder that the
+  server reads. `npm run models:fetch -- --check` checks the files,
+  `npm run models:fetch -- <folder>` fills another folder, and `HF_ENDPOINT`
+  points the script at a mirror.
 - **npm install.** On Linux x64, `ONNXRUNTIME_NODE_INSTALL=skip npm install`
   skips GPU files that Contrack does not use.
 - **These need the network:** AI providers (an OpenAI-compatible server on
@@ -347,21 +360,25 @@ lists the folders and the order in which the server reads them.
   database respond, and `503` when the database does not. It needs no
   sign-in, so an uptime monitor can call it. The Docker image calls it every
   30 seconds, and gives the first start 60 seconds.
-- **Settings → Administration → Instance health** shows the database and its
-  write-ahead log, the last backup, the job queues, the search index, the AI
-  provider for each task, and the AI cache. It refreshes every 15 seconds.
-  - Its **Background jobs** card lists each recurring job (the connector
-    sync, the score sweeps, the backup, the daily sweep, the trash purge, the
-    expired merges, the unused files, the address cache, the model lists and
-    the planner statistics) with its last run, its result
-    and its next run, and the jobs that failed in the last 24 hours with
-    their errors. `JOB_CONCURRENCY` sets how many jobs run at once.
+- **Settings → Administration → Instance health** shows the schema and the
+  uptime, the database and its write-ahead log, the last backup, the
+  duplicate scan and research queues, the search index, the model for each
+  task, and the AI cache. It refreshes every 15 seconds.
+  - Its **Background jobs** card lists each recurring job with its last run,
+    its result and its next run: connector syncs, the two score sweeps, the
+    scheduled backup, the daily cleanup, the trash purge, expired merges,
+    unused files, the address cache, the AI model lists, the database
+    statistics and the OAuth sweep. It also lists the jobs that failed in the
+    last 24 hours, with their errors. `JOB_CONCURRENCY` sets how many jobs run
+    at once.
 - The server writes its log to standard output: the terminal, or
   `docker logs contrack`. Each line has the time, the level and the area, such
   as `[WARN] [Auth]`. Colors appear only in a terminal.
 - `LOG_LEVEL` sets how much it writes: `error`, `warn`, `info` (the default)
-  or `debug`. Each request is one `info` line, with the client's IP address,
-  the path and no query string.
+  or `debug`. Each request is one `info` line, with the path and no query
+  string. In production, the line also has the client's IP address.
+- An error line carries the request id that the client got in
+  `X-Request-Id`, so a reported error leads to its line.
 - The log says what happened, to which record id, how many and how long. It
   never holds a name, an email address, a phone number, a street address, a
   note or its title, a search or an Ask question, a file name, a pasted link
@@ -407,6 +424,8 @@ The log names the variable:
 
 - `DATA_DIR` holds tables that Contrack 2 did not create: start with an empty
   folder. A data folder from Contrack 1 is one of these.
+- The database has a migration that this build does not have: a newer
+  Contrack wrote it. Run that version, or restore a backup from before it.
 - `PUBLIC_URL`: use an `http` or `https` origin with no path, such as
   `https://crm.example.com`.
 - `TRUST_PROXY_HOPS`: use a whole number from 0 to 10.
@@ -415,14 +434,34 @@ The log names the variable:
 ### Search models are missing on an offline install
 
 With `MODEL_DOWNLOADS=false`, the log names the missing model, the folder, and
-the fix. Search keeps working on keywords. Run `npm run models:fetch`, with
-the folder when `.env` sets `DATA_DIR` or `MODEL_DIR`. Or set
-`MODEL_DOWNLOADS=true` for one start.
+the fix. Search keeps working on keywords. Run `npm run models:fetch` in the
+folder that you start the server in, or set `MODEL_DOWNLOADS=true` for one
+start.
 
 To check that both models load and run, use `npm run models:smoke`, or
 `docker exec contrack node scripts/model-smoke.ts` in a container. It embeds
 one sentence and scores one pair, and fails with the reason when a model or
 its runtime is missing.
+
+### Contrack does not answer to a name
+
+The browser shows "Contrack does not answer to "crm.example.com" while sign-in
+is off", and the API answers `403 HOST_NOT_ALLOWED`. While sign-in is off, and
+until the first account exists, Contrack answers only to local names (see
+[Remote access](#remote-access)). Do one of these:
+
+- Turn on sign-in, and create the first account at an IP address,
+  `localhost`, or the `PUBLIC_URL` address.
+- Set `PUBLIC_URL` to the address people open.
+- Add the name to `ALLOWED_HOSTS`, such as `ALLOWED_HOSTS=nas.tail1234.ts.net`.
+
+Behind a reverse proxy, the proxy must also pass the original `Host` header.
+
+### A change fails with CROSS_SITE_REQUEST
+
+A save with the session cookie must come from a page at this server's own
+address. The message names the page's address. Set `PUBLIC_URL` to the address
+people open, and make the proxy pass the original `Host` header.
 
 ### Passkeys fail on an IP address
 
@@ -446,7 +485,8 @@ of proxies, and make the proxy send `X-Forwarded-Proto` and `X-Forwarded-For`.
 
 The reset command takes a username or an email address and prints a temporary
 password. It also ends the account's sessions and revokes its API tokens (see
-[Reset a password](accounts.md#reset-a-password)).
+[Reset a password](accounts.md#reset-a-password)). Without Docker, run it in
+the folder that you start the server in, so that it opens the same database.
 
 ```bash
 # Without Docker
