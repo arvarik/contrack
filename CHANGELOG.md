@@ -9,9 +9,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-These changes ship as version 2.0.0. Version 2 turns Contrack into a server
-that several people can share and reach from the internet. It also rebuilds
-search, Pulse, the map, research and the contact page.
+## [2.0.0] - 2026-10-07
+
+Version 2 turns Contrack into a server that several people can share and reach
+from the internet. It also rebuilds search, Pulse, the map, research and the
+contact page.
 
 **Version 2 is a new start.** It does not open or convert a Contrack 1 data
 folder. It stops with a message and changes nothing in it. Start Contrack 2
@@ -374,7 +376,8 @@ with an empty `DATA_DIR`.
 The first release: a local-first personal CRM with contact management,
 semantic search, AI enrichment and duplicate detection.
 
-[unreleased]: https://github.com/arvarik/contrack/compare/v1.5.5...HEAD
+[unreleased]: https://github.com/arvarik/contrack/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/arvarik/contrack/compare/v1.5.5...v2.0.0
 [1.5.5]: https://github.com/arvarik/contrack/compare/v1.5.4...v1.5.5
 [1.5.4]: https://github.com/arvarik/contrack/compare/v1.5.3...v1.5.4
 [1.5.3]: https://github.com/arvarik/contrack/compare/v1.5.2...v1.5.3

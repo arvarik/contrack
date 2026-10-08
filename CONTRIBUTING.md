@@ -227,9 +227,13 @@ with its own floor for `server/`. `.agent/TESTING.md` has the rest.
 `.github/workflows/ci.yml` runs on pull requests into `main`, on pushes to it,
 on `v*` tags, and by hand.
 
-- `build-and-test`: lint, the format check, the tests with coverage, and a
-  production build.
-- `browser-a11y`: the Playwright suite. Its report is uploaded on every run.
+- `checks`: lint, the format check and a production build.
+- `unit-tests`: the tests with coverage, split across four runners with
+  `--shard`. Each shard uploads a blob report.
+- `coverage`: merges the four blob reports, shows every failure in one place
+  and checks the coverage floor.
+- `browser-a11y`: the Playwright suite, split across four runners. Each shard
+  uploads its report on every run.
 - `build-image` and `merge-image`: on a push to `main` or a `v*` tag, one
   image for linux/amd64 and linux/arm64 at `ghcr.io/arvarik/contrack`. `main`
   is tagged `latest` and the short SHA, and a release its version, its

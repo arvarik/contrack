@@ -99,12 +99,13 @@ This half is for contributors.
 
 ### What CI runs
 
-The **Browser accessibility** job in `.github/workflows/ci.yml` builds the
-production bundle and runs `npx playwright test` in headless Chromium. Each
-worker starts its own production server (`NODE_ENV=production`, `dist/`, the
-CSP on) on a free port, with a new temporary `DATA_DIR`. The suite runs with
-reduced motion, the `en-US` locale and the `America/Los_Angeles` time zone.
-The report is uploaded on every run.
+The **Browser accessibility** jobs in `.github/workflows/ci.yml` build the
+production bundle and run `npx playwright test` in headless Chromium, split
+across four runners with `--shard`. Each worker starts its own production
+server (`NODE_ENV=production`, `dist/`, the CSP on) on a free port, with a new
+temporary `DATA_DIR`. The suite runs with reduced motion, the `en-US` locale
+and the `America/Los_Angeles` time zone. Each shard uploads its report on
+every run.
 
 | Spec                           | What it holds                                                                                                                                                          |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
