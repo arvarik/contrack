@@ -7,6 +7,8 @@
  * wrapped: a private window or a full quota throws.
  */
 
+import { isPlainDay } from "../../shared/dates";
+
 /** The four interaction kinds the composer offers. */
 export type DraftKind = "note" | "call" | "meeting" | "email";
 
@@ -16,6 +18,8 @@ interface ComposerDraft {
   /** The "next action" field. */
   followUpText: string;
   type: DraftKind;
+  /** The day the note is dated, as YYYY-MM-DD. Absent: the day it is saved. */
+  day?: string;
   /** Epoch milliseconds, written by the browser that saved it. */
   savedAt: number;
 }
@@ -77,6 +81,7 @@ function parseDraft(raw: string): ComposerDraft | null {
     html: d.html,
     followUpText: d.followUpText,
     type: d.type as DraftKind,
+    ...(typeof d.day === "string" && isPlainDay(d.day) && { day: d.day }),
     savedAt,
   };
 }

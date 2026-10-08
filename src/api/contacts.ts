@@ -19,6 +19,7 @@ import {
   type TrashedContact,
 } from "../types";
 import { isValidLatLng, type MapContact } from "../../shared/geo";
+import { dayInZone } from "../../shared/dates";
 import { contactRoutes } from "../../shared/contracts/contacts";
 import { trashRoutes } from "../../shared/contracts/trash";
 import type { BodyOf } from "../../shared/contracts/route";
@@ -228,10 +229,11 @@ export const useCreateContact = () => {
 export const useParseContactText = () => {
   return useMutation({
     mutationFn: async (text: string): Promise<ParsedContactData> => {
+      // Today on this device, so "yesterday" in the text is the user's.
       const res = await apiFetch("/parse-contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, today: dayInZone(new Date()) }),
       });
       return res.json();
     },

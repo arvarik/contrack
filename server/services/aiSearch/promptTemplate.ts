@@ -879,7 +879,8 @@ export function attachSources(
 // the whole answer for one extra field.
 
 /** Values a model writes for "nothing": they are no value at all. */
-const EMPTY_WORDS = /^(null|none|n\/a|na|unknown|not found|not available|-)$/i;
+export const EMPTY_WORDS =
+  /^(null|none|n\/a|na|unknown|not found|not available|-)$/i;
 
 const shortText = z.string().trim().max(500);
 
@@ -917,15 +918,32 @@ const optionalText = shortText
       ? undefined
       : value,
   );
-const webUrl = z
-  .string()
-  .trim()
-  .max(2000)
-  .url()
-  .refine(
-    (value) => /^https?:\/\//i.test(value),
-    "Expected an HTTP or HTTPS URL",
-  );
+/**
+ * A page address. A bare domain ("acme.com") gets https. A host with no dot
+ * ("localhost") is no one's site, and a user name in the address is an email
+ * in the wrong field or a lookalike ("https://linkedin.com@evil.example").
+ */
+const webUrl = z.preprocess(
+  (value) =>
+    typeof value === "string" && !/^[a-z][a-z\d+.-]*:/i.test(value.trim())
+      ? `https://${value.trim()}`
+      : value,
+  z
+    .string()
+    .trim()
+    .max(2000)
+    .url()
+    .refine((value) => {
+      const url = URL.parse(value);
+      return (
+        !!url &&
+        /^https?:$/.test(url.protocol) &&
+        url.hostname.includes(".") &&
+        !url.username &&
+        !url.password
+      );
+    }, "Expected an HTTP or HTTPS URL"),
+);
 const optionalUrl = z.preprocess(
   (value) =>
     typeof value === "string" &&
@@ -956,8 +974,13 @@ const place = optionalText.transform(
 /** One entry of each list field, validated on its own by `parseExtraction`. */
 const LIST_ITEMS = {
   emails: z.object({ email: z.email().max(320), label: optionalText }),
+  // Three digits, as a contact's phone needs: "unknown" is no number.
   phones: z.object({
-    phone: z.string().trim().min(1).max(80),
+    phone: z
+      .string()
+      .trim()
+      .max(80)
+      .regex(/^(?:\P{Nd}*\p{Nd}){3}/u),
     label: optionalText,
   }),
   socialLinks: z.object({
@@ -1005,7 +1028,7 @@ const LIST_ITEMS = {
       ),
     location: place,
   }),
-  tags: z.object({ tag: shortText.min(1) }),
+  tags: z.object({ tag: shortText.min(1).max(100) }),
   interests: z.object({
     // "Tennis (former USTA junior player)" is "Tennis": the label is what
     // the chip shows, and the story behind it belongs to the dossier.

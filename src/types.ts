@@ -24,6 +24,7 @@ import type {
   InteractionSearchHit,
   TimelineEntry,
 } from "../shared/contracts/interactions";
+import type { InteractionKind } from "./lib/interactionKinds";
 
 export type {
   ContactAddress,
@@ -96,34 +97,13 @@ export type ContactUpdateData = Partial<
 };
 
 /**
- * The fields `POST /api/parse-contact` (Magic Paste) returns. Child entries
- * are partial: the parser omits ids and unknown fields.
+ * What `POST /api/parse-contact` (Add from text) returns: a contact's fields
+ * and child entries, without ids, and the interactions the text says
+ * already happened. A date is a day, and is absent when the text gives none.
  */
-export interface ParsedContactData extends Partial<
-  Omit<
-    Contact,
-    | "emails"
-    | "phones"
-    | "addresses"
-    | "socialLinks"
-    | "interests"
-    | "attributes"
-    | "education"
-    | "experience"
-    | "sources"
-    | "tags"
-    | "lists"
-  >
-> {
-  /** Flat convenience fields present in some parser responses. */
-  email?: string;
-  phone?: string;
-  emails?: Partial<ContactEmail>[];
-  phones?: Partial<ContactPhone>[];
-  socialLinks?: Partial<ContactSocialLink>[];
-  education?: Partial<ContactEducation>[];
-  experience?: Partial<ContactExperience>[];
-}
+export type ParsedContactData = ContactUpdateData & {
+  interactions?: { type: InteractionKind; date?: string; summary: string }[];
+};
 
 /**
  * An interaction: the contract's row plus what the timeline adds. `type` is

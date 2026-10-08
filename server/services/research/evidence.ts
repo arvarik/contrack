@@ -5,6 +5,7 @@
 //
 //   createMeter       what a run spends, counted over every call
 //   contextWindowFor  the window of the model a call goes to, when small
+//   answerTokens      the answer a JSON call can ask for in that window
 //   SourceOutcome     what one source came back with: facts, a no-match after
 //                     a search, or the reason it has neither
 //   mergeEvidence     the facts of several sources as one
@@ -52,6 +53,24 @@ export function contextWindowFor(
   return resolved.providerId.startsWith("custom:")
     ? UNREPORTED_WINDOW_TOKENS
     : undefined;
+}
+
+/**
+ * The answer tokens a JSON call can ask for: `max`, or less when a small
+ * window must also hold the prompt, and never under 512. A server such as
+ * vLLM refuses a call whose prompt and answer exceed the window.
+ */
+export function answerTokens(
+  capability: "quick" | "deep",
+  prompt: string,
+  max = 6_000,
+): number {
+  const window = contextWindowFor(capability);
+  if (!window) return max;
+  return Math.max(
+    512,
+    Math.min(max, window - Math.ceil(prompt.length / CHARS_PER_TOKEN)),
+  );
 }
 
 /** What a run spends, over every call it makes. */

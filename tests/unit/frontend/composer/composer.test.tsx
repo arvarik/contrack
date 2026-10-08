@@ -779,14 +779,17 @@ describe("a save that succeeds", () => {
     expect(saves).toHaveLength(1);
   });
 
-  it("sends the type and the follow-up that are on screen from the keyboard", async () => {
+  it("sends the type, the day and the follow-up that are on screen from the keyboard", async () => {
     // The shortcut extension is created once, with the first render's
-    // closures, so it must read the type and follow-up on screen at send time.
+    // closures, so it must read what is on screen at send time.
     const saves = stubServer();
     mount();
     const pm = await editorElement();
     await type(pm, "Spoke on the phone");
     fireEvent.click(typeButton("Call"));
+    const day = screen.getByLabelText("Date") as HTMLInputElement;
+    const today = day.value;
+    fireEvent.change(day, { target: { value: "2020-01-02" } });
     fireEvent.change(followUpInput(), {
       target: { value: "Call again next Monday" },
     });
@@ -795,12 +798,16 @@ describe("a save that succeeds", () => {
     await waitFor(() => expect(saves).toHaveLength(1));
     expect(saves[0].body.type).toBe("call");
     expect(saves[0].body.title).toBe("Call");
+    // A past day is sent as that day, with no time.
+    expect(saves[0].body.date).toBe("2020-01-02");
     expect(saves[0].body.actionItem).toMatchObject({ title: "Call again" });
 
     await act(async () => {
       saves[0].resolve();
     });
     await waitFor(() => expect(pm.textContent).toBe(""));
+    // The next note is today's again.
+    expect(day.value).toBe(today);
   });
 });
 
