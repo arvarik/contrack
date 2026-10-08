@@ -3,8 +3,8 @@
  * Add from text, on the Network list. Closing the dialog (X, Escape or the
  * overlay) only closes, and focus goes back to the control that opened it. A
  * successful extraction opens the New contact form with the fields filled
- * in, and a result that arrives after a close opens nothing. The V key opens
- * the same dialog.
+ * in, and saves what the person keeps of the rest. A result that arrives
+ * after a close opens nothing. The V key opens the same dialog.
  *
  * The real ContactList renders here, so the test holds its wiring and not a
  * copy of it. The API is stubbed and nothing is saved.
@@ -25,6 +25,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const parse = vi.fn();
 const createContact = vi.fn();
+const addInteraction = vi.fn();
 
 vi.mock("../../../../src/api", () => {
   const mutation = () => ({
@@ -46,6 +47,7 @@ vi.mock("../../../../src/api", () => {
     useUnarchiveContact: mutation,
     useCreateContact: () => ({ mutateAsync: createContact, isPending: false }),
     useParseContactText: () => ({ mutateAsync: parse, isPending: false }),
+    useAddInteraction: () => ({ mutateAsync: addInteraction }),
     useBulkDeleteContacts: mutation,
     useBulkRestoreContacts: mutation,
     useBulkUpdateContacts: mutation,
@@ -82,6 +84,7 @@ afterEach(() => {
   cleanup();
   parse.mockReset();
   createContact.mockReset();
+  addInteraction.mockReset();
   vi.mocked(toast.error).mockReset();
 });
 
@@ -154,12 +157,22 @@ describe("Add from text", () => {
     await waitFor(() => expect(document.activeElement).toBe(select));
   });
 
-  it("opens the form filled in when the text was read", async () => {
+  it("opens the form filled in when the text was read, and saves what is kept", async () => {
     parse.mockResolvedValue({
       name: "Priya Raman",
       company: "Northwind",
-      email: "priya@northwind.example",
+      emails: [
+        { email: "priya@northwind.example" },
+        { email: "p@home.example" },
+      ],
+      about: "Builds payment systems.",
+      tags: [{ tag: "fintech" }, { tag: "wrong" }],
+      interactions: [
+        { type: "meeting", date: "2026-10-01", summary: "Talked Series A." },
+      ],
     });
+    createContact.mockResolvedValue({ id: "c-1" });
+    addInteraction.mockResolvedValue({ id: "i-1" });
     const newButton = mount();
     extract(openFromMenu(newButton), "Priya Raman, CTO at Northwind");
     const filled = await screen.findByRole("dialog", { name: "New contact" });
@@ -170,14 +183,37 @@ describe("Add from text", () => {
     expect(field(/Full name/)).toBe("Priya Raman");
     expect(field(/Company/)).toBe("Northwind");
     expect(field(/Email/)).toBe("priya@northwind.example");
+    within(filled).getByText("Also saved: about, 1 more email");
 
-    // Closing the form gives focus to New, not to the gone Extract button.
+    // A wrong tag is unticked, and the meeting's day put right.
+    fireEvent.click(within(filled).getByRole("checkbox", { name: "wrong" }));
+    fireEvent.change(within(filled).getByLabelText("Date of the meeting"), {
+      target: { value: "2026-09-30" },
+    });
     fireEvent.click(
-      within(filled).getByRole("button", { name: "Close dialog" }),
+      within(filled).getByRole("button", { name: "Save contact" }),
     );
     await waitFor(() => expect(form()).toBeNull());
+    expect(createContact.mock.calls[0][0]).toMatchObject({
+      name: "Priya Raman",
+      about: "Builds payment systems.",
+      emails: [
+        { email: "priya@northwind.example", isPrimary: true },
+        { email: "p@home.example" },
+      ],
+      tags: [{ tag: "fintech" }],
+    });
+    expect(addInteraction).toHaveBeenCalledWith({
+      contactId: "c-1",
+      data: {
+        type: "meeting",
+        title: "Meeting",
+        content: "Talked Series A.",
+        date: "2026-09-30",
+      },
+    });
+    // The form gives focus to New, not to the gone Extract button.
     await waitFor(() => expect(document.activeElement).toBe(newButton));
-    expect(createContact).not.toHaveBeenCalled();
   });
 
   it("opens nothing when the text is read after the dialog was closed", async () => {

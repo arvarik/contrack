@@ -44,10 +44,10 @@ describe("draft keys", () => {
 });
 
 describe("reading and writing a draft", () => {
-  it("round-trips, under the account that wrote it only", () => {
+  it("round-trips with its day, under the account that wrote it only", () => {
     const mine = draftKey("user-a", "contact-1");
-    writeDraft(mine, draft);
-    expect(readDraft(mine)).toMatchObject(draft);
+    writeDraft(mine, { ...draft, day: "2026-10-01" });
+    expect(readDraft(mine)).toMatchObject({ ...draft, day: "2026-10-01" });
     expect(readDraft(draftKey("user-b", "contact-1"))).toBeNull();
     expect(readDraft(draftKey("user-a", "contact-2"))).toBeNull();
   });

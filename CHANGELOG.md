@@ -110,7 +110,10 @@ with an empty `DATA_DIR`.
 ### Contacts
 
 - The contact page fits the width of its pane. One composer logs a note, a
-  call, a meeting or an email, with a follow-up.
+  call, a meeting or an email, with a follow-up, on today or a past day.
+- **Add from text** also reads meeting notes. It finds tags, interests and
+  other facts, and the past meetings, calls and emails, each with a date to
+  check before it saves.
 - The **Dossier** holds the AI briefing and the record of every research run.
 - Default avatars follow a contact's pronouns and name.
 - Deletes go to a trash that keeps them for 30 days by default, and a write

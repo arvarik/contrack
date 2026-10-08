@@ -21,7 +21,7 @@ import { getErrorMessage } from "../utils/helpers.ts";
 import { contactService } from "../services/contactService.ts";
 import { trashRetentionDays } from "../services/lifecycleSettings.ts";
 import { relationshipService } from "../services/relationshipService.ts";
-import { parseContactRecord } from "../ai/aiService.ts";
+import { PASTE_MAX_CHARS, parseContactRecord } from "../ai/aiService.ts";
 import { parseQuery, validateBody } from "../utils/validators.ts";
 import { contactRoutes } from "../../shared/contracts/contacts.ts";
 import { z } from "zod";
@@ -436,11 +436,24 @@ router.post(
 
 router.post(
   "/parse-contact",
-  validateBody(z.object({ text: z.string().min(1, "text is required") })),
+  validateBody(
+    z.object({
+      text: z
+        .string()
+        .trim()
+        .min(1, "text is required")
+        .max(
+          PASTE_MAX_CHARS,
+          `Paste at most ${PASTE_MAX_CHARS.toLocaleString("en-US")} characters`,
+        ),
+      /** The user's day, for "yesterday" in the text. */
+      today: z.iso.date().optional(),
+    }),
+  ),
   asyncHandler(async (req, res) => {
     const rid = req.requestId;
-    const { text } = req.body;
-    const parsed = await parseContactRecord(text);
+    const { text, today } = req.body;
+    const parsed = await parseContactRecord(text, today);
     log.info("API", `[${rid}] POST /api/parse-contact → parsed`);
     res.json(parsed);
   }),

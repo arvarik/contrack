@@ -169,40 +169,6 @@ export interface DiagnosticsSnapshot {
 
 // Inputs and outputs of the AI functions
 
-/** Contact fields `parseContactRecord` extracts from free text. */
-export interface ParsedContact {
-  name: string;
-  firstName?: string;
-  lastName?: string;
-  headline?: string;
-  company?: string;
-  role?: string;
-  location?: string;
-  about?: string;
-  pronouns?: string;
-  industry?: string;
-  website?: string;
-  emails?: Array<{ email: string; label?: string }>;
-  phones?: Array<{ phone: string; label?: string }>;
-  socialLinks?: Array<{ platform: string; url: string }>;
-  education?: Array<{
-    school: string;
-    degree?: string;
-    fieldOfStudy?: string;
-    startDate?: string;
-    endDate?: string;
-  }>;
-  experience?: Array<{
-    company: string;
-    role?: string;
-    startDate?: string;
-    endDate?: string;
-    isCurrent?: boolean;
-    description?: string;
-    location?: string;
-  }>;
-}
-
 /** A person `extractMentions` found in a timeline note. */
 export interface MentionEntity {
   name: string;

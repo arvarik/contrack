@@ -38,11 +38,12 @@ describe("parseServerTime", () => {
 });
 
 describe("formatDay and formatWhen", () => {
-  it("show a date-only value on its own day", () => {
+  it("show a date-only value on its own day, with no time", () => {
     const expected = new Date(1974, 4, 10).toLocaleDateString(undefined, {
       dateStyle: "medium",
     });
     expect(formatDay("1974-05-10")).toBe(expected);
+    expect(formatWhen("1974-05-10")).toBe(expected);
   });
 
   it("fall back to the given text when there is no date", () => {

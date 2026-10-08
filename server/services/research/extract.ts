@@ -12,7 +12,7 @@ import {
 import { recordInvocation } from "../aiStatsService.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
-import { CHARS_PER_TOKEN, contextWindowFor } from "./evidence.ts";
+import { answerTokens } from "./evidence.ts";
 import type { ResearchRequest, TechniqueContext } from "./types.ts";
 
 /**
@@ -39,21 +39,13 @@ export async function extractFacts(
   const startMs = Date.now();
   const capability = resolveCapability("quick") ? "quick" : "deep";
   const prompt = buildExtractionPrompt(contact, facts);
-  // A small window holds the prompt and what is left for the answer. A
-  // server such as vLLM refuses a call whose prompt and answer exceed it.
-  const window = contextWindowFor(capability);
   const result = await ctx.generate(capability, {
     prompt,
     responseFormat: "json",
     jsonSchema: extractionJsonSchema,
     signal,
     timeoutMs: 30_000,
-    maxOutputTokens: window
-      ? Math.max(
-          512,
-          Math.min(6_000, window - Math.ceil(prompt.length / CHARS_PER_TOKEN)),
-        )
-      : 6_000,
+    maxOutputTokens: answerTokens(capability, prompt),
   });
   signal?.throwIfAborted();
   ctx.meter.count(result);

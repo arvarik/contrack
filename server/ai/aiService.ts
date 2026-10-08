@@ -16,7 +16,10 @@ import type { CompressedContact } from "./types.ts";
 // Re-export domain types for consumers
 export type { CompressedContact };
 
-export { parseContactRecord } from "./services/contactParsing.ts";
+export {
+  parseContactRecord,
+  PASTE_MAX_CHARS,
+} from "./services/contactParsing.ts";
 
 export {
   generateCatchMeUpBriefing,

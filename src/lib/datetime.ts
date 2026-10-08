@@ -17,7 +17,10 @@ import { isPlainDay, parseServerTime } from "../../shared/dates";
  */
 export { isPlainDay, parseServerTime };
 
-/** An absolute date and time, in the reader's own locale and zone. */
+/**
+ * An absolute date and time, in the reader's own locale and zone. A plain
+ * day, such as a note dated to a past day, shows no time.
+ */
 export function formatWhen(
   value: string | null | undefined,
   fallback = "Unknown",
@@ -26,7 +29,7 @@ export function formatWhen(
   if (!date) return fallback;
   return date.toLocaleString(undefined, {
     dateStyle: "medium",
-    timeStyle: "short",
+    ...(!isPlainDay(value ?? "") && { timeStyle: "short" }),
   });
 }
 

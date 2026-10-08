@@ -8,7 +8,11 @@ import { motion } from "motion/react";
 import { FileText, Sparkles } from "lucide-react";
 import { useBlockedAi } from "../../hooks/useAiSetup";
 import { AiSetupNote } from "../../components/AiSetupNote";
-import { useCreateContact, useParseContactText } from "../../api";
+import {
+  useAddInteraction,
+  useCreateContact,
+  useParseContactText,
+} from "../../api";
 import type {
   ContactList as ContactListType,
   ParsedContactData,
@@ -18,9 +22,11 @@ import { ImportModal } from "../../components/ImportModal";
 import { BulkModals } from "../../components/bulk/BulkModals";
 import { AnimatedSkeleton } from "../../components/ui/AnimatedSkeleton";
 import { FORM_INPUT, FORM_LABEL, formInputHighlight } from "../../lib/styles";
-import { cn, errorText } from "../../lib/utils";
+import { cn, errorText, plural } from "../../lib/utils";
 import { CreateListModal } from "./CreateListModal";
 import { fallbackAvatarUrl } from "../../lib/avatar";
+import { INTERACTION_LABELS } from "../../lib/interactionKinds";
+import { dayInZone } from "../../../shared/dates";
 
 interface ContactListModalsProps {
   selectedCount: number;
@@ -80,8 +86,11 @@ export const ContactListModals = ({
 }: ContactListModalsProps) => {
   const [smartPasteText, setSmartPasteText] = useState("");
   const [parsedData, setParsedData] = useState<ParsedContactData | null>(null);
+  /** From the first request to the last: the contact, then its interactions. */
+  const [isSaving, setIsSaving] = useState(false);
 
   const createContact = useCreateContact();
+  const addInteraction = useAddInteraction();
   const parseContactText = useParseContactText();
   // Add from text needs a Fast model. Without one the dialog says how to
   // set it up, before Extract is pressed.
@@ -118,35 +127,83 @@ export const ContactListModals = ({
 
   const handleCreateContact = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const data = Object.fromEntries(formData.entries());
-    const emailValue = data.email as string;
-    const phoneValue = data.phone as string;
+    const form = new FormData(e.currentTarget);
+    const field = (key: string) => String(form.get(key) ?? "").trim();
+    const name = field("name");
+    const email = field("email");
+    const phone = field("phone");
+    const today = dayInZone(new Date()) ?? "";
+    const { interactions = [], emails = [], phones = [], ...found } = pd ?? {};
+    // What the text gave, with the form's values on top. The first email and
+    // phone are the form's, and the model's split of a name the form changed
+    // is stale.
+    const contact = {
+      ...found,
+      ...(pd && name !== pd.name && { firstName: null, lastName: null }),
+      name,
+      role: field("role"),
+      company: field("company"),
+      location: field("location"),
+      avatarUrl: fallbackAvatarUrl(name),
+      emails: [
+        ...(email
+          ? [{ email, label: emails[0]?.label ?? "work", isPrimary: true }]
+          : []),
+        ...emails.slice(1),
+      ],
+      phones: [
+        ...(phone
+          ? [{ phone, label: phones[0]?.label ?? "mobile", isPrimary: true }]
+          : []),
+        ...phones.slice(1),
+      ],
+      ...(found.tags && {
+        tags: form.getAll("tag").map((tag) => ({ tag: String(tag) })),
+      }),
+    };
+    // The ticked interactions, each on its day. Today is the moment of the
+    // save, as in the composer.
+    const notes = interactions.flatMap((item, index) => {
+      if (!form.has(`interaction-${index}`)) return [];
+      const day = field(`interaction-${index}-day`);
+      return [
+        {
+          type: item.type,
+          title: INTERACTION_LABELS[item.type],
+          content: item.summary,
+          ...(day && day < today && { date: day }),
+        },
+      ];
+    });
+    setIsSaving(true);
     try {
-      const newContact = await createContact.mutateAsync({
-        name: data.name as string,
-        role: data.role as string,
-        company: data.company as string,
-        location: data.location as string,
-        avatarUrl:
-          (data.avatarUrl as string) || fallbackAvatarUrl(data.name as string),
-        emails: emailValue
-          ? [{ email: emailValue, label: "work", isPrimary: true }]
-          : [],
-        phones: phoneValue
-          ? [{ phone: phoneValue, label: "mobile", isPrimary: true }]
-          : [],
-        ...(pd?.socialLinks ? { socialLinks: pd.socialLinks } : {}),
-        ...(pd?.education ? { education: pd.education } : {}),
-        ...(pd?.experience ? { experience: pd.experience } : {}),
-      });
+      const newContact = await createContact.mutateAsync(contact);
+      const saved = await Promise.allSettled(
+        notes.map((data) =>
+          addInteraction.mutateAsync({ contactId: newContact.id, data }),
+        ),
+      );
+      const failed = saved.flatMap((result) =>
+        result.status === "rejected" ? [result.reason] : [],
+      );
       onCloseModal();
       setParsedData(null);
       setSmartPasteText("");
-      toast.success(`Created "${data.name}"`);
-      if (newContact?.id) onContactCreated(newContact.id);
+      const logged = saved.length - failed.length;
+      toast.success(
+        logged > 0
+          ? `Created "${name}" with ${plural(logged, "interaction", "interactions")}`
+          : `Created "${name}"`,
+      );
+      if (failed.length > 0)
+        toast.error(
+          `Could not save ${plural(failed.length, "interaction", "interactions")}: ${errorText(failed[0])}`,
+        );
+      onContactCreated(newContact.id);
     } catch (err: unknown) {
       toast.error(`Could not create the contact: ${errorText(err)}`);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -234,14 +291,10 @@ export const ContactListModals = ({
                 name="email"
                 type="email"
                 autoComplete="off"
-                defaultValue={
-                  (pd?.emails?.[0]?.email as string) ||
-                  (pd?.email as string) ||
-                  ""
-                }
+                defaultValue={pd?.emails?.[0]?.email ?? ""}
                 className={cn(
                   FORM_INPUT,
-                  formInputHighlight(!!(pd?.emails?.[0]?.email || pd?.email)),
+                  formInputHighlight(!!pd?.emails?.[0]?.email),
                 )}
                 placeholder="jane@example.com"
               />
@@ -255,14 +308,10 @@ export const ContactListModals = ({
                 name="phone"
                 type="tel"
                 autoComplete="off"
-                defaultValue={
-                  (pd?.phones?.[0]?.phone as string) ||
-                  (pd?.phone as string) ||
-                  ""
-                }
+                defaultValue={pd?.phones?.[0]?.phone ?? ""}
                 className={cn(
                   FORM_INPUT,
-                  formInputHighlight(!!(pd?.phones?.[0]?.phone || pd?.phone)),
+                  formInputHighlight(!!pd?.phones?.[0]?.phone),
                 )}
                 placeholder="+1 (555) 000-0000"
               />
@@ -281,13 +330,14 @@ export const ContactListModals = ({
               placeholder="San Francisco, CA"
             />
           </div>
+          {pd && <FoundInText found={pd} />}
           <div className="pt-4">
             <button
               type="submit"
-              disabled={createContact.isPending}
+              disabled={isSaving}
               className="btn-primary w-full"
             >
-              {createContact.isPending ? "Saving…" : "Save contact"}
+              {isSaving ? "Saving…" : "Save contact"}
             </button>
           </div>
         </form>
@@ -333,8 +383,9 @@ export const ContactListModals = ({
           ) : (
             <>
               <p className="text-sm text-on-surface-variant leading-relaxed">
-                Paste an email signature, a LinkedIn bio or rough notes, and AI
-                picks out the contact's details
+                Paste an email signature, a LinkedIn bio or notes from a
+                meeting, and AI picks out the person's details, their
+                specialties and the meetings the text describes
               </p>
               <textarea
                 aria-label="Paste contact details"
@@ -345,7 +396,7 @@ export const ContactListModals = ({
                 onChange={(e) => setSmartPasteText(e.target.value)}
                 rows={5}
                 className="w-full bg-surface-container border-none rounded-xl p-4 text-sm font-mono text-on-surface resize-none"
-                placeholder={`Examples:\n• "Jane Kim | VP Eng @ Stripe | jane@stripe.com | based in NYC"\n• A copied LinkedIn summary\n• A forwarded email signature`}
+                placeholder={`Examples:\n• "Jane Kim | VP Eng @ Stripe | jane@stripe.com | based in NYC"\n• A copied LinkedIn summary\n• "Met Jane at SaaStr on Tuesday, talked about her Series A"`}
               />
             </>
           )}
@@ -378,6 +429,121 @@ export const ContactListModals = ({
         onClose={onCloseImport}
         onSuccess={() => {}}
       />
+    </>
+  );
+};
+
+/** What else the text gave, saved as it is: "about", "2 jobs". */
+function alsoSaved(found: ParsedContactData): string[] {
+  const count = (
+    items: unknown[] | undefined,
+    one: string,
+    many: string,
+    shown = 0,
+  ) => {
+    const left = (items?.length ?? 0) - shown;
+    return left > 0 && plural(left, one, many);
+  };
+  return [
+    found.headline && "headline",
+    found.about && "about",
+    found.industry && "industry",
+    found.website && "website",
+    found.birthday && "birthday",
+    found.pronouns && "pronouns",
+    count(found.emails, "more email", "more emails", 1),
+    count(found.phones, "more phone", "more phones", 1),
+    count(found.socialLinks, "link", "links"),
+    count(found.experience, "job", "jobs"),
+    count(found.education, "school", "schools"),
+    count(found.interests, "interest", "interests"),
+    count(found.addresses, "address", "addresses"),
+    count(found.attributes, "other fact", "other facts"),
+  ].filter((part): part is string => !!part);
+}
+
+/**
+ * What Add from text found past the form's fields. Each tag and each
+ * interaction is a ticked checkbox, so a wrong one stays out, and an
+ * interaction's day can be put right. The rest is named, and saves as found.
+ */
+const FoundInText = ({ found }: { found: ParsedContactData }) => {
+  const id = React.useId();
+  const today = dayInZone(new Date()) ?? "";
+  const extras = alsoSaved(found);
+  return (
+    <>
+      {!!found.tags?.length && (
+        <fieldset>
+          <legend className={FORM_LABEL}>Tags</legend>
+          <div className="flex flex-wrap gap-2">
+            {found.tags.map(({ tag }) => (
+              <label
+                key={tag}
+                className={cn(
+                  "inline-flex items-center gap-2 rounded-lg px-3 min-h-[44px] sm:pointer-fine:min-h-8 text-sm text-on-surface cursor-pointer",
+                  formInputHighlight(true),
+                )}
+              >
+                <input
+                  type="checkbox"
+                  name="tag"
+                  value={tag}
+                  defaultChecked
+                  className="w-4 h-4 shrink-0 accent-primary"
+                />
+                {tag}
+              </label>
+            ))}
+          </div>
+        </fieldset>
+      )}
+      {!!found.interactions?.length && (
+        <fieldset>
+          <legend className={FORM_LABEL}>Interactions</legend>
+          <ul className="space-y-2">
+            {found.interactions.map((item, index) => (
+              <li
+                key={index}
+                className={cn("rounded-xl px-3 py-2", formInputHighlight(true))}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <label className="inline-flex items-center gap-2 min-h-[44px] sm:pointer-fine:min-h-8 text-sm font-bold text-on-surface cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name={`interaction-${index}`}
+                      defaultChecked
+                      aria-describedby={`${id}-${index}`}
+                      className="w-4 h-4 shrink-0 accent-primary"
+                    />
+                    {INTERACTION_LABELS[item.type]}
+                  </label>
+                  <input
+                    type="date"
+                    name={`interaction-${index}-day`}
+                    aria-label={`Date of the ${INTERACTION_LABELS[item.type].toLowerCase()}`}
+                    aria-describedby={`${id}-${index}`}
+                    max={today}
+                    defaultValue={item.date ?? today}
+                    className="min-h-[44px] sm:pointer-fine:min-h-8 rounded-lg bg-surface-container px-2.5 text-base sm:text-xs font-bold text-on-surface"
+                  />
+                </div>
+                <p
+                  id={`${id}-${index}`}
+                  className="pb-1 text-sm text-on-surface-variant text-pretty"
+                >
+                  {item.summary}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </fieldset>
+      )}
+      {extras.length > 0 && (
+        <p className="text-xs text-on-surface-variant">
+          Also saved: {extras.join(", ")}
+        </p>
+      )}
     </>
   );
 };

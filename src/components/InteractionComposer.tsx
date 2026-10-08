@@ -7,7 +7,7 @@
  * 2. The follow-up line. A date in it ("next Tuesday at 2pm") becomes a
  *    follow-up on save. A weekday is always the next one.
  * 3. A message line, only after a Save that cannot go ahead.
- * 4. The action bar: the type control and Save.
+ * 4. The action bar: the type control, the date and Save.
  *
  * `collapsible` (the narrow contact layout) shows the editor alone until it
  * takes focus. Save is always enabled: a Save with nothing to send says what
@@ -22,6 +22,8 @@
  *   (`lib/composerDrafts`). The compact composer keeps one draft of its own,
  *   so closing the dialog never loses the note.
  * - One request at a time, however Save is pressed.
+ * - A note is dated the moment it is saved, or the past day the date field
+ *   names. That day is the draft's too, so a kept note keeps its day.
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
@@ -33,6 +35,7 @@ import { FileText, Phone, Handshake, Mail, CalendarClock } from "lucide-react";
 import * as chrono from "chrono-node";
 import { toast } from "sonner";
 import { formatDue } from "../lib/datetime";
+import { dayInZone } from "../../shared/dates";
 import { LinkPreviewExtension } from "./LinkPreviewExtension";
 import { getMentionSuggestion } from "./MentionSuggestion";
 import { Segmented, type SegmentedOption } from "./ui/Segmented";
@@ -262,6 +265,10 @@ const Composer = ({
   const createFollowUp = useCreateActionItem();
   const [followUpText, setFollowUpText] = useState(draft?.followUpText ?? "");
   const followUpRef = useRef(followUpText);
+  /** The note's day, before today. Empty: the moment of the save. */
+  const [day, setDay] = useState(draft?.day ?? "");
+  const dayRef = useRef(day);
+  const today = dayInZone(new Date()) ?? "";
   const [isSaving, setIsSaving] = useState(false);
   const [problem, setProblem] = useState<Problem | null>(null);
   const parsedDate = parseFollowUp(followUpText)?.start.date();
@@ -298,6 +305,7 @@ const Composer = ({
       html: lastHtmlRef.current,
       followUpText: followUpRef.current,
       type: typeRef.current,
+      ...(dayRef.current && { day: dayRef.current }),
     });
   }, [storageKey]);
   const persistSoon = useCallback(() => {
@@ -326,6 +334,11 @@ const Composer = ({
     followUpRef.current = followUpText;
     persistSoon();
   }, [followUpText, persistSoon]);
+
+  useEffect(() => {
+    dayRef.current = day;
+    persistSoon();
+  }, [day, persistSoon]);
 
   // A message answers one press of Save. The first change after it, a key
   // typed or a contact chosen, takes it away.
@@ -378,7 +391,7 @@ const Composer = ({
           type: kind,
           title: INTERACTION_LABELS[kind],
           content: editor.getHTML(),
-          date: new Date().toISOString(),
+          date: dayRef.current || new Date().toISOString(),
         };
         if (followUpItem) payload.actionItem = followUpItem;
         await addInteraction.mutateAsync({ contactId: target, data: payload });
@@ -390,6 +403,7 @@ const Composer = ({
       // Only now, and only the submitted part.
       removeSubmitted(editor, mark);
       setFollowUpText((current) => followUpRemainder(current, followUp));
+      setDay("");
       persistSoon();
       onSaved?.({ type: kind, contactId: target });
     } catch {
@@ -519,6 +533,23 @@ const Composer = ({
     setOpened(false);
   };
 
+  /**
+   * Today, or a day before it: a note is never dated ahead. The wide
+   * composer's bar has room for it beside the type. The narrow one and the
+   * dialog give it a row of its own, so their bar stays one row in view.
+   */
+  const inlineDay = !compact && !collapsible;
+  const dayField = (
+    <input
+      type="date"
+      aria-label="Date"
+      max={today}
+      value={day || today}
+      onChange={(e) => setDay(e.target.value < today ? e.target.value : "")}
+      className="min-h-[44px] sm:pointer-fine:min-h-0 sm:pointer-fine:h-9 rounded-lg bg-surface-container px-2.5 text-base sm:text-xs font-bold text-on-surface"
+    />
+  );
+
   return (
     // Key and focus handlers on the container, not a control: the events come
     // from the fields and buttons inside it.
@@ -570,6 +601,10 @@ const Composer = ({
         <span id={placeholderId} className="sr-only">
           {PLACEHOLDERS[type]}
         </span>
+
+        {!inlineDay && (
+          <div className={cn("mt-4", !expanded && "hidden")}>{dayField}</div>
+        )}
 
         {/* The follow-up line, and the save hint at its end */}
         <div
@@ -665,6 +700,8 @@ const Composer = ({
           label="Interaction type"
           className="w-auto"
         />
+
+        {inlineDay && dayField}
 
         <button
           type="button"

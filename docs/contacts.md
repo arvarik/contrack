@@ -71,9 +71,12 @@ Press **New**, the plus button above the list.
 
 - **New contact** opens a form. Only **Full name** is required. Press
   **Save contact**. In the list, `N` opens the form too.
-- **Add from text**: paste an email signature, a bio or rough notes, and
-  press **Extract contact**. AI fills in the **New contact** form for you to
-  check. `V` opens it too. It needs AI. When AI is off or no model is set up,
+- **Add from text**: paste an email signature, a bio or notes from a
+  meeting, and press **Extract contact**. AI fills in the **New contact**
+  form for you to check. Below the fields are the tags and the past
+  meetings, calls and emails that it found, each with a check box and each
+  interaction with its date. Clear a box to leave one out. The other things
+  it found, such as jobs and links, save with the contact. `V` opens it too. It needs AI. When AI is off or no model is set up,
   the dialog says what is missing, and links to the fix when you can make it.
   See [Connect a provider](ai.md#connect-a-provider).
 - **New list**: see [Lists](#lists).
@@ -204,7 +207,8 @@ and then one heading per month. The week starts on the day set in
    weekday is always the next one: on a Monday, "Friday" is this Friday. A
    follow-up needs a date. With only a follow-up and no note, Save adds the
    follow-up alone, and "last contacted" does not change.
-4. Choose **Note**, **Call**, **Meeting** or **Email**.
+4. Choose **Note**, **Call**, **Meeting** or **Email**, and the date. The
+   date is today. For a meeting that happened before, choose its day.
 5. Press **Save**, or `Cmd+Enter` (`Ctrl+Enter` on Windows and Linux).
 
 The entry takes its type as its title: "Note", "Call", "Meeting" or "Email".
