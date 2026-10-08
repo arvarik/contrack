@@ -145,11 +145,11 @@ export function csvCell(value: unknown): string {
 }
 
 /**
- * One account's flat contacts CSV: the same rows as the vCard file (see
- * `buildContactsVcf`).
+ * The contacts both files write: active and archived, and not the Trash, ghosts
+ * or merged-away rows (see `buildContactsVcf`).
  */
-export function buildContactsCsv(scope: Scope): string {
-  const contacts = contactRepo.hydrateMany(
+function exportableContacts(scope: Scope): HydratedContact[] {
+  return contactRepo.hydrateMany(
     sqlite
       .prepare(
         `SELECT * FROM contacts
@@ -159,60 +159,43 @@ export function buildContactsCsv(scope: Scope): string {
       )
       .all(scope.ownerId),
   );
+}
 
-  const header = [
-    "Name",
-    "First Name",
-    "Last Name",
-    "Company",
-    "Role",
-    "Location",
-    "Industry",
-    "Website",
-    "Emails",
-    "Phones",
-    "Addresses",
-    "Social Links",
-    "Birthday",
-    "About",
-    "Tags",
-    "Archived",
-    "Tracked",
-    "Cadence Days",
-    "Tracked At",
-    "Added At",
-    "Last Contacted At",
-  ];
+/** Each CSV column: its header, and how it reads one contact. */
+const CSV_COLUMNS: [string, (c: HydratedContact) => unknown][] = [
+  ["Name", (c) => c.name],
+  ["First Name", (c) => c.firstName],
+  ["Last Name", (c) => c.lastName],
+  ["Company", (c) => c.company],
+  ["Role", (c) => c.role],
+  ["Location", (c) => c.location],
+  ["Industry", (c) => c.industry],
+  ["Website", (c) => c.website],
+  ["Emails", (c) => (c.emails ?? []).map((e) => e.email).join("; ")],
+  ["Phones", (c) => (c.phones ?? []).map((p) => p.phone).join("; ")],
+  ["Addresses", (c) => (c.addresses ?? []).map((a) => a.address).join("; ")],
+  ["Social Links", (c) => (c.socialLinks ?? []).map((l) => l.url).join("; ")],
+  ["Birthday", (c) => c.birthday],
+  ["About", (c) => c.about],
+  ["Tags", (c) => (c.tags ?? []).map((t) => t.tag).join("; ")],
+  ["Archived", (c) => (c.isArchived ? "yes" : "no")],
+  ["Tracked", (c) => (c.isTracked ? "yes" : "no")],
+  ["Cadence Days", (c) => c.cadenceDays],
+  ["Tracked At", (c) => c.trackedAt],
+  ["Added At", (c) => c.addedAt],
+  ["Last Contacted At", (c) => c.lastContactedAt],
+];
 
-  const rows = contacts.map((c) =>
-    [
-      c.name,
-      c.firstName,
-      c.lastName,
-      c.company,
-      c.role,
-      c.location,
-      c.industry,
-      c.website,
-      (c.emails ?? []).map((e) => e.email).join("; "),
-      (c.phones ?? []).map((p) => p.phone).join("; "),
-      (c.addresses ?? []).map((a) => a.address).join("; "),
-      (c.socialLinks ?? []).map((l) => l.url).join("; "),
-      c.birthday,
-      c.about,
-      (c.tags ?? []).map((t) => t.tag).join("; "),
-      c.isArchived ? "yes" : "no",
-      c.isTracked ? "yes" : "no",
-      c.cadenceDays,
-      c.trackedAt,
-      c.addedAt,
-      c.lastContactedAt,
-    ]
-      .map(csvCell)
-      .join(","),
+/**
+ * One account's flat contacts CSV: the same rows as the vCard file (see
+ * `buildContactsVcf`).
+ */
+export function buildContactsCsv(scope: Scope): string {
+  const header = CSV_COLUMNS.map(([name]) => csvCell(name)).join(",");
+  const rows = exportableContacts(scope).map((c) =>
+    CSV_COLUMNS.map(([, read]) => csvCell(read(c))).join(","),
   );
-
-  return [header.map(csvCell).join(","), ...rows].join("\r\n") + "\r\n";
+  return [header, ...rows].join("\r\n") + "\r\n";
 }
 
 /**
@@ -226,18 +209,7 @@ export function buildContactsCsv(scope: Scope): string {
  *   exists only for undo, so it would write the same person twice.
  */
 export function buildContactsVcf(scope: Scope): string {
-  const contacts = contactRepo.hydrateMany(
-    sqlite
-      .prepare(
-        `SELECT * FROM contacts
-          WHERE ownerId = ? AND deletedAt IS NULL AND isGhost = 0
-            AND canonicalId IS NULL
-          ORDER BY name COLLATE NOCASE ASC`,
-      )
-      .all(scope.ownerId),
-  );
-
-  return serializeVCards(contacts.map(toVCardInput));
+  return serializeVCards(exportableContacts(scope).map(toVCardInput));
 }
 
 /** The fields of a contact that belong on a contact card. */

@@ -62,7 +62,7 @@ export function isTransientImageError(err: unknown): boolean {
 
 /** A stable 24-hex-character file name stem for a remote URL. */
 export function urlDigest(url: string): string {
-  return crypto.createHash("sha256").update(url).digest("hex").slice(0, 24);
+  return crypto.hash("sha256", url).slice(0, 24);
 }
 
 /**

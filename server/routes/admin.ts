@@ -82,7 +82,7 @@ import {
   discardAuthLink,
   ADMIN_RESET_LINK_TTL_SECONDS,
 } from "../services/authLinkService.ts";
-import { snapshotFile } from "../services/backupService.ts";
+import { snapshotFile, rescheduleBackups } from "../services/backupService.ts";
 import { exportFileSlug } from "../services/exportService.ts";
 
 const router = Router();
@@ -445,6 +445,7 @@ router.put(
     }
     if (req.body.backupIntervalHours !== undefined) {
       setBackupIntervalHours(req.body.backupIntervalHours);
+      rescheduleBackups();
       changed.push(SETTING_KEYS.backupIntervalHours);
     }
     if (req.body.backupKeep !== undefined) {

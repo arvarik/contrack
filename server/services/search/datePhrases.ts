@@ -65,7 +65,7 @@ const MONTH_PATTERN = `(?:${[...MONTHS, ...MONTH_ABBREVIATIONS]
   .sort((a, b) => b.length - a.length)
   .join("|")})\\.?`;
 
-const WRITTEN_NUMBERS: Record<string, number> = {
+export const WRITTEN_NUMBERS: Record<string, number> = {
   a: 1,
   an: 1,
   one: 1,
@@ -81,16 +81,6 @@ const WRITTEN_NUMBERS: Record<string, number> = {
   eleven: 11,
   twelve: 12,
 };
-
-/** Whether Intl knows the zone. A bad name must be refused, not defaulted. */
-export function isValidTimeZone(zone: string): boolean {
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: zone });
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 interface ZonedParts {
   year: number;

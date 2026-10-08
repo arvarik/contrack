@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import crypto from "node:crypto";
 import { sqlite } from "../../db.ts";
 import { ACTIVE_CONTACT_SQL } from "./ftsIndex.ts";
 import { PASSAGE_VERSION } from "./passageIndex.ts";
@@ -25,7 +25,7 @@ export interface PassageSnapshot {
   passages: SearchPassage[];
 }
 
-const hash = (text: string) => createHash("sha256").update(text).digest("hex");
+const hash = (text: string) => crypto.hash("sha256", text);
 const CHARS = 480;
 const OVERLAP = 80;
 

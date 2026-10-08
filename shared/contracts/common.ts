@@ -56,11 +56,7 @@ export const idsSchema = z
   .max(5000)
   .transform((ids) => [...new Set(ids)]);
 
-/**
- * Whether Intl knows the zone. A bad name is refused, not defaulted. A copy
- * of `isValidTimeZone` in `server/services/search/datePhrases.ts`, because
- * `shared/` never imports `server/`. Change both together.
- */
+/** Whether Intl knows the zone. A bad name is refused, not defaulted. */
 export function isValidTimeZone(zone: string): boolean {
   try {
     new Intl.DateTimeFormat("en-US", { timeZone: zone });

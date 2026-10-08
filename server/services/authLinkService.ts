@@ -41,7 +41,7 @@ export const HOURLY_CREATION_CAP = 3;
  * SHA-256 hash a plaintext token for lookup in auth_links.
  */
 export function hashToken(token: string): string {
-  return crypto.createHash("sha256").update(token).digest("hex");
+  return crypto.hash("sha256", token);
 }
 
 /**

@@ -22,6 +22,7 @@
  *
  * @module server/services/relationshipService
  */
+import type { ScoreBreakdown } from "../../shared/contracts/contacts.ts";
 import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
@@ -61,25 +62,6 @@ function recencyScore(daysSinceContact: number, cadenceDays: number): number {
   if (daysSinceContact <= 0) return 100;
   const k = 0.08;
   return 100 / (1 + Math.exp(k * (daysSinceContact - cadenceDays)));
-}
-
-/**
- * The five signals behind a score, each 0 to 100, with its weight. A bare "42"
- * attached to a person is a judgment nobody can check; "you last spoke 8 months
- * ago, against a 90-day cadence" is something to act on or dispute.
- */
-export interface ScoreBreakdown {
-  score: number;
-  components: {
-    key: "recency" | "frequency" | "depth" | "reciprocity" | "momentum";
-    label: string;
-    /** 0–100 for this signal alone. */
-    value: number;
-    /** Its share of the composite, 0–1. */
-    weight: number;
-    /** What this signal measured, in words. */
-    detail: string;
-  }[];
 }
 
 const WEIGHTS = {
@@ -458,32 +440,11 @@ export const relationshipService = {
 
   /**
    * Compute and save one contact's score, right after an interaction is
-   * created.
+   * created. Only a tracked contact is scored: an interaction logged on anybody
+   * else changes `lastContactedAt` and nothing more.
    */
   computeScore(contactId: string): number | null {
-    const contact = sqlite
-      .prepare(
-        // tenant-lint: allow owner-checked by caller
-        `SELECT id, ownerId, cadenceDays, lastContactedAt, isTracked
-           FROM contacts WHERE id = ?`,
-      )
-      .get(contactId) as ContactScoreTarget | undefined;
-
-    // Only a tracked contact is scored. An interaction logged on anybody
-    // else changes `lastContactedAt` and nothing more.
-    if (!contact || !contact.isTracked) return null;
-
-    const defaultCadence = contact.ownerId
-      ? (getPreferences(contact.ownerId).defaultCadenceDays ?? 90)
-      : 90;
-    const score = computeScoreForContact(contact, defaultCadence);
-    sqlite
-      .prepare(
-        // tenant-lint: allow owner-checked by caller
-        "UPDATE contacts SET relationshipScore = ?, scoreDirty = 0 WHERE id = ?",
-      )
-      .run(score, contactId);
-    return score;
+    return relationshipService.explainScore(contactId)?.score ?? null;
   },
 
   /**

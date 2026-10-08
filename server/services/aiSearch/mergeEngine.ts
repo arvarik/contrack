@@ -216,7 +216,7 @@ function entryText(entry: unknown, key: string): string {
 
 /** A short fingerprint of a field's whole value. */
 function valueHash(text: string): string {
-  return crypto.createHash("sha256").update(text).digest("hex").slice(0, 16);
+  return crypto.hash("sha256", text).slice(0, 16);
 }
 
 /** An entry as the record keeps it, each part cut to the schema's length. */

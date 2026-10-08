@@ -50,8 +50,6 @@ export function triggerIndexDrain(delayMs = DEFAULT_DEBOUNCE_MS): void {
 
 export interface DrainOptions {
   /** Maximum number of items to drain in one call. Defaults to 50. */
-  maxItems?: number;
-  /** Alias for maxItems. */
   maxBatchSize?: number;
   /** Allow draining using a paid provider model. If false/omitted, paid models are skipped. */
   allowProvider?: boolean;
@@ -133,7 +131,7 @@ export async function drainIndexQueue(
   };
 
   try {
-    const limit = options.maxItems ?? options.maxBatchSize ?? DRAIN_BATCH_SIZE;
+    const limit = options.maxBatchSize ?? DRAIN_BATCH_SIZE;
     const seenInThisDrain = new Set<string>();
 
     while (result.processed < limit) {

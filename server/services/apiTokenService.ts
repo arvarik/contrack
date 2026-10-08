@@ -5,6 +5,7 @@
 // it is 256 random bits, so there is no dictionary for a slow KDF to defend
 // against. The plaintext exists once, in the response that created it.
 
+import type { ApiToken } from "../../shared/contracts/tokens.ts";
 import crypto from "crypto";
 import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
@@ -21,25 +22,8 @@ const DISPLAY_PREFIX_LENGTH = 12;
 export const MAX_TOKEN_NAME = 60;
 export const MAX_TOKEN_DAYS = 3650;
 
-export interface TokenSummary {
-  id: string;
-  name: string;
-  tokenPrefix: string;
-  createdAt: string;
-  lastUsedAt: string | null;
-  expiresAt: string | null;
-  revokedAt: string | null;
-  /** True when the token may only read. See `guardReadOnlyToken`. */
-  readOnly: boolean;
-  /**
-   * `personal` for a token the person made, `oauth` for an app they approved
-   * (oauthService.ts). An app's `tokenPrefix` is the host it signs in from.
-   */
-  kind: "personal" | "oauth";
-}
-
 function hashToken(token: string): string {
-  return crypto.createHash("sha256").update(token).digest("hex");
+  return crypto.hash("sha256", token);
 }
 
 /**
@@ -116,13 +100,13 @@ export function createToken(
 }
 
 /** One account's tokens, newest first, revoked and expired ones included. */
-export function listTokens(userId: string): TokenSummary[] {
+export function listTokens(userId: string): ApiToken[] {
   const rows = sqlite
     .prepare(
       `SELECT id, name, tokenPrefix, createdAt, lastUsedAt, expiresAt, revokedAt, readOnly, kind
          FROM api_tokens WHERE userId = ? ORDER BY createdAt DESC`,
     )
-    .all(userId) as (Omit<TokenSummary, "readOnly"> & { readOnly: number })[];
+    .all(userId) as (Omit<ApiToken, "readOnly"> & { readOnly: number })[];
   return rows.map((row) => ({ ...row, readOnly: row.readOnly === 1 }));
 }
 

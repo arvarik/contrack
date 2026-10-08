@@ -56,7 +56,7 @@ const SELECT_INVITATIONS = `
     LEFT JOIN users u ON u.id = i.invitedBy`;
 
 function tokenHash(secret: string): string {
-  return crypto.createHash("sha256").update(secret).digest("hex");
+  return crypto.hash("sha256", secret);
 }
 
 /**
