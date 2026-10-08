@@ -1,10 +1,40 @@
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import path from "path";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
+
+/** The render-blocking boot script's tag in index.html. */
+const THEME_BOOT_TAG = '<script src="/theme-boot.js"></script>';
+
+/**
+ * Vite does not hash `public/` files, so a phone revalidated the
+ * render-blocking `theme-boot.js` on every start: one round trip before the
+ * app's code ran. The build puts the file's hash in the tag (`?v=`), and the
+ * server lets a browser keep that copy a year (`server/serveClient.ts`).
+ */
+const versionThemeBoot = (): Plugin => ({
+  name: "version-theme-boot",
+  apply: "build",
+  transformIndexHtml(html) {
+    if (!html.includes(THEME_BOOT_TAG))
+      throw new Error(`index.html has no ${THEME_BOOT_TAG}`);
+    const hash = createHash("sha256")
+      .update(
+        readFileSync(path.resolve(import.meta.dirname, "public/theme-boot.js")),
+      )
+      .digest("hex")
+      .slice(0, 10);
+    return html.replace(
+      THEME_BOOT_TAG,
+      `<script src="/theme-boot.js?v=${hash}"></script>`,
+    );
+  },
+});
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), versionThemeBoot()],
   resolve: {
     alias: {
       // import.meta.dirname, not __dirname: this config is ESM, and Vite's

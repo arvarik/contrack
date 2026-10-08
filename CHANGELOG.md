@@ -129,6 +129,9 @@ with an empty `DATA_DIR`.
 - On a phone, notes on the timeline and Pulse rows use the full width, the
   bulk bar is one row with a **More actions** menu, filter pills scroll in
   one line, and each Settings group is one card.
+- A start with a warm cache shows the contact list about a second sooner on a
+  slow phone connection. The list loads beside the sign-in check, and the
+  theme script stays cached.
 - "Follow up Friday" always means the next Friday, a follow-up alone no
   longer counts as talking to someone, a birthday with no year keeps none,
   and email and phone fields refuse text that is not an address or a number.

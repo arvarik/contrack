@@ -63,9 +63,11 @@ export const SelectedCount = ({ count }: { count: number }) => (
     role="status"
     aria-live="polite"
     aria-atomic="true"
-    className="text-sm font-bold text-on-surface mx-2 shrink-0 tabular-nums"
+    className="text-sm font-bold text-on-surface mx-2 max-sm:mx-1 shrink-0 tabular-nums"
   >
-    <span className="text-primary">{count}</span> selected
+    <span className="text-primary">{count}</span>
+    {/* Under 360 px the one-row phone bar has no room for the word. */}
+    <span className="max-[359px]:sr-only"> selected</span>
   </span>
 );
 
@@ -103,18 +105,18 @@ export const BulkActionToolbar = ({
   // Every action is disabled until a row is picked.
   const nothingSelected = selectedCount === 0;
   const [showBulkColorPicker, setShowBulkColorPicker] = React.useState(false);
-  // The whole bar: the picker opens from Color, or from More on a phone.
-  const bulkColorPickerRef = useRef<HTMLDivElement>(null);
+  // The picker's two homes: Color, and More on a phone. A press anywhere
+  // else, another bar button too, closes it.
+  const colorHomeRef = useRef<HTMLDivElement>(null);
+  const moreHomeRef = useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
     if (!showBulkColorPicker) return;
     const handler = (e: MouseEvent) => {
-      if (
-        bulkColorPickerRef.current &&
-        !bulkColorPickerRef.current.contains(e.target as Node)
-      ) {
-        setShowBulkColorPicker(false);
-      }
+      const inside = [colorHomeRef, moreHomeRef].some((home) =>
+        home.current?.contains(e.target as Node),
+      );
+      if (!inside) setShowBulkColorPicker(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -163,10 +165,9 @@ export const BulkActionToolbar = ({
           for contrast. The buttons wrap in a narrow pane, so none sit past
           the edge. A phone gets one row (`PHONE_HIDDEN`). */}
       <div
-        ref={bulkColorPickerRef}
         role="toolbar"
         aria-label="Bulk actions"
-        className="bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-2.5 max-sm:px-2 max-sm:py-1.5 flex flex-wrap max-sm:flex-nowrap items-center justify-center max-sm:justify-between gap-1 min-w-0"
+        className="bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-2.5 max-sm:px-2 max-sm:py-1.5 flex flex-wrap max-sm:flex-nowrap items-center justify-center max-sm:justify-between gap-1 max-sm:gap-0 min-w-0"
       >
         {selectedCount !== undefined && <SelectedCount count={selectedCount} />}
         {/* Track first: it decides who the score and Pulse are about. */}
@@ -199,7 +200,10 @@ export const BulkActionToolbar = ({
           className={cn("text-primary", PHONE_HIDDEN)}
         />
 
-        <div className={cn("relative shrink-0", PHONE_HIDDEN)}>
+        <div
+          ref={colorHomeRef}
+          className={cn("relative shrink-0", PHONE_HIDDEN)}
+        >
           <button
             type="button"
             onClick={() => setShowBulkColorPicker((v) => !v)}
@@ -239,9 +243,11 @@ export const BulkActionToolbar = ({
           className="text-error"
         />
 
-        <div className="relative shrink-0 sm:hidden">
+        <div ref={moreHomeRef} className="relative shrink-0 sm:hidden">
           <ActionMenu
             label="More actions"
+            // The menu opens over the picker: one panel at a time.
+            onOpenChange={(open) => open && setShowBulkColorPicker(false)}
             icon={MoreHorizontal}
             iconClassName="w-4 h-4"
             triggerClassName="min-w-11 min-h-11"

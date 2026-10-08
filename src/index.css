@@ -269,6 +269,12 @@
     @apply bg-surface text-on-surface font-body antialiased;
   }
 
+  /* No gray box on a tap in iOS Safari: every control draws its own press
+   * (`state-layer`, the buttons' sink), and the box doubled it. */
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
   /* A quick second tap on a control is a second press, not a zoom. Pan and
    * pinch still work, so the page can still be zoomed. */
   :where(a, button, input, select, textarea, label, summary, [role="button"]) {
@@ -1294,6 +1300,26 @@ html[data-text-scale="large"] {
      large and a small one reaches 16 px. */
   :is(input, textarea)[class*="text-inherit"] {
     font-size: max(16px, 1em);
+  }
+}
+
+/* The contact's name in the narrow Back bar (`BackBar`). It fades in while
+   the header's name scrolls under the bar, as an iOS large title does.
+   Without scroll-driven animations (Safari before 26) the bar shows Back
+   alone, as before. */
+.contact-bar-name {
+  opacity: 0;
+}
+@supports (animation-timeline: scroll()) {
+  .contact-bar-name {
+    animation: contact-bar-name linear both;
+    animation-timeline: scroll(nearest);
+    animation-range: 48px 96px;
+  }
+}
+@keyframes contact-bar-name {
+  to {
+    opacity: 1;
   }
 }
 

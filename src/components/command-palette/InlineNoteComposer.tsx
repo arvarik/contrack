@@ -200,7 +200,8 @@ export const InlineNoteComposer: React.FC<InlineNoteComposerProps> = ({
               e.stopPropagation();
           }}
           placeholder={placeholder}
-          className="w-full bg-surface-container-low rounded-xl p-3 text-sm text-on-surface placeholder:text-on-surface-variant resize-none min-h-[80px] max-h-[160px]"
+          // A phone grows the box with the note, up to its cap.
+          className="w-full bg-surface-container-low rounded-xl p-3 text-sm text-on-surface placeholder:text-on-surface-variant resize-none min-h-[80px] max-h-[160px] max-sm:[field-sizing:content]"
           rows={3}
         />
       </div>

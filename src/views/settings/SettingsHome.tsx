@@ -25,7 +25,7 @@ import { flyCorvid } from "../../lib/corvid";
 
 /**
  * A card that is itself the link. The lift is its only hover. On a phone the
- * group is the one card and each link a row in it, with the press layer.
+ * group is the one card and each link a row in it, tinted on press.
  */
 const SettingsLink = ({
   to,
@@ -45,8 +45,9 @@ const SettingsLink = ({
       to={to}
       className={cn(
         CARD_INTERACTIVE,
-        "state-layer flex items-start gap-3.5 p-4 sm:p-5",
-        "max-sm:p-3 max-sm:rounded-xl max-sm:bg-transparent max-sm:shadow-none",
+        "flex items-start gap-3.5 p-4 sm:p-5",
+        // A row of the phone's group card, tinted on press.
+        "max-sm:p-3 max-sm:rounded-xl max-sm:bg-transparent max-sm:shadow-none max-sm:active:bg-on-surface/10",
       )}
     >
       <span

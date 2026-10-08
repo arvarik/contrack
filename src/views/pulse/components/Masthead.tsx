@@ -104,10 +104,12 @@ export const Masthead = ({
       description={quiet ? undefined : line}
       actions={
         <>
+          {/* Small on a phone, like the Network list's New: the full size
+              outweighed the title beside it. */}
           <button
             type="button"
             onClick={() => openQuickNote()}
-            className="btn-primary"
+            className={wide ? "btn-primary" : "btn-primary btn-sm"}
           >
             <PenLine className="w-4 h-4" aria-hidden="true" />
             Log note

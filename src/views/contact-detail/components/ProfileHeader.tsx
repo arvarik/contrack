@@ -437,12 +437,18 @@ export const ContactIntro = ({
 
 /**
  * Back, below `lg`, where the list does not show. The bar is 56 px tall, and
- * the narrow tabs stick right under it (ContactProfile).
+ * the narrow tabs stick right under it (ContactProfile). With a `name`, the
+ * name fades into the bar as the header's name scrolls under it
+ * (`.contact-bar-name` in index.css), as an iOS large title does.
  */
 export const BackBar = ({
   onClose,
   backLabel,
-}: Pick<ProfileHeaderProps, "backLabel"> & { onClose: () => void }) => (
+  name,
+}: Pick<ProfileHeaderProps, "backLabel"> & {
+  onClose: () => void;
+  name?: string;
+}) => (
   // Solid, like the sticky tab row under it: the header's text scrolls
   // under both.
   <div className="sticky top-0 z-30 bg-surface h-14 px-4 lg:hidden flex items-center justify-between shrink-0">
@@ -455,6 +461,15 @@ export const BackBar = ({
       <ArrowLeft aria-hidden="true" className="w-5 h-5" />
       {backLabel ?? "Back"}
     </button>
+    {/* The page's `h1` names the person, so a screen reader skips this. */}
+    {name && (
+      <span
+        aria-hidden="true"
+        className="contact-bar-name flex-1 min-w-0 px-2 truncate text-center text-sm font-bold text-on-surface pointer-events-none"
+      >
+        {name}
+      </span>
+    )}
     {/* A phone has no ⌘K: the way to the next person from this one. */}
     <PaletteButton className="-mr-2" />
   </div>
@@ -733,7 +748,9 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
 
   return (
     <>
-      {onClose && <BackBar onClose={onClose} backLabel={backLabel} />}
+      {onClose && (
+        <BackBar onClose={onClose} backLabel={backLabel} name={contact.name} />
+      )}
 
       {/* A follow-up that is late, today or within the week, the same window
           as Pulse's "This week". A later one shows only in Details. */}

@@ -22,8 +22,8 @@ import { toast } from "sonner";
 import {
   DEFAULT_PREFERENCES,
   deletePreference,
-  fetchPreferences,
   isDefaultValue,
+  preferencesQuery,
   savePreferences,
   type Preferences,
   type PreferencesResponse,
@@ -31,7 +31,7 @@ import {
 import { applyTheme, readThemeCache, type ResolvedMode } from "../lib/theme";
 import { errorText } from "../lib/utils";
 
-const QUERY_KEY = ["preferences"] as const;
+const QUERY_KEY = preferencesQuery.queryKey;
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 
@@ -91,14 +91,7 @@ export const usePreferences = () => useContext(PreferencesContext);
 export function PreferencesProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
 
-  const { data, isSuccess } = useQuery({
-    queryKey: QUERY_KEY,
-    queryFn: fetchPreferences,
-    // This provider is the only writer, so a refetch on focus could only
-    // replace an optimistic value with a stale one.
-    staleTime: Infinity,
-    gcTime: Infinity,
-  });
+  const { data, isSuccess } = useQuery(preferencesQuery);
 
   // Until the account answers, the theme and the accent are what this
   // browser last painted (the boot script's), so a load does not flash the

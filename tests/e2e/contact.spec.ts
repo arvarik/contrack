@@ -955,7 +955,11 @@ test.describe("tracking", () => {
   test("t tracks and untracks the open contact", async ({ page, instance }) => {
     const id = await ownContact(instance, "Zed Keyed");
     await page.goto(`/contact/${id}`);
-    await expect(contactHeading(page, "Zed Keyed")).toBeVisible();
+    // The loaded header, not its skeleton: the skeleton shows the name from
+    // the cached contact list, and nothing acts on it until the contact loads.
+    await expect(
+      page.getByRole("button", { name: "Track, choose how often" }),
+    ).toBeVisible();
 
     // One key, the account's default cadence, as before.
     await page.keyboard.press("t");
