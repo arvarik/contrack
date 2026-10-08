@@ -128,7 +128,7 @@ With no contacts yet, Pulse shows **Welcome to Pulse** with four first steps: **
 
 The **Catch up** clock starts at your last interaction with the contact. With nothing logged, it starts on the day you tracked the contact. A contact comes due the day after its cadence ends. When more than ten contacts are past due, the heading shows the total, for example "10 of 14".
 
-Each row shows the name, the chip and what to do. A row that is not a catch-up also says when you last spoke, for example "Last spoke 2 weeks ago". Press a row to open the contact. The round button at the start of the row does the row's job:
+Each row shows the name, the chip and what to do. A row that is not a catch-up also says when you last spoke, for example "Last spoke 2 weeks ago" ("Spoke 2 weeks ago" on a phone). Press a row to open the contact. The round button at the start of the row does the row's job:
 
 - On a follow-up, the check marks it done.
 - On a birthday ("Wish Rowan Vale a happy birthday"), the cake opens a note to log.

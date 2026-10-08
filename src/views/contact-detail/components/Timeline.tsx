@@ -152,6 +152,10 @@ const MONTH_YEAR = new Intl.DateTimeFormat(undefined, {
   year: "numeric",
 });
 const SHORT_MONTH = new Intl.DateTimeFormat(undefined, { month: "short" });
+const SHORT_DAY = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+});
 
 interface DatedEntry {
   item: Interaction;
@@ -299,7 +303,9 @@ const TimelineEntry = React.memo(
             : undefined
         }
       >
-        <div className="w-16 shrink-0 pt-4">
+        {/* A phone has no room for the date column: the date and the kind's
+            icon move into the card's title row, so the text gets the width. */}
+        <div className="w-16 shrink-0 pt-4 max-sm:hidden">
           {date && (
             <time
               dateTime={date.toISOString()}
@@ -318,7 +324,7 @@ const TimelineEntry = React.memo(
         <div className={cn(TIMELINE_CARD, "flex min-w-0 flex-1 gap-3")}>
           <div
             className={cn(
-              "flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
+              "flex h-8 w-8 shrink-0 items-center justify-center rounded-full max-sm:hidden",
               tone,
             )}
           >
@@ -328,6 +334,15 @@ const TimelineEntry = React.memo(
           <div className="min-w-0 flex-1">
             <div className="flex items-start gap-3">
               <div className="min-w-0 flex-1 pt-1 flex flex-wrap items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className={cn(
+                    "sm:hidden flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
+                    tone,
+                  )}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                </span>
                 <h3 className="font-bold text-on-surface break-words">
                   <button
                     type="button"
@@ -343,6 +358,14 @@ const TimelineEntry = React.memo(
                   </span>
                 )}
               </div>
+              {date && (
+                <time
+                  dateTime={date.toISOString()}
+                  className="sm:hidden shrink-0 pt-1.5 text-xs font-medium tabular-nums text-on-surface-variant"
+                >
+                  {SHORT_DAY.format(date)}
+                </time>
+              )}
               <ActionMenu
                 label={`Actions for ${item.title}`}
                 className="-mr-2 -mt-1 shrink-0"

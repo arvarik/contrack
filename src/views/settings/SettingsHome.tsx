@@ -23,7 +23,10 @@ import { perchProps } from "../../components/brand/CorvidFlight";
 import { useCorvidLevel } from "../../hooks/useCorvidLevel";
 import { flyCorvid } from "../../lib/corvid";
 
-/** A card that is itself the link. The lift is its only hover. */
+/**
+ * A card that is itself the link. The lift is its only hover. On a phone the
+ * group is the one card and each link a row in it, with the press layer.
+ */
 const SettingsLink = ({
   to,
   icon: Icon,
@@ -40,7 +43,11 @@ const SettingsLink = ({
   return (
     <SlideLink
       to={to}
-      className={cn(CARD_INTERACTIVE, "flex items-start gap-3.5 p-4 sm:p-5")}
+      className={cn(
+        CARD_INTERACTIVE,
+        "state-layer flex items-start gap-3.5 p-4 sm:p-5",
+        "max-sm:p-3 max-sm:rounded-xl max-sm:bg-transparent max-sm:shadow-none",
+      )}
     >
       <span
         className={cn(
@@ -152,7 +159,7 @@ export const SettingsHome = () => {
                   }
                 >
                   <h2 className={SETTINGS_SECTION_HEADING}>{group.title}</h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-sm:gap-0 max-sm:p-1 max-sm:rounded-2xl max-sm:bg-surface-container-lowest max-sm:shadow-sm">
                     {pages.map((page) => (
                       <SettingsLink
                         key={page.id}

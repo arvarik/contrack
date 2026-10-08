@@ -15,7 +15,8 @@ export interface SegmentedOption<T extends string | number> {
   /**
    * A glyph for narrow screens. With one, the option shows the glyph below
    * `sm` and the text from `sm`. The text stays in the page as the option's
-   * name at every width, visually hidden where the glyph stands in for it.
+   * name at every width, visually hidden where the glyph stands in for it,
+   * except on the chosen option.
    */
   icon?: LucideIcon;
 }
@@ -99,7 +100,17 @@ export const Segmented = <T extends string | number>({
             {Icon ? (
               <>
                 <Icon aria-hidden="true" className="w-4 h-4 sm:hidden" />
-                <span className="sr-only sm:not-sr-only">{option.label}</span>
+                {/* Below `sm` the chosen option keeps its word beside the
+                    glyph, so the control says what it is set to. */}
+                <span
+                  className={
+                    value === option.value
+                      ? "max-sm:ml-1.5"
+                      : "sr-only sm:not-sr-only"
+                  }
+                >
+                  {option.label}
+                </span>
               </>
             ) : (
               option.label

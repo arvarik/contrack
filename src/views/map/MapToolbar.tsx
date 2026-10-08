@@ -529,7 +529,8 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
       {!cramped && (
         <div
           data-map-chrome="top"
-          className="absolute top-4 left-4 z-10 flex items-center gap-2 lg:hidden"
+          // Stretched, so the glyph-only buttons match the worded ones.
+          className="absolute top-4 left-4 z-10 flex items-stretch gap-2 lg:hidden"
         >
           <button
             type="button"
@@ -549,7 +550,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
             type="button"
             onClick={onFitAll}
             aria-label="Fit all"
-            className="hit-area state-layer glass-panel shadow-lg rounded-xl p-2 text-sm font-medium text-on-surface cursor-pointer border border-outline-variant/30"
+            className="hit-area state-layer glass-panel shadow-lg rounded-xl px-2.5 flex items-center text-sm font-medium text-on-surface cursor-pointer border border-outline-variant/30"
           >
             <Maximize2 className="w-4 h-4" />
           </button>

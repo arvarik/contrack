@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import {
   Archive,
   ListPlus as AddToListIcon,
+  MoreHorizontal,
   Pencil,
   Copy,
   Palette,
@@ -13,6 +14,7 @@ import { VIBES, vibeTokens } from "../../lib/theme";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import { BAR_BUTTON, BAR_LABEL, SELECTED_TINT } from "../../lib/styles";
 import { cn } from "../../lib/utils";
+import { ActionMenu } from "../../components/ui/ActionMenu";
 import type { SelectionTracked } from "../../components/bulk/useBulkActions";
 
 const BulkActionBtn = ({
@@ -34,12 +36,23 @@ const BulkActionBtn = ({
     disabled={disabled}
     title={label}
     aria-label={label}
-    className={cn(BAR_BUTTON, "disabled:opacity-40 cursor-pointer", className)}
+    className={cn(
+      BAR_BUTTON,
+      "disabled:opacity-40 cursor-pointer max-sm:min-h-11 max-sm:justify-center",
+      className,
+    )}
   >
     {icon}
-    <span className={BAR_LABEL}>{label}</span>
+    {/* A phone shows the glyphs alone, so the bar is one row. */}
+    <span className={cn(BAR_LABEL, "max-sm:sr-only")}>{label}</span>
   </button>
 );
+
+/**
+ * On a phone, the three rarer actions wait in a More menu: with their words,
+ * all eight buttons wrapped to three rows over the list.
+ */
+const PHONE_HIDDEN = "max-sm:hidden";
 
 /**
  * "3 selected" at the start of a bulk bar, read out as it changes. Atomic,
@@ -90,6 +103,7 @@ export const BulkActionToolbar = ({
   // Every action is disabled until a row is picked.
   const nothingSelected = selectedCount === 0;
   const [showBulkColorPicker, setShowBulkColorPicker] = React.useState(false);
+  // The whole bar: the picker opens from Color, or from More on a phone.
   const bulkColorPickerRef = useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -106,6 +120,36 @@ export const BulkActionToolbar = ({
     return () => document.removeEventListener("mousedown", handler);
   }, [showBulkColorPicker]);
 
+  const colorPicker = (
+    <AnimatePresence>
+      {showBulkColorPicker && (
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9, y: 6 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.9, y: 6 }}
+          className="absolute bottom-full mb-2 left-1/2 max-sm:left-auto max-sm:right-0 -translate-x-1/2 max-sm:translate-x-0 menu-panel p-3 z-50 grid grid-cols-4 gap-2 w-[120px] place-items-center"
+        >
+          {VIBES.map((vibe) => (
+            <button
+              aria-label={`Set color to ${vibe.label}`}
+              key={vibe.id}
+              onClick={() => {
+                onColorChange(vibe.id);
+                setShowBulkColorPicker(false);
+              }}
+              disabled={isPending || nothingSelected}
+              style={{
+                backgroundColor: vibeTokens(vibe.id, mode).primary,
+              }}
+              title={vibe.label}
+              className="hit-area w-6 h-6 rounded-full transition-transform hover:scale-110 shadow-sm hover:ring-2 hover:ring-white/50 hover:ring-offset-1 hover:ring-offset-surface disabled:opacity-50"
+            />
+          ))}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   return (
     <motion.div
       ref={ref}
@@ -117,11 +161,12 @@ export const BulkActionToolbar = ({
     >
       {/* Nearly opaque, not glass: the list under it would fight the labels
           for contrast. The buttons wrap in a narrow pane, so none sit past
-          the edge. */}
+          the edge. A phone gets one row (`PHONE_HIDDEN`). */}
       <div
+        ref={bulkColorPickerRef}
         role="toolbar"
         aria-label="Bulk actions"
-        className="bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-2.5 flex flex-wrap items-center justify-center gap-1 min-w-0"
+        className="bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-2.5 max-sm:px-2 max-sm:py-1.5 flex flex-wrap max-sm:flex-nowrap items-center justify-center max-sm:justify-between gap-1 min-w-0"
       >
         {selectedCount !== undefined && <SelectedCount count={selectedCount} />}
         {/* Track first: it decides who the score and Pulse are about. */}
@@ -151,10 +196,10 @@ export const BulkActionToolbar = ({
           label="Edit field"
           onClick={onEditField}
           disabled={nothingSelected}
-          className="text-primary"
+          className={cn("text-primary", PHONE_HIDDEN)}
         />
 
-        <div className="relative shrink-0" ref={bulkColorPickerRef}>
+        <div className={cn("relative shrink-0", PHONE_HIDDEN)}>
           <button
             type="button"
             onClick={() => setShowBulkColorPicker((v) => !v)}
@@ -170,34 +215,7 @@ export const BulkActionToolbar = ({
             <Palette className="w-4 h-4" />
             <span className={BAR_LABEL}>Color</span>
           </button>
-
-          <AnimatePresence>
-            {showBulkColorPicker && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9, y: 6 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.9, y: 6 }}
-                className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 menu-panel p-3 z-50 grid grid-cols-4 gap-2 w-[120px] place-items-center"
-              >
-                {VIBES.map((vibe) => (
-                  <button
-                    aria-label={`Set color to ${vibe.label}`}
-                    key={vibe.id}
-                    onClick={() => {
-                      onColorChange(vibe.id);
-                      setShowBulkColorPicker(false);
-                    }}
-                    disabled={isPending || nothingSelected}
-                    style={{
-                      backgroundColor: vibeTokens(vibe.id, mode).primary,
-                    }}
-                    title={vibe.label}
-                    className="hit-area w-6 h-6 rounded-full transition-transform hover:scale-110 shadow-sm hover:ring-2 hover:ring-white/50 hover:ring-offset-1 hover:ring-offset-surface disabled:opacity-50"
-                  />
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
+          {colorPicker}
         </div>
 
         {/* It copies CSV text, and downloads no file. */}
@@ -206,10 +224,12 @@ export const BulkActionToolbar = ({
           label="Copy CSV"
           onClick={onExportCSV}
           disabled={nothingSelected}
-          className="text-on-surface-variant"
+          className={cn("text-on-surface-variant", PHONE_HIDDEN)}
         />
 
-        <div className="w-px h-5 bg-surface-container-high" />
+        <div
+          className={cn("w-px h-5 bg-surface-container-high", PHONE_HIDDEN)}
+        />
 
         <BulkActionBtn
           icon={<Trash2 className="w-4 h-4" />}
@@ -218,6 +238,37 @@ export const BulkActionToolbar = ({
           disabled={isPending || nothingSelected}
           className="text-error"
         />
+
+        <div className="relative shrink-0 sm:hidden">
+          <ActionMenu
+            label="More actions"
+            icon={MoreHorizontal}
+            iconClassName="w-4 h-4"
+            triggerClassName="min-w-11 min-h-11"
+            disabled={nothingSelected}
+            items={[
+              {
+                id: "edit",
+                label: "Edit field",
+                icon: Pencil,
+                onSelect: onEditField,
+              },
+              {
+                id: "color",
+                label: "Change color",
+                icon: Palette,
+                onSelect: () => setShowBulkColorPicker(true),
+              },
+              {
+                id: "csv",
+                label: "Copy CSV",
+                icon: Copy,
+                onSelect: onExportCSV,
+              },
+            ]}
+          />
+          {colorPicker}
+        </div>
       </div>
     </motion.div>
   );

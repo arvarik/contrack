@@ -83,6 +83,7 @@ import { SelectedCount } from "./contact-list/BulkActionToolbar";
 import { SettingsHeaderActions } from "./settings/SettingsHeader";
 import { SETTINGS_BOX } from "./settings/layout";
 import { SearchField } from "../components/ui/SearchField";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 
 // The groups
 
@@ -438,6 +439,7 @@ export const TrackedContactsView = () => {
   const { data: contacts = [], isLoading } = useContacts();
 
   const [query, setQuery] = useState("");
+  const wide = useMediaQuery("(min-width: 640px)");
   // The list follows a deferred copy of the box, so each letter shows at
   // once and the groups catch up a moment later.
   const deferredQuery = useDeferredValue(query);
@@ -717,7 +719,12 @@ export const TrackedContactsView = () => {
               className="flex-1 min-w-[12rem]"
               type="search"
               aria-label="Search tracked contacts"
-              placeholder="Search by name, company or role"
+              // A phone's field cut the long one off at "rol".
+              placeholder={
+                wide
+                  ? "Search by name, company or role"
+                  : "Name, company or role"
+              }
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onClear={() => setQuery("")}

@@ -102,9 +102,10 @@ describe("PageHeader", () => {
     expect(header).not.toBeNull();
     expect(header!.className).not.toMatch(/\bbg-|\bborder/);
     // No icon beside the title. The palette's button, for a touch screen,
-    // is an action.
-    expect(
-      header!.querySelector("h1")!.parentElement!.querySelector("svg"),
-    ).toBeNull();
+    // shares the title's line, but it is a button, not a tile.
+    const glyphs = [
+      ...header!.querySelector("h1")!.parentElement!.querySelectorAll("svg"),
+    ].filter((svg) => !svg.closest("button"));
+    expect(glyphs).toEqual([]);
   });
 });

@@ -65,6 +65,9 @@ sits beside the open contact, and you can drag its edge to resize it. Under
 | **Copy CSV**                   | Copies the name, role, company, location, first email and first phone to the clipboard.                                                                  |
 | **Delete**                     | Moves the selection to the trash, with **Undo**.                                                                                                         |
 
+On a phone the bar is one row of icons. **Edit field**, **Change color**
+and **Copy CSV** are in its **More actions** menu, the three dots.
+
 ## Add a contact
 
 Press **New**, the plus button above the list.

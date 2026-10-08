@@ -126,6 +126,9 @@ with an empty `DATA_DIR`.
   them, and Save stays above the keyboard while the tab bar steps aside.
   The app keeps clear of the status bar and a side cutout, and a contact
   opens without its timeline jumping.
+- On a phone, notes on the timeline and Pulse rows use the full width, the
+  bulk bar is one row with a **More actions** menu, filter pills scroll in
+  one line, and each Settings group is one card.
 - "Follow up Friday" always means the next Friday, a follow-up alone no
   longer counts as talking to someone, a birthday with no year keeps none,
   and email and phone fields refuse text that is not an address or a number.
