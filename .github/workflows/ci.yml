@@ -53,7 +53,8 @@ permissions:
   contents: read
 
 jobs:
-  build-and-test:
+  checks:
+    name: Lint, format and build
     # Fork pull requests carry untrusted code, so they are pinned to
     # GitHub-hosted runners and can never reach the self-hosted machine.
     runs-on: ${{ github.event.inputs.runner == 'hppc' && fromJSON('["self-hosted","hppc"]') || 'ubuntu-latest' }}
@@ -81,11 +82,89 @@ jobs:
       - name: Format Check
         run: npm run format:check
 
-      - name: Run Tests
-        run: npm run test:coverage
-
       - name: Production Build
         run: npm run build
+
+  # ── Unit, integration and eval tests ───────────────────────────────────────
+  # `npm run test:coverage`, split across four runners. The tests use every
+  # core of a runner, so four runners finish in about a quarter of the time
+  # one takes. Each shard writes a blob report with its part of the coverage,
+  # and `coverage` merges them and checks the floor in vitest.config.ts.
+  unit-tests:
+    name: Tests (${{ matrix.shard }}/4)
+    runs-on: ${{ github.event.inputs.runner == 'hppc' && fromJSON('["self-hosted","hppc"]') || 'ubuntu-latest' }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Use the Node.js version in .nvmrc
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # One shard's coverage is below the floor by design, so the shards skip
+      # the check.
+      - name: Run Tests
+        env:
+          COVERAGE_SHARD: "1"
+        run: >-
+          npx vitest run --project unit --project integration --project eval
+          --coverage --coverage.reporter=text-summary
+          --shard=${{ matrix.shard }}/4 --reporter=default --reporter=blob
+
+      - name: Upload the blob report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: vitest-blob-${{ matrix.shard }}
+          path: .vitest/blob/
+          include-hidden-files: true
+          retention-days: 1
+
+  # One report for all four shards: every failure in one place, and the
+  # coverage floor checked on the whole suite.
+  coverage:
+    name: Tests and coverage
+    needs: unit-tests
+    if: ${{ !cancelled() }}
+    # The shards' runner: a blob names files by their path on the runner.
+    runs-on: ${{ github.event.inputs.runner == 'hppc' && fromJSON('["self-hosted","hppc"]') || 'ubuntu-latest' }}
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Use the Node.js version in .nvmrc
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download the blob reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: vitest-blob-*
+          path: .vitest/blob/
+          merge-multiple: true
+
+      - name: Merge the reports and check coverage
+        run: npx vitest run --merge-reports --coverage
 
   # ── Browser journeys ───────────────────────────────────────────────────────
   # What the unit suite cannot see: real focus, real dialogs, real live
@@ -94,14 +173,19 @@ jobs:
   # walks the keyboard, dialog, search, phone-form and account journeys, and
   # scans every screen with axe. See docs/accessibility.md.
   #
-  # Its own job rather than a step in build-and-test, so a lint failure and a
-  # focus regression are reported separately and neither hides the other.
-  # Always the hosted runner: Playwright installs Chromium's system libraries
-  # with apt, which needs the sudo the self-hosted runner deliberately lacks.
+  # Its own job rather than a step in `checks`, so a lint failure and a focus
+  # regression are reported separately and neither hides the other. Split
+  # across four runners like the tests. Always the hosted runner: Playwright
+  # installs Chromium's system libraries with apt, which needs the sudo the
+  # self-hosted runner deliberately lacks.
   browser-a11y:
-    name: Browser accessibility
+    name: Browser accessibility (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -142,16 +226,16 @@ jobs:
         run: npx playwright install-deps chromium
 
       - name: Run browser journeys
-        run: npx playwright test
+        run: npx playwright test --shard=${{ matrix.shard }}/4
 
       # The HTML report carries every axe result, the trace of any retried
       # test and the screenshot of any failure. Uploaded on failure and on
-      # success alike, so a green run can still be inspected.
+      # success alike, so a green run can still be inspected. One per shard.
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: playwright-report/
           retention-days: 14
 
@@ -165,7 +249,7 @@ jobs:
   # digests into one multi-arch tag. This is the pattern docker/build-push-action
   # documents for splitting a build across runners.
   build-image:
-    needs: [build-and-test, browser-a11y]
+    needs: [checks, unit-tests, coverage, browser-a11y]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
@@ -377,7 +461,7 @@ jobs:
   # already exist for the tag — publishing via `gh release create` first (to
   # attach hand-written notes) makes this a no-op rather than a conflict.
   release:
-    needs: [build-and-test, browser-a11y]
+    needs: [checks, unit-tests, coverage, browser-a11y]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     timeout-minutes: 10
