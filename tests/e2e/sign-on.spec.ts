@@ -172,9 +172,23 @@ test("passkey sign-on journey: setup, nudge, passkey sign-in, account settings, 
   await expect(
     page.getByRole("heading", { name: "Welcome back" }),
   ).toBeVisible();
+});
 
-  // 9. Reset password dead link shape
-  await page.goto(`${localhostBase}/reset-password?token=not-real`);
+// Its own test, so its own instance. The journey above already spends about
+// nine of the sign-in limiter's ten requests a minute, and the browser asks
+// for passkey options a varying number of times.
+test("dead reset and invitation links say so", async ({
+  page,
+  gated: _gated,
+}, testInfo) => {
+  await completeSetup(page, ADMIN);
+  await signOutFromSidebar(page, ADMIN);
+  await expect(
+    page.getByRole("heading", { name: "Welcome back" }),
+  ).toBeVisible();
+
+  // Reset password dead link shape
+  await page.goto("/reset-password?token=not-real");
   await expect(
     page.getByRole("heading", { name: "Choose a new password" }),
   ).toBeVisible();
@@ -189,8 +203,8 @@ test("passkey sign-on journey: setup, nudge, passkey sign-in, account settings, 
     page.getByRole("heading", { name: "Reset your password" }),
   ).toBeVisible();
 
-  // 10. A dead invitation link says so before any form shows
-  await page.goto(`${localhostBase}/join?token=not-real`);
+  // A dead invitation link says so before any form shows
+  await page.goto("/join?token=not-real");
   await expect(
     page.getByRole("heading", { name: "This invitation is no longer valid" }),
   ).toBeVisible();
