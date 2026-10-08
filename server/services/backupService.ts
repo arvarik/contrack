@@ -19,11 +19,7 @@ import { OWNED_TABLES, sqlite } from "../db.ts";
 import { DATA_DIR, ensureDir } from "../utils/paths.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
-import {
-  backupIntervalHours,
-  backupKeep,
-  registerBackupIntervalChangeListener,
-} from "./lifecycleSettings.ts";
+import { backupIntervalHours, backupKeep } from "./lifecycleSettings.ts";
 import { nextRunOf, scheduleNextRun } from "../jobs/runner.ts";
 
 export const BACKUPS_DIR = path.join(DATA_DIR, "backups");
@@ -414,11 +410,6 @@ export function rescheduleBackups(): number | null {
 export function nextBackupRun(): string | null {
   return nextRunOf(SCHEDULED_BACKUP_JOB);
 }
-
-// Automatically reschedule whenever the interval setting changes.
-registerBackupIntervalChangeListener(() => {
-  rescheduleBackups();
-});
 
 /**
  * Boot: warn when the backups seem to have stopped, and log how often they run.

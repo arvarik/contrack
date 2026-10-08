@@ -1,5 +1,6 @@
 import type { QueryPlan } from "./types.ts";
 import { extractQueryLocations } from "./searchLocations.ts";
+import { WRITTEN_NUMBERS } from "../services/search/datePhrases.ts";
 
 /** Reviewed equivalences. Broader occupations never imply leadership or seniority. */
 const roleFamilies = [
@@ -388,21 +389,7 @@ export function compileQueryPlan(query: string, raw: QueryPlan): QueryPlan {
         : older[2].toLowerCase().startsWith("year")
           ? 365
           : 1;
-    const writtenNumbers: Record<string, number> = {
-      one: 1,
-      two: 2,
-      three: 3,
-      four: 4,
-      five: 5,
-      six: 6,
-      seven: 7,
-      eight: 8,
-      nine: 9,
-      ten: 10,
-      eleven: 11,
-      twelve: 12,
-    };
-    const amount = writtenNumbers[older[1].toLowerCase()] ?? Number(older[1]);
+    const amount = WRITTEN_NUMBERS[older[1].toLowerCase()] ?? Number(older[1]);
     const daysAgo = amount * multiplier;
     if (daysAgo <= 36_500) {
       plan.must.temporal = { type: "lastContact", daysAgo };

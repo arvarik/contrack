@@ -10,8 +10,8 @@ import { describe, it, expect } from "vitest";
 import {
   boundFromFilter,
   extractDatePhrase,
-  isValidTimeZone,
 } from "../../../../server/services/search/datePhrases.ts";
+import { isValidTimeZone } from "../../../../shared/contracts/common.ts";
 
 const now = new Date("2026-09-14T17:30:00.000Z");
 const at = (zone: string) => ({ now, timeZone: zone });

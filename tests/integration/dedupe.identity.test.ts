@@ -14,7 +14,7 @@ import { sqlite, ensureLocalOwner } from "../../server/db.ts";
 import { scopeForOwnerId } from "../../server/tenancy/scope.ts";
 import { contactService } from "../../server/services/contactService.ts";
 import { dedupeService } from "../../server/services/dedupe/index.ts";
-import { DEFAULT_AUTO_MERGE_THRESHOLD } from "../../server/services/dedupe/engine.ts";
+import { DEFAULT_AUTO_MERGE_THRESHOLD } from "../../server/services/dedupe/policy.ts";
 import { dedupeQueue } from "../../server/services/dedupe/jobQueue.ts";
 
 const scope = scopeForOwnerId(ensureLocalOwner());

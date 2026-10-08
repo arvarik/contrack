@@ -29,19 +29,9 @@ import {
 } from "./suggestions.ts";
 import { softMergeContacts, mergeContacts } from "./merging.ts";
 import { pairKey } from "./blocking.ts";
-import {
-  autoMergeThresholdFor,
-  DEFAULT_AUTO_MERGE_THRESHOLD,
-  reasonWithCaveat,
-} from "./policy.ts";
+import { autoMergeThresholdFor, reasonWithCaveat } from "./policy.ts";
 import type { DedupeScanMode, RawPair, MatchType } from "./types.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
-
-/**
- * The threshold with nothing chosen, from policy.ts. Re-exported because the
- * dedupe eval and the identity tests pin it by this name.
- */
-export { DEFAULT_AUTO_MERGE_THRESHOLD };
 
 /**
  * Save the pairs one contact produced. A pair at or above the auto-merge

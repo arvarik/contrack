@@ -225,19 +225,8 @@ export function runDailyMaintenance(): MaintenanceCounts {
   counts.walPagesCheckpointed = runWalMaintenance()?.checkpointedPages ?? 0;
 
   const total =
-    counts.auditRows +
-    counts.expiredSessions +
-    counts.expiredChallenges +
-    counts.agedAuthLinks +
-    counts.agedTokens +
-    counts.deadInvitations +
-    counts.oldInvocations +
-    counts.oldImports +
-    counts.prunedScoreSnapshots +
-    counts.expiredOAuthStates +
-    counts.oldConnectorRuns +
-    counts.oldEvents +
-    counts.oldJobs;
+    Object.values(counts).reduce((sum, n) => sum + n, 0) -
+    counts.walPagesCheckpointed;
   if (total > 0) {
     log.info(
       "Maintenance",

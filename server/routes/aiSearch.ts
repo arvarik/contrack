@@ -8,7 +8,7 @@ import { z } from "zod";
 import { validateBody } from "../utils/validators.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { startStream } from "../utils/stream.ts";
-import { jobQueue } from "../services/aiSearch/index.ts";
+import { jobQueue } from "../services/aiSearch/jobQueue.ts";
 import { log } from "../utils/logger.ts";
 import type { AISearchBatch } from "../services/aiSearch/types.ts";
 import { getErrorMessage } from "../utils/helpers.ts";

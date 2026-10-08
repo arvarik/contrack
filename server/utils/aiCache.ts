@@ -489,5 +489,5 @@ export function invalidateSearchCache(): void {
  * plenty for about 200 entries.
  */
 export function contentHash(text: string): string {
-  return crypto.createHash("sha256").update(text).digest("hex").slice(0, 16);
+  return crypto.hash("sha256", text).slice(0, 16);
 }

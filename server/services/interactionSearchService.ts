@@ -16,11 +16,9 @@ import {
   INTERACTION_FTS_TITLE_COLUMN,
   INTERACTION_WEIGHTS,
 } from "./search/interactionFtsIndex.ts";
-import {
-  boundFromFilter,
-  extractDatePhrase,
-  isValidTimeZone,
-} from "./search/datePhrases.ts";
+import { boundFromFilter, extractDatePhrase } from "./search/datePhrases.ts";
+import { isValidTimeZone } from "../../shared/contracts/common.ts";
+import type { InteractionSearchHit } from "../../shared/contracts/interactions.ts";
 import {
   compileInteractionMatch,
   type MatchMode,
@@ -53,27 +51,6 @@ export interface InteractionSearchParams {
 
 /** Start and end offsets of a matched term, in UTF-16 code units. */
 export type HighlightRange = [number, number];
-
-export interface InteractionSearchHit {
-  /** The interaction id. */
-  id: string;
-  contactId: string;
-  type: string;
-  title: string;
-  /** The interaction date exactly as stored. */
-  date: string;
-  /** The best passage of the body, or its opening when nothing matched there. */
-  excerpt: string | null;
-  highlights: { title: HighlightRange[]; excerpt: HighlightRange[] };
-  contact: {
-    id: string;
-    name: string;
-    avatarUrl: string | null;
-    themeColor: string | null;
-    company: string | null;
-    role: string | null;
-  };
-}
 
 export interface AppliedRange {
   /** ISO instant, inclusive. Null when the range is open at this end. */

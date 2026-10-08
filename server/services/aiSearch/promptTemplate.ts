@@ -1374,123 +1374,57 @@ export function hasNewFacts(
 // Gemini responseSchema for pass 2. It mirrors the Zod schema above in the
 // provider-agnostic form that GeminiAdapter translates to Gemini's types.
 
+const strings = (...names: string[]): Record<string, JsonSchemaNode> =>
+  Object.fromEntries(names.map((name) => [name, { type: "string" }]));
+
+const bool: JsonSchemaNode = { type: "boolean" };
+
+/** An array of records. `required` names the fields the model must fill. */
+const records = (
+  properties: Record<string, JsonSchemaNode>,
+  ...required: string[]
+): JsonSchemaNode => ({
+  type: "array",
+  items: { type: "object", properties, required },
+});
+
 export const extractionJsonSchema: JsonSchemaNode = {
   type: "object",
   properties: {
-    role: { type: "string", nullable: true },
-    company: { type: "string", nullable: true },
-    headline: { type: "string", nullable: true },
-    about: { type: "string", nullable: true },
-    industry: { type: "string", nullable: true },
-    website: { type: "string", nullable: true },
-    location: { type: "string", nullable: true },
-    pronouns: { type: "string", nullable: true },
-    birthday: { type: "string", nullable: true },
-    emails: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          email: { type: "string" },
-          label: { type: "string" },
-        },
-        required: ["email"],
+    ...Object.fromEntries(
+      [
+        "role",
+        "company",
+        "headline",
+        "about",
+        "industry",
+        "website",
+        "location",
+        "pronouns",
+        "birthday",
+      ].map((name) => [name, { type: "string", nullable: true }]),
+    ),
+    emails: records(strings("email", "label"), "email"),
+    phones: records(strings("phone", "label"), "phone"),
+    socialLinks: records(strings("platform", "url"), "platform", "url"),
+    education: records(
+      strings("school", "degree", "fieldOfStudy", "startDate", "endDate"),
+      "school",
+    ),
+    experience: records(
+      {
+        ...strings("company", "role", "startDate", "endDate"),
+        isCurrent: bool,
+        ...strings("description", "location"),
       },
-    },
-    phones: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          phone: { type: "string" },
-          label: { type: "string" },
-        },
-        required: ["phone"],
-      },
-    },
-    socialLinks: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          platform: { type: "string" },
-          url: { type: "string" },
-        },
-        required: ["platform", "url"],
-      },
-    },
-    education: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          school: { type: "string" },
-          degree: { type: "string" },
-          fieldOfStudy: { type: "string" },
-          startDate: { type: "string" },
-          endDate: { type: "string" },
-        },
-        required: ["school"],
-      },
-    },
-    experience: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          company: { type: "string" },
-          role: { type: "string" },
-          startDate: { type: "string" },
-          endDate: { type: "string" },
-          isCurrent: { type: "boolean" },
-          description: { type: "string" },
-          location: { type: "string" },
-        },
-        required: ["company"],
-      },
-    },
-    tags: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          tag: { type: "string" },
-        },
-        required: ["tag"],
-      },
-    },
-    interests: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          interest: { type: "string" },
-          isAiGenerated: { type: "boolean" },
-        },
-        required: ["interest"],
-      },
-    },
-    attributes: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          name: { type: "string" },
-          value: { type: "string" },
-        },
-        required: ["name", "value"],
-      },
-    },
-    addresses: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          address: { type: "string" },
-          label: { type: "string" },
-        },
-        required: ["address"],
-      },
-    },
+      "company",
+    ),
+    tags: records(strings("tag"), "tag"),
+    interests: records(
+      { ...strings("interest"), isAiGenerated: bool },
+      "interest",
+    ),
+    attributes: records(strings("name", "value"), "name", "value"),
+    addresses: records(strings("address", "label"), "address"),
   },
 };

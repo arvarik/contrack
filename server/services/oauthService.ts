@@ -162,8 +162,7 @@ function checkResource(issuer: string, resource: string | undefined): void {
 
 // Secrets
 
-const sha256 = (value: string) =>
-  crypto.createHash("sha256").update(value).digest("hex");
+const sha256 = (value: string) => crypto.hash("sha256", value);
 
 const randomSecret = (prefix = "") =>
   `${prefix}${crypto.randomBytes(32).toString("base64url")}`;

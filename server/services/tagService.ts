@@ -10,14 +10,19 @@
 // Each runs in one transaction, scoped through contacts.ownerId.
 
 import { sqlite } from "../db.ts";
+import type { TagSummary } from "../../shared/contracts/tags.ts";
 import type { Scope } from "../tenancy/scope.ts";
 import { aiCache } from "../utils/aiCache.ts";
 import { scheduleSearchIndex } from "./search/indexQueue.ts";
 
-export interface TagSummaryItem {
-  tag: string;
-  count: number;
-  total: number;
+/** After a rename or delete changed these contacts: drop cached answers, reindex. */
+function afterTagChange(scope: Scope, ids: string[]): { affected: number } {
+  if (ids.length === 0) return { affected: 0 };
+  for (const tier of ["rerank", "synthesis", "dailyInsight", "briefing"]) {
+    aiCache.invalidateForOwner(tier, scope.ownerId);
+  }
+  for (const id of ids) scheduleSearchIndex(id);
+  return { affected: ids.length };
 }
 
 const _stmts = {
@@ -77,8 +82,8 @@ const _stmts = {
 };
 
 export const tagService = {
-  getSummary(scope: Scope): TagSummaryItem[] {
-    return _stmts.summary.all(scope.ownerId) as TagSummaryItem[];
+  getSummary(scope: Scope): TagSummary[] {
+    return _stmts.summary.all(scope.ownerId) as TagSummary[];
   },
 
   renameTag(
@@ -115,18 +120,7 @@ export const tagService = {
       }
     })();
 
-    if (affectedIds.length === 0) {
-      return { affected: 0 };
-    }
-
-    for (const tier of ["rerank", "synthesis", "dailyInsight", "briefing"]) {
-      aiCache.invalidateForOwner(tier, scope.ownerId);
-    }
-    for (const id of affectedIds) {
-      scheduleSearchIndex(id);
-    }
-
-    return { affected: affectedIds.length };
+    return afterTagChange(scope, affectedIds);
   },
 
   deleteTag(scope: Scope, tag: string): { affected: number } {
@@ -152,17 +146,6 @@ export const tagService = {
       }
     })();
 
-    if (affectedIds.length === 0) {
-      return { affected: 0 };
-    }
-
-    for (const tier of ["rerank", "synthesis", "dailyInsight", "briefing"]) {
-      aiCache.invalidateForOwner(tier, scope.ownerId);
-    }
-    for (const id of affectedIds) {
-      scheduleSearchIndex(id);
-    }
-
-    return { affected: affectedIds.length };
+    return afterTagChange(scope, affectedIds);
   },
 };

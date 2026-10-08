@@ -69,57 +69,18 @@ sqlite.pragma("temp_store = MEMORY");
 // with SQLITE_BUSY.
 sqlite.pragma("busy_timeout = 5000");
 
-// Diagnostic: Log all applied PRAGMA values for observability
 import fs from "fs";
 
-const dbSizeBytes = (() => {
+const dbSizeMB = (() => {
   try {
-    return fs.statSync(DB_PATH).size;
+    return (fs.statSync(DB_PATH).size / (1024 * 1024)).toFixed(2);
   } catch {
-    return 0;
+    return "0.00";
   }
 })();
-const dbSizeMB = (dbSizeBytes / (1024 * 1024)).toFixed(2);
-
-// Read back actual PRAGMA values (what SQLite accepted, not what we set)
-const appliedCacheSize = (
-  sqlite.pragma("cache_size") as { cache_size: number }[]
-)[0]?.cache_size;
-const appliedMmapSize = (
-  sqlite.pragma("mmap_size") as { mmap_size: number }[]
-)[0]?.mmap_size;
-const appliedSynchronous = (
-  sqlite.pragma("synchronous") as { synchronous: number }[]
-)[0]?.synchronous;
-const appliedTempStore = (
-  sqlite.pragma("temp_store") as { temp_store: number }[]
-)[0]?.temp_store;
-const pageSize = (sqlite.pragma("page_size") as { page_size: number }[])[0]
-  ?.page_size;
-const pageCount = (sqlite.pragma("page_count") as { page_count: number }[])[0]
-  ?.page_count;
-
-const syncModeNames: Record<number, string> = {
-  0: "OFF",
-  1: "NORMAL",
-  2: "FULL",
-  3: "EXTRA",
-};
-const tempStoreNames: Record<number, string> = {
-  0: "DEFAULT",
-  1: "FILE",
-  2: "MEMORY",
-};
 
 log.info("Database", `Opened ${DB_PATH} (WAL mode, foreign keys ON)`, {
   fileSizeMB: dbSizeMB,
-  pageSize,
-  pageCount,
-  cacheSize: `${appliedCacheSize} (${Math.abs(appliedCacheSize as number)} KB)`,
-  mmapSize: `${appliedMmapSize} (${((appliedMmapSize as number) / (1024 * 1024)).toFixed(0)} MB ceiling)`,
-  synchronous:
-    syncModeNames[appliedSynchronous as number] ?? appliedSynchronous,
-  tempStore: tempStoreNames[appliedTempStore as number] ?? appliedTempStore,
 });
 
 // sqlite-vec, loaded before any DDL that creates vec0 tables.

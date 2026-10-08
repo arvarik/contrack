@@ -27,7 +27,7 @@ import {
   normalizeContact,
 } from "../../server/services/dedupe/normalization.ts";
 import { isEmbeddingAvailable } from "../../server/services/dedupe/embeddings.ts";
-import { DEFAULT_AUTO_MERGE_THRESHOLD } from "../../server/services/dedupe/engine.ts";
+import { DEFAULT_AUTO_MERGE_THRESHOLD } from "../../server/services/dedupe/policy.ts";
 import {
   THRESHOLD_AI,
   THRESHOLD_AUTO,
