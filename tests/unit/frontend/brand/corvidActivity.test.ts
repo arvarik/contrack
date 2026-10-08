@@ -247,6 +247,22 @@ describe("a celebration", () => {
     expect(heard.fly).toEqual([]);
     expect(vi.getTimerCount()).toBe(0);
   });
+
+  it("stops waiting when the page is gone", () => {
+    // A test's environment closes while an import's celebration still waits.
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    document.body.append(dialog);
+    flyWhenClear({ kind: "swoop" });
+    vi.stubGlobal("document", undefined);
+    try {
+      expect(() => vi.advanceTimersByTime(1_000)).not.toThrow();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+      dialog.remove();
+    }
+  });
 });
 
 describe("reactions", () => {
