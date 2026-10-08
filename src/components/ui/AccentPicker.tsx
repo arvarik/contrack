@@ -88,10 +88,10 @@ export const AccentPicker = ({
   };
 
   // 36 px swatches with 44 px tap boxes (`hit-area`) do not fit one row of a
-  // phone card, so below `sm` they sit in two rows of four. The 8 px gap
-  // keeps the tap boxes apart.
+  // phone card, so below `sm` they sit in two rows of four, and the color
+  // well takes the eighth cell. The 8 px gap keeps the tap boxes apart.
   return (
-    <div className="flex items-end gap-2 sm:items-center">
+    <div className="relative flex items-end gap-2 sm:items-center max-sm:w-fit">
       <div
         ref={group}
         role="radiogroup"
@@ -143,7 +143,7 @@ export const AccentPicker = ({
       */}
       <label
         htmlFor={wellId}
-        className="group/well relative w-11 h-11 -m-1 flex items-center justify-center cursor-pointer"
+        className="group/well relative max-sm:absolute max-sm:right-0 max-sm:bottom-0 w-11 h-11 -m-1 flex items-center justify-center cursor-pointer"
         title="Any other color"
       >
         <span

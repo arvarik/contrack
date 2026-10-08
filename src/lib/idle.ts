@@ -1,7 +1,7 @@
 /**
  * Run a task once the browser has nothing better to do, such as warming a
  * page's code before a person visits it. Never when the browser was asked
- * to save data.
+ * to save data, and not while an API request is on its way.
  */
 
 interface IdleWindow {
@@ -46,17 +46,53 @@ const IDLE_TIMEOUT_MS = 10_000;
 /** The wait in a browser with no idle callback. */
 const FALLBACK_DELAY_MS = 2_000;
 
+/** How long a task waits, at most, for the API requests to finish. */
+const BUSY_WAIT_MS = 10_000;
+
+/** How often a waiting task looks again. */
+const BUSY_RETRY_MS = 250;
+
+/** API requests on their way, bodies included (`noteRequest`). */
+let requestsInFlight = 0;
+
+/**
+ * Counts `request` until it settles, so idle work waits for it: on a slow
+ * phone the map's code took the bandwidth the first contact list needed.
+ */
+export function noteRequest<T>(request: Promise<T>): Promise<T> {
+  requestsInFlight += 1;
+  const settle = () => {
+    requestsInFlight -= 1;
+  };
+  request.then(settle, settle);
+  return request;
+}
+
 /**
  * Schedule `task` for an idle moment, and return a function that cancels
- * it. Does nothing when the browser saves data.
+ * it. Does nothing when the browser saves data. After the idle moment the
+ * task waits while an API request is on its way, looking every
+ * `BUSY_RETRY_MS`, for `BUSY_WAIT_MS` at most, so a request that streams
+ * for long does not hold it forever.
  */
 export function whenIdle(task: () => void): () => void {
   if (typeof window === "undefined" || savesData()) return () => {};
   const idle = window as Window & IdleWindow;
+  const giveUpAt = Date.now() + BUSY_WAIT_MS;
+  let cancel = () => {};
+  const afterRequests = () => {
+    if (requestsInFlight === 0 || Date.now() >= giveUpAt) return task();
+    const handle = window.setTimeout(afterRequests, BUSY_RETRY_MS);
+    cancel = () => window.clearTimeout(handle);
+  };
   if (typeof idle.requestIdleCallback === "function") {
-    const handle = idle.requestIdleCallback(task, { timeout: IDLE_TIMEOUT_MS });
-    return () => idle.cancelIdleCallback?.(handle);
+    const handle = idle.requestIdleCallback(afterRequests, {
+      timeout: IDLE_TIMEOUT_MS,
+    });
+    cancel = () => idle.cancelIdleCallback?.(handle);
+  } else {
+    const handle = window.setTimeout(afterRequests, FALLBACK_DELAY_MS);
+    cancel = () => window.clearTimeout(handle);
   }
-  const handle = window.setTimeout(task, FALLBACK_DELAY_MS);
-  return () => window.clearTimeout(handle);
+  return () => cancel();
 }

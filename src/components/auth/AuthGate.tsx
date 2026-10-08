@@ -31,7 +31,8 @@ import React, {
 import { useQueryClient } from "@tanstack/react-query";
 import { fetchAuthStatus, signOut, type AccountUser } from "../../api/auth";
 import type { MapStyleUrls } from "../../../shared/geo";
-import { fetchContactsSlim } from "../../api/contacts";
+import { contactsQuery } from "../../api/contacts";
+import { preferencesQuery } from "../../api/preferences";
 import {
   AUTH_EXPIRED_EVENT,
   AUTH_STATUS_STALE_EVENT,
@@ -197,6 +198,11 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   const queryClient = useQueryClient();
 
   const check = useCallback(async () => {
+    // The account's preferences, asked for beside /status. The app opens
+    // once they are in (below), so the list never draws with the defaults
+    // first: rows, order, shortcuts. Signed out, they are refused, which the
+    // gate ignores before it is open. Cached, they cost nothing.
+    const preferences = queryClient.prefetchQuery(preferencesQuery);
     let status;
     try {
       status = await fetchAuthStatus();
@@ -248,8 +254,9 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
       setState("password-change");
       return;
     }
+    await preferences;
     setState("open");
-  }, []);
+  }, [queryClient]);
 
   useEffect(() => {
     void check();
@@ -360,24 +367,28 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   }, [check]);
 
   /**
-   * Warms the contacts cache once the gate opens (before it, a gated instance
-   * answers 401), and again for each new identity.
+   * Warms the contacts cache beside the first /status, when the gate opens,
+   * and for each new identity. Most first pages show the list, and asked
+   * only once the gate opened, it waited one more round trip. While signed
+   * out the first ask is refused, a 401 the gate ignores before it is open,
+   * and the ask at the open fetches it again. A fresh list is not asked for
+   * twice (`contactsQuery`'s stale time). Sign-in, sign-out and an expiry ask
+   * nothing.
    */
+  const contactsPhase = state === "checking" || state === "open" ? state : null;
   useEffect(() => {
-    if (state !== "open") return;
-    void queryClient.prefetchQuery({
-      queryKey: ["contacts"],
-      queryFn: async () => {
-        const data = await fetchContactsSlim();
-        logCacheEvent({
-          type: "prefetch",
-          queryKey: "['contacts']",
-          meta: { count: data.length, source: "gate-open" },
-        });
-        return data;
-      },
-    });
-  }, [state, user?.id, queryClient]);
+    if (!contactsPhase) return;
+    void queryClient.prefetchQuery(contactsQuery).then(() =>
+      logCacheEvent({
+        type: "prefetch",
+        queryKey: "['contacts']",
+        meta: {
+          count: queryClient.getQueryData(contactsQuery.queryKey)?.length,
+          source: contactsPhase === "open" ? "gate-open" : "first-status",
+        },
+      }),
+    );
+  }, [contactsPhase, user?.id, queryClient]);
 
   const context: AuthContextValue = {
     user,

@@ -14,6 +14,7 @@
  * 2. The pressed pill wears the selected tint (`filterPill`). The count is
  *    in the pill's ink at a lighter weight.
  * 3. The label sits above the pills on a phone, and before them from `sm`.
+ *    On a phone the pills scroll sideways in one line.
  */
 import React from "react";
 import { filterPill } from "../../lib/styles";
@@ -63,7 +64,9 @@ export function FilterRow<T extends string>({
       <div
         role="group"
         aria-labelledby={labelId}
-        className="flex flex-1 flex-wrap gap-1.5"
+        // A phone scrolls the pills sideways in one line: wrapped, the two
+        // Tracked rows took five lines. The padding keeps the tap boxes in.
+        className="flex flex-1 flex-wrap gap-1.5 max-sm:flex-nowrap max-sm:overflow-x-auto scrollbar-hide max-sm:py-2 max-sm:-my-2"
       >
         {pills.map((pill) => (
           <button
@@ -71,7 +74,10 @@ export function FilterRow<T extends string>({
             type="button"
             aria-pressed={value === pill.id}
             onClick={() => onChange(pill.id)}
-            className={cn("hit-area", filterPill(value === pill.id))}
+            className={cn(
+              "hit-area shrink-0 whitespace-nowrap",
+              filterPill(value === pill.id),
+            )}
           >
             {pill.icon}
             {pill.label}

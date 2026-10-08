@@ -3,7 +3,8 @@
  * control with a selected option. The arrows move and select as they go, and
  * only the selected option is in the Tab order.
  */
-import { useRef } from "react";
+import { useId, useRef } from "react";
+import { motion } from "motion/react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
@@ -15,7 +16,8 @@ export interface SegmentedOption<T extends string | number> {
   /**
    * A glyph for narrow screens. With one, the option shows the glyph below
    * `sm` and the text from `sm`. The text stays in the page as the option's
-   * name at every width, visually hidden where the glyph stands in for it.
+   * name at every width, visually hidden where the glyph stands in for it,
+   * except on the chosen option.
    */
   icon?: LucideIcon;
 }
@@ -36,6 +38,9 @@ export const Segmented = <T extends string | number>({
 }) => {
   const container = useRef<HTMLDivElement>(null);
   const labeled = useMediaQuery("(min-width: 640px)");
+  // One thumb per control: it slides to the chosen option, as on iOS.
+  // `MotionConfig` turns the slide off with reduced motion.
+  const thumbId = useId();
 
   /**
    * Arrows move the selection and the focus. On each radio, where focus is,
@@ -84,7 +89,7 @@ export const Segmented = <T extends string | number>({
             onKeyDown={onKeyDown}
             onClick={() => onChange(option.value)}
             className={cn(
-              "flex-1 sm:flex-none px-3 sm:px-4 min-h-[44px] sm:pointer-fine:min-h-0 sm:pointer-fine:h-full rounded-md text-xs font-bold",
+              "relative flex-1 sm:flex-none px-3 sm:px-4 min-h-[44px] sm:pointer-fine:min-h-0 sm:pointer-fine:h-full rounded-md text-xs font-bold",
               "flex items-center justify-center whitespace-nowrap transition-colors",
               // A glyph alone is narrower than a thumb, so it gets the width
               // floor as well as the height.
@@ -92,18 +97,39 @@ export const Segmented = <T extends string | number>({
               // An option not chosen is a flat control in the trough: the
               // hover and press layer, like every flat control.
               value === option.value
-                ? "bg-surface shadow-sm text-primary"
+                ? "text-primary"
                 : "state-layer text-on-surface-variant hover:text-on-surface",
             )}
           >
-            {Icon ? (
-              <>
-                <Icon aria-hidden="true" className="w-4 h-4 sm:hidden" />
-                <span className="sr-only sm:not-sr-only">{option.label}</span>
-              </>
-            ) : (
-              option.label
+            {value === option.value && (
+              <motion.span
+                aria-hidden="true"
+                layoutId={thumbId}
+                transition={{ type: "spring", bounce: 0.15, duration: 0.3 }}
+                className="absolute inset-0 rounded-md bg-surface shadow-sm"
+              />
             )}
+            {/* Over the thumb. */}
+            <span className="relative flex items-center justify-center">
+              {Icon ? (
+                <>
+                  <Icon aria-hidden="true" className="w-4 h-4 sm:hidden" />
+                  {/* Below `sm` the chosen option keeps its word beside the
+                    glyph, so the control says what it is set to. */}
+                  <span
+                    className={
+                      value === option.value
+                        ? "max-sm:ml-1.5"
+                        : "sr-only sm:not-sr-only"
+                    }
+                  >
+                    {option.label}
+                  </span>
+                </>
+              ) : (
+                option.label
+              )}
+            </span>
           </button>
         );
         // Below `sm` a glyph stands alone, so a long press names it. From

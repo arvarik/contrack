@@ -230,7 +230,7 @@ const SocialLink = ({
   /** When set, the link gets a menu with Copy link and Remove link. */
   onRemove?: () => void;
   /**
-   * Narrow: the icon and ↗ only, with the handle as name and tooltip. Two
+   * Narrow: the icon only, with the handle as name and tooltip. Two
    * handles in words wrap a phone's meta line to three lines.
    */
   iconOnly?: boolean;
@@ -256,9 +256,13 @@ const SocialLink = ({
         {displayName}
       </span>
       {platformName && <span className="sr-only">, {platformName}</span>}
-      <span aria-hidden="true" className="text-on-surface-variant">
-        ↗
-      </span>
+      {/* A lone brand icon reads as a link already: the arrow beside it was
+          one more glyph in a crowded phone row. */}
+      {!iconOnly && (
+        <span aria-hidden="true" className="text-on-surface-variant">
+          ↗
+        </span>
+      )}
       <span className="sr-only"> (opens in a new tab)</span>
     </a>
     {onRemove && (
@@ -293,9 +297,12 @@ const SocialLink = ({
   </span>
 );
 
-/** At most 144 px wide, so a lone Log note on a tablet is a tile, not a bar. */
+/**
+ * At most 144 px wide from `sm`, so a lone Log note on a tablet is a tile, not
+ * a bar. On a phone the tiles share the whole row.
+ */
 const QUICK_ACTION =
-  "state-layer flex-1 basis-0 min-w-0 max-w-36 flex flex-col items-center justify-center gap-1 min-h-[52px] px-1 py-2 rounded-xl text-xs font-semibold";
+  "state-layer flex-1 basis-0 min-w-0 sm:max-w-36 flex flex-col items-center justify-center gap-1 min-h-[52px] px-1 py-2 rounded-xl text-xs font-semibold";
 
 /**
  * The narrow header's last row, only on a touch screen: a narrow desktop
@@ -323,7 +330,7 @@ const QuickActions = ({ contact }: { contact: Contact }) => {
       return (
         <ActionMenu
           label={`${label}, choose a number`}
-          className="flex-1 basis-0 min-w-0 max-w-36"
+          className="flex-1 basis-0 min-w-0 sm:max-w-36"
           triggerClassName={cn(tile, "w-full max-w-none")}
           triggerContent={face}
           items={numbers.map((p, i) => ({
@@ -430,13 +437,21 @@ export const ContactIntro = ({
 
 /**
  * Back, below `lg`, where the list does not show. The bar is 56 px tall, and
- * the narrow tabs stick right under it (ContactProfile).
+ * the narrow tabs stick right under it (ContactProfile). With a `name`, the
+ * name fades into the bar as the header's name scrolls under it
+ * (`.contact-bar-name` in index.css), as an iOS large title does.
  */
 export const BackBar = ({
   onClose,
   backLabel,
-}: Pick<ProfileHeaderProps, "backLabel"> & { onClose: () => void }) => (
-  <div className="sticky top-0 z-30 glass-panel h-14 px-4 lg:hidden flex items-center justify-between shrink-0">
+  name,
+}: Pick<ProfileHeaderProps, "backLabel"> & {
+  onClose: () => void;
+  name?: string;
+}) => (
+  // Solid, like the sticky tab row under it: the header's text scrolls
+  // under both.
+  <div className="sticky top-0 z-30 bg-surface h-14 px-4 lg:hidden flex items-center justify-between shrink-0">
     <button
       type="button"
       onClick={onClose}
@@ -446,6 +461,15 @@ export const BackBar = ({
       <ArrowLeft aria-hidden="true" className="w-5 h-5" />
       {backLabel ?? "Back"}
     </button>
+    {/* The page's `h1` names the person, so a screen reader skips this. */}
+    {name && (
+      <span
+        aria-hidden="true"
+        className="contact-bar-name flex-1 min-w-0 px-2 truncate text-center text-sm font-bold text-on-surface pointer-events-none"
+      >
+        {name}
+      </span>
+    )}
     {/* A phone has no ⌘K: the way to the next person from this one. */}
     <PaletteButton className="-mr-2" />
   </div>
@@ -606,7 +630,10 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
   };
 
   // Meta line: one fact or one link per item, with dots between items.
-  const metaItems: { key: string; node: React.ReactNode }[] = [];
+  // Narrow, a link is an icon, and two icons in a row need no dot.
+  const metaItems: { key: string; node: React.ReactNode; dot?: boolean }[] = [];
+  const dotBeforeLink = () =>
+    !narrow || !/^(link-|website$)/.test(metaItems.at(-1)?.key ?? "");
   const place =
     shortPlace(contact.addresses?.[0]?.address) ?? shortPlace(contact.location);
   if (place) {
@@ -632,6 +659,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
     const platformName = isKnown ? capitalize(platformKey) : undefined;
     metaItems.push({
       key: `link-${sl.id}`,
+      dot: dotBeforeLink(),
       node: (
         <SocialLink
           iconOnly={narrow}
@@ -659,6 +687,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
   ) {
     metaItems.push({
       key: "website",
+      dot: dotBeforeLink(),
       node: (
         <SocialLink
           iconOnly={narrow}
@@ -719,7 +748,9 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
 
   return (
     <>
-      {onClose && <BackBar onClose={onClose} backLabel={backLabel} />}
+      {onClose && (
+        <BackBar onClose={onClose} backLabel={backLabel} name={contact.name} />
+      )}
 
       {/* A follow-up that is late, today or within the week, the same window
           as Pulse's "This week". A later one shows only in Details. */}
@@ -918,6 +949,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                 ...metaItems.slice(0, -1),
                 {
                   key: "last",
+                  dot: metaItems.at(-1)?.dot,
                   node: (
                     <span className={META_ITEM}>
                       {metaItems.at(-1)?.node}

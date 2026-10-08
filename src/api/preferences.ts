@@ -2,6 +2,7 @@
  * The account's preferences. They live on the account, so they follow it to
  * another device and stay hidden from the next person on the same browser.
  */
+import { queryOptions } from "@tanstack/react-query";
 import type { EngineChoice } from "../../shared/webSearchEngine";
 import { apiJson, jsonBody } from "./client";
 
@@ -123,6 +124,18 @@ export function isDefaultValue<K extends keyof Preferences>(
 
 export const fetchPreferences = (): Promise<PreferencesResponse> =>
   apiJson<PreferencesResponse>("/auth/preferences");
+
+/**
+ * The account's preferences. PreferencesContext is the only writer, so a
+ * refetch could only replace an optimistic value with a stale one. AuthGate
+ * asks for them beside its first `/status`.
+ */
+export const preferencesQuery = queryOptions({
+  queryKey: ["preferences"],
+  queryFn: fetchPreferences,
+  staleTime: Infinity,
+  gcTime: Infinity,
+});
 
 export const savePreferences = (
   patch: Partial<Preferences>,

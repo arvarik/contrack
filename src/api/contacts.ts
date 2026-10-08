@@ -9,7 +9,12 @@ import {
   storeContact,
   writeContactInOrder,
 } from "./contactCache";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  queryOptions,
+  useQuery,
+  useMutation,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { STALE_TIMES } from "../lib/queryConfig";
 import { corvidReact } from "../lib/corvid";
 import {
@@ -41,13 +46,17 @@ export const fetchContactsSlim = async (context?: {
     signal: context?.signal,
   })) as Contact[];
 
-export const useContacts = () => {
-  return useQuery({
-    queryKey: ["contacts"],
-    queryFn: fetchContactsSlim,
-    staleTime: 600_000, // 10 minutes, so going back to Network is instant
-  });
-};
+/**
+ * The slim contact list. The gate asks for it beside its first `/status`
+ * (AuthGate), so the first page does not wait one more round trip.
+ */
+export const contactsQuery = queryOptions({
+  queryKey: ["contacts"],
+  queryFn: fetchContactsSlim,
+  staleTime: 600_000, // 10 minutes, so going back to Network is instant
+});
+
+export const useContacts = () => useQuery(contactsQuery);
 
 /**
  * The name-and-avatar projection, for mentions, the palette and the like.

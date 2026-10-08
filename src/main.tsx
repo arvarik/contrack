@@ -28,8 +28,8 @@ const queryClient = new QueryClient({
   },
 });
 
-// The contacts prefetch runs in AuthGate once the gate opens, not here: at
-// module load a gated instance answers 401 before anything listens.
+// The contacts prefetch runs in AuthGate, beside its first /status and when
+// the gate opens, not here: the gate is what ignores a 401 before it opens.
 import { usePreferences } from "./contexts/PreferencesContext";
 
 function MotionPreference({ children }: { children: React.ReactNode }) {

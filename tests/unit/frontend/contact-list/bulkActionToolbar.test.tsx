@@ -4,7 +4,14 @@
  * acts on no one, so Delete must not be live there.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import { BulkActionToolbar } from "../../../../src/views/contact-list/BulkActionToolbar";
 
 vi.mock("../../../../src/contexts/PreferencesContext", () => ({
@@ -67,6 +74,23 @@ describe("BulkActionToolbar", () => {
     // Track is still the first button.
     expect(within(toolbar).getAllByRole("button")[0]).toBe(
       within(toolbar).getByRole("button", { name: "Track" }),
+    );
+  });
+
+  // The picker has two homes (Color, and More on a phone). A press on
+  // another bar button, such as Delete, is outside both and closes it.
+  it("closes the color picker when another bar button is pressed", async () => {
+    renderBar(2);
+    fireEvent.click(screen.getByRole("button", { name: "Color" }));
+    expect(
+      screen.getAllByRole("button", { name: "Set color to Blue" }).length,
+    ).toBeGreaterThan(0);
+    fireEvent.mouseDown(screen.getByRole("button", { name: "Delete" }));
+    // It leaves through its exit animation.
+    await waitFor(() =>
+      expect(
+        screen.queryAllByRole("button", { name: "Set color to Blue" }),
+      ).toEqual([]),
     );
   });
 

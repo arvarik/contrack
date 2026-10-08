@@ -79,6 +79,8 @@ export const DialogCloseButton = ({
 /** A drag down this far, or this fast, closes the sheet. */
 const CLOSE_DISTANCE = 96;
 const CLOSE_SPEED = 0.6; // px per ms
+/** A flick travels this far at least: a jitter as the finger lifts is fast. */
+const FLICK_MIN_DISTANCE = 24;
 
 interface ModalProps {
   isOpen: boolean;
@@ -119,7 +121,15 @@ export function Modal({
 }: ModalProps) {
   const previousFocus = useRef<HTMLElement | null>(null);
   const content = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ y: number; at: number; dy: number } | null>(null);
+  // `lastY`, `lastAt` and `speed` follow the finger's last move, so a flick
+  // at the end of a slow drag still closes the sheet.
+  const drag = useRef<{
+    y: number;
+    dy: number;
+    lastY: number;
+    lastAt: number;
+    speed: number;
+  } | null>(null);
 
   useCloseRequest(isOpen, onClose);
   useEffect(() => {
@@ -151,7 +161,13 @@ export function Modal({
     // From `sm` it is a centered dialog, not a sheet, and does not drag.
     if (window.matchMedia?.("(min-width: 640px)").matches) return;
     if ((event.target as HTMLElement).closest("button, a, input")) return;
-    drag.current = { y: event.clientY, at: event.timeStamp, dy: 0 };
+    drag.current = {
+      y: event.clientY,
+      dy: 0,
+      lastY: event.clientY,
+      lastAt: event.timeStamp,
+      speed: 0,
+    };
     try {
       event.currentTarget.setPointerCapture(event.pointerId);
     } catch {
@@ -160,18 +176,29 @@ export function Modal({
     content.current.style.transition = "none";
   };
   const moveDrag = (event: ReactPointerEvent<HTMLElement>) => {
-    if (!drag.current || !content.current) return;
-    drag.current.dy = Math.max(0, event.clientY - drag.current.y);
-    content.current.style.transform = `translateY(${drag.current.dy}px)`;
+    const state = drag.current;
+    if (!state || !content.current) return;
+    const dt = event.timeStamp - state.lastAt;
+    if (dt > 0) {
+      state.speed = (event.clientY - state.lastY) / dt;
+      state.lastY = event.clientY;
+      state.lastAt = event.timeStamp;
+    }
+    state.dy = Math.max(0, event.clientY - state.y);
+    content.current.style.transform = `translateY(${state.dy}px)`;
   };
   const endDrag = (event: ReactPointerEvent<HTMLElement>) => {
     const sheet = content.current;
     const state = drag.current;
     drag.current = null;
     if (!state || !sheet) return;
-    const speed = state.dy / Math.max(1, event.timeStamp - state.at);
+    // A finger that stopped before it lifted is no flick.
+    const speed = event.timeStamp - state.lastAt > 100 ? 0 : state.speed;
     sheet.style.transition = "";
-    if (state.dy > CLOSE_DISTANCE || speed > CLOSE_SPEED) {
+    if (
+      state.dy > CLOSE_DISTANCE ||
+      (speed > CLOSE_SPEED && state.dy > FLICK_MIN_DISTANCE)
+    ) {
       sheet.style.setProperty("--sheet-drag", `${state.dy}px`);
       onClose();
       // A dialog that refused to close, such as one with unsaved work,

@@ -64,6 +64,24 @@ describe("in production", () => {
     const post = await fetch(`http://${host}/search`, { method: "POST" });
     expect(post.status).toBe(404);
   });
+
+  it("lets a browser keep the versioned boot script a year, and revalidate an old link", async () => {
+    // It blocks the first paint, so a revalidation cost each start a trip.
+    const distPath = fs.mkdtempSync(path.join(os.tmpdir(), "contrack-"));
+    fs.writeFileSync(path.join(distPath, "index.html"), "<!doctype html>");
+    fs.writeFileSync(path.join(distPath, "theme-boot.js"), "void 0;");
+    const host = await start({ production: true, distPath });
+
+    const kept = await fetch(`http://${host}/theme-boot.js?v=abc123`);
+    expect(kept.status).toBe(200);
+    expect(await kept.text()).toBe("void 0;");
+    expect(kept.headers.get("cache-control")).toBe(
+      "public, max-age=31536000, immutable",
+    );
+    const old = await fetch(`http://${host}/theme-boot.js`);
+    expect(old.status).toBe(200);
+    expect(old.headers.get("cache-control")).toBe("public, max-age=0");
+  });
 });
 
 describe("in development", () => {

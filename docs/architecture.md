@@ -132,8 +132,13 @@ This is the path of one edit, from a click to a saved row.
   settings page, its group and its searchable rows.
 - **Code loading.** The Network list and the contact page are in the first
   bundle. The map, Pulse, Ask Contrack, the note composer and each settings
-  page are chunks of their own. The app warms them in idle moments
-  (`src/views/pages.ts`, `src/views/settings/warm.ts`, `src/lib/idle.ts`).
+  page are chunks of their own. The app warms them in idle moments, after
+  the API requests on their way (`src/views/pages.ts`,
+  `src/views/settings/warm.ts`, `src/lib/idle.ts`). The gate asks for the
+  account's preferences and the contact list beside its first `/status`, and
+  opens once the preferences are in, so nothing draws with the defaults
+  first. The build puts a hash on the render-blocking `theme-boot.js`, so a
+  browser keeps it.
   Pointing at a link starts its page's code and first data, except in a
   browser that asks to save data. `src/lib/preloadable.tsx` renders a loaded
   view in the same frame.

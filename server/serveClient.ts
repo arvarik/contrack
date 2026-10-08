@@ -67,6 +67,17 @@ export async function serveClient(
   app.use("/assets", (_req, res) => {
     res.status(404).type("text/plain").send("Not found");
   });
+  // The render-blocking boot script carries its content hash (`?v=`, from
+  // vite.config.ts), so a browser keeps that copy a year, as it does /assets.
+  // A request with no hash, from a page built before, revalidates as before.
+  app.get("/theme-boot.js", (req, res, next) => {
+    if (typeof req.query.v !== "string") return next();
+    res.sendFile("theme-boot.js", {
+      root: distPath,
+      maxAge: "1y",
+      immutable: true,
+    });
+  });
   app.use(express.static(distPath));
   // The SPA fallback answers navigation only (GET and HEAD). A POST to an
   // unknown path answered with index.html and a 200 would read as success to a

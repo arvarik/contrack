@@ -395,7 +395,9 @@ export const ContactListModals = ({
                 value={smartPasteText}
                 onChange={(e) => setSmartPasteText(e.target.value)}
                 rows={5}
-                className="w-full bg-surface-container border-none rounded-xl p-4 text-sm font-mono text-on-surface resize-none"
+                // A phone grows the box with a long paste, up to 40 percent
+                // of the screen, then it scrolls.
+                className="w-full bg-surface-container border-none rounded-xl p-4 text-sm font-mono text-on-surface resize-none max-sm:[field-sizing:content] max-sm:min-h-32 max-sm:max-h-[40dvh]"
                 placeholder={`Examples:\n• "Jane Kim | VP Eng @ Stripe | jane@stripe.com | based in NYC"\n• A copied LinkedIn summary\n• "Met Jane at SaaStr on Tuesday, talked about her Series A"`}
               />
             </>

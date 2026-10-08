@@ -118,14 +118,17 @@ export const PageHeader = ({
           {backLink}
           {/* Top-aligned, so every title starts at the same height. The
               title shrinks to its longest word (no `min-w-0`, on purpose),
-              so the actions drop under it only when both do not fit. */}
+              so the actions drop under it only when both do not fit. The
+              palette's button stays on the title's line, so a phone's
+              wrapped actions never start with it. */}
           <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
-            <div className="flex-1">
+            <div className="flex-1 flex items-start justify-between gap-3">
               <Title className={TITLE}>{title}</Title>
+              {palette && <PaletteButton />}
             </div>
-            {allActions && (
+            {actions && (
               <div className={cn(ACTIONS, "sm:shrink-0", actionsClassName)}>
-                {allActions}
+                {actions}
               </div>
             )}
           </div>

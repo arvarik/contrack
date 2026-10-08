@@ -21,25 +21,27 @@ export const MetaDot = () => <span aria-hidden="true">·</span>;
  * 3. The clip reaches past the other three edges, and 8 px past the left,
  *    so tap boxes and focus rings stay whole. A menu opens in the top
  *    layer (`usePanelPlacement`), which no clip reaches.
+ * 4. An item with `dot: false` keeps its box empty, for glyphs that need
+ *    a gap but no dot, such as two link icons in a row.
  */
 export const DotLine = ({
   items,
   className,
 }: {
-  items: { key: Key; node: ReactNode }[];
+  items: { key: Key; node: ReactNode; dot?: boolean }[];
   className?: string;
 }) => (
   <div
     className={cn("[clip-path:inset(-1rem_-1rem_-1rem_-0.5rem)]", className)}
   >
     <div className="flex flex-wrap items-center gap-x-1 gap-y-1 -ml-[calc(1em+0.25rem)]">
-      {items.map(({ key, node }) => (
+      {items.map(({ key, node, dot = true }) => (
         <span
           key={key}
           className="inline-flex items-center gap-x-1 min-w-0 max-w-full"
         >
           <span aria-hidden="true" className="w-[1em] shrink-0 text-center">
-            ·
+            {dot && "·"}
           </span>
           {node}
         </span>

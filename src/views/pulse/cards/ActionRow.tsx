@@ -46,7 +46,7 @@ interface ActionRowProps {
    */
   focusOnSelect?: boolean;
   /**
-   * The phone layout, below `sm`: the chip moves down beside "Last spoke"
+   * The phone layout, below `sm`: the chip moves down beside "Spoke …"
    * and the title may run to two lines. A 390 px phone leaves a row about
    * 220 px for text, too little for a name, a chip and a button.
    */
@@ -353,8 +353,12 @@ export const ActionRow = memo(
           {(compact || lastSpoke) && (
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               {compact && chip}
+              {/* "Spoke" on a phone: with "Last", the line was 20 px too
+                  wide beside a chip and wrapped, so each row took 4 lines. */}
               {lastSpoke && (
-                <span className={PULSE_TYPE.meta}>Last spoke {lastSpoke}</span>
+                <span className={PULSE_TYPE.meta}>
+                  {compact ? "Spoke" : "Last spoke"} {lastSpoke}
+                </span>
               )}
             </div>
           )}

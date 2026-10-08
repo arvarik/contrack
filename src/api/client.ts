@@ -12,6 +12,7 @@ import {
   emitPasswordChangeRequired,
 } from "../lib/appEvents";
 import { noteCorvidActivity } from "../lib/corvid";
+import { noteRequest } from "../lib/idle";
 import type { ResponseOf, RouteContract } from "../../shared/contracts/route";
 
 export const API_BASE = "/api";
@@ -237,16 +238,13 @@ export async function apiJson(
   pathOrInit?: string | RequestInit,
   init?: Omit<RequestInit, "method">,
 ): Promise<unknown> {
-  if (typeof pathOrContract === "string")
-    return handleResponse(
-      await apiFetch(pathOrContract, pathOrInit as RequestInit | undefined),
-    );
-  return handleResponse(
-    await apiFetch(pathOrInit as string, {
-      ...init,
-      method: pathOrContract.method,
-    }),
-  );
+  const [path, request] =
+    typeof pathOrContract === "string"
+      ? [pathOrContract, pathOrInit as RequestInit | undefined]
+      : [pathOrInit as string, { ...init, method: pathOrContract.method }];
+  // Counted to the end of the body, where a list's bytes are, so idle
+  // warm-ups wait for it (`lib/idle.ts`).
+  return noteRequest(apiFetch(path, request).then(handleResponse));
 }
 
 /** A JSON request body, with the header the server needs to parse it. */

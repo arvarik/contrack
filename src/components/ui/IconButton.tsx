@@ -43,11 +43,10 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         type="button"
         {...rest}
         className={cn(
-          // A 44px minimum tap area on every device. No tap highlight: the
-          // state layer draws the press.
+          // A 44px minimum tap area on every device. The state layer draws
+          // the press.
           "state-layer inline-flex items-center justify-center min-w-[44px] min-h-[44px] rounded-xl transition-colors",
           "disabled:opacity-40 disabled:pointer-events-none",
-          "[-webkit-tap-highlight-color:transparent]",
           sizeClasses[size],
           toneClasses[tone],
           className,

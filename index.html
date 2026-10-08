@@ -33,7 +33,8 @@
 
     <!--
       Paints the chosen theme before the first frame. A file, not an inline
-      script, because the production CSP is `script-src 'self'`.
+      script, because the production CSP is `script-src 'self'`. The build
+      adds the file's hash (`?v=`, vite.config.ts), so a browser keeps it.
     -->
     <script src="/theme-boot.js"></script>
 
