@@ -202,6 +202,9 @@ with an empty `DATA_DIR`.
 - A calendar keeps its meeting threshold, and an all-day event stays on its
   day. An IMAP test from the edit form uses the saved password, for the same
   server only.
+- A mailbox that drops its connection fails the sync, not the server. An
+  email summary reads only the text part. A calendar event that repeats within
+  the hour is skipped. Google Contacts syncs again after a week without a sync.
 
 ### Duplicates
 
@@ -250,6 +253,9 @@ with an empty `DATA_DIR`.
 - Each tool has a title and hints that say whether it reads, adds, or can
   overwrite. Results leave out the fields only the server reads, and a
   refused call answers with its code and what to do next.
+- Text that other people can write, such as notes, email summaries and meeting
+  titles, reaches the assistant inside `<untrusted_data>` tags, and the tools
+  tell the model not to follow instructions in it.
 - The routes for contacts, notes, follow-ups, lists, tags and tokens share
   one contract with the app and the MCP tools. `docs/openapi.json` describes
   them in OpenAPI 3.1.

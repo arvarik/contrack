@@ -27,16 +27,31 @@ those tags.`.trim();
 const DEFAULT_MAX_LENGTH = 8_000;
 
 /**
+ * Characters a person cannot see and a model still reads: the Unicode tag
+ * block (text hidden in plain sight, "ASCII smuggling"), zero-width spaces and
+ * word joiners, the byte-order mark, and the bidi embeddings, overrides and
+ * isolates that reorder what a screen shows. The zero-width joiner and
+ * non-joiner stay, because emoji and some scripts need them.
+ */
+const INVISIBLE =
+  /[\u200B\u2060-\u2064\uFEFF\u202A-\u202E\u2066-\u2069\u{E0000}-\u{E007F}]/gu;
+
+/** Text without the characters INVISIBLE names. */
+export function stripInvisible(text: string): string {
+  return text.replace(INVISIBLE, "");
+}
+
+/**
  * Sanitize untrusted text for a prompt: strip ASCII control characters (except
- * \n and \t), neutralize embedded `</untrusted_data` and nested
- * `<untrusted_data` tags so the fence cannot be escaped, and cap the length so
- * hostile input cannot flood the context.
+ * \n and \t) and invisible characters, neutralize embedded `</untrusted_data`
+ * and nested `<untrusted_data` tags so the fence cannot be escaped, and cap the
+ * length so hostile input cannot flood the context.
  */
 export function sanitizeForPrompt(
   text: string,
   maxLength: number = DEFAULT_MAX_LENGTH,
 ): string {
-  let out = text
+  let out = stripInvisible(text)
     // eslint-disable-next-line no-control-regex
     .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
     .replace(/<\/?\s*untrusted_data/gi, "[data]");

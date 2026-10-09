@@ -7,6 +7,8 @@
  * @module server/mcp/views
  */
 
+import { stripInvisible, wrapUntrusted } from "../ai/promptSafety.ts";
+
 /** Columns only the server reads. They are `INTERNAL` in shared/contracts. */
 const INTERNAL = new Set([
   "ownerId",
@@ -75,6 +77,51 @@ export function lean(value: unknown): unknown {
     Object.entries(value)
       .filter(([key]) => !STRIPPED.has(key))
       .map(([key, inner]) => [key, lean(inner)]),
+  );
+}
+
+/**
+ * Fields whose text can come from someone other than the person: notes and
+ * email summaries, meeting and follow-up titles, profile prose, research facts
+ * (`value`) and what AI wrote about a contact. The model reads them fenced, and
+ * the server instructions say a fence holds data, never instructions. Names,
+ * IDs, emails, dates and links stay plain, so a client can use them as they are.
+ */
+const FENCED = new Set([
+  "title",
+  "content",
+  "excerpt",
+  "about",
+  "preferences",
+  "description",
+  "value",
+  "aiBriefing",
+  "aiBackground",
+  "aiSummary",
+  "aiReason",
+]);
+
+/** Generous, so a long note still arrives whole. */
+const MAX_FENCED_CHARS = 50_000;
+
+/**
+ * A lean value as the model reads it: each FENCED string in an
+ * `<untrusted_data>` fence, and invisible characters out of every string.
+ * Clients pass the model `structuredContent`, the text, or both, so `answer()`
+ * builds both from this. Only an answer is fenced, never a stored row.
+ */
+export function forModel(value: unknown, key?: string): unknown {
+  if (typeof value === "string") {
+    return key && FENCED.has(key) && value.trim()
+      ? wrapUntrusted(key, value, MAX_FENCED_CHARS)
+      : stripInvisible(value);
+  }
+  if (Array.isArray(value)) return value.map((item) => forModel(item));
+  if (value === null || typeof value !== "object") return value;
+  const proto: unknown = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([k, inner]) => [k, forModel(inner, k)]),
   );
 }
 

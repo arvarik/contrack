@@ -15,7 +15,7 @@ import { relationshipService } from "../services/relationshipService.ts";
 import { dashboardService } from "../services/dashboardService.ts";
 import { NotFoundError } from "../utils/AppError.ts";
 import { toMcpError } from "./errors.ts";
-import { contactProfile, lean } from "./views.ts";
+import { contactProfile, forModel, lean } from "./views.ts";
 
 export function registerResources(server: McpServer, scope: Scope): void {
   server.resource(
@@ -33,7 +33,7 @@ export function registerResources(server: McpServer, scope: Scope): void {
           contents: [
             {
               uri: uri.href,
-              text: JSON.stringify(lean(pulse), null, 2),
+              text: JSON.stringify(forModel(lean(pulse)), null, 2),
               mimeType: "application/json",
             },
           ],
@@ -64,7 +64,7 @@ export function registerResources(server: McpServer, scope: Scope): void {
             {
               uri: uri.href,
               text: JSON.stringify(
-                { ...contactProfile(contact), scoreExplanation },
+                forModel({ ...contactProfile(contact), scoreExplanation }),
                 null,
                 2,
               ),

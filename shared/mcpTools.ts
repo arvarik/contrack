@@ -19,6 +19,11 @@ export interface McpToolDefinition {
   effect: McpToolEffect;
   /** A second identical call changes nothing more. */
   idempotent?: boolean;
+  /**
+   * Its answer can hold text other people wrote, such as an email summary or
+   * a calendar title. The server adds a warning to what the model reads.
+   */
+  othersText?: boolean;
 }
 
 export const MCP_TOOLS = [
@@ -28,6 +33,7 @@ export const MCP_TOOLS = [
     description:
       "Search contacts with a question in plain words, and get up to 30 ranked matches. The role, company, location, industry, tag, and list filters narrow those matches. To find every contact with a field, use list_contacts.",
     effect: "read",
+    othersText: true,
   },
   {
     name: "get_contact",
@@ -35,6 +41,7 @@ export const MCP_TOOLS = [
     description:
       "Retrieve a contact's full profile by contact ID, with the relationship score explanation when the contact is tracked (isTracked). An untracked contact has no score.",
     effect: "read",
+    othersText: true,
   },
   {
     name: "list_contacts",
@@ -49,6 +56,7 @@ export const MCP_TOOLS = [
     description:
       "Page through a contact's notes, meetings, calls, and emails, newest first.",
     effect: "read",
+    othersText: true,
   },
   {
     name: "search_notes",
@@ -56,6 +64,7 @@ export const MCP_TOOLS = [
     description:
       "Search notes and interactions with keyword, date range, and interaction type filters.",
     effect: "read",
+    othersText: true,
   },
   {
     name: "list_action_items",
@@ -63,6 +72,7 @@ export const MCP_TOOLS = [
     description:
       "List pending follow-ups, soonest due first, filtered by urgency (overdue, today, week, all).",
     effect: "read",
+    othersText: true,
   },
   {
     name: "get_pulse",
@@ -70,6 +80,7 @@ export const MCP_TOOLS = [
     description:
       "Get the dashboard Pulse metrics: the tracked contacts and their bands, the catch-ups past their cadence, and the follow-ups due.",
     effect: "read",
+    othersText: true,
   },
   {
     name: "list_tags",
