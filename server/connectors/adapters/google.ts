@@ -26,6 +26,7 @@ import {
   MAX_SUMMARIES_PER_RUN,
 } from "../summaries.ts";
 import { getGoogleOAuthCredentials } from "../../services/integrationSettings.ts";
+import { pageText } from "../../services/research/pages.ts";
 import type {
   ConnectorAdapter,
   Participant,
@@ -86,6 +87,27 @@ export function isAuthError(err: unknown): boolean {
 }
 
 /**
+ * A sync token Google no longer takes, which calls for a full sync. Calendar
+ * answers 410. People answers 400 with the reason EXPIRED_SYNC_TOKEN, 7 days
+ * after the full sync that gave the token: checking only 410 kept a connector
+ * that had stopped for a week from ever syncing contacts again.
+ */
+export function syncTokenExpired(err: unknown): boolean {
+  const e = err as {
+    code?: number | string;
+    status?: number;
+    message?: string;
+    response?: { status?: number; data?: unknown };
+  } | null;
+  const status = Number(e?.response?.status ?? e?.status ?? e?.code);
+  if (status === 410) return true;
+  const said = `${e?.message ?? ""} ${JSON.stringify(e?.response?.data ?? "")}`;
+  return (
+    status === 400 && /EXPIRED_SYNC_TOKEN|sync token is expired/i.test(said)
+  );
+}
+
+/**
  * How long one call to Google may take, from request to last byte. gaxios sets
  * no timeout unless asked, so a half-open connection would hold a sync forever,
  * with its scheduler and owner slots taken until a restart. Every call carries
@@ -124,16 +146,19 @@ export function createOAuth2Client(secret: GoogleSecret) {
 }
 
 /**
- * Recursively extracts plain text body from a Gmail payload.
+ * Recursively extracts plain text body from a Gmail payload. HTML is read as
+ * a research page is, so a style sheet or a script is not taken for text.
  */
 export function extractGmailBody(
   payload?: gmail_v1.Schema$MessagePart,
 ): string | undefined {
   if (!payload) return undefined;
+  const decode = (data: string) =>
+    Buffer.from(data, "base64url").toString("utf-8");
 
   // Direct text/plain body
   if (payload.mimeType === "text/plain" && payload.body?.data) {
-    return Buffer.from(payload.body.data, "base64url").toString("utf-8");
+    return decode(payload.body.data);
   }
 
   // Multipart parts traversal
@@ -141,7 +166,7 @@ export function extractGmailBody(
     // Prefer text/plain
     for (const part of payload.parts) {
       if (part.mimeType === "text/plain" && part.body?.data) {
-        return Buffer.from(part.body.data, "base64url").toString("utf-8");
+        return decode(part.body.data);
       }
     }
     // Search sub-parts recursively
@@ -152,21 +177,13 @@ export function extractGmailBody(
     // Fallback to text/html stripped of tags if no plain text
     for (const part of payload.parts) {
       if (part.mimeType === "text/html" && part.body?.data) {
-        const html = Buffer.from(part.body.data, "base64url").toString("utf-8");
-        return html
-          .replace(/<[^>]+>/g, " ")
-          .replace(/\s+/g, " ")
-          .trim();
+        return pageText(decode(part.body.data)) ?? undefined;
       }
     }
   }
 
   if (payload.mimeType === "text/html" && payload.body?.data) {
-    const html = Buffer.from(payload.body.data, "base64url").toString("utf-8");
-    return html
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
+    return pageText(decode(payload.body.data)) ?? undefined;
   }
 
   return undefined;
@@ -276,13 +293,11 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
               callOptions(signal),
             );
           } catch (err: unknown) {
-            const code =
-              (err as { code?: number; status?: number })?.code ??
-              (err as { code?: number; status?: number })?.status;
-            if (code === 410) {
+            if (contactsSyncToken && syncTokenExpired(err)) {
               // Sync token expired: reset and perform full pull
               contactsSyncToken = undefined;
               delete params.syncToken;
+              delete params.pageToken;
               res = await people.people.connections.list(
                 params,
                 callOptions(signal),
@@ -610,13 +625,11 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
           try {
             res = await calendar.events.list(params, callOptions(signal));
           } catch (err: unknown) {
-            const code =
-              (err as { code?: number; status?: number })?.code ??
-              (err as { code?: number; status?: number })?.status;
-            if (code === 410) {
+            if (calendarSyncToken && syncTokenExpired(err)) {
               // Sync token expired
               calendarSyncToken = undefined;
               delete params.syncToken;
+              delete params.pageToken;
               params.timeMin = new Date(ctx.since).toISOString();
               res = await calendar.events.list(params, callOptions(signal));
             } else {

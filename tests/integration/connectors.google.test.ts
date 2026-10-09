@@ -626,6 +626,68 @@ describe("Google Workspace Connector & OAuth Integration", () => {
     });
   });
 
+  describe("Expired sync tokens", () => {
+    it("runs a full People sync when the saved token has expired", async () => {
+      // People answers an expired token with 400 EXPIRED_SYNC_TOKEN, not 410.
+      const expired = Object.assign(new Error("Sync token is expired."), {
+        status: 400,
+        response: {
+          status: 400,
+          data: {
+            error: { details: [{ reason: "EXPIRED_SYNC_TOKEN" }] },
+          },
+        },
+      });
+      const list = vi.fn(async (params: { syncToken?: string }) => {
+        if (params.syncToken) throw expired;
+        return {
+          data: {
+            connections: [
+              {
+                resourceName: "people/c1",
+                names: [{ displayName: "Ada Lovelace" }],
+              },
+            ],
+            nextSyncToken: "fresh-token",
+          },
+        };
+      });
+      vi.spyOn(google, "people").mockReturnValue({
+        people: { connections: { list } },
+      } as unknown as ReturnType<typeof google.people>);
+
+      const gen = googleAdapter.sync({
+        config: {
+          syncContacts: true,
+          syncEmail: false,
+          syncCalendar: false,
+          summaries: false,
+          lookbackDays: 90,
+          rollup: true,
+          ghostThreshold: 3,
+          maxMessagesPerRun: 5000,
+          aliases: [],
+        },
+        secret: { refreshToken: "good-token" },
+        cursor: { contactsSyncToken: "week-old-token" },
+        since: "2026-01-01T00:00:00.000Z",
+        selfAddresses: { emails: [], phones: [] },
+        signal: new AbortController().signal,
+        log: () => {},
+      });
+      const events: SyncEvent[] = [];
+      let step = await gen.next();
+      while (!step.done) {
+        events.push(step.value);
+        step = await gen.next();
+      }
+
+      expect(events.filter((e) => e.kind === "contact")).toHaveLength(1);
+      expect(step.value).toMatchObject({ contactsSyncToken: "fresh-token" });
+      expect(list).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe("Correspondents Ignore", () => {
     it("POST /api/connectors/correspondents/ignore sets ignoredAt and filters from listCorrespondents", async () => {
       // Seed a connector and correspondent link

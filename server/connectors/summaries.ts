@@ -10,7 +10,11 @@
 
 import { generateFor, isAnyProviderConfigured } from "../ai/gateway.ts";
 import { aiAllowedForUser } from "../ai/instanceSwitch.ts";
-import { wrapUntrusted, UNTRUSTED_DATA_RULE } from "../ai/promptSafety.ts";
+import {
+  sanitizeAiOutputValue,
+  wrapUntrusted,
+  UNTRUSTED_DATA_RULE,
+} from "../ai/promptSafety.ts";
 import { recordInvocation } from "../services/aiStatsService.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
@@ -57,8 +61,10 @@ You are an assistant summarizing an email for a personal CRM.
 Provide a concise 1-2 sentence summary of the email content, focusing on key decisions, requests, or updates.
 Respond with plain text only.`;
 
+  // The sender writes the subject as well as the body, so both are fenced.
   const prompt = `Please summarize the following email.
-Subject: ${subject || "(No subject)"}
+
+${wrapUntrusted("email_subject", subject || "(No subject)", 300)}
 
 ${wrapUntrusted("email_body", trimmedBody, 8_000)}`;
 
@@ -83,7 +89,9 @@ ${wrapUntrusted("email_body", trimmedBody, 8_000)}`;
       description: `Email summary: ${(subject || "Untitled").slice(0, 50)}`,
     });
 
-    return result.text.trim();
+    // The summary is saved as a note, and an assistant reads notes through
+    // MCP. An answer that echoes an injected instruction is dropped.
+    return sanitizeAiOutputValue(result.text, 1_000);
   } catch (err) {
     log.warn("Connectors", "Failed to generate email summary", {
       error: getErrorMessage(err),

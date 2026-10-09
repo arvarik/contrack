@@ -20,7 +20,11 @@ import {
   it,
   vi,
 } from "vitest";
-import { imapAdapter } from "../../server/connectors/adapters/imap.ts";
+import type { MessageStructureObject } from "imapflow";
+import {
+  imapAdapter,
+  summaryPart,
+} from "../../server/connectors/adapters/imap.ts";
 import {
   ConnectorAuthError,
   ConnectorConfigError,
@@ -39,6 +43,8 @@ describe("IMAP Adapter Integration", () => {
   let folderUidValidity = 12345;
   /** Message bodies the fake server sent: only a summary needs one. */
   let bodyFetches = 0;
+  /** Reset the connection (TCP RST) instead of answering the first FETCH. */
+  let resetOnFetch = false;
 
   const rawMessageRfc822 = [
     'From: "Alice Wonderland" <alice@example.com>',
@@ -107,12 +113,24 @@ describe("IMAP Adapter Integration", () => {
                 socket.write(`* SEARCH 101\r\n${tag} OK SEARCH completed\r\n`);
               }
             } else if (subCmd === "FETCH") {
-              if (line.includes("BODY.PEEK") || line.includes("BODY[]")) {
+              if (resetOnFetch) {
+                socket.resetAndDestroy();
+                return;
+              }
+              if (line.includes("BODY.PEEK[TEXT]")) {
+                // Only the text part: the adapter never downloads the whole
+                // message, whose attachments a summary does not read.
                 bodyFetches++;
-                const len = Buffer.byteLength(rawMessageRfc822);
+                const [head, body] = rawMessageRfc822.split("\r\n\r\n");
+                const header = `${head}\r\n\r\n`;
                 socket.write(
-                  `* 1 FETCH (UID 101 RFC822.SIZE ${len} BODY[]<0> {${len}}\r\n${rawMessageRfc822})\r\n${tag} OK FETCH completed\r\n`,
+                  `* 1 FETCH (UID 101 RFC822.SIZE ${rawMessageRfc822.length} BODY[HEADER] {${header.length}}\r\n${header} BODY[TEXT]<0> {${body.length}}\r\n${body})\r\n${tag} OK FETCH completed\r\n`,
                 );
+              } else if (
+                line.includes("BODY.PEEK") ||
+                line.includes("BODY[]")
+              ) {
+                socket.write(`${tag} NO Whole messages are not served\r\n`);
               } else {
                 socket.write(
                   `* 1 FETCH (UID 101 INTERNALDATE "15-Feb-2026 10:00:00 +0000" ENVELOPE ("Sun, 15 Feb 2026 10:00:00 +0000" "Important Project Discussion" (( "Alice Wonderland" NIL "alice" "example.com")) (( "Alice Wonderland" NIL "alice" "example.com")) (( "Alice Wonderland" NIL "alice" "example.com")) ((NIL NIL "me" "example.com")) NIL NIL NIL "<msg-001@example.com>") BODYSTRUCTURE ("TEXT" "PLAIN" ("CHARSET" "utf-8") NIL NIL "7BIT" ${rawMessageRfc822.length} 9))\r\n${tag} OK FETCH completed\r\n`,
@@ -151,6 +169,7 @@ describe("IMAP Adapter Integration", () => {
 
   beforeEach(() => {
     authFail = false;
+    resetOnFetch = false;
     folderUidValidity = 12345;
   });
 
@@ -342,6 +361,84 @@ describe("IMAP Adapter Integration", () => {
       expect(generateSpy).not.toHaveBeenCalled();
     } finally {
       allowedSpy.mockRestore();
+    }
+  });
+
+  it.each([
+    [
+      "plain text before HTML, never an attachment",
+      {
+        type: "multipart/mixed",
+        childNodes: [
+          { type: "text/plain", part: "1", disposition: "attachment" },
+          {
+            type: "multipart/alternative",
+            part: "2",
+            childNodes: [
+              { type: "text/html", part: "2.1" },
+              { type: "text/plain", part: "2.2" },
+            ],
+          },
+        ],
+      },
+      { part: "2.2", html: false },
+    ],
+    [
+      "HTML when there is no plain text",
+      {
+        type: "multipart/mixed",
+        childNodes: [
+          { type: "text/html", part: "1" },
+          { type: "application/pdf", part: "2" },
+        ],
+      },
+      { part: "1", html: true },
+    ],
+    [
+      "the text of a single-part message",
+      { type: "text/plain" },
+      { part: "1", html: false },
+    ],
+    ["nothing to read", { type: "image/png" }, null],
+  ])("summaryPart picks %s", (_name, structure, expected) => {
+    expect(summaryPart(structure as MessageStructureObject)).toEqual(expected);
+  });
+
+  it("fails the sync, not the process, when the server resets the connection", async () => {
+    // ImapFlow emits a reset as an `error` event. With no listener, Node
+    // throws it, and the server's uncaughtException handler exits.
+    resetOnFetch = true;
+    const uncaught = vi.fn();
+    process.on("uncaughtException", uncaught);
+    try {
+      const gen = imapAdapter.sync({
+        config: {
+          host: "127.0.0.1",
+          port: serverPort,
+          secure: false,
+          username: "me@example.com",
+          folders: ["INBOX"],
+          summaries: false,
+          lookbackDays: 90,
+          rollup: true,
+          ghostThreshold: 3,
+          maxMessagesPerFolder: 100,
+          aliases: [],
+        },
+        secret: { password: "password" },
+        cursor: null,
+        since: "2026-01-01T00:00:00.000Z",
+        selfAddresses: { emails: ["me@example.com"], phones: [] },
+        signal: new AbortController().signal,
+        log: () => {},
+        accountId: ownerId,
+      });
+      // The FETCH that was waiting rejects, and the sync ends with it.
+      await expect(gen.next()).rejects.toThrow("Connection not available");
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(uncaught).not.toHaveBeenCalled();
+    } finally {
+      process.off("uncaughtException", uncaught);
     }
   });
 
