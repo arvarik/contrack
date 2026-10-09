@@ -155,6 +155,32 @@ async function localContactPhoto(
 }
 
 /**
+ * The longest title, note and participant name a connector stores. A mail
+ * server or a calendar feed writes them, not the person, and a 5 MB feed can
+ * hold one event title of 5 MB.
+ */
+export const MAX_SYNCED_TITLE = 300;
+export const MAX_SYNCED_CONTENT = 20_000;
+const MAX_SYNCED_NAME = 200;
+
+function capped(event: SyncEvent): SyncEvent {
+  if (event.kind !== "interaction" && event.kind !== "upcoming") return event;
+  const participants = event.participants.map((p) =>
+    p.name && p.name.length > MAX_SYNCED_NAME
+      ? { ...p, name: p.name.slice(0, MAX_SYNCED_NAME) }
+      : p,
+  );
+  const title = event.title.slice(0, MAX_SYNCED_TITLE);
+  if (event.kind === "upcoming") return { ...event, title, participants };
+  return {
+    ...event,
+    title,
+    participants,
+    content: event.content?.slice(0, MAX_SYNCED_CONTENT),
+  };
+}
+
+/**
  * Ingests a stream of SyncEvents from an adapter.
  */
 export async function ingestStream(
@@ -186,7 +212,8 @@ export async function ingestStream(
   const seenUpcomingExternalIds = new Set<string>();
   let hasUpcomingEvents = false;
 
-  function processSingleEvent(event: SyncEvent, nowIso: string): void {
+  function processSingleEvent(raw: SyncEvent, nowIso: string): void {
+    const event = capped(raw);
     if (event.kind === "progress") {
       stats.fetched = event.fetched;
       return;

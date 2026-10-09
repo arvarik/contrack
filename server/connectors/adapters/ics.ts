@@ -39,6 +39,32 @@ export type IcsConfig = z.infer<typeof icsConfigSchema>;
 const MAX_CALENDAR_BYTES = 5 * 1024 * 1024; // 5 MB cap
 
 /**
+ * The most instances one recurring event may have in the sync window (up to
+ * 365 days back and 30 ahead). A daily meeting has at most 395, twice a day 790.
+ */
+export const MAX_INSTANCES_PER_EVENT = 1_000;
+
+/**
+ * A rule that recurs within the hour. Its expansion is not bounded by any cap
+ * the parser has: one 1 KB event with every BYHOUR, BYMINUTE and BYSECOND value
+ * filled a 400 MB heap in 3 s, and the process aborted. So it is skipped before
+ * expansion. More than 24 times in a day is not a meeting with a person.
+ */
+export function recursWithinTheHour(rrule: VEvent["rrule"]): boolean {
+  if (!rrule) return false;
+  const o = rrule.options;
+  const count = (camel: string) => {
+    const list = o[camel] ?? o[camel.toLowerCase()];
+    return Array.isArray(list) && list.length > 0 ? list.length : 1;
+  };
+  const freq = String(o.freq).toUpperCase();
+  if (["HOURLY", "MINUTELY", "SECONDLY", "4", "5", "6"].includes(freq)) {
+    return true;
+  }
+  return count("byHour") * count("byMinute") * count("bySecond") > 24;
+}
+
+/**
  * Reads a stream capped at MAX_CALENDAR_BYTES.
  */
 async function readCappedBody(
@@ -214,7 +240,7 @@ export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
     const rawIcs = await fetchIcsContent(config.url);
     let parsed: CalendarResponse;
     try {
-      parsed = ical.sync.parseICS(rawIcs);
+      parsed = await ical.async.parseICS(rawIcs);
     } catch (err) {
       throw new ConnectorConfigError(
         `Failed to parse calendar format: ${(err as Error).message}`,
@@ -243,13 +269,17 @@ export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
     ctx: SyncContext<IcsConfig, null>,
   ): AsyncGenerator<SyncEvent, unknown | null> {
     const { config, since: _since, signal, log } = ctx;
-    log(`Fetching calendar feed from ${config.url}`);
+    // The address is not logged: a private ICS address is the key to the
+    // whole calendar, and it often names the account's email.
+    log("Fetching the calendar feed");
     const rawIcs = await fetchIcsContent(config.url, signal);
 
     log("Parsing ICS calendar data");
     let parsed: CalendarResponse;
     try {
-      parsed = ical.sync.parseICS(rawIcs);
+      // The async parser yields between batches of lines: a 5 MB feed held
+      // the event loop for about 110 ms with the sync one, and 4 ms with this.
+      parsed = await ical.async.parseICS(rawIcs);
     } catch (err) {
       throw new ConnectorConfigError(
         `Failed to parse calendar data: ${(err as Error).message}`,
@@ -319,6 +349,10 @@ export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
 
       // Handle recurring events
       if (event.rrule) {
+        if (recursWithinTheHour(event.rrule)) {
+          log("Skipped a recurring event that repeats within the hour");
+          continue;
+        }
         let instances: EventInstance[] = [];
         try {
           instances = ical.expandRecurringEvent(event, {
@@ -330,6 +364,12 @@ export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
         } catch {
           // If expandRecurringEvent fails on unusual RRULE, fall back to base event
           instances = [];
+        }
+        // Each instance is a write. A rule that passes the check above can
+        // still give thousands, such as 24 times a day for a year.
+        if (instances.length > MAX_INSTANCES_PER_EVENT) {
+          log(`Skipped a recurring event with ${instances.length} instances`);
+          continue;
         }
 
         for (const instance of instances) {

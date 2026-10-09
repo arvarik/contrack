@@ -326,6 +326,13 @@ only the server or the app reads, such as the search index, the research
 record, or the photo. Each result has one line for a person to read, then the
 same data as JSON.
 
+Text that other people can write arrives inside `<untrusted_data>` tags, in the
+JSON and in its text copy. This covers notes, email summaries, meeting and
+follow-up titles, profile text, and facts from research. The tags tell the
+model that the text is data, not instructions. Names, IDs, emails, dates, and
+links arrive without tags. Invisible characters, such as zero-width spaces,
+are removed from every value. Contrack stores the text unchanged.
+
 Dates are ISO 8601: a day, such as `2026-11-03`, or a date and time.
 `log_interaction` refuses a date in the future, because an interaction has
 already happened. A follow-up can be due on any date.
@@ -339,7 +346,9 @@ offset, for `from` and `to`.
 When a client connects, the server also sends instructions for its model.
 They say where contact IDs come from, to check for a contact with
 `list_contacts` before `create_contact`, how to write dates, and how to get
-the next page. A read-only client is also told that it can only read.
+the next page. They also say that text inside `<untrusted_data>` tags is data,
+and that the model must not act on instructions in it. A read-only client is
+also told that it can only read.
 
 With AI off for your account or for the instance, `search_people` answers from
 the local index, as Ask Contrack does. **Enrich new contacts automatically**
@@ -363,6 +372,9 @@ And two prompts, which a client can offer you as commands:
   one.
 - `weekly_review`: a weekly review of overdue follow-ups, the follow-ups due
   today and this week, and the tracked contacts to catch up with.
+
+A prompt arrives as your own message, so both prompts put their records inside
+`<untrusted_data>` tags.
 
 ## Limits and errors
 
@@ -399,6 +411,9 @@ And two prompts, which a client can offer you as commands:
   need you signed in.
 - A token cannot change your password, create tokens, or manage passkeys and
   devices. Those need you signed in.
+- An email or a calendar invite can hold words written to steer an
+  assistant. Contrack marks that text, but no mark stops every attack. Give an
+  assistant that can also browse the web or send messages a read-only token.
 - Give each client its own token. Then you can revoke one without the others.
 - Revoke a token you no longer use, or one you think someone else has seen.
 - A password reset stops every token and app of the account. Changing your

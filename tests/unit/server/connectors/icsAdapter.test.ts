@@ -222,4 +222,33 @@ describe("icsAdapter", () => {
     expect(pass1.length).toBeGreaterThan(0);
     expect(pass1).toEqual(pass2);
   });
+
+  it("skips rules that repeat within the hour, and never logs the feed's address", async () => {
+    // Before, these gave about 9,500 and 19,000 writes. Every BYSECOND too
+    // aborts the process inside the parser, so no test expands one.
+    const hours = Array.from({ length: 24 }, (_, i) => i).join(",");
+    const event = (uid: string, rule: string) =>
+      `BEGIN:VEVENT\r\nUID:${uid}\r\nDTSTAMP:20260101T000000Z\r\nDTSTART:20260201T100000Z\r\nDTEND:20260201T101000Z\r\nRRULE:${rule}\r\nSUMMARY:${uid}\r\nEND:VEVENT\r\n`;
+    mockFetch(
+      `BEGIN:VCALENDAR\r\nVERSION:2.0\r\n${event("hourly", "FREQ=HOURLY")}${event("half-hourly", `FREQ=DAILY;BYHOUR=${hours};BYMINUTE=0,30`)}END:VCALENDAR\r\n`,
+    );
+    const url =
+      "https://calendar.example.com/ical/me%40example.com/private-5ecret/basic.ics";
+    const logged: string[] = [];
+    const written: SyncEvent[] = [];
+    for await (const ev of icsAdapter.sync({
+      config: { url, lookbackDays: 365 },
+      secret: null,
+      cursor: null,
+      since: "2025-03-01T00:00:00.000Z",
+      selfAddresses: { emails: [], phones: [] },
+      signal: new AbortController().signal,
+      log: (msg) => logged.push(msg),
+    })) {
+      if (ev.kind !== "progress") written.push(ev);
+    }
+
+    expect(written).toEqual([]);
+    expect(logged.join("\n")).not.toMatch(/5ecret|example\.com/);
+  });
 });

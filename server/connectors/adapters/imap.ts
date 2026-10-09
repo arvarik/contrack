@@ -8,10 +8,12 @@
 
 import net from "node:net";
 import dns from "node:dns/promises";
-import { ImapFlow } from "imapflow";
-import { simpleParser } from "mailparser";
+import { text } from "node:stream/consumers";
+import { ImapFlow, type MessageStructureObject } from "imapflow";
 import { z } from "zod";
 import { isPrivateAddress } from "../../utils/urlSafety.ts";
+import { log } from "../../utils/logger.ts";
+import { pageText } from "../../services/research/pages.ts";
 import { ConnectorAuthError, ConnectorConfigError } from "../errors.ts";
 import { normalizeEmail } from "../email/normalize.ts";
 import {
@@ -102,12 +104,17 @@ export async function assertSafeImapHost(host: string): Promise<void> {
 
 /**
  * Create and configure an ImapFlow client.
+ *
+ * After connect, ImapFlow reports a dropped or reset socket as an `error`
+ * event. With no listener Node throws it, and the server exits. The listener
+ * only logs: the command that was waiting rejects on its own, and the sync
+ * fails with that error.
  */
 export function createImapClient(
   config: ImapConfig,
   secret: ImapSecret,
 ): ImapFlow {
-  return new ImapFlow({
+  const client = new ImapFlow({
     host: config.host,
     port: config.port,
     secure: config.secure,
@@ -118,6 +125,64 @@ export function createImapClient(
     logger: false,
     emitLogs: false,
   });
+  client.on("error", (err: NodeJS.ErrnoException) => {
+    log.warn("Connectors", `IMAP connection error: ${err.code ?? err.message}`);
+  });
+  return client;
+}
+
+/** Messages per FETCH: one round trip each, not one per message. */
+const FETCH_BATCH = 200;
+
+/**
+ * The most bytes of one body part a summary downloads. The prompt keeps 8,000
+ * characters, and an HTML part needs room for its markup.
+ */
+export const SUMMARY_PART_BYTES = 64 * 1024;
+
+/**
+ * The part a summary reads: the first text/plain part that is not an
+ * attachment, else the first text/html one. A single-part message is part
+ * "1", which ImapFlow reads as the message text. Null when there is none.
+ */
+export function summaryPart(
+  node: MessageStructureObject | undefined,
+): { part: string; html: boolean } | null {
+  let html: { part: string; html: boolean } | null = null;
+  const walk = (
+    n: MessageStructureObject,
+  ): { part: string; html: boolean } | null => {
+    if (n.disposition === "attachment") return null;
+    if (n.childNodes?.length) {
+      for (const child of n.childNodes) {
+        const found = walk(child);
+        if (found) return found;
+      }
+      return null;
+    }
+    if (n.type === "text/plain") return { part: n.part ?? "1", html: false };
+    if (n.type === "text/html" && !html)
+      html = { part: n.part ?? "1", html: true };
+    return null;
+  };
+  return node ? (walk(node) ?? html) : null;
+}
+
+/** The readable text of one message for a summary, at most SUMMARY_PART_BYTES of it. */
+async function summaryText(
+  client: ImapFlow,
+  uid: number,
+  structure: MessageStructureObject | undefined,
+): Promise<string> {
+  const found = summaryPart(structure);
+  if (!found) return "";
+  const { content } = await client.download(String(uid), found.part, {
+    uid: true,
+    maxBytes: SUMMARY_PART_BYTES,
+  });
+  if (!content) return "";
+  const body = await text(content);
+  return (found.html ? pageText(body) : body.trim()) ?? "";
 }
 
 function isAuthError(err: unknown): boolean {
@@ -325,21 +390,29 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
 
           let highestUid = lastUid;
 
-          for (const uid of uids) {
+          // One FETCH per batch. A body is downloaded only after its batch has
+          // arrived: ImapFlow cannot run a command inside a running FETCH.
+          const messages = async function* () {
+            for (let i = 0; i < uids.length; i += FETCH_BATCH) {
+              signal.throwIfAborted();
+              const batch = await client.fetchAll(
+                uids.slice(i, i + FETCH_BATCH).join(","),
+                {
+                  envelope: true,
+                  internalDate: true,
+                  uid: true,
+                  bodyStructure: true,
+                },
+                { uid: true },
+              );
+              yield* batch.sort((a, b) => a.uid - b.uid);
+            }
+          };
+
+          for await (const message of messages()) {
             signal.throwIfAborted();
-
-            const message = await client.fetchOne(
-              String(uid),
-              {
-                envelope: true,
-                internalDate: true,
-                uid: true,
-                bodyStructure: true,
-              },
-              { uid: true },
-            );
-
-            if (!message || !message.envelope) continue;
+            const uid = message.uid;
+            if (!message.envelope) continue;
 
             if (uid > highestUid) {
               highestUid = uid;
@@ -394,26 +467,19 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
               summariesAllowed(ctx.accountId)
             ) {
               try {
-                const downloadResult = await client.download(
-                  String(uid),
-                  undefined,
-                  {
-                    uid: true,
-                  },
+                const bodyText = await summaryText(
+                  client,
+                  uid,
+                  message.bodyStructure,
                 );
-                if (downloadResult?.content) {
-                  const parsed = await simpleParser(downloadResult.content);
-                  const bodyText = parsed.text || "";
-                  if (bodyText) {
-                    const summary = await summarizeEmail(
-                      norm.subject,
-                      bodyText,
-                      { signal: ctx.signal, accountId: ctx.accountId },
-                    );
-                    if (summary) {
-                      summaryContent = summary;
-                      summaryCount++;
-                    }
+                if (bodyText) {
+                  const summary = await summarizeEmail(norm.subject, bodyText, {
+                    signal: ctx.signal,
+                    accountId: ctx.accountId,
+                  });
+                  if (summary) {
+                    summaryContent = summary;
+                    summaryCount++;
                   }
                 }
               } catch (downloadErr) {
@@ -462,7 +528,9 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
       };
     } finally {
       signal.removeEventListener("abort", closeOnAbort);
-      await client.logout();
+      // On a closed socket (an abort, a dropped connection) logout throws, and
+      // a throw here would replace the error that ended the sync.
+      await client.logout().catch(() => client.close());
     }
   },
 };
