@@ -16,7 +16,7 @@ import { interactionService } from "../services/interactionService.ts";
 import { dashboardService } from "../services/dashboardService.ts";
 import { mcpService } from "../services/mcpService.ts";
 import { AppError, NotFoundError } from "../utils/AppError.ts";
-import { stripInvisible, wrapUntrusted } from "../ai/promptSafety.ts";
+import { wrapUntrusted } from "../ai/promptSafety.ts";
 import { toMcpError } from "./errors.ts";
 import { contactProfile, lean } from "./views.ts";
 
@@ -70,9 +70,6 @@ export function registerPrompts(server: McpServer, scope: Scope): void {
       try {
         const contact = findContact(scope, nameOrId);
         const timeline = interactionService.getTimeline(scope, contact.id);
-        const work = [contact.role, contact.company]
-          .filter(Boolean)
-          .join(" at ");
 
         return {
           description: `Catch me up on ${contact.name}`,
@@ -82,7 +79,9 @@ export function registerPrompts(server: McpServer, scope: Scope): void {
               content: {
                 type: "text" as const,
                 text:
-                  `Please catch me up on ${stripInvisible(contact.name)}${work ? ` (${stripInvisible(work)})` : ""}.\n\n` +
+                  // The name, role and company stay inside the fence: a
+                  // calendar invite or a research page can set them.
+                  `Please catch me up on the contact whose profile is below.\n\n` +
                   `${DATA_NOTE}\n\n` +
                   `Contact Details:\n${wrapUntrusted("contact_profile", JSON.stringify(contactProfile(contact), null, 2), 20_000)}\n\n` +
                   `Recent Timeline (newest first):\n${wrapUntrusted("timeline", JSON.stringify(lean(timeline.slice(0, 20)), null, 2), 60_000)}\n\n` +

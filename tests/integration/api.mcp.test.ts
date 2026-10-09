@@ -419,6 +419,8 @@ describe("MCP Server (/api/mcp)", () => {
     const asked = (byName.messages[0].content as { text: string }).text;
     expect(asked).toContain('<untrusted_data label="contact_profile">');
     expect(asked).toContain('<untrusted_data label="timeline">');
+    // Not even the name is outside a fence: an invite or a web page can set it.
+    expect(asked.split("<untrusted_data")[0]).not.toContain("alice Contact 0");
     await expect(
       a.getPrompt({ name: "catch_me_up", arguments: { contact: "alice" } }),
     ).rejects.toMatchObject({
