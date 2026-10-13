@@ -19,6 +19,8 @@ import { useSemanticSearch } from "../api/search";
 interface RecentContextValue {
   lastContactId: string | null;
   setLastContactId: Dispatch<SetStateAction<string | null>>;
+  lastSettingsPath: string | null;
+  setLastSettingsPath: Dispatch<SetStateAction<string | null>>;
 }
 
 const RecentContext = createContext<RecentContextValue | null>(null);
@@ -52,10 +54,16 @@ export function useAISearchSession(): AISearchSessionValue {
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   // ── Recent (narrow, low-churn) ──────────────────────────────────────
   const [lastContactId, setLastContactId] = useState<string | null>(null);
+  const [lastSettingsPath, setLastSettingsPath] = useState<string | null>(null);
 
   const recentValue = useMemo<RecentContextValue>(
-    () => ({ lastContactId, setLastContactId }),
-    [lastContactId],
+    () => ({
+      lastContactId,
+      setLastContactId,
+      lastSettingsPath,
+      setLastSettingsPath,
+    }),
+    [lastContactId, lastSettingsPath],
   );
 
   // Not memoized: the search is a new object on every render, and this

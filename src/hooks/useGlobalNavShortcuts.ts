@@ -10,6 +10,7 @@
 import { useContext, useEffect, useTransition } from "react";
 import { useNavigate } from "react-router-dom";
 import { QueryClientContext } from "@tanstack/react-query";
+import { useRecent } from "../contexts/SessionContext";
 import { markPendingNav } from "../lib/pendingNav";
 import { warmPage } from "../views/pages";
 import { chordLabel, NAV_MODIFIERS, navChordKey } from "../lib/platform";
@@ -39,12 +40,17 @@ export const useGlobalNavShortcuts = () => {
   const navigate = useNavigate();
   const [_, startTransition] = useTransition();
   const queryClient = useContext(QueryClientContext);
+  const { lastSettingsPath } = useRecent();
 
   useEffect(() => {
     // The rail marks the page at once, and its code and first data start
     // together rather than one after the other (`views/pages`).
-    const go = (path: string) => {
-      warmPage(path, queryClient);
+    const go = (rawPath: string) => {
+      const path =
+        rawPath === "/settings"
+          ? (lastSettingsPath ?? "/settings/account")
+          : rawPath;
+      warmPage(rawPath, queryClient);
       markPendingNav(path);
       startTransition(() => navigate(path));
     };
@@ -75,5 +81,5 @@ export const useGlobalNavShortcuts = () => {
 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [navigate, queryClient]);
+  }, [navigate, queryClient, lastSettingsPath]);
 };

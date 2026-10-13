@@ -25,7 +25,7 @@ import { warmSettingsShell } from "../../views/settings/warm";
 
 export const MobileNav = () => {
   const location = useLocation();
-  const { lastContactId } = useRecent();
+  const { lastContactId, lastSettingsPath } = useRecent();
   const matchContact = useMatch("/contact/:id");
   const matchMapContact = useMatch("/map/contact/:id");
   const isContactSelected = matchContact || matchMapContact;
@@ -89,7 +89,7 @@ export const MobileNav = () => {
           badge: 0,
         },
         {
-          to: "/settings",
+          to: lastSettingsPath && !isSettings ? lastSettingsPath : "/settings",
           icon: SettingsIcon,
           label: NAMES.settings.label,
           active: isSettings,
@@ -101,7 +101,7 @@ export const MobileNav = () => {
           to={to}
           // A touch on a tab starts its page's code, and Pulse's data, a
           // moment before the tap lands (`views/pages.ts`, `warm.ts`).
-          {...(to === "/settings"
+          {...(to.startsWith("/settings")
             ? { onPointerDown: warmSettingsShell }
             : pageLinkWarm(to, queryClient))}
           onClick={markPendingNavOnClick(to)}

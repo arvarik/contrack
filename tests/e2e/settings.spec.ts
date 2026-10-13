@@ -21,6 +21,7 @@ test.describe("Settings — Desktop", () => {
     page,
   }) => {
     await page.goto("/settings");
+    await expect(page).toHaveURL(/\/settings\/account$/);
     const rail = page.getByRole("navigation", { name: "Settings" });
     await expect(rail).toBeVisible();
 
@@ -49,13 +50,17 @@ test.describe("Settings — Desktop", () => {
     await expect(page.getByRole("link", { name: /^Back to/ })).toHaveCount(0);
 
     // Every page's title starts at the same height: a settings page's and
-    // Pulse's.
+    // Pulse's. Navigating away and clicking Settings in the sidebar returns
+    // to the remembered settings page (/settings/appearance).
     const settingsTop = (await heading.boundingBox())!.y;
-    await page.goto("/pulse");
+    await page.getByRole("link", { name: /^Pulse/ }).click();
     const pulseTop = (await page
       .getByRole("heading", { level: 1, name: "Pulse" })
       .boundingBox())!.y;
     expect(Math.abs(settingsTop - pulseTop)).toBeLessThan(1);
+
+    await page.getByRole("link", { name: "Settings", exact: true }).click();
+    await expect(page).toHaveURL(/\/settings\/appearance$/);
   });
 
   test("one rail row is lit: Correspondents does not light Connectors", async ({

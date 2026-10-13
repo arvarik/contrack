@@ -17,7 +17,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { SETTINGS_CONTENT_ID } from "../../components/layout/SkipLink";
@@ -25,6 +25,7 @@ import {
   SETTINGS_LIST_PATH,
   SETTINGS_PAGES,
   findSettingsPage,
+  isSettingsPageVisible,
   settingsBackLink,
   type SettingsPage,
 } from "./registry";
@@ -47,13 +48,22 @@ import {
   SettingsRedirect,
 } from "../../components/auth/RequireAdmin";
 import { useAuth } from "../../components/auth/AuthGate";
+import { useRecent } from "../../contexts/SessionContext";
 import { useMediaQuery, WIDE_QUERY } from "../../hooks/useMediaQuery";
 import { usePageTitle } from "../../hooks/usePageTitle";
 import { PAGE_TOP, PAGE_X } from "../../lib/styles";
 import { NAMES } from "../../lib/names";
 import { cn } from "../../lib/utils";
 import { SETTINGS_BOX, SETTINGS_PAGE } from "./layout";
-import { settingsPagePreload, useWarmSettingsPages } from "./warm";
+import {
+  settingsPagePreload,
+  useWarmSettingsPages,
+  warmSettingsPage,
+} from "./warm";
+
+// Warm the default Account page immediately alongside the shell so redirecting
+// `/settings` -> `/settings/account` renders synchronously without a fallback.
+warmSettingsPage(SETTINGS_PAGES[0]);
 
 const UsersView = React.lazy(() =>
   import("./admin/UsersView").then((m) => ({ default: m.UsersView })),
@@ -93,12 +103,31 @@ export const SettingsShell = () => {
   const isWide = useMediaQuery(WIDE_QUERY);
   const slide = useSlideNavigate();
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const { lastSettingsPath, setLastSettingsPath } = useRecent();
 
   const currentSubpage = findSettingsPage(location.pathname);
-  const isSubpage = !!currentSubpage;
-  const title = currentSubpage?.title ?? NAMES.settings.title;
-  const ownsScrolling = currentSubpage?.ownsScrolling ?? false;
+  const defaultTarget = lastSettingsPath ?? "/settings/account";
+  const activeSubpage =
+    currentSubpage ?? (isWide ? findSettingsPage(defaultTarget) : undefined);
+  const isSubpage = !!activeSubpage;
+  const title = activeSubpage?.title ?? NAMES.settings.title;
+  const ownsScrolling = activeSubpage?.ownsScrolling ?? false;
   const { isAdmin, authRequired } = useAuth();
+
+  useLayoutEffect(() => {
+    if (
+      currentSubpage &&
+      isSettingsPageVisible(currentSubpage, { isAdmin, authRequired })
+    ) {
+      setLastSettingsPath?.(location.pathname);
+    }
+  }, [
+    currentSubpage,
+    isAdmin,
+    authRequired,
+    location.pathname,
+    setLastSettingsPath,
+  ]);
 
   usePageTitle(title);
   useWarmSettingsPages({ isAdmin, authRequired });
@@ -151,7 +180,7 @@ export const SettingsShell = () => {
     <PageHeader
       back={back}
       title={title}
-      description={currentSubpage?.description}
+      description={activeSubpage?.description}
       actions={
         actionClaims > 0 ? (
           <div ref={setActionsTarget} className="contents" />
@@ -162,7 +191,7 @@ export const SettingsShell = () => {
         // A full-width tool's header spans the column unless `boxed`. Other
         // headers take the page's box, in line with its first card.
         ownsScrolling
-          ? cn(currentSubpage?.boxed ? SETTINGS_BOX : PAGE_X, "shrink-0")
+          ? cn(activeSubpage?.boxed ? SETTINGS_BOX : PAGE_X, "shrink-0")
           : SETTINGS_BOX,
       )}
     />
@@ -207,7 +236,16 @@ export const SettingsShell = () => {
                 "Loading…" at once and React holds it for 300 ms. */}
               <Suspense fallback={<PageFallback />}>
                 <Routes>
-                  <Route path="/" element={<SettingsHome />} />
+                  <Route
+                    path="/"
+                    element={
+                      isWide ? (
+                        <Navigate to={defaultTarget} replace />
+                      ) : (
+                        <SettingsHome />
+                      )
+                    }
+                  />
 
                   <Route
                     path="admin/users/new"

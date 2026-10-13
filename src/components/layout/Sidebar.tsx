@@ -79,7 +79,7 @@ const CorvidPerch = () => {
 export const Sidebar = () => {
   const location = useLocation();
   // A narrow context, so a keystroke in Ask's search does not redraw this.
-  const { lastContactId } = useRecent();
+  const { lastContactId, lastSettingsPath } = useRecent();
   // The page a person pressed is marked at once, before it can draw: the
   // location changes only when the new page is on screen (`pendingNav`).
   const path = usePendingNav() ?? location.pathname;
@@ -119,6 +119,7 @@ export const Sidebar = () => {
 
   const networkTo =
     lastContactId && !isHome ? `/contact/${lastContactId}` : "/";
+  const settingsTo = lastSettingsPath ?? "/settings/account";
 
   return (
     <aside
@@ -258,12 +259,12 @@ export const Sidebar = () => {
           shortcut={NAV_SHORTCUTS["/settings"].keys}
         >
           <Link
-            to="/settings"
+            to={settingsTo}
             // Pointing at the link starts Settings' code (`warm.ts`), so it
             // is here when the click lands.
             onPointerEnter={warmSettingsShell}
             onFocus={warmSettingsShell}
-            onClick={markPendingNavOnClick("/settings")}
+            onClick={markPendingNavOnClick(settingsTo)}
             className={navLink(isCleanup)}
             aria-label={NAMES.settings.label}
           >

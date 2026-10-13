@@ -134,11 +134,6 @@ export const SettingsHome = () => {
         <div className="space-y-8">
           <NeedsAttention />
 
-          {/* From lg the rail lists every page, so this list does not. */}
-          <p className="hidden lg:block text-sm text-on-surface-variant">
-            Choose a page in the list to see its settings
-          </p>
-
           <div className="space-y-8 lg:hidden">
             {SETTINGS_GROUPS.map((group, groupIdx) => {
               const pages = SETTINGS_PAGES.filter(
