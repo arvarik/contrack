@@ -1,41 +1,45 @@
 import { defineConfig } from "vitest/config";
 
+/**
+ * A floor, not a target, so a change cannot delete the matrix and manifest
+ * tests that hold isolation up and still pass. Two points under the measured
+ * number: only imported files are instrumented, so a test that reaches a
+ * large untested module lowers the total.
+ *
+ * Raise these when the real number moves up. Lowering one is a decision that
+ * belongs in a pull request description.
+ */
+const COVERAGE_FLOOR = {
+  // Whole project, measured at 77.19 / 64.66 / 76.93 / 78.98.
+  statements: 75,
+  branches: 62,
+  functions: 74,
+  lines: 76,
+  /**
+   * The server on its own, so uncovered frontend code cannot hide lost server
+   * tests in the project total.
+   *
+   * Measured at 76.77 / 63.74 / 81.76 / 78.71, aggregated over the glob from
+   * `coverage/coverage-final.json`. Not the text report's `server` row: it
+   * covers only the top-level `server/*.ts` files and reads about fourteen
+   * points higher.
+   */
+  "**/server/**": {
+    statements: 74,
+    branches: 61,
+    functions: 79,
+    lines: 76,
+  },
+};
+
 export default defineConfig({
   test: {
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
-      /**
-       * A floor, not a target, so a change cannot delete the matrix and
-       * manifest tests that hold isolation up and still pass. Two points
-       * under the measured number: only imported files are instrumented, so a
-       * test that reaches a large untested module lowers the total.
-       *
-       * Raise these when the real number moves up. Lowering one is a decision
-       * that belongs in a pull request description.
-       */
-      thresholds: {
-        // Whole project, measured at 77.19 / 64.66 / 76.93 / 78.98.
-        statements: 75,
-        branches: 62,
-        functions: 74,
-        lines: 76,
-        /**
-         * The server on its own, so uncovered frontend code cannot hide lost
-         * server tests in the project total.
-         *
-         * Measured at 76.77 / 63.74 / 81.76 / 78.71, aggregated over the glob
-         * from `coverage/coverage-final.json`. Not the text report's `server`
-         * row: it covers only the top-level `server/*.ts` files and reads
-         * about fourteen points higher.
-         */
-        "**/server/**": {
-          statements: 74,
-          branches: 61,
-          functions: 79,
-          lines: 76,
-        },
-      },
+      // A CI shard holds only part of the coverage. The CI job that merges
+      // the shards checks the floor.
+      thresholds: process.env.COVERAGE_SHARD ? undefined : COVERAGE_FLOOR,
     },
     projects: [
       {

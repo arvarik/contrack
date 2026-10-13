@@ -260,6 +260,8 @@ export function flyWhenClear(detail: Partial<CorvidFlyDetail> = {}): void {
   }
   const until = performance.now() + CELEBRATION_WAIT;
   const check = () => {
+    // The page can be gone by now, as when a test's environment closes.
+    if (typeof document === "undefined") return;
     if (!overlayIsOpen()) flyCorvid(detail);
     else if (performance.now() < until) setTimeout(check, 400);
   };
