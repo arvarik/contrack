@@ -114,6 +114,7 @@ export interface SlimSearchContact {
   location: string | null;
   industry: string | null;
   avatarUrl: string | null;
+  addedAt?: string | null;
   updatedAt: string;
   lastContactedAt: string | null;
   relationshipScore: number | null;
@@ -140,6 +141,7 @@ const toSearchContacts = (contacts: SlimContacts): SlimSearchContact[] =>
       location: c.location,
       industry: c.industry,
       avatarUrl: c.avatarUrl,
+      addedAt: c.addedAt ?? null,
       updatedAt: c.updatedAt,
       lastContactedAt: c.lastContactedAt,
       relationshipScore: c.relationshipScore ?? null,
@@ -189,6 +191,7 @@ export const toMapContacts = (contacts: SlimContacts): MapContact[] =>
       lists: (c.lists || []).map((l) => ({ id: l.id, name: l.name })),
       geoSource: c.geoSource,
       // The same arrays as the slim row, not copies: the facets only read them.
+      addedAt: c.addedAt ?? null,
       updatedAt: c.updatedAt,
       emails: c.emails,
       phones: c.phones,

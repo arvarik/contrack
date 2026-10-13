@@ -15,6 +15,7 @@ import { cn } from "../../../lib/utils";
 import type { ResearchAnchor } from "../../../lib/research";
 import { formatDue } from "../../../lib/datetime";
 import { toLocalDay } from "../../../../shared/pulse";
+import { isValidLatLng } from "../../../../shared/geo";
 import { useHiddenPendingIds } from "../../../lib/pendingDeletes";
 import {
   useContactActionItems,
@@ -84,20 +85,14 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
   // Opened as "work": research looks for the person at their job.
   const requestFor = (anchor: ResearchAnchor) =>
     detailRequest?.anchor === anchor ? detailRequest.key : undefined;
-  // The address list, or the single legacy `location`. The mini map reads it
-  // too, so no address means no map block.
-  const addressItems =
-    contact.addresses && contact.addresses.length > 0
-      ? contact.addresses.map((a: ContactAddress) => ({
-          id: a.id,
-          value: a.address,
-          label: a.label || "home",
-        }))
-      : contact.location
-        ? [{ id: "legacy-init", value: contact.location, label: "home" }]
-        : [];
+  // The address list. The mini map reads it too, so no address means no map block.
+  const addressItems = (contact.addresses ?? []).map((a: ContactAddress) => ({
+    id: a.id,
+    value: a.address,
+    label: a.label || "home",
+  }));
   const mapLink = useMapLink(contactId);
-  const isPlaced = contact.lat !== null && contact.lng !== null;
+  const isPlaced = isValidLatLng(contact.lat, contact.lng);
 
   // Preferences are one string on the contact, so a chip is one part of it.
   // Its id comes from its text: the same preference keeps the same chip.

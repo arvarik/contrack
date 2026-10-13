@@ -239,20 +239,30 @@ export const MapView = () => {
   );
 
   // A view is a query, a layer and a box. The overdue filter is none of them.
-  const { setOverdueOnly } = filter;
+  const { setOverdueOnly, setQuery } = filter;
   const applyView = useCallback(
     (view: MapViewType, instant = false) => {
       setLastViewId(view.id);
       setOverdueOnly(false);
-      setLayerState(view.layer);
-      setPreference("mapLayer", view.layer);
+      setQuery(view.query);
+      if (view.layer) {
+        setLayerState(view.layer);
+        setPreference("mapLayer", view.layer);
+      }
       setSearchParams(
-        view.query ? { view: view.id, q: view.query } : { view: view.id },
+        () => {
+          const next = new URLSearchParams();
+          next.set("view", view.id);
+          if (view.query) next.set("q", view.query);
+          if (view.layer && view.layer !== "pins")
+            next.set("layer", view.layer);
+          return next;
+        },
         { replace: true },
       );
       fitTo(view.bounds, 10, instant);
     },
-    [setOverdueOnly, fitTo, setPreference, setSearchParams],
+    [setOverdueOnly, setQuery, fitTo, setPreference, setSearchParams],
   );
 
   // The page opened on a `?view=` link: show that view, or drop a stale id.
@@ -820,6 +830,21 @@ export const MapView = () => {
           highlightedId={isPaneOpen ? highlightedId : null}
           cardRequest={cardRequest}
           onSelect={openContact}
+          onToggleSelectIds={(ids) => {
+            const allSelected =
+              ids.length > 0 &&
+              ids.every((id) => selection.selectedIds.has(id));
+            if (allSelected) {
+              const removeSet = new Set(ids);
+              const remaining = Array.from(selection.selectedIds).filter(
+                (id) => !removeSet.has(id),
+              );
+              selection.clear();
+              if (remaining.length > 0) selection.addMany(remaining);
+            } else {
+              selection.addMany(ids);
+            }
+          }}
           onMapClick={closeContact}
           onMapReady={setMap}
           initialPadding={initialInsets ? paddingFor(initialInsets) : undefined}
@@ -876,7 +901,7 @@ export const MapView = () => {
               role="toolbar"
               aria-label="Map selection actions"
               data-map-chrome="bottom"
-              className="absolute left-1/2 -translate-x-1/2 z-40 bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-1.5 flex items-center gap-2 max-w-[calc(100%-2rem)] overflow-x-auto scrollbar-hide"
+              className="absolute left-1/2 -translate-x-1/2 z-40 bg-surface-container-lowest/98 backdrop-blur-xl ring-1 ring-outline-variant/40 rounded-2xl shadow-2xl px-3 py-1.5 flex items-center gap-2 max-w-[calc(100vw-6rem)] sm:max-w-[calc(100%-2rem)] overflow-x-auto scrollbar-hide"
               style={{ bottom: bulkRoom + 8 }}
             >
               <span className="font-bold text-xs text-on-surface whitespace-nowrap pl-1">
@@ -955,6 +980,11 @@ export const MapView = () => {
           onClose={() => {
             setIsFollowUpOpen(false);
             setSingleFollowUpContactId(null);
+          }}
+          onSuccess={() => {
+            if (!singleFollowUpContactId) {
+              selection.clear();
+            }
           }}
           contactIds={followUpIds}
         />

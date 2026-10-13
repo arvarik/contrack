@@ -214,7 +214,25 @@ const geocode: Subscriber = {
     )
       return;
     const pin = pinState(event.ownerId, event.subjectId);
-    if (pin.shown && !pin.manual) queueGeocode(event.subjectId, pin.shown);
+    if (pin.shown && !pin.manual) {
+      queueGeocode(event.subjectId, pin.shown);
+    } else if (event.type === "contact.updated" && !pin.shown && !pin.manual) {
+      if (event.payload.changed.includes("geoSource")) {
+        sqlite
+          .prepare(
+            `UPDATE contacts SET geoSource = 'manual' WHERE id = ? AND ownerId = ?`,
+          )
+          .run(event.subjectId, event.ownerId);
+      } else {
+        sqlite
+          .prepare(
+            `UPDATE contacts SET lat = NULL, lng = NULL, geoSource = NULL
+               WHERE id = ? AND ownerId = ?
+                 AND (geoSource IS NULL OR geoSource != 'manual')`,
+          )
+          .run(event.subjectId, event.ownerId);
+      }
+    }
   },
 };
 

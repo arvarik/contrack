@@ -365,13 +365,28 @@ describe("AdjustPinModal", () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it("starts with no pin for a contact nobody has placed", () => {
+  it("starts with no pin for a contact nobody has placed, pre-filling the search box and resetting when the contact changes", () => {
     stubFetch();
-    mount({
-      ...ADA,
-      lat: null as unknown as number,
-      lng: null as unknown as number,
+    const client = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
     });
+    const { rerender } = render(
+      <QueryClientProvider client={client}>
+        <AdjustPinModal
+          contact={{
+            ...ADA,
+            lat: null as unknown as number,
+            lng: null as unknown as number,
+          }}
+          hasAddress
+          isOpen
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
 
     expect(screen.getByRole("dialog", { name: "Set location" })).toBeTruthy();
     expect(mapHandles.props?.initialView).toBeUndefined();
@@ -381,6 +396,14 @@ describe("AdjustPinModal", () => {
       screen.queryByRole("button", { name: "Use address again" }),
     ).toBeNull();
 
+    const searchbox = screen.getByRole("searchbox", {
+      name: "Find a place",
+    }) as HTMLInputElement;
+    expect(searchbox.value).toBe("London, UK");
+
+    fireEvent.change(searchbox, { target: { value: "Custom search" } });
+    expect(searchbox.value).toBe("Custom search");
+
     act(() =>
       mapHandles.onMapClick?.({ longitude: 2.3522, latitude: 48.8566 }),
     );
@@ -388,5 +411,24 @@ describe("AdjustPinModal", () => {
     expect(screen.getByTestId("marker")).toBeTruthy();
     const save = screen.getByRole("button", { name: "Save" });
     expect((save as HTMLButtonElement).disabled).toBe(false);
+
+    // Switching to another contact resets the search box.
+    rerender(
+      <QueryClientProvider client={client}>
+        <AdjustPinModal
+          contact={{ ...ADA, id: "c2", location: "Berlin, Germany" }}
+          hasAddress
+          isOpen
+          onClose={vi.fn()}
+        />
+      </QueryClientProvider>,
+    );
+    expect(
+      (
+        screen.getByRole("searchbox", {
+          name: "Find a place",
+        }) as HTMLInputElement
+      ).value,
+    ).toBe("");
   });
 });

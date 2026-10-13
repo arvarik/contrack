@@ -29,6 +29,7 @@ function slimRow(fields: {
   id: string;
   industry: string;
   updatedAt: string;
+  addedAt?: string;
   emails: { email: string }[];
   phones: { phone: string }[];
   tags?: { tag: string }[];
@@ -63,6 +64,7 @@ const rows = toMapContacts([
     id: "vc",
     industry: "Venture Capital",
     updatedAt: iso(3),
+    addedAt: iso(5),
     emails: [{ email: "ada@example.com" }],
     phones: [],
     tags: [{ tag: "design" }],
@@ -71,6 +73,7 @@ const rows = toMapContacts([
     id: "fintech",
     industry: "Fintech",
     updatedAt: iso(400),
+    addedAt: iso(400),
     emails: [],
     phones: [{ phone: "+44 20 7946 0000" }],
     tags: [{ tag: "design-lead" }],
@@ -105,6 +108,7 @@ describe("the map's filter", () => {
   it("carries the fields the facets read into each map row", () => {
     const [vc] = rows;
     expect(vc.updatedAt).toBeTruthy();
+    expect(vc.addedAt).toBeTruthy();
     expect(vc.emails).toEqual([{ email: "ada@example.com" }]);
     expect(vc.phones).toEqual([]);
   });
@@ -114,8 +118,24 @@ describe("the map's filter", () => {
     expect(ids(renderFilter('industry:"Venture Capital"'))).toEqual(["vc"]);
     expect(ids(renderFilter("updated:<1m"))).toEqual(["vc"]);
     expect(ids(renderFilter("updated:>6m"))).toEqual(["fintech"]);
+    expect(ids(renderFilter("added:<1m"))).toEqual(["vc"]);
+    expect(ids(renderFilter("added:>6m"))).toEqual(["fintech"]);
     expect(ids(renderFilter("missing:email"))).toEqual(["fintech"]);
     expect(ids(renderFilter("missing:phone"))).toEqual(["vc"]);
+  });
+
+  it("cancels any pending rawInput debounce when setQuery is called", async () => {
+    vi.useFakeTimers();
+    try {
+      const result = renderFilter("tag:design");
+      act(() => result.current.filter.setRawInput("tag:stale "));
+      act(() => result.current.filter.setQuery("industry:Fintech"));
+      await act(() => vi.advanceTimersByTimeAsync(250));
+      expect(result.current.filter.rawInput).toBe("industry:Fintech ");
+      expect(ids(result)).toEqual(["fintech"]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("keeps the pills, the text and the address in step", async () => {

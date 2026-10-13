@@ -51,6 +51,7 @@ interface ContactMarkerProps {
   /** Another contact is open, so this pin steps back. */
   dimmed?: boolean;
   onSelect: (id: string) => void;
+  onToggleSelect?: (id: string) => void;
   onCard: (id: string, event: PinEvent) => void;
   /** The pin's card is open as a tooltip, which then describes the pin. */
   described?: boolean;
@@ -73,6 +74,7 @@ export const ContactMarker = memo(function ContactMarker({
   marked = false,
   dimmed = false,
   onSelect,
+  onToggleSelect,
   onCard,
   described = false,
 }: ContactMarkerProps) {
@@ -105,8 +107,13 @@ export const ContactMarker = memo(function ContactMarker({
         data-contact-id={id}
         data-halo={halo || undefined}
         data-dimmed={dimmed || undefined}
-        onClick={() => {
-          if (press.current?.type !== "touch") onSelect(id);
+        onClick={(event) => {
+          if (press.current?.type === "touch") return;
+          if (event.shiftKey && onToggleSelect) {
+            onToggleSelect(id);
+            return;
+          }
+          onSelect(id);
         }}
         onKeyDown={(event) => {
           if (event.key === " ") {
@@ -114,6 +121,10 @@ export const ContactMarker = memo(function ContactMarker({
             onCard(id, "space");
           } else if (event.key === "Enter") {
             event.preventDefault();
+            if (event.shiftKey && onToggleSelect) {
+              onToggleSelect(id);
+              return;
+            }
             onSelect(id);
           }
         }}

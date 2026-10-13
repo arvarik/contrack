@@ -27,6 +27,7 @@ interface GeoTask {
 }
 
 const geocodeQueue: GeoTask[] = [];
+const latestKeyByContact = new Map<string, string>();
 let isGeocoding = false;
 let noAnswers = 0;
 
@@ -42,6 +43,12 @@ export function queueGeocode(contactId: string, location: string): void {
   if (!location?.trim()) return;
 
   const key = normalizeLocationKey(location);
+  latestKeyByContact.set(contactId, key);
+  for (let i = geocodeQueue.length - 1; i >= 0; i--) {
+    if (geocodeQueue[i].contactId === contactId) {
+      geocodeQueue.splice(i, 1);
+    }
+  }
 
   const cached = getCachedGeocode(key);
   if (cached) {
@@ -113,8 +120,12 @@ async function drainQueue(): Promise<void> {
     const result = await geocodeWithFallback(task.location);
 
     if (result.status === "error") {
-      // No answer is not "nothing found": cache nothing, and ask again later.
-      geocodeQueue.push(task);
+      // No answer is not "nothing found": cache nothing, and ask again later,
+      // unless a newer address was queued for this contact in the meantime.
+      const latest = latestKeyByContact.get(task.contactId);
+      if (!latest || latest === task.normalizedKey) {
+        geocodeQueue.push(task);
+      }
       const wait = Math.min(RETRY_FIRST_MS * 2 ** noAnswers, RETRY_MAX_MS);
       noAnswers++;
       log.warn(
@@ -184,11 +195,17 @@ function applyCoordinates(
   lat: number,
   lng: number,
 ): void {
-  writeGeocoded(contactId, lat, lng);
+  const latest = latestKeyByContact.get(contactId);
+  if (!latest || latest === normalizedKey) {
+    writeGeocoded(contactId, lat, lng);
+  }
 
   const dupes = geocodeQueue.filter((t) => t.normalizedKey === normalizedKey);
   for (const dupe of dupes) {
-    writeGeocoded(dupe.contactId, lat, lng);
+    const dupeLatest = latestKeyByContact.get(dupe.contactId);
+    if (!dupeLatest || dupeLatest === normalizedKey) {
+      writeGeocoded(dupe.contactId, lat, lng);
+    }
   }
   const remaining = geocodeQueue.filter(
     (t) => t.normalizedKey !== normalizedKey,
