@@ -146,12 +146,12 @@ const ContactListItemInner = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLAnchorElement>) => {
-    onRowKeyDown?.(e);
-    if (e.defaultPrevented) return;
     if (isSelectMode && (e.key === " " || e.key === "Enter")) {
       e.preventDefault();
       onToggleSelect(contact.id, e.shiftKey);
+      return;
     }
+    onRowKeyDown?.(e);
   };
 
   const handleLogoError = () => {
