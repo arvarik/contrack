@@ -726,12 +726,6 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     isolated: true,
   },
   {
-    method: "GET",
-    path: "/api/contacts/map",
-    class: "scoped",
-    isolated: true,
-  },
-  {
     method: "POST",
     path: "/api/contacts/merge",
     class: "scoped",

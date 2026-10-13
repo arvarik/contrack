@@ -21,11 +21,167 @@
 import type Database from "better-sqlite3";
 import { ensureLocalOwner } from "../owners.ts";
 
+/** The contacts columns that are not edits. */
+const NOT_EDITS = [
+  "relationshipScore",
+  "scoreDirty",
+  "lat",
+  "lng",
+  "geoSource",
+];
+
 export function up(db: Database.Database): void {
   db.exec(TABLES);
   db.exec(INDEXES);
   db.exec(TRIGGERS);
   ensureLocalOwner(db);
+
+  // Events, cursors, jobs, OAuth, map pins, dedupe indexes/columns, archivedAt,
+  // correspondent display names, and contact_addresses backfill.
+  // tenant-lint: allow boot migration
+  db.exec(`
+    CREATE TABLE events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,  -- the order subscribers read in
+      ownerId TEXT NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+      type TEXT NOT NULL,
+      subjectType TEXT NOT NULL,             -- 'contact' | 'interaction' | 'action_item' | 'list'
+      subjectId TEXT NOT NULL,
+      payload TEXT NOT NULL,                 -- JSON, the schema of its type
+      createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+    );
+    CREATE INDEX idx_events_owner ON events(ownerId, id);
+
+    CREATE TRIGGER events_owner_required BEFORE INSERT ON events
+       WHEN NEW.ownerId IS NULL
+       BEGIN SELECT RAISE(ABORT, 'events.ownerId is required'); END;
+
+    CREATE TABLE event_cursors (
+      subscriber TEXT PRIMARY KEY,
+      lastEventId INTEGER NOT NULL DEFAULT 0,
+      failures INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE TABLE jobs (
+      id TEXT PRIMARY KEY,
+      kind TEXT NOT NULL,
+      ownerId TEXT REFERENCES users(id) ON DELETE RESTRICT, -- null for instance jobs
+      payload TEXT NOT NULL DEFAULT '{}',
+      status TEXT NOT NULL DEFAULT 'queued', -- 'queued' | 'running' | 'done' | 'failed' | 'cancelled'
+      runAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+      attempts INTEGER NOT NULL DEFAULT 0,
+      maxAttempts INTEGER NOT NULL DEFAULT 3,
+      lastError TEXT,
+      progress TEXT,                         -- JSON, for the queues that move later
+      dedupeKey TEXT,
+      createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+      startedAt TEXT,
+      finishedAt TEXT
+    );
+    CREATE INDEX idx_jobs_due ON jobs(status, runAt);
+    CREATE UNIQUE INDEX idx_jobs_dedupe ON jobs(dedupeKey) WHERE status IN ('queued', 'running');
+
+    ALTER TABLE geocode_cache ADD COLUMN displayName TEXT;
+    DELETE FROM geocode_cache;
+
+    CREATE TABLE oauth_clients (
+      id TEXT PRIMARY KEY,
+      source TEXT NOT NULL CHECK (source IN ('registered', 'document')),
+      name TEXT NOT NULL,
+      redirectUris TEXT NOT NULL,
+      createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+      lastUsedAt TEXT,
+      staleAt TEXT
+    );
+
+    CREATE TABLE oauth_requests (
+      id TEXT PRIMARY KEY,
+      clientId TEXT NOT NULL REFERENCES oauth_clients(id) ON DELETE CASCADE,
+      redirectUri TEXT NOT NULL,
+      state TEXT,
+      codeChallenge TEXT NOT NULL,
+      wantsWrite INTEGER NOT NULL,
+      ip TEXT,
+      userId TEXT REFERENCES users(id) ON DELETE CASCADE,
+      readOnly INTEGER,
+      codeHash TEXT UNIQUE,
+      grantId TEXT,
+      usedAt TEXT,
+      createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+      expiresAt TEXT NOT NULL
+    );
+    CREATE INDEX idx_oauth_requests_expires ON oauth_requests(expiresAt);
+
+    ALTER TABLE api_tokens ADD COLUMN kind TEXT NOT NULL DEFAULT 'personal';
+    ALTER TABLE api_tokens ADD COLUMN clientId TEXT;
+
+    CREATE TABLE oauth_tokens (
+      tokenHash TEXT PRIMARY KEY,
+      grantId TEXT NOT NULL REFERENCES api_tokens(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL CHECK (kind IN ('access', 'refresh')),
+      expiresAt TEXT NOT NULL,
+      usedAt TEXT,
+      createdAt TEXT NOT NULL DEFAULT (CURRENT_TIMESTAMP)
+    );
+    CREATE INDEX idx_oauth_tokens_grant ON oauth_tokens(grantId);
+
+    CREATE INDEX idx_dedupe_sugg_contact_b ON dedupe_suggestions(contactIdB);
+    ALTER TABLE dedupe_suggestions ADD COLUMN caveat TEXT;
+
+    ALTER TABLE contacts ADD COLUMN archivedAt TEXT;
+    UPDATE contacts SET archivedAt = updatedAt WHERE isArchived = 1;
+
+    ALTER TABLE connector_links ADD COLUMN displayName TEXT;
+  `);
+
+  const edits = (db.pragma("table_info(contacts)") as { name: string }[])
+    .map((c) => c.name)
+    .filter((name) => !NOT_EDITS.includes(name))
+    .map((name) => `"${name}"`)
+    .join(", ");
+  // tenant-lint: allow boot migration
+  db.exec(`
+    DROP TRIGGER contacts_auto_updated_at;
+    CREATE TRIGGER contacts_auto_updated_at
+    AFTER UPDATE OF ${edits} ON contacts
+    FOR EACH ROW
+    WHEN NEW.updatedAt = OLD.updatedAt OR NEW.updatedAt IS NULL
+    BEGIN
+      UPDATE contacts SET updatedAt = datetime('now') WHERE id = NEW.id;
+    END;
+
+    DROP TRIGGER contacts_score_dirty;
+    CREATE TRIGGER contacts_score_dirty
+    AFTER UPDATE OF ${edits} ON contacts
+    FOR EACH ROW
+    WHEN NEW.scoreDirty = 0
+    BEGIN
+      UPDATE contacts SET scoreDirty = 1 WHERE id = NEW.id;
+    END;
+
+    CREATE TRIGGER contacts_archive_stamp_ins
+    AFTER INSERT ON contacts
+    FOR EACH ROW
+    WHEN NEW.isArchived = 1 AND NEW.archivedAt IS NULL AND NEW.deletedAt IS NULL
+    BEGIN
+      UPDATE contacts SET archivedAt = datetime('now') WHERE id = NEW.id;
+    END;
+
+    CREATE TRIGGER contacts_archive_stamp_upd
+    AFTER UPDATE OF isArchived ON contacts
+    FOR EACH ROW
+    WHEN NEW.isArchived IS NOT OLD.isArchived AND NEW.deletedAt IS NULL
+    BEGIN
+      UPDATE contacts
+         SET archivedAt = CASE WHEN NEW.isArchived = 1 THEN datetime('now') ELSE NULL END
+       WHERE id = NEW.id;
+    END;
+
+    INSERT OR IGNORE INTO contact_addresses (id, contactId, address, label, isPrimary, sortOrder, source)
+    SELECT 'addr-' || id, id, trim(location), 'home', 1, 0, 'manual'
+    FROM contacts
+    WHERE location IS NOT NULL AND trim(location) != ''
+      AND NOT EXISTS (SELECT 1 FROM contact_addresses ca WHERE ca.contactId = contacts.id);
+  `);
 }
 
 /** Every table, in the order a new database created them. */

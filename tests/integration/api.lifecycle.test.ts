@@ -154,6 +154,28 @@ describe("trash: soft delete → restore", () => {
     );
   });
 
+  it("restore preserves archive state when an archived contact was trashed", async () => {
+    const id = await createContact({ name: "Archived Then Trashed" });
+    const archived = await request(app)
+      .patch(`/api/contacts/${id}`)
+      .send({ isArchived: true });
+    expect(archived.status).toBe(200);
+    const stamp = archived.body.archivedAt as string;
+    expect(stamp).toEqual(expect.any(String));
+
+    await request(app).delete(`/api/contacts/${id}`).expect(200);
+
+    const restored = await request(app).post(`/api/trash/${id}/restore`);
+    expect(restored.status).toBe(200);
+    expect(restored.body.isArchived).toBe(true);
+    expect(restored.body.archivedAt).toBe(stamp);
+
+    const archivedList = await request(app).get("/api/contacts/archived");
+    expect(archivedList.body.some((c: { id: string }) => c.id === id)).toBe(
+      true,
+    );
+  });
+
   it("bulk restore is the undo path for a bulk delete", async () => {
     const a = await createContact({ name: "Undo Alpha" });
     const b = await createContact({ name: "Undo Beta" });

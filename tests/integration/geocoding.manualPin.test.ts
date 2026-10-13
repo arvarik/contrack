@@ -228,6 +228,22 @@ describe("an edit to a contact whose pin was placed by hand", () => {
 
     expect(pinRow(id)).toMatchObject({ ...ROME, geoSource: "geocoder" });
   });
+
+  it("hands the pin back and syncs location on bulkUpdateContacts", async () => {
+    const id = await placedByHand("Bulk Moved Person");
+    const scope = scopeForOwnerId(pinRow(id).ownerId);
+
+    contactService.bulkUpdateContacts(scope, [id], {
+      addresses: [{ address: "Rome, Italy", label: "home", isPrimary: true }],
+    });
+
+    expect(queued).toHaveBeenCalledWith(id, "Rome, Italy");
+    expect(pinRow(id)).toMatchObject({ ...PARIS, geoSource: null });
+    const row = sqlite
+      .prepare(`SELECT location FROM contacts WHERE id = ?`)
+      .get(id) as { location: string | null };
+    expect(row.location).toBe("Rome, Italy");
+  });
 });
 
 describe("handing the pin back on request", () => {

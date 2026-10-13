@@ -21,14 +21,6 @@ import {
 const app = makeTestApp();
 const OPENFREEMAP = "https://tiles.openfreemap.org";
 
-interface MapRow {
-  id: string;
-  name: string;
-  lat: number;
-  lng: number;
-  geoSource: "geocoder" | "manual" | null;
-}
-
 interface PinFields {
   lat: number | null;
   lng: number | null;
@@ -43,75 +35,6 @@ async function place(name: string, extra: Record<string, unknown> = {}) {
   expect(res.status).toBe(201);
   return res.body.id as string;
 }
-
-const mapIds = async (): Promise<string[]> => {
-  const res = await request(app).get("/api/contacts/map");
-  expect(res.status).toBe(200);
-  return (res.body as MapRow[]).map((row) => row.id);
-};
-
-describe("GET /api/contacts/map", () => {
-  it("returns a placed contact with the fields a pin needs", async () => {
-    const id = await place("Mapped Person", { company: "Babbage & Co" });
-    const res = await request(app).get("/api/contacts/map");
-    const row = (res.body as MapRow[]).find((r) => r.id === id);
-    expect(row).toMatchObject({
-      id,
-      name: "Mapped Person",
-      company: "Babbage & Co",
-      location: "London, UK",
-      lat: 51.5,
-      lng: -0.12,
-    });
-  });
-
-  it("leaves out a trashed, ghost, archived or merged contact", async () => {
-    const trashed = await place("Trashed Person");
-    const archived = await place("Archived Person");
-    const primary = await place("Primary Person");
-    const duplicate = await place("Duplicate Person");
-    const ghost = await place("Ghost Person", { isGhost: true });
-
-    expect((await request(app).delete(`/api/contacts/${trashed}`)).status).toBe(
-      200,
-    );
-    const archive = await request(app)
-      .patch(`/api/contacts/${archived}`)
-      .send({ isArchived: true });
-    expect(archive.status).toBe(200);
-    // A merged duplicate is a row the list hides, so the map hides it too.
-    const merge = await request(app)
-      .post("/api/contacts/merge")
-      .send({ primaryId: primary, duplicateId: duplicate });
-    expect(merge.status).toBe(200);
-
-    const ids = await mapIds();
-    expect(ids).toContain(primary);
-    for (const id of [trashed, ghost, archived, duplicate])
-      expect(ids).not.toContain(id);
-  });
-
-  it("says who placed each pin", async () => {
-    // Coordinates that arrived with the contact were placed by nobody the
-    // map can name, so the row says so with null rather than guessing.
-    const id = await place("Placed Person");
-    const rowFor = async (contactId: string) => {
-      const res = await request(app).get("/api/contacts/map");
-      return (res.body as MapRow[]).find((r) => r.id === contactId);
-    };
-    expect((await rowFor(id))?.geoSource).toBeNull();
-
-    const moved = await request(app)
-      .patch(`/api/contacts/${id}/location`)
-      .send({ lat: 48.8566, lng: 2.3522 });
-    expect(moved.status).toBe(200);
-    expect((await rowFor(id))?.geoSource).toBe("manual");
-    // The slim list the map page draws from says the same.
-    const slim = await request(app).get("/api/contacts?view=slim");
-    const slimRow = (slim.body as MapRow[]).find((r) => r.id === id);
-    expect(slimRow?.geoSource).toBe("manual");
-  });
-});
 
 describe("GET /api/geo/status", () => {
   it("lists the contacts with an address and no pin, and why each has none", async () => {
@@ -235,7 +158,6 @@ describe("PATCH /api/contacts/:id/location", () => {
       geoSource: null,
     });
     expect(await pinOf(id)).toEqual({ lat: null, lng: null, geoSource: null });
-    expect(await mapIds()).not.toContain(id);
   });
 
   it("answers 404 for a contact in the trash, and for one that never was", async () => {

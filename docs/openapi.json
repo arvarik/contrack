@@ -3203,24 +3203,6 @@
         }
       }
     },
-    "/api/contacts/map": {
-      "get": {
-        "summary": "The contacts with a pin, for the map",
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": { "$ref": "#/components/schemas/MapContact" }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/contacts/merge": {
       "post": {
         "summary": "Merge one contact into another",
@@ -5150,35 +5132,6 @@
           "company": { "type": ["string", "null"] }
         },
         "required": ["id", "name", "avatarUrl", "role", "company"],
-        "additionalProperties": false
-      },
-      "MapContact": {
-        "type": "object",
-        "properties": {
-          "id": { "type": "string" },
-          "name": { "type": "string" },
-          "company": { "type": ["string", "null"] },
-          "avatarUrl": { "type": ["string", "null"] },
-          "location": { "type": ["string", "null"] },
-          "lat": { "type": "number" },
-          "lng": { "type": "number" },
-          "geoSource": {
-            "anyOf": [
-              { "type": "string", "enum": ["geocoder", "manual"] },
-              { "type": "null" }
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "company",
-          "avatarUrl",
-          "location",
-          "lat",
-          "lng",
-          "geoSource"
-        ],
         "additionalProperties": false
       },
       "MergeConflict": {

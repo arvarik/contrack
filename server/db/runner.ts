@@ -30,9 +30,67 @@ export interface Migration {
   up: (db: Database.Database) => void;
 }
 
+const RETIRED_PRE_V2_MIGRATIONS = [
+  "0002_events_and_jobs",
+  "0003_map_pins",
+  "0004_oauth",
+  "0005_dedupe_pair_index",
+  "0006_dedupe_caveat",
+  "0007_archived_at",
+  "0008_correspondent_names",
+] as const;
+
+function retireConsolidatedMigrations(db: Database.Database): void {
+  const placeholders = RETIRED_PRE_V2_MIGRATIONS.map(() => "?").join(", ");
+  const res = db
+    .prepare(
+      `DELETE FROM schema_migrations WHERE kind = 'migration' AND id IN (${placeholders})`,
+    )
+    .run(...RETIRED_PRE_V2_MIGRATIONS);
+  if (res.changes > 0) {
+    const hasAddresses =
+      db
+        .prepare(
+          "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'contact_addresses'",
+        )
+        .get() !== undefined;
+    if (hasAddresses) {
+      // tenant-lint: allow boot migration
+      db.exec(`
+        DROP TRIGGER IF EXISTS contacts_archive_stamp_ins;
+        CREATE TRIGGER contacts_archive_stamp_ins
+        AFTER INSERT ON contacts
+        FOR EACH ROW
+        WHEN NEW.isArchived = 1 AND NEW.archivedAt IS NULL AND NEW.deletedAt IS NULL
+        BEGIN
+          UPDATE contacts SET archivedAt = datetime('now') WHERE id = NEW.id;
+        END;
+
+        DROP TRIGGER IF EXISTS contacts_archive_stamp_upd;
+        CREATE TRIGGER contacts_archive_stamp_upd
+        AFTER UPDATE OF isArchived ON contacts
+        FOR EACH ROW
+        WHEN NEW.isArchived IS NOT OLD.isArchived AND NEW.deletedAt IS NULL
+        BEGIN
+          UPDATE contacts
+             SET archivedAt = CASE WHEN NEW.isArchived = 1 THEN datetime('now') ELSE NULL END
+           WHERE id = NEW.id;
+        END;
+
+        INSERT OR IGNORE INTO contact_addresses (id, contactId, address, label, isPrimary, sortOrder, source)
+        SELECT 'addr-' || id, id, trim(location), 'home', 1, 0, 'manual'
+        FROM contacts
+        WHERE location IS NOT NULL AND trim(location) != ''
+          AND NOT EXISTS (SELECT 1 FROM contact_addresses ca WHERE ca.contactId = contacts.id);
+      `);
+    }
+  }
+}
+
 /** Create the ledger when it is missing. */
 export function ensureLedger(db: Database.Database): void {
   db.exec(SCHEMA_MIGRATIONS_DDL);
+  retireConsolidatedMigrations(db);
 }
 
 function hasLedger(db: Database.Database): boolean {
@@ -58,6 +116,7 @@ function hasTables(db: Database.Database): boolean {
 /** The ids of the migrations this database has applied, in id order. */
 export function appliedMigrations(db: Database.Database): string[] {
   if (!hasLedger(db)) return [];
+  retireConsolidatedMigrations(db);
   return (
     db
       .prepare(
