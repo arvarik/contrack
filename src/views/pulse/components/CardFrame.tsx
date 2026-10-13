@@ -166,26 +166,18 @@ export const CardFrame = ({
         className={cn(
           // The card's side inset, so the title lines up with the cards'.
           "relative flex flex-wrap items-center gap-x-3 gap-y-1 px-4 sm:px-5 py-2 rounded-2xl transition-shadow",
-          isCustomizing && "ring-1 ring-primary/20",
+          isCustomizing && "ring-1 ring-primary/20 pr-28",
         )}
       >
         {heading}
-        {/* In customize mode the words keep their place, invisible, and the
-            controls sit over the row's end, so the line keeps its height. */}
+        {/* In customize mode the words hide so wrapped lines do not stretch the
+            card and the controls sit cleanly at the row's end. */}
         <div
-          className={cn(
-            PULSE_TYPE.meta,
-            "min-w-0",
-            isCustomizing && "invisible",
-          )}
+          className={cn(PULSE_TYPE.meta, "min-w-0", isCustomizing && "hidden")}
         >
           {children}
         </div>
-        {headerAction && isCustomizing ? (
-          <span className="invisible">{headerAction}</span>
-        ) : (
-          headerAction
-        )}
+        {!isCustomizing && headerAction}
         {isCustomizing && cardId && (
           <CustomizeControls
             title={title}

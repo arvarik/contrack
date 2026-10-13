@@ -12,7 +12,7 @@ import {
   useNavigate,
   useSearchParams,
 } from "react-router-dom";
-import { addDays } from "date-fns";
+import { addDays, format } from "date-fns";
 import { toast } from "sonner";
 import { Eye, EyeOff } from "lucide-react";
 import {
@@ -30,6 +30,7 @@ import { usePreferences } from "../../contexts/PreferencesContext";
 import { useSingleKeyShortcuts } from "../../hooks/useSingleKeyShortcuts";
 import { NAMES } from "../../lib/names";
 import { openQuickNote } from "../../lib/appEvents";
+import { corvidReact } from "../../lib/corvid";
 import { scrollBehavior } from "../../lib/a11y";
 import { withUndo } from "../../lib/undoToast";
 import {
@@ -118,7 +119,8 @@ const PulseOffice = () => {
   // memoized queue element survives.
   const completeAsync = completeAction.mutateAsync;
   const handleComplete = useCallback(
-    (id: string) =>
+    (id: string) => {
+      corvidReact("nod");
       startPendingDelete({
         id,
         send: () => completeAsync(id),
@@ -127,23 +129,26 @@ const PulseOffice = () => {
           "Could not complete the follow-up. It is back in the queue",
         flushUrl: `/action-items/${encodeURIComponent(id)}/complete`,
         flushMethod: "PATCH",
-      }),
+      });
+    },
     [completeAsync],
   );
 
   const handleSnooze = useCallback(
     (item: UpNextItem, days: number) => {
       const before = item.dueAt;
-      const dueAt = addDays(new Date(), days).toISOString();
+      const targetDate = addDays(new Date(), days);
+      const dueAt = format(targetDate, "yyyy-MM-dd");
       updateFollowUp(
         { id: item.id, data: { dueAt } },
         {
           onSuccess: () =>
             toast.success(
-              `Follow-up snoozed to ${new Date(dueAt).toLocaleDateString(
-                undefined,
-                { weekday: "long", month: "short", day: "numeric" },
-              )}`,
+              `Follow-up snoozed to ${targetDate.toLocaleDateString(undefined, {
+                weekday: "long",
+                month: "short",
+                day: "numeric",
+              })}`,
               before
                 ? withUndo(() =>
                     updateFollowUp({ id: item.id, data: { dueAt: before } }),
@@ -327,9 +332,10 @@ const PulseOffice = () => {
     return map;
   }, [contacts]);
 
+  const todayStr = format(new Date(), "yyyy-MM-dd");
   const upcomingBirthdays = useMemo(() => {
-    return getUpcomingBirthdays(contacts, new Date(), 14);
-  }, [contacts]);
+    return getUpcomingBirthdays(contacts, new Date(`${todayStr}T00:00:00`), 14);
+  }, [contacts, todayStr]);
 
   // People added in the last 30 days, and how many are untracked. The
   // untracked count uses the server's exclusions: a ghost is a mention.

@@ -55,7 +55,11 @@ export const WelcomeOffice = () => {
         </div>
 
         <div className="space-y-3">
-          <button onClick={() => navigate("/?import=1")} className={STEP}>
+          <button
+            type="button"
+            onClick={() => navigate("/?import=1")}
+            className={STEP}
+          >
             <div className="flex items-start gap-3.5">
               <div className={STEP_ICON}>
                 <Upload className="w-5 h-5" />
@@ -70,7 +74,11 @@ export const WelcomeOffice = () => {
             <ChevronRight className={STEP_CHEVRON} />
           </button>
 
-          <button onClick={() => openQuickNote()} className={STEP}>
+          <button
+            type="button"
+            onClick={() => openQuickNote()}
+            className={STEP}
+          >
             <div className="flex items-start gap-3.5">
               <div className={STEP_ICON}>
                 <PenLine className="w-5 h-5" />

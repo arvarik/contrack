@@ -81,10 +81,32 @@ describe("GET /api/dashboard/activity", () => {
       "linkedin",
     );
 
+    // An interaction at the start of the 84-day window must be counted in
+    // weekTotals[0] (rolling 7-day buckets, never dropped by a weekday offset).
+    note.run(
+      crypto.randomUUID(),
+      contactId,
+      actorA.user.id,
+      daysAgo(83),
+      "note",
+      null,
+    );
+
     const res = await getActivity(actorA);
     expect(res.status).toBe(200);
     expect(res.body.streak.current).toBe(3);
     expect(res.body.streak.best).toBe(3);
+    expect(res.body.weekTotals).toHaveLength(12);
+    expect(res.body.weekTotals[0]).toBeGreaterThanOrEqual(1);
+    const sumDays = res.body.days.reduce(
+      (sum: number, d: { count: number }) => sum + d.count,
+      0,
+    );
+    const sumWeeks = res.body.weekTotals.reduce(
+      (sum: number, w: number) => sum + w,
+      0,
+    );
+    expect(sumWeeks).toBe(sumDays);
   });
 
   it("counts today.completed for items completed today", async () => {

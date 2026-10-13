@@ -72,10 +72,10 @@ async function run<T>(
 }
 
 describe("the moments the corvid answers", () => {
-  it("nods when a follow-up is done", async () => {
+  it("does not fire a delayed nod in useCompleteActionItem (PulseView nods immediately)", async () => {
     vi.stubGlobal("fetch", answer(200, { id: "a1", contactId: "c1" }));
     await run(useCompleteActionItem, "a1");
-    expect(reactions).toEqual(["nod"]);
+    expect(reactions).toEqual([]);
   });
 
   it("caws, silently, when a conversation is written down", async () => {

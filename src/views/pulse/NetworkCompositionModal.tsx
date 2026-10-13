@@ -1,11 +1,11 @@
-import { X, PieChart, MapPin, Briefcase } from "lucide-react";
+import { PieChart, MapPin, Briefcase } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { motion } from "motion/react";
 import { type DashboardPayload } from "../../api";
 
-import { ICON_BTN, SECTION_HEADING } from "../../lib/styles";
-import { DURATION, EASE } from "../../lib/motion";
-import { Modal } from "../../components/ui/Modal";
+import { SECTION_HEADING } from "../../lib/styles";
+import { DURATION, EASE, prefersReducedMotion } from "../../lib/motion";
+import { DialogCloseButton, Modal } from "../../components/ui/Modal";
 
 interface NetworkCompositionModalProps {
   isOpen: boolean;
@@ -29,6 +29,7 @@ const CompositionColumn = ({
 
   const maxCount = Math.max(...data.map((d) => d.count));
   const totalCount = data.reduce((acc, d) => acc + d.count, 0);
+  const reducedMotion = prefersReducedMotion();
 
   // The label is the one key that is not `count`.
   const renderItem = (item: CompositionEntry, index: number) => {
@@ -52,13 +53,17 @@ const CompositionColumn = ({
 
         <div className="h-2 w-full bg-surface-container-high rounded-full overflow-hidden flex">
           <motion.div
-            initial={{ width: 0 }}
+            initial={reducedMotion ? false : { width: 0 }}
             animate={{ width: `${widthPercentage}%` }}
-            transition={{
-              duration: DURATION.slow,
-              delay: 0.1 + index * 0.05,
-              ease: EASE,
-            }}
+            transition={
+              reducedMotion
+                ? { duration: 0 }
+                : {
+                    duration: DURATION.slow,
+                    delay: 0.1 + index * 0.05,
+                    ease: EASE,
+                  }
+            }
             className="h-full bg-primary rounded-full origin-left"
           />
         </div>
@@ -100,9 +105,7 @@ export const NetworkCompositionModal = ({
             Network composition
           </h2>
         </div>
-        <button onClick={onClose} aria-label="Close" className={ICON_BTN}>
-          <X className="w-5 h-5" />
-        </button>
+        <DialogCloseButton onClick={onClose} />
       </div>
 
       <div className="p-6 sm:p-8">

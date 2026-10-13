@@ -117,7 +117,7 @@ export const InboxCard = ({
 
   if (totalItems === 0) {
     return (
-      <CardFrame cardId="inbox" title="Inbox" count={0} variant="line">
+      <CardFrame cardId="inbox" title="Inbox" variant="line">
         <span className="inline-flex items-center gap-1.5">
           <CheckCircle2
             className={cn("w-4 h-4 shrink-0", TONE_TEXT.success)}
@@ -204,7 +204,7 @@ export const InboxCard = ({
                 id="ghosts-list"
                 className="flex flex-wrap gap-1.5 px-3 pb-3 pt-0.5"
               >
-                {ghosts.slice(0, 8).map((g) => (
+                {ghosts.slice(0, 5).map((g) => (
                   <Link
                     key={g.id}
                     to={`/contact/${g.id}`}
