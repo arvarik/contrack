@@ -154,6 +154,8 @@ export async function generateDailyInsight(
   stats: {
     totalContacts: number;
     industryDistribution: Record<string, number>;
+    roleDistribution?: Record<string, number>;
+    locationDistribution?: Record<string, number>;
     atRiskNames: string[];
     newContactsCount: number;
     topRelationships: string[];
@@ -174,11 +176,14 @@ export async function generateDailyInsight(
 
   const prompt = `Based on the following network statistics, generate a single actionable insight
     (1-2 sentences max) that helps the user be a better relationship-builder.
-    Be specific and reference actual patterns in the data.
+    Be specific and reference actual patterns in the data across roles, industries, locations, and relationship activity.
+    Focus on dimensions that have meaningful data rather than extrapolating from 1-2 isolated entries when a field is mostly unpopulated.
 
     Stats:
     - Total contacts: ${stats.totalContacts}
-    - Industry distribution: ${JSON.stringify(stats.industryDistribution)}
+    - Industry distribution (top): ${JSON.stringify(stats.industryDistribution)}
+    - Role distribution (top): ${JSON.stringify(stats.roleDistribution ?? {})}
+    - Location distribution (top): ${JSON.stringify(stats.locationDistribution ?? {})}
     - Contacts not reached in 60+ days: ${stats.atRiskNames.join(", ") || "None"}
     - New contacts this month: ${stats.newContactsCount}
     - Most active relationships: ${stats.topRelationships.join(", ") || "None"}

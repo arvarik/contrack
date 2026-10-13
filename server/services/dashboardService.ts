@@ -438,19 +438,29 @@ export const dashboardService = {
         const totalActive = insightCounts.totalActive ?? 0;
         const newContacts30d = insightCounts.newContacts30d ?? 0;
 
-        const industryRows = sqlite
-          .prepare(
-            `
-          SELECT industry, COUNT(*) as count
-          FROM contacts
-          WHERE ownerId = ? AND industry IS NOT NULL AND industry != '' AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
-          GROUP BY industry
-        `,
-          )
-          .all(scope.ownerId) as { industry: string; count: number }[];
-        const industryDistribution: Record<string, number> = {};
-        for (const r of industryRows)
-          industryDistribution[r.industry] = r.count;
+        const toDistribution = (
+          column: "industry" | "role" | "location",
+        ): Record<string, number> => {
+          const rows = sqlite
+            .prepare(
+              `
+            SELECT trim(${column}) as label, COUNT(*) as count
+            FROM contacts
+            WHERE ownerId = ? AND ${column} IS NOT NULL AND trim(${column}) != '' AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
+            GROUP BY trim(${column}) COLLATE NOCASE
+            ORDER BY count DESC
+            LIMIT 15
+          `,
+            )
+            .all(scope.ownerId) as { label: string; count: number }[];
+          const dist: Record<string, number> = {};
+          for (const r of rows) dist[r.label] = r.count;
+          return dist;
+        };
+
+        const industryDistribution = toDistribution("industry");
+        const roleDistribution = toDistribution("role");
+        const locationDistribution = toDistribution("location");
 
         const notReached = sqlite
           .prepare(
@@ -494,6 +504,8 @@ export const dashboardService = {
         const stats = {
           totalContacts: numContacts,
           industryDistribution,
+          roleDistribution,
+          locationDistribution,
           atRiskNames: notReached.map((r) => r.name),
           newContactsCount: newContacts30d,
           topRelationships: topRel.map((r) => r.name),
