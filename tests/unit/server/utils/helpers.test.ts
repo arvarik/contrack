@@ -1,8 +1,34 @@
 import { describe, it, expect } from "vitest";
 import {
+  contactSlug,
   getErrorMessage,
+  newContactId,
   redactUrlForLog,
 } from "../../../../server/utils/helpers";
+
+describe("contactSlug & newContactId", () => {
+  it.each([
+    ["Ada Lovelace", "ada-lovelace"],
+    ["Dr. François-Xavier D'Souza", "dr-francois-xavier-d-souza"],
+    ["  alice@example.com  ", "alice-example-com"],
+    ["???", "contact"],
+    ["", "contact"],
+    [
+      "A Very Long Contact Name That Exceeds Thirty Two Characters Easily",
+      "a-very-long-contact-name-that-ex",
+    ],
+  ])("slugifies %j as %s", (name, expected) => {
+    expect(contactSlug(name)).toBe(expected);
+  });
+
+  it("appends a unique 8-character hex suffix to the name slug", () => {
+    const a = newContactId("Ada Lovelace");
+    const b = newContactId("Ada Lovelace");
+    expect(a).toMatch(/^ada-lovelace-[0-9a-f]{8}$/);
+    expect(b).toMatch(/^ada-lovelace-[0-9a-f]{8}$/);
+    expect(a).not.toBe(b);
+  });
+});
 
 describe("getErrorMessage", () => {
   class CustomError extends Error {

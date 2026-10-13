@@ -122,6 +122,9 @@ test.describe("desktop", () => {
     page,
     seed,
   }) => {
+    expect(seed.byName("Grace Hopper").id).toMatch(
+      /^grace-hopper-[0-9a-f]{8}$/,
+    );
     await page.goto("/");
     await listRow(page, seed, "Grace Hopper").click();
 

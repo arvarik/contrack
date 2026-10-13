@@ -21,7 +21,7 @@ import { contactService } from "../services/contactService.ts";
 import type { NewContactPayload } from "../repositories/types.ts";
 import { normalizePhone } from "../utils/nlp/phone.ts";
 import { log } from "../utils/logger.ts";
-import { getErrorMessage } from "../utils/helpers.ts";
+import { getErrorMessage, newContactId } from "../utils/helpers.ts";
 import { ownerUploadDir, ownerUploadUrl } from "../utils/paths.ts";
 import {
   ensureLocalImage,
@@ -503,12 +503,12 @@ export async function ingestStream(
             if (!row.ignoredAt && !row.localId) {
               if (newSeen >= ghostThreshold) {
                 // Promote to ghost contact
-                const ghostId = crypto.randomUUID();
+                const ghostName = p.name || p.email || p.phone || "Unknown";
+                const ghostId = newContactId(ghostName);
                 // A vibe id the client draws (`VIBES` in src/lib/theme.ts).
                 const newTheme = ["brand", "teal", "rose", "emerald", "amber"][
                   Math.floor(Math.random() * 5)
                 ];
-                const ghostName = p.name || p.email || p.phone || "Unknown";
 
                 sqlite
                   .prepare(
@@ -564,11 +564,11 @@ export async function ingestStream(
           } else {
             // First time seen
             if (ghostThreshold <= 1) {
-              const ghostId = crypto.randomUUID();
+              const ghostName = p.name || p.email || p.phone || "Unknown";
+              const ghostId = newContactId(ghostName);
               const newTheme = ["brand", "teal", "rose", "emerald", "amber"][
                 Math.floor(Math.random() * 5)
               ];
-              const ghostName = p.name || p.email || p.phone || "Unknown";
 
               sqlite
                 .prepare(
