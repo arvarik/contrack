@@ -338,17 +338,7 @@ export const ActionRow = memo(
             >
               {item.contactName}
             </Link>
-            {!compact && (
-              <span
-                className={cn(
-                  "inline-flex",
-                  item.hasCheckAction &&
-                    "transition-opacity pointer-fine:group-hover:opacity-0 pointer-fine:group-focus-within:opacity-0 focus-within:opacity-0",
-                )}
-              >
-                {chip}
-              </span>
-            )}
+            {!compact && chip}
             {snooze}
           </div>
 
