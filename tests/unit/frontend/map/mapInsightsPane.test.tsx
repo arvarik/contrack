@@ -116,47 +116,29 @@ afterEach(() => {
 });
 
 describe("MapInsightsPane", () => {
-  it("is the side panel from lg, covering the map only while it is open", () => {
-    const { rerender } = renderPane();
+  it("is the side panel from lg, covering the map while open and toggling from the insights button", () => {
+    const onToggle = vi.fn();
+    const { rerender } = renderPane({ onToggle });
     const panel = screen.getByRole("complementary", { name: "Map insights" });
     expect(panel.getAttribute("data-covers-map")).toBe("right");
-    // The insights button, the glyph alone, discloses it. The heading row
-    // holds the view switch, and the heading stays for a screen reader.
     const button = screen.getByRole("button", { name: "Map insights" });
     expect(button.getAttribute("aria-expanded")).toBe("true");
     expect(button.getAttribute("aria-controls")).toBe(panel.id);
-    expect(button.textContent).toBe("");
-    const heading = screen.getByRole("heading", { name: "Map insights" });
-    expect(heading.className).toContain("sr-only");
-    expect(
-      heading.parentElement?.contains(
-        screen.getByRole("radiogroup", { name: "Insights view" }),
-      ),
-    ).toBe(true);
+    fireEvent.click(button);
+    expect(onToggle).toHaveBeenLastCalledWith(false);
 
     rerender(
       <MapInsightsPane
         isOpen={false}
-        onToggle={vi.fn()}
+        onToggle={onToggle}
         stats={stats}
         inViewContacts={people}
         onApplyFacet={vi.fn()}
         onSelectContact={vi.fn()}
       />,
     );
-    // Closed, it is inert and covers nothing, so the map keeps its width.
     expect(panel.hasAttribute("inert")).toBe(true);
     expect(panel.hasAttribute("data-covers-map")).toBe(false);
-  });
-
-  it("closes and opens from the one insights button", () => {
-    const onToggle = vi.fn();
-    const { unmount } = renderPane({ onToggle });
-    expect(screen.queryByRole("button", { name: /hide/i })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Map insights" }));
-    expect(onToggle).toHaveBeenLastCalledWith(false);
-    unmount();
-    renderPane({ onToggle, isOpen: false });
     fireEvent.click(screen.getByRole("button", { name: "Map insights" }));
     expect(onToggle).toHaveBeenLastCalledWith(true);
   });

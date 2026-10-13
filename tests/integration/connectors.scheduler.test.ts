@@ -182,9 +182,7 @@ describe("Connectors Scheduler", () => {
     const pausedId = connector({}, { owner: owner2, status: "paused" });
 
     await tickScheduler();
-
-    // Give asynchronous tick task a moment to complete
-    await new Promise((r) => setTimeout(r, 100));
+    await vi.waitFor(() => expect(getSchedulerState().activeRunsCount).toBe(0));
 
     expect(executedConnectorIds).toContain(dueId);
     expect(executedConnectorIds).not.toContain(futureId);
@@ -197,7 +195,7 @@ describe("Connectors Scheduler", () => {
 
     // Tick 1
     await tickScheduler();
-    await new Promise((r) => setTimeout(r, 100));
+    await vi.waitFor(() => expect(getSchedulerState().activeRunsCount).toBe(0));
 
     // Only one should have run during tick 1!
     expect(executedConnectorIds).toHaveLength(1);
@@ -206,7 +204,7 @@ describe("Connectors Scheduler", () => {
 
     // Tick 2: now the second one gets its turn
     await tickScheduler();
-    await new Promise((r) => setTimeout(r, 100));
+    await vi.waitFor(() => expect(getSchedulerState().activeRunsCount).toBe(0));
 
     expect(executedConnectorIds).toHaveLength(2);
     expect(executedConnectorIds).toContain(secondExpected);
@@ -218,7 +216,7 @@ describe("Connectors Scheduler", () => {
     connector({}, { owner: owner2 });
 
     await tickScheduler();
-    await new Promise((r) => setTimeout(r, 100));
+    await vi.waitFor(() => expect(getSchedulerState().activeRunsCount).toBe(0));
 
     // Concurrency is 1, so only 1 should have run in this tick!
     expect(executedConnectorIds).toHaveLength(1);
@@ -231,8 +229,7 @@ describe("Connectors Scheduler", () => {
     await tickScheduler();
 
     // Wait until slow sync begins running
-    await new Promise((r) => setTimeout(r, 50));
-    expect(executedConnectorIds).toContain(slowConn);
+    await vi.waitFor(() => expect(executedConnectorIds).toContain(slowConn));
 
     // Stop scheduler while slow sync is in flight
     await stopConnectorScheduler();
@@ -267,8 +264,7 @@ describe("Connectors Scheduler", () => {
     expect(first).not.toBeNull();
     expect(startSync(scope, { id, ownerId: owner1 }, "manual")).toBeNull();
     await tickScheduler();
-    await new Promise((r) => setTimeout(r, 50));
-    expect(executedConnectorIds).toEqual([id]);
+    await vi.waitFor(() => expect(executedConnectorIds).toEqual([id]));
     _slowSyncResolver?.();
     await first;
   });

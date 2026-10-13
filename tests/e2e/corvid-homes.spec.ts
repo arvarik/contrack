@@ -36,8 +36,12 @@ test.describe("the bird while the AI works", () => {
     seed,
   }, testInfo) => {
     await serveAiModels(page);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     await page.route("**/api/contacts/*/briefing", async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, 5_000));
+      await gate;
       await route.fulfill({ json: { points: ["one", "two", "three"] } });
     });
 
@@ -51,6 +55,7 @@ test.describe("the bird while the AI works", () => {
     await expect(thinkingBird(page).first()).toBeVisible();
 
     await expectPageAccessible(page, testInfo, "briefing-pending");
+    release();
   });
 
   test("Ask Contrack's synthesis bar thinks while it writes", async ({
@@ -65,8 +70,12 @@ test.describe("the bird while the AI works", () => {
       personMatch(seed.byName("Grace Hopper")),
       personMatch(seed.byName("Edsger Dijkstra")),
     ]);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     await page.route("**/api/search/synthesize", async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, 5_000));
+      await gate;
       await route.fulfill({
         status: 200,
         contentType: "application/x-ndjson",
@@ -90,6 +99,7 @@ test.describe("the bird while the AI works", () => {
     await expect(thinkingBird(page).first()).toBeVisible();
 
     await expectPageAccessible(page, testInfo, "synthesis-pending");
+    release();
   });
 });
 

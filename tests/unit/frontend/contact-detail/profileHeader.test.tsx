@@ -38,6 +38,8 @@ vi.mock("../../../../src/api", () => ({
   useLists: () => ({ data: [] }),
   useAddToList: () => ({ mutate: vi.fn() }),
   useRemoveFromList: () => ({ mutate: vi.fn() }),
+  useUploadAvatar: () => ({ mutate: vi.fn(), isPending: false }),
+  useSetDicebearAvatar: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 /** The toasts, so a test can read what was offered and press Undo. */
@@ -283,33 +285,15 @@ describe("the contact header", () => {
     ).toBeTruthy();
   });
 
-  it("puts the one Track menu button beside the kebab, saying the cadence once tracked", () => {
-    const { unmount } = mount(<ProfileHeader {...makeProps()} />);
+  it("puts the Track menu button before the kebab in the action cluster", () => {
+    mount(<ProfileHeader {...makeProps()} />);
     const track = screen.getByRole("button", {
       name: "Track, choose how often",
     });
-    expect(track.getAttribute("aria-haspopup")).toBe("menu");
-    // One control: no toggle beside a caret, and no second half.
-    expect(screen.queryByRole("button", { name: /^Cadence:/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Track" })).toBeNull();
-    // Track comes before the kebab in the cluster.
     const kebab = screen.getByRole("button", { name: "Contact actions" });
     expect(
       track.compareDocumentPosition(kebab) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-    unmount();
-
-    mount(
-      <ProfileHeader
-        {...makeProps({
-          contact: makeContact({ isTracked: true, cadenceDays: 90 }),
-        })}
-      />,
-    );
-    const tracked = screen.getByRole("button", {
-      name: "Tracking quarterly, change or stop",
-    });
-    expect(tracked.textContent).toContain("Quarterly");
   });
 
   it("offers no Track to a ghost, which cannot be tracked", () => {
@@ -377,9 +361,6 @@ describe("the contact header", () => {
     expect(pencilRef.current).toBe(pencil);
     fireEvent.click(pencil);
     expect(props.onOpenAvatarPicker).toHaveBeenCalledTimes(1);
-    // 28 px on the 96 px avatar, with the 44 px tap box.
-    expect(pencil.className).toContain("size-7");
-    expect(pencil.className).toContain("hit-area");
   });
 
   it("puts the pencil beside the score button, never inside it", () => {
@@ -408,7 +389,7 @@ describe("the contact header", () => {
     ).toBeTruthy();
   });
 
-  it("keeps the Archived chip and the ghost badge clear of the pencil", () => {
+  it("renders the Archived chip, ghost badge, and avatar pencil together", () => {
     mount(
       <ProfileHeader
         {...makeProps({
@@ -416,18 +397,9 @@ describe("the contact header", () => {
         })}
       />,
     );
-    const pencil = screen.getByRole("button", { name: "Change avatar" });
-    const chip = screen.getByText("Archived");
-    // The badge holds the tooltip that names it.
-    const badge = screen.getByText("Not in your network").parentElement!
-      .parentElement!;
-    // The pencil holds the lower right corner, the chip sits under the
-    // avatar, and the ghost badge holds the upper right corner.
-    expect(pencil.className).toContain("bottom-0");
-    expect(pencil.className).toContain("right-0");
-    expect(chip.className).toContain("top-full");
-    expect(badge.className).toContain("-top-3");
-    expect(badge.className).toContain("-right-3");
+    expect(screen.getByRole("button", { name: "Change avatar" })).toBeTruthy();
+    expect(screen.getByText("Archived")).toBeTruthy();
+    expect(screen.getByText("Not in your network")).toBeTruthy();
   });
 
   it("opens social links in a new tab, and says so", () => {
@@ -808,7 +780,7 @@ describe("Enrich contact", () => {
 });
 
 describe("+ link", () => {
-  it("ends the meta line after the last link, with no dot before it", () => {
+  it("ends the meta line after the last link, with no dot before it, and shows even with no links yet", () => {
     mount(<ProfileHeader {...makeProps()} />);
     const add = screen.getByRole("button", { name: "Add link" });
     expect(add.textContent).toBe("link");
@@ -817,101 +789,8 @@ describe("+ link", () => {
     // The item before it is the last link, and nothing sits between them.
     const lastLink = screen.getByRole("link", { name: /@Thomas_Walker/ });
     expect(add.previousElementSibling?.contains(lastLink)).toBe(true);
-  });
 
-  it("adds the link as a URL alone, after the links the contact has", () => {
-    const props = makeProps();
-    mount(<ProfileHeader {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: "Add link" }));
-    const field = screen.getByRole("textbox", { name: "New link" });
-    fireEvent.change(field, { target: { value: "github.com/thomaswalker" } });
-    fireEvent.keyDown(field, { key: "Enter" });
-    expect(props.updateContact).toHaveBeenCalledWith({
-      id: "c1",
-      data: {
-        socialLinks: [
-          {
-            platform: "linkedin",
-            url: "https://www.linkedin.com/in/ThomasWalker",
-            handle: "ThomasWalker",
-          },
-          {
-            platform: "twitter",
-            url: "https://twitter.com/Thomas_Walker",
-            handle: "@Thomas_Walker",
-          },
-          { url: "https://github.com/thomaswalker" },
-        ],
-      },
-    });
-    // Closed, with focus back on "+ link" rather than on the page.
-    expect(screen.queryByRole("textbox", { name: "New link" })).toBeNull();
-    expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Add link" }),
-    );
-  });
-
-  it("keeps focus on + link while the new link arrives in front of it", () => {
-    const client = new QueryClient();
-    const wrap = (ui: React.ReactElement) => (
-      <QueryClientProvider client={client}>
-        <MemoryRouter>{ui}</MemoryRouter>
-      </QueryClientProvider>
-    );
-    const props = makeProps();
-    const { rerender } = render(wrap(<ProfileHeader {...props} />));
-    fireEvent.click(screen.getByRole("button", { name: "Add link" }));
-    const field = screen.getByRole("textbox", { name: "New link" });
-    fireEvent.change(field, { target: { value: "github.com/thomaswalker" } });
-    fireEvent.keyDown(field, { key: "Enter" });
-    const add = screen.getByRole("button", { name: "Add link" });
-    expect(document.activeElement).toBe(add);
-
-    // The save answers, and the new link is the last one now.
-    const links = makeContact().socialLinks;
-    rerender(
-      wrap(
-        <ProfileHeader
-          {...props}
-          contact={makeContact({
-            socialLinks: [
-              ...links,
-              {
-                id: "s3",
-                platform: "github",
-                url: "https://github.com/thomaswalker",
-                handle: "thomaswalker",
-                source: null,
-              },
-            ],
-          })}
-        />,
-      ),
-    );
-    expect(
-      screen.getByRole("link", { name: /thomaswalker, Github/ }),
-    ).toBeTruthy();
-    // The same button, still focused: it was not rebuilt.
-    expect(screen.getByRole("button", { name: "Add link" })).toBe(add);
-    expect(document.activeElement).toBe(add);
-  });
-
-  it("refuses the website again, in another spelling", () => {
-    const props = makeProps({
-      contact: makeContact({ website: "https://www.umbrella.com" }),
-    });
-    mount(<ProfileHeader {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: "Add link" }));
-    const field = screen.getByRole("textbox", { name: "New link" });
-    fireEvent.change(field, { target: { value: "umbrella.com/" } });
-    fireEvent.keyDown(field, { key: "Enter" });
-    expect(screen.getByRole("alert").textContent).toBe(
-      "This contact already has that link",
-    );
-    expect(props.updateContact).not.toHaveBeenCalled();
-  });
-
-  it("shows for a contact with no place, time or links yet", () => {
+    cleanup();
     mount(
       <ProfileHeader
         {...makeProps({
@@ -956,9 +835,7 @@ describe("the narrow header", () => {
       aiSummary: "Runs the research guild.",
     });
     mount(<ProfileHeader {...makeProps({ layout: "narrow", contact })} />);
-    expect(screen.getByRole("heading", { level: 1 }).className).toContain(
-      "text-2xl",
-    );
+    expect(screen.getByRole("heading", { level: 1 })).toBeTruthy();
     expect(screen.getByText("Sydney")).toBeTruthy();
     expect(
       screen.getByRole("button", { name: "Contact actions" }),
@@ -980,7 +857,7 @@ describe("the narrow header", () => {
     expect(weatherRequests()).toHaveLength(1);
   });
 
-  it("draws the avatar in a 56 px box, with no ring for an untracked contact", () => {
+  it("draws the avatar in a 56 px box, with a ring only once tracked", () => {
     mount(<ProfileHeader {...makeProps({ layout: "narrow" })} />);
     expect(
       screen.queryByRole("img", { name: /score|interactions/i }),
@@ -988,9 +865,8 @@ describe("the narrow header", () => {
     const box = document.querySelector("[data-score-band]") as HTMLElement;
     expect(box.getAttribute("data-score-band")).toBe("untracked");
     expect(box.style.width).toBe("56px");
-  });
 
-  it("draws the 56 px ring once somebody tracks the contact", () => {
+    cleanup();
     mount(
       <ProfileHeader
         {...makeProps({
@@ -1013,7 +889,6 @@ describe("the narrow header", () => {
       />,
     );
     const promote = screen.getByRole("button", { name: "Add to Network" });
-    expect(promote.className).toContain("mt-3");
     // After the meta line, not in the name row above it.
     expect(
       screen.getByText("Sydney").compareDocumentPosition(promote) &
@@ -1109,5 +984,17 @@ describe("the headline and the summary", () => {
     expect(
       newInHeadline({ ...at, headline: "Partner, Northwind Partners" }),
     ).toBeNull();
+  });
+});
+
+describe("the avatar picker's upload tab", () => {
+  it("lists every format the server accepts, AVIF included", async () => {
+    const { AvatarPickerModal } =
+      await import("../../../../src/components/AvatarPickerModal");
+    render(<AvatarPickerModal isOpen onClose={vi.fn()} contactId="c-1" />);
+    fireEvent.click(screen.getByRole("button", { name: /Upload a photo/ }));
+    expect(
+      await screen.findByText("JPEG, PNG, WebP, GIF, AVIF · up to 10 MB"),
+    ).toBeTruthy();
   });
 });

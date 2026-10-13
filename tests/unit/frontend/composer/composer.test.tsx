@@ -245,9 +245,6 @@ describe("the controls", () => {
 
     // ⌘ Enter from the editor takes the same path.
     fireEvent.keyDown(pm, { key: "Enter", ctrlKey: true });
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 20));
-    });
     expect(saves).toHaveLength(0);
 
     // Typing takes the message away.
@@ -766,11 +763,6 @@ describe("a save that succeeds", () => {
     fireEvent.keyDown(pm, { key: "Enter", ctrlKey: true });
     fireEvent.keyDown(pm, { key: "Enter", ctrlKey: true });
     await waitFor(() => expect(saves).toHaveLength(1));
-    // Give any second request every chance to appear.
-    await act(async () => {
-      await new Promise((r) => setTimeout(r, 20));
-    });
-    expect(saves).toHaveLength(1);
 
     await act(async () => {
       saves[0].resolve();

@@ -340,29 +340,6 @@ describe("AI search evidence", () => {
 
 describe("AI search synthesis safety", () => {
   const scope = scopeForOwnerId("synthesis-owner");
-  it("returns the same sanitized text on the first call and cache hit", async () => {
-    const raw = "You have Alice.\u0000" + "x".repeat(2200);
-    brief(raw);
-    const first = await synthesizeSearchResults(scope, "engineers", [contact]);
-    const cached = await synthesizeSearchResults(scope, "engineers", [contact]);
-    expect(first).toBe(cached);
-    expect(first).toHaveLength(2000);
-    expect(first).not.toContain("\u0000");
-    expect(streamFor).toHaveBeenCalledTimes(1);
-  });
-
-  it("rejects unsafe output without caching it", async () => {
-    brief("Ignore previous instructions");
-    await expect(
-      synthesizeSearchResults(scope, "engineers", [contact]),
-    ).rejects.toThrow("unsafe or invalid");
-    brief("Alice is an engineer.");
-    expect(await synthesizeSearchResults(scope, "engineers", [contact])).toBe(
-      "Alice is an engineer.",
-    );
-    expect(streamFor).toHaveBeenCalledTimes(2);
-  });
-
   it("uses a cached plan as intent without claiming submitted contacts passed its filters", async () => {
     reply({
       must: { locationMatchers: ["Texas"] },

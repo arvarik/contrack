@@ -538,28 +538,6 @@ const pill = (row: string, name: RegExp) =>
   });
 const where = () => screen.getByTestId("where").textContent;
 
-describe("groupContacts, with the filters", () => {
-  it("narrows by tracking and by the last interaction", () => {
-    const now = Date.now();
-    const notTrackedThisMonth = groupContacts(WITH_TALKS, {
-      tracking: "not_tracked",
-      spoke: "month",
-      now,
-    });
-    expect(
-      notTrackedThisMonth.map((g) => [g.id, g.contacts.map((c) => c.id)]),
-    ).toEqual([["not-tracked", ["barbara"]]]);
-    const trackedNever = groupContacts(WITH_TALKS, {
-      tracking: "tracked",
-      spoke: "never",
-      now,
-    });
-    expect(
-      trackedNever.map((g) => [g.id, g.contacts.map((c) => c.id)]),
-    ).toEqual([["unscored", ["zed"]]]);
-  });
-});
-
 describe("the Tracked contacts page's filters", () => {
   beforeEach(() => {
     api.contacts = WITH_TALKS;

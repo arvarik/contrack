@@ -174,29 +174,41 @@ describe("verifyBackup, when the file is not a backup", () => {
 });
 
 describe("rotation", () => {
-  it("takes each snapshot's verification with it", async () => {
+  it("takes each snapshot's verification and stale WAL companions with it", async () => {
     process.env.BACKUP_KEEP = "2";
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const t0 = new Date("2026-06-01T12:00:00Z");
+      vi.setSystemTime(t0);
+      const first = await runBackup();
+      fs.utimesSync(path.join(BACKUPS_DIR, first.filename), t0, t0);
+      const stale = path.join(BACKUPS_DIR, `${first.filename}-shm`);
+      fs.writeFileSync(stale, Buffer.alloc(32768));
 
-    const first = await runBackup();
-    // The filename carries a whole second, so three snapshots inside one
-    // second would be one file. The rows make each snapshot different and the
-    // writes push the clock along.
-    await contactService.bulkCreateContacts(scope, [{ name: "Rotate A" }]);
-    await new Promise((resolve) => setTimeout(resolve, 1100));
-    await runBackup();
-    await contactService.bulkCreateContacts(scope, [{ name: "Rotate B" }]);
-    await new Promise((resolve) => setTimeout(resolve, 1100));
-    await runBackup();
+      const t1 = new Date(t0.getTime() + 2000);
+      vi.setSystemTime(t1);
+      await contactService.bulkCreateContacts(scope, [{ name: "Rotate A" }]);
+      const second = await runBackup();
+      fs.utimesSync(path.join(BACKUPS_DIR, second.filename), t1, t1);
 
-    const remaining = listBackups();
-    expect(remaining).toHaveLength(2);
-    expect(remaining.map((b) => b.filename)).not.toContain(first.filename);
+      const t2 = new Date(t0.getTime() + 4000);
+      vi.setSystemTime(t2);
+      await contactService.bulkCreateContacts(scope, [{ name: "Rotate B" }]);
+      const third = await runBackup();
+      fs.utimesSync(path.join(BACKUPS_DIR, third.filename), t2, t2);
 
-    // A sidecar left behind would be adopted by the next file to take that
-    // name, and it would say a snapshot was verified that never was.
-    expect(fs.existsSync(sidecarOf(first.filename))).toBe(false);
-    for (const backup of remaining) {
-      expect(fs.existsSync(sidecarOf(backup.filename))).toBe(true);
+      const remaining = listBackups();
+      expect(remaining).toHaveLength(2);
+      expect(remaining.map((b) => b.filename)).not.toContain(first.filename);
+
+      // Both the sidecar and any lingering -shm companion are rotated out with the snapshot.
+      expect(fs.existsSync(sidecarOf(first.filename))).toBe(false);
+      expect(fs.existsSync(stale)).toBe(false);
+      for (const backup of remaining) {
+        expect(fs.existsSync(sidecarOf(backup.filename))).toBe(true);
+      }
+    } finally {
+      vi.useRealTimers();
     }
   }, 20_000);
 
@@ -221,18 +233,6 @@ describe("rotation", () => {
     expect(files.filter((f) => f.endsWith("-shm"))).toEqual([]);
     expect(files.filter((f) => f.endsWith("-wal"))).toEqual([]);
   });
-
-  it("rotates away a companion an older version left behind", async () => {
-    process.env.BACKUP_KEEP = "1";
-    const first = await runBackup();
-    const stale = path.join(BACKUPS_DIR, `${first.filename}-shm`);
-    fs.writeFileSync(stale, Buffer.alloc(32768));
-
-    await new Promise((resolve) => setTimeout(resolve, 1100));
-    await runBackup();
-
-    expect(fs.existsSync(stale)).toBe(false);
-  }, 20_000);
 
   it("never lists a sidecar as a backup", async () => {
     await runBackup();

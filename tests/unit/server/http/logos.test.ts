@@ -189,7 +189,14 @@ describe("GET /api/logos/:domain", () => {
       return served(png);
     });
 
-    const server = app.listen(0);
+    let arrived = 0;
+    const trackedApp = express();
+    trackedApp.use((_req, _res, next) => {
+      arrived += 1;
+      next();
+    });
+    trackedApp.use("/api/logos", logosRouter);
+    const server = trackedApp.listen(0);
     try {
       const pending = [
         request(server)
@@ -202,9 +209,10 @@ describe("GET /api/logos/:domain", () => {
           .get(`/api/logos/${domain.toUpperCase()}`)
           .then((r) => r),
       ];
-      // Every request has to be waiting on the fetch before it resolves.
-      await vi.waitFor(() => expect(safeFetchMock).toHaveBeenCalled());
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await vi.waitFor(() => {
+        expect(arrived).toBe(3);
+        expect(safeFetchMock).toHaveBeenCalledTimes(1);
+      });
       release();
       const responses = await Promise.all(pending);
       expect(responses.map((r) => r.status)).toEqual([200, 200, 200]);

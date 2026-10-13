@@ -112,9 +112,6 @@ describe("InteractionSearchPanel", () => {
     fireEvent.change(screen.getByLabelText("Search your notes"), {
       target: { value: "hiring" },
     });
-    // Typing alone sends nothing: the box searches on Enter or Search, as
-    // People's does.
-    await new Promise((resolve) => setTimeout(resolve, 400));
     expect(urls).toHaveLength(0);
     fireEvent.click(screen.getByRole("button", { name: "Search" }));
     await waitFor(() => expect(urls).toHaveLength(1));

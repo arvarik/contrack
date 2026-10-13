@@ -80,6 +80,10 @@ test("account profile photo lifecycle in Settings", async ({
 test("captures screenshots of photo card and sidebar in light and dark", async ({
   page,
 }) => {
+  test.skip(
+    !process.env.DOCS_SCREENSHOTS,
+    "Only run when capturing docs screenshots",
+  );
   await completeSetup(page, ADMIN);
   await page.goto("/settings/account");
   await expect(page.getByRole("heading", { name: "Photo" })).toBeVisible();
@@ -96,7 +100,6 @@ test("captures screenshots of photo card and sidebar in light and dark", async (
   // Desktop Light (1440x900)
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.emulateMedia({ colorScheme: "light" });
-  await page.waitForTimeout(300);
   await page.screenshot({
     path: path.join(SHOTS, "settings-desktop-light.png"),
     fullPage: false,
@@ -112,7 +115,6 @@ test("captures screenshots of photo card and sidebar in light and dark", async (
 
   // Desktop Dark (1440x900)
   await page.emulateMedia({ colorScheme: "dark" });
-  await page.waitForTimeout(300);
   await page.screenshot({
     path: path.join(SHOTS, "settings-desktop-dark.png"),
     fullPage: false,
@@ -127,7 +129,6 @@ test("captures screenshots of photo card and sidebar in light and dark", async (
   // Mobile Light (390x844)
   await page.setViewportSize({ width: 390, height: 844 });
   await page.emulateMedia({ colorScheme: "light" });
-  await page.waitForTimeout(300);
   await page.screenshot({
     path: path.join(SHOTS, "settings-phone-light.png"),
   });
@@ -139,7 +140,6 @@ test("captures screenshots of photo card and sidebar in light and dark", async (
 
   // Mobile Dark (390x844)
   await page.emulateMedia({ colorScheme: "dark" });
-  await page.waitForTimeout(300);
   await page.screenshot({
     path: path.join(SHOTS, "settings-identity-phone-dark.png"),
   });
@@ -174,6 +174,10 @@ test("complete setup with a profile photo", async ({ page }, testInfo) => {
 });
 
 test("captures screenshot of setup screen on phone", async ({ page }) => {
+  test.skip(
+    !process.env.DOCS_SCREENSHOTS,
+    "Only run when capturing docs screenshots",
+  );
   await page.goto("/");
   await expect(
     page.getByRole("heading", { name: SETUP_HEADING }),
@@ -189,7 +193,6 @@ test("captures screenshot of setup screen on phone", async ({ page }) => {
   await page.getByLabel("Your name").fill(ADMIN.displayName);
   await page.getByLabel("Email").fill(ADMIN.email);
 
-  await page.waitForTimeout(300);
   await page.screenshot({
     path: path.join(SHOTS, "setup-phone-light.png"),
   });

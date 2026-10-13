@@ -126,7 +126,6 @@ test.describe("the Corvid motion setting, live", () => {
     await expect(page.getByText("Ada Lovelace")).toBeVisible();
     const logo = await perchDrawing(page);
     await perch(page).click();
-    await page.waitForTimeout(600);
     await expect(overlay(page)).toHaveCount(0);
     expect(await perchDrawing(page)).toEqual(logo);
   });

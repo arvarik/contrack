@@ -265,13 +265,9 @@ describe("npm run db:enrich", () => {
     expect(rows.filter((r) => r.lastContactedAt).length).toBeGreaterThan(20);
   });
 
-  it("creates no one and changes nothing on a second run", async () => {
+  it("creates no one and changes nothing on a second run", () => {
     const everyone = [...network(), ...real];
     const before = dump(everyone);
-    // The database stamps a row with the real time when a column has no value.
-    // Two runs in one second hid that, so the second run waits past the next
-    // second on purpose.
-    await new Promise((resolve) => setTimeout(resolve, 1100));
     expect(run()).toMatchObject({
       created: 0,
       rows: { contacts: COUNT },

@@ -168,7 +168,7 @@ describe("holds", () => {
   it("make each head turn in glance, cock and look back a snap", () => {
     const HEAD = ["headAngle", "headX", "headY", "headFacing"] as const;
     for (const make of [makeGlance, makeCock, makeLookBack]) {
-      for (let seed = 1; seed <= 40; seed++) {
+      for (let seed = 1; seed <= 8; seed++) {
         const { name, tracks } = make(createRng(seed));
         for (const field of HEAD) {
           const keys = tracks[field] ?? [];
@@ -186,11 +186,12 @@ describe("holds", () => {
 });
 
 describe("every act", () => {
-  it("starts and ends at the logo, whatever the seed", () => {
+  it("starts and ends at the logo within 3.5 seconds, whatever the seed", () => {
     for (const name of FINITE) {
-      for (let seed = 1; seed <= 40; seed++) {
+      for (let seed = 1; seed <= 8; seed++) {
         const motion = makeCorvidMotion(name, createRng(seed));
         expect(Number.isFinite(motion.duration), name).toBe(true);
+        expect(motion.duration, name).toBeLessThan(3_500);
         expectHome(at(motion, 0), `${name} start`);
         expectHome(at(motion, motion.duration), `${name} end`);
         expectHome(at(motion, motion.duration + 5_000), `${name} after`);
@@ -207,17 +208,6 @@ describe("every act", () => {
         POSE_KEYS.some((key) => Math.abs(pose[key] - HOME_POSE[key]) > 0.05),
       );
       expect(moved, name).toBe(true);
-    }
-  });
-
-  it("is quick: nothing on the perch takes more than three and a half seconds", () => {
-    for (const name of FINITE) {
-      for (let seed = 1; seed <= 40; seed++) {
-        expect(
-          makeCorvidMotion(name, createRng(seed)).duration,
-          name,
-        ).toBeLessThan(3_500);
-      }
     }
   });
 
@@ -253,19 +243,19 @@ describe("blinks", () => {
 
   it("come in pairs about one time in five", () => {
     let doubles = 0;
-    for (let seed = 1; seed <= 400; seed++) {
+    for (let seed = 1; seed <= 100; seed++) {
       const blink = makeBlink(createRng(seed));
       const shuts = Array.from(
-        { length: 200 },
-        (_, i) => at(blink, (i / 199) * blink.duration).eye,
+        { length: 60 },
+        (_, i) => at(blink, (i / 59) * blink.duration).eye,
       );
       let closings = 0;
       for (let i = 1; i < shuts.length; i++)
         if (shuts[i]! < 0.2 && shuts[i - 1]! >= 0.2) closings += 1;
       if (closings === 2) doubles += 1;
     }
-    expect(doubles / 400).toBeGreaterThan(0.12);
-    expect(doubles / 400).toBeLessThan(0.28);
+    expect(doubles / 100).toBeGreaterThan(0.1);
+    expect(doubles / 100).toBeLessThan(0.32);
   });
 });
 

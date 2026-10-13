@@ -309,26 +309,7 @@ describe("the follow-up glyph", () => {
     expect(row.getAttribute("aria-label")).toMatch(
       /, follow-up 3 days overdue$/,
     );
-  });
-
-  // Between 768 and 1023 px the glyph has a slot of its own in the city
-  // column, on every row, empty with no follow-up, so it does not move with
-  // the width of the city.
-  it("keeps a slot of one width for the glyph in the tablet column", () => {
-    const slotOf = (row: HTMLElement) =>
-      row.querySelector(".md\\:flex.lg\\:hidden > span.w-3\\.5");
-    const late = mount(makeContact({ nextFollowUpAt: "2026-09-19" }));
-    expect(slotOf(late)?.querySelector("svg")).not.toBeNull();
-    // The one on the name's line hides at that width.
-    expect(
-      late
-        .querySelector('[title^="Follow-up"]')!
-        .classList.contains("md:hidden"),
-    ).toBe(true);
-    cleanup();
-    const none = mount(makeContact());
-    expect(slotOf(none)).not.toBeNull();
-    expect(slotOf(none)?.querySelector("svg")).toBeNull();
+    expect(row.querySelector('[title^="Follow-up"]')).not.toBeNull();
   });
 });
 

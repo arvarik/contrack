@@ -18,8 +18,8 @@ const NOW = Date.parse("2026-08-16T00:00:00Z");
 const DAY = 24 * 60 * 60 * 1000;
 
 describe("modality guardrails (isChatModel)", () => {
-  it("keeps chat and reasoning models", () => {
-    const chatModels = [
+  it("keeps chat and reasoning models and drops non-chat or empty IDs", () => {
+    for (const id of [
       "gpt-5.1",
       "gpt-5.1-mini",
       "o4-mini",
@@ -31,79 +31,56 @@ describe("modality guardrails (isChatModel)", () => {
       "gemini-3.1-flash-lite",
       "llama3.2:3b",
       "qwen2.5-coder",
-    ];
-    for (const id of chatModels) {
+    ]) {
       expect(isChatModel(id), id).toBe(true);
     }
-  });
 
-  it("drops embedding models", () => {
-    expect(isChatModel("text-embedding-3-large")).toBe(false);
-    expect(isChatModel("gemini-embedding-001")).toBe(false);
-    expect(isChatModel("gemini-embedding-2")).toBe(false);
-    expect(isChatModel("nomic-embed-text")).toBe(false);
-  });
-
-  it("drops audio, transcription, and speech models", () => {
-    expect(isChatModel("whisper-1")).toBe(false);
-    expect(isChatModel("gpt-4o-transcribe")).toBe(false);
-    expect(isChatModel("gpt-4o-mini-tts")).toBe(false);
-    expect(isChatModel("gpt-4o-audio-preview")).toBe(false);
-    expect(isChatModel("gpt-4o-realtime-preview")).toBe(false);
-    expect(isChatModel("gemini-2.5-flash-preview-tts")).toBe(false);
-    expect(isChatModel("gemini-3.5-transcribe")).toBe(false);
-  });
-
-  it("drops image and video generation models", () => {
-    expect(isChatModel("dall-e-3")).toBe(false);
-    expect(isChatModel("gpt-image-1")).toBe(false);
-    expect(isChatModel("imagen-4.0-generate-001")).toBe(false);
-    expect(isChatModel("veo-3.1-generate-preview")).toBe(false);
-    expect(isChatModel("gemini-2.5-flash-image")).toBe(false);
-    expect(isChatModel("nano-banana-pro-preview")).toBe(false);
-  });
-
-  it("drops moderation and legacy completion models", () => {
-    expect(isChatModel("omni-moderation-latest")).toBe(false);
-    expect(isChatModel("text-moderation-007")).toBe(false);
-    expect(isChatModel("babbage-002")).toBe(false);
-    expect(isChatModel("davinci-002")).toBe(false);
-    expect(isChatModel("gpt-3.5-turbo-instruct")).toBe(false);
-  });
-
-  it("drops robotics, deep-research, and internal preview models", () => {
-    expect(isChatModel("gemini-robotics-er-2-preview")).toBe(false);
-    expect(isChatModel("deep-research-pro-preview-12-2025")).toBe(false);
-    expect(isChatModel("deep-research-max-preview-04-2026")).toBe(false);
-    expect(isChatModel("antigravity-preview-05-2026")).toBe(false);
-    expect(isChatModel("lyria-3.5")).toBe(false);
-  });
-
-  it("handles empty input", () => {
-    expect(isChatModel("")).toBe(false);
-    expect(isChatModel(undefined)).toBe(false);
-    expect(isChatModel(null)).toBe(false);
+    for (const id of [
+      "text-embedding-3-large",
+      "gemini-embedding-001",
+      "gemini-embedding-2",
+      "nomic-embed-text",
+      "whisper-1",
+      "gpt-4o-transcribe",
+      "gpt-4o-mini-tts",
+      "gpt-4o-audio-preview",
+      "gpt-4o-realtime-preview",
+      "gemini-2.5-flash-preview-tts",
+      "gemini-3.5-transcribe",
+      "dall-e-3",
+      "gpt-image-1",
+      "imagen-4.0-generate-001",
+      "veo-3.1-generate-preview",
+      "gemini-2.5-flash-image",
+      "nano-banana-pro-preview",
+      "omni-moderation-latest",
+      "text-moderation-007",
+      "babbage-002",
+      "davinci-002",
+      "gpt-3.5-turbo-instruct",
+      "gemini-robotics-er-2-preview",
+      "deep-research-pro-preview-12-2025",
+      "deep-research-max-preview-04-2026",
+      "antigravity-preview-05-2026",
+      "lyria-3.5",
+      "",
+      undefined,
+      null,
+    ]) {
+      expect(isChatModel(id), String(id)).toBe(false);
+    }
   });
 });
 
 describe("recency guardrail (isWithinRecencyWindow)", () => {
-  it("keeps models released within the last year", () => {
+  it("keeps models within the recency window or without a release timestamp", () => {
     expect(isWithinRecencyWindow(NOW - 30 * DAY, NOW)).toBe(true);
     expect(isWithinRecencyWindow(NOW - 364 * DAY, NOW)).toBe(true);
-  });
-
-  it("drops models released over a year ago", () => {
-    expect(isWithinRecencyWindow(NOW - 366 * DAY, NOW)).toBe(false);
-    expect(isWithinRecencyWindow(NOW - 3 * 365 * DAY, NOW)).toBe(false);
-  });
-
-  it("keeps the exact boundary", () => {
     expect(isWithinRecencyWindow(NOW - RECENCY_WINDOW_MS, NOW)).toBe(true);
-  });
-
-  it("keeps models without a release timestamp", () => {
     expect(isWithinRecencyWindow(null, NOW)).toBe(true);
     expect(isWithinRecencyWindow(undefined, NOW)).toBe(true);
+    expect(isWithinRecencyWindow(NOW - 366 * DAY, NOW)).toBe(false);
+    expect(isWithinRecencyWindow(NOW - 3 * 365 * DAY, NOW)).toBe(false);
   });
 });
 
@@ -172,23 +149,17 @@ describe("applyCatalogGuardrails (all passes combined)", () => {
   });
 });
 
-describe("family inference", () => {
-  it("classifies Gemini families", () => {
+describe("family inference, generation extraction, and class mapping", () => {
+  it("classifies Gemini, Claude, and OpenAI model families and maps them to model classes", () => {
     expect(inferModelFamily("gemini", "gemini-3.8-flash")).toBe("Flash");
     expect(inferModelFamily("gemini", "gemini-3.5-flash")).toBe("Flash");
     expect(inferModelFamily("gemini", "gemini-3.1-pro")).toBe("Pro");
     expect(inferModelFamily("gemini", "gemini-3.5-flash-lite")).toBe(
       "Flash-Lite",
     );
-  });
-
-  it("classifies Claude families", () => {
     expect(inferModelFamily("claude", "claude-sonnet-4-6")).toBe("Sonnet");
     expect(inferModelFamily("claude", "claude-haiku-4-5")).toBe("Haiku");
     expect(inferModelFamily("claude", "claude-opus-4-8")).toBe("Opus");
-  });
-
-  it("classifies OpenAI families including GPT-5.6 tier names", () => {
     expect(inferModelFamily("openai", "gpt-5.6-sol")).toBe("Flagship");
     expect(inferModelFamily("openai", "gpt-5.6-terra")).toBe("Balanced");
     expect(inferModelFamily("openai", "gpt-5.6-luna")).toBe("Fast");
@@ -196,11 +167,20 @@ describe("family inference", () => {
     expect(inferModelFamily("openai", "gpt-5.2-mini")).toBe("Mini");
     expect(inferModelFamily("openai", "gpt-5.2-nano")).toBe("Nano");
     expect(inferModelFamily("openai", "o3")).toBe("Reasoning");
-  });
-});
 
-describe("generation extraction (extractGeneration)", () => {
-  it("reads dotted and dashed version numbers", () => {
+    expect(familyToModelClass("gemini", "Flash-Lite")).toBe("lite");
+    expect(familyToModelClass("gemini", "Flash")).toBe("flash");
+    expect(familyToModelClass("gemini", "Pro")).toBe("pro");
+    expect(familyToModelClass("anthropic", "Haiku")).toBe("lite");
+    expect(familyToModelClass("anthropic", "Sonnet")).toBe("flash");
+    expect(familyToModelClass("anthropic", "Opus")).toBe("pro");
+    expect(familyToModelClass("openai", "Nano")).toBe("lite");
+    expect(familyToModelClass("openai", "Mini")).toBe("flash");
+    expect(familyToModelClass("openai", "Flagship")).toBe("pro");
+    expect(familyToModelClass("gemini", null)).toBe(null);
+  });
+
+  it("extracts generation numbers and detects preview variants", () => {
     expect(extractGeneration("gemini-3.8-flash")).toBe(3.8);
     expect(extractGeneration("gemini-3.6-flash")).toBe(3.6);
     expect(extractGeneration("gemini-3.5-flash-lite")).toBe(3.5);
@@ -209,20 +189,22 @@ describe("generation extraction (extractGeneration)", () => {
     expect(extractGeneration("claude-opus-5")).toBe(5);
     expect(extractGeneration("claude-haiku-4-5")).toBe(4.5);
     expect(extractGeneration("o4-mini")).toBe(4);
-  });
-
-  it("ignores snapshot date suffixes", () => {
     expect(extractGeneration("claude-opus-4-5-20251101")).toBe(4.5);
-  });
-
-  it("returns null when no version exists", () => {
     expect(extractGeneration("gemini-flash-latest")).toBe(null);
     expect(extractGeneration("")).toBe(null);
+
+    expect(isPreviewVariant("gemini-3.6-flash-preview-06-17")).toBe(true);
+    expect(isPreviewVariant("gemini-exp-1206")).toBe(true);
+    expect(isPreviewVariant("gemini-flash-latest")).toBe(true);
+    expect(isPreviewVariant("chatgpt-4o-latest")).toBe(true);
+    expect(isPreviewVariant("gemini-3.8-flash")).toBe(false);
+    expect(isPreviewVariant("claude-opus-5")).toBe(false);
+    expect(isPreviewVariant("gpt-5.6-sol")).toBe(false);
   });
 });
 
 describe("latest-per-family reduction (keepLatestPerFamily)", () => {
-  it("keeps newest generation of each Gemini family including gemini-3.8-flash", () => {
+  it("keeps newest generation of each Gemini family and resolves model class", () => {
     const raw = [
       { id: "gemini-2.5-flash" },
       { id: "gemini-3.5-flash" },
@@ -236,16 +218,13 @@ describe("latest-per-family reduction (keepLatestPerFamily)", () => {
       { id: "gemini-3.5-flash-lite" },
       { id: "gemini-flash-lite-latest" },
     ];
-    const result = keepLatestPerFamily("gemini", raw).map((m) => m.id);
-    expect(result).toEqual([
+    expect(keepLatestPerFamily("gemini", raw).map((m) => m.id)).toEqual([
       "gemini-3.1-pro",
       "gemini-3.8-flash",
       "gemini-3.5-flash-lite",
     ]);
-  });
 
-  it("resolves model class to newest generation model", () => {
-    const raw = [
+    const classPool = [
       { id: "gemini-2.5-flash" },
       { id: "gemini-3.6-flash" },
       { id: "gemini-3.8-flash" },
@@ -253,50 +232,14 @@ describe("latest-per-family reduction (keepLatestPerFamily)", () => {
       { id: "gemini-3.5-flash-lite" },
       { id: "gemini-3.1-pro-preview" },
     ];
-    expect(getLatestModelForClass("gemini", "flash", raw)).toBe(
+    expect(getLatestModelForClass("gemini", "flash", classPool)).toBe(
       "gemini-3.8-flash",
     );
-    expect(getLatestModelForClass("gemini", "lite", raw)).toBe(
+    expect(getLatestModelForClass("gemini", "lite", classPool)).toBe(
       "gemini-3.5-flash-lite",
     );
-    expect(getLatestModelForClass("gemini", "pro", raw)).toBe(
+    expect(getLatestModelForClass("gemini", "pro", classPool)).toBe(
       "gemini-3.1-pro-preview",
     );
-  });
-});
-
-describe("preview variant detection (isPreviewVariant)", () => {
-  it("flags preview, experimental, and latest aliases", () => {
-    expect(isPreviewVariant("gemini-3.6-flash-preview-06-17")).toBe(true);
-    expect(isPreviewVariant("gemini-exp-1206")).toBe(true);
-    expect(isPreviewVariant("gemini-flash-latest")).toBe(true);
-    expect(isPreviewVariant("chatgpt-4o-latest")).toBe(true);
-  });
-
-  it("passes stable releases", () => {
-    expect(isPreviewVariant("gemini-3.8-flash")).toBe(false);
-    expect(isPreviewVariant("claude-opus-5")).toBe(false);
-    expect(isPreviewVariant("gpt-5.6-sol")).toBe(false);
-  });
-});
-
-describe("family to model class mapping", () => {
-  it("maps Gemini families correctly", () => {
-    expect(familyToModelClass("gemini", "Flash-Lite")).toBe("lite");
-    expect(familyToModelClass("gemini", "Flash")).toBe("flash");
-    expect(familyToModelClass("gemini", "Pro")).toBe("pro");
-  });
-
-  it("maps Anthropic and OpenAI families correctly", () => {
-    expect(familyToModelClass("anthropic", "Haiku")).toBe("lite");
-    expect(familyToModelClass("anthropic", "Sonnet")).toBe("flash");
-    expect(familyToModelClass("anthropic", "Opus")).toBe("pro");
-    expect(familyToModelClass("openai", "Nano")).toBe("lite");
-    expect(familyToModelClass("openai", "Mini")).toBe("flash");
-    expect(familyToModelClass("openai", "Flagship")).toBe("pro");
-  });
-
-  it("returns null for unknown family", () => {
-    expect(familyToModelClass("gemini", null)).toBe(null);
   });
 });

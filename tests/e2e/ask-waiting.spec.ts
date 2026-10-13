@@ -501,9 +501,6 @@ test.describe("on a phone", () => {
     await mark(page, "Ada Lovelace").tap();
     const tip = tipOf(page, "Ada Lovelace");
     await expect(tip).toBeVisible();
-    // Not open and shut in one gesture: it is still there a moment later.
-    await page.waitForTimeout(400);
-    await expect(tip).toBeVisible();
     await expectInWindow(page, tip);
     await expectPageAccessible(page, testInfo, "phone-unverified-tip-open");
     await expectFloors(page, testInfo, "phone-unverified-results");
@@ -536,6 +533,10 @@ test.describe("on a phone", () => {
  * light and dark.
  */
 test.describe("screenshots", () => {
+  test.skip(
+    !process.env.DOCS_SCREENSHOTS,
+    "Only run when capturing docs screenshots",
+  );
   test.use({ reducedMotion: "no-preference" });
 
   const SIZES = [

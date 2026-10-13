@@ -403,9 +403,9 @@ test.describe("map features - filters and place search", () => {
     }
   });
 
-  test("Tab to a pin shows hover card, Space pins it focusing first button, Escape returns focus", async ({
+  test("Tab to a pin shows hover card, Space pins it focusing first button, follow-up modal is accessible, Escape returns focus", async ({
     page,
-  }) => {
+  }, testInfo) => {
     await page.goto("/map");
     const map = page.getByRole("region", { name: "Contact map" });
     await expect(map).toBeVisible();
@@ -437,6 +437,7 @@ test.describe("map features - filters and place search", () => {
     const openBtn = dialog.getByRole("button", { name: "Open contact" });
     await expect(openBtn).toBeVisible();
     await expect(openBtn).toBeFocused();
+    await expectPageAccessible(page, testInfo, "map-hover-card-pinned");
 
     // Escape closes the card and gives the focus back to the pin, and that
     // focus does not open the card again as a tooltip.
@@ -445,36 +446,14 @@ test.describe("map features - filters and place search", () => {
       page.getByRole("dialog", { name: "Ada Lovelace" }),
     ).toHaveCount(0);
     await expect(adaPin).toBeFocused();
-    await page.waitForTimeout(600);
     await expect(page.getByRole("tooltip")).toHaveCount(0);
-  });
 
-  test("is accessible with card pinned and follow-up modal open", async ({
-    page,
-  }, testInfo) => {
-    await page.goto("/map");
-    const map = page.getByRole("region", { name: "Contact map" });
-    await expect(map).toBeVisible();
-
-    const adaPin = map.getByRole("button", {
-      name: "Ada Lovelace, Babbage & Co",
-    });
-    await expect(adaPin).toBeVisible();
-    await adaPin.focus();
+    // Open follow-up modal from pinned card and check accessibility
     await page.keyboard.press("Space");
-
-    const dialog = page.getByRole("dialog", { name: "Ada Lovelace" });
     await expect(dialog).toBeVisible();
-
-    // Check accessibility with card pinned
-    await expectPageAccessible(page, testInfo, "map-hover-card-pinned");
-
-    // Open follow-up modal from hover card
     await dialog.getByRole("button", { name: "Add follow-up" }).click();
     const modal = page.getByRole("dialog", { name: "Add follow-up" });
     await expect(modal).toBeVisible();
-
-    // Check accessibility with follow-up modal open
     await expectPageAccessible(page, testInfo, "map-followup-modal");
   });
 
@@ -515,9 +494,9 @@ test.describe("map features - filters and place search", () => {
     ).toBeVisible();
   });
 
-  test("saves a view with a facet, and choosing it after a reload filters the map again", async ({
+  test("saves a view with a facet, is accessible, and choosing it after a reload filters the map again", async ({
     page,
-  }) => {
+  }, testInfo) => {
     await page.goto("/map");
     const map = page.getByRole("region", { name: "Contact map" });
     await expect(map).toBeVisible();
@@ -525,8 +504,15 @@ test.describe("map features - filters and place search", () => {
     await filterInput.fill("company:Babbage ");
 
     await page.getByRole("button", { name: "Saved views" }).click();
+    const menu = page.getByRole("menu", { name: "Saved views" });
+    await expect(menu).toBeVisible();
+    await expect(menu.getByRole("menuitem").first()).toBeFocused();
+    await expectPageAccessible(page, testInfo, "map-views-menu");
+
     await page.getByRole("menuitem", { name: "Save current view…" }).click();
     const saveModal = page.getByRole("dialog", { name: "Save current view" });
+    await expect(saveModal).toBeVisible();
+    await expectPageAccessible(page, testInfo, "map-save-view-modal");
     await saveModal.getByLabel("View name").fill("Babbage");
     await saveModal.getByRole("button", { name: "Save view" }).click();
     await expect(saveModal).toHaveCount(0);
@@ -549,28 +535,6 @@ test.describe("map features - filters and place search", () => {
       map.getByRole("button", { name: "Grace Hopper, US Navy" }),
     ).toHaveCount(0);
   });
-
-  test("is accessible with views menu open and save view modal open", async ({
-    page,
-  }, testInfo) => {
-    await page.goto("/map");
-    const map = page.getByRole("region", { name: "Contact map" });
-    await expect(map).toBeVisible();
-
-    // Open Saved views menu and check accessibility
-    await page.getByRole("button", { name: "Saved views" }).click();
-    const menu = page.getByRole("menu", { name: "Saved views" });
-    await expect(menu).toBeVisible();
-    // It opens with the focus on an item, as a menu does.
-    await expect(menu.getByRole("menuitem").first()).toBeFocused();
-    await expectPageAccessible(page, testInfo, "map-views-menu");
-
-    // Open Save view modal and check accessibility
-    await page.getByRole("menuitem", { name: "Save current view…" }).click();
-    const modal = page.getByRole("dialog", { name: "Save current view" });
-    await expect(modal).toBeVisible();
-    await expectPageAccessible(page, testInfo, "map-save-view-modal");
-  });
 });
 
 const { defaultBrowserType: _webkit, ...PHONE } = devices["iPhone 13"];
@@ -582,47 +546,34 @@ test.describe("map features on phone", () => {
     await stubBasemap(page);
   });
 
-  test("opens mobile filter sheet and is accessible", async ({
-    page,
-  }, testInfo) => {
-    await page.goto("/map");
-    const map = page.getByRole("region", { name: "Contact map" });
-    await expect(map).toBeVisible();
-
-    // Click Filters button
-    const filtersBtn = page.getByRole("button", { name: "Filters" });
-    await expect(filtersBtn).toBeVisible();
-    await filtersBtn.tap();
-
-    // Modal sheet appears
-    const sheet = page.getByRole("dialog", { name: "Filters" });
-    await expect(sheet).toBeVisible();
-
-    // Check accessibility with filter sheet open
-    await expectPageAccessible(page, testInfo, "map-filter-sheet-mobile");
-  });
-
-  test("opens mobile insights sheet, is accessible, and closes for a tapped person", async ({
+  test("opens mobile filter and insights sheets, is accessible, and closes insights for a tapped person", async ({
     page,
   }, testInfo) => {
     await page.goto("/map");
     const map = page.getByRole("region", { name: "Contact map" });
     await expect(map).toHaveAttribute("data-map-ready", "true");
 
+    // Click Filters button
+    const filtersBtn = page.getByRole("button", { name: "Filters" });
+    await expect(filtersBtn).toBeVisible();
+    await filtersBtn.tap();
+
+    const filterSheet = page.getByRole("dialog", { name: "Filters" });
+    await expect(filterSheet).toBeVisible();
+    await expectPageAccessible(page, testInfo, "map-filter-sheet-mobile");
+    await page.keyboard.press("Escape");
+    await expect(filterSheet).toHaveCount(0);
+
     // Click Insights button on mobile toolbar
     const insightsBtn = page.getByRole("button", { name: "Insights" });
     await expect(insightsBtn).toBeVisible();
     await insightsBtn.tap();
 
-    // Modal sheet appears
     const sheet = page.getByRole("dialog", { name: "Map insights" });
     await expect(sheet).toBeVisible();
-
-    // Check accessibility with insights sheet open
     await expectPageAccessible(page, testInfo, "map-insights-sheet-mobile");
 
-    // A tapped person left the sheet open: the map flew behind it, and the
-    // list shrank under the finger.
+    // A tapped person closes the sheet.
     await sheet.getByRole("radio", { name: "People" }).tap();
     await sheet
       .getByRole("list", { name: "People in view" })

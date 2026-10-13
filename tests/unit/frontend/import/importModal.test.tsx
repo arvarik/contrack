@@ -635,4 +635,43 @@ describe("reopening the modal", () => {
     );
     expect(recallImport("acct-1")).toBeNull();
   });
+
+  it("remembers the chosen import source tab and falls back to Apple on unknown or blocked storage", () => {
+    const SOURCE_KEY = "contrack.import.lastSource";
+    localStorage.setItem(SOURCE_KEY, "linkedin");
+    const { unmount } = mount();
+    expect(
+      screen
+        .getByRole("tab", { name: "LinkedIn" })
+        .getAttribute("aria-selected"),
+    ).toBe("true");
+    unmount();
+
+    localStorage.setItem(SOURCE_KEY, "unknown-format");
+    const { unmount: unmount2 } = mount();
+    expect(
+      screen.getByRole("tab", { name: "Apple" }).getAttribute("aria-selected"),
+    ).toBe("true");
+    unmount2();
+
+    const getSpy = vi
+      .spyOn(Storage.prototype, "getItem")
+      .mockImplementation(() => {
+        throw new DOMException("QuotaExceededError");
+      });
+    const setSpy = vi
+      .spyOn(Storage.prototype, "setItem")
+      .mockImplementation(() => {
+        throw new DOMException("SecurityError");
+      });
+    mount();
+    expect(
+      screen.getByRole("tab", { name: "Apple" }).getAttribute("aria-selected"),
+    ).toBe("true");
+    const facebookTab = screen.getByRole("tab", { name: "Facebook" });
+    fireEvent.click(facebookTab);
+    expect(facebookTab.getAttribute("aria-selected")).toBe("true");
+    getSpy.mockRestore();
+    setSpy.mockRestore();
+  });
 });
