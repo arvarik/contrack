@@ -210,6 +210,30 @@ function primaryAddressText(addresses: unknown): string | null | undefined {
 }
 
 /**
+ * Keep `contact_addresses` in step when a caller writes the scalar `location`
+ * field without sending an `addresses` array. Clearing `location` removes any
+ * stored addresses; setting `location` updates the primary address row if the
+ * contact already has structured addresses.
+ */
+function syncLocationToAddresses(id: string, location: unknown): void {
+  const loc = typeof location === "string" ? location.trim() : "";
+  if (!loc) {
+    sqlite.prepare("DELETE FROM contact_addresses WHERE contactId = ?").run(id);
+  } else {
+    sqlite
+      .prepare(
+        `UPDATE OR REPLACE contact_addresses SET address = ?
+          WHERE id = (
+            SELECT id FROM contact_addresses
+            WHERE contactId = ?
+            ORDER BY isPrimary DESC, sortOrder ASC LIMIT 1
+          )`,
+      )
+      .run(loc, id);
+  }
+}
+
+/**
  * Map a contact body to the contacts-table insert values, for createContact and
  * bulkCreateContacts. A field not listed here never reaches the database.
  */
@@ -703,24 +727,7 @@ export const contactService = {
                 addresses: data.addresses,
               } as ChildRecordsPayload);
             } else if (data.location !== undefined) {
-              const loc =
-                typeof data.location === "string" ? data.location.trim() : "";
-              if (!loc) {
-                sqlite
-                  .prepare("DELETE FROM contact_addresses WHERE contactId = ?")
-                  .run(id);
-              } else {
-                sqlite
-                  .prepare(
-                    `UPDATE OR IGNORE contact_addresses SET address = ?
-                      WHERE id = (
-                        SELECT id FROM contact_addresses
-                        WHERE contactId = ?
-                        ORDER BY isPrimary DESC, sortOrder ASC LIMIT 1
-                      )`,
-                  )
-                  .run(loc, id);
-              }
+              syncLocationToAddresses(id, data.location);
             }
             const released = releaseMovedPin(scope, id, pinBefore);
             changedIds.push(id);
@@ -779,6 +786,9 @@ export const contactService = {
           } as ChildRecordsPayload);
         }
       }
+      if (!Array.isArray(body.addresses) && body.location !== undefined) {
+        syncLocationToAddresses(id, body.location);
+      }
 
       followUpTo(scope, [id], body.nextFollowUpAt);
       const released = releaseMovedPin(scope, id, pinBefore);
@@ -827,6 +837,9 @@ export const contactService = {
           ),
         )
         .run();
+      if (!Array.isArray(body.addresses) && body.location !== undefined) {
+        syncLocationToAddresses(id, body.location);
+      }
       followUpTo(scope, [id], body.nextFollowUpAt);
       const released = releaseMovedPin(scope, id, pinBefore);
       if (changed.length > 0) {

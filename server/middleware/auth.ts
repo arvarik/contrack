@@ -322,7 +322,8 @@ export function requireAuth(
   if (isAuthenticated(req)) return next();
   if (
     req.method === "GET" &&
-    req.originalUrl.startsWith("/api/connectors/google/callback")
+    trimTrailingSlashes(req.originalUrl.split("?")[0].toLowerCase()) ===
+      "/api/connectors/google/callback"
   ) {
     res.redirect(302, "/settings/connectors?error=expired");
     return;
@@ -529,15 +530,20 @@ const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
  * - `Origin` absent: `Sec-Fetch-Site` is `same-origin` or `none`, or absent. A
  *   client that sends neither header is not a browser.
  *
- * A browser never sends a bearer token on its own, so a token request passes.
- * So do the OAuth endpoints, which are outside `/api`.
+ * A browser never sends a bearer token or `X-Contrack-Session` on its own, so
+ * a token or header-authenticated request passes. So do the OAuth endpoints,
+ * which are outside `/api`.
  */
 export function refuseCrossSiteWrites(
   req: Request,
   _res: Response,
   next: NextFunction,
 ): void {
-  if (req.principal?.via !== "session" || !WRITE_METHODS.has(req.method)) {
+  if (
+    req.principal?.via !== "session" ||
+    !readCookie(req, COOKIE_NAME) ||
+    !WRITE_METHODS.has(req.method)
+  ) {
     return next();
   }
   const origin = req.headers.origin;

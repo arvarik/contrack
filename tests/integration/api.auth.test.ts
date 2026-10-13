@@ -537,6 +537,13 @@ describe("sessions", () => {
       .get("/api/contacts")
       .set("X-Contrack-Session", secret);
     expect(res.status).toBe(200);
+
+    const write = await request(app)
+      .patch("/api/auth/me")
+      .set("X-Contrack-Session", secret)
+      .set("Origin", "capacitor://localhost")
+      .send({ displayName: "Companion App" });
+    expect(write.status).toBe(200);
   });
 
   it("redirects unauthenticated GET /api/connectors/google/callback to /settings/connectors?error=expired", async () => {
