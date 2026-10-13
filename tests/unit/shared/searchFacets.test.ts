@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  facetFiltersSchema,
   matchesFacet,
   unknownFacetValue,
   type FacetContact,
@@ -348,7 +349,25 @@ describe("unknownFacetValue", () => {
     expect(unknownFacetValue({ field: "updated", value: "soon" })).toBe(
       "a time, such as >3m",
     );
+    expect(unknownFacetValue({ field: "added", value: "soon" })).toBe(
+      "a time, such as >3m",
+    );
+    expect(unknownFacetValue({ field: "added", value: "30d" })).toBeNull();
     // A text facet takes any text.
     expect(unknownFacetValue({ field: "company", value: "zz" })).toBeNull();
+  });
+});
+
+describe("facetFiltersSchema", () => {
+  it("normalizes leading > and < operators in raw filter values", () => {
+    expect(
+      facetFiltersSchema.parse([
+        { field: "score", value: ">80" },
+        { field: "added", value: "<30d" },
+      ]),
+    ).toEqual([
+      { field: "score", value: "80", operator: ">" },
+      { field: "added", value: "30d", operator: "<" },
+    ]);
   });
 });

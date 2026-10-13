@@ -89,7 +89,7 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
       }));
     }
 
-    if (field === "updated") {
+    if (field === "updated" || field === "added") {
       return UPDATED_PRESETS.filter(
         (p) =>
           !partial ||

@@ -5,6 +5,7 @@ import { sqlite } from "../db.ts";
 import type { Scope } from "../tenancy/scope.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
 import { dispatchEvents, recordEvent } from "../events/index.ts";
+import { aiCache } from "../utils/aiCache.ts";
 import type { ListMember } from "../../shared/contracts/lists.ts";
 
 interface ListRow {
@@ -94,6 +95,10 @@ export const listService = {
         `UPDATE lists SET ${setClauses.join(", ")} WHERE id = ? AND ownerId = ?`,
       )
       .run(...values);
+    if (data.name !== undefined) {
+      aiCache.invalidateForOwner("rerank", scope.ownerId);
+      aiCache.invalidateForOwner("synthesis", scope.ownerId);
+    }
 
     return sqlite
       .prepare(

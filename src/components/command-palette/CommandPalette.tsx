@@ -278,20 +278,30 @@ export const CommandPalette = () => {
   // only when a person picks a result (`handleSelectFtsContact`).
   useEffect(() => {
     const answered = semanticSearch.data?.query ?? "";
+    const fullAnswered = [...aiFilters.map(formatFacet), answered]
+      .filter(Boolean)
+      .join(" ");
     if (
       mode === "ai" &&
       semanticSearch.isSuccess &&
       aiResults.length > 0 &&
-      answered &&
-      answered !== lastRecordedAiRef.current
+      fullAnswered &&
+      fullAnswered !== lastRecordedAiRef.current
     ) {
-      lastRecordedAiRef.current = answered;
-      addEntry(`? ${answered}`, "ai");
+      lastRecordedAiRef.current = fullAnswered;
+      addEntry(`? ${fullAnswered}`, "ai", {
+        resultCount: aiTotal,
+        resultIds: aiResults.slice(0, 30).map((m) => m.id),
+        fallback: aiFallback,
+      });
     }
   }, [
     semanticSearch.isSuccess,
     semanticSearch.data?.query,
-    aiResults.length,
+    aiFilters,
+    aiResults,
+    aiTotal,
+    aiFallback,
     mode,
     addEntry,
   ]);
@@ -851,6 +861,9 @@ export const CommandPalette = () => {
   // for `?`, the links below it.
   const aiModeProps = {
     question: aiQuery,
+    fullQuestion: [...aiFilters.map(formatFacet), aiQuery]
+      .filter(Boolean)
+      .join(" "),
     pending: aiPending,
     loading: aiQuery.length >= 3 && isAiLoading && !aiPending,
     answered: semanticSearch.isSuccess,

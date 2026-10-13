@@ -50,7 +50,9 @@ const unquotePartial = (partial: string) =>
   partial.replace(/^"([^"]*)"?/, "$1");
 
 const sameValue = (a: FacetFilter, b: FacetFilter) =>
-  a.field === b.field && a.value === b.value;
+  a.field === b.field &&
+  a.value === b.value &&
+  (a.operator ?? "") === (b.operator ?? "");
 
 /** Split the input into pills, free text and the facet being typed. */
 export function parseQuery(
@@ -100,6 +102,7 @@ export function withoutFacet(input: string, filter: FacetFilter): string {
       const typedValue = typed?.value.toLowerCase();
       const same =
         typed?.field === filter.field &&
+        (typed?.operator ?? "") === (filter.operator ?? "") &&
         (typedValue === value || typedValue?.replace(/-/g, " ") === value);
       return same ? "" : full;
     },

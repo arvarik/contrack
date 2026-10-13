@@ -106,6 +106,9 @@ const stores = new Map<string, Map<string, CacheEntry>>();
  * it cannot be a keyed tier, but a flush of every tier must reach it.
  */
 const flushAllListeners = new Set<() => void>();
+const flushOwnerListeners = new Set<
+  (operation: string, ownerId: string) => void
+>();
 
 /** Per-tier hit/miss/eviction counters. */
 const stats = new Map<string, TierStats>();
@@ -303,11 +306,19 @@ export const aiCache = {
           `INVALIDATE [${TIER_CONFIGS[operation]?.label}] ${removed} entries matching "${keyPrefix}*" (${store.size} remaining)`,
         );
       }
+      if (keyPrefix.endsWith("::")) {
+        const ownerId = keyPrefix.slice(0, -2);
+        for (const listener of flushOwnerListeners)
+          listener(operation, ownerId);
+      }
     } else {
       // Full flush of this tier
       const count = store.size;
       store.clear();
       tierStats.entries = 0;
+      if (operation === "rerank") {
+        for (const listener of flushAllListeners) listener();
+      }
       if (count > 0) {
         log.info(
           "AICache",
@@ -324,6 +335,13 @@ export const aiCache = {
    */
   invalidateForOwner(operation: string, ownerId: string): void {
     aiCache.invalidate(operation, `${ownerId}::`);
+  },
+
+  /** Run `listener` whenever an owner's entries are invalidated in a tier. */
+  onInvalidateOwner(
+    listener: (operation: string, ownerId: string) => void,
+  ): void {
+    flushOwnerListeners.add(listener);
   },
 
   /** Run `listener` whenever every tier is flushed, after the tiers empty. */

@@ -126,6 +126,13 @@ describe("parseFacetQuery", () => {
       { field: "tag", value: "a" },
     ]);
   });
+
+  it("keeps distinct operators on the same field", () => {
+    expect(parseFacetQuery("score:>50 score:<50").filters).toEqual([
+      { field: "score", value: "50", operator: ">" },
+      { field: "score", value: "50", operator: "<" },
+    ]);
+  });
 });
 
 describe("formatFacetQuery", () => {

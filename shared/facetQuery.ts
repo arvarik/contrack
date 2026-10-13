@@ -98,7 +98,10 @@ export function parseFacetQuery(input: string): {
       if (filter) {
         if (
           !filters.some(
-            (f) => f.field === filter.field && f.value === filter.value,
+            (f) =>
+              f.field === filter.field &&
+              f.value === filter.value &&
+              (f.operator ?? "") === (filter.operator ?? ""),
           )
         ) {
           filters.push(filter);

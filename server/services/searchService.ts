@@ -430,12 +430,7 @@ function buildCompressedCandidates(
       (entry.passages?.length ?? 0) > 1
     )
       entry.passages!.pop();
-    for (const field of [
-      "about",
-      "preferences",
-      "headline",
-      "interests",
-    ] as const) {
+    for (const field of ["about", "preferences", "headline"] as const) {
       if (JSON.stringify(entry).length <= budget) break;
       delete entry[field];
     }
@@ -636,6 +631,7 @@ async function answerFromPlan(
 
   if (!candidates.length)
     return { path: "empty", result: { matches: [], fallback: false } };
+  const startRevision = searchRevision(scope);
   const pool = [
     ...hydrateCandidates(
       scope,
@@ -651,13 +647,16 @@ async function answerFromPlan(
   );
   signal.throwIfAborted();
   const inPool = new Set(pool.map((c) => c.id));
-  const fresh = hydrateCandidates(
-    scope,
-    verified
-      .filter((match) => inPool.has(match.contact_id))
-      .map((match) => match.contact_id),
-    PHASE1_LIMIT,
-  );
+  const fresh =
+    searchRevision(scope) === startRevision
+      ? new Map(pool.map((c) => [c.id, c]))
+      : hydrateCandidates(
+          scope,
+          verified
+            .filter((match) => inPool.has(match.contact_id))
+            .map((match) => match.contact_id),
+          PHASE1_LIMIT,
+        );
   return {
     path: "rerank",
     result: {
@@ -994,7 +993,7 @@ async function runSearch(
   // The model stage starts now, and the local list is built while the
   // planner's request is on the network. The list then costs the answer
   // nothing.
-  const coalesceKey = `${scope.ownerId}:search:${revision}:${notes}:${capability?.providerId ?? "none"}:${capability?.model ?? "none"}:${facetPart}:${normalizedQuery}`;
+  const coalesceKey = `${scope.ownerId}:search:${cacheKey}`;
 
   const answer = searchCoalescer.coalesce(
     coalesceKey,
@@ -1061,14 +1060,16 @@ async function runSearch(
   // reported as unhandled.
   answer.catch(() => {});
 
-  const first = await localList(await queryVector);
-  signal?.throwIfAborted();
-  emit?.({
-    phase: "instant",
-    matches: first.matches,
-    fallback: true,
-    latencyMs: elapsed(),
-  });
+  if (emit) {
+    const first = await localList(await queryVector);
+    signal?.throwIfAborted();
+    emit({
+      phase: "instant",
+      matches: first.matches,
+      fallback: true,
+      latencyMs: elapsed(),
+    });
+  }
   return answer;
 }
 
