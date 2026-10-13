@@ -417,6 +417,19 @@ test.describe("map", () => {
     await expect(page.getByText("Placed by hand")).toHaveCount(0);
     const after = await instance.api<PinFields>("GET", `/contacts/${id}`);
     expect(after).toMatchObject({ lat: null, lng: null, geoSource: null });
+
+    // Removing the last address clears `location` too, so it does not come back.
+    await page.getByRole("button", { name: /^Actions for Sydney/ }).click();
+    await page.getByRole("menuitem", { name: "Remove" }).click();
+    await expect(page.getByText("Not on the map yet")).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: /^Actions for Sydney/ }),
+    ).toHaveCount(0);
+    const cleared = await instance.api<{ location: string | null }>(
+      "GET",
+      `/contacts/${id}`,
+    );
+    expect(cleared.location).toBeNull();
   });
 
   test("loads a self-hosted style from this origin, with the CSP on", async ({

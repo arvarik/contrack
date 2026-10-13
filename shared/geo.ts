@@ -46,9 +46,10 @@ export interface MapContact {
   lists?: { id: string; name: string }[];
   geoSource?: GeoSource;
   /**
-   * The map's `updated:`, `missing:email` and `missing:phone` facets read
-   * these three.
+   * The map's `added:`, `updated:`, `missing:email` and `missing:phone` facets
+   * read these four.
    */
+  addedAt?: string | null;
   updatedAt?: string | null;
   emails?: { email: string }[];
   phones?: { phone: string }[];

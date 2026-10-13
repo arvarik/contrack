@@ -1,3 +1,4 @@
+import { isValidLatLng } from "../../../shared/geo.ts";
 import { log } from "../../utils/logger.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 import { nominatimBaseUrl } from "./switch.ts";
@@ -73,10 +74,15 @@ async function geocodeSingle(query: string): Promise<GeoOutcome> {
     }
     const hit = (await res.json())?.[0];
     if (!hit) return { status: "none" };
+    const lat = parseFloat(hit.lat);
+    const lng = parseFloat(hit.lon);
+    if (!isValidLatLng(lat, lng) || (lat === 0 && lng === 0)) {
+      return { status: "none" };
+    }
     return {
       status: "found",
-      lat: parseFloat(hit.lat),
-      lng: parseFloat(hit.lon),
+      lat,
+      lng,
       provider: "Nominatim",
       displayName: hit.display_name,
     };

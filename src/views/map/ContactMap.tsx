@@ -137,6 +137,8 @@ interface ContactMapProps {
   /** IDs of multi-selected contacts. */
   selectedIds?: Set<string>;
   onSelect: (id: string) => void;
+  /** Toggle one or more contacts in the multi-selection (`Shift+Click` / `Shift+Enter`). */
+  onToggleSelectIds?: (ids: string[]) => void;
   /** A click on the map itself, not on a pin or a card, and where it landed. */
   onMapClick?: (at: { longitude: number; latitude: number }) => void;
   /** False draws a still map: no pan, no zoom, no zoom buttons. */
@@ -176,6 +178,7 @@ export const ContactMap = ({
   selectedId = null,
   selectedIds,
   onSelect,
+  onToggleSelectIds,
   onMapClick,
   interactive = true,
   initialView,
@@ -385,10 +388,21 @@ export const ContactMap = ({
           const ids = leaves
             .map((l) => l.properties?.id)
             .filter((id): id is string => typeof id === "string");
-          const spots = new Set(leaves.map((l) => JSON.stringify(l.geometry)));
+          const firstCoords =
+            leaves[0]?.geometry?.type === "Point"
+              ? leaves[0].geometry.coordinates
+              : null;
+          const isStack =
+            firstCoords !== null &&
+            leaves.every(
+              (l) =>
+                l.geometry?.type === "Point" &&
+                l.geometry.coordinates[0] === firstCoords[0] &&
+                l.geometry.coordinates[1] === firstCoords[1],
+            );
           clusterLeavesCache.current.set(c.key, {
             ids,
-            stack: spots.size === 1,
+            stack: isStack,
           });
         } catch {
           // New data replaced the cluster, and the next read asks again.
@@ -408,6 +422,37 @@ export const ContactMap = ({
     (f: ClusterFeature): ClusterPeople | undefined =>
       f.ids ? { ids: f.ids, stack: true } : clusterLeaves.get(f.key),
     [clusterLeaves],
+  );
+  const toggleContact = useCallback(
+    (id: string) => onToggleSelectIds?.([id]),
+    [onToggleSelectIds],
+  );
+  const toggleCluster = useCallback(
+    async (cluster: ClusterFeature) => {
+      if (!onToggleSelectIds) return;
+      const known = peopleOf(cluster);
+      if (known?.ids.length) {
+        onToggleSelectIds(known.ids);
+        return;
+      }
+      if (cluster.clusterId === undefined) return;
+      const source = map?.getSource<GeoJSONSource>(CONTACTS_SOURCE_ID);
+      if (!source) return;
+      try {
+        const leaves = await source.getClusterLeaves(
+          cluster.clusterId,
+          Infinity,
+          0,
+        );
+        const ids = leaves
+          .map((l) => l.properties?.id)
+          .filter((id): id is string => typeof id === "string");
+        if (ids.length > 0) onToggleSelectIds(ids);
+      } catch {
+        // Cluster changed before leaves arrived.
+      }
+    },
+    [map, onToggleSelectIds, peopleOf],
   );
   const overdueIds = useMemo(
     () =>
@@ -738,6 +783,9 @@ export const ContactMap = ({
                     cluster={feature}
                     selectedCount={selectedInCluster}
                     onExpand={expandCluster}
+                    onToggleSelect={
+                      onToggleSelectIds ? toggleCluster : undefined
+                    }
                     onCard={hoverCard ? onCluster : undefined}
                     described={
                       card?.kind === "cluster" &&
@@ -768,6 +816,7 @@ export const ContactMap = ({
                     dimming && contact.id !== selectedId && !marked && !multi
                   }
                   onSelect={select}
+                  onToggleSelect={onToggleSelectIds ? toggleContact : undefined}
                   onCard={onPin}
                   described={
                     card?.kind === "contact" &&

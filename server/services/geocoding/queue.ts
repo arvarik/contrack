@@ -27,6 +27,7 @@ interface GeoTask {
 }
 
 const geocodeQueue: GeoTask[] = [];
+const latestKeyByContact = new Map<string, string>();
 let isGeocoding = false;
 let noAnswers = 0;
 
@@ -36,12 +37,22 @@ let noAnswers = 0;
  * nothing leaves the server, and nothing is queued. Log lines name the contact,
  * never the address.
  */
+export function cancelGeocode(contactId: string): void {
+  latestKeyByContact.delete(contactId);
+  for (let i = geocodeQueue.length - 1; i >= 0; i--) {
+    if (geocodeQueue[i].contactId === contactId) {
+      geocodeQueue.splice(i, 1);
+    }
+  }
+}
+
 export function queueGeocode(contactId: string, location: string): void {
   // Integration tests set this to keep background fetches off the network.
   if (process.env.DISABLE_BACKGROUND_JOBS === "true") return;
   if (!location?.trim()) return;
 
   const key = normalizeLocationKey(location);
+  cancelGeocode(contactId);
 
   const cached = getCachedGeocode(key);
   if (cached) {
@@ -60,6 +71,7 @@ export function queueGeocode(contactId: string, location: string): void {
 
   if (isGeocodingOff()) return;
 
+  latestKeyByContact.set(contactId, key);
   const existing = geocodeQueue.find((t) => t.normalizedKey === key);
   if (existing) {
     if (existing.contactId !== contactId) {
@@ -113,8 +125,11 @@ async function drainQueue(): Promise<void> {
     const result = await geocodeWithFallback(task.location);
 
     if (result.status === "error") {
-      // No answer is not "nothing found": cache nothing, and ask again later.
-      geocodeQueue.push(task);
+      // No answer is not "nothing found": cache nothing, and ask again later,
+      // unless a newer address was queued for this contact in the meantime.
+      if (latestKeyByContact.get(task.contactId) === task.normalizedKey) {
+        geocodeQueue.push(task);
+      }
       const wait = Math.min(RETRY_FIRST_MS * 2 ** noAnswers, RETRY_MAX_MS);
       noAnswers++;
       log.warn(
@@ -146,6 +161,9 @@ async function drainQueue(): Promise<void> {
         `[${result.provider}] Placed contact ${task.contactId}`,
       );
     } else {
+      if (latestKeyByContact.get(task.contactId) === task.normalizedKey) {
+        latestKeyByContact.delete(task.contactId);
+      }
       cacheGeocode(task.normalizedKey, null, null, "none", false);
       log.warn(
         "Geocode",
@@ -184,11 +202,17 @@ function applyCoordinates(
   lat: number,
   lng: number,
 ): void {
-  writeGeocoded(contactId, lat, lng);
+  if (latestKeyByContact.get(contactId) === normalizedKey) {
+    latestKeyByContact.delete(contactId);
+    writeGeocoded(contactId, lat, lng);
+  }
 
   const dupes = geocodeQueue.filter((t) => t.normalizedKey === normalizedKey);
   for (const dupe of dupes) {
-    writeGeocoded(dupe.contactId, lat, lng);
+    if (latestKeyByContact.get(dupe.contactId) === normalizedKey) {
+      latestKeyByContact.delete(dupe.contactId);
+      writeGeocoded(dupe.contactId, lat, lng);
+    }
   }
   const remaining = geocodeQueue.filter(
     (t) => t.normalizedKey !== normalizedKey,

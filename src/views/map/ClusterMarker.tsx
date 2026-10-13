@@ -21,6 +21,7 @@ interface ClusterMarkerProps {
   cluster: ClusterFeature;
   selectedCount?: number;
   onExpand: (cluster: ClusterFeature) => void;
+  onToggleSelect?: (cluster: ClusterFeature) => void;
   onCard?: (cluster: ClusterFeature, event: PinEvent) => void;
   /** The preview is open, and describes the cluster. */
   described?: boolean;
@@ -38,6 +39,7 @@ export const ClusterMarker = memo(function ClusterMarker({
   cluster,
   selectedCount = 0,
   onExpand,
+  onToggleSelect,
   onCard,
   described = false,
   stacked = false,
@@ -68,7 +70,19 @@ export const ClusterMarker = memo(function ClusterMarker({
         data-cluster-key={cluster.key}
         data-halo={halo || undefined}
         data-dimmed={dimmed || undefined}
-        onClick={() => onExpand(cluster)}
+        onClick={(event) => {
+          if (event.shiftKey && onToggleSelect) {
+            onToggleSelect(cluster);
+            return;
+          }
+          onExpand(cluster);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && event.shiftKey && onToggleSelect) {
+            event.preventDefault();
+            onToggleSelect(cluster);
+          }
+        }}
         onPointerEnter={(event) => {
           if (event.pointerType !== "touch") onCard?.(cluster, "enter");
         }}

@@ -3,7 +3,7 @@ import { log } from "../../utils/logger.ts";
 import type { NotOnMapContact } from "../../../shared/contracts/geo.ts";
 import type { Scope } from "../../tenancy/scope.ts";
 import { isRecentFailure, normalizeLocationKey } from "./cache.ts";
-import { queueGeocode } from "./queue.ts";
+import { cancelGeocode, queueGeocode } from "./queue.ts";
 import { isGeocodingOff } from "./switch.ts";
 
 /** A contact's first address with text, in the order its page lists them. */
@@ -181,4 +181,4 @@ export function pruneGeocodeCache(): number {
   return stale.length;
 }
 
-export { queueGeocode };
+export { cancelGeocode, queueGeocode };

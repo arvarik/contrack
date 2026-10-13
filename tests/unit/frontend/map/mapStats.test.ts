@@ -185,4 +185,27 @@ describe("computeMapStats", () => {
       formatter.mockRestore();
     }
   });
+
+  it("merges top industries, companies, and tags case-insensitively while keeping the first display label", () => {
+    const contacts: MapContact[] = [
+      {
+        ...baseContact,
+        id: "1",
+        industry: "Fintech",
+        company: "Acme Corp",
+        tags: ["Design"],
+      },
+      {
+        ...baseContact,
+        id: "2",
+        industry: "fintech",
+        company: "acme corp",
+        tags: ["design"],
+      },
+    ];
+    const stats = computeMapStats(contacts);
+    expect(stats.topIndustries).toEqual([{ name: "Fintech", count: 2 }]);
+    expect(stats.topCompanies).toEqual([{ name: "Acme Corp", count: 2 }]);
+    expect(stats.topTags).toEqual([{ name: "Design", count: 2 }]);
+  });
 });

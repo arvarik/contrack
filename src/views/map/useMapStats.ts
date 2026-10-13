@@ -33,9 +33,10 @@ export function useMapStats({
   );
   const read = useCallback((): UseMapStatsResult => {
     const bounds = visible();
+    const inViewContacts = getInViewContacts(contacts, bounds);
     return {
-      stats: computeMapStats(contacts, bounds),
-      inViewContacts: getInViewContacts(contacts, bounds),
+      stats: computeMapStats(contacts, bounds, new Date(), inViewContacts),
+      inViewContacts,
     };
   }, [contacts, visible]);
   const [result, setResult] = useState<UseMapStatsResult>(read);

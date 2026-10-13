@@ -68,9 +68,40 @@ function offsetLabel(zone: string, now: Date, labels: Map<string, string>) {
   return label;
 }
 
-function topFive(counts: Map<string, number>): TopBucket[] {
-  return Array.from(counts.entries())
-    .map(([name, count]) => ({ name, count }))
+const tzGridCache = new Map<string, string | null>();
+
+function lookupTimeZone(lat: number, lng: number): string | null {
+  const key = `${Math.round(lat * 100)},${Math.round(lng * 100)}`;
+  const cached = tzGridCache.get(key);
+  if (cached !== undefined) return cached;
+  try {
+    const tz = tzlookup(lat, lng) || null;
+    tzGridCache.set(key, tz);
+    return tz;
+  } catch {
+    // Ignore tz-lookup errors for ocean/boundary points
+    tzGridCache.set(key, null);
+    return null;
+  }
+}
+
+function addBucket(
+  buckets: Map<string, TopBucket>,
+  raw: string | null | undefined,
+): void {
+  const name = raw?.trim();
+  if (!name) return;
+  const key = name.toLowerCase();
+  const existing = buckets.get(key);
+  if (existing) {
+    existing.count++;
+  } else {
+    buckets.set(key, { name, count: 1 });
+  }
+}
+
+function topFive(buckets: Map<string, TopBucket>): TopBucket[] {
+  return Array.from(buckets.values())
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
     .slice(0, 5);
 }
@@ -95,10 +126,12 @@ export function computeMapStats(
   contacts: readonly MapContact[],
   bounds?: MapBounds | null,
   now: Date = new Date(),
+  precomputedInView?: readonly MapContact[],
 ): MapStats {
   const matching = contacts.length;
 
-  const inViewContacts = getInViewContacts(contacts, bounds);
+  const inViewContacts =
+    precomputedInView ?? getInViewContacts(contacts, bounds);
   const inView = inViewContacts.length;
   if (inView === 0) {
     return {
@@ -114,9 +147,9 @@ export function computeMapStats(
 
   let overdue = 0;
 
-  const industryCounts = new Map<string, number>();
-  const companyCounts = new Map<string, number>();
-  const tagCounts = new Map<string, number>();
+  const industryCounts = new Map<string, TopBucket>();
+  const companyCounts = new Map<string, TopBucket>();
+  const tagCounts = new Map<string, TopBucket>();
   const tzBuckets = new Map<
     string,
     { count: number; offsetMinutes: number; label: string }
@@ -128,45 +161,30 @@ export function computeMapStats(
     // set to "Tomorrow" is overdue by 6 PM in Los Angeles.
     if (isPastDay(c.nextFollowUpAt, now)) overdue++;
 
-    if (c.industry && c.industry.trim()) {
-      const ind = c.industry.trim();
-      industryCounts.set(ind, (industryCounts.get(ind) ?? 0) + 1);
-    }
-
-    if (c.company && c.company.trim()) {
-      const comp = c.company.trim();
-      companyCounts.set(comp, (companyCounts.get(comp) ?? 0) + 1);
-    }
+    addBucket(industryCounts, c.industry);
+    addBucket(companyCounts, c.company);
 
     if (c.tags && Array.isArray(c.tags)) {
       for (const tag of c.tags) {
-        const t = (
-          typeof tag === "string" ? tag : (tag as { tag: string }).tag
-        )?.trim();
-        if (t) {
-          tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
-        }
+        const t = typeof tag === "string" ? tag : (tag as { tag: string }).tag;
+        addBucket(tagCounts, t);
       }
     }
 
     if (isValidLatLng(c.lat, c.lng)) {
-      try {
-        const tz = tzlookup(c.lat as number, c.lng as number);
-        if (tz) {
-          const tzPart = offsetLabel(tz, now, offsetLabels);
-          const current = tzBuckets.get(tzPart);
-          if (current) {
-            current.count++;
-          } else {
-            tzBuckets.set(tzPart, {
-              count: 1,
-              offsetMinutes: parseOffsetMinutes(tzPart),
-              label: tzPart,
-            });
-          }
+      const tz = lookupTimeZone(c.lat as number, c.lng as number);
+      if (tz) {
+        const tzPart = offsetLabel(tz, now, offsetLabels);
+        const current = tzBuckets.get(tzPart);
+        if (current) {
+          current.count++;
+        } else {
+          tzBuckets.set(tzPart, {
+            count: 1,
+            offsetMinutes: parseOffsetMinutes(tzPart),
+            label: tzPart,
+          });
         }
-      } catch {
-        // Ignore tz-lookup errors for ocean/boundary points
       }
     }
   }

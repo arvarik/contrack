@@ -7,7 +7,7 @@
  * The map is {@link ContactMap} with no contacts, and the pin is this
  * dialog's own draggable marker, because clustered pins cannot be dragged.
  */
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Marker, type MarkerDragEvent } from "@vis.gl/react-maplibre";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { Loader2 } from "lucide-react";
@@ -61,7 +61,7 @@ function nudgeFor(
 const noSelect = () => {};
 
 interface AdjustPinModalProps {
-  contact: MiniMapContact;
+  contact: MiniMapContact & { addresses?: { address: string }[] };
   /** True when the contact has address text. Left out, the dialog reads it. */
   hasAddress?: boolean;
   isOpen: boolean;
@@ -74,19 +74,28 @@ export const AdjustPinModal = ({
   isOpen,
   onClose,
 }: AdjustPinModalProps) => {
+  const placed = isValidLatLng(contact.lat, contact.lng);
+  const inlineAddress = contact.addresses?.[0]?.address;
   // The map's rows carry no address rows, so the contact itself is read.
   const { data: detail } = useContact(
-    known === undefined ? contact.id : undefined,
+    known === undefined || (!placed && !inlineAddress && !contact.location)
+      ? contact.id
+      : undefined,
   );
   const hasAddress =
     known ??
     [detail?.location, ...(detail?.addresses ?? []).map((a) => a.address)].some(
       (text) => text?.trim(),
     );
-  const placed = isValidLatLng(contact.lat, contact.lng);
   const start: PinPosition | null = placed
     ? { latitude: contact.lat as number, longitude: contact.lng as number }
     : null;
+  const defaultPlace = placed
+    ? ""
+    : (detail?.addresses?.[0]?.address ??
+      inlineAddress ??
+      contact.location ??
+      "");
 
   // The pin being placed. Nothing is written until Save.
   const [pin, setPin] = useState<PinPosition | null>(start);
@@ -94,15 +103,27 @@ export const AdjustPinModal = ({
   const hintId = useId();
   const save = useSetContactLocation();
   // With no pin, the search starts from the address the geocoder could not place.
-  const [place, setPlace] = useState(placed ? "" : (contact.location ?? ""));
+  const [place, setPlace] = useState(defaultPlace);
+  const placeEdited = useRef(false);
   const [finding, setFinding] = useState(false);
   const [findError, setFindError] = useState<string | null>(null);
 
   // A reopened dialog starts from the saved pin, not a canceled drag.
   useEffect(() => {
-    if (isOpen) setPin(start);
+    if (isOpen) {
+      setPin(start);
+      placeEdited.current = false;
+      setPlace(defaultPlace);
+      setFindError(null);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, contact.lat, contact.lng]);
+  }, [isOpen, contact.id, contact.lat, contact.lng]);
+
+  useEffect(() => {
+    if (isOpen && !placeEdited.current && defaultPlace) {
+      setPlace(defaultPlace);
+    }
+  }, [isOpen, defaultPlace]);
 
   const moved =
     pin !== null &&
@@ -210,6 +231,7 @@ export const AdjustPinModal = ({
             type="search"
             value={place}
             onChange={(event) => {
+              placeEdited.current = true;
               setPlace(event.target.value);
               setFindError(null);
             }}

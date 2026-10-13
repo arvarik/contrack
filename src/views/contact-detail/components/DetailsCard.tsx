@@ -15,6 +15,7 @@ import { cn } from "../../../lib/utils";
 import type { ResearchAnchor } from "../../../lib/research";
 import { formatDue } from "../../../lib/datetime";
 import { toLocalDay } from "../../../../shared/pulse";
+import { isValidLatLng } from "../../../../shared/geo";
 import { useHiddenPendingIds } from "../../../lib/pendingDeletes";
 import {
   useContactActionItems,
@@ -97,7 +98,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
         ? [{ id: "legacy-init", value: contact.location, label: "home" }]
         : [];
   const mapLink = useMapLink(contactId);
-  const isPlaced = contact.lat !== null && contact.lng !== null;
+  const isPlaced = isValidLatLng(contact.lat, contact.lng);
 
   // Preferences are one string on the contact, so a chip is one part of it.
   // Its id comes from its text: the same preference keeps the same chip.
@@ -164,6 +165,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
             updateContact({
               id: contactId,
               data: {
+                location: updated[0]?.value ?? null,
                 addresses: updated.map((a, i) => ({
                   address: a.value,
                   label: a.label || "home",

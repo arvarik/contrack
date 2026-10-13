@@ -46,10 +46,15 @@ export function useMapFilter(contacts: MapContact[]) {
   const [overdueOnly, setOverdueOnly] = useState(false);
   // The `q` the input and the URL last agreed on, so neither echoes the other.
   const syncedQ = useRef(urlQ);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // A link, a saved view, or Back and Forward sets the input.
   useEffect(() => {
     if (urlQ === syncedQ.current) return;
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
     syncedQ.current = urlQ;
     setRawInput(asTyped(urlQ));
   }, [urlQ]);
@@ -58,7 +63,8 @@ export function useMapFilter(contacts: MapContact[]) {
   useEffect(() => {
     const q = rawInput.trim();
     if (q === syncedQ.current) return;
-    const timer = setTimeout(() => {
+    timerRef.current = setTimeout(() => {
+      timerRef.current = null;
       syncedQ.current = q;
       setSearchParams(
         (prev) => {
@@ -71,8 +77,23 @@ export function useMapFilter(contacts: MapContact[]) {
         { replace: true },
       );
     }, 200);
-    return () => clearTimeout(timer);
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
   }, [rawInput, setSearchParams]);
+
+  const setQuery = useCallback((next: string) => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    const trimmed = next.trim();
+    syncedQ.current = trimmed;
+    setRawInput(asTyped(trimmed));
+  }, []);
 
   const parsed = useMemo(() => parseQuery(rawInput), [rawInput]);
 
@@ -168,13 +189,23 @@ export function useMapFilter(contacts: MapContact[]) {
 
   const clearFilters = useCallback(() => {
     setOverdueOnly(false);
-    setRawInput("");
-    clearPeople();
-  }, [clearPeople]);
+    setQuery("");
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("q");
+        next.delete("view");
+        next.delete("people");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [setQuery, setSearchParams]);
 
   return {
     rawInput,
     setRawInput,
+    setQuery,
     parsed,
     effectiveFilters,
     filteredContacts,

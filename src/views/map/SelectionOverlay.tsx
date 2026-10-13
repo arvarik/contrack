@@ -3,7 +3,7 @@
  * stops pointer events while drawing so the map does not pan, and touch
  * never draws. The SVG is aria-hidden: the page announces the selection.
  */
-import React, { useEffect, useState, useRef } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import type { Point } from "./mapMath";
 
@@ -37,18 +37,45 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
   const [isDrawingLasso, setIsDrawingLasso] = useState(false);
   const [lassoPoints, setLassoPoints] = useState<[number, number][]>([]);
 
+  const boxStartRef = useRef<{ x: number; y: number } | null>(null);
+  const boxCurrentRef = useRef<{ x: number; y: number } | null>(null);
+  const lassoPointsRef = useRef<[number, number][]>([]);
+  const onSelectBoxRef = useRef(onSelectBox);
+  onSelectBoxRef.current = onSelectBox;
+  const onSelectLassoRef = useRef(onSelectLasso);
+  onSelectLassoRef.current = onSelectLasso;
+  const onExitLassoModeRef = useRef(onExitLassoMode);
+  onExitLassoModeRef.current = onExitLassoMode;
+
   const isLassoModeRef = useRef(isLassoMode);
   isLassoModeRef.current = isLassoMode;
 
+  const resetDrawing = useCallback(() => {
+    boxStartRef.current = null;
+    boxCurrentRef.current = null;
+    lassoPointsRef.current = [];
+    setIsDrawingBox(false);
+    setBoxStart(null);
+    setBoxCurrent(null);
+    setIsDrawingLasso(false);
+    setLassoPoints([]);
+  }, []);
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isLassoModeRef.current) {
-        onExitLassoMode();
+      if (e.key === "Escape" && !e.defaultPrevented) {
+        const drawing =
+          boxStartRef.current !== null || lassoPointsRef.current.length > 0;
+        if (drawing || isLassoModeRef.current) {
+          e.preventDefault();
+          if (drawing) resetDrawing();
+          if (isLassoModeRef.current) onExitLassoModeRef.current();
+        }
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onExitLassoMode]);
+  }, [resetDrawing]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -80,12 +107,17 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
       e.stopPropagation();
 
       if (isLasso) {
+        const initial: [number, number][] = [[x, y]];
+        lassoPointsRef.current = initial;
         setIsDrawingLasso(true);
-        setLassoPoints([[x, y]]);
+        setLassoPoints(initial);
       } else {
+        const pt = { x, y };
+        boxStartRef.current = pt;
+        boxCurrentRef.current = pt;
         setIsDrawingBox(true);
-        setBoxStart({ x, y });
-        setBoxCurrent({ x, y });
+        setBoxStart(pt);
+        setBoxCurrent(pt);
       }
     };
 
@@ -111,9 +143,17 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
       const y = Math.max(0, Math.min(rect.height, e.clientY - rect.top));
 
       if (isDrawingBox) {
-        setBoxCurrent({ x, y });
+        const pt = { x, y };
+        boxCurrentRef.current = pt;
+        setBoxCurrent(pt);
       } else if (isDrawingLasso) {
-        setLassoPoints((prev) => [...prev, [x, y]]);
+        const pts = lassoPointsRef.current;
+        const last = pts[pts.length - 1];
+        if (!last || Math.hypot(x - last[0], y - last[1]) >= 4) {
+          const next: [number, number][] = [...pts, [x, y]];
+          lassoPointsRef.current = next;
+          setLassoPoints(next);
+        }
       }
     };
 
@@ -121,60 +161,57 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
       e.preventDefault();
       e.stopPropagation();
 
-      if (isDrawingBox && boxStart && boxCurrent) {
-        const minX = Math.min(boxStart.x, boxCurrent.x);
-        const maxX = Math.max(boxStart.x, boxCurrent.x);
-        const minY = Math.min(boxStart.y, boxCurrent.y);
-        const maxY = Math.max(boxStart.y, boxCurrent.y);
+      const start = boxStartRef.current;
+      const current = boxCurrentRef.current;
+      const points = lassoPointsRef.current;
+
+      if (isDrawingBox && start && current) {
+        const minX = Math.min(start.x, current.x);
+        const maxX = Math.max(start.x, current.x);
+        const minY = Math.min(start.y, current.y);
+        const maxY = Math.max(start.y, current.y);
 
         // A drag of 4 px or less either way selects nothing.
         if (maxX - minX > 4 && maxY - minY > 4) {
           const nw = map.unproject([minX, minY]);
           const se = map.unproject([maxX, maxY]);
-          const west = Math.min(nw.lng, se.lng);
-          const east = Math.max(nw.lng, se.lng);
+          const west = nw.lng;
+          const east = se.lng;
           const south = Math.min(nw.lat, se.lat);
           const north = Math.max(nw.lat, se.lat);
 
-          onSelectBox([west, south, east, north]);
+          onSelectBoxRef.current([west, south, east, north]);
         }
-      } else if (isDrawingLasso && lassoPoints.length >= 3) {
-        const geoRing: Point[] = lassoPoints.map(([px, py]) => {
+      } else if (isDrawingLasso && points.length >= 3) {
+        const geoRing: Point[] = points.map(([px, py]) => {
           const coord = map.unproject([px, py]);
           return { lng: coord.lng, lat: coord.lat };
         });
-        onSelectLasso(geoRing);
-        onExitLassoMode();
+        onSelectLassoRef.current(geoRing);
+        onExitLassoModeRef.current();
       }
 
-      setIsDrawingBox(false);
-      setBoxStart(null);
-      setBoxCurrent(null);
-      setIsDrawingLasso(false);
-      setLassoPoints([]);
+      resetDrawing();
+    };
+
+    const onCancel = () => {
+      resetDrawing();
     };
 
     window.addEventListener("pointermove", onPointerMove, { capture: true });
     window.addEventListener("pointerup", onPointerUp, { capture: true });
+    window.addEventListener("pointercancel", onCancel, { capture: true });
+    window.addEventListener("blur", onCancel);
 
     return () => {
       window.removeEventListener("pointermove", onPointerMove, {
         capture: true,
       });
       window.removeEventListener("pointerup", onPointerUp, { capture: true });
+      window.removeEventListener("pointercancel", onCancel, { capture: true });
+      window.removeEventListener("blur", onCancel);
     };
-  }, [
-    isDrawingBox,
-    isDrawingLasso,
-    boxStart,
-    boxCurrent,
-    lassoPoints,
-    map,
-    containerRef,
-    onSelectBox,
-    onSelectLasso,
-    onExitLassoMode,
-  ]);
+  }, [isDrawingBox, isDrawingLasso, map, containerRef, resetDrawing]);
 
   const boxRect =
     isDrawingBox && boxStart && boxCurrent

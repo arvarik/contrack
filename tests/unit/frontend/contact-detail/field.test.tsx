@@ -309,6 +309,7 @@ describe("DetailsCard", () => {
     expect(mutate).toHaveBeenCalledWith({
       id: "c1",
       data: {
+        location: "2 High St, Leeds, UK",
         addresses: [
           { address: "2 High St, Leeds, UK", label: "work", isPrimary: true },
           { address: "1 Main St, London, UK", label: "home", isPrimary: false },
