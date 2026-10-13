@@ -4,6 +4,8 @@ import { zoneQuery } from "./dashboard";
 import { actionItemRoutes } from "../../shared/contracts/actionItems";
 import type { BodyOf } from "../../shared/contracts/route";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { errorText } from "../lib/utils";
 import { type ActionItem } from "../types";
 
 export const useCompletedActionItems = () => {
@@ -55,6 +57,9 @@ export const useUpdateActionItem = () => {
       apiJson(actionItemRoutes.update, `/action-items/${id}`, jsonBody(data)),
     // A trigger keeps the contact's next follow-up date in step.
     onSuccess: (item) => void refreshContact(queryClient, item.contactId),
+    onError: (err: unknown) => {
+      toast.error(`Could not update follow-up: ${errorText(err)}`);
+    },
   });
 };
 

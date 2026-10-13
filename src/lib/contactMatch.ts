@@ -80,3 +80,58 @@ export function scoreContactMatch(
 
   return score;
 }
+
+/**
+ * When a search matches a contact only through a field the row does not
+ * already show (tag, location, industry, email or phone), returns a short
+ * reason string so the person sees why the row matched.
+ */
+export function getContactMatchReason(
+  contact: MatchableContact,
+  rawQuery: string,
+): string | null {
+  const q = rawQuery.toLowerCase().trim();
+  if (!q) return null;
+
+  // Name, company and role are already visible on the row.
+  if (contact.name.toLowerCase().includes(q)) return null;
+  if (contact.company && contact.company.toLowerCase().includes(q)) return null;
+  if (contact.role && contact.role.toLowerCase().includes(q)) return null;
+
+  if (contact.tags) {
+    for (const item of contact.tags) {
+      const tag = typeof item === "string" ? item : item.tag;
+      if (tag.toLowerCase().includes(q)) return `#${tag}`;
+    }
+  }
+
+  if (contact.location && contact.location.toLowerCase().includes(q)) {
+    return contact.location;
+  }
+
+  if (contact.industry && contact.industry.toLowerCase().includes(q)) {
+    return contact.industry;
+  }
+
+  if (contact.emails) {
+    for (const e of contact.emails) {
+      if (e.email.toLowerCase().includes(q)) return e.email;
+    }
+  }
+
+  const cleanPhoneQuery = normalizePhone(q);
+  if (cleanPhoneQuery && contact.phones) {
+    for (const p of contact.phones) {
+      const normalized = normalizePhone(p.phone);
+      if (
+        normalized.length > 0 &&
+        (normalized.includes(cleanPhoneQuery) ||
+          cleanPhoneQuery.includes(normalized))
+      ) {
+        return p.phone;
+      }
+    }
+  }
+
+  return null;
+}

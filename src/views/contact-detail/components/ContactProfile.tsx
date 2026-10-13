@@ -109,10 +109,34 @@ const ROOT =
  */
 const DROP_ACCEPT = {
   "message/rfc822": [".eml"],
-  "image/*": [".png", ".jpg", ".jpeg", ".gif"],
+  "image/*": [".png", ".jpg", ".jpeg", ".gif", ".webp"],
   "application/pdf": [".pdf"],
   "text/*": [".txt", ".csv", ".md"],
 };
+
+const EXT_BY_MIME: Record<string, string> = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/gif": ".gif",
+  "image/webp": ".webp",
+  "application/pdf": ".pdf",
+  "text/plain": ".txt",
+  "text/markdown": ".md",
+  "text/csv": ".csv",
+  "message/rfc822": ".eml",
+};
+
+/** Ensure a pasted screenshot or clipboard file has an extension for upload. */
+function normalizeAttachmentFile(file: globalThis.File): globalThis.File {
+  if (/\.[a-z0-9]+$/i.test(file.name)) return file;
+  const ext =
+    EXT_BY_MIME[file.type] ?? (file.type.startsWith("image/") ? ".png" : "");
+  if (!ext) return file;
+  return new File([file], `${file.name || "pasted-image"}${ext}`, {
+    type: file.type,
+    lastModified: file.lastModified,
+  });
+}
 
 /** The pane width, in px, from which Details is a column and not a tab. */
 const WIDE_CONTACT_MIN_PX = 768;
@@ -232,10 +256,14 @@ export const ContactProfile = ({
 
   // With AI off, the server saves an .eml with no summary, like any file.
   const aiAllowed = useAiAllowed();
+  const seenFilesRef = useRef(new WeakSet<globalThis.File>());
   const onDrop = useCallback(
     (acceptedFiles: globalThis.File[]) => {
       if (acceptedFiles.length > 0 && id) {
-        acceptedFiles.forEach((file) => {
+        acceptedFiles.forEach((rawFile) => {
+          if (seenFilesRef.current.has(rawFile)) return;
+          seenFilesRef.current.add(rawFile);
+          const file = normalizeAttachmentFile(rawFile);
           const isEml = file.name.toLowerCase().endsWith(".eml");
           const toastId = toast.loading(
             isEml && aiAllowed
@@ -487,7 +515,7 @@ export const ContactProfile = ({
                     contact={contact}
                     contactId={id}
                     onUpdate={handleUpdate}
-                    updateContact={updateContact}
+                    updateContact={saveContact}
                     detailRequest={detailRequest}
                     onDetailRequestDone={spendDetailRequest}
                   />
@@ -519,6 +547,7 @@ export const ContactProfile = ({
                       getRootProps={getRootProps}
                       getInputProps={getInputProps}
                       onAttach={chooseFiles}
+                      onAttachFiles={onDrop}
                       deleteInteraction={deleteInteraction}
                       updateInteraction={updateInteraction}
                       promoteGhost={promoteGhost}

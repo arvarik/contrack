@@ -262,7 +262,7 @@ interface TimelineEntryProps {
   arrived: boolean;
   onOpen: (item: Interaction, editing: boolean) => void;
   onAskDelete: (item: Interaction) => void;
-  promoteGhost: PromoteGhost;
+  promoteGhost?: PromoteGhost;
   /** A follow-up marked done in its undo window reads as done here too. */
   pending: ReadonlySet<string>;
 }
@@ -274,7 +274,6 @@ const TimelineEntry = React.memo(
     arrived,
     onOpen,
     onAskDelete,
-    promoteGhost,
     pending,
   }: TimelineEntryProps) => {
     const navigate = useNavigate();
@@ -422,16 +421,10 @@ const TimelineEntry = React.memo(
                 </span>
                 {mentions.map((mention, idx) =>
                   mention.isGhost ? (
-                    <button
-                      type="button"
+                    <Link
                       key={idx}
-                      onClick={() =>
-                        promoteGhost(mention.contactId, {
-                          onSuccess: () =>
-                            navigate(`/contact/${mention.contactId}`),
-                        })
-                      }
-                      title={`Add ${mention.name} to Network`}
+                      to={`/contact/${mention.contactId}`}
+                      title={`View ${mention.name} (Ghost contact)`}
                       className="hit-area state-layer flex items-center gap-2 px-2.5 py-1 rounded-md bg-surface-container-low border border-dashed border-primary transition-colors group/ghost"
                     >
                       <div className="w-5 h-5 rounded-full bg-surface-container-highest flex items-center justify-center text-[11px] font-bold text-on-surface-variant opacity-70 group-hover/ghost:opacity-100 transition-opacity">
@@ -440,7 +433,7 @@ const TimelineEntry = React.memo(
                       <div className="text-xs font-semibold text-on-surface-variant group-hover/ghost:text-on-surface text-left leading-tight pr-1 opacity-80 group-hover/ghost:opacity-100 transition-opacity">
                         {mention.name}
                       </div>
-                    </button>
+                    </Link>
                   ) : (
                     <Link
                       key={idx}

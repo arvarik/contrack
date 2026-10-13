@@ -42,7 +42,10 @@ interface DetailsCardProps {
   contact: Contact;
   contactId: string;
   onUpdate: (field: string, val: string) => void;
-  updateContact: (args: { id: string; data: ContactUpdateData }) => void;
+  updateContact: (args: {
+    id: string;
+    data: ContactUpdateData;
+  }) => void | Promise<unknown>;
   /**
    * A detail the Research card asked for: "city" or "workEmail" opens that
    * field's add form. `onDetailRequestDone` spends the request.
@@ -153,135 +156,144 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
   };
 
   return (
-    <div className={cn(CARD, "space-y-5")}>
+    <div className={CARD}>
       {/* h2: the first section under the contact's name, which is the h1. */}
       <h2 className={cn(SECTION_HEADING, "pb-2 mb-4")}>Details</h2>
 
-      {/* The list fields draw their own "+ Add", so Field gets no `onAdd`. */}
-      <Field label="Location">
-        <MultiValueField
-          items={addressItems}
-          onSave={(updated) =>
-            updateContact({
-              id: contactId,
-              data: {
-                location: updated[0]?.value ?? null,
-                addresses: updated.map((a, i) => ({
-                  address: a.value,
-                  label: a.label || "home",
-                  isPrimary: i === 0,
-                })),
-              },
-            })
-          }
-          labelOptions={ADDR_LABELS}
-          noun="address"
-          addLabel="Add location"
-          inputPlaceholder="San Francisco, CA"
-          openRequest={requestFor("city")}
-          openLabel="work"
-          onOpenRequestDone={onDetailRequestDone}
-          isAddress
-          mapLink={isPlaced ? mapLink : undefined}
-          afterRows={
-            <LocationMiniMap
-              contact={contact}
-              hasAddress={addressItems.length > 0}
-            />
-          }
-        />
-      </Field>
+      <div className="divide-y divide-surface-container/60 [&>*]:py-3.5 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">
+        {/* The list fields draw their own "+ Add", so Field gets no `onAdd`. */}
+        <Field label="Location">
+          <MultiValueField
+            items={addressItems}
+            onSave={(updated) =>
+              updateContact({
+                id: contactId,
+                data: {
+                  location: updated[0]?.value ?? null,
+                  addresses: updated.map((a, i) => ({
+                    address: a.value,
+                    label: a.label || "home",
+                    isPrimary: i === 0,
+                  })),
+                },
+              })
+            }
+            labelOptions={ADDR_LABELS}
+            noun="address"
+            addLabel="Add location"
+            inputPlaceholder="San Francisco, CA"
+            openRequest={requestFor("city")}
+            openLabel="work"
+            onOpenRequestDone={onDetailRequestDone}
+            isAddress
+            mapLink={isPlaced ? mapLink : undefined}
+            afterRows={
+              <LocationMiniMap
+                contact={contact}
+                hasAddress={addressItems.length > 0}
+              />
+            }
+          />
+        </Field>
 
-      <Field label="Email">
-        <MultiValueField
-          items={(contact.emails ?? []).map((e) => ({
-            id: e.id,
-            value: e.email,
-            label: e.label || "personal",
-          }))}
-          onSave={(updated) =>
-            updateContact({
-              id: contactId,
-              data: {
-                emails: updated.map((e, i) => ({
-                  email: e.value,
-                  label: e.label,
-                  isPrimary: i === 0,
-                })),
-              },
-            })
-          }
-          labelOptions={EMAIL_LABELS}
-          noun="email"
-          kind="email"
-          addLabel="Add email"
-          inputPlaceholder="email@example.com"
-          openRequest={requestFor("workEmail")}
-          openLabel="work"
-          onOpenRequestDone={onDetailRequestDone}
-        />
-      </Field>
+        <Field label="Email">
+          <MultiValueField
+            items={(contact.emails ?? []).map((e) => ({
+              id: e.id,
+              value: e.email,
+              label: e.label || "personal",
+            }))}
+            onSave={(updated) =>
+              updateContact({
+                id: contactId,
+                data: {
+                  emails: updated.map((e, i) => ({
+                    email: e.value,
+                    label: e.label,
+                    isPrimary: i === 0,
+                  })),
+                },
+              })
+            }
+            labelOptions={EMAIL_LABELS}
+            noun="email"
+            kind="email"
+            addLabel="Add email"
+            inputPlaceholder="email@example.com"
+            openRequest={requestFor("workEmail")}
+            openLabel="work"
+            onOpenRequestDone={onDetailRequestDone}
+          />
+        </Field>
 
-      <Field label="Phone">
-        <MultiValueField
-          items={(contact.phones ?? []).map((p) => ({
-            id: p.id,
-            value: p.phone,
-            label: p.label || "mobile",
-          }))}
-          onSave={(updated) =>
-            updateContact({
-              id: contactId,
-              data: {
-                phones: updated.map((p, i) => ({
-                  phone: p.value,
-                  label: p.label,
-                  isPrimary: i === 0,
-                })),
-              },
-            })
-          }
-          labelOptions={PHONE_LABELS}
-          noun="phone"
-          kind="phone"
-          addLabel="Add phone"
-          inputPlaceholder="+1 (555) 000-0000"
-        />
-      </Field>
+        <Field label="Phone">
+          <MultiValueField
+            items={(contact.phones ?? []).map((p) => ({
+              id: p.id,
+              value: p.phone,
+              label: p.label || "mobile",
+            }))}
+            onSave={(updated) =>
+              updateContact({
+                id: contactId,
+                data: {
+                  phones: updated.map((p, i) => ({
+                    phone: p.value,
+                    label: p.label,
+                    isPrimary: i === 0,
+                  })),
+                },
+              })
+            }
+            labelOptions={PHONE_LABELS}
+            noun="phone"
+            kind="phone"
+            addLabel="Add phone"
+            inputPlaceholder="+1 (555) 000-0000"
+          />
+        </Field>
 
-      <Field label="Birthday">
-        <BirthdayField
-          value={contact.birthday}
-          onSave={(val) => onUpdate("birthday", val)}
-        />
-      </Field>
+        <Field label="Dates">
+          <BirthdayField
+            value={contact.birthday}
+            attributes={contact.attributes}
+            onSave={(val) => onUpdate("birthday", val)}
+            onSaveDates={({ birthday, attributes }) =>
+              updateContact({
+                id: contactId,
+                data: { birthday, attributes },
+              })
+            }
+          />
+        </Field>
 
-      <Field label="Industry">
-        <IndustryField
-          value={contact.industry}
-          onSave={(val) => onUpdate("industry", val)}
-        />
-      </Field>
+        <Field label="Industry">
+          <IndustryField
+            value={contact.industry}
+            onSave={(val) => onUpdate("industry", val)}
+          />
+        </Field>
 
-      <Field label="Preferences">
-        <ChipInput
-          chips={preferenceChips}
-          onAdd={addPreferences}
-          onRemove={removePreference}
-          noun="preference"
-        />
-      </Field>
+        <Field label="Preferences">
+          <ChipInput
+            chips={preferenceChips}
+            onAdd={addPreferences}
+            onRemove={removePreference}
+            noun="preference"
+          />
+        </Field>
 
-      <Field label="Interests">
-        <ChipInput
-          chips={interestChips}
-          onAdd={addInterests}
-          onRemove={removeInterest}
-          noun="interest"
-        />
-      </Field>
+        <Field label="Interests">
+          <ChipInput
+            chips={interestChips}
+            onAdd={addInterests}
+            onRemove={removeInterest}
+            noun="interest"
+          />
+        </Field>
 
-      {contact.nextFollowUpAt && <NextFollowUp contactId={contactId} />}
+        {contact.nextFollowUpAt && <NextFollowUp contactId={contactId} />}
+      </div>
     </div>
   );
 };

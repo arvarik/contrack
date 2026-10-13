@@ -71,9 +71,10 @@ export const ComingUpCard = ({
     const list: Entry[] = [];
     for (const b of birthdays) {
       if (b.daysUntil < COMING_UP_FROM_DAY) continue;
+      const isBday = !b.label || b.label.toLowerCase() === "birthday";
       list.push({
         kind: "birthday",
-        key: `b-${b.contactId}`,
+        key: isBday ? `b-${b.contactId}` : `b-${b.contactId}-${b.label}`,
         when: b.nextDate,
         birthday: b,
       });
@@ -131,6 +132,8 @@ export const ComingUpCard = ({
 
           if (entry.kind === "birthday") {
             const b = entry.birthday;
+            const label = b.label || "Birthday";
+            const isBday = label.toLowerCase() === "birthday";
             return (
               <li key={entry.key}>
                 <Link to={`/contact/${b.contactId}`} className={PULSE_ROW}>
@@ -163,9 +166,13 @@ export const ComingUpCard = ({
                         )}
                         aria-hidden="true"
                       />
-                      {b.turningAge !== null
-                        ? `Turns ${b.turningAge}`
-                        : "Birthday"}
+                      {isBday
+                        ? b.turningAge !== null
+                          ? `Turns ${b.turningAge}`
+                          : "Birthday"
+                        : b.turningAge !== null
+                          ? `${label} (${b.turningAge} yr)`
+                          : label}
                     </span>
                   </span>
                   {chip}

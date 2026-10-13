@@ -5,15 +5,14 @@
 import React, { Suspense, useEffect, useState } from "react";
 import { composerChunk } from "../../../components/composerChunk";
 import { useSearchParams } from "react-router-dom";
-import { MessageSquare, Paperclip, UploadCloud } from "lucide-react";
+import { MessageSquare, UploadCloud } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 import type { Interaction } from "../../../types";
 import { ComposerPlaceholder } from "../../../components/ComposerPlaceholder";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { useHiddenPendingIds } from "../../../lib/pendingDeletes";
-import { BTN_QUIET, DROPZONE_INPUT } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { DROPZONE_INPUT } from "../../../lib/styles";
 import type { DropzoneRootProps, DropzoneInputProps } from "react-dropzone";
 import {
   Timeline,
@@ -41,6 +40,8 @@ export interface TimelineTabProps {
   getInputProps: () => DropzoneInputProps;
   /** Opens the file picker, for a phone or a keyboard, which cannot drop. */
   onAttach: () => void;
+  /** Attaches dropped or pasted files directly to the contact's timeline. */
+  onAttachFiles?: (files: File[]) => void;
   deleteInteraction: DeleteInteraction;
   updateInteraction: UpdateInteraction;
   promoteGhost: PromoteGhost;
@@ -55,6 +56,7 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
   getRootProps,
   getInputProps,
   onAttach,
+  onAttachFiles,
   deleteInteraction,
   updateInteraction,
   promoteGhost,
@@ -126,16 +128,10 @@ const TimelineTabInner: React.FC<TimelineTabProps> = ({
         <InteractionComposer
           contactId={contactId}
           collapsible={composerCollapsible}
+          onAttach={onAttach}
+          onAttachFiles={onAttachFiles}
         />
       </Suspense>
-      <button
-        type="button"
-        onClick={onAttach}
-        className={cn(BTN_QUIET, "self-start -mt-3")}
-      >
-        <Paperclip aria-hidden="true" className="w-4 h-4" />
-        Attach a file
-      </button>
 
       {!timelineLoading && !hasEntries && (
         <EmptyState

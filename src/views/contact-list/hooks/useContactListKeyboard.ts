@@ -83,7 +83,7 @@ export function useContactListKeyboard({
       if (isPageKeyTaken(e)) return;
       // Caps Lock on: "J" is still j.
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-      if (!singleKeys && /^[/nvjk]$/.test(key)) return;
+      if (!singleKeys && /^[/nvjk[\]]$/.test(key)) return;
 
       if (key === "Escape" && isSelectMode) {
         exitSelectMode();
@@ -119,7 +119,7 @@ export function useContactListKeyboard({
       if (key.startsWith("Arrow") && isScroller(document.activeElement)) {
         return;
       }
-      if (key === "ArrowDown" || key === "j") {
+      if (key === "ArrowDown" || key === "j" || key === "]") {
         e.preventDefault();
         if (filteredContacts.length === 0) return;
         const currentIndex = filteredContacts.findIndex(
@@ -130,7 +130,7 @@ export function useContactListKeyboard({
             ? 0
             : Math.min(currentIndex + 1, filteredContacts.length - 1);
         navigate(`/contact/${filteredContacts[nextIndex].id}${locationSearch}`);
-      } else if (key === "ArrowUp" || key === "k") {
+      } else if (key === "ArrowUp" || key === "k" || key === "[") {
         e.preventDefault();
         if (filteredContacts.length === 0) return;
         const currentIndex = filteredContacts.findIndex(
@@ -144,11 +144,4 @@ export function useContactListKeyboard({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
-
-  useEffect(() => {
-    if (currentId) {
-      const el = document.getElementById(`contact-row-${currentId}`);
-      if (el) el.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    }
-  }, [currentId]);
 }

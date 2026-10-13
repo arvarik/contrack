@@ -12,7 +12,8 @@ import {
   shift,
   type VirtualElement,
 } from "@floating-ui/dom";
-import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import { forwardRef, useImperativeHandle, useState } from "react";
+import { flushSync } from "react-dom";
 import { ScoreRingAvatar } from "./ScoreRingAvatar";
 import { scoreView, scoreWords } from "../../shared/scoreBand";
 import type { ContactSlim } from "../api/contacts";
@@ -34,8 +35,12 @@ const MentionList = forwardRef<
   MentionListProps
 >((props, ref) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
-
-  useEffect(() => setSelectedIndex(0), [props.items]);
+  const [prevItems, setPrevItems] = useState(props.items);
+  if (prevItems !== props.items) {
+    setPrevItems(props.items);
+    if (selectedIndex !== 0) setSelectedIndex(0);
+  }
+  const activeIndex = selectedIndex < props.items.length ? selectedIndex : 0;
 
   useImperativeHandle(ref, () => ({
     onKeyDown: ({ event }: { event: KeyboardEvent }) => {
@@ -44,18 +49,18 @@ const MentionList = forwardRef<
       if (!props.items.length) return false;
       if (event.key === "ArrowUp") {
         setSelectedIndex(
-          (selectedIndex + props.items.length - 1) % props.items.length,
+          (activeIndex + props.items.length - 1) % props.items.length,
         );
         return true;
       }
       if (event.key === "ArrowDown") {
-        setSelectedIndex((selectedIndex + 1) % props.items.length);
+        setSelectedIndex((activeIndex + 1) % props.items.length);
         return true;
       }
       if (event.key === "Enter") {
         props.command({
-          id: props.items[selectedIndex].id,
-          label: props.items[selectedIndex].name,
+          id: props.items[activeIndex].id,
+          label: props.items[activeIndex].name,
         });
         return true;
       }
@@ -72,11 +77,13 @@ const MentionList = forwardRef<
         const words = scoreWords(scoreView(item));
         return (
           <button
+            type="button"
             className={cn(
               MENU_ITEM,
-              index === selectedIndex && MENU_ITEM_SELECTED,
+              index === activeIndex && MENU_ITEM_SELECTED,
             )}
             key={item.id}
+            onMouseDown={(e) => e.preventDefault()}
             onClick={() => {
               props.command({ id: item.id, label: item.name });
             }}
@@ -152,6 +159,7 @@ export const getMentionSuggestion = (contacts: () => ContactSlim[]) => ({
     let popup: HTMLElement | null = null;
     let stopUpdates: (() => void) | null = null;
     let caret: (() => DOMRect | null) | null | undefined;
+    let placeSeq = 0;
     /** Whether the list shows a name. With no match it draws nothing. */
     let shown = false;
     // One reference for the list's lifetime, reading the latest caret, so
@@ -163,10 +171,12 @@ export const getMentionSuggestion = (contacts: () => ContactSlim[]) => ({
     const place = () => {
       const el = popup;
       if (!el) return;
+      const seq = ++placeSeq;
       void computePosition(reference, el, {
         placement: "bottom-start",
         middleware: [offset(10), flip(), shift({ padding: 8 })],
       }).then(({ x, y }) => {
+        if (seq !== placeSeq || popup !== el) return;
         el.style.left = `${x}px`;
         el.style.top = `${y}px`;
         // Hidden until placed, so it never shows at the host's corner.
@@ -203,7 +213,13 @@ export const getMentionSuggestion = (contacts: () => ContactSlim[]) => ({
       },
 
       onUpdate(props: SuggestionProps<ContactSlim, MentionNodeAttrs>) {
-        component.updateProps(props);
+        try {
+          flushSync(() => {
+            component.updateProps(props);
+          });
+        } catch {
+          component.updateProps(props);
+        }
         shown = props.items.length > 0;
 
         if (!props.clientRect) return;
@@ -231,6 +247,7 @@ export const getMentionSuggestion = (contacts: () => ContactSlim[]) => ({
       },
 
       onExit() {
+        placeSeq++;
         stopUpdates?.();
         popup?.remove();
         popup = null;

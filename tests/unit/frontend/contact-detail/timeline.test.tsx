@@ -280,11 +280,8 @@ describe("the groups", () => {
     expect(aug.getByRole("link", { name: /deck\.pdf/ })).toBeTruthy();
     expect(within(entry("sqlite")!).getByAltText("photo.png")).toBeTruthy();
 
-    fireEvent.click(aug.getByTitle("Add Grace to Network"));
-    expect(props.promoteGhost).toHaveBeenCalledWith("g1", expect.any(Object));
-    const [, options] = vi.mocked(props.promoteGhost).mock.calls[0];
-    act(() => options?.onSuccess?.());
-    // The promoted contact opens.
+    fireEvent.click(aug.getByTitle("View Grace (Ghost contact)"));
+    expect(props.promoteGhost).not.toHaveBeenCalled();
     expect(screen.getByTestId("where").textContent).toBe("/contact/g1");
 
     // The via badge is a real button, and opens the contact it names.

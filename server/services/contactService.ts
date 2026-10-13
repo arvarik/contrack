@@ -1237,6 +1237,16 @@ export const contactService = {
     const phoneRows = sqlite
       .prepare(`SELECT contactId, phone FROM contact_phones ${unarchivedQuery}`)
       .all(scope.ownerId) as { contactId: string; phone: string }[];
+    const attributeRows = sqlite
+      .prepare(
+        `SELECT id, contactId, name, value FROM contact_attributes ${unarchivedQuery}`,
+      )
+      .all(scope.ownerId) as {
+      id: string;
+      contactId: string;
+      name: string;
+      value: string;
+    }[];
     // `interactions` is owned, so it names the owner itself. The owner-check
     // trigger keeps an interaction's owner equal to its contact's.
     const interactionCounts = sqlite
@@ -1289,6 +1299,20 @@ export const contactService = {
       phonesByContact.get(r.contactId)!.push({ phone: r.phone });
     }
 
+    const attributesByContact = new Map<
+      string,
+      { id: string; name: string; value: string }[]
+    >();
+    for (const r of attributeRows) {
+      if (!attributesByContact.has(r.contactId))
+        attributesByContact.set(r.contactId, []);
+      attributesByContact.get(r.contactId)!.push({
+        id: r.id,
+        name: r.name,
+        value: r.value,
+      });
+    }
+
     const interactionMap = new Map(
       interactionCounts.map((r) => [r.contactId, r.cnt]),
     );
@@ -1318,7 +1342,7 @@ export const contactService = {
       sources: [],
       addresses: [],
       interests: [],
-      attributes: [],
+      attributes: attributesByContact.get(r.id) || [],
     }));
     const joinMs = Date.now() - joinStartMs;
 

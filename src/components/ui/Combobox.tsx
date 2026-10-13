@@ -12,13 +12,15 @@ export const Combobox = ({
   value,
   onChange,
   onSave,
+  onCancel,
   options,
   placeholder,
   autoFocus,
 }: {
   value: string;
   onChange: (val: string) => void;
-  onSave: () => void;
+  onSave: (val?: string) => void;
+  onCancel?: () => void;
   options: string[];
   placeholder?: string;
   autoFocus?: boolean;
@@ -50,7 +52,11 @@ export const Combobox = ({
         }}
         onKeyDown={(e) => {
           if (e.key === "Enter") onSave();
-          if (e.key === "Escape") onSave();
+          if (e.key === "Escape") {
+            setIsOpen(false);
+            if (onCancel) onCancel();
+            else onSave();
+          }
         }}
         placeholder={placeholder}
       />
@@ -68,7 +74,7 @@ export const Combobox = ({
               onKeyDown={activateOnKey(() => {
                 onChange(opt);
                 setIsOpen(false);
-                setTimeout(() => onSave(), 10);
+                onSave(opt);
               })}
               className={cn(DROPDOWN_ITEM, opt === value && MENU_ITEM_SELECTED)}
               onMouseDown={(e) => {
@@ -76,7 +82,7 @@ export const Combobox = ({
                 e.preventDefault();
                 onChange(opt);
                 setIsOpen(false);
-                setTimeout(() => onSave(), 10);
+                onSave(opt);
               }}
             >
               {opt}

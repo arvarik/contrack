@@ -412,7 +412,7 @@ const slimContactSchema = z
     sources: z.tuple([]),
     addresses: z.tuple([]),
     interests: z.tuple([]),
-    attributes: z.tuple([]),
+    attributes: z.array(contactAttributeSchema),
   })
   .meta({ id: "SlimContact" });
 

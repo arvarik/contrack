@@ -329,16 +329,14 @@ describe("the contact header", () => {
     }
   });
 
-  it("lists the eight contact actions in order, the two enrich depths after the color", () => {
+  it("lists the contact actions in order, with Enrich contact expanding into Standard and Deep", () => {
     mount(<ProfileHeader {...makeProps()} />);
     fireEvent.click(screen.getByRole("button", { name: "Contact actions" }));
     const menu = screen.getByRole("menu", { name: "Contact actions" });
     const items = within(menu).getAllByRole("menuitem");
-    // Each enrich row says the time a contact takes, to a screen reader too.
     const names = [
       "Change color",
-      `Enrich contact, ${depthTime("standard")}`,
-      `Enrich deeply, ${depthTime("deep")}`,
+      "Enrich contact",
       "Copy basic details",
       "Copy full details",
       "Save contact card",
@@ -349,6 +347,20 @@ describe("the contact header", () => {
     names.forEach((name, index) => {
       expect(within(menu).getByRole("menuitem", { name })).toBe(items[index]);
     });
+    // Hovering or clicking Enrich contact reveals the two enrichment depths.
+    fireEvent.click(
+      within(menu).getByRole("menuitem", { name: "Enrich contact" }),
+    );
+    expect(
+      within(menu).getByRole("menuitem", {
+        name: `Standard, ${depthTime("standard")}`,
+      }),
+    ).toBeTruthy();
+    expect(
+      within(menu).getByRole("menuitem", {
+        name: `Deep, ${depthTime("deep")}`,
+      }),
+    ).toBeTruthy();
     // Change avatar moved to the pencil on the avatar.
     expect(
       within(menu).queryByRole("menuitem", { name: "Change avatar" }),
@@ -712,13 +724,16 @@ describe("Enrich contact", () => {
   }
 
   it.each([
-    ["standard", "Enrich contact"],
-    ["deep", "Enrich deeply"],
+    ["standard", "Standard"],
+    ["deep", "Deep"],
   ] as const)(
     "starts a %s run for this one contact from %s, with any limit said in a toast",
     (depth, label) => {
       mount(<ProfileHeader {...makeProps()} />);
       fireEvent.click(screen.getByRole("button", { name: "Contact actions" }));
+      fireEvent.pointerEnter(
+        screen.getByRole("menuitem", { name: /^Enrich contact/ }),
+      );
       fireEvent.click(
         screen.getByRole("menuitem", { name: new RegExp(`^${label}`) }),
       );

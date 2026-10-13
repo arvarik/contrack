@@ -314,7 +314,7 @@ describe("the controls", () => {
     stubServer();
     mount();
     await editorElement();
-    const hint = screen.getByText("to save").parentElement!;
+    const hint = screen.getByText("Enter").parentElement!;
     expect(
       within(hint)
         .getAllByText(/⌘|Enter/)
