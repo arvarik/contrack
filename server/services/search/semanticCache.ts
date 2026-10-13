@@ -272,9 +272,17 @@ export function semanticEntryCount(ownerId: string): number {
   return byOwner.get(ownerId)?.length ?? 0;
 }
 
+/** Forget one owner's answers. */
+export function clearSemanticCacheForOwner(ownerId: string): void {
+  byOwner.delete(ownerId);
+}
+
 /** Forget every answer. */
 export function clearSemanticCache(): void {
   byOwner.clear();
 }
 
 aiCache.onInvalidateAll(clearSemanticCache);
+aiCache.onInvalidateOwner((operation, ownerId) => {
+  if (operation === "rerank") clearSemanticCacheForOwner(ownerId);
+});

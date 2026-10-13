@@ -65,6 +65,20 @@ const TRACKED_PRESETS = [
   { label: "No", value: "no" },
 ];
 
+const PRESETS: Partial<
+  Record<
+    FacetField,
+    readonly { label: string; value: string; operator?: ">" | "<" }[]
+  >
+> = {
+  score: SCORE_PRESETS,
+  updated: UPDATED_PRESETS,
+  added: UPDATED_PRESETS,
+  contacted: CONTACTED_PRESETS,
+  tracked: TRACKED_PRESETS,
+  missing: MISSING_PRESETS,
+};
+
 export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
   field,
   partial,
@@ -77,68 +91,25 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
 
   // Build suggestions from slim cache
   const suggestions = useMemo(() => {
-    if (field === "score") {
-      return SCORE_PRESETS.filter(
-        (p) =>
-          !partial ||
-          p.value.includes(partial) ||
-          p.label.toLowerCase().includes(partial.toLowerCase()),
-      ).map((p) => ({
-        label: p.label,
-        filter: { field, value: p.value, operator: p.operator } as FacetFilter,
-      }));
-    }
-
-    if (field === "updated") {
-      return UPDATED_PRESETS.filter(
-        (p) =>
-          !partial ||
-          p.value.includes(partial) ||
-          p.label.toLowerCase().includes(partial.toLowerCase()),
-      ).map((p) => ({
-        label: p.label,
-        filter: { field, value: p.value, operator: p.operator } as FacetFilter,
-      }));
-    }
-
-    if (field === "contacted") {
-      return CONTACTED_PRESETS.filter(
-        (p) =>
-          !partial ||
-          p.value.includes(partial.toLowerCase()) ||
-          p.label.toLowerCase().includes(partial.toLowerCase()),
-      ).map((p) => ({
-        label: p.label,
-        filter: {
-          field,
-          value: p.value,
-          ...("operator" in p ? { operator: p.operator } : {}),
-        } as FacetFilter,
-      }));
-    }
-
-    if (field === "tracked") {
-      return TRACKED_PRESETS.filter(
-        (p) =>
-          !partial ||
-          p.value.includes(partial.toLowerCase()) ||
-          p.label.toLowerCase().includes(partial.toLowerCase()),
-      ).map((p) => ({
-        label: p.label,
-        filter: { field, value: p.value } as FacetFilter,
-      }));
-    }
-
-    if (field === "missing") {
-      return MISSING_PRESETS.filter(
-        (p) =>
-          !partial ||
-          p.value.includes(partial.toLowerCase()) ||
-          p.label.toLowerCase().includes(partial.toLowerCase()),
-      ).map((p) => ({
-        label: p.label,
-        filter: { field, value: p.value } as FacetFilter,
-      }));
+    const presets = PRESETS[field];
+    if (presets) {
+      const needle = partial.toLowerCase();
+      return presets
+        .filter(
+          (p) =>
+            !needle ||
+            p.value.toLowerCase().includes(needle) ||
+            `${p.operator ?? ""}${p.value}`.toLowerCase().includes(needle) ||
+            p.label.toLowerCase().includes(needle),
+        )
+        .map((p) => ({
+          label: p.label,
+          filter: {
+            field,
+            value: p.value,
+            ...(p.operator ? { operator: p.operator } : {}),
+          } as FacetFilter,
+        }));
     }
 
     if (!slimContacts?.length) return [];

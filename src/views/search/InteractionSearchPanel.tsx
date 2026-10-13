@@ -40,7 +40,7 @@ import { useInteractionSearch } from "../../api/search";
 import { useRecordSearch } from "../../api/searchHistory";
 import { useLoadingShown } from "../../hooks/useLoadingShown";
 import { useSingleKeyShortcuts } from "../../hooks/useSingleKeyShortcuts";
-import { isTypingTarget } from "../../lib/keyboard";
+import { isPageKeyTaken } from "../../lib/keyboard";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 import { formatDay, formatRelative, parseServerTime } from "../../lib/datetime";
 import {
@@ -58,6 +58,7 @@ import type { InteractionSearchHit } from "../../types";
 import { Highlighted } from "../../components/ui/Highlighted";
 import { AskSearchBox } from "./AskSearchBox";
 import { ShimmerCard } from "./SearchResultCards";
+import { useRovingFocus } from "./useRovingFocus";
 
 const TYPE_ICONS: Record<string, LucideIcon> = {
   note: FileText,
@@ -163,10 +164,12 @@ const HitCard = ({
   hit,
   index,
   onOpen,
+  rovingProps,
 }: {
   hit: InteractionSearchHit;
   index: number;
   onOpen: (hit: InteractionSearchHit) => void;
+  rovingProps?: React.HTMLAttributes<HTMLElement> & { "data-roving"?: number };
 }) => {
   const Icon = TYPE_ICONS[hit.type] ?? ActivitySquare;
   return (
@@ -177,6 +180,7 @@ const HitCard = ({
       <button
         type="button"
         onClick={() => onOpen(hit)}
+        {...rovingProps}
         className={cn(
           CARD_INTERACTIVE,
           "w-full text-left flex items-start gap-4",
@@ -285,7 +289,7 @@ export const InteractionSearchPanel = () => {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isTypingTarget(e)) return;
+      if (isPageKeyTaken(e)) return;
       if (!singleKeys) return;
       if (e.key === "/") {
         e.preventDefault();
@@ -313,6 +317,7 @@ export const InteractionSearchPanel = () => {
   const result = search.data;
   const hits = result?.hits ?? [];
   const total = result?.total ?? 0;
+  const { listRef, itemProps } = useRovingFocus(hits.length);
   const period: Period = customOpen ? "custom" : periodOf(from, to);
   // A date phrase ("coffee last month") sets the range and shows its own
   // chip, so no period shows pressed then.
@@ -619,9 +624,15 @@ export const InteractionSearchPanel = () => {
           )}
 
           {hits.length > 0 && (
-            <div className="space-y-2">
+            <div ref={listRef} className="space-y-2">
               {hits.map((hit, i) => (
-                <HitCard key={hit.id} hit={hit} index={i} onOpen={open} />
+                <HitCard
+                  key={hit.id}
+                  hit={hit}
+                  index={i}
+                  onOpen={open}
+                  rovingProps={itemProps(i)}
+                />
               ))}
             </div>
           )}

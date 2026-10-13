@@ -79,9 +79,8 @@ export const SearchView = () => {
     null,
   );
 
-  // Read ?q= URL param on mount (from Cmd+K "Open in full-page search" bridge)
+  // Read ?q= URL param (from Cmd+K "Open in Ask Contrack" bridge)
   const [searchParams, setSearchParams] = useSearchParams();
-  const initialQueryHandled = useRef(false);
 
   const navigate = useNavigate();
   const { preferences, setPreference } = usePreferences();
@@ -209,13 +208,12 @@ export const SearchView = () => {
     recordSearch,
   ]);
 
-  // Ask the `?q=` question on mount, through handleSearch, so it is recorded
+  // Ask the `?q=` question through handleSearch, so it is recorded
   // and restored like a typed one. In Notes mode `q` belongs to the panel.
   useEffect(() => {
-    if (initialQueryHandled.current || mode === "notes") return;
+    if (mode === "notes") return;
     const urlQuery = searchParams.get("q")?.trim();
     if (urlQuery && urlQuery.length >= 3) {
-      initialQueryHandled.current = true;
       setQuery(urlQuery);
       // Clear the param to avoid re-firing on back navigation
       setSearchParams({}, { replace: true });
@@ -240,9 +238,9 @@ export const SearchView = () => {
       // A key in a field, a dialog or a menu is theirs, so H in the history's
       // Clear confirmation does not close the pane under it.
       if (isPageKeyTaken(e)) return;
-      if (e.key === "/") {
+      if (e.key === "/" && inputRef.current) {
         e.preventDefault();
-        inputRef.current?.focus();
+        inputRef.current.focus();
       } else if (e.key.toLowerCase() === "h") {
         e.preventDefault();
         // The sheet is a dialog, and a key pressed in it is its own, so

@@ -220,13 +220,16 @@ router.post(
     const readContacts = () =>
       sqlite
         .prepare(
-          `SELECT c.id,c.name,c.role,c.company,c.industry,c.location FROM contacts c
-             WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL} AND c.id IN (SELECT value FROM json_each(?))`,
+          `SELECT c.id,c.name,c.role,c.headline,c.company,c.industry,c.location FROM contacts c
+             JOIN json_each(?) j ON j.value = c.id
+             WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL}
+             ORDER BY CAST(j.key AS INTEGER)`,
         )
-        .all(scope.ownerId, JSON.stringify(ids)) as {
+        .all(JSON.stringify(ids), scope.ownerId) as {
         id: string;
         name: string;
         role?: string;
+        headline?: string;
         company?: string;
         industry?: string;
         location?: string;

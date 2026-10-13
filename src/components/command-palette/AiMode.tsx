@@ -5,7 +5,13 @@
  * says why and how to fix it.
  */
 import { Command } from "cmdk";
-import { ArrowUpRight, HelpCircle, Settings, Sparkles } from "lucide-react";
+import {
+  ArrowUpRight,
+  HelpCircle,
+  RotateCw,
+  Settings,
+  Sparkles,
+} from "lucide-react";
 import { NAMES } from "../../lib/names";
 import { cn } from "../../lib/utils";
 import type { SemanticMatch } from "../../types";
@@ -26,6 +32,8 @@ export interface AiModeProps {
   part: "notes" | "rows" | "after";
   /** The question, without the `?`. */
   question: string;
+  /** The question with any locked facet pills prepended, for `/search` links. */
+  fullQuestion?: string;
   /** Typed, or the pills changed, since the last question: Enter asks. */
   pending: boolean;
   loading: boolean;
@@ -47,6 +55,7 @@ export interface AiModeProps {
 
 export const AiMode = (props: AiModeProps) => {
   const { part, question, setup, results, fallback } = props;
+  const fullQuestion = props.fullQuestion || question;
   const showResults =
     question.length >= 3 &&
     !props.loading &&
@@ -207,6 +216,21 @@ export const AiMode = (props: AiModeProps) => {
             />
           ))}
         </Command.Group>
+        {fallback && !setup && (
+          <Command.Group heading="Retry" className={GROUP_HEADING_DEFAULT}>
+            <Command.Item
+              value={`retry_ai_${question}`}
+              onSelect={props.onAsk}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2 min-h-[44px] pointer-fine:min-h-0 rounded-xl cursor-default select-none transition-colors text-sm text-on-surface",
+                ITEM_CURRENT,
+              )}
+            >
+              <RotateCw className="w-4 h-4 shrink-0 text-primary" />
+              <span className="truncate">Try again</span>
+            </Command.Item>
+          </Command.Group>
+        )}
         {setupRow}
       </>
     );
@@ -236,11 +260,11 @@ export const AiMode = (props: AiModeProps) => {
       )}
       <div className="px-3 py-2 flex flex-wrap justify-end gap-x-4 gap-y-1">
         {link(
-          `/search?mode=notes&q=${encodeURIComponent(question)}`,
+          `/search?mode=notes&q=${encodeURIComponent(fullQuestion)}`,
           "Search notes",
         )}
         {link(
-          `/search?q=${encodeURIComponent(question)}`,
+          `/search?q=${encodeURIComponent(fullQuestion)}`,
           `Open in ${NAMES.ask.label}`,
         )}
       </div>

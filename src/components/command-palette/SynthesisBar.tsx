@@ -11,7 +11,13 @@ import { z } from "zod";
  *
  * A cache hit sends start and complete with no deltas.
  */
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, {
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useMemo,
+} from "react";
 import { Sparkles, X, AlertTriangle } from "lucide-react";
 import { CorvidThinking } from "../brand/CorvidThinking";
 import { LiveStatus } from "../ui/LiveStatus";
@@ -65,17 +71,21 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
   const [errorMessage, setErrorMessage] = useState("");
   const abortRef = useRef<AbortController | null>(null);
 
-  const identity = JSON.stringify([
-    query,
-    contacts.map((c) => [
-      c.id,
-      c.name,
-      c.role,
-      c.company,
-      c.location,
-      c.aiReason,
-    ]),
-  ]);
+  const identity = useMemo(
+    () =>
+      JSON.stringify([
+        query,
+        contacts.map((c) => [
+          c.id,
+          c.name,
+          c.role,
+          c.company,
+          c.location,
+          c.aiReason,
+        ]),
+      ]),
+    [query, contacts],
+  );
   // Reset when query or contacts change (new search)
   useEffect(() => {
     setPhase("idle");

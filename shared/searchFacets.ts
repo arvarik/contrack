@@ -78,19 +78,38 @@ export interface FacetContact {
  */
 export const facetFiltersSchema = z
   .array(
-    z.object({
-      field: z.enum(FACET_FIELDS),
-      value: z.string().trim().min(1).max(100),
-      operator: z.enum([">", "<"]).optional(),
-      km: z.number().positive().max(20_000).optional(),
-      point: z
-        .object({
-          lat: z.number().min(-90).max(90),
-          lng: z.number().min(-180).max(180),
-          km: z.number().positive().max(20_000),
-        })
-        .optional(),
-    }),
+    z
+      .object({
+        field: z.enum(FACET_FIELDS),
+        value: z.string().trim().min(1).max(100),
+        operator: z.enum([">", "<"]).optional(),
+        km: z.number().positive().max(20_000).optional(),
+        point: z
+          .object({
+            lat: z.number().min(-90).max(90),
+            lng: z.number().min(-180).max(180),
+            km: z.number().positive().max(20_000),
+          })
+          .optional(),
+      })
+      .transform((f) => {
+        if (
+          !f.operator &&
+          (f.field === "score" ||
+            f.field === "updated" ||
+            f.field === "added" ||
+            f.field === "contacted") &&
+          (f.value.startsWith(">") || f.value.startsWith("<")) &&
+          f.value.length > 1
+        ) {
+          return {
+            ...f,
+            operator: f.value[0] as ">" | "<",
+            value: f.value.slice(1).trim(),
+          };
+        }
+        return f;
+      }),
   )
   .max(8);
 
@@ -196,6 +215,7 @@ export function unknownFacetValue(filter: FacetFilter): string | null {
     case "score":
       return isNaN(parseInt(v, 10)) ? "a number, such as >80" : null;
     case "updated":
+    case "added":
       return facetCutoff(v) ? null : "a time, such as >3m";
     case "contacted":
       return v === "never" || facetCutoff(v)

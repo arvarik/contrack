@@ -11,7 +11,12 @@
 import { devices, type Page } from "@playwright/test";
 import { test, expect } from "./fixtures/test";
 import type { ContrackInstance } from "./fixtures/instance";
-import { failPeopleSearch } from "./fixtures/search";
+import {
+  answerPeopleSearch,
+  failPeopleSearch,
+  personMatch,
+  serveAiModels,
+} from "./fixtures/search";
 
 /** What the current test wrote, as the API path that deletes it. */
 const created: { instance: ContrackInstance; path: string }[] = [];
@@ -294,14 +299,37 @@ test("Settings pages come up after the word settings", async ({ page }) => {
   ).toBeVisible();
 });
 
-test("a failed question offers to ask again", async ({ page }) => {
+test("a failed or fallback question offers to ask again, and Open in Ask Contrack keeps locked pills", async ({
+  page,
+  seed,
+}) => {
+  await serveAiModels(page);
   await failPeopleSearch(page, "The search failed");
   const palette = await openPalette(page);
+  await page.keyboard.type("location:London ");
+  await expect(
+    palette.getByRole("button", { name: /Remove filter location/ }),
+  ).toBeVisible();
   await page.keyboard.type("? who likes espresso");
   await page.keyboard.press("Enter");
   await expect(palette.getByRole("alert")).toHaveText("The search failed");
   // There was no row, so Enter did nothing after "Try again".
   await expect(highlighted(palette)).toHaveText('Ask: "who likes espresso"');
+
+  // When the answer falls back to unverified matches, a Try again row is offered,
+  // and Open in Ask Contrack carries the locked facet pill into /search.
+  await page.unroute("**/api/search/semantic");
+  await answerPeopleSearch(page, [personMatch(seed.byName("Ada Lovelace"))], {
+    fallback: true,
+  });
+  await page.keyboard.press("Enter");
+  await expect(
+    palette.getByRole("option", { name: "Try again" }),
+  ).toBeVisible();
+  await palette.getByRole("button", { name: /Open in Ask Contrack/ }).click();
+  await expect(
+    page.getByRole("textbox", { name: "Ask about your network" }),
+  ).toHaveValue("location:London who likes espresso");
 });
 
 test("> Log keeps words that start like a kind as the name", async ({
@@ -334,6 +362,16 @@ test("the Filter chip lists the facets, and a pick opens its values", async ({
   await palette.getByRole("option", { name: /^contacted:/ }).click();
   await expect(palette.getByRole("combobox")).toHaveValue("contacted:");
   await expect(palette.getByText("contacted values")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await palette.getByRole("button", { name: "Filter" }).click();
+  await palette.getByRole("option", { name: /^added:/ }).click();
+  await expect(palette.getByRole("combobox")).toHaveValue("added:");
+  await expect(palette.getByText("added values")).toBeVisible();
+  await page.keyboard.type("<1m");
+  await expect(
+    palette.getByRole("option", { name: /Last month/ }),
+  ).toBeVisible();
 });
 
 test("Escape asks once before it discards a typed note", async ({ page }) => {

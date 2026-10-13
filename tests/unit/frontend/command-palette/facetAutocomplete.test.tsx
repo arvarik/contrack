@@ -59,5 +59,9 @@ describe("contacted: in the facet autocomplete", () => {
       field: "contacted",
       value: "never",
     });
+    cleanup();
+
+    show("<30d");
+    expect(labels()).toEqual(["Within 30 days"]);
   });
 });

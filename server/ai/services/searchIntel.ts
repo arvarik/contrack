@@ -334,8 +334,10 @@ Return a JSON array of VERIFIED matches with field-level evidence. If no candida
           wordBoundaryMatch(cand.industry ?? "", matcher) ||
           wordBoundaryMatch(cand.interests ?? "", matcher),
       )
-    )
+    ) {
+      droppedHardConstraint++;
       continue;
+    }
     if (filtered.some((item) => item.contact_id === cand.id)) continue;
     const sanitizedValue = sanitizeAiOutputValue(value, 600);
     if (!sanitizedValue) {
@@ -433,6 +435,7 @@ export async function synthesizeSearchResults(
   contacts: {
     name: string;
     role?: string;
+    headline?: string;
     company?: string;
     industry?: string;
     location?: string;
@@ -494,6 +497,7 @@ export async function synthesizeSearchResults(
     .map((c) => {
       const parts = [c.name];
       if (c.role) parts.push(c.role);
+      else if (c.headline) parts.push(c.headline);
       if (c.company) parts.push(`at ${c.company}`);
       if (c.industry) parts.push(`[industry: ${c.industry}]`);
       if (c.location) parts.push(`[location: ${c.location}]`);

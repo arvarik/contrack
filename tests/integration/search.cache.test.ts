@@ -563,5 +563,12 @@ describe("owner isolation", () => {
     const same = await ask(ASKED, third);
     expect(same.cached).toBeFalsy();
     expect(names(same)).toEqual(["Tove Lund"]);
+
+    // Owner-scoped rerank invalidation clears only that owner's semanticCache entry.
+    expect(semanticEntryCount(first.ownerId)).toBe(1);
+    expect(semanticEntryCount(second.ownerId)).toBe(1);
+    aiCache.invalidateForOwner("rerank", first.ownerId);
+    expect(semanticEntryCount(first.ownerId)).toBe(0);
+    expect(semanticEntryCount(second.ownerId)).toBe(1);
   });
 });

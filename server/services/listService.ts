@@ -5,6 +5,7 @@ import { sqlite } from "../db.ts";
 import type { Scope } from "../tenancy/scope.ts";
 import { contactRepo } from "../repositories/contactRepository.ts";
 import { dispatchEvents, recordEvent } from "../events/index.ts";
+import { aiCache } from "../utils/aiCache.ts";
 import type { ListMember } from "../../shared/contracts/lists.ts";
 
 interface ListRow {
@@ -94,6 +95,7 @@ export const listService = {
         `UPDATE lists SET ${setClauses.join(", ")} WHERE id = ? AND ownerId = ?`,
       )
       .run(...values);
+    if (data.name !== undefined) invalidateListSearchCaches(scope.ownerId);
 
     return sqlite
       .prepare(
@@ -192,6 +194,7 @@ export const listService = {
         });
       }
     })();
+    invalidateListSearchCaches(scope.ownerId);
     dispatchEvents();
     return existing;
   },
@@ -206,8 +209,9 @@ export const listService = {
       .get(contactId, scope.ownerId);
     if (!contact) throw new NotFoundError("Contact");
 
+    let added = 0;
     sqlite.transaction(() => {
-      const added = sqlite
+      added = sqlite
         .prepare(
           "INSERT OR IGNORE INTO list_members (listId, contactId) VALUES (?, ?)",
         )
@@ -219,6 +223,7 @@ export const listService = {
         });
       }
     })();
+    if (added > 0) invalidateListSearchCaches(scope.ownerId);
     dispatchEvents();
     return true;
   },
@@ -232,8 +237,9 @@ export const listService = {
     if (!contactRepo.findOwned(scope, contactId))
       throw new NotFoundError("Contact");
 
+    let removed = 0;
     sqlite.transaction(() => {
-      const removed = sqlite
+      removed = sqlite
         .prepare("DELETE FROM list_members WHERE listId = ? AND contactId = ?")
         .run(listId, contactId).changes;
       if (removed > 0) {
@@ -243,6 +249,7 @@ export const listService = {
         });
       }
     })();
+    if (removed > 0) invalidateListSearchCaches(scope.ownerId);
     dispatchEvents();
     return true;
   },
@@ -278,6 +285,7 @@ export const listService = {
       }
     });
     insertFn();
+    if (added.length > 0) invalidateListSearchCaches(scope.ownerId);
     dispatchEvents();
     return added.length;
   },
@@ -309,7 +317,13 @@ export const listService = {
         });
       }
     })();
+    if (removed.length > 0) invalidateListSearchCaches(scope.ownerId);
     dispatchEvents();
     return removed.length;
   },
 };
+
+function invalidateListSearchCaches(ownerId: string) {
+  aiCache.invalidateForOwner("rerank", ownerId);
+  aiCache.invalidateForOwner("synthesis", ownerId);
+}
