@@ -47,18 +47,7 @@ describe("NeedsAttention", () => {
     expect(counts(0, 0).container.firstChild).toBeNull();
   });
 
-  it("links each count to the page that settles it", () => {
-    counts(12, 1);
-    const hrefs = screen
-      .getAllByRole("link")
-      .map((link) => [link.textContent, link.getAttribute("href")]);
-    expect(hrefs).toEqual([
-      ["Review 12 possible duplicates", "/pulse/duplicates"],
-      ["Retry 1 failed import", "/settings/import"],
-    ]);
-  });
-
-  it("skips View Transition on touch devices when navigating to /pulse/duplicates", () => {
+  it("links each count to the page that settles it, skipping View Transition on touch devices for /pulse/duplicates", () => {
     const startViewTransition = vi.fn();
     (document as { startViewTransition?: unknown }).startViewTransition =
       startViewTransition;
@@ -72,9 +61,17 @@ describe("NeedsAttention", () => {
         }) as unknown as MediaQueryList,
     );
 
-    counts(5, 0);
+    counts(12, 1);
+    const hrefs = screen
+      .getAllByRole("link")
+      .map((link) => [link.textContent, link.getAttribute("href")]);
+    expect(hrefs).toEqual([
+      ["Review 12 possible duplicates", "/pulse/duplicates"],
+      ["Retry 1 failed import", "/settings/import"],
+    ]);
+
     fireEvent.click(
-      screen.getByRole("link", { name: "Review 5 possible duplicates" }),
+      screen.getByRole("link", { name: "Review 12 possible duplicates" }),
     );
     expect(startViewTransition).not.toHaveBeenCalled();
     expect(currentPath).toBe("/pulse/duplicates");

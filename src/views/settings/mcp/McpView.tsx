@@ -378,14 +378,6 @@ export const McpView: React.FC = () => {
   const tokenTarget = useHashTarget<HTMLDivElement>("token");
   const tools = useHashTarget<HTMLElement>("tools");
 
-  useEffect(() => {
-    const hash =
-      location.hash ||
-      (typeof window !== "undefined" ? window.location.hash : "");
-    const nextClient = HASH_CLIENT_ID[hash];
-    if (nextClient) setClientId(nextClient);
-  }, [location.hash]);
-
   const origin =
     publicUrl ?? (typeof window !== "undefined" ? window.location.origin : "");
   const endpointUrl = `${origin}/api/mcp`;
@@ -397,6 +389,15 @@ export const McpView: React.FC = () => {
   // in with the browser when OAuth is on, or with a token.
   const reachable = mcpOAuth && publicUrl?.startsWith("https://") === true;
   const blocked = client.signIn === "oauth" && !reachable;
+
+  useEffect(() => {
+    const hash =
+      location.hash ||
+      (typeof window !== "undefined" ? window.location.hash : "");
+    const nextClient = HASH_CLIENT_ID[hash];
+    if (nextClient) setClientId(nextClient);
+    else if (hash === "#token" && blocked) setClientId("claude-code");
+  }, [location.hash, blocked]);
   const viaBrowser =
     mcpOAuth &&
     (client.signIn === "oauth" ||
