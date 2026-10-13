@@ -19,6 +19,7 @@ import { ImapFormModal } from "./ImapFormModal";
 import { GoogleFormModal } from "./GoogleFormModal";
 import { RunHistoryDrawer } from "./RunHistoryDrawer";
 import { SettingsHeaderActions } from "../SettingsHeader";
+import { useHashTarget } from "../SettingRow";
 import {
   SETTINGS_CARD,
   SETTINGS_PAGE,
@@ -47,6 +48,7 @@ export const ConnectorsView: React.FC = () => {
   const { data: connectors, isLoading, isError, refetch } = useConnectors();
   const { data: kinds } = useConnectorKinds();
   const { data: correspondents } = useCorrespondents(50) ?? {};
+  const gallery = useHashTarget<HTMLDivElement>("gallery");
 
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -163,84 +165,94 @@ export const ConnectorsView: React.FC = () => {
         )}
       </SettingsHeaderActions>
 
-      {isLoading && (
-        <div className="flex justify-center py-12">
-          <Loader2
-            aria-label="Loading connectors"
-            className="w-6 h-6 animate-spin text-primary"
-          />
-        </div>
-      )}
-
-      {isError && (
-        <LoadFailed what="connectors" onRetry={() => void refetch()} />
-      )}
-
-      {!isLoading && !isError && hasConnectors && (
-        <div className="grid gap-3">
-          {connectors.map((connector) => (
-            <ConnectorCard
-              key={connector.id}
-              connector={connector}
-              onEdit={handleEdit}
-              onShowRuns={handleShowRuns}
+      <div
+        id="gallery"
+        ref={gallery.ref}
+        tabIndex={-1}
+        className={cn(
+          "scroll-mt-20 outline-none rounded-2xl transition-colors duration-(--dur-slow)",
+          gallery.flashing && "flash bg-primary/10",
+        )}
+      >
+        {isLoading && (
+          <div className="flex justify-center py-12">
+            <Loader2
+              aria-label="Loading connectors"
+              className="w-6 h-6 animate-spin text-primary"
             />
-          ))}
-        </div>
-      )}
-
-      {/* Nothing connected yet: the choices, on the page. */}
-      {!isLoading && !isError && !hasConnectors && (
-        <section aria-labelledby="add-connector">
-          <h2 id="add-connector" className={SETTINGS_SECTION_HEADING}>
-            Add a connector
-          </h2>
-          <div className={cn(SETTINGS_CARD, "space-y-4")}>
-            <p className="text-sm text-on-surface-variant text-pretty">
-              Contrack learns who you talk to from your calendar and your mail.
-              Nothing leaves the server unless you turn on AI summaries
-            </p>
-            {/* A row for each kind, with its own Connect: three equal
-                choices, so none of them is the page's one primary. */}
-            <ul className="grid gap-2">
-              {(kinds ?? []).map((k) => {
-                const Icon = KIND_ICONS[k.kind] ?? Calendar;
-                return (
-                  <li
-                    key={k.kind}
-                    className="flex items-center gap-3 p-3.5 rounded-xl bg-surface-container-low"
-                  >
-                    <span
-                      className={cn(
-                        "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
-                        TONE_WASH.primary,
-                      )}
-                    >
-                      <Icon className="w-5 h-5" aria-hidden="true" />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="text-sm font-semibold text-on-surface">
-                        {k.label}
-                      </h3>
-                      <p className="text-xs text-on-surface-variant mt-0.5 text-pretty">
-                        {k.description}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleSelectKind(k.kind)}
-                      aria-label={`Connect ${k.label}`}
-                      className="btn-secondary btn-sm shrink-0"
-                    >
-                      Connect
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
           </div>
-        </section>
-      )}
+        )}
+
+        {isError && (
+          <LoadFailed what="connectors" onRetry={() => void refetch()} />
+        )}
+
+        {!isLoading && !isError && hasConnectors && (
+          <div className="grid gap-3">
+            {connectors.map((connector) => (
+              <ConnectorCard
+                key={connector.id}
+                connector={connector}
+                onEdit={handleEdit}
+                onShowRuns={handleShowRuns}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Nothing connected yet: the choices, on the page. */}
+        {!isLoading && !isError && !hasConnectors && (
+          <section aria-labelledby="add-connector">
+            <h2 id="add-connector" className={SETTINGS_SECTION_HEADING}>
+              Add a connector
+            </h2>
+            <div className={cn(SETTINGS_CARD, "space-y-4")}>
+              <p className="text-sm text-on-surface-variant text-pretty">
+                Contrack learns who you talk to from your calendar and your
+                mail. Nothing leaves the server unless you turn on AI summaries
+              </p>
+              {/* A row for each kind, with its own Connect: three equal
+                  choices, so none of them is the page's one primary. */}
+              <ul className="grid gap-2">
+                {(kinds ?? []).map((k) => {
+                  const Icon = KIND_ICONS[k.kind] ?? Calendar;
+                  return (
+                    <li
+                      key={k.kind}
+                      className="flex items-center gap-3 p-3.5 rounded-xl bg-surface-container-low"
+                    >
+                      <span
+                        className={cn(
+                          "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
+                          TONE_WASH.primary,
+                        )}
+                      >
+                        <Icon className="w-5 h-5" aria-hidden="true" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-sm font-semibold text-on-surface">
+                          {k.label}
+                        </h3>
+                        <p className="text-xs text-on-surface-variant mt-0.5 text-pretty">
+                          {k.description}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectKind(k.kind)}
+                        aria-label={`Connect ${k.label}`}
+                        className="btn-secondary btn-sm shrink-0"
+                      >
+                        Connect
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </section>
+        )}
+      </div>
 
       <AddConnectorSheet
         isOpen={addSheetOpen}

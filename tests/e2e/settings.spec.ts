@@ -134,6 +134,20 @@ test.describe("Settings — Desktop", () => {
     await expect(tempUnitRow).toBeFocused();
     await expect(tempUnitRow).toHaveClass(/flash/);
     await expect(tempUnitRow).not.toHaveClass(/ring-2/);
+
+    // Subpage deep links (#gallery on Connectors, #export on Export, and
+    // #claude-desktop on MCP) also focus and flash their targets.
+    for (const [path, id] of [
+      ["/settings/connectors#gallery", "#gallery"],
+      ["/settings/export#export", "#export"],
+      ["/settings/mcp#claude-desktop", "#claude-desktop"],
+    ] as const) {
+      await page.goto(path);
+      const target = page.locator(id);
+      await expect(target).toBeVisible();
+      await expect(target).toBeFocused();
+      await expect(target).toHaveClass(/flash/);
+    }
   });
 
   test("a changed setting wears the dot, and Reset to defaults at the page's end puts it back", async ({
@@ -716,6 +730,12 @@ test.describe("Tracked contacts", () => {
     await page.getByRole("button", { name: "Reset to defaults" }).click();
     await expect(cadence).toHaveText(/Quarterly/);
     await expect(trackNew).toHaveAttribute("aria-checked", "false");
+    await expect(
+      page.getByRole("img", { name: "Changed from the default" }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Reset to defaults" }),
+    ).toBeHidden();
     await expect(
       page.getByText("2 settings are back to their defaults"),
     ).toBeVisible();

@@ -339,21 +339,27 @@ describe("following the machine", () => {
 });
 
 describe("resetting a preference", () => {
-  it("resets an account preference back to default and deletes it on the server", async () => {
-    stored = { listDensity: "compact" };
+  it("resets account preferences back to default and deletes them on the server without resurrecting deleted keys", async () => {
+    stored = { theme: "dark", listDensity: "compact" };
     const { result } = renderHook(() => usePreferences(), {
       wrapper: makeWrapper(),
     });
     await waitFor(() => expect(result.current.isLoaded).toBe(true));
     expect(result.current.preferences.listDensity).toBe("compact");
-    expect(result.current.stored).toEqual(["listDensity"]);
+    expect(result.current.stored).toEqual(["theme", "listDensity"]);
+    expect(result.current.changed).toEqual(["theme", "listDensity"]);
 
-    act(() => result.current.resetPreference("listDensity"));
+    act(() => {
+      result.current.resetPreference("theme");
+      result.current.resetPreference("listDensity");
+    });
 
-    await waitFor(() =>
-      expect(result.current.preferences.listDensity).toBe("comfortable"),
-    );
-    expect(result.current.stored).not.toContain("listDensity");
+    await waitFor(() => {
+      expect(result.current.preferences.theme).toBe("system");
+      expect(result.current.preferences.listDensity).toBe("comfortable");
+      expect(result.current.stored).toEqual([]);
+      expect(result.current.changed).toEqual([]);
+    });
     expect(
       calls.some(
         (c) =>

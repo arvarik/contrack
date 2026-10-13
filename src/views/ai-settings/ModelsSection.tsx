@@ -51,7 +51,7 @@ export function ModelsSection({ settings }: { settings: AISettings }) {
           id="embedding-model"
           capability="embeddings"
           title="Embedding model"
-          summary="Turns each contact into numbers, to compare people by meaning. The built-in model runs on the server, free and offline. A hosted one gets every contact's profile text"
+          summary="Turns each contact into numbers, to compare people by meaning. Built-in runs on this server, or pick a provider to save memory"
           usedBy={featuresUsing("embedding")}
           state={capabilities.embeddings}
           autoLabel="Built-in (recommended)"

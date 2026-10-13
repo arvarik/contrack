@@ -4,13 +4,15 @@
  * enrichment page instead.
  */
 import React, { useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { ChevronRight, Copy, UploadCloud } from "lucide-react";
 import { useDedupeCount } from "../../api";
 import { useImports } from "../../api/imports";
+import { touchFirst } from "../../lib/platform";
 import { TONE_WASH } from "../../lib/styles";
 import { cn, plural } from "../../lib/utils";
 import { SETTINGS_SECTION_HEADING } from "./layout";
-import { SlideLink } from "./slide";
+import { SlideLink, isPlainClick } from "./slide";
 
 const FAILED_IMPORT_WINDOW_MS = 30 * 86_400_000;
 
@@ -35,6 +37,7 @@ export function useAttentionCounts() {
 }
 
 export const NeedsAttention = () => {
+  const navigate = useNavigate();
   const { duplicates, failedImports } = useAttentionCounts();
 
   const items: {
@@ -73,6 +76,16 @@ export const NeedsAttention = () => {
             <SlideLink
               key={item.path}
               to={item.path}
+              onClick={(event) => {
+                if (
+                  item.path === "/pulse/duplicates" &&
+                  touchFirst() &&
+                  isPlainClick(event)
+                ) {
+                  event.preventDefault();
+                  navigate(item.path);
+                }
+              }}
               className="lift state-layer flex items-center gap-3 p-3.5 rounded-xl bg-primary/10 text-on-surface min-h-[44px]"
             >
               <span
