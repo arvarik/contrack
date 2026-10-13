@@ -273,7 +273,7 @@ test.describe("map", () => {
         name: "Alan Turing, Same Place Ltd",
       });
       await alan.click();
-      await expect(page).toHaveURL(/\/map\/contact\/[0-9a-f-]+$/);
+      await expect(page).toHaveURL(/\/map\/contact\/alan-turing-[0-9a-f]{8}$/);
       // The list stays, and marks the open contact.
       await expect(alan).toHaveAttribute("aria-current", "true");
       // Restore pane preference for subsequent tests
@@ -977,7 +977,7 @@ test.describe("map on a phone", () => {
     await expect(card).toBeVisible();
     await expect(page).toHaveURL(/\/map$/);
     await card.getByRole("button", { name: "Open contact" }).tap();
-    await expect(page).toHaveURL(/\/map\/contact\/[0-9a-f-]+$/);
+    await expect(page).toHaveURL(/\/map\/contact\/linus-torvalds-[0-9a-f]{8}$/);
     const overlay = page.getByRole("region", { name: "Contact", exact: true });
     await expect(
       overlay.getByRole("heading", { level: 1, name: /Linus Torvalds/ }),

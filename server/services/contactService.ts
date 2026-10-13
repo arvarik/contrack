@@ -23,13 +23,16 @@ import {
 } from "../utils/avatarProcessor.ts";
 import { aiCache } from "../utils/aiCache.ts";
 import { scopeForOwnerId, type Scope } from "../tenancy/scope.ts";
-import { buildContactUpdate } from "../utils/helpers.ts";
+import {
+  buildContactUpdate,
+  getErrorMessage,
+  newContactId,
+} from "../utils/helpers.ts";
 import { defaultAvatarUrl, isDefaultAvatarFor } from "./avatarService.ts";
 import { removeFromIndexQueue } from "./search/indexQueue.ts";
 import { doubleMetaphone } from "../utils/nlp/index.ts";
 import { log } from "../utils/logger.ts";
 import { importService } from "./importService.ts";
-import { getErrorMessage } from "../utils/helpers.ts";
 import { getPreferences } from "./userPreferencesService.ts";
 import { trashRetentionDays } from "./lifecycleSettings.ts";
 import {
@@ -492,7 +495,7 @@ export const contactService = {
     source: string = "manual",
     options: { autoEnrich?: boolean } = {},
   ) {
-    const id = crypto.randomUUID();
+    const id = newContactId(body.name);
     const values = buildInsertValues(scope, body, id, {
       manual: source === "manual",
     });
@@ -574,7 +577,7 @@ export const contactService = {
     try {
       /** One row. A savepoint when nested in the batch below. */
       const insertOne = sqlite.transaction((c: NewContactPayload) => {
-        const id = crypto.randomUUID();
+        const id = newContactId(c.name);
         // An import, so never tracked by the preference.
         const values = buildInsertValues(scope, c, id, { manual: false });
 
