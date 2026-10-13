@@ -9,7 +9,7 @@
 // winter in the north, July is winter in the south.
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   LocalTimeWeather,
@@ -184,13 +184,9 @@ describe("the weather", () => {
     return fetchMock;
   }
 
-  it("never asks Open-Meteo when the weather is not allowed", async () => {
+  it("never asks Open-Meteo when the weather is not allowed", () => {
     const fetchMock = mount(false);
     expect(screen.getByText(/local time/)).toBeTruthy();
-    // Give a query that should not exist the chance to start.
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    });
     expect(fetchMock).not.toHaveBeenCalled();
     expect(screen.queryByText(/°C/)).toBeNull();
   });

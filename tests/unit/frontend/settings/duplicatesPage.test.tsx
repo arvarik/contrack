@@ -71,59 +71,12 @@ describe("DuplicatesPage", () => {
     expect(screen.queryByText(/possible duplicates/i)).toBeNull();
   });
 
-  it("renders sensitivity and automatic check switches and toggles them", () => {
+  it("renders sensitivity and automatic check switches, page order, and Merge history link", () => {
     vi.mocked(api.useDedupeCount).mockReturnValue({
       data: 0,
     } as unknown as ReturnType<typeof api.useDedupeCount>);
 
     renderComponent();
-    expect(screen.getByText("Auto-merge sensitivity")).toBeTruthy();
-    expect(screen.getByText("Check new contacts automatically")).toBeTruthy();
-    expect(screen.getByText("Check imports automatically")).toBeTruthy();
-
-    const onCreateSwitch = screen.getByRole("switch", {
-      name: "Check new contacts automatically",
-    });
-    fireEvent.click(onCreateSwitch);
-    expect(mockSetPreference).toHaveBeenCalledWith("dedupeOnCreate", false);
-
-    const onImportSwitch = screen.getByRole("switch", {
-      name: "Check imports automatically",
-    });
-    fireEvent.click(onImportSwitch);
-    expect(mockSetPreference).toHaveBeenCalledWith("dedupeOnImport", false);
-  });
-});
-
-describe("DuplicatesPage, the order of the page", () => {
-  beforeEach(() => {
-    vi.mocked(prefContext.usePreferences).mockReturnValue({
-      preferences: {
-        dedupePreset: "default",
-        dedupeOnCreate: true,
-        dedupeOnImport: true,
-      },
-      stored: [],
-      changed: [],
-      resetPreference: vi.fn(),
-      setPreference: vi.fn(),
-    } as unknown as ReturnType<typeof prefContext.usePreferences>);
-    vi.mocked(api.useDedupeCount).mockReturnValue({
-      data: 0,
-    } as unknown as ReturnType<typeof api.useDedupeCount>);
-  });
-
-  const renderPage = () =>
-    render(
-      <QueryClientProvider client={new QueryClient()}>
-        <MemoryRouter>
-          <DuplicatesPage />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-
-  it("puts the tool first and what runs by itself under it", () => {
-    renderPage();
     const tool = screen.getByTestId("dedupe-engine");
     const section = screen.getByRole("heading", {
       level: 2,
@@ -137,12 +90,22 @@ describe("DuplicatesPage, the order of the page", () => {
         screen.getByText("Auto-merge sensitivity"),
       ) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
-  });
 
-  it("links Merge history from the header, with its name on the button", () => {
-    renderPage();
-    const link = screen.getByRole("link", { name: "Merge history" });
-    expect(link.getAttribute("href")).toBe("/pulse/duplicates?view=merged");
-    expect(link.textContent).toBe("Merge history");
+    const mergeHistory = screen.getByRole("link", { name: "Merge history" });
+    expect(mergeHistory.getAttribute("href")).toBe(
+      "/pulse/duplicates?view=merged",
+    );
+
+    const onCreateSwitch = screen.getByRole("switch", {
+      name: "Check new contacts automatically",
+    });
+    fireEvent.click(onCreateSwitch);
+    expect(mockSetPreference).toHaveBeenCalledWith("dedupeOnCreate", false);
+
+    const onImportSwitch = screen.getByRole("switch", {
+      name: "Check imports automatically",
+    });
+    fireEvent.click(onImportSwitch);
+    expect(mockSetPreference).toHaveBeenCalledWith("dedupeOnImport", false);
   });
 });

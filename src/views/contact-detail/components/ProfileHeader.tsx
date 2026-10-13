@@ -19,7 +19,7 @@
  *    the summary and the tags move to the Details tab, the weather stays
  *    off, and a row of quick actions ends the header.
  */
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -568,6 +568,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
   const navigate = useNavigate();
   const narrow = layout === "narrow";
   const { preferences } = usePreferences();
+  const [ghostInfoOpen, setGhostInfoOpen] = useState(false);
 
   /**
    * Opening a contact moves focus to its name, the h1, so the next Tab starts
@@ -834,9 +835,21 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                     : "Named in a note, and not added yet";
 
                   return (
-                    <div className="absolute -top-3 -right-3 flex items-center justify-center w-8 h-8 rounded-full bg-surface-container-highest border-2 border-surface-container-lowest shadow-sm z-20 group/ghosticon cursor-help">
+                    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
+                    <div
+                      title={`Not in your network — ${ghostText}`}
+                      onClick={() => setGhostInfoOpen((o) => !o)}
+                      className="absolute -top-3 -right-3 flex items-center justify-center w-8 h-8 rounded-full bg-surface-container-highest border-2 border-surface-container-lowest shadow-sm z-20 group/ghosticon cursor-help"
+                    >
                       <Sparkles className="w-4 h-4 text-primary opacity-80 group-hover/ghosticon:opacity-100 transition-opacity" />
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-surface text-on-surface text-xs font-medium p-2.5 rounded-xl shadow-lg border border-surface-container opacity-0 pointer-events-none group-hover/ghosticon:opacity-100 transition-all z-50 text-center leading-relaxed">
+                      <div
+                        className={cn(
+                          "absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-surface text-on-surface text-xs font-medium p-2.5 rounded-xl shadow-lg border border-surface-container pointer-events-none transition-all z-50 text-center leading-relaxed",
+                          ghostInfoOpen
+                            ? "opacity-100"
+                            : "opacity-0 group-hover/ghosticon:opacity-100",
+                        )}
+                      >
                         <strong className="block text-primary mb-0.5">
                           Not in your network
                         </strong>

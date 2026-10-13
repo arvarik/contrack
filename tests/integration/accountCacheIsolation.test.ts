@@ -357,7 +357,7 @@ describe("Account cache isolation and shared pending requests", () => {
       let rerankCalls = 0;
       vi.mocked(rerankCandidates).mockImplementation(async () => {
         rerankCalls++;
-        await new Promise((resolve) => setTimeout(resolve, 60));
+        await new Promise((resolve) => setTimeout(resolve, 15));
         return [
           {
             contact_id: contactAId,
@@ -396,8 +396,10 @@ describe("Account cache isolation and shared pending requests", () => {
       );
       const contactAId = resA.body.id;
 
+      let releaseRerank!: () => void;
+      const rerankGate = new Promise<void>((r) => (releaseRerank = r));
       vi.mocked(rerankCandidates).mockImplementation(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 80));
+        await rerankGate;
         return [
           {
             contact_id: contactAId,
@@ -425,9 +427,9 @@ describe("Account cache isolation and shared pending requests", () => {
 
       // Caller 1 aborts early
       ac1.abort();
-
       await expect(p1).rejects.toThrow();
 
+      releaseRerank();
       // Caller 2 receives the full semantic result!
       const result2 = await p2;
       expect(result2.fallback).toBe(false);
@@ -444,7 +446,7 @@ describe("Account cache isolation and shared pending requests", () => {
       let insightGenerations = 0;
       vi.mocked(generateDailyInsight).mockImplementation(async () => {
         insightGenerations++;
-        await new Promise((resolve) => setTimeout(resolve, 60));
+        await new Promise((resolve) => setTimeout(resolve, 15));
         return {
           text: "Single flight insight",
           category: "network",
@@ -477,8 +479,10 @@ describe("Account cache isolation and shared pending requests", () => {
           .send({ name: "Alice", role: "Engineer" }),
       );
 
+      let releaseInsight!: () => void;
+      const insightGate = new Promise<void>((r) => (releaseInsight = r));
       vi.mocked(generateDailyInsight).mockImplementation(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 80));
+        await insightGate;
         return {
           text: "Insight for surviving caller",
           category: "overview",
@@ -494,9 +498,9 @@ describe("Account cache isolation and shared pending requests", () => {
 
       // Caller 1 aborts early
       ac1.abort();
-
       await expect(p1).rejects.toThrow();
 
+      releaseInsight();
       // Caller 2 receives the generated insight
       const result2 = await p2;
       expect(result2).toEqual({
@@ -525,7 +529,6 @@ describe("Account cache isolation and shared pending requests", () => {
       let rerankInvocations = 0;
       vi.mocked(rerankCandidates).mockImplementation(async () => {
         rerankInvocations++;
-        await new Promise((resolve) => setTimeout(resolve, 40));
         return [];
       });
 

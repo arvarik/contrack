@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  getContactMatchReason,
   scoreContactMatch,
   type MatchableContact,
 } from "../../../../src/lib/contactMatch";
@@ -98,5 +99,25 @@ describe("scoreContactMatch", () => {
     expect(
       scoreContactMatch({ name: "Alice", phones: [{ phone: "" }] }, "555"),
     ).toBe(0);
+  });
+
+  it("returns a match reason only when matched via a non-visible field", () => {
+    const contact: MatchableContact = {
+      name: "Ada Lovelace",
+      company: "Analytical Engines Inc",
+      role: "Founder",
+      location: "London, UK",
+      industry: "Computing",
+      tags: [{ tag: "Pioneer" }],
+      emails: [{ email: "ada@analytical.org" }],
+      phones: [{ phone: "(555) 123-4567" }],
+    };
+    expect(getContactMatchReason(contact, "ada")).toBeNull();
+    expect(getContactMatchReason(contact, "analytical")).toBeNull();
+    expect(getContactMatchReason(contact, "founder")).toBeNull();
+    expect(getContactMatchReason(contact, "pioneer")).toBe("#Pioneer");
+    expect(getContactMatchReason(contact, "london")).toBe("London, UK");
+    expect(getContactMatchReason(contact, "computing")).toBe("Computing");
+    expect(getContactMatchReason(contact, "555123")).toBe("(555) 123-4567");
   });
 });

@@ -57,14 +57,13 @@ const fake = (score: Reranker["score"]): Reranker => ({
 });
 
 /** A reranker that gives each document the score its name maps to. */
-function scoresByName(scores: Record<string, number>, delayMs = 0) {
+function scoresByName(scores: Record<string, number>) {
   const calls: { query: string; docs: string[] }[] = [];
   const signals: AbortSignal[] = [];
   setReranker(
     fake(async (query, docs, signal) => {
       calls.push({ query, docs });
       signals.push(signal);
-      if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
       return docs.map((doc) => scores[doc.split(" | ")[0]] ?? 0);
     }),
   );
@@ -82,6 +81,7 @@ beforeEach(() => {
 
 afterEach(() => {
   setReranker(null);
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -134,14 +134,19 @@ describe("the budget", () => {
   });
 
   it("keeps the fused order when the scores arrive late", async () => {
-    const { signals } = scoresByName({ Ada: 1, Grace: 3 }, 200);
-    const started = performance.now();
-    const list = await rerankLocal("q", people("Ada", "Grace"), 20);
+    vi.useFakeTimers();
+    let capturedSignal!: AbortSignal;
+    setReranker(
+      fake((_query, _docs, signal) => {
+        capturedSignal = signal;
+        return new Promise<number[]>(() => {});
+      }),
+    );
+    const pending = rerankLocal("q", people("Ada", "Grace"), 20);
+    await vi.advanceTimersByTimeAsync(25);
+    const list = await pending;
     expect(names(list)).toEqual(["Ada", "Grace"]);
-    // The list came back at the budget, not when the scores did.
-    expect(performance.now() - started).toBeLessThan(150);
-    // And the scorer was told the scores are no longer wanted.
-    expect(signals[0].aborted).toBe(true);
+    expect(capturedSignal.aborted).toBe(true);
   });
 
   it("takes its default from SEARCH_RERANK_BUDGET_MS", () => {

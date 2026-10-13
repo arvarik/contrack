@@ -204,7 +204,7 @@ describe("DetailsCard", () => {
       "Location",
       "Email",
       "Phone",
-      "Birthday",
+      "Dates",
       "Industry",
       "Preferences",
       "Interests",
@@ -242,7 +242,7 @@ describe("DetailsCard", () => {
 
   it("names one add button per list field and shows no placeholder text", () => {
     drawCard({ phones: [] });
-    for (const name of ["Add location", "Add email", "Add phone"]) {
+    for (const name of ["Add location", "Add email", "Add phone", "Add date"]) {
       expect(screen.getAllByRole("button", { name })).toHaveLength(1);
     }
     expect(screen.queryByText(/Add Phone|Add another/)).toBeNull();
@@ -322,15 +322,15 @@ describe("DetailsCard", () => {
     );
   });
 
-  it("gives an empty Birthday and Industry the card's one + Add, and puts focus back after Escape", () => {
+  it("gives an empty Dates and Industry the card's one + Add, and puts focus back after Escape", () => {
     const { onUpdate } = drawCard();
-    const birthday = screen.getByRole("button", { name: "Add birthday" });
+    const birthday = screen.getByRole("button", { name: "Add date" });
     expect(birthday.textContent).toBe("Add");
     fireEvent.click(birthday);
     const date = screen.getByLabelText("Birthday", { selector: "input" });
     fireEvent.keyDown(date, { key: "Escape" });
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Add birthday" }),
+      screen.getByRole("button", { name: "Add date" }),
     );
 
     const industry = screen.getByRole("button", { name: "Add industry" });
@@ -347,7 +347,7 @@ describe("DetailsCard", () => {
 
   it("saves a typed birthday once, on Enter, and keeps a day with no year", () => {
     const { onUpdate } = drawCard();
-    fireEvent.click(screen.getByRole("button", { name: "Add birthday" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add date" }));
     const field = screen.getByLabelText("Birthday", { selector: "input" });
     // A date input saved after the first digit typed.
     fireEvent.change(field, { target: { value: "May 1" } });
@@ -355,6 +355,35 @@ describe("DetailsCard", () => {
     expect(onUpdate).not.toHaveBeenCalled();
     fireEvent.keyDown(field, { key: "Enter" });
     expect(onUpdate).toHaveBeenCalledExactlyOnceWith("birthday", "05-14");
+  });
+
+  it("adds an anniversary or custom date alongside birthday in Dates", () => {
+    const { mutate } = drawCard({ birthday: "1990-05-14", attributes: [] });
+    const group = screen.getByRole("group", { name: "Dates" });
+    fireEvent.click(within(group).getByRole("button", { name: "Add date" }));
+    // When a birthday already exists, the new date defaults to anniversary.
+    const labelChip = within(group).getByRole("combobox", {
+      name: "Label for new date",
+    });
+    expect(labelChip.textContent).toContain("anniversary");
+    fireEvent.click(labelChip);
+    fireEvent.click(screen.getByRole("option", { name: "custom…" }));
+    const customInput = within(group).getByRole("textbox", {
+      name: "Custom date type",
+    });
+    fireEvent.change(customInput, { target: { value: "Graduation" } });
+    const dateInput = within(group).getByLabelText("Birthday", {
+      selector: "input",
+    });
+    fireEvent.change(dateInput, { target: { value: "June 1, 2015" } });
+    fireEvent.keyDown(dateInput, { key: "Enter" });
+    expect(mutate).toHaveBeenCalledWith({
+      id: "c1",
+      data: {
+        birthday: "1990-05-14",
+        attributes: [{ name: "date:Graduation", value: "2015-06-01" }],
+      },
+    });
   });
 
   it("adds preferences split on commas and names each chip's remove button", () => {

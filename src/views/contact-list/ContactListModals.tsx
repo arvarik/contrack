@@ -192,8 +192,8 @@ export const ContactListModals = ({
       const logged = saved.length - failed.length;
       toast.success(
         logged > 0
-          ? `Created "${name}" with ${plural(logged, "interaction", "interactions")}`
-          : `Created "${name}"`,
+          ? `Created \u201c${name}\u201d with ${plural(logged, "interaction", "interactions")}`
+          : `Created \u201c${name}\u201d`,
       );
       if (failed.length > 0)
         toast.error(

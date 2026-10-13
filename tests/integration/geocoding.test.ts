@@ -14,6 +14,7 @@ import {
   normalizeLocationKey,
 } from "../../server/services/geocoding/cache.ts";
 import {
+  cleanLocationQuery,
   geocodeWithFallback,
   INTER_REQUEST_DELAY_MS,
 } from "../../server/services/geocoding/provider.ts";
@@ -33,6 +34,18 @@ describe("Geocoding Integration Tests", () => {
       "san francisco, ca",
     );
     expect(normalizeLocationKey("san  francisco,ca")).toBe("san francisco, ca");
+    expect(cleanLocationQuery("New York City Metropolitan Area")).toBe(
+      "Manhattan, New York, NY",
+    );
+    expect(cleanLocationQuery("Greater Boston Area")).toBe("Boston, MA");
+    expect(cleanLocationQuery("San Francisco Bay Area")).toBe(
+      "San Francisco, CA",
+    );
+    expect(cleanLocationQuery("Columbus, Ohio Metropolitan Area")).toBe(
+      "Columbus, Ohio",
+    );
+    expect(cleanLocationQuery("Seattle, WA (Remote)")).toBe("Seattle, WA");
+    expect(cleanLocationQuery("Remote")).toBe("");
   });
 
   it("skips processing if location is null or empty", async () => {

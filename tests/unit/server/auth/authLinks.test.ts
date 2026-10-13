@@ -49,40 +49,27 @@ describe("authLinkService", () => {
   });
 
   describe("expiry per kind", () => {
-    it("creates reset links with 1-hour expiry", () => {
-      const now = Date.now();
-      const link = createAuthLink("reset", testUserId, RESET_LINK_TTL_SECONDS);
-      expect(link).not.toBeNull();
-      const expiresAt = new Date(link!.expiresAt).getTime();
-      const diffSeconds = Math.round((expiresAt - now) / 1000);
-      expect(diffSeconds).toBeGreaterThanOrEqual(3595);
-      expect(diffSeconds).toBeLessThanOrEqual(3605);
-    });
-
-    it("creates magic links with 15-minute expiry", () => {
-      const now = Date.now();
-      const link = createAuthLink("magic", testUserId, MAGIC_LINK_TTL_SECONDS);
-      expect(link).not.toBeNull();
-      const expiresAt = new Date(link!.expiresAt).getTime();
-      const diffSeconds = Math.round((expiresAt - now) / 1000);
-      expect(diffSeconds).toBeGreaterThanOrEqual(895);
-      expect(diffSeconds).toBeLessThanOrEqual(905);
-    });
-
-    it("creates admin reset links with 24-hour expiry", () => {
-      const now = Date.now();
-      const link = createAuthLink(
-        "reset",
-        testUserId,
-        ADMIN_RESET_LINK_TTL_SECONDS,
-        adminUserId,
-      );
-      expect(link).not.toBeNull();
-      const expiresAt = new Date(link!.expiresAt).getTime();
-      const diffSeconds = Math.round((expiresAt - now) / 1000);
-      expect(diffSeconds).toBeGreaterThanOrEqual(86395);
-      expect(diffSeconds).toBeLessThanOrEqual(86405);
-    });
+    it.each([
+      ["reset", RESET_LINK_TTL_SECONDS, false],
+      ["magic", MAGIC_LINK_TTL_SECONDS, false],
+      ["reset", ADMIN_RESET_LINK_TTL_SECONDS, true],
+    ] as const)(
+      "creates %s link with %i-second expiry (admin=%s)",
+      (kind, ttlSeconds, byAdmin) => {
+        const now = Date.now();
+        const link = createAuthLink(
+          kind,
+          testUserId,
+          ttlSeconds,
+          byAdmin ? adminUserId : undefined,
+        );
+        expect(link).not.toBeNull();
+        const expiresAt = new Date(link!.expiresAt).getTime();
+        const diffSeconds = Math.round((expiresAt - now) / 1000);
+        expect(diffSeconds).toBeGreaterThanOrEqual(ttlSeconds - 5);
+        expect(diffSeconds).toBeLessThanOrEqual(ttlSeconds + 5);
+      },
+    );
   });
 
   describe("single use and validation", () => {

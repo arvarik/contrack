@@ -883,19 +883,41 @@ describe("Frontend Connectors Components", () => {
       vi.useRealTimers();
     });
 
-    it("formats fetched-only stats, a sub-second duration, and an unknown status label", () => {
-      const run: ConnectorRun = {
-        id: "run-neutral",
-        connectorId: "conn-hist-1",
-        trigger: "manual",
-        status: "custom_status" as unknown as ConnectorRun["status"],
-        startedAt: "2026-02-01T10:00:00Z",
-        finishedAt: "2026-02-01T10:00:00.500Z",
-        stats: { fetched: 15 },
-        error: null,
-      };
+    it("formats fetched-only, message, and interaction stats, sub-second durations, and unknown status labels", () => {
+      const runs: ConnectorRun[] = [
+        {
+          id: "run-neutral",
+          connectorId: "conn-hist-1",
+          trigger: "manual",
+          status: "custom_status" as unknown as ConnectorRun["status"],
+          startedAt: "2026-02-01T10:00:00Z",
+          finishedAt: "2026-02-01T10:00:00.500Z",
+          stats: { fetched: 15 },
+          error: null,
+        },
+        {
+          id: "run-msg-int",
+          connectorId: "conn-hist-1",
+          trigger: "manual",
+          status: "ok",
+          startedAt: "2026-02-01T10:00:00Z",
+          finishedAt: "2026-02-01T10:00:01Z",
+          stats: { messages: 7, interactions: 10 },
+          error: null,
+        },
+        {
+          id: "run-interactions-only",
+          connectorId: "conn-hist-1",
+          trigger: "manual",
+          status: "ok",
+          startedAt: "2026-02-01T10:00:00Z",
+          finishedAt: "2026-02-01T10:00:01Z",
+          stats: { interactions: 4 },
+          error: null,
+        },
+      ];
       vi.mocked(connectorsApi.useConnectorRuns).mockReturnValue({
-        data: [run],
+        data: runs,
         isLoading: false,
       } as unknown as ReturnType<typeof connectorsApi.useConnectorRuns>);
 
@@ -906,38 +928,6 @@ describe("Frontend Connectors Components", () => {
       expect(screen.getByText("15 fetched")).toBeTruthy();
       expect(screen.getByText("500ms")).toBeTruthy();
       expect(screen.getByText("custom_status")).toBeTruthy();
-    });
-
-    it("formats messages and interactions in run stats", () => {
-      const run: ConnectorRun = {
-        id: "run-msg-int",
-        connectorId: "conn-hist-1",
-        trigger: "manual",
-        status: "ok",
-        startedAt: "2026-02-01T10:00:00Z",
-        finishedAt: "2026-02-01T10:00:01Z",
-        stats: { messages: 7, interactions: 10 },
-        error: null,
-      };
-      const run2: ConnectorRun = {
-        id: "run-interactions-only",
-        connectorId: "conn-hist-1",
-        trigger: "manual",
-        status: "ok",
-        startedAt: "2026-02-01T10:00:00Z",
-        finishedAt: "2026-02-01T10:00:01Z",
-        stats: { interactions: 4 },
-        error: null,
-      };
-      vi.mocked(connectorsApi.useConnectorRuns).mockReturnValue({
-        data: [run, run2],
-        isLoading: false,
-      } as unknown as ReturnType<typeof connectorsApi.useConnectorRuns>);
-
-      renderWithClient(
-        <RunHistoryDrawer isOpen={true} onClose={vi.fn()} connector={null} />,
-      );
-
       expect(screen.getByText("7 messages")).toBeTruthy();
       expect(screen.getByText("4 interactions")).toBeTruthy();
     });
@@ -1017,37 +1007,6 @@ describe("Frontend Connectors Components", () => {
       },
     );
 
-    it("clicking Edit on a connector card opens CalendarFormModal in edit mode", () => {
-      const connector = createMockConnector({
-        id: "conn-edit-view",
-        name: "Personal iCloud",
-        kind: "ics",
-        config: { url: "https://icloud.com/feed.ics" },
-      });
-
-      vi.mocked(connectorsApi.useConnectors).mockReturnValue({
-        data: [connector],
-        isLoading: false,
-        isError: false,
-        refetch: vi.fn(),
-      } as unknown as ReturnType<typeof connectorsApi.useConnectors>);
-
-      renderWithClient(<ConnectorsView />);
-
-      const menuTrigger = screen.getByRole("button", {
-        name: `Actions for ${connector.name}`,
-      });
-      fireEvent.click(menuTrigger);
-
-      const editItem = screen.getByRole("menuitem", { name: "Edit" });
-      fireEvent.click(editItem);
-
-      expect(
-        screen.getByRole("heading", { name: "Edit Personal iCloud" }),
-      ).toBeTruthy();
-      expect(screen.getByDisplayValue("Personal iCloud")).toBeTruthy();
-    });
-
     it("renders error state and retry button when loading connectors fails", () => {
       const refetchMock = vi.fn();
       vi.mocked(connectorsApi.useConnectors).mockReturnValue({
@@ -1066,8 +1025,13 @@ describe("Frontend Connectors Components", () => {
       expect(refetchMock).toHaveBeenCalledTimes(1);
     });
 
-    it("closes AddConnectorSheet, CalendarFormModal, and RunHistoryDrawer when requested", () => {
-      const connector = createMockConnector({ id: "conn-1", name: "Cal 1" });
+    it("opens and closes AddConnectorSheet, CalendarFormModal in edit mode, and RunHistoryDrawer", () => {
+      const connector = createMockConnector({
+        id: "conn-1",
+        name: "Personal iCloud",
+        kind: "ics",
+        config: { url: "https://icloud.com/feed.ics" },
+      });
       vi.mocked(connectorsApi.useConnectors).mockReturnValue({
         data: [connector],
         isLoading: false,
@@ -1089,23 +1053,32 @@ describe("Frontend Connectors Components", () => {
 
       // Open and close CalendarFormModal via card edit
       const menuTrigger = screen.getByRole("button", {
-        name: "Actions for Cal 1",
+        name: "Actions for Personal iCloud",
       });
       fireEvent.click(menuTrigger);
       fireEvent.click(screen.getByRole("menuitem", { name: "Edit" }));
-      expect(screen.getByRole("heading", { name: "Edit Cal 1" })).toBeTruthy();
+      expect(
+        screen.getByRole("heading", { name: "Edit Personal iCloud" }),
+      ).toBeTruthy();
+      expect(screen.getByDisplayValue("Personal iCloud")).toBeTruthy();
       fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-      expect(screen.queryByRole("heading", { name: "Edit Cal 1" })).toBeNull();
+      expect(
+        screen.queryByRole("heading", { name: "Edit Personal iCloud" }),
+      ).toBeNull();
 
       // Open and close RunHistoryDrawer via card runs
       fireEvent.click(menuTrigger);
       fireEvent.click(screen.getByRole("menuitem", { name: "Run history" }));
       expect(
-        screen.getByRole("heading", { name: "Run history for Cal 1" }),
+        screen.getByRole("heading", {
+          name: "Run history for Personal iCloud",
+        }),
       ).toBeTruthy();
       fireEvent.click(screen.getByRole("button", { name: "Close" }));
       expect(
-        screen.queryByRole("heading", { name: "Run history for Cal 1" }),
+        screen.queryByRole("heading", {
+          name: "Run history for Personal iCloud",
+        }),
       ).toBeNull();
     });
   });

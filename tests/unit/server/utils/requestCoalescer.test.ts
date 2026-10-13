@@ -1,6 +1,16 @@
 import { describe, it, expect, vi } from "vitest";
 import { RequestCoalescer } from "../../../../server/utils/requestCoalescer.ts";
 
+function deferred<T = void>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 /**
  * Nothing is left in flight under `key`: a new call runs its own action
  * rather than joining a finished, failed or abandoned one.
@@ -14,18 +24,19 @@ async function expectRunsFresh(coalescer: RequestCoalescer, key: string) {
 describe("RequestCoalescer", () => {
   it("shares identical in-flight requests among concurrent callers", async () => {
     const coalescer = new RequestCoalescer();
+    const gate = deferred<{ data: string }>();
     let runs = 0;
 
-    const action = async () => {
+    const action = () => {
       runs++;
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      return { data: "success" };
+      return gate.promise;
     };
 
     const p1 = coalescer.coalesce("key-1", action);
     const p2 = coalescer.coalesce("key-1", action);
     const p3 = coalescer.coalesce("key-1", action);
 
+    gate.resolve({ data: "success" });
     const [r1, r2, r3] = await Promise.all([p1, p2, p3]);
 
     expect(runs).toBe(1);
@@ -39,11 +50,7 @@ describe("RequestCoalescer", () => {
     const coalescer = new RequestCoalescer();
     let runs = 0;
 
-    const action = async () => {
-      const current = ++runs;
-      await new Promise((resolve) => setTimeout(resolve, 30));
-      return current;
-    };
+    const action = async () => ++runs;
 
     const p1 = coalescer.coalesce("account-1:search:query", action);
     const p2 = coalescer.coalesce("account-2:search:query", action);
@@ -66,17 +73,15 @@ describe("RequestCoalescer", () => {
     "preserves cancellation: if %s aborts, the other still receives the result",
     async (_who, aborting) => {
       const coalescer = new RequestCoalescer();
+      const gate = deferred<string>();
       let runs = 0;
 
-      const action = async (signal: AbortSignal) => {
+      const action = (signal: AbortSignal) => {
         runs++;
-        return new Promise<string>((resolve, reject) => {
-          const timer = setTimeout(() => resolve("done"), 60);
-          signal.addEventListener("abort", () => {
-            clearTimeout(timer);
-            reject(signal.reason ?? new Error("Action aborted"));
-          });
+        signal.addEventListener("abort", () => {
+          gate.reject(signal.reason ?? new Error("Action aborted"));
         });
+        return gate.promise;
       };
 
       const controllers = [new AbortController(), new AbortController()];
@@ -90,6 +95,7 @@ describe("RequestCoalescer", () => {
       await expect(callers[aborting]).rejects.toBe(reason);
 
       // The other still completes successfully!
+      gate.resolve("done");
       await expect(callers[1 - aborting]).resolves.toBe("done");
       expect(runs).toBe(1);
       await expectRunsFresh(coalescer, "key-cancel");
@@ -100,16 +106,13 @@ describe("RequestCoalescer", () => {
     const coalescer = new RequestCoalescer();
     let actionAborted = false;
 
-    const action = async (signal: AbortSignal) => {
-      return new Promise<string>((resolve, reject) => {
-        const timer = setTimeout(() => resolve("done"), 100);
+    const action = (signal: AbortSignal) =>
+      new Promise<string>((_resolve, reject) => {
         signal.addEventListener("abort", () => {
           actionAborted = true;
-          clearTimeout(timer);
           reject(signal.reason ?? new Error("Action aborted"));
         });
       });
-    };
 
     const ac1 = new AbortController();
     const ac2 = new AbortController();
@@ -144,15 +147,12 @@ describe("RequestCoalescer", () => {
 
   it("propagates underlying failure to all waiting callers", async () => {
     const coalescer = new RequestCoalescer();
+    const gate = deferred<never>();
 
-    const action = async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      throw new Error("Provider quota exceeded");
-    };
+    const p1 = coalescer.coalesce("key-err", () => gate.promise);
+    const p2 = coalescer.coalesce("key-err", () => gate.promise);
 
-    const p1 = coalescer.coalesce("key-err", action);
-    const p2 = coalescer.coalesce("key-err", action);
-
+    gate.reject(new Error("Provider quota exceeded"));
     await expect(p1).rejects.toThrow("Provider quota exceeded");
     await expect(p2).rejects.toThrow("Provider quota exceeded");
 
@@ -163,10 +163,7 @@ describe("RequestCoalescer", () => {
     const coalescer = new RequestCoalescer();
     let runs = 0;
 
-    const action = async () => {
-      runs++;
-      return runs;
-    };
+    const action = async () => ++runs;
 
     const r1 = await coalescer.coalesce("key-sequential", action);
     expect(r1).toBe(1);
@@ -179,41 +176,34 @@ describe("RequestCoalescer", () => {
 
   it("does not delete newly started in-flight entry if a previous aborted entry settles afterwards", async () => {
     const coalescer = new RequestCoalescer();
-    let resolveFirstAction!: () => void;
-    const firstAction = async (signal: AbortSignal) => {
-      await new Promise<void>((resolve) => {
-        resolveFirstAction = resolve;
-        signal.addEventListener("abort", () => {
-          // Slow async cleanup simulating unwinding
-        });
-      });
+    const firstGate = deferred();
+    const secondGate = deferred<string>();
+
+    const firstAction = async () => {
+      await firstGate.promise;
       return "first";
     };
 
     const ac1 = new AbortController();
     const p1 = coalescer.coalesce("key-race", firstAction, ac1.signal);
-    // Abort caller 1 (the only caller)
     ac1.abort();
     await expect(p1).rejects.toThrow();
 
-    // Now caller 2 immediately starts with the same key while firstAction has not resolved yet
     let runsSecond = 0;
-    const secondAction = async () => {
+    const secondAction = () => {
       runsSecond++;
-      await new Promise((resolve) => setTimeout(resolve, 50));
-      return "second";
+      return secondGate.promise;
     };
 
     const p2a = coalescer.coalesce("key-race", secondAction);
 
-    // Now firstAction finally finishes and executes its finally block
-    resolveFirstAction();
-    await new Promise((resolve) => setTimeout(resolve, 10));
+    // First action settles and executes its finally block while p2a is in flight.
+    firstGate.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
 
-    // Caller 2's entry MUST still be in flight. It should NOT have been deleted
-    // by firstAction's finally block, so caller 2b attaches to the same key and
-    // MUST coalesce with p2a, not start a new run
     const p2b = coalescer.coalesce("key-race", secondAction);
+    secondGate.resolve("second");
     const [resA, resB] = await Promise.all([p2a, p2b]);
     expect(resA).toBe("second");
     expect(resB).toBe("second");

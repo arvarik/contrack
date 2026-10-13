@@ -18,129 +18,69 @@ describe("NLP Names & Nicknames", () => {
   });
 
   describe("nameSimilarity", () => {
-    it("scores exact matches perfectly", () => {
+    it("scores exact matches, nicknames, initials, typos, and unrelated names", () => {
       expect(nameSimilarity("Robert Johnson", "Robert Johnson")).toBe(1);
-    });
-
-    it("scores nicknames highly", () => {
       expect(nameSimilarity("Robert Johnson", "Bob Johnson")).toBeGreaterThan(
         0.9,
       );
-    });
-
-    it("handles initials", () => {
       expect(nameSimilarity("J. Smith", "James Smith")).toBeGreaterThan(0.8);
-    });
-
-    it("gives low scores to unrelated names", () => {
       expect(nameSimilarity("James Kirk", "Vladimir Petrov")).toBeLessThan(0.6);
-    });
 
-    it("scores name typo pairs highly", () => {
-      expect(
-        nameSimilarity("Jonathon Smyth", "Jonathan Smith"),
-      ).toBeGreaterThan(0.9);
-      expect(
-        nameSimilarity("Katharine Oconnel", "Katherine O'Connell"),
-      ).toBeGreaterThan(0.9);
-      expect(
-        nameSimilarity("Shivaun Murphey", "Siobhan Murphy"),
-      ).toBeGreaterThan(0.8);
-      expect(
-        nameSimilarity("Kristof Novak", "Krzysztof Nowak"),
-      ).toBeGreaterThan(0.85);
-      expect(
-        nameSimilarity("Eefa Gallacher", "Aoife Gallagher"),
-      ).toBeGreaterThan(0.85);
-      expect(
-        nameSimilarity("Jeffrey Thwaight", "Geoffrey Thwaite"),
-      ).toBeGreaterThan(0.9);
-      expect(nameSimilarity("Xiomarra Reyez", "Xiomara Reyes")).toBeGreaterThan(
-        0.9,
-      );
-      expect(
-        nameSimilarity("Bartholemew Quigly", "Bartholomew Quigley"),
-      ).toBeGreaterThan(0.9);
+      for (const [a, b, min] of [
+        ["Jonathon Smyth", "Jonathan Smith", 0.9],
+        ["Katharine Oconnel", "Katherine O'Connell", 0.9],
+        ["Shivaun Murphey", "Siobhan Murphy", 0.8],
+        ["Kristof Novak", "Krzysztof Nowak", 0.85],
+        ["Eefa Gallacher", "Aoife Gallagher", 0.85],
+        ["Jeffrey Thwaight", "Geoffrey Thwaite", 0.9],
+        ["Xiomarra Reyez", "Xiomara Reyes", 0.9],
+        ["Bartholemew Quigly", "Bartholomew Quigley", 0.9],
+      ] as const) {
+        expect(nameSimilarity(a, b), `${a} vs ${b}`).toBeGreaterThan(min);
+      }
     });
   });
 
-  describe("isNicknameMatch", () => {
-    it("detects structural nickname pairs correctly", () => {
+  describe("isNicknameMatch & areNicknameEquivalent", () => {
+    it("detects structural nickname pairs and equivalent nicknames", () => {
       expect(isNicknameMatch("Robert Johnson", "Bob Johnson")).toBe(true);
       expect(isNicknameMatch("Robert", "Bob")).toBe(true);
-
       expect(isNicknameMatch("Robert Johnson", "Bob Smith")).toBe(false);
-      expect(isNicknameMatch("John Smith", "John Smith")).toBe(false); // Exact match, not a nickname variant
-    });
-  });
+      expect(isNicknameMatch("John Smith", "John Smith")).toBe(false);
 
-  describe("areNicknameEquivalent", () => {
-    it("identifies equivalent names", () => {
       expect(areNicknameEquivalent("robert", "bob")).toBe(true);
       expect(areNicknameEquivalent("william", "bill")).toBe(true);
     });
   });
+
   describe("isMiddleNameExtension", () => {
     const check = (a: string, b: string) =>
       isMiddleNameExtension(tokenizeName(a), tokenizeName(b));
 
-    it("matches one added middle name, in either order", () => {
+    it("matches added middle names or initials and strips honorifics", () => {
       expect(check("Anton Kovacs", "Anton Peter Kovacs")).toBe(true);
       expect(check("Anton Peter Kovacs", "Anton Kovacs")).toBe(true);
-    });
-
-    it("matches two added middle names", () => {
       expect(check("Richard Bexwell", "Richard Alexander James Bexwell")).toBe(
         true,
       );
-    });
-
-    it("matches a middle initial, because the tokenizer drops the dot", () => {
       expect(check("Anton Kovacs", "Anton P. Kovacs")).toBe(true);
+      expect(check("Dr. Anton Kovacs", "Anton Peter Kovacs")).toBe(true);
     });
 
     it.each([
-      // Somebody who goes by their middle name, or somebody else. Either way
-      // the surname alone is not enough to merge on.
       ["a dropped first name", "Peter Kovacs", "Anton Peter Kovacs"],
-      // The lengths are equal, so neither is an extension of the other. This
-      // is the father-and-son shape.
       ["two different middle names", "Robert Lee Smith", "Robert Ann Smith"],
       ["a different surname", "Anton Kovacs", "Anton Peter Zeller"],
       ["a different first name", "Marta Kovacs", "Anton Peter Kovacs"],
+      ["a single token", "Kovacs", "Anton Kovacs"],
+      ["a single first token", "Anton", "Anton Peter Kovacs"],
+      ["an identical name", "Anton Kovacs", "Anton Kovacs"],
+      ["an empty first name", "", "Anton Peter Kovacs"],
+      ["an empty second name", "Anton Kovacs", ""],
+      ["a stripped suffix", "Anton Kovacs Jr.", "Anton Kovacs"],
+      ["reversed tokens", "Anton Kovacs", "Kovacs Peter Anton"],
     ])("refuses %s", (_what, a, b) => {
       expect(check(a, b)).toBe(false);
-    });
-
-    it("refuses a single token on either side", () => {
-      expect(check("Kovacs", "Anton Kovacs")).toBe(false);
-      expect(check("Anton", "Anton Peter Kovacs")).toBe(false);
-    });
-
-    it("refuses an identical name", () => {
-      // Exact names are somebody else's rule. This one only answers the
-      // question it is asked.
-      expect(check("Anton Kovacs", "Anton Kovacs")).toBe(false);
-    });
-
-    it("refuses an empty name", () => {
-      expect(check("", "Anton Peter Kovacs")).toBe(false);
-      expect(check("Anton Kovacs", "")).toBe(false);
-    });
-
-    it("ignores a title or a suffix, because the tokenizer strips them", () => {
-      // "Dr. Anton Kovacs" and "Anton Peter Kovacs" differ by a middle name
-      // once the honorific is gone, which is the right answer.
-      expect(check("Dr. Anton Kovacs", "Anton Peter Kovacs")).toBe(true);
-      // And a suffix cannot masquerade as a middle name: both sides tokenize
-      // to two tokens, so there is no extension.
-      expect(check("Anton Kovacs Jr.", "Anton Kovacs")).toBe(false);
-    });
-
-    it("requires the shorter name's tokens to appear in order", () => {
-      // "kovacs anton" reversed is not an extension of "anton kovacs", and the
-      // first-and-last-token checks are what refuse it.
-      expect(check("Anton Kovacs", "Kovacs Peter Anton")).toBe(false);
     });
   });
 });

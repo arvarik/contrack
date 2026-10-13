@@ -25,19 +25,34 @@
  * - A note is dated the moment it is saved, or the past day the date field
  *   names. That day is the draft's too, so a kept note keeps its day.
  */
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import { Extension } from "@tiptap/core";
 import Mention from "@tiptap/extension-mention";
-import { FileText, Phone, Handshake, Mail, CalendarClock } from "lucide-react";
+import {
+  FileText,
+  Phone,
+  Handshake,
+  Mail,
+  CalendarClock,
+  Paperclip,
+} from "lucide-react";
 import * as chrono from "chrono-node";
 import { toast } from "sonner";
 import { formatDue } from "../lib/datetime";
 import { dayInZone } from "../../shared/dates";
 import { LinkPreviewExtension } from "./LinkPreviewExtension";
 import { getMentionSuggestion } from "./MentionSuggestion";
+import { IconButton } from "./ui/IconButton";
+import { RailTooltip } from "./ui/RailTooltip";
 import { Segmented, type SegmentedOption } from "./ui/Segmented";
 import { useAddInteraction, useContactNames } from "../api";
 import { useCreateActionItem } from "../api/actionItems";
@@ -57,6 +72,25 @@ import {
   INTERACTION_LABELS,
   type InteractionKind,
 } from "../lib/interactionKinds";
+
+/** Extract files from a clipboard paste or drag-and-drop DataTransfer. */
+function extractTransferFiles(dt: DataTransfer | null | undefined): File[] {
+  if (!dt) return [];
+  if (dt.files && dt.files.length > 0) {
+    return Array.from(dt.files);
+  }
+  if (dt.items && dt.items.length > 0) {
+    const out: File[] = [];
+    for (const item of Array.from(dt.items)) {
+      if (item.kind === "file") {
+        const file = item.getAsFile();
+        if (file) out.push(file);
+      }
+    }
+    return out;
+  }
+  return [];
+}
 
 /** The type control's options, in the order they are shown. */
 const INTERACTION_TYPES: readonly SegmentedOption<InteractionKind>[] = [
@@ -167,22 +201,30 @@ export const NoteEditor = ({
   useEffect(() => {
     contactsRef.current = contacts;
   }, [contacts]);
-  const editor = useEditor({
-    extensions: [
+  const extensions = useMemo(
+    () => [
       StarterKit,
       mentions(() => contactsRef.current),
       LinkPreviewExtension,
     ],
-    content: html,
-    onUpdate: ({ editor }) => onChange(editor.isEmpty ? "" : editor.getHTML()),
-    editorProps: {
+    [],
+  );
+  const editorProps = useMemo(
+    () => ({
       attributes: {
         role: "textbox",
         "aria-label": "Note",
         "aria-multiline": "true",
         class: EDITOR_CLASS,
       },
-    },
+    }),
+    [],
+  );
+  const editor = useEditor({
+    extensions,
+    content: html,
+    onUpdate: ({ editor }) => onChange(editor.isEmpty ? "" : editor.getHTML()),
+    editorProps,
   });
   return (
     <EditorContent
@@ -216,6 +258,10 @@ interface InteractionComposerProps {
    * takes focus, and again when focus leaves with nothing written.
    */
   collapsible?: boolean;
+  /** Opens the file picker to attach a file to the contact's timeline. */
+  onAttach?: () => void;
+  /** Attaches dropped or pasted files directly to the contact's timeline. */
+  onAttachFiles?: (files: File[]) => void;
 }
 
 export const InteractionComposer = (props: InteractionComposerProps) => {
@@ -239,6 +285,8 @@ const Composer = ({
   onSaved,
   onContactMissing,
   collapsible = false,
+  onAttach,
+  onAttachFiles,
   storageKey,
 }: InteractionComposerProps & { storageKey: string | null }) => {
   const [draft] = useState(() => (storageKey ? readDraft(storageKey) : null));
@@ -261,6 +309,10 @@ const Composer = ({
   useEffect(() => {
     contactsRef.current = allContacts;
   }, [allContacts]);
+  const onAttachFilesRef = useRef(onAttachFiles);
+  useEffect(() => {
+    onAttachFilesRef.current = onAttachFiles;
+  }, [onAttachFiles]);
   const addInteraction = useAddInteraction();
   const createFollowUp = useCreateActionItem();
   const [followUpText, setFollowUpText] = useState(draft?.followUpText ?? "");
@@ -269,6 +321,8 @@ const Composer = ({
   const [day, setDay] = useState(draft?.day ?? "");
   const dayRef = useRef(day);
   const today = dayInZone(new Date()) ?? "";
+  const datePickerOpenRef = useRef(false);
+  const datePickerWasOpenRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
   const [problem, setProblem] = useState<Problem | null>(null);
   const parsedDate = parseFollowUp(followUpText)?.start.date();
@@ -445,8 +499,8 @@ const Composer = ({
     }),
   );
 
-  const editor = useEditor({
-    extensions: [
+  const extensions = useMemo(
+    () => [
       StarterKit,
       Placeholder.configure({
         // A function, re-read whenever decorations are recomputed.
@@ -457,13 +511,11 @@ const Composer = ({
       mentions(() => contactsRef.current),
       LinkPreviewExtension,
     ],
-    content: draft?.html ?? "",
-    onUpdate: ({ editor }) => {
-      lastHtmlRef.current = editor.isEmpty ? "" : editor.getHTML();
-      if (!editor.isEmpty) setProblem(null);
-      persistSoon();
-    },
-    editorProps: {
+    [SubmitExtension],
+  );
+
+  const editorProps = useMemo(
+    () => ({
       /**
        * A name and a description for the contenteditable. The placeholder is
        * a CSS decoration a screen reader skips, so the description points at
@@ -478,7 +530,35 @@ const Composer = ({
         "aria-describedby": placeholderId,
         class: EDITOR_CLASS,
       },
+      handlePaste: (_view: unknown, event: ClipboardEvent) => {
+        if (!onAttachFilesRef.current) return false;
+        const files = extractTransferFiles(event.clipboardData);
+        if (files.length === 0) return false;
+        event.preventDefault();
+        onAttachFilesRef.current(files);
+        return true;
+      },
+      handleDrop: (_view: unknown, event: DragEvent) => {
+        if (!onAttachFilesRef.current) return false;
+        const files = extractTransferFiles(event.dataTransfer);
+        if (files.length === 0) return false;
+        event.preventDefault();
+        onAttachFilesRef.current(files);
+        return true;
+      },
+    }),
+    [placeholderId],
+  );
+
+  const editor = useEditor({
+    extensions,
+    content: draft?.html ?? "",
+    onUpdate: ({ editor }) => {
+      lastHtmlRef.current = editor.isEmpty ? "" : editor.getHTML();
+      if (!editor.isEmpty) setProblem(null);
+      persistSoon();
     },
+    editorProps,
   });
 
   useEffect(() => {
@@ -545,10 +625,51 @@ const Composer = ({
       aria-label="Date"
       max={today}
       value={day || today}
-      onChange={(e) => setDay(e.target.value < today ? e.target.value : "")}
+      onMouseDown={(e) => {
+        datePickerWasOpenRef.current = datePickerOpenRef.current;
+        if (datePickerWasOpenRef.current) {
+          e.preventDefault();
+          datePickerOpenRef.current = false;
+          e.currentTarget.blur();
+        }
+      }}
+      onClick={(e) => {
+        if (datePickerWasOpenRef.current) {
+          e.preventDefault();
+          datePickerWasOpenRef.current = false;
+          return;
+        }
+        datePickerOpenRef.current = true;
+      }}
+      onBlur={() => {
+        datePickerOpenRef.current = false;
+        datePickerWasOpenRef.current = false;
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Escape" || e.key === "Enter") {
+          datePickerOpenRef.current = false;
+        }
+      }}
+      onChange={(e) => {
+        datePickerOpenRef.current = false;
+        setDay(e.target.value < today ? e.target.value : "");
+      }}
       className="min-h-[44px] sm:pointer-fine:min-h-0 sm:pointer-fine:h-9 rounded-lg bg-surface-container px-2.5 text-base sm:text-xs font-bold text-on-surface"
     />
   );
+
+  const attachButton = onAttach ? (
+    <RailTooltip label="Attach a file" side="left">
+      <IconButton
+        aria-label="Attach a file"
+        tone="subtle"
+        size="sm"
+        onClick={onAttach}
+      >
+        <Paperclip aria-hidden="true" className="w-4 h-4" />
+      </IconButton>
+    </RailTooltip>
+  ) : null;
 
   return (
     // Key and focus handlers on the container, not a control: the events come
@@ -559,6 +680,30 @@ const Composer = ({
       onKeyDown={onKeyDown}
       onFocus={collapsible ? () => setOpened(true) : undefined}
       onBlur={onBlur}
+      onPaste={(e) => {
+        if (e.defaultPrevented || !onAttachFilesRef.current) return;
+        const files = extractTransferFiles(e.clipboardData);
+        if (files.length > 0) {
+          e.preventDefault();
+          onAttachFilesRef.current(files);
+        }
+      }}
+      onDragOver={(e) => {
+        if (
+          onAttachFilesRef.current &&
+          e.dataTransfer?.types?.includes("Files")
+        ) {
+          e.preventDefault();
+        }
+      }}
+      onDrop={(e) => {
+        if (e.defaultPrevented || !onAttachFilesRef.current) return;
+        const files = extractTransferFiles(e.dataTransfer);
+        if (files.length > 0) {
+          e.preventDefault();
+          onAttachFilesRef.current(files);
+        }
+      }}
       data-expanded={expanded}
       className={cn(
         compact
@@ -603,7 +748,15 @@ const Composer = ({
         </span>
 
         {!inlineDay && (
-          <div className={cn("mt-4", !expanded && "hidden")}>{dayField}</div>
+          <div
+            className={cn(
+              "mt-4 flex items-center justify-between gap-2",
+              !expanded && "hidden",
+            )}
+          >
+            {dayField}
+            {attachButton}
+          </div>
         )}
 
         {/* The follow-up line, and the save hint at its end */}
@@ -663,7 +816,6 @@ const Composer = ({
           <span className="hidden sm:inline-flex items-center gap-1 shrink-0 text-xs text-on-surface-variant whitespace-nowrap">
             <kbd className={KBD_SM}>{MOD_KEY}</kbd>
             <kbd className={KBD_SM}>Enter</kbd>
-            <span>to save</span>
           </span>
         </div>
 
@@ -703,15 +855,18 @@ const Composer = ({
 
         {inlineDay && dayField}
 
-        <button
-          type="button"
-          onClick={() => submitRef.current()}
-          aria-busy={isSaving}
-          aria-describedby={problem ? messageId : undefined}
-          className="btn-primary ml-auto"
-        >
-          {isSaving ? "Saving…" : "Save"}
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          {inlineDay && attachButton}
+          <button
+            type="button"
+            onClick={() => submitRef.current()}
+            aria-busy={isSaving}
+            aria-describedby={problem ? messageId : undefined}
+            className="btn-primary"
+          >
+            {isSaving ? "Saving…" : "Save"}
+          </button>
+        </div>
       </div>
     </div>
   );

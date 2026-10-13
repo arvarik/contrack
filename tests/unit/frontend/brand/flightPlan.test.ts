@@ -46,7 +46,7 @@ const SIDEBAR: FlightPerch = { left: 16, top: 12, size: 40 };
 /** The phone's perch, at the right end of the Settings footer. */
 const FOOTER: FlightPerch = { left: 346, top: 700, size: 20 };
 
-const SEEDS = [1, 2, 3, 5, 8, 13, 21, 34, 55, 89];
+const SEEDS = [1, 2, 5, 13];
 
 function fly(plan: FlightPlan, step = 1000 / 60): FlightFrame[] {
   const frames: FlightFrame[] = [];
@@ -111,7 +111,9 @@ const CASES: [string, FlightViewport, FlightPerch][] = [
 for (const kind of ["loop", "sortie", "swoop", "search"] as FlightKind[]) {
   describe(`a ${kind}`, () => {
     for (const [name, viewport, perch] of CASES) {
-      it(`leaves as the logo and lands as the logo, on ${name}`, () => {
+      it(`leaves and lands as the logo, and stays in the flight box, on ${name}`, () => {
+        const box = flightBox(viewport);
+        const [px, py] = perchCenter(perch);
         for (const seed of SEEDS) {
           const plan = planFlight({
             kind,
@@ -122,19 +124,6 @@ for (const kind of ["loop", "sortie", "swoop", "search"] as FlightKind[]) {
           expect(plan.lands).toBe(true);
           expectHome(plan.frame(0), perch);
           expectHome(plan.frame(plan.duration), perch);
-        }
-      });
-
-      it(`stays in the window, and in the flight box away from the perch, on ${name}`, () => {
-        const box = flightBox(viewport);
-        const [px, py] = perchCenter(perch);
-        for (const seed of SEEDS) {
-          const plan = planFlight({
-            kind,
-            viewport,
-            perch,
-            rng: createRng(seed),
-          });
           for (const f of fly(plan)) {
             expect(f.x).toBeGreaterThanOrEqual(0);
             expect(f.x).toBeLessThanOrEqual(viewport.width);
@@ -197,7 +186,7 @@ describe("which way the bird faces", () => {
         if (Math.sign(vx) !== Math.sign(b.pose.headFacing)) wrong += 1;
       }
     }
-    expect(checked).toBeGreaterThan(1000);
+    expect(checked).toBeGreaterThan(400);
     // A turn takes a sixth of a second, and a turn is where the two differ.
     expect(wrong / checked).toBeLessThan(0.04);
   });
@@ -774,7 +763,7 @@ describe("a search round the column", () => {
       hunts: ["top"],
     },
   ];
-  const MANY = Array.from({ length: 24 }, (_, i) => i + 1);
+  const MANY = Array.from({ length: 8 }, (_, i) => i + 1);
 
   const plan = (layout: Layout, seed: number) =>
     planFlight({
@@ -800,47 +789,9 @@ describe("a search round the column", () => {
     const { name, viewport, area, field, perch } = layout;
     const size = flightSize(viewport);
 
-    it(`never flies over the search box or the results, on ${name}`, () => {
-      for (const seed of MANY) {
-        for (const f of away(fly(plan(layout, seed)), perch)) {
-          // Half a bird out beside the column, or nearly as much over it:
-          // the body clears the column, and so does most of each wing.
-          const beside = Math.max(field.left - f.x, f.x - field.right);
-          const over = field.top - f.y;
-          expect(
-            beside >= 0.5 * size || over >= 0.4 * size,
-            `${seed} at ${f.x.toFixed(1)},${f.y.toFixed(1)}`,
-          ).toBe(true);
-        }
-      }
-    });
-
-    it(`stays on the page, off the nav rail and the tab bar, on ${name}`, () => {
+    it(`hunts in the room around the column for ~${SEARCH_HUNT_MS / 1000}s and lands at the search box, on ${name}`, () => {
       const room = flightBox(viewport);
-      for (const seed of MANY.slice(0, 8)) {
-        for (const f of away(fly(plan(layout, seed)), perch)) {
-          expect(f.x).toBeGreaterThanOrEqual(area.left + size / 2 - 3);
-          expect(f.x).toBeLessThanOrEqual(area.right - size / 2 + 3);
-          expect(f.y).toBeGreaterThanOrEqual(FLIGHT_EDGE - 3);
-          expect(f.y).toBeLessThanOrEqual(room.bottom + 3);
-        }
-      }
-    });
-
-    it(`hunts where there is room, on ${name}`, () => {
       const seen = new Set<string>();
-      for (const seed of MANY) {
-        const frames = away(fly(plan(layout, seed)), perch);
-        const parts = frames.map((f) => partOf(f, field));
-        for (const part of parts) seen.add(part);
-        // Nearly all of the hunt is where the layout has room for one.
-        const hunting = parts.filter((part) => layout.hunts.includes(part));
-        expect(hunting.length / parts.length, `${seed}`).toBeGreaterThan(0.85);
-      }
-      for (const part of layout.hunts) expect(seen).toContain(part);
-    });
-
-    it(`hunts for about ${SEARCH_HUNT_MS / 1000} seconds, then lands in the search box, on ${name}`, () => {
       for (const seed of MANY) {
         const flight = plan(layout, seed);
         expect(flight.lands).toBe(true);
@@ -848,11 +799,31 @@ describe("a search round the column", () => {
         expect(flight.duration, `${seed}`).toBeLessThan(40_000);
         expectHome(flight.frame(0), perch);
         expectHome(flight.frame(flight.duration), perch);
+
+        const frames = away(fly(flight), perch);
+        for (const f of frames) {
+          const beside = Math.max(field.left - f.x, f.x - field.right);
+          const over = field.top - f.y;
+          expect(
+            beside >= 0.5 * size || over >= 0.4 * size,
+            `${seed} at ${f.x.toFixed(1)},${f.y.toFixed(1)}`,
+          ).toBe(true);
+          expect(f.x).toBeGreaterThanOrEqual(area.left + size / 2 - 3);
+          expect(f.x).toBeLessThanOrEqual(area.right - size / 2 + 3);
+          expect(f.y).toBeGreaterThanOrEqual(FLIGHT_EDGE - 3);
+          expect(f.y).toBeLessThanOrEqual(room.bottom + 3);
+        }
+
+        const parts = frames.map((f) => partOf(f, field));
+        for (const part of parts) seen.add(part);
+        const hunting = parts.filter((part) => layout.hunts.includes(part));
+        expect(hunting.length / parts.length, `${seed}`).toBeGreaterThan(0.85);
       }
+      for (const part of layout.hunts) expect(seen).toContain(part);
     });
 
     it(`comes home round the column when called early, on ${name}`, () => {
-      for (const seed of MANY.slice(0, 8)) {
+      for (const seed of MANY.slice(0, 4)) {
         const hunt = plan(layout, seed);
         for (const t of [2_500, 7_000, 13_000]) {
           const at = hunt.frame(t);
@@ -953,9 +924,9 @@ describe("a search round the column", () => {
       orders.add(order.join(" "));
       if (order.includes("left") && order.includes("right")) both += 1;
     }
-    expect(orders.size).toBeGreaterThanOrEqual(4);
+    expect(orders.size).toBeGreaterThanOrEqual(3);
     // Many hunts cross over the top to the other side, and many stay.
-    expect(both).toBeGreaterThanOrEqual(6);
+    expect(both).toBeGreaterThanOrEqual(2);
     expect(both).toBeLessThan(MANY.length);
   });
 

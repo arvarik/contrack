@@ -140,24 +140,15 @@ describe("the Ask page's question mark", () => {
     };
   };
 
-  it("sits beside the card, never inside its button", () => {
+  it("sits beside the card with an aria-describedby explanation, and is absent on a verified match", () => {
     const { mark, card } = renderAsk();
     expect(card.contains(mark)).toBe(false);
-    // The corner of the card: the wrapper is the positioned parent.
-    expect(mark.closest(".absolute")?.className).toMatch(/top-3 right-3/);
-    // The card leaves room for it, so a long name never runs under it.
-    expect(card.className).toMatch(/\bpr-12\b/);
-  });
-
-  it("describes the mark to a screen reader, open or closed", () => {
-    const { mark } = renderAsk();
     const described = document.getElementById(
       mark.getAttribute("aria-describedby")!,
     );
     expect(described?.textContent).toMatch(/AI did not check the match/);
-  });
 
-  it("is not there for a verified match, and the card keeps its padding", () => {
+    cleanup();
     render(
       <ResultCard
         match={match({ verified: true })}
@@ -167,7 +158,6 @@ describe("the Ask page's question mark", () => {
       />,
     );
     expect(screen.queryByRole("button", { name: /not verified/i })).toBeNull();
-    expect(screen.getByRole("button").className).not.toMatch(/\bpr-12\b/);
   });
 });
 

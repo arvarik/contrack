@@ -69,6 +69,8 @@ interface ContactListItemProps {
   showSelection?: boolean;
   /** `extend` is true for a shift-click: select the range, don't toggle. */
   onToggleSelect: (id: string, extend: boolean) => void;
+  /** Shown when a search matches via a non-visible field (tag, email, etc.). */
+  matchReason?: string | null;
   /**
    * The row's place in the roving Tab order (useRovingList). Separate props,
    * not one object, so the memo still skips rows whose Tab stop did not move.
@@ -88,6 +90,7 @@ const ContactListItemInner = ({
   isSelected,
   showSelection = true,
   onToggleSelect,
+  matchReason,
   rovingIndex,
   tabIndex,
   onRowKeyDown,
@@ -142,6 +145,15 @@ const ContactListItemInner = ({
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLAnchorElement>) => {
+    if (isSelectMode && (e.key === " " || e.key === "Enter")) {
+      e.preventDefault();
+      onToggleSelect(contact.id, e.shiftKey);
+      return;
+    }
+    onRowKeyDown?.(e);
+  };
+
   const handleLogoError = () => {
     setImgError(true);
   };
@@ -185,7 +197,7 @@ const ContactListItemInner = ({
       tabIndex={tabIndex}
       {...(rovingIndex !== undefined && { [ROVING_INDEX_ATTR]: rovingIndex })}
       {...{ [PROXIMITY_ROW_ATTR]: "" }}
-      onKeyDown={onRowKeyDown}
+      onKeyDown={handleKeyDown}
       onFocus={onRowFocus}
       onPointerEnter={handlePointerEnter}
       onPointerLeave={handlePointerLeave}
@@ -198,28 +210,6 @@ const ContactListItemInner = ({
         isSelectMode && "cursor-pointer select-none",
       )}
     >
-      <AnimatePresence>
-        {isSelectMode && (
-          <motion.div
-            initial={{ scale: 0.6, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.6, opacity: 0 }}
-            className="shrink-0"
-          >
-            <div
-              className={cn(
-                "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors",
-                isSelected
-                  ? "bg-primary border-primary"
-                  : "border-on-surface-variant/40 bg-surface-container-low",
-              )}
-            >
-              {isSelected && <CheckCheck className="w-3 h-3 text-on-primary" />}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* The row's name says the score, so the ring is hidden from a screen
           reader. The tooltip is for a pointer. */}
       <span
@@ -256,7 +246,7 @@ const ContactListItemInner = ({
           </div>
           {/* Between 768 and 1023 px the glyph moves to its own slot in the
               right column, so it does not shift with the city's width. */}
-          {followUp && (
+          {followUp && !isSelectMode && (
             <span
               title={followUp.text}
               className="flex shrink-0 pl-2 md:hidden lg:flex"
@@ -298,6 +288,12 @@ const ContactListItemInner = ({
             <span className="truncate">{contact.role}</span>
           </p>
         ) : null}
+
+        {matchReason && (
+          <p className="text-[11px] font-medium text-primary truncate mt-0.5">
+            Matches {matchReason}
+          </p>
+        )}
       </div>
 
       {/* Tablet-only column: only between 768 and 1023 px is the row wide
@@ -324,6 +320,28 @@ const ContactListItemInner = ({
           {shortRecency(contact.lastContactedAt)}
         </span>
       </div>
+
+      <AnimatePresence>
+        {isSelectMode && (
+          <motion.div
+            initial={{ scale: 0.6, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.6, opacity: 0 }}
+            className="ml-auto shrink-0"
+          >
+            <div
+              className={cn(
+                "w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors",
+                isSelected
+                  ? "bg-primary border-primary"
+                  : "border-on-surface-variant/40 bg-surface-container-low",
+              )}
+            >
+              {isSelected && <CheckCheck className="w-3 h-3 text-on-primary" />}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </Link>
   );
 };

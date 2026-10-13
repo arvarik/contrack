@@ -49,9 +49,15 @@ export const IndustryField = ({
     button.current?.focus();
   }, [isEditing]);
 
-  const save = () => {
+  const save = (override?: string) => {
+    const next = override ?? tempVal;
     setIsEditing(false);
-    if (tempVal !== (value || "")) onSave(tempVal);
+    if (next !== (value || "")) onSave(next);
+  };
+
+  const cancel = () => {
+    setIsEditing(false);
+    setTempVal(value || "");
   };
 
   if (isEditing) {
@@ -69,6 +75,7 @@ export const IndustryField = ({
           value={tempVal}
           onChange={setTempVal}
           onSave={save}
+          onCancel={cancel}
           options={COMMON_INDUSTRIES}
           placeholder="Add industry"
         />

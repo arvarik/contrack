@@ -10,8 +10,10 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { STALE_TIMES } from "../lib/queryConfig";
 import { corvidReact } from "../lib/corvid";
+import { errorText } from "../lib/utils";
 import { type Interaction, type Contact } from "../types";
 
 /**
@@ -149,6 +151,9 @@ export const usePromoteGhost = () => {
       void refreshContact(queryClient, contact);
       queryClient.invalidateQueries({ queryKey: ["timeline"] });
       invalidateInteractionSearch(queryClient);
+    },
+    onError: (err: Error) => {
+      toast.error(`Could not promote contact: ${errorText(err)}`);
     },
   });
 };

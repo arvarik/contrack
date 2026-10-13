@@ -12,7 +12,9 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { STALE_TIMES } from "../lib/queryConfig";
+import { errorText } from "../lib/utils";
 import { type Contact, type ContactList } from "../types";
 
 export const useLists = () => {
@@ -149,7 +151,10 @@ function useListMembership(add: boolean) {
           : lists,
       });
     },
-    onError: (_error, _input, rollback) => rollback?.(),
+    onError: (error, _input, rollback) => {
+      rollback?.();
+      toast.error(`Could not update list: ${errorText(error)}`);
+    },
     onSettled: (_data, _error, { contactId }) =>
       void refreshContact(queryClient, contactId),
   });

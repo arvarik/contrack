@@ -114,13 +114,6 @@ const SCREENS: Screen[] = [
     name: "settings",
     path: () => "/settings",
     ready: async (page) => {
-      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    },
-  },
-  {
-    name: "account settings",
-    path: () => "/settings/account",
-    ready: async (page) => {
       await expect(
         page.getByRole("heading", { name: "No account needed" }),
       ).toBeVisible();
@@ -128,46 +121,38 @@ const SCREENS: Screen[] = [
   },
 ];
 
-for (const screen of SCREENS) {
-  test(`${screen.name} has no WCAG violations`, async ({
-    page,
-    seed,
-  }, testInfo) => {
-    await page.goto(screen.path(seed));
-    await screen.ready(page, seed);
-    await expectPageAccessible(page, testInfo, screen.name);
-  });
-}
-
 /**
  * Landmarks and headings.
  *
- * The WCAG scans above pass on a page that is one undifferentiated block, so
- * structure is scanned separately, on the screens most likely to lose an h1
- * or leave nodes outside every landmark.
+ * The WCAG scans pass on a page that is one undifferentiated block, so
+ * structure is scanned alongside WCAG on the screens most likely to lose an
+ * h1 or leave nodes outside every landmark.
  */
-const STRUCTURED = [
+const STRUCTURED = new Set([
   "network list",
   "contact detail",
   "pulse",
   "map",
   "ask contrack",
   "settings",
-];
+]);
 
-for (const screen of SCREENS.filter((s) => STRUCTURED.includes(s.name))) {
-  test(`${screen.name} has one main, an h1 and ordered headings`, async ({
+for (const screen of SCREENS) {
+  test(`${screen.name} has no WCAG or landmark/heading violations`, async ({
     page,
     seed,
   }, testInfo) => {
     await page.goto(screen.path(seed));
     await screen.ready(page, seed);
-    await expectPageStructured(
-      page,
-      testInfo,
-      screen.name,
-      screen.structure ?? STRUCTURE_RULES,
-    );
+    await expectPageAccessible(page, testInfo, screen.name);
+    if (STRUCTURED.has(screen.name)) {
+      await expectPageStructured(
+        page,
+        testInfo,
+        screen.name,
+        screen.structure ?? STRUCTURE_RULES,
+      );
+    }
   });
 }
 

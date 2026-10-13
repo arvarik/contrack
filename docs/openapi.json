@@ -5439,9 +5439,16 @@
           },
           "attributes": {
             "type": "array",
-            "prefixItems": [],
-            "items": false,
-            "maxItems": 0
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "name": { "type": "string" },
+                "value": { "type": "string" }
+              },
+              "required": ["id", "name", "value"],
+              "additionalProperties": false
+            }
           }
         },
         "required": [

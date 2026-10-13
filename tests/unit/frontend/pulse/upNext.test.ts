@@ -5,7 +5,10 @@ import {
   describeDueChip,
 } from "../../../../src/views/pulse/lib/upNext";
 import type { ActionItem } from "../../../../src/types";
-import type { UpcomingBirthday } from "../../../../src/views/pulse/lib/birthdays";
+import {
+  getUpcomingBirthdays,
+  type UpcomingBirthday,
+} from "../../../../src/views/pulse/lib/birthdays";
 import type { CatchUpCard } from "../../../../shared/pulse";
 
 /** A tracked contact past its cadence, as the server sends it. */
@@ -350,6 +353,39 @@ describe("pulse.upNext", () => {
     });
     expect(result.items.map((i) => i.id)).toEqual(["bday-seven"]);
     expect(result.counts.birthdays).toBe(1);
+  });
+
+  it("includes anniversary and custom contact dates from attributes in Pulse", () => {
+    const now = new Date("2026-05-10T12:00:00.000Z");
+    const dates = getUpcomingBirthdays(
+      [
+        {
+          id: "c1",
+          name: "Ada Lovelace",
+          birthday: "1990-05-12",
+          attributes: [
+            { name: "date:anniversary", value: "2020-05-14" },
+            { name: "date:Work anniversary", value: "05-16" },
+          ],
+        },
+      ],
+      now,
+      14,
+    );
+    expect(
+      dates.map((d) => ({ label: d.label, daysUntil: d.daysUntil })),
+    ).toEqual([
+      { label: "Birthday", daysUntil: 2 },
+      { label: "Anniversary", daysUntil: 4 },
+      { label: "Work anniversary", daysUntil: 6 },
+    ]);
+
+    const queue = buildUpNextQueue({ birthdays: dates, now });
+    expect(queue.items.map((i) => i.title)).toEqual([
+      "Wish Ada Lovelace a happy birthday",
+      "Wish Ada Lovelace a happy anniversary",
+      "Ada Lovelace · Work anniversary",
+    ]);
   });
 });
 

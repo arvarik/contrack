@@ -45,12 +45,18 @@ A search match is a plain `<mark>`, painted by the base layer
 
 ### No-Line hierarchy
 
-Lines are a failure of hierarchy. Sections are told apart by a surface step,
-not a border.
+Top-level sections are told apart by a surface step, not an outer box border.
+Inside a grouped card or section where another surface step would create noisy
+nested boxes, subtle internal hairline dividers (`divide-y`, `border-t`) in a
+low-contrast surface token (`divide-surface-container/60`,
+`divide-surface-container-high/60`, `border-surface-container/60`) are
+encouraged.
 
-- Never `border-*` for sectioning.
+- Never heavy outer `border-*` boxes around cards where a surface step works.
 - Allowed lines: the focus ring, a `.btn-*` edge, a floating panel's hairline
-  (`.menu-panel`), a drag-and-drop outline, the timeline's rail.
+  (`.menu-panel`), a drag-and-drop outline, the timeline's rail, and subtle
+  internal hairline dividers (`divide-y`, `border-t`) inside grouped cards or
+  lists of fields/entries.
 
 ### Type
 

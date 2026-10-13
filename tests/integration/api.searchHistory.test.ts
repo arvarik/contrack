@@ -96,8 +96,12 @@ describe("API search history (/api/search/history)", () => {
     const entry1 = res1.body.entry;
     expect(entry1.runCount).toBe(1);
 
-    // Small delay to ensure timestamp resolution difference
-    await new Promise((resolve) => setTimeout(resolve, 1100));
+    // Backdate entry1 so the second POST's lastRunAt is strictly newer without sleeping 1.1s
+    sqlite
+      .prepare(
+        "UPDATE search_history SET createdAt = '2026-01-01T00:00:00Z', lastRunAt = '2026-01-01T00:00:00Z' WHERE id = ?",
+      )
+      .run(entry1.id);
 
     const res2 = await asUser(userA)(
       request(app)
@@ -120,9 +124,9 @@ describe("API search history (/api/search/history)", () => {
     expect(entry2.resultCount).toBe(12);
     expect(entry2.resultIds).toEqual(["c2", "c3"]);
     expect(entry2.fallback).toBe(true);
-    expect(entry2.createdAt).toBe(entry1.createdAt);
+    expect(entry2.createdAt).toBe("2026-01-01T00:00:00Z");
     expect(new Date(entry2.lastRunAt).getTime()).toBeGreaterThan(
-      new Date(entry1.lastRunAt).getTime(),
+      new Date("2026-01-01T00:00:00Z").getTime(),
     );
 
     const listRes = await asUser(userA)(

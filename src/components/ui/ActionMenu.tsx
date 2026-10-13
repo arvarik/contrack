@@ -27,7 +27,12 @@ import React, {
   useState,
 } from "react";
 import { Link } from "react-router-dom";
-import { MoreVertical, Check, type LucideIcon } from "lucide-react";
+import {
+  MoreVertical,
+  Check,
+  ChevronRight,
+  type LucideIcon,
+} from "lucide-react";
 import { cn } from "../../lib/utils";
 import { RailTooltip } from "./RailTooltip";
 import { focusOnPointer } from "../../lib/a11y";
@@ -76,6 +81,11 @@ export interface ActionMenuItem {
    * tracking under the cadences). A `danger` item gets one of its own.
    */
   separatorBefore?: boolean;
+  /**
+   * Nested choices revealed when hovering over or clicking the row (for
+   * example Standard and Deep under Enrich contact).
+   */
+  children?: readonly ActionMenuItem[];
 }
 
 interface ActionMenuProps {
@@ -199,6 +209,8 @@ export const ActionMenu = ({
   disabled = false,
 }: ActionMenuProps) => {
   const [open, setOpen] = useState(false);
+  const [openSubId, setOpenSubId] = useState<string | null>(null);
+  const hoveredSubId = useRef<string | null>(null);
   /** Which item takes focus when the menu opens: the first or the last. */
   const [openAt, setOpenAt] = useState<"first" | "last">("first");
   const trigger = useRef<HTMLButtonElement | null>(null);
@@ -217,6 +229,10 @@ export const ActionMenu = ({
   const change = useCallback(
     (next: boolean) => {
       setOpen(next);
+      if (!next) {
+        hoveredSubId.current = null;
+        setOpenSubId(null);
+      }
       onOpenChange?.(next);
     },
     [onOpenChange],
@@ -235,6 +251,7 @@ export const ActionMenu = ({
     align,
     trigger,
     panel: menu,
+    measureKey: openSubId,
     onClose: close,
   });
   useClickOutside(wrapper, close, open);
@@ -295,6 +312,8 @@ export const ActionMenu = ({
     const isChecked = item.checked === true;
     const isCheckable = item.checked !== undefined;
     const role = isCheckable ? "menuitemradio" : "menuitem";
+    const hasChildren = Boolean(item.children && item.children.length > 0);
+    const subOpen = hasChildren && openSubId === item.id && !item.disabled;
 
     const content = (
       <>
@@ -309,6 +328,15 @@ export const ActionMenu = ({
           <span aria-hidden="true" className={MENU_HINT}>
             {item.hint}
           </span>
+        )}
+        {hasChildren && !item.disabled && (
+          <ChevronRight
+            aria-hidden="true"
+            className={cn(
+              "w-4 h-4 shrink-0 text-on-surface-variant ml-auto transition-transform",
+              subOpen && "rotate-90",
+            )}
+          />
         )}
         {isChecked && (
           <Check
@@ -327,6 +355,69 @@ export const ActionMenu = ({
       item.speakHint && item.hint && !isChecked
         ? `${item.label}, ${item.hint}`
         : undefined;
+    if (hasChildren) {
+      return (
+        <div
+          key={item.id}
+          role="none"
+          onPointerEnter={(e) => {
+            if (!item.disabled && e.pointerType !== "touch") {
+              hoveredSubId.current = item.id;
+              setOpenSubId(item.id);
+            }
+          }}
+          onPointerLeave={(e) => {
+            if (e.pointerType !== "touch") {
+              if (hoveredSubId.current === item.id) hoveredSubId.current = null;
+              setOpenSubId((cur) => (cur === item.id ? null : cur));
+            }
+          }}
+        >
+          <button
+            type="button"
+            role={role}
+            aria-haspopup="menu"
+            aria-expanded={subOpen}
+            aria-label={spokenName}
+            tabIndex={-1}
+            aria-disabled={item.disabled || undefined}
+            onPointerMove={focusOnPointer}
+            className={classes}
+            onClick={() => {
+              if (item.disabled) return;
+              if (hoveredSubId.current === item.id) {
+                setOpenSubId(item.id);
+                return;
+              }
+              setOpenSubId((cur) => (cur === item.id ? null : item.id));
+            }}
+            onKeyDown={(e) => {
+              if (item.disabled) return;
+              if (e.key === "ArrowRight") {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpenSubId(item.id);
+              } else if (e.key === "ArrowLeft" && subOpen) {
+                e.preventDefault();
+                e.stopPropagation();
+                setOpenSubId(null);
+              }
+            }}
+          >
+            {content}
+          </button>
+          {subOpen && (
+            <div
+              role="group"
+              aria-label={item.label}
+              className="pl-6 flex flex-col"
+            >
+              {item.children!.map(renderItem)}
+            </div>
+          )}
+        </div>
+      );
+    }
     if (item.to && !item.disabled) {
       return (
         <Link

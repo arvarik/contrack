@@ -120,19 +120,7 @@ function extract(dialog: HTMLElement, text: string) {
 }
 
 describe("Add from text", () => {
-  it("closes with the X and nothing else, and gives focus back to New", async () => {
-    const newButton = mount();
-    const dialog = openFromMenu(newButton);
-    fireEvent.click(
-      within(dialog).getByRole("button", { name: "Close dialog" }),
-    );
-    await waitFor(() => expect(pasteDialog()).toBeNull());
-    expect(form()).toBeNull();
-    await waitFor(() => expect(document.activeElement).toBe(newButton));
-    expect(parse).not.toHaveBeenCalled();
-  });
-
-  it("closes with Escape and nothing else", async () => {
+  it("opens from the menu or the V key, and closing with X or Escape restores focus", async () => {
     const newButton = mount();
     openFromMenu(newButton);
     fireEvent.keyDown(document.activeElement ?? document.body, {
@@ -141,19 +129,16 @@ describe("Add from text", () => {
     await waitFor(() => expect(pasteDialog()).toBeNull());
     expect(form()).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(newButton));
-  });
+    expect(parse).not.toHaveBeenCalled();
 
-  it("opens from the V key, and closing it hands focus back to where it was", async () => {
-    mount();
     const select = screen.getByRole("button", { name: "Select" });
     select.focus();
     fireEvent.keyDown(select, { key: "v" });
-    const dialog = screen.getByRole("dialog", { name: "Add from text" });
+    const vDialog = screen.getByRole("dialog", { name: "Add from text" });
     fireEvent.click(
-      within(dialog).getByRole("button", { name: "Close dialog" }),
+      within(vDialog).getByRole("button", { name: "Close dialog" }),
     );
     await waitFor(() => expect(pasteDialog()).toBeNull());
-    expect(form()).toBeNull();
     await waitFor(() => expect(document.activeElement).toBe(select));
   });
 

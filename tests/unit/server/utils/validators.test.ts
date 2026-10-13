@@ -21,21 +21,26 @@ const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
 
 describe("pastDateSchema", () => {
-  it("accepts a timestamp in the past", () => {
-    expect(pastDateSchema.safeParse(iso(-DAY)).success).toBe(true);
+  const dayOnly = (offsetMs: number) =>
+    new Date(Date.now() + offsetMs).toISOString().slice(0, 10);
+
+  it("accepts past/now timestamps, 1-minute clock skew, and date-only strings up to tomorrow, normalizing to UTC", () => {
+    for (const input of [
+      iso(-DAY),
+      iso(0),
+      iso(60_000),
+      dayOnly(-DAY),
+      dayOnly(0),
+      dayOnly(DAY),
+    ]) {
+      expect(pastDateSchema.safeParse(input).success, input).toBe(true);
+    }
+    expect(pastDateSchema.parse("2020-06-01T12:00:00+02:00")).toBe(
+      "2020-06-01T10:00:00.000Z",
+    );
   });
 
-  it("accepts now", () => {
-    expect(pastDateSchema.safeParse(iso(0)).success).toBe(true);
-  });
-
-  it("accepts a clock a minute ahead of the server", () => {
-    // The reason the tolerance exists. A browser whose clock runs fast stamps
-    // "I just spoke to them" as the near future, and that is an honest write.
-    expect(pastDateSchema.safeParse(iso(60_000)).success).toBe(true);
-  });
-
-  it("refuses a clock an hour ahead", () => {
+  it("refuses future timestamps, dates three days out, and non-dates", () => {
     const result = pastDateSchema.safeParse(iso(HOUR));
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -43,43 +48,9 @@ describe("pastDateSchema", () => {
         "Date cannot be in the future",
       );
     }
-  });
-
-  it("refuses a timestamp next year", () => {
-    expect(pastDateSchema.safeParse(iso(365 * DAY)).success).toBe(false);
-  });
-
-  const dayOnly = (offsetMs: number) =>
-    new Date(Date.now() + offsetMs).toISOString().slice(0, 10);
-
-  it("accepts today as a date with no time", () => {
-    expect(pastDateSchema.safeParse(dayOnly(0)).success).toBe(true);
-  });
-
-  it("accepts yesterday as a date with no time", () => {
-    expect(pastDateSchema.safeParse(dayOnly(-DAY)).success).toBe(true);
-  });
-
-  it("accepts tomorrow as a date with no time", () => {
-    // Deliberate. A client in UTC+13 logging a call today sends a local date
-    // that is tomorrow in UTC, and refusing it would refuse an honest write.
-    // A date with no time parses to midnight, so it cannot reach the cliff
-    // this schema exists for, and the `MIN` in interactionService clamps the
-    // stored value regardless.
-    expect(pastDateSchema.safeParse(dayOnly(DAY)).success).toBe(true);
-  });
-
-  it("refuses a date three days out", () => {
-    expect(pastDateSchema.safeParse(dayOnly(3 * DAY)).success).toBe(false);
-  });
-
-  it("refuses a value that is not a date at all", () => {
-    expect(pastDateSchema.safeParse("last tuesday").success).toBe(false);
-  });
-
-  it("normalizes to UTC the way dateSchema does", () => {
-    const result = pastDateSchema.parse("2020-06-01T12:00:00+02:00");
-    expect(result).toBe("2020-06-01T10:00:00.000Z");
+    for (const bad of [iso(365 * DAY), dayOnly(3 * DAY), "last tuesday"]) {
+      expect(pastDateSchema.safeParse(bad).success, bad).toBe(false);
+    }
   });
 });
 

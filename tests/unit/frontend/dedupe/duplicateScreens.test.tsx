@@ -258,14 +258,10 @@ describe("a merged contact's old page", () => {
     merged = false;
     await act(async () => lastUndo(toast)());
 
-    await waitFor(
-      () =>
-        expect(screen.getByTestId("where").textContent).toBe("/contact/gone"),
-      { timeout: 3000 },
-    );
-    // Long enough for a stale answer to have bounced it back.
-    await act(async () => new Promise((r) => setTimeout(r, 50)));
-    expect(screen.getByTestId("where").textContent).toBe("/contact/gone");
+    await waitFor(() => {
+      expect(screen.getByTestId("where").textContent).toBe("/contact/gone");
+      expect(screen.getByText("page")).toBeTruthy();
+    });
   });
 
   it("leaves a live contact's page alone", () => {

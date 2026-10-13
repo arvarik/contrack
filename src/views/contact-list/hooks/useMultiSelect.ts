@@ -3,7 +3,7 @@
  * from `useBulkActions`. Select all and ranges cover `filteredContacts`, the
  * rows on screen.
  */
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useBulkActions } from "../../../components/bulk/useBulkActions";
 import type { Contact } from "../../../types";
 
@@ -14,6 +14,30 @@ export function useMultiSelect(filteredContacts: Contact[]) {
   // The last row clicked without shift, where a shift-click range starts. A
   // ref, since nothing renders from it.
   const anchorRef = useRef<string | null>(null);
+
+  // Keep `selectedIds` to contacts still in `filteredContacts`, so narrowing
+  // a search or archiving via the context menu never leaves hidden rows in a
+  // bulk action.
+  useEffect(() => {
+    if (!isSelectMode) return;
+    const visibleIds = new Set(filteredContacts.map((c) => c.id));
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      let hasHidden = false;
+      for (const id of prev) {
+        if (!visibleIds.has(id)) {
+          hasHidden = true;
+          break;
+        }
+      }
+      if (!hasHidden) return prev;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (visibleIds.has(id)) next.add(id);
+      }
+      return next;
+    });
+  }, [filteredContacts, isSelectMode]);
 
   const enterSelectMode = useCallback(() => {
     setIsSelectMode(true);

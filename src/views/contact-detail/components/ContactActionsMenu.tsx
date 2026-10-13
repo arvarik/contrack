@@ -195,27 +195,35 @@ export const ContactActionsMenu = ({
             id: "enrich",
             label: enriching ? "Enriching…" : "Enrich contact",
             icon: Sparkles,
-            hint: blocked
-              ? "Needs AI"
-              : enriching || !search.depthFiguresApply
-                ? undefined
-                : depthTime("standard"),
+            hint: blocked ? "Needs AI" : undefined,
             speakHint: true,
             disabled: enriching,
-            onSelect: () => enrich("standard"),
-          },
-          {
-            id: "enrich-deep",
-            label: "Enrich deeply",
-            icon: Sparkles,
-            hint: blocked
-              ? "Needs AI"
-              : enriching || !search.depthFiguresApply
-                ? undefined
-                : depthTime("deep"),
-            speakHint: true,
-            disabled: enriching,
-            onSelect: () => enrich("deep"),
+            children: enriching
+              ? undefined
+              : [
+                  {
+                    id: "enrich-standard",
+                    label: "Standard",
+                    hint: blocked
+                      ? "Needs AI"
+                      : !search.depthFiguresApply
+                        ? undefined
+                        : depthTime("standard"),
+                    speakHint: true,
+                    onSelect: () => enrich("standard"),
+                  },
+                  {
+                    id: "enrich-deep",
+                    label: "Deep",
+                    hint: blocked
+                      ? "Needs AI"
+                      : !search.depthFiguresApply
+                        ? undefined
+                        : depthTime("deep"),
+                    speakHint: true,
+                    onSelect: () => enrich("deep"),
+                  },
+                ],
           },
         ]
       : []),

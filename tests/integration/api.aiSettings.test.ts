@@ -3,7 +3,7 @@
 // integration environment, so these exercise the configuration surface and its
 // failure modes rather than live provider calls.
 
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
 import { sqlite } from "../../server/db.ts";
@@ -152,8 +152,9 @@ describe("capability assignment", () => {
     expect(res.status).toBe(200);
 
     // Let the background reconciliation settle.
-    await new Promise((r) => setTimeout(r, 500));
-    expect(widthOf("search_embeddings")).toBe(widthOf("contact_embeddings"));
+    await vi.waitFor(() => {
+      expect(widthOf("search_embeddings")).toBe(widthOf("contact_embeddings"));
+    });
   });
 
   it("refuses an embeddings pin the provider cannot actually serve", async () => {

@@ -546,13 +546,11 @@ test.describe("the contact header", () => {
     await expect(kebab).toHaveAttribute("aria-haspopup", "menu");
     await kebab.click();
     const menu = page.getByRole("menu", { name: "Contact actions" });
-    // Change avatar left for the pencil on the avatar, and the two enrich
-    // depths follow the color: AI actions about this contact. Each ends
-    // with its time, because research runs on Gemini here.
+    // Change avatar left for the pencil on the avatar, and Enrich contact
+    // follows the color, opening its two depths when chosen or hovered.
     await expect(menu.getByRole("menuitem")).toHaveText([
       "Change color",
-      /^Enrich contactabout \d+ s$/,
-      /^Enrich deeplyabout \d+ s$/,
+      "Enrich contact",
       "Copy basic details",
       "Copy full details",
       "Save contact card",
@@ -750,7 +748,12 @@ test.describe("the contact header", () => {
     await expect(contactHeading(page, "Zion Enrich")).toBeVisible();
     const kebab = page.getByRole("button", { name: "Contact actions" });
     await kebab.click();
-    await page.getByRole("menuitem", { name: "Enrich contact" }).click();
+    const menu = page.getByRole("menu", { name: "Contact actions" });
+    await menu.getByRole("menuitem", { name: "Enrich contact" }).click();
+    await expect(
+      menu.getByRole("group", { name: "Enrich contact" }).getByRole("menuitem"),
+    ).toHaveText([/^Standardabout \d+ s$/, /^Deepabout \d+ s$/]);
+    await menu.getByRole("menuitem", { name: /^Standard/ }).click();
 
     // No confirmation for one contact, and no toast: the panel opens, in
     // the corner the toasts use, and says it by itself.
@@ -1161,7 +1164,7 @@ test.describe("the composer", () => {
       "aria-checked",
       "true",
     );
-    await expect(page.getByText("to save")).toBeVisible();
+    await expect(page.getByText("Enter", { exact: true })).toBeVisible();
     await expectPageAccessible(page, testInfo, "composer-with-text");
 
     await editor.click();

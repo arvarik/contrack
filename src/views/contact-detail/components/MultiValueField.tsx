@@ -117,7 +117,7 @@ interface RowProps {
   mapLink?: MapLink;
   /** True after Alt+Arrow placed this row, until focus leaves it. */
   moved: boolean;
-  onEdit: (index: number, value: string) => void;
+  onEdit: (index: number, value: string) => void | Promise<unknown>;
   onLabelChange: (index: number, label: string) => void;
   onMakePrimary: (index: number) => void;
   onRemove: (index: number) => void;
@@ -287,7 +287,9 @@ const SortableRow = ({
 interface MultiValueFieldProps {
   items: MultiValueItem[];
   /** Saves the whole list, in order. The first value is the primary one. */
-  onSave: (items: { value: string; label: string }[]) => void;
+  onSave: (
+    items: { value: string; label: string }[],
+  ) => void | Promise<unknown>;
   labelOptions: readonly string[];
   /** One value's name in lower case, for "Edit email" and "New email". */
   noun: string;
@@ -461,7 +463,7 @@ export const MultiValueField = ({
       row: () => index,
       part: "value",
     };
-    onSave(
+    return onSave(
       items.map((item, i) => ({
         value: i === index ? next : item.value,
         label: item.label,

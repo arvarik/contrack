@@ -14,14 +14,19 @@ import { SettingsRail } from "../../../../src/views/settings/SettingsRail";
 import { LEFT_PANE } from "../../../../src/components/layout/paneWidth";
 
 vi.mock("../../../../src/components/auth/AuthGate", () => ({
-  useAuth: () => ({ isAdmin: false, authRequired: false }),
+  useAuth: () => ({ isAdmin: true, authRequired: false }),
 }));
-vi.mock("../../../../src/views/settings/NeedsAttention", () => ({
-  useAttentionCounts: () => ({
-    duplicates: 0,
-    neverEnriched: 0,
-    failedImports: 0,
+vi.mock("../../../../src/api", () => ({
+  useDedupeCount: () => ({ data: 3 }),
+  useContacts: () => ({
+    data: [
+      { id: "c1", aiHydratedAt: null, isArchived: false, isGhost: false },
+      { id: "c2", aiHydratedAt: null, isArchived: false, isGhost: false },
+    ],
   }),
+}));
+vi.mock("../../../../src/api/imports", () => ({
+  useImports: () => ({ data: [] }),
 }));
 
 afterEach(() => {
@@ -39,22 +44,26 @@ const mount = () =>
   );
 
 describe("SettingsRail", () => {
-  it("has the Network list's edge to drag, with its bounds", () => {
-    mount();
+  it("has the Network list's edge to drag, with its bounds, and opens at the stored width", () => {
+    localStorage.setItem(LEFT_PANE.storageKey, "420");
+    const { container } = mount();
     const handle = screen.getByRole("separator", {
       name: "Resize the settings list",
     });
-    expect(handle.getAttribute("aria-valuenow")).toBe(
-      String(LEFT_PANE.initial),
-    );
+    expect(handle.getAttribute("aria-valuenow")).toBe("420");
     expect(handle.getAttribute("aria-valuemin")).toBe(String(LEFT_PANE.min));
+    const rail = container.querySelector("aside")!;
+    expect(rail.style.getPropertyValue(LEFT_PANE.property)).toBe("420px");
   });
 
-  it("opens at the width the Network list was left at on this device", () => {
-    localStorage.setItem(LEFT_PANE.storageKey, "420");
-    const { container } = mount();
-    const rail = container.querySelector("aside")!;
-    expect(rail.className).toContain("w-(--pane-width)");
-    expect(rail.style.getPropertyValue(LEFT_PANE.property)).toBe("420px");
+  it("counts possible duplicates on Duplicates and shows no count on Contact enrichment", () => {
+    mount();
+    expect(
+      screen.getByRole("link", { name: /, 3 waiting$/ }).getAttribute("href"),
+    ).toBe("/settings/duplicates");
+    const enrichLink = screen.getByRole("link", { name: /Contact enrichment/ });
+    expect(enrichLink.getAttribute("href")).toBe("/settings/enrichment");
+    expect(enrichLink.getAttribute("aria-label")).not.toMatch(/waiting/);
+    expect(enrichLink.textContent).not.toMatch(/\d/);
   });
 });

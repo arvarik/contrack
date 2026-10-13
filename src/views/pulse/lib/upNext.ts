@@ -191,23 +191,33 @@ export function buildUpNextQueue(options: BuildUpNextOptions): UpNextResult {
   const birthdayItems: UpNextItem[] = birthdays
     .filter((b) => b.daysUntil <= 7)
     .sort((a, b) => a.daysUntil - b.daysUntil)
-    .map((b) => ({
-      id: `bday-${b.contactId}`,
-      kind: "birthday",
-      group: "birthdays",
-      contactId: b.contactId,
-      contactName: b.name,
-      contactAvatarUrl: b.avatarUrl,
-      isTracked: b.isTracked,
-      relationshipScore: b.relationshipScore,
-      lastContactedAt: b.lastContactedAt,
-      title: `Wish ${b.name} a happy birthday`,
-      hasCheckAction: false,
-      dueChip: {
-        text: describeDueChip(b.daysUntil, b.nextDate),
-        variant: b.daysUntil === 0 ? "today" : "neutral",
-      },
-    }));
+    .map((b) => {
+      const label = b.label || "Birthday";
+      const lower = label.toLowerCase();
+      const isBirthday = lower === "birthday";
+      const title = isBirthday
+        ? `Wish ${b.name} a happy birthday`
+        : lower === "anniversary"
+          ? `Wish ${b.name} a happy anniversary`
+          : `${b.name} · ${label}`;
+      return {
+        id: isBirthday ? `bday-${b.contactId}` : `bday-${b.contactId}-${lower}`,
+        kind: "birthday",
+        group: "birthdays",
+        contactId: b.contactId,
+        contactName: b.name,
+        contactAvatarUrl: b.avatarUrl,
+        isTracked: b.isTracked,
+        relationshipScore: b.relationshipScore,
+        lastContactedAt: b.lastContactedAt,
+        title,
+        hasCheckAction: false,
+        dueChip: {
+          text: describeDueChip(b.daysUntil, b.nextDate),
+          variant: b.daysUntil === 0 ? "today" : "neutral",
+        },
+      };
+    });
 
   // In the server's order, the furthest past due first.
   const catchUpItems: UpNextItem[] = catchUp.map((contact) => ({

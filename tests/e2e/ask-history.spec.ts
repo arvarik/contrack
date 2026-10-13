@@ -271,12 +271,15 @@ test.describe("desktop", () => {
 
     // 3. Ask a ? question in the palette
     const paletteInput = palette.getByRole("combobox");
-    await page.waitForTimeout(1100);
     await paletteInput.fill("? who understands compilers");
+    const recorded = page.waitForResponse(
+      (r) =>
+        r.url().includes("/api/search/history") &&
+        r.request().method() === "POST",
+    );
     await page.keyboard.press("Enter");
-    // Wait for AI results to settle in palette and call addEntry
     await expect(palette.getByText("Ada Lovelace")).toBeVisible();
-    await page.waitForTimeout(600);
+    await recorded;
 
     // Close palette: the first Escape clears the question.
     await page.keyboard.press("Escape");

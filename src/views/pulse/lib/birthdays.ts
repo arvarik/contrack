@@ -1,4 +1,4 @@
-/** Upcoming birthdays for the Pulse cards, by `lib/birthday.ts` rules. */
+/** Upcoming birthdays and contact dates for the Pulse cards, by `lib/birthday.ts` rules. */
 import { getUpcomingBirthdayInfo } from "../../../lib/birthday";
 
 export interface UpcomingBirthday {
@@ -12,19 +12,27 @@ export interface UpcomingBirthday {
   daysUntil: number;
   turningAge: number | null;
   nextDate: Date;
+  /** The date's label ("Birthday", "Anniversary", or a custom type). */
+  label?: string;
 }
 
 interface ContactWithBirthday {
   id: string;
   name: string;
   birthday?: string | null;
+  attributes?: readonly { name: string; value: string }[];
   avatarUrl?: string | null;
   isTracked?: boolean;
   relationshipScore?: number | null;
   lastContactedAt?: string | null;
 }
 
-/** Birthdays within `maxDays`, nearest first. */
+function capitalizeLabel(raw: string): string {
+  const trimmed = raw.trim() || "Other";
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
+/** Birthdays and custom contact dates within `maxDays`, nearest first. */
 export function getUpcomingBirthdays(
   contacts: readonly ContactWithBirthday[],
   now: Date = new Date(),
@@ -32,10 +40,14 @@ export function getUpcomingBirthdays(
 ): UpcomingBirthday[] {
   const results: UpcomingBirthday[] = [];
 
-  for (const c of contacts) {
-    if (!c.birthday) continue;
-    const info = getUpcomingBirthdayInfo(c.birthday, now);
-    if (!info) continue;
+  const pushDate = (
+    c: ContactWithBirthday,
+    dateStr: string | null | undefined,
+    label: string,
+  ) => {
+    if (!dateStr) return;
+    const info = getUpcomingBirthdayInfo(dateStr, now);
+    if (!info) return;
     if (info.daysUntil >= 0 && info.daysUntil <= maxDays) {
       results.push({
         contactId: c.id,
@@ -47,7 +59,16 @@ export function getUpcomingBirthdays(
         daysUntil: info.daysUntil,
         turningAge: info.turningAge,
         nextDate: info.nextDate,
+        label,
       });
+    }
+  };
+
+  for (const c of contacts) {
+    pushDate(c, c.birthday, "Birthday");
+    for (const attr of c.attributes ?? []) {
+      if (!attr.name.startsWith("date:")) continue;
+      pushDate(c, attr.value, capitalizeLabel(attr.name.slice(5)));
     }
   }
 

@@ -105,6 +105,7 @@ export const Segmented = <T extends string | number>({
               <motion.span
                 aria-hidden="true"
                 layoutId={thumbId}
+                initial={false}
                 transition={{ type: "spring", bounce: 0.15, duration: 0.3 }}
                 className="absolute inset-0 rounded-md bg-surface shadow-sm"
               />

@@ -59,6 +59,7 @@ import { AnimatePresence } from "motion/react";
 import { toast } from "sonner";
 import { filterPill, ICON_BTN, LABEL, PAGE_TOP } from "../../lib/styles";
 import { cn, errorText } from "../../lib/utils";
+import { getContactMatchReason } from "../../lib/contactMatch";
 import { PageHeader } from "../../components/layout/PageHeader";
 import { usePageTitle } from "../../hooks/usePageTitle";
 import {
@@ -222,12 +223,15 @@ const ListChip = ({
 // A row with its context menu, long press and recordVisit.
 interface ContactRowWrapperProps {
   contact: Contact;
+  idPrefix?: string;
   density: ListDensity;
   active: boolean;
   isFlashing: boolean;
   isSelectMode: boolean;
   isSelected: boolean;
-  onToggleSelect: (id: string) => void;
+  showSelection?: boolean;
+  matchReason?: string | null;
+  onToggleSelect: (id: string, extend?: boolean) => void;
   onEnterSelectMode: () => void;
   handleContextMenu: ReturnType<typeof useContextMenu>["handleContextMenu"];
   recordVisit: (id: string) => void;
@@ -242,11 +246,14 @@ interface ContactRowWrapperProps {
 const ContactRowWrapper = React.memo(
   ({
     contact,
+    idPrefix,
     density,
     active,
     isFlashing,
     isSelectMode,
     isSelected,
+    showSelection,
+    matchReason,
     onToggleSelect,
     onEnterSelectMode,
     handleContextMenu,
@@ -315,10 +322,13 @@ const ContactRowWrapper = React.memo(
       >
         <ContactListItem
           contact={contact}
+          idPrefix={idPrefix}
           density={density}
           active={active}
           isSelectMode={isSelectMode}
           isSelected={isSelected}
+          showSelection={showSelection}
+          matchReason={matchReason}
           onToggleSelect={onToggleSelect}
           rovingIndex={rovingIndex}
           tabIndex={tabIndex}
@@ -336,6 +346,7 @@ interface ContactRowsProps {
   filteredContacts: Contact[];
   /** The Recent strip, or none while a search, a filter or a load hides it. */
   recentContacts: Contact[];
+  searchQuery?: string;
   openId: string | undefined;
   flashId: string | null;
   isSelectMode: boolean;
@@ -363,6 +374,7 @@ const ContactRows = ({
   children,
   filteredContacts,
   recentContacts,
+  searchQuery = "",
   openId,
   flashId,
   isSelectMode,
@@ -672,16 +684,22 @@ const ContactRows = ({
                 {recentContacts.map((contact, index) => {
                   const item = roving.getItemProps(index);
                   return (
-                    <ContactListItem
+                    <ContactRowWrapper
                       key={`recent-${contact.id}`}
                       idPrefix="recent-contact"
                       contact={contact}
                       density={density}
                       active={openId === contact.id}
+                      isFlashing={false}
                       isSelectMode={isSelectMode}
                       isSelected={selectedIds.has(contact.id)}
                       showSelection={!listedIds.has(contact.id)}
                       onToggleSelect={toggleSelect}
+                      onEnterSelectMode={enterSelectMode}
+                      handleContextMenu={handleContextMenu}
+                      recordVisit={recordVisit}
+                      archiveContact={archiveContact}
+                      navigate={navigateRows}
                       rovingIndex={index}
                       tabIndex={item.tabIndex}
                       onRowKeyDown={item.onKeyDown}
@@ -709,6 +727,9 @@ const ContactRows = ({
             {virtualItems.map((virtualItem) => {
               const contact = filteredContacts[virtualItem.index];
               const item = roving.getItemProps(recentCount + virtualItem.index);
+              const matchReason = searchQuery
+                ? getContactMatchReason(contact, searchQuery)
+                : null;
               return (
                 <div
                   key={virtualItem.key}
@@ -731,6 +752,7 @@ const ContactRows = ({
                     isFlashing={flashId === contact.id}
                     isSelectMode={isSelectMode}
                     isSelected={selectedIds.has(contact.id)}
+                    matchReason={matchReason}
                     onToggleSelect={toggleSelect}
                     onEnterSelectMode={enterSelectMode}
                     handleContextMenu={handleContextMenu}
@@ -990,7 +1012,7 @@ export const ContactList = () => {
   }, [isSelectMode, selectAll]);
 
   const activeContactCount = useMemo(
-    () => contacts.filter((c) => !c.isArchived).length,
+    () => contacts.filter((c) => !c.isArchived && !c.isGhost).length,
     [contacts],
   );
   /** The Tracked chip's count: tracked, and in the list. */
@@ -1280,6 +1302,7 @@ export const ContactList = () => {
             ? recentContacts
             : []
         }
+        searchQuery={searchQuery}
         openId={id}
         flashId={flashId}
         isSelectMode={isSelectMode}
