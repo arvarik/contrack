@@ -228,6 +228,32 @@ describe("an edit to a contact whose pin was placed by hand", () => {
 
     expect(pinRow(id)).toMatchObject({ ...ROME, geoSource: "geocoder" });
   });
+
+  it("hands the pin back and syncs location and addresses across bulkUpdate, patch, and update", async () => {
+    const id = await placedByHand("Bulk Moved Person");
+    const scope = scopeForOwnerId(pinRow(id).ownerId);
+
+    contactService.bulkUpdateContacts(scope, [id], {
+      addresses: [{ address: "Rome, Italy", label: "home", isPrimary: true }],
+    });
+
+    expect(queued).toHaveBeenCalledWith(id, "Rome, Italy");
+    expect(pinRow(id)).toMatchObject({ ...PARIS, geoSource: null });
+    expect(contactService.getContactById(scope, id)?.location).toBe(
+      "Rome, Italy",
+    );
+
+    queued.mockClear();
+    const patched = contactService.patchContact(scope, id, {
+      location: "London, UK",
+    });
+    expect(patched?.addresses[0]?.address).toBe("London, UK");
+    expect(queued).toHaveBeenCalledWith(id, "London, UK");
+
+    const cleared = contactService.updateContact(scope, id, { addresses: [] });
+    expect(cleared?.location).toBeNull();
+    expect(cleared?.addresses).toEqual([]);
+  });
 });
 
 describe("handing the pin back on request", () => {

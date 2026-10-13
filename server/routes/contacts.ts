@@ -128,16 +128,6 @@ const IMPORT_SETTLE_MS = Number(process.env.IMPORT_SETTLE_MS ?? 3000);
 const router = Router();
 
 router.get(
-  "/contacts/map",
-  asyncHandler(async (req, res) => {
-    const rid = req.requestId;
-    const results = contactService.getMapContacts(scopeOf(req));
-    log.debug("API", `[${rid}] GET /api/contacts/map → ${results.length}`);
-    res.json(results);
-  }),
-);
-
-router.get(
   "/contacts/archived",
   asyncHandler(async (req, res) => {
     const rid = req.requestId;

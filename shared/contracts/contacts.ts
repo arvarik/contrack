@@ -416,20 +416,6 @@ const slimContactSchema = z
   })
   .meta({ id: "SlimContact" });
 
-/** A contact with a pin, as the map draws it. */
-const mapContactSchema = z
-  .strictObject({
-    id: z.string(),
-    name: z.string(),
-    company: z.string().nullable(),
-    avatarUrl: z.string().nullable(),
-    location: z.string().nullable(),
-    lat: z.number(),
-    lng: z.number(),
-    geoSource: geoSourceSchema,
-  })
-  .meta({ id: "MapContact" });
-
 /** Why a tracked contact scores what it scores: five signals, each 0 to 100. */
 const scoreBreakdownSchema = z
   .strictObject({
@@ -460,12 +446,6 @@ const IMPORT_STATUSES = ["running", "imported", "complete", "failed"] as const;
 // Routes
 
 export const contactRoutes = {
-  map: route({
-    method: "GET",
-    path: "/api/contacts/map",
-    summary: "The contacts with a pin, for the map",
-    response: z.array(mapContactSchema),
-  }),
   archived: route({
     method: "GET",
     path: "/api/contacts/archived",

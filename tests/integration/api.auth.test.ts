@@ -252,7 +252,7 @@ describe("sign in", () => {
     expect(res.body.user.username).toBe("theowner");
     expect(cookie.join(";")).toContain("contrack_session=");
     expect(cookie.join(";")).toContain("HttpOnly");
-    expect(cookie.join(";")).toContain("SameSite=Strict");
+    expect(cookie.join(";")).toContain("SameSite=Lax");
   });
 
   it("rejects the wrong password, and its audit row keeps no typed text", async () => {
@@ -529,7 +529,32 @@ describe("sessions", () => {
     expect(after.status).toBe(401);
   });
 
-  // SameSite=Strict lets a page on a sibling subdomain send the cookie, and
+  it("accepts the session secret via X-Contrack-Session header", async () => {
+    const secret = decodeURIComponent(
+      cookie.join(";").match(/contrack_session=([^;]+)/)![1],
+    );
+    const res = await request(app)
+      .get("/api/contacts")
+      .set("X-Contrack-Session", secret);
+    expect(res.status).toBe(200);
+
+    const write = await request(app)
+      .patch("/api/auth/me")
+      .set("X-Contrack-Session", secret)
+      .set("Origin", "capacitor://localhost")
+      .send({ displayName: "Companion App" });
+    expect(write.status).toBe(200);
+  });
+
+  it("redirects unauthenticated GET /api/connectors/google/callback to /settings/connectors?error=expired", async () => {
+    const res = await request(app).get(
+      "/api/connectors/google/callback?code=abc&state=xyz",
+    );
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe("/settings/connectors?error=expired");
+  });
+
+  // SameSite=Lax lets a page on a sibling subdomain send the cookie, and
   // a text/plain POST from one disabled an account.
   it.each<[string, string, string, number]>([
     ["another site", "Origin", "https://x.example.com", 403],

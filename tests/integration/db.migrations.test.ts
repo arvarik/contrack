@@ -136,6 +136,48 @@ describe("a new database", () => {
     const kept = (row: MasterRow) => !ADDED_SINCE_FIXTURE.includes(row.name);
     expect(actual.filter(kept)).toEqual(fixtureRows().filter(kept));
   });
+
+  it("retires pre-v2 migration rows and backfills contact_addresses from contacts.location", () => {
+    const dev = new Database(":memory:");
+    runMigrations(dev, MIGRATIONS);
+    const owner = dev.prepare("SELECT id FROM users LIMIT 1").get() as {
+      id: string;
+    };
+    dev
+      .prepare(
+        "INSERT INTO contacts (id, name, location, ownerId) VALUES ('c-legacy', 'Ada', 'London, UK', ?)",
+      )
+      .run(owner.id);
+    for (const id of [
+      "0002_events_and_jobs",
+      "0003_map_pins",
+      "0004_oauth",
+      "0005_dedupe_pair_index",
+      "0006_dedupe_caveat",
+      "0007_archived_at",
+      "0008_correspondent_names",
+    ]) {
+      dev
+        .prepare(
+          "INSERT INTO schema_migrations (id, kind) VALUES (?, 'migration')",
+        )
+        .run(id);
+    }
+
+    expect(runMigrations(dev, MIGRATIONS)).toEqual([]);
+    expect(appliedMigrations(dev)).toEqual(["0001_baseline"]);
+    const addr = dev
+      .prepare(
+        "SELECT address, label, isPrimary FROM contact_addresses WHERE contactId = 'c-legacy'",
+      )
+      .get() as { address: string; label: string; isPrimary: number };
+    expect(addr).toEqual({
+      address: "London, UK",
+      label: "home",
+      isPrimary: 1,
+    });
+    dev.close();
+  });
 });
 
 describe("a database that Contrack 2 did not make", () => {

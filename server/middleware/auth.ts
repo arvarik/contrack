@@ -128,8 +128,9 @@ function readCookie(req: Request, name: string): string | null {
 /**
  * Cookie attributes.
  *
- * `SameSite=Strict` keeps the cookie off a request from another site, but a
- * sibling subdomain is the same site, so `refuseCrossSiteWrites` is the second
+ * `SameSite=Lax` sends the cookie on top-level GET navigations back from an
+ * external provider (such as Google OAuth callbacks), while keeping it off
+ * cross-site POST/subresource requests. `refuseCrossSiteWrites` is the second
  * half of the CSRF defense.
  *
  * `Secure` is set only when the request arrived over HTTPS: always setting it
@@ -139,7 +140,7 @@ function readCookie(req: Request, name: string): string | null {
 function cookieAttributes(req: Request, maxAgeSeconds: number | null): string {
   const secure = isHttps(req) ? "; Secure" : "";
   const maxAge = maxAgeSeconds !== null ? `; Max-Age=${maxAgeSeconds}` : "";
-  return `HttpOnly; SameSite=Strict; Path=/${secure}${maxAge}`;
+  return `HttpOnly; SameSite=Lax; Path=/${secure}${maxAge}`;
 }
 
 function isHttps(req: Request): boolean {
@@ -183,7 +184,11 @@ export function clearSessionCookie(req: Request, res: Response): void {
 
 /** Read the session secret this request presented, if any. */
 export function presentedSessionSecret(req: Request): string | null {
-  return readCookie(req, COOKIE_NAME);
+  const fromCookie = readCookie(req, COOKIE_NAME);
+  if (fromCookie) return fromCookie;
+  const header = req.headers["x-contrack-session"];
+  const value = Array.isArray(header) ? header[0] : header;
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 }
 
 // Middleware
@@ -315,6 +320,14 @@ export function requireAuth(
   next: NextFunction,
 ): void {
   if (isAuthenticated(req)) return next();
+  if (
+    req.method === "GET" &&
+    trimTrailingSlashes(req.originalUrl.split("?")[0].toLowerCase()) ===
+      "/api/connectors/google/callback"
+  ) {
+    res.redirect(302, "/settings/connectors?error=expired");
+    return;
+  }
   const sentToken = req.headers.authorization?.startsWith("Bearer ") === true;
   // On the MCP endpoint with OAuth on, the challenge also names the OAuth
   // metadata (RFC 9728 §5.1), which is how an MCP client finds the sign-in page
@@ -517,15 +530,20 @@ const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
  * - `Origin` absent: `Sec-Fetch-Site` is `same-origin` or `none`, or absent. A
  *   client that sends neither header is not a browser.
  *
- * A browser never sends a bearer token on its own, so a token request passes.
- * So do the OAuth endpoints, which are outside `/api`.
+ * A browser never sends a bearer token or `X-Contrack-Session` on its own, so
+ * a token or header-authenticated request passes. So do the OAuth endpoints,
+ * which are outside `/api`.
  */
 export function refuseCrossSiteWrites(
   req: Request,
   _res: Response,
   next: NextFunction,
 ): void {
-  if (req.principal?.via !== "session" || !WRITE_METHODS.has(req.method)) {
+  if (
+    req.principal?.via !== "session" ||
+    !readCookie(req, COOKIE_NAME) ||
+    !WRITE_METHODS.has(req.method)
+  ) {
     return next();
   }
   const origin = req.headers.origin;

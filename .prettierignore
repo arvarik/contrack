@@ -9,3 +9,6 @@ tests/fixtures/search-eval/
 playwright-report/
 test-results/
 blob-report/
+
+# Agent scratch and session directories.
+.claude/

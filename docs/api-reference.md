@@ -51,7 +51,7 @@ request then needs one of two credentials:
   read-only tools. Every other request gets `403 TOKEN_READ_ONLY`, and so does
   the Google sign-in at `/api/connectors/google/`, which adds a connector.
 - **The session cookie.** The browser gets `contrack_session` when it signs in.
-  The cookie is `HttpOnly`, `SameSite=Strict` and `Path=/`. It is `Secure`
+  The cookie is `HttpOnly`, `SameSite=Lax` and `Path=/`. It is `Secure`
   when the request arrived over HTTPS, or when a proxy sends
   `X-Forwarded-Proto: https`. A session lasts 30 days by default, and an admin
   sets 1 to 365 days. A sign-in with `remember: false` gets a cookie that ends
@@ -316,9 +316,9 @@ documents send `public, max-age=300`, and a company logo sends
 
 ## Health
 
-| Endpoint       | What it does                                                                                                                                                                                                                                                                                                                                                                                                                       | Access |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| `GET /healthz` | Liveness probe. Runs one query and answers `{ "status": "ok", "schema": { "migration", "expects" }, "vec" }`. `schema.migration` is the last migration the database applied, such as `0008_correspondent_names`, and `schema.expects` is the last one this build holds. They are equal when an upgrade is complete. `vec` is the sqlite-vec version. Answers `503 { "status": "unavailable" }` when the database does not respond. | public |
+| Endpoint       | What it does                                                                                                                                                                                                                                                                                                                                                                                                            | Access |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| `GET /healthz` | Liveness probe. Runs one query and answers `{ "status": "ok", "schema": { "migration", "expects" }, "vec" }`. `schema.migration` is the last migration the database applied, such as `0001_baseline`, and `schema.expects` is the last one this build holds. They are equal when an upgrade is complete. `vec` is the sqlite-vec version. Answers `503 { "status": "unavailable" }` when the database does not respond. | public |
 
 For sizes, queues, backups and the version of each search index, use
 `GET /api/admin/health`.
@@ -453,7 +453,6 @@ A contact carries its child records: `emails`, `phones`, `addresses`,
 | `PUT /api/contacts/:id`                  | Change fields and child arrays. Each child array you send replaces the old one. Fields you leave out stay.                                                                                                                                                                  | your data            |
 | `DELETE /api/contacts/:id`               | Move a contact to the trash. Answers `{ success, retentionDays }`. Restore it with `POST /api/trash/:id/restore`.                                                                                                                                                           | your data            |
 | `GET /api/contacts/archived`             | Archived contacts, most recently archived first.                                                                                                                                                                                                                            | your data            |
-| `GET /api/contacts/map`                  | Your placed contacts, for API clients: `id`, `name`, `company`, `avatarUrl`, `location`, `lat`, `lng` and `geoSource`. Archived, trashed, merged and ghosts are left out.                                                                                                   | your data            |
 | `PATCH /api/contacts/:id/location`       | Place the pin by hand with `{ lat, lng }`, or give it back to the geocoder with `{ "regeocode": true }`. Nothing else may be in the body. Answers the contact.                                                                                                              | your data            |
 | `POST /api/contacts/:id/avatar`          | Upload a contact photo in the field `avatar`. Answers the contact.                                                                                                                                                                                                          | your data            |
 | `GET /api/contacts/:id/score`            | The score breakdown: `{ score, components }`, one entry for each of the five signals. `404 NOT_TRACKED` for a contact you do not track.                                                                                                                                     | your data            |
@@ -1164,7 +1163,7 @@ weeks. `rising` and `cooling` stay empty until four weekly snapshots exist.
 
 In `bounds`, west must be less than east, and south less than north. The Map
 page reads its contacts from `GET /api/contacts?view=slim`.
-`GET /api/contacts/map` and the pin routes are in [Contacts](#contacts).
+The pin routes are in [Contacts](#contacts).
 `PATCH /api/contacts/:id/location` with `regeocode` answers `400 NO_ADDRESS`
 when the contact has no address text to read.
 

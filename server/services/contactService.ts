@@ -181,6 +181,59 @@ function followUpTo(
 // Private helpers
 
 /**
+ * Derive `contacts.location` from the first primary or non-empty address in a
+ * structured `addresses` array when `location` is not explicitly provided.
+ */
+function primaryAddressText(addresses: unknown): string | null | undefined {
+  if (!Array.isArray(addresses)) return undefined;
+  const items = addresses
+    .map((a, index) => {
+      const address = (
+        typeof a === "string"
+          ? a
+          : a &&
+              typeof a === "object" &&
+              "address" in a &&
+              typeof a.address === "string"
+            ? a.address
+            : ""
+      ).trim();
+      const isPrimary =
+        typeof a === "object" && a !== null && "isPrimary" in a
+          ? Boolean(a.isPrimary)
+          : index === 0;
+      return { address, isPrimary };
+    })
+    .filter((a) => a.address !== "");
+  const primary = items.find((a) => a.isPrimary) ?? items[0];
+  return primary?.address ?? null;
+}
+
+/**
+ * Keep `contact_addresses` in step when a caller writes the scalar `location`
+ * field without sending an `addresses` array. Clearing `location` removes any
+ * stored addresses; setting `location` updates the primary address row if the
+ * contact already has structured addresses.
+ */
+function syncLocationToAddresses(id: string, location: unknown): void {
+  const loc = typeof location === "string" ? location.trim() : "";
+  if (!loc) {
+    sqlite.prepare("DELETE FROM contact_addresses WHERE contactId = ?").run(id);
+  } else {
+    sqlite
+      .prepare(
+        `UPDATE OR REPLACE contact_addresses SET address = ?
+          WHERE id = (
+            SELECT id FROM contact_addresses
+            WHERE contactId = ?
+            ORDER BY isPrimary DESC, sortOrder ASC LIMIT 1
+          )`,
+      )
+      .run(loc, id);
+  }
+}
+
+/**
  * Map a contact body to the contacts-table insert values, for createContact and
  * bulkCreateContacts. A field not listed here never reaches the database.
  */
@@ -210,7 +263,10 @@ function buildInsertValues(
     headline: body.headline || null,
     role: body.role || null,
     company: body.company || null,
-    location: body.location || null,
+    location:
+      body.location !== undefined
+        ? body.location || null
+        : (primaryAddressText(body.addresses) ?? null),
     birthday: body.birthday || null,
     preferences: body.preferences || null,
     avatarUrl: body.avatarUrl || null,
@@ -642,7 +698,10 @@ export const contactService = {
     try {
       const owned = contactRepo.findManyOwned(scope, ids).map((r) => r.id);
       const update = buildContactUpdate(data);
-      const changed = changedFields(update);
+      if (data.location === undefined && Array.isArray(data.addresses)) {
+        update.location = primaryAddressText(data.addresses);
+      }
+      const changed = changedFields(update, data);
       if (typeof data.name === "string")
         update.phoneticHash = doubleMetaphone(data.name).primary;
       // buildContactUpdate returns only keys from a fixed allow list
@@ -658,11 +717,23 @@ export const contactService = {
             WHERE id = ? AND ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL`,
         );
         for (const id of owned) {
+          const pinBefore = pinState(scope.ownerId, id);
           if (stmt.run(...values, id, scope.ownerId).changes) {
+            if (Array.isArray(data.addresses)) {
+              sqlite
+                .prepare("DELETE FROM contact_addresses WHERE contactId = ?")
+                .run(id);
+              contactRepo.insertChildRecords(id, {
+                addresses: data.addresses,
+              } as ChildRecordsPayload);
+            } else if (data.location !== undefined) {
+              syncLocationToAddresses(id, data.location);
+            }
+            const released = releaseMovedPin(scope, id, pinBefore);
             changedIds.push(id);
             if (changed.length > 0) {
               recordEvent(scope, "contact.updated", id, {
-                changed,
+                changed: released ? [...changed, "geoSource"] : changed,
                 bulk: true,
               });
             }
@@ -682,6 +753,9 @@ export const contactService = {
     assertOwnedContact(scope, id);
     // Recompute phoneticHash if name changed
     const updateData = buildContactUpdate(body);
+    if (body.location === undefined && Array.isArray(body.addresses)) {
+      updateData.location = primaryAddressText(body.addresses);
+    }
     if (body.name) {
       updateData.phoneticHash = doubleMetaphone(body.name).primary;
     }
@@ -712,6 +786,9 @@ export const contactService = {
           } as ChildRecordsPayload);
         }
       }
+      if (!Array.isArray(body.addresses) && body.location !== undefined) {
+        syncLocationToAddresses(id, body.location);
+      }
 
       followUpTo(scope, [id], body.nextFollowUpAt);
       const released = releaseMovedPin(scope, id, pinBefore);
@@ -735,6 +812,9 @@ export const contactService = {
   patchContact(scope: Scope, id: string, body: Record<string, unknown>) {
     assertOwnedContact(scope, id);
     const update = buildContactUpdate(body);
+    if (body.location === undefined && Array.isArray(body.addresses)) {
+      update.location = primaryAddressText(body.addresses);
+    }
     // Dedupe's phonetic blocking reads this hash, so a rename by PATCH must
     // update it, as updateContact does.
     if (typeof body.name === "string" && body.name) {
@@ -757,6 +837,9 @@ export const contactService = {
           ),
         )
         .run();
+      if (!Array.isArray(body.addresses) && body.location !== undefined) {
+        syncLocationToAddresses(id, body.location);
+      }
       followUpTo(scope, [id], body.nextFollowUpAt);
       const released = releaseMovedPin(scope, id, pinBefore);
       if (changed.length > 0) {
@@ -814,7 +897,7 @@ export const contactService = {
       db.update(schema.contacts)
         .set({
           deletedAt: null,
-          isArchived: 0,
+          isArchived: existing.archivedAt ? 1 : 0,
           updatedAt: new Date().toISOString(),
         })
         .where(
@@ -1082,19 +1165,6 @@ export const contactService = {
     dispatchEvents();
     queueGeocode(id, text);
     return contactRepo.hydrate(contactRepo.findOwned(scope, id));
-  },
-
-  getMapContacts(scope: Scope) {
-    return sqlite
-      .prepare(
-        `SELECT id, name, company, avatarUrl, location, lat, lng, geoSource
-          FROM contacts
-          WHERE ownerId = ? AND lat IS NOT NULL AND lng IS NOT NULL
-            AND (isArchived = 0 OR isArchived IS NULL)
-            AND deletedAt IS NULL AND canonicalId IS NULL
-            AND (isGhost = 0 OR isGhost IS NULL)`,
-      )
-      .all(scope.ownerId);
   },
 
   getArchivedContacts(scope: Scope) {

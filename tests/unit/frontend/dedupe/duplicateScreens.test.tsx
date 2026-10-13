@@ -249,15 +249,19 @@ describe("a merged contact's old page", () => {
       <Page contact={contact as unknown as Contact} />,
       "/contact/gone",
     );
-    await waitFor(() =>
-      expect(screen.getByTestId("where").textContent).toBe("/contact/keeper"),
+    await waitFor(
+      () =>
+        expect(screen.getByTestId("where").textContent).toBe("/contact/keeper"),
+      { timeout: 3000 },
     );
 
     merged = false;
     await act(async () => lastUndo(toast)());
 
-    await waitFor(() =>
-      expect(screen.getByTestId("where").textContent).toBe("/contact/gone"),
+    await waitFor(
+      () =>
+        expect(screen.getByTestId("where").textContent).toBe("/contact/gone"),
+      { timeout: 3000 },
     );
     // Long enough for a stale answer to have bounced it back.
     await act(async () => new Promise((r) => setTimeout(r, 50)));

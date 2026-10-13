@@ -157,7 +157,6 @@ const COVERED = [
   "GET /api/contacts/:id/timeline",
   "GET /api/contacts/action-items",
   "GET /api/contacts/archived",
-  "GET /api/contacts/map",
   "GET /api/dashboard",
   "GET /api/dashboard/activity",
   "GET /api/dashboard/insight",
@@ -485,21 +484,6 @@ describe("list endpoints return only the caller's rows", () => {
     const forB = await asUser(B)(request(app).get("/api/contacts"));
     expect(forB.status).toBe(200);
     expect(ids(forB.body).sort()).toEqual([...seedB.contactIds].sort());
-  });
-
-  it("GET /api/contacts/map excludes the other owner", async () => {
-    const placed = seedA.contactIds[2];
-    const patched = await asUser(A)(
-      request(app)
-        .patch(`/api/contacts/${placed}`)
-        .send({ lat: 51.5, lng: -0.1 }),
-    );
-    expect(patched.status).toBe(200);
-
-    const forA = await asUser(A)(request(app).get("/api/contacts/map"));
-    const forB = await asUser(B)(request(app).get("/api/contacts/map"));
-    expect(ids(forA.body)).toEqual([placed]);
-    expect(forB.body).toEqual([]);
   });
 
   it("GET /api/geo/status lists only the caller's contacts", async () => {
@@ -3868,8 +3852,8 @@ describe("all scoped routes are isolated", () => {
       .filter((r) => r.method === "GET" && !r.path.includes("/:"))
       .map(key);
     // Each is covered above. The count makes a new collection route show in
-    // this file's diff: 45 with the map's list of contacts that have no pin.
-    expect(collections).toHaveLength(45);
+    // this file's diff: 44 after removing GET /api/contacts/map.
+    expect(collections).toHaveLength(44);
     for (const k of collections) expect(COVERED).toContain(k);
   });
 });
