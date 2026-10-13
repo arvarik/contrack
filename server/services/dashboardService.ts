@@ -42,19 +42,20 @@ interface ContactCardRow {
   themeColor: string | null;
 }
 
-interface DashboardMetricsRow {
+interface DashboardContactCountsRow {
   totalActive: number;
-  newContacts30d: number;
-}
-
-/** The band counts of the tracked contacts, straight from one aggregate. */
-interface TrackingRow {
-  count: number;
-  strong: number;
-  fading: number;
-  atRisk: number;
-  unscored: number;
-  startedLast30d: number;
+  newContacts30d: number | null;
+  trackedCount: number | null;
+  strong: number | null;
+  fading: number | null;
+  atRisk: number | null;
+  unscored: number | null;
+  startedLast30d: number | null;
+  catchUpCount: number | null;
+  missingCompany: number | null;
+  missingLocation: number | null;
+  missingEmail: number | null;
+  stale: number | null;
 }
 
 export const dashboardService = {
@@ -107,20 +108,45 @@ export const dashboardService = {
       )
       .all(scope.ownerId) as (ContactCardRow & { mentionCount: number })[];
 
-    // 3. Metrics. Two numbers: the client reads no other.
-    const metrics = sqlite
+    // 3. Single-pass scalar counts over active contacts: metrics, tracking
+    // bands, catch-up count, and hygiene counts in one index scan.
+    const contactCounts = sqlite
       .prepare(
         `
       SELECT
-        (SELECT COUNT(*) FROM contacts WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as totalActive,
-        (SELECT COUNT(*) FROM contacts WHERE ownerId = ? AND addedAt >= date('now', '-30 days') AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)) as newContacts30d
+        COUNT(*) as totalActive,
+        SUM(CASE WHEN c.addedAt >= date('now', '-30 days') THEN 1 ELSE 0 END) as newContacts30d,
+        SUM(CASE WHEN c.isTracked = 1 THEN 1 ELSE 0 END) as trackedCount,
+        SUM(CASE WHEN c.isTracked = 1 AND c.lastContactedAt IS NOT NULL AND c.relationshipScore IS NOT NULL AND c.relationshipScore >= ${STRONG_MIN} THEN 1 ELSE 0 END) as strong,
+        SUM(CASE WHEN c.isTracked = 1 AND c.lastContactedAt IS NOT NULL AND c.relationshipScore IS NOT NULL AND c.relationshipScore >= ${FADING_MIN} AND c.relationshipScore < ${STRONG_MIN} THEN 1 ELSE 0 END) as fading,
+        SUM(CASE WHEN c.isTracked = 1 AND c.lastContactedAt IS NOT NULL AND c.relationshipScore IS NOT NULL AND c.relationshipScore < ${FADING_MIN} THEN 1 ELSE 0 END) as atRisk,
+        SUM(CASE WHEN c.isTracked = 1 AND (c.lastContactedAt IS NULL OR c.relationshipScore IS NULL) THEN 1 ELSE 0 END) as unscored,
+        SUM(CASE WHEN c.isTracked = 1 AND c.trackedAt >= datetime('now', '-30 days') THEN 1 ELSE 0 END) as startedLast30d,
+        SUM(CASE WHEN ${CATCH_UP_WHERE} THEN 1 ELSE 0 END) as catchUpCount,
+        SUM(CASE WHEN c.company IS NULL OR trim(c.company) = '' THEN 1 ELSE 0 END) as missingCompany,
+        SUM(CASE WHEN c.location IS NULL OR trim(c.location) = '' THEN 1 ELSE 0 END) as missingLocation,
+        SUM(CASE WHEN NOT EXISTS (
+          SELECT 1 FROM contact_emails ce WHERE ce.contactId = c.id AND ce.email IS NOT NULL AND trim(ce.email) != ''
+        ) THEN 1 ELSE 0 END) as missingEmail,
+        SUM(CASE WHEN c.updatedAt < date('now', '-6 months') THEN 1 ELSE 0 END) as stale
+      FROM contacts c
+      WHERE c.ownerId = ?
+        AND c.deletedAt IS NULL
+        AND c.canonicalId IS NULL
+        AND c.isGhost = 0
+        AND (c.isArchived = 0 OR c.isArchived IS NULL)
     `,
       )
-      .get(scope.ownerId, scope.ownerId) as DashboardMetricsRow;
+      .get(scope.ownerId) as DashboardContactCountsRow;
+
+    const metrics = {
+      totalActive: contactCounts.totalActive ?? 0,
+      newContacts30d: contactCounts.newContacts30d ?? 0,
+    };
 
     // 4. Catch up: tracked contacts past their cadence, the furthest first.
     // The Up next group on Pulse. The rule is in catchUp.ts, shared with
-    // the count below and the palette's zero state.
+    // the count above and the palette's zero state.
     const catchUp: CatchUpCard[] = (
       sqlite
         .prepare(
@@ -155,45 +181,17 @@ export const dashboardService = {
       overshootDays: row.overshootDays,
     }));
 
-    // 4b. Tracking: the state of the people this owner tracks. The bands use
-    // scoreView's cuts, so the bar on Pulse and the rings on the Tracked
-    // contacts page count the same people. The band numbers are constants from
-    // code, written into the SQL text.
-    const trackingRow = sqlite
-      .prepare(
-        `
-      SELECT
-        COUNT(*) as count,
-        SUM(CASE WHEN lastContactedAt IS NOT NULL AND relationshipScore IS NOT NULL AND relationshipScore >= ${STRONG_MIN} THEN 1 ELSE 0 END) as strong,
-        SUM(CASE WHEN lastContactedAt IS NOT NULL AND relationshipScore IS NOT NULL AND relationshipScore >= ${FADING_MIN} AND relationshipScore < ${STRONG_MIN} THEN 1 ELSE 0 END) as fading,
-        SUM(CASE WHEN lastContactedAt IS NOT NULL AND relationshipScore IS NOT NULL AND relationshipScore < ${FADING_MIN} THEN 1 ELSE 0 END) as atRisk,
-        SUM(CASE WHEN lastContactedAt IS NULL OR relationshipScore IS NULL THEN 1 ELSE 0 END) as unscored,
-        SUM(CASE WHEN trackedAt >= datetime('now', '-30 days') THEN 1 ELSE 0 END) as startedLast30d
-      FROM contacts
-      WHERE ownerId = ? AND isTracked = 1
-        AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0
-        AND (isArchived = 0 OR isArchived IS NULL)
-    `,
-      )
-      .get(scope.ownerId) as TrackingRow;
-    const catchUpCount = (
-      sqlite
-        .prepare(
-          `SELECT COUNT(*) as count FROM contacts c WHERE c.ownerId = ? AND ${CATCH_UP_WHERE}`,
-        )
-        .get(scope.ownerId) as { count: number }
-    ).count;
     const momentum = momentumFor(scope);
     const tracking: TrackingSummary = {
-      count: trackingRow.count,
+      count: contactCounts.trackedCount ?? 0,
       bands: {
-        strong: trackingRow.strong ?? 0,
-        fading: trackingRow.fading ?? 0,
-        atRisk: trackingRow.atRisk ?? 0,
-        unscored: trackingRow.unscored ?? 0,
+        strong: contactCounts.strong ?? 0,
+        fading: contactCounts.fading ?? 0,
+        atRisk: contactCounts.atRisk ?? 0,
+        unscored: contactCounts.unscored ?? 0,
       },
-      catchUpCount,
-      startedLast30d: trackingRow.startedLast30d ?? 0,
+      catchUpCount: contactCounts.catchUpCount ?? 0,
+      startedLast30d: contactCounts.startedLast30d ?? 0,
       ...momentum,
     };
 
@@ -278,54 +276,12 @@ export const dashboardService = {
       )
       .all(scope.ownerId) as (ContactCardRow & { addedAt: string | null })[];
 
-    // 11. Hygiene counts
-    const missingCompany = (
-      sqlite
-        .prepare(
-          `SELECT COUNT(*) as count FROM contacts
-            WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
-              AND (company IS NULL OR trim(company) = '')`,
-        )
-        .get(scope.ownerId) as { count: number }
-    ).count;
-
-    const missingLocation = (
-      sqlite
-        .prepare(
-          `SELECT COUNT(*) as count FROM contacts
-            WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
-              AND (location IS NULL OR trim(location) = '')`,
-        )
-        .get(scope.ownerId) as { count: number }
-    ).count;
-
-    const missingEmail = (
-      sqlite
-        .prepare(
-          `SELECT COUNT(*) as count FROM contacts c
-            WHERE c.ownerId = ? AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 0 AND (c.isArchived = 0 OR c.isArchived IS NULL)
-              AND NOT EXISTS (
-                SELECT 1 FROM contact_emails ce WHERE ce.contactId = c.id AND ce.email IS NOT NULL AND trim(ce.email) != ''
-              )`,
-        )
-        .get(scope.ownerId) as { count: number }
-    ).count;
-
-    const stale = (
-      sqlite
-        .prepare(
-          `SELECT COUNT(*) as count FROM contacts
-            WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
-              AND updatedAt < date('now', '-6 months')`,
-        )
-        .get(scope.ownerId) as { count: number }
-    ).count;
-
+    // 11. Hygiene counts (from single-pass scan above)
     const hygiene = {
-      missingCompany,
-      missingLocation,
-      missingEmail,
-      stale,
+      missingCompany: contactCounts.missingCompany ?? 0,
+      missingLocation: contactCounts.missingLocation ?? 0,
+      missingEmail: contactCounts.missingEmail ?? 0,
+      stale: contactCounts.stale ?? 0,
     };
 
     // 12. Meetings (from upcoming_events when that table exists): those not
@@ -428,10 +384,10 @@ export const dashboardService = {
    * `ownerKey`, so each owner gets their own paragraph, and the per-owner
    * invalidation that drops it uses the same function.
    */
-  async getInsight(scope: Scope, signal?: AbortSignal) {
+  async getInsight(scope: Scope, signal?: AbortSignal, timeZone?: string) {
     const revision = searchRevision(scope);
     const model = resolveCapability("quick");
-    const dateBucket = new Date().toISOString().slice(0, 10);
+    const dateBucket = dayInZone(new Date(), timeZone)!;
     const cacheKey = ownerKey(
       scope,
       `${revision}:${dateBucket}:${model?.providerId}:${model?.model}`,
@@ -465,13 +421,22 @@ export const dashboardService = {
           "Cache miss for Daily Insight. Generating new insight...",
         );
 
-        const totalActive = (
-          sqlite
-            .prepare(
-              `SELECT COUNT(*) as count FROM contacts WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)`,
-            )
-            .get(scope.ownerId) as { count: number }
-        ).count;
+        const insightCounts = sqlite
+          .prepare(
+            `
+          SELECT
+            COUNT(*) as totalActive,
+            SUM(CASE WHEN addedAt >= date('now', '-30 days') THEN 1 ELSE 0 END) as newContacts30d
+          FROM contacts
+          WHERE ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
+        `,
+          )
+          .get(scope.ownerId) as {
+          totalActive: number;
+          newContacts30d: number | null;
+        };
+        const totalActive = insightCounts.totalActive ?? 0;
+        const newContacts30d = insightCounts.newContacts30d ?? 0;
 
         const industryRows = sqlite
           .prepare(
@@ -497,17 +462,6 @@ export const dashboardService = {
         `,
           )
           .all(scope.ownerId) as { name: string }[];
-
-        const newContacts30d = (
-          sqlite
-            .prepare(
-              `
-          SELECT COUNT(*) as count FROM contacts
-          WHERE ownerId = ? AND addedAt >= date('now', '-30 days') AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL)
-        `,
-            )
-            .get(scope.ownerId) as { count: number }
-        ).count;
 
         const topRel = sqlite
           .prepare(
@@ -593,32 +547,38 @@ export const dashboardService = {
     }
 
     // Index seek on idx_interactions_owner_date. A day early, because the
-    // reader's first day can start before UTC's.
+    // reader's first day can start before UTC's. Group identical timestamps
+    // and memoize dayInZone so Intl.DateTimeFormat is not called repeatedly.
     const rows = sqlite
       .prepare(
-        `SELECT date, type FROM interactions WHERE ownerId = ? AND date >= ?`,
+        `SELECT date, type, COUNT(*) as count FROM interactions WHERE ownerId = ? AND date >= ? GROUP BY date, type`,
       )
       .all(scope.ownerId, addCalendarDays(firstDay, -1)) as {
       date: string;
       type: string | null;
+      count: number;
     }[];
+    const dayCache = new Map<string, string | null>();
+    const resolveDay = (raw: string): string | null => {
+      let cached = dayCache.get(raw);
+      if (cached === undefined) {
+        cached = dayInZone(raw, timeZone);
+        dayCache.set(raw, cached);
+      }
+      return cached;
+    };
     for (const row of rows) {
-      const day = byDay.get(dayInZone(row.date, timeZone) ?? "");
+      const day = byDay.get(resolveDay(row.date) ?? "");
       if (!day) continue;
-      day.count++;
+      day.count += row.count;
       const type = row.type || "note";
-      day.byType[type] = (day.byType[type] || 0) + 1;
+      day.byType[type] = (day.byType[type] || 0) + row.count;
     }
 
-    // Twelve weeks from the week start, this one last.
-    const weekTotals = Array.from({ length: 12 }, (_, w) => {
-      const from = addCalendarDays(weekStart, (w - 11) * 7);
-      const to = addCalendarDays(from, 6);
-      return days.reduce(
-        (sum, d) => (d.day >= from && d.day <= to ? sum + d.count : sum),
-        0,
-      );
-    });
+    // Twelve rolling 7-day windows across the 84 days, ending today.
+    const weekTotals = Array.from({ length: 12 }, (_, w) =>
+      days.slice(w * 7, (w + 1) * 7).reduce((sum, d) => sum + d.count, 0),
+    );
 
     let thisWeekLogged = 0;
     const thisWeekByType: Record<string, number> = {};
@@ -633,7 +593,7 @@ export const dashboardService = {
     // Streak: every day with a note a person logged (no imports, no syncs).
     const streakRows = sqlite
       .prepare(
-        `SELECT date FROM interactions
+        `SELECT DISTINCT date FROM interactions
           WHERE ownerId = ? AND (type != 'import' OR type IS NULL) AND source IS NULL`,
       )
       .all(scope.ownerId) as StreakInteraction[];

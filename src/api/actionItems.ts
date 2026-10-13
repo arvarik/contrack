@@ -1,6 +1,5 @@
 import { apiJson, jsonBody } from "./client";
 import { invalidateContactViews, refreshContact } from "./contactCache";
-import { corvidReact } from "../lib/corvid";
 import { zoneQuery } from "./dashboard";
 import { actionItemRoutes } from "../../shared/contracts/actionItems";
 import type { BodyOf } from "../../shared/contracts/route";
@@ -65,8 +64,6 @@ export const useCompleteActionItem = () => {
     mutationFn: (id: string): Promise<ActionItem> =>
       apiJson(actionItemRoutes.complete, `/action-items/${id}/complete`),
     onSuccess: (item) => {
-      // Done: the corvid on its perch nods.
-      corvidReact("nod");
       void refreshContact(queryClient, item.contactId);
       // The note it came with shows it on the timeline.
       void queryClient.invalidateQueries({

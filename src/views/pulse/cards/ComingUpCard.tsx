@@ -99,7 +99,7 @@ export const ComingUpCard = ({
 
   if (entries.length === 0) {
     return (
-      <CardFrame cardId="coming-up" title="Coming up" count={0} variant="line">
+      <CardFrame cardId="coming-up" title="Coming up" variant="line">
         Nothing coming up
         {calendarConnected === false && (
           <>

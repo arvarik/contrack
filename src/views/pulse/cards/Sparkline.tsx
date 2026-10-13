@@ -76,32 +76,47 @@ export const Sparkline = ({ weekTotals, days, thisWeek }: SparklineProps) => {
 
   const comparison = useMemo(() => compareFourWeeks(days), [days]);
 
+  // Twelve rolling 7-day windows over `days`, oldest first, so the rightmost
+  // point is always a full 7-day window and never plunges on Monday morning.
+  const buckets = useMemo(() => {
+    if (days && days.length >= 84) {
+      const windowDays = days.slice(-84);
+      const totals: number[] = [];
+      for (let w = 0; w < 12; w++) {
+        const slice = windowDays.slice(w * 7, (w + 1) * 7);
+        totals.push(slice.reduce((sum, d) => sum + d.count, 0));
+      }
+      return totals;
+    }
+    return weekTotals;
+  }, [days, weekTotals]);
+
   const { pointsStr, areaStr, last } = useMemo(() => {
-    if (!weekTotals || weekTotals.length === 0 || width <= 0) {
+    if (!buckets || buckets.length === 0 || width <= 0) {
       return { pointsStr: "", areaStr: "", last: null };
     }
     // The dot at the end needs room, so the line stops short of the edge.
     const inset = 3;
     const innerWidth = Math.max(1, width - inset * 2);
     const drawHeight = HEIGHT - PAD_Y * 2;
-    const maxVal = Math.max(...weekTotals, 1);
-    const minVal = Math.min(...weekTotals, 0);
+    const maxVal = Math.max(...buckets, 1);
+    const minVal = Math.min(...buckets, 0);
     const range = maxVal - minVal || 1;
 
     const coords: [number, number][] =
-      weekTotals.length === 1
+      buckets.length === 1
         ? [
             [
               inset,
-              HEIGHT - PAD_Y - ((weekTotals[0] - minVal) / range) * drawHeight,
+              HEIGHT - PAD_Y - ((buckets[0] - minVal) / range) * drawHeight,
             ],
             [
               inset + innerWidth,
-              HEIGHT - PAD_Y - ((weekTotals[0] - minVal) / range) * drawHeight,
+              HEIGHT - PAD_Y - ((buckets[0] - minVal) / range) * drawHeight,
             ],
           ]
-        : weekTotals.map((val, idx) => {
-            const x = inset + (idx / (weekTotals.length - 1)) * innerWidth;
+        : buckets.map((val, idx) => {
+            const x = inset + (idx / (buckets.length - 1)) * innerWidth;
             const y = HEIGHT - PAD_Y - ((val - minVal) / range) * drawHeight;
             return [Math.round(x * 10) / 10, Math.round(y * 10) / 10];
           });
@@ -109,7 +124,7 @@ export const Sparkline = ({ weekTotals, days, thisWeek }: SparklineProps) => {
     const pts = coords.map(([x, y]) => `${x},${y}`).join(" ");
     const area = `${pts} ${coords[coords.length - 1][0]},${HEIGHT} ${coords[0][0]},${HEIGHT}`;
     return { pointsStr: pts, areaStr: area, last: coords[coords.length - 1] };
-  }, [weekTotals, width]);
+  }, [buckets, width]);
 
   return (
     <div className="flex flex-col gap-2">

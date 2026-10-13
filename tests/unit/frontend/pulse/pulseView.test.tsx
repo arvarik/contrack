@@ -19,13 +19,17 @@ import {
 } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { addDays, format } from "date-fns";
 import { PulseView } from "../../../../src/views/pulse/PulseView";
 import { PulseSkeleton } from "../../../../src/views/pulse/components/PulseSkeleton";
 import { ComingUpCard } from "../../../../src/views/pulse/cards/ComingUpCard";
+import { Heatmap } from "../../../../src/views/pulse/cards/Heatmap";
+import { InboxCard } from "../../../../src/views/pulse/cards/InboxCard";
 import { InsightCard } from "../../../../src/views/pulse/cards/InsightCard";
 import { KeepingUpCard } from "../../../../src/views/pulse/cards/KeepingUpCard";
 import { connectorKeys } from "../../../../src/api/connectors";
 import type { DashboardPayload } from "../../../../src/api";
+import { CORVID_REACT_EVENT } from "../../../../src/lib/corvid";
 import { resetPendingDeletes } from "../../../../src/lib/pendingDeletes";
 
 /** The toasts, so a test can press Undo or end its window. */
@@ -234,18 +238,49 @@ describe("Pulse", () => {
     expect(mockRefetch).toHaveBeenCalledOnce();
   });
 
-  it("never completes a row nobody can see: the first D only shows it, and Undo keeps it unsent", () => {
-    renderPulse();
-    fireEvent.keyDown(window, { key: "d" });
-    expect(screen.getByText("Send whitepaper")).toBeDefined();
-    expect(toastMock.success).not.toHaveBeenCalled();
+  it("never completes a row nobody can see: the first D only shows it, nods immediately, and Undo keeps it unsent", () => {
+    const reactions: string[] = [];
+    const onReact = (e: Event) =>
+      reactions.push((e as CustomEvent).detail.reaction);
+    window.addEventListener(CORVID_REACT_EVENT, onReact);
+    try {
+      renderPulse();
+      fireEvent.keyDown(window, { key: "d" });
+      expect(screen.getByText("Send whitepaper")).toBeDefined();
+      expect(toastMock.success).not.toHaveBeenCalled();
+      expect(reactions).toEqual([]);
 
+      fireEvent.keyDown(window, { key: "d" });
+      expect(screen.queryByText("Send whitepaper")).toBeNull();
+      expect(reactions).toEqual(["nod"]);
+      act(() => lastToast()[1].action.onClick());
+      expect(screen.getByText("Send whitepaper")).toBeDefined();
+      act(() => lastToast()[1].onAutoClose());
+      expect(mockCompleteMutate).not.toHaveBeenCalled();
+    } finally {
+      window.removeEventListener(CORVID_REACT_EVENT, onReact);
+    }
+  });
+
+  it("keeps focus and selection on the next row when a focused row is completed", () => {
+    renderPulse();
+    const [first] = queueRows();
+    // Wake the keyboard selection, then focus the first row.
     fireEvent.keyDown(window, { key: "d" });
-    expect(screen.queryByText("Send whitepaper")).toBeNull();
-    act(() => lastToast()[1].action.onClick());
-    expect(screen.getByText("Send whitepaper")).toBeDefined();
-    act(() => lastToast()[1].onAutoClose());
-    expect(mockCompleteMutate).not.toHaveBeenCalled();
+    act(() => {
+      first.focus();
+    });
+    expect(document.activeElement).toBe(first);
+
+    // Completing the focused row unmounts it; focus and selection move to the next row.
+    fireEvent.keyDown(window, { key: "d" });
+    const remaining = queueRows();
+    expect(remaining).toHaveLength(1);
+    expect(document.activeElement).toBe(remaining[0]);
+
+    // A single D immediately completes the newly focused row without needing another wake-up key.
+    fireEvent.keyDown(window, { key: "d" });
+    expect(screen.getByText("Nothing due today")).toBeDefined();
   });
 
   it("leaves the queue keys to an open menu", () => {
@@ -262,13 +297,15 @@ describe("Pulse", () => {
     expect(screen.getByText("Send whitepaper")).toBeDefined();
   });
 
-  it("snoozes with S, says to which day, and Undo puts the old date back", () => {
+  it("snoozes with S as a plain calendar day, says to which day, and Undo puts the old date back", () => {
     renderPulse();
     fireEvent.keyDown(window, { key: "s" });
     fireEvent.keyDown(window, { key: "s" });
     const [variables, callbacks] = mockUpdateMutate.mock.calls[0];
     expect(variables.id).toBe("act-1");
-    expect(Date.parse(variables.data.dueAt)).toBeGreaterThan(Date.now());
+    expect(variables.data.dueAt).toBe(
+      format(addDays(new Date(), 1), "yyyy-MM-dd"),
+    );
 
     act(() => callbacks.onSuccess());
     const [message, options] = lastToast();
@@ -477,5 +514,38 @@ describe("Pulse", () => {
     expect(screen.queryByRole("heading", { level: 3 })).toBeNull();
     expect(screen.queryByRole("button", { name: /to catch up/ })).toBeNull();
     expect(screen.getByText("of 42 within cadence")).toBeDefined();
+  });
+
+  it("omits the 0 badge on empty Coming up and Inbox line cards", () => {
+    renderWithClient(
+      <>
+        <ComingUpCard />
+        <InboxCard pendingDuplicates={0} />
+      </>,
+      clientWith([{ kind: "ics" }]),
+    );
+    expect(screen.getByRole("heading", { name: "Coming up" }).textContent).toBe(
+      "Coming up",
+    );
+    expect(screen.getByRole("heading", { name: "Inbox" }).textContent).toBe(
+      "Inbox",
+    );
+  });
+
+  it("renders future days of the current week in Heatmap as non-interactive empty slots", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    // Monday, Sep 21, 2026: rows 1..6 (Tue..Sun) of the last column are in the future.
+    vi.setSystemTime(new Date(2026, 8, 21, 9));
+    const { container } = render(
+      <Heatmap
+        days={[]}
+        weekTotals={Array(12).fill(0)}
+        weekStartPref="monday"
+      />,
+    );
+    const activeCells = container.querySelectorAll("[data-heatmap-cell]");
+    const futureCells = container.querySelectorAll("[data-heatmap-future]");
+    expect(activeCells).toHaveLength(11 * 7 + 1);
+    expect(futureCells).toHaveLength(6);
   });
 });

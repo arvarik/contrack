@@ -1,4 +1,11 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { flushSync } from "react-dom";
 import { PartyPopper, PenLine } from "lucide-react";
 import confetti from "canvas-confetti";
@@ -7,6 +14,7 @@ import { ActionRow } from "./ActionRow";
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { InfoTip } from "../../../components/ui/InfoTip";
 import { useMediaQuery } from "../../../hooks/useMediaQuery";
+import { TOUCH_QUERY } from "../../../lib/platform";
 import { KBD_SM, TONE_DOT } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { openQuickNote } from "../../../lib/appEvents";
@@ -65,8 +73,11 @@ export const UpNextCard = ({
   const prevItemCountRef = useRef<number | null>(null);
   /** Focus is inside the list, so a newly highlighted row takes focus. */
   const [focusWithin, setFocusWithin] = useState(false);
-  /** Below sm the rows take the phone anatomy. See `ActionRow`. */
-  const compact = !useMediaQuery("(min-width: 640px)");
+  /** Below sm, or on a touch screen below xl, rows take the compact anatomy. */
+  const isSm = useMediaQuery("(min-width: 640px)");
+  const isXl = useMediaQuery("(min-width: 1280px)");
+  const isTouch = useMediaQuery(TOUCH_QUERY);
+  const compact = !isSm || (isTouch && !isXl);
   /** From lg the pane scrolls inside the card, so every row is drawn. */
   const scrolls = useMediaQuery("(min-width: 1024px)");
   const [showAll, setShowAll] = useState(false);
@@ -90,15 +101,27 @@ export const UpNextCard = ({
   // leaves it. The snooze menu's panel sits inside its row in the DOM, so a
   // press on it is inside the list.
   useEffect(() => {
-    if (!selectionShown) return;
+    if (!selectionShown && !focusWithin) return;
     const onPointerDown = (e: PointerEvent) => {
       if (!paneRef.current?.contains(e.target as Node | null)) {
+        setFocusWithin(false);
         onSelectionShownChange(false);
       }
     };
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [selectionShown, onSelectionShownChange]);
+  }, [selectionShown, focusWithin, onSelectionShownChange]);
+
+  // When a focused row unmounts after completion or snooze, focus falls to
+  // document.body. Put it on the replacement row at selectedIndex.
+  useLayoutEffect(() => {
+    if (!focusWithin || !paneRef.current) return;
+    if (paneRef.current.contains(document.activeElement)) return;
+    const rows =
+      paneRef.current.querySelectorAll<HTMLElement>("[data-up-next-row]");
+    const target = rows[Math.min(Math.max(0, selectedIndex), rows.length - 1)];
+    target?.focus({ preventScroll: true });
+  }, [items, selectedIndex, focusWithin]);
 
   useEffect(() => {
     if (
@@ -131,11 +154,20 @@ export const UpNextCard = ({
     };
   }, [items.length]);
 
+  const indexById = useMemo(() => {
+    const map = new Map<string, number>();
+    items.forEach((item, idx) => map.set(item.id, idx));
+    return map;
+  }, [items]);
+
   /** Step the highlight from a row, within the list's bounds. */
-  const moveFrom = (globalIdx: number, direction: -1 | 1) => {
-    const next = globalIdx + direction;
-    if (next >= 0 && next < items.length) onSelectIndex(next);
-  };
+  const moveFrom = useCallback(
+    (globalIdx: number, direction: -1 | 1) => {
+      const next = globalIdx + direction;
+      if (next >= 0 && next < items.length) onSelectIndex(next);
+    },
+    [items.length, onSelectIndex],
+  );
 
   return (
     <CardFrame
@@ -170,7 +202,7 @@ export const UpNextCard = ({
       ) : (
         // From lg the pane scrolls inside the card with sticky headings, and
         // the reserved gutter keeps rows from shifting. Each section holds its
-        // own list under its heading: a heading inside a list fails axe. The
+        // Own list under its heading: a heading inside a list fails axe. The
         // first row is current from the start but wears the tint only while
         // the keyboard is on the list: on load it read as a stray highlight.
         <div
@@ -187,6 +219,10 @@ export const UpNextCard = ({
             }
           }}
           onBlur={(e) => {
+            // When a focused row unmounts after completion or snooze, the
+            // browser fires blur with relatedTarget === null before
+            // useLayoutEffect runs.
+            if (e.relatedTarget === null) return;
             // Focus moving to another row or a control in one stays inside.
             if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
               setFocusWithin(false);
@@ -226,21 +262,22 @@ export const UpNextCard = ({
                 className="flex flex-col gap-1.5"
               >
                 {group.items.map((item) => {
-                  const globalIdx = items.findIndex((i) => i.id === item.id);
+                  const globalIdx = indexById.get(item.id) ?? 0;
                   const isSelected = globalIdx === selectedIndex;
 
                   return (
                     <ActionRow
                       key={item.id}
                       item={item}
+                      index={globalIdx}
                       isSelected={isSelected}
                       looksSelected={isSelected && selectionShown}
-                      onSelect={() => onSelectIndex(globalIdx)}
+                      onSelect={onSelectIndex}
                       onComplete={onComplete}
                       onSnooze={onSnooze}
                       onLog={onLog}
                       onOpenContact={onOpenContact}
-                      onMove={(direction) => moveFrom(globalIdx, direction)}
+                      onMove={moveFrom}
                       focusOnSelect={focusWithin}
                       compact={compact}
                     />

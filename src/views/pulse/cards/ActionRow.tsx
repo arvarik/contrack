@@ -27,18 +27,19 @@ import type { UpNextItem } from "../lib/upNext";
 
 interface ActionRowProps {
   item: UpNextItem;
+  index?: number;
   /** The current row: `aria-current` and the one tab stop. Not the tint. */
   isSelected?: boolean;
   /** The row wears the selected tint. The queue paints it for the keyboard only. */
   looksSelected?: boolean;
-  onSelect?: () => void;
+  onSelect?: (index: number) => void;
   onComplete?: (id: string) => void;
   /** Move a follow-up's due date out by some days. */
   onSnooze?: (item: UpNextItem, days: number) => void;
   onLog?: (contactId: string) => void;
   onOpenContact?: (contactId: string) => void;
   /** ArrowDown and ArrowUp on the focused row move the highlight. */
-  onMove?: (direction: -1 | 1) => void;
+  onMove?: (index: number, direction: -1 | 1) => void;
   /**
    * True while focus is inside the list. A newly selected row then takes
    * focus. Otherwise it only scrolls into view, so J or K never pulls focus
@@ -86,6 +87,7 @@ const onControl = (target: EventTarget | null) =>
 export const ActionRow = memo(
   ({
     item,
+    index = 0,
     isSelected = false,
     looksSelected = false,
     onSelect,
@@ -152,7 +154,7 @@ export const ActionRow = memo(
 
     const handleRowClick = (e: React.MouseEvent) => {
       if (onControl(e.target)) return;
-      onSelect?.();
+      onSelect?.(index);
       onOpenContact?.(item.contactId);
     };
 
@@ -172,11 +174,11 @@ export const ActionRow = memo(
           return;
         case "ArrowDown":
           e.preventDefault();
-          onMove?.(1);
+          onMove?.(index, 1);
           return;
         case "ArrowUp":
           e.preventDefault();
-          onMove?.(-1);
+          onMove?.(index, -1);
           return;
         default:
           return;
@@ -241,11 +243,12 @@ export const ActionRow = memo(
       <div
         ref={rowRef}
         role="listitem"
+        data-up-next-row=""
         aria-current={isSelected ? "true" : undefined}
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
         tabIndex={isSelected ? 0 : -1}
         onFocus={() => {
-          if (!isSelected) onSelect?.();
+          if (!isSelected) onSelect?.(index);
         }}
         onClick={handleRowClick}
         onKeyDown={handleKeyDown}

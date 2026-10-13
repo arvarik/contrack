@@ -66,6 +66,7 @@ interface Cell {
   count: number;
   byType: Record<string, number>;
   isToday: boolean;
+  isFuture: boolean;
 }
 
 interface ActiveCell {
@@ -133,6 +134,7 @@ export const Heatmap = ({
           count: data?.count ?? 0,
           byType: data?.byType ?? {},
           isToday: dayStr === todayLocal,
+          isFuture: dayStr > todayLocal,
         });
       }
       columns.push(colDays);
@@ -205,7 +207,7 @@ export const Heatmap = ({
     () =>
       grid
         .flat()
-        .filter((cell) => cell.count > 0)
+        .filter((cell) => !cell.isFuture && cell.count > 0)
         .map((cell) => ({
           key: cell.dayStr,
           words: formatCellTitle(cell.date, cell.count, cell.byType),
@@ -259,6 +261,20 @@ export const Heatmap = ({
           >
             {grid.map((col, colIdx) =>
               col.map((cell, rowIdx) => {
+                if (cell.isFuture) {
+                  return (
+                    <rect
+                      key={cell.dayStr}
+                      data-heatmap-future={cell.dayStr}
+                      x={colIdx * STEP + PAD}
+                      y={rowIdx * STEP + PAD}
+                      width={CELL}
+                      height={CELL}
+                      rx={2}
+                      className="opacity-0 pointer-events-none"
+                    />
+                  );
+                }
                 const step = scaleFn(cell.count);
                 const alpha = getHeatmapAlpha(step);
                 return (
