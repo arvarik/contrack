@@ -34,13 +34,13 @@ function undoOptions(
 ) {
   const id = merge.mergeLogId;
   if (!id) return {};
-  return withUndo(() => {
-    void undoMerges(qc, [id], true)
+  return withUndo(() =>
+    undoMerges(qc, [id], true)
       .then(() => afterUndo?.())
-      .catch((err: unknown) =>
-        toast.error(`Could not undo: ${errorText(err)}`),
-      );
-  });
+      .catch((err: unknown) => {
+        toast.error(`Could not undo: ${errorText(err)}`);
+      }),
+  );
 }
 
 /**

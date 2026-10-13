@@ -36,6 +36,7 @@ export function useMergedRedirect(
     const base = pathname.startsWith("/map/contact/")
       ? "/map/contact/"
       : "/contact/";
+    if (pathname === `${base}${merge.primaryId}`) return;
     announceMergedPage(qc, name, merge, () => {
       forgetMerge(qc, id);
       navigate(`${base}${id}`, { replace: true });

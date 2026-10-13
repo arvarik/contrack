@@ -207,6 +207,8 @@ export const useMergedInto = (contactId: string, enabled: boolean) =>
  * again after an undo: the contact as it was merged, and where it went.
  */
 export function forgetMerge(qc: QueryClient, contactId: string): void {
+  void qc.resetQueries({ queryKey: ["contacts", contactId], exact: true });
+  void qc.resetQueries({ queryKey: suggestionKeys.mergedInto(contactId) });
   qc.removeQueries({ queryKey: ["contacts", contactId], exact: true });
   qc.removeQueries({ queryKey: suggestionKeys.mergedInto(contactId) });
 }
