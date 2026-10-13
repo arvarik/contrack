@@ -85,12 +85,18 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
   // Opened as "work": research looks for the person at their job.
   const requestFor = (anchor: ResearchAnchor) =>
     detailRequest?.anchor === anchor ? detailRequest.key : undefined;
-  // The address list. The mini map reads it too, so no address means no map block.
-  const addressItems = (contact.addresses ?? []).map((a: ContactAddress) => ({
-    id: a.id,
-    value: a.address,
-    label: a.label || "home",
-  }));
+  // The address list, or the single legacy `location`. The mini map reads it
+  // too, so no address means no map block.
+  const addressItems =
+    contact.addresses && contact.addresses.length > 0
+      ? contact.addresses.map((a: ContactAddress) => ({
+          id: a.id,
+          value: a.address,
+          label: a.label || "home",
+        }))
+      : contact.location
+        ? [{ id: "legacy-init", value: contact.location, label: "home" }]
+        : [];
   const mapLink = useMapLink(contactId);
   const isPlaced = isValidLatLng(contact.lat, contact.lng);
 
@@ -159,6 +165,7 @@ const DetailsCardInner: React.FC<DetailsCardProps> = ({
             updateContact({
               id: contactId,
               data: {
+                location: updated[0]?.value ?? null,
                 addresses: updated.map((a, i) => ({
                   address: a.value,
                   label: a.label || "home",

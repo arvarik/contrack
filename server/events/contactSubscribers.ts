@@ -31,7 +31,11 @@ import { scopeForOwnerId } from "../tenancy/scope.ts";
 import { runWithContext } from "../tenancy/requestContext.ts";
 import { scheduleSearchIndex } from "../services/search/indexQueue.ts";
 import { generateAndStoreEmbedding } from "../services/dedupe/embeddings.ts";
-import { pinState, queueGeocode } from "../services/geocoding/index.ts";
+import {
+  cancelGeocode,
+  pinState,
+  queueGeocode,
+} from "../services/geocoding/index.ts";
 import { relationshipService } from "../services/relationshipService.ts";
 import { getPreferences } from "../services/userPreferencesService.ts";
 import { aiAllowedForUser } from "../ai/instanceSwitch.ts";
@@ -217,6 +221,7 @@ const geocode: Subscriber = {
     if (pin.shown && !pin.manual) {
       queueGeocode(event.subjectId, pin.shown);
     } else if (event.type === "contact.updated" && !pin.shown && !pin.manual) {
+      cancelGeocode(event.subjectId);
       if (event.payload.changed.includes("geoSource")) {
         sqlite
           .prepare(

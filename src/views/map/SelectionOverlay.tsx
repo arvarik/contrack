@@ -63,12 +63,13 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (boxStartRef.current || lassoPointsRef.current.length > 0) {
-          resetDrawing();
-        }
-        if (isLassoModeRef.current) {
-          onExitLassoModeRef.current();
+      if (e.key === "Escape" && !e.defaultPrevented) {
+        const drawing =
+          boxStartRef.current !== null || lassoPointsRef.current.length > 0;
+        if (drawing || isLassoModeRef.current) {
+          e.preventDefault();
+          if (drawing) resetDrawing();
+          if (isLassoModeRef.current) onExitLassoModeRef.current();
         }
       }
     };
