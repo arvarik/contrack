@@ -47,8 +47,8 @@ export const useGlobalNavShortcuts = () => {
     // together rather than one after the other (`views/pages`).
     const go = (rawPath: string) => {
       const path =
-        rawPath === "/settings"
-          ? (lastSettingsPath ?? "/settings/account")
+        rawPath === "/settings" && lastSettingsPath
+          ? lastSettingsPath
           : rawPath;
       warmPage(rawPath, queryClient);
       markPendingNav(path);

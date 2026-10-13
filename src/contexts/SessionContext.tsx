@@ -25,10 +25,15 @@ interface RecentContextValue {
 
 const RecentContext = createContext<RecentContextValue | null>(null);
 
+const DEFAULT_RECENT: RecentContextValue = {
+  lastContactId: null,
+  setLastContactId: () => {},
+  lastSettingsPath: null,
+  setLastSettingsPath: () => {},
+};
+
 export function useRecent(): RecentContextValue {
-  const ctx = useContext(RecentContext);
-  if (!ctx) throw new Error("useRecent must be used within SessionProvider");
-  return ctx;
+  return useContext(RecentContext) ?? DEFAULT_RECENT;
 }
 
 // AISearchSessionContext: the Ask page's search, which outlives the page

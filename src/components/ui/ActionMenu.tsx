@@ -210,6 +210,7 @@ export const ActionMenu = ({
 }: ActionMenuProps) => {
   const [open, setOpen] = useState(false);
   const [openSubId, setOpenSubId] = useState<string | null>(null);
+  const hoveredSubId = useRef<string | null>(null);
   /** Which item takes focus when the menu opens: the first or the last. */
   const [openAt, setOpenAt] = useState<"first" | "last">("first");
   const trigger = useRef<HTMLButtonElement | null>(null);
@@ -228,7 +229,10 @@ export const ActionMenu = ({
   const change = useCallback(
     (next: boolean) => {
       setOpen(next);
-      if (!next) setOpenSubId(null);
+      if (!next) {
+        hoveredSubId.current = null;
+        setOpenSubId(null);
+      }
       onOpenChange?.(next);
     },
     [onOpenChange],
@@ -358,11 +362,13 @@ export const ActionMenu = ({
           role="none"
           onPointerEnter={(e) => {
             if (!item.disabled && e.pointerType !== "touch") {
+              hoveredSubId.current = item.id;
               setOpenSubId(item.id);
             }
           }}
           onPointerLeave={(e) => {
             if (e.pointerType !== "touch") {
+              if (hoveredSubId.current === item.id) hoveredSubId.current = null;
               setOpenSubId((cur) => (cur === item.id ? null : cur));
             }
           }}
@@ -379,6 +385,10 @@ export const ActionMenu = ({
             className={classes}
             onClick={() => {
               if (item.disabled) return;
+              if (hoveredSubId.current === item.id) {
+                setOpenSubId(item.id);
+                return;
+              }
               setOpenSubId((cur) => (cur === item.id ? null : item.id));
             }}
             onKeyDown={(e) => {
