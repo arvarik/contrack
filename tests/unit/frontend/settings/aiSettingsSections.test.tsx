@@ -43,6 +43,11 @@ vi.mock("../../../../src/contexts/PreferencesContext", () => ({
 
 import { FeatureMap } from "../../../../src/views/ai-settings/FeatureMap";
 import { ModelRow } from "../../../../src/views/ai-settings/ModelRow";
+import { ModelsSection } from "../../../../src/views/ai-settings/ModelsSection";
+
+vi.mock("../../../../src/views/search", () => ({
+  SearchCoverageBar: () => null,
+}));
 
 const served = { providerId: "gemini", providerLabel: "Google Gemini" };
 
@@ -179,6 +184,15 @@ describe("a model row", () => {
     expect(
       screen.getByText(
         /The pinned model cannot run now, so Automatic chose this one/,
+      ),
+    ).toBeTruthy();
+  });
+
+  it("explains that choosing a provider for embeddings saves memory on the server", () => {
+    inRouter(<ModelsSection settings={settings()} />);
+    expect(
+      screen.getByText(
+        /Built-in runs on this server, or pick a provider to save memory/,
       ),
     ).toBeTruthy();
   });

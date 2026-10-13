@@ -95,3 +95,43 @@ describe("SettingRow", () => {
     window.location.hash = "";
   });
 });
+
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { McpView } from "../../../../src/views/settings/mcp/McpView";
+import { ExportPage } from "../../../../src/views/settings/pages/ExportPage";
+
+describe("Settings subpage deep-link anchors", () => {
+  it("highlights and focuses #export on ExportPage", () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={["/settings/export#export"]}>
+        <ExportPage />
+      </MemoryRouter>,
+    );
+    const target = container.querySelector("#export");
+    expect(target).toBeTruthy();
+    expect(target?.classList.contains("flash")).toBe(true);
+    expect(document.activeElement).toBe(target);
+  });
+
+  it.each([
+    "endpoint",
+    "token",
+    "claude-code",
+    "claude-desktop",
+    "curl",
+    "tools",
+  ])("highlights and focuses #%s on McpView", (id) => {
+    const client = new QueryClient();
+    const { container } = render(
+      <MemoryRouter initialEntries={[`/settings/mcp#${id}`]}>
+        <QueryClientProvider client={client}>
+          <McpView />
+        </QueryClientProvider>
+      </MemoryRouter>,
+    );
+    const target = container.querySelector(`#${id}`);
+    expect(target).toBeTruthy();
+    expect(target?.classList.contains("flash")).toBe(true);
+    expect(document.activeElement).toBe(target);
+  });
+});

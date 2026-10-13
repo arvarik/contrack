@@ -1,14 +1,26 @@
 // @vitest-environment jsdom
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import React from "react";
-import { render, screen } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { NeedsAttention } from "../../../../src/views/settings/NeedsAttention";
 import * as api from "../../../../src/api";
 import * as importsApi from "../../../../src/api/imports";
 
 vi.mock("../../../../src/api", () => ({ useDedupeCount: vi.fn() }));
 vi.mock("../../../../src/api/imports", () => ({ useImports: vi.fn() }));
+
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  delete (document as { startViewTransition?: unknown }).startViewTransition;
+});
+
+let currentPath = "";
+const PathProbe = () => {
+  currentPath = useLocation().pathname;
+  return null;
+};
 
 const counts = (duplicates: number, failed: number) => {
   vi.mocked(api.useDedupeCount).mockReturnValue({
@@ -23,8 +35,9 @@ const counts = (duplicates: number, failed: number) => {
     })),
   } as unknown as ReturnType<typeof importsApi.useImports>);
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={["/settings"]}>
       <NeedsAttention />
+      <PathProbe />
     </MemoryRouter>,
   );
 };
@@ -43,5 +56,27 @@ describe("NeedsAttention", () => {
       ["Review 12 possible duplicates", "/pulse/duplicates"],
       ["Retry 1 failed import", "/settings/import"],
     ]);
+  });
+
+  it("skips View Transition on touch devices when navigating to /pulse/duplicates", () => {
+    const startViewTransition = vi.fn();
+    (document as { startViewTransition?: unknown }).startViewTransition =
+      startViewTransition;
+    vi.stubGlobal(
+      "matchMedia",
+      (query: string) =>
+        ({
+          matches: query === "(pointer: coarse)",
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        }) as unknown as MediaQueryList,
+    );
+
+    counts(5, 0);
+    fireEvent.click(
+      screen.getByRole("link", { name: "Review 5 possible duplicates" }),
+    );
+    expect(startViewTransition).not.toHaveBeenCalled();
+    expect(currentPath).toBe("/pulse/duplicates");
   });
 });

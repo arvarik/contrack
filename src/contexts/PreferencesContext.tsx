@@ -116,19 +116,9 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
     [stored, preferences],
   );
 
-  // The server's answer, under any change made while it was on its way.
+  // The server's answer is the full current preference state.
   const storeAnswer = (response: PreferencesResponse) => {
-    queryClient.setQueryData<PreferencesResponse>(QUERY_KEY, (current) => {
-      if (!current) return response;
-      return {
-        ...response,
-        preferences: {
-          ...response.preferences,
-          ...current.preferences,
-        },
-        stored: [...new Set([...response.stored, ...current.stored])],
-      };
-    });
+    queryClient.setQueryData<PreferencesResponse>(QUERY_KEY, response);
   };
 
   const mutation = useMutation({

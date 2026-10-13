@@ -1108,5 +1108,20 @@ describe("Frontend Connectors Components", () => {
         screen.queryByRole("heading", { name: "Run history for Cal 1" }),
       ).toBeNull();
     });
+
+    it("highlights and focuses #gallery when deep-linked", () => {
+      const { container } = render(
+        <MemoryRouter initialEntries={["/settings/connectors#gallery"]}>
+          <QueryClientProvider client={queryClient}>
+            <ConnectorsView />
+          </QueryClientProvider>
+        </MemoryRouter>,
+      );
+
+      const gallery = container.querySelector("#gallery");
+      expect(gallery).toBeTruthy();
+      expect(gallery?.classList.contains("flash")).toBe(true);
+      expect(document.activeElement).toBe(gallery);
+    });
   });
 });

@@ -362,6 +362,28 @@ describe("resetting a preference", () => {
       ),
     ).toBe(true);
   });
+
+  it("resets multiple preferences at once without resurrecting deleted keys", async () => {
+    stored = { theme: "dark", listDensity: "compact" };
+    const { result } = renderHook(() => usePreferences(), {
+      wrapper: makeWrapper(),
+    });
+    await waitFor(() => expect(result.current.isLoaded).toBe(true));
+    expect(result.current.stored).toEqual(["theme", "listDensity"]);
+    expect(result.current.changed).toEqual(["theme", "listDensity"]);
+
+    act(() => {
+      result.current.resetPreference("theme");
+      result.current.resetPreference("listDensity");
+    });
+
+    await waitFor(() => {
+      expect(result.current.preferences.theme).toBe("system");
+      expect(result.current.preferences.listDensity).toBe("comfortable");
+      expect(result.current.stored).toEqual([]);
+      expect(result.current.changed).toEqual([]);
+    });
+  });
 });
 
 describe("text scale and motion attributes", () => {

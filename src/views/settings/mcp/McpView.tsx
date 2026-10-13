@@ -6,8 +6,8 @@
  * wraps instead of scrolling sideways, and Copy takes the exact text.
  */
 
-import React, { useState } from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Copy,
@@ -31,6 +31,7 @@ import { MCP_TOOLS } from "../../../../shared/mcpTools";
 import { radioKeys, radioTabIndex } from "../../../lib/a11y";
 import { filterPill, SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
+import { useHashTarget } from "../SettingRow";
 import {
   SETTINGS_CARD,
   SETTINGS_INPUT,
@@ -102,37 +103,70 @@ const CopyButton = ({
   );
 };
 
+const CLIENT_HASH_ID: Partial<Record<McpClientId, string>> = {
+  "claude-code": "claude-code",
+  "claude-desktop": "claude-desktop",
+  other: "curl",
+};
+
+const HASH_CLIENT_ID: Record<string, McpClientId> = {
+  "#claude-code": "claude-code",
+  "#claude-desktop": "claude-desktop",
+  "#curl": "other",
+};
+
 const ClientPicker = ({
   value,
   onChange,
 }: {
   value: McpClientId;
   onChange: (id: McpClientId) => void;
-}) => (
-  <div
-    role="radiogroup"
-    aria-labelledby="mcp-client-heading"
-    className="flex flex-wrap gap-2"
-  >
-    {MCP_CLIENTS.map((client, index) => {
-      const checked = client.id === value;
-      return (
-        <button
-          key={client.id}
-          type="button"
-          role="radio"
-          aria-checked={checked}
-          tabIndex={radioTabIndex(checked, index, true)}
-          onKeyDown={radioKeys}
-          onClick={() => onChange(client.id)}
-          className={cn(filterPill(checked), "hit-area")}
-        >
-          {client.label}
-        </button>
-      );
-    })}
-  </div>
-);
+}) => {
+  const claudeCode = useHashTarget<HTMLButtonElement>("claude-code");
+  const claudeDesktop = useHashTarget<HTMLButtonElement>("claude-desktop");
+  const curl = useHashTarget<HTMLButtonElement>("curl");
+  const targets: Partial<
+    Record<McpClientId, ReturnType<typeof useHashTarget<HTMLButtonElement>>>
+  > = {
+    "claude-code": claudeCode,
+    "claude-desktop": claudeDesktop,
+    other: curl,
+  };
+
+  return (
+    <div
+      role="radiogroup"
+      aria-labelledby="mcp-client-heading"
+      className="flex flex-wrap gap-2"
+    >
+      {MCP_CLIENTS.map((client, index) => {
+        const checked = client.id === value;
+        const hashId = CLIENT_HASH_ID[client.id];
+        const target = targets[client.id];
+        return (
+          <button
+            key={client.id}
+            id={hashId}
+            ref={target?.ref}
+            type="button"
+            role="radio"
+            aria-checked={checked}
+            tabIndex={radioTabIndex(checked, index, true)}
+            onKeyDown={radioKeys}
+            onClick={() => onChange(client.id)}
+            className={cn(
+              filterPill(checked),
+              "hit-area scroll-mt-20",
+              target?.flashing && "flash",
+            )}
+          >
+            {client.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+};
 
 type TokenAccess = "write" | "read";
 
@@ -329,10 +363,28 @@ const METHOD_OPTIONS: readonly SegmentedOption<SignInMethod>[] = [
 
 export const McpView: React.FC = () => {
   const { authRequired, publicUrl, mcpOAuth } = useAuth();
-  const [clientId, setClientId] = useState<McpClientId>("claude-code");
+  const location = useLocation();
+  const [clientId, setClientId] = useState<McpClientId>(() => {
+    const hash =
+      location.hash ||
+      (typeof window !== "undefined" ? window.location.hash : "");
+    return HASH_CLIENT_ID[hash] ?? "claude-code";
+  });
   const [draft, setDraft] = useState<TokenDraft>(NO_TOKEN);
   const token = draft.token;
   const [method, setMethod] = useState<SignInMethod>("browser");
+
+  const endpoint = useHashTarget<HTMLDivElement>("endpoint");
+  const tokenTarget = useHashTarget<HTMLDivElement>("token");
+  const tools = useHashTarget<HTMLElement>("tools");
+
+  useEffect(() => {
+    const hash =
+      location.hash ||
+      (typeof window !== "undefined" ? window.location.hash : "");
+    const nextClient = HASH_CLIENT_ID[hash];
+    if (nextClient) setClientId(nextClient);
+  }, [location.hash]);
 
   const origin =
     publicUrl ?? (typeof window !== "undefined" ? window.location.origin : "");
@@ -368,7 +420,15 @@ export const McpView: React.FC = () => {
           Connect an assistant
         </h2>
         <div className={cn(SETTINGS_CARD, "space-y-6")}>
-          <div id="endpoint" className="space-y-2 scroll-mt-20">
+          <div
+            id="endpoint"
+            ref={endpoint.ref}
+            tabIndex={-1}
+            className={cn(
+              "space-y-2 scroll-mt-20 outline-none rounded-xl transition-colors duration-(--dur-slow)",
+              endpoint.flashing && "flash bg-primary/10",
+            )}
+          >
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
                 <h3 className={STEP_HEADING}>Server address</h3>
@@ -432,7 +492,15 @@ export const McpView: React.FC = () => {
           ) : (
             <>
               {authRequired && (
-                <div id="token" className="space-y-3 scroll-mt-20">
+                <div
+                  id="token"
+                  ref={tokenTarget.ref}
+                  tabIndex={-1}
+                  className={cn(
+                    "space-y-3 scroll-mt-20 outline-none rounded-xl transition-colors duration-(--dur-slow)",
+                    tokenTarget.flashing && "flash bg-primary/10",
+                  )}
+                >
                   <h3 className={cn(STEP_HEADING, "flex items-center gap-1.5")}>
                     <KeyRound
                       className="w-4 h-4 text-primary"
@@ -517,7 +585,17 @@ export const McpView: React.FC = () => {
                   <code>{setup.code}</code>
                 </pre>
                 {!authRequired && (
-                  <p className="text-xs text-on-surface-variant text-pretty">
+                  <p
+                    id="token"
+                    ref={
+                      tokenTarget.ref as React.RefObject<HTMLParagraphElement>
+                    }
+                    tabIndex={-1}
+                    className={cn(
+                      "text-xs text-on-surface-variant text-pretty scroll-mt-20 outline-none rounded-xl transition-colors duration-(--dur-slow)",
+                      tokenTarget.flashing && "flash bg-primary/10",
+                    )}
+                  >
                     This Contrack asks no one to sign in, so a client needs no
                     token. Anyone who can reach the address can use it
                   </p>
@@ -528,7 +606,16 @@ export const McpView: React.FC = () => {
         </div>
       </section>
 
-      <section aria-labelledby="mcp-tools-heading" id="tools">
+      <section
+        aria-labelledby="mcp-tools-heading"
+        id="tools"
+        ref={tools.ref}
+        tabIndex={-1}
+        className={cn(
+          "scroll-mt-20 outline-none rounded-2xl transition-colors duration-(--dur-slow)",
+          tools.flashing && "flash bg-primary/10",
+        )}
+      >
         <h2 id="mcp-tools-heading" className={SETTINGS_SECTION_HEADING}>
           Tools
         </h2>

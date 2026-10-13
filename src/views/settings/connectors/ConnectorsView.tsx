@@ -19,6 +19,7 @@ import { ImapFormModal } from "./ImapFormModal";
 import { GoogleFormModal } from "./GoogleFormModal";
 import { RunHistoryDrawer } from "./RunHistoryDrawer";
 import { SettingsHeaderActions } from "../SettingsHeader";
+import { useHashTarget } from "../SettingRow";
 import {
   SETTINGS_CARD,
   SETTINGS_PAGE,
@@ -47,6 +48,7 @@ export const ConnectorsView: React.FC = () => {
   const { data: connectors, isLoading, isError, refetch } = useConnectors();
   const { data: kinds } = useConnectorKinds();
   const { data: correspondents } = useCorrespondents(50) ?? {};
+  const gallery = useHashTarget<HTMLElement>("gallery");
 
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -177,7 +179,15 @@ export const ConnectorsView: React.FC = () => {
       )}
 
       {!isLoading && !isError && hasConnectors && (
-        <div className="grid gap-3">
+        <div
+          id="gallery"
+          ref={gallery.ref as React.RefObject<HTMLDivElement>}
+          tabIndex={-1}
+          className={cn(
+            "grid gap-3 scroll-mt-20 outline-none rounded-2xl transition-colors duration-(--dur-slow)",
+            gallery.flashing && "flash bg-primary/10",
+          )}
+        >
           {connectors.map((connector) => (
             <ConnectorCard
               key={connector.id}
@@ -191,7 +201,16 @@ export const ConnectorsView: React.FC = () => {
 
       {/* Nothing connected yet: the choices, on the page. */}
       {!isLoading && !isError && !hasConnectors && (
-        <section aria-labelledby="add-connector">
+        <section
+          id="gallery"
+          ref={gallery.ref}
+          tabIndex={-1}
+          aria-labelledby="add-connector"
+          className={cn(
+            "scroll-mt-20 outline-none rounded-2xl transition-colors duration-(--dur-slow)",
+            gallery.flashing && "flash bg-primary/10",
+          )}
+        >
           <h2 id="add-connector" className={SETTINGS_SECTION_HEADING}>
             Add a connector
           </h2>
