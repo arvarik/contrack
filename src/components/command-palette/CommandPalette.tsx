@@ -21,6 +21,7 @@ import { useRecentContacts } from "../../hooks/useRecentContacts";
 import { useSearchHistory } from "../../hooks/useSearchHistory";
 import { useInstantSearch } from "../../hooks/useInstantSearch";
 import {
+  parseQuery,
   useQueryTokenizer,
   type FacetFilter,
 } from "../../hooks/useQueryTokenizer";
@@ -32,7 +33,7 @@ import { DURATION, EASE } from "../../lib/motion";
 import { cn, errorText } from "../../lib/utils";
 import { CLOSE_PALETTE_EVENT, OPEN_PALETTE_EVENT } from "../../lib/appEvents";
 import type { SemanticMatch, ZeroStateInsight } from "../../types";
-import { formatFacet } from "../../../shared/facetQuery";
+import { formatFacet, parseFacetQuery } from "../../../shared/facetQuery";
 import { getMode, insightPath, looksLikeQuestion } from "./utils";
 import { AiMode } from "./AiMode";
 import { useAiSetup } from "../../hooks/useAiSetup";
@@ -85,6 +86,20 @@ const MODE_CHIPS = [
 
 /** No pills: one array, so a question without pills keeps one identity. */
 const NO_FILTERS: FacetFilter[] = [];
+
+const joinFiltersAndQuery = (filters: readonly FacetFilter[], q: string) => {
+  const inQuery = parseFacetQuery(q).filters;
+  const extra = filters.filter(
+    (f) =>
+      !inQuery.some(
+        (t) =>
+          t.field === f.field &&
+          t.value.toLowerCase() === f.value.toLowerCase() &&
+          (t.operator ?? "") === (f.operator ?? ""),
+      ),
+  );
+  return [...extra.map(formatFacet), q].filter(Boolean).join(" ");
+};
 
 export const CommandPalette = () => {
   const { preferences } = usePreferences();
@@ -278,9 +293,7 @@ export const CommandPalette = () => {
   // only when a person picks a result (`handleSelectFtsContact`).
   useEffect(() => {
     const answered = semanticSearch.data?.query ?? "";
-    const fullAnswered = [...aiFilters.map(formatFacet), answered]
-      .filter(Boolean)
-      .join(" ");
+    const fullAnswered = joinFiltersAndQuery(aiFilters, answered);
     if (
       mode === "ai" &&
       semanticSearch.isSuccess &&
@@ -538,12 +551,13 @@ export const CommandPalette = () => {
         handleClose();
         return;
       }
+      clearFilters();
       setSearch(query);
       // A question picked again is asked again.
       if (query.trim().startsWith("?"))
-        askAi(query.replace(/^\s*\?\s*/, ""), []);
+        askAi(query.replace(/^\s*\?\s*/, ""), parseQuery(query).filters);
     },
-    [navigate, handleClose, askAi],
+    [navigate, handleClose, askAi, clearFilters],
   );
 
   // The one place a people search becomes a recent search: when a person
@@ -861,9 +875,7 @@ export const CommandPalette = () => {
   // for `?`, the links below it.
   const aiModeProps = {
     question: aiQuery,
-    fullQuestion: [...aiFilters.map(formatFacet), aiQuery]
-      .filter(Boolean)
-      .join(" "),
+    fullQuestion: joinFiltersAndQuery(aiFilters, aiQuery),
     pending: aiPending,
     loading: aiQuery.length >= 3 && isAiLoading && !aiPending,
     answered: semanticSearch.isSuccess,

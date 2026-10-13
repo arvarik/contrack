@@ -632,28 +632,30 @@ async function answerFromPlan(
   if (!candidates.length)
     return { path: "empty", result: { matches: [], fallback: false } };
   const startRevision = searchRevision(scope);
-  const pool = [
-    ...hydrateCandidates(
-      scope,
-      candidates.map((c) => c.contactId),
-      PHASE1_LIMIT,
-    ).values(),
-  ];
+  const pool = hydrateCandidates(
+    scope,
+    candidates.map((c) => c.contactId),
+    PHASE1_LIMIT,
+  );
   const verified = await rerankCandidates(
     query,
-    buildCompressedCandidates(pool, scope, query, retrieval.queryVector),
+    buildCompressedCandidates(
+      [...pool.values()],
+      scope,
+      query,
+      retrieval.queryVector,
+    ),
     plan,
     signal,
   );
   signal.throwIfAborted();
-  const inPool = new Set(pool.map((c) => c.id));
   const fresh =
     searchRevision(scope) === startRevision
-      ? new Map(pool.map((c) => [c.id, c]))
+      ? pool
       : hydrateCandidates(
           scope,
           verified
-            .filter((match) => inPool.has(match.contact_id))
+            .filter((match) => pool.has(match.contact_id))
             .map((match) => match.contact_id),
           PHASE1_LIMIT,
         );

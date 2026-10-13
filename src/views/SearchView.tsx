@@ -238,9 +238,9 @@ export const SearchView = () => {
       // A key in a field, a dialog or a menu is theirs, so H in the history's
       // Clear confirmation does not close the pane under it.
       if (isPageKeyTaken(e)) return;
-      if (e.key === "/") {
+      if (e.key === "/" && inputRef.current) {
         e.preventDefault();
-        inputRef.current?.focus();
+        inputRef.current.focus();
       } else if (e.key.toLowerCase() === "h") {
         e.preventDefault();
         // The sheet is a dialog, and a key pressed in it is its own, so

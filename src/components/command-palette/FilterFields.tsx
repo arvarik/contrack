@@ -20,6 +20,7 @@ const FIELDS: readonly { field: FacetField; does: string }[] = [
   { field: "contacted", does: "Last in touch before or after" },
   { field: "score", does: "Relationship score above or below" },
   { field: "updated", does: "Last edited before or after" },
+  { field: "added", does: "Added before or after" },
   { field: "missing", does: "Has no email, phone, company or location" },
 ];
 

@@ -355,11 +355,6 @@ describe("unknownFacetValue", () => {
     expect(unknownFacetValue({ field: "added", value: "30d" })).toBeNull();
     // A text facet takes any text.
     expect(unknownFacetValue({ field: "company", value: "zz" })).toBeNull();
-  });
-});
-
-describe("facetFiltersSchema", () => {
-  it("normalizes leading > and < operators in raw filter values", () => {
     expect(
       facetFiltersSchema.parse([
         { field: "score", value: ">80" },

@@ -121,13 +121,10 @@ describe("parseFacetQuery", () => {
     });
   });
 
-  it("drops a repeated facet", () => {
+  it("drops a repeated facet while keeping distinct operators", () => {
     expect(parseFacetQuery("tag:a tag:a").filters).toEqual([
       { field: "tag", value: "a" },
     ]);
-  });
-
-  it("keeps distinct operators on the same field", () => {
     expect(parseFacetQuery("score:>50 score:<50").filters).toEqual([
       { field: "score", value: "50", operator: ">" },
       { field: "score", value: "50", operator: "<" },

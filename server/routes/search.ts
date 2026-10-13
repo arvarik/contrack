@@ -217,13 +217,15 @@ router.post(
     // The facts the brief may use. Industry is one of them: a question such
     // as "who works in fintech" is answered from it, and without it the
     // model said nobody did. Read twice, before and after the model runs.
-    const readContacts = () => {
-      const rows = sqlite
+    const readContacts = () =>
+      sqlite
         .prepare(
           `SELECT c.id,c.name,c.role,c.headline,c.company,c.industry,c.location FROM contacts c
-             WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL} AND c.id IN (SELECT value FROM json_each(?))`,
+             JOIN json_each(?) j ON j.value = c.id
+             WHERE c.ownerId = ? AND ${ACTIVE_CONTACT_SQL}
+             ORDER BY CAST(j.key AS INTEGER)`,
         )
-        .all(scope.ownerId, JSON.stringify(ids)) as {
+        .all(JSON.stringify(ids), scope.ownerId) as {
         id: string;
         name: string;
         role?: string;
@@ -232,12 +234,6 @@ router.post(
         industry?: string;
         location?: string;
       }[];
-      const byId = new Map(rows.map((row) => [row.id, row]));
-      return ids.flatMap((id) => {
-        const row = byId.get(id);
-        return row ? [row] : [];
-      });
-    };
     // TODO(v2.1): Build richer summaries from server-validated passage references tied to each contact.
     // Check each claim against that contact and source revision before streaming it.
     const contacts = readContacts();
