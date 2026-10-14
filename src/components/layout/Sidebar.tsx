@@ -264,6 +264,7 @@ export const Sidebar = () => {
             // is here when the click lands.
             onPointerEnter={warmSettingsShell}
             onFocus={warmSettingsShell}
+            onPointerDown={warmSettingsShell}
             onClick={markPendingNavOnClick(settingsTo)}
             className={navLink(isCleanup)}
             aria-label={NAMES.settings.label}

@@ -30,11 +30,11 @@ export const askPage = preloadable(() =>
   import("./SearchView").then((m) => ({ default: m.SearchView })),
 );
 
-/** The idle warm-up's order: the largest chunk first. */
+/** The idle warm-up's order: fast everyday pages first, then the 1 MB map bundle. */
 const WARM_ORDER: readonly Preloadable<object>[] = [
-  mapPage,
   pulsePage,
   askPage,
+  mapPage,
 ];
 
 /** The lazy page at `path`, or null for a page in the entry bundle. */

@@ -123,7 +123,28 @@ type Card =
 /** A cluster's people, and whether no zoom splits it, so a click lists them. */
 interface ClusterPeople {
   ids: string[];
+  idSet: Set<string>;
+  overdue: number;
   stack: boolean;
+}
+
+function buildClusterPeople(
+  ids: string[],
+  stack: boolean,
+  overdueIds: ReadonlySet<string>,
+): ClusterPeople {
+  let overdue = 0;
+  if (overdueIds.size > 0) {
+    for (const id of ids) {
+      if (overdueIds.has(id)) overdue += 1;
+    }
+  }
+  return {
+    ids,
+    idSet: new Set(ids),
+    overdue,
+    stack,
+  };
 }
 
 /** A pinned card and a sheet stay until closed on purpose. */
@@ -363,65 +384,93 @@ export const ContactMap = ({
   const [clusterLeaves, setClusterLeaves] = useState<
     Map<string, ClusterPeople>
   >(new Map());
+  const overdueIds = useMemo(
+    () =>
+      new Set(
+        contacts.filter((c) => isPastDay(c.nextFollowUpAt)).map((c) => c.id),
+      ),
+    [contacts],
+  );
 
   useEffect(() => {
     const source = map?.getSource<GeoJSONSource>(CONTACTS_SOURCE_ID);
     if (!map || !source) return;
 
     let isMounted = true;
-    const missing = features.filter(
-      (f): f is ClusterFeature & { clusterId: number } =>
-        f.kind === "cluster" &&
-        f.clusterId !== undefined &&
-        !clusterLeavesCache.current.has(f.key),
-    );
-    if (missing.length === 0) return;
+    const loadMissing = () => {
+      if (!isMounted) return;
+      const missing = features.filter(
+        (f): f is ClusterFeature & { clusterId: number } =>
+          f.kind === "cluster" &&
+          f.clusterId !== undefined &&
+          !clusterLeavesCache.current.has(f.key),
+      );
+      if (missing.length === 0) return;
 
-    Promise.all(
-      missing.map(async (c) => {
-        try {
-          const leaves = await source.getClusterLeaves(
-            c.clusterId,
-            Infinity,
-            0,
-          );
-          const ids = leaves
-            .map((l) => l.properties?.id)
-            .filter((id): id is string => typeof id === "string");
-          const firstCoords =
-            leaves[0]?.geometry?.type === "Point"
-              ? leaves[0].geometry.coordinates
-              : null;
-          const isStack =
-            firstCoords !== null &&
-            leaves.every(
-              (l) =>
-                l.geometry?.type === "Point" &&
-                l.geometry.coordinates[0] === firstCoords[0] &&
-                l.geometry.coordinates[1] === firstCoords[1],
+      Promise.all(
+        missing.map(async (c) => {
+          try {
+            const leaves = await source.getClusterLeaves(
+              c.clusterId,
+              Infinity,
+              0,
             );
-          clusterLeavesCache.current.set(c.key, {
-            ids,
-            stack: isStack,
-          });
-        } catch {
-          // New data replaced the cluster, and the next read asks again.
-        }
-      }),
-    ).then(() => {
-      if (isMounted) setClusterLeaves(new Map(clusterLeavesCache.current));
-    });
+            const ids = leaves
+              .map((l) => l.properties?.id)
+              .filter((id): id is string => typeof id === "string");
+            const firstCoords =
+              leaves[0]?.geometry?.type === "Point"
+                ? leaves[0].geometry.coordinates
+                : null;
+            const isStack =
+              firstCoords !== null &&
+              leaves.every(
+                (l) =>
+                  l.geometry?.type === "Point" &&
+                  l.geometry.coordinates[0] === firstCoords[0] &&
+                  l.geometry.coordinates[1] === firstCoords[1],
+              );
+            clusterLeavesCache.current.set(
+              c.key,
+              buildClusterPeople(ids, isStack, overdueIds),
+            );
+          } catch {
+            // New data replaced the cluster, and the next read asks again.
+          }
+        }),
+      ).then(() => {
+        if (isMounted) setClusterLeaves(new Map(clusterLeavesCache.current));
+      });
+    };
 
+    if (typeof map.isMoving === "function" && map.isMoving()) {
+      map.once("moveend", loadMissing);
+      return () => {
+        isMounted = false;
+        map.off("moveend", loadMissing);
+      };
+    }
+
+    loadMissing();
     return () => {
       isMounted = false;
     };
-  }, [map, features]);
+  }, [map, features, overdueIds]);
 
   // A stack carries its people. A cluster's arrive from MapLibre once asked.
   const peopleOf = useCallback(
-    (f: ClusterFeature): ClusterPeople | undefined =>
-      f.ids ? { ids: f.ids, stack: true } : clusterLeaves.get(f.key),
-    [clusterLeaves],
+    (f: ClusterFeature): ClusterPeople | undefined => {
+      if (f.ids) {
+        let cached = clusterLeavesCache.current.get(f.key);
+        if (!cached) {
+          cached = buildClusterPeople(f.ids, true, overdueIds);
+          clusterLeavesCache.current.set(f.key, cached);
+        }
+        return cached;
+      }
+      return clusterLeaves.get(f.key);
+    },
+    [clusterLeaves, overdueIds],
   );
   const toggleContact = useCallback(
     (id: string) => onToggleSelectIds?.([id]),
@@ -453,13 +502,6 @@ export const ContactMap = ({
       }
     },
     [map, onToggleSelectIds, peopleOf],
-  );
-  const overdueIds = useMemo(
-    () =>
-      new Set(
-        contacts.filter((c) => isPastDay(c.nextFollowUpAt)).map((c) => c.id),
-      ),
-    [contacts],
   );
 
   // New data makes a stack's list, a card and the cluster ids stale: MapLibre
@@ -769,12 +811,23 @@ export const ContactMap = ({
             features.map((feature) => {
               if (feature.kind === "cluster") {
                 const known = peopleOf(feature);
-                const leaves = known?.ids ?? [];
-                const selectedInCluster = selectedIds
-                  ? leaves.filter((id) => selectedIds.has(id)).length
-                  : 0;
-                const halo = [selectedId, cardOwner, highlightedId].some(
-                  (id) => id !== null && leaves.includes(id),
+                let selectedInCluster = 0;
+                if (known && selectedIds && selectedIds.size > 0) {
+                  if (selectedIds.size < known.ids.length) {
+                    for (const id of selectedIds) {
+                      if (known.idSet.has(id)) selectedInCluster += 1;
+                    }
+                  } else {
+                    for (const id of known.ids) {
+                      if (selectedIds.has(id)) selectedInCluster += 1;
+                    }
+                  }
+                }
+                const halo = Boolean(
+                  known &&
+                  ((selectedId !== null && known.idSet.has(selectedId)) ||
+                    (cardOwner !== null && known.idSet.has(cardOwner)) ||
+                    (highlightedId !== null && known.idSet.has(highlightedId))),
                 );
 
                 return (
@@ -792,7 +845,7 @@ export const ContactMap = ({
                       card.cluster.key === feature.key
                     }
                     stacked={known?.stack}
-                    overdue={leaves.filter((id) => overdueIds.has(id)).length}
+                    overdue={known?.overdue ?? 0}
                     halo={halo}
                     dimmed={
                       dimming && !!known && !halo && selectedInCluster === 0
@@ -815,6 +868,7 @@ export const ContactMap = ({
                   dimmed={
                     dimming && contact.id !== selectedId && !marked && !multi
                   }
+                  overdue={overdueIds.has(contact.id)}
                   onSelect={select}
                   onToggleSelect={onToggleSelectIds ? toggleContact : undefined}
                   onCard={onPin}

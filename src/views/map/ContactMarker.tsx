@@ -50,6 +50,8 @@ interface ContactMarkerProps {
   marked?: boolean;
   /** Another contact is open, so this pin steps back. */
   dimmed?: boolean;
+  /** Whether the contact's follow-up is overdue (computed when omitted). */
+  overdue?: boolean;
   onSelect: (id: string) => void;
   onToggleSelect?: (id: string) => void;
   onCard: (id: string, event: PinEvent) => void;
@@ -73,6 +75,7 @@ export const ContactMarker = memo(function ContactMarker({
   multiSelected = false,
   marked = false,
   dimmed = false,
+  overdue: overdueProp,
   onSelect,
   onToggleSelect,
   onCard,
@@ -83,7 +86,7 @@ export const ContactMarker = memo(function ContactMarker({
   // The last press. A tap's focus and click are not a mouse's.
   const press = useRef<{ type: string; x: number; y: number } | null>(null);
   const { id } = contact;
-  const overdue = isPastDay(contact.nextFollowUpAt);
+  const overdue = overdueProp ?? isPastDay(contact.nextFollowUpAt);
   const overdueId = useId();
 
   const halo = selected || marked;
@@ -170,6 +173,7 @@ export const ContactMarker = memo(function ContactMarker({
         <img
           src={src}
           alt=""
+          decoding="async"
           draggable={false}
           onError={() => setBroken(true)}
           className="w-full h-full rounded-full object-cover"

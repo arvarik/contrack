@@ -32,9 +32,10 @@ export const settingsShell = preloadable(() =>
   import("./SettingsShell").then((m) => ({ default: m.SettingsShell })),
 );
 
-/** Starts Settings' shell, for a link to Settings a person points at. */
+/** Starts Settings' shell and default page, for a link to Settings a person points at. */
 export function warmSettingsShell(): void {
   settingsShell.load().catch(() => undefined);
+  warmSettingsPage(SETTINGS_PAGES[0]);
 }
 
 const pagePreloads = new Map<string, Preloadable<object, SettingsPageModule>>();
