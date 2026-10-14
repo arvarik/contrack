@@ -4,7 +4,7 @@
 // cancellation through options.signal. JSON answers are validated and
 // normalized, so the text callers get always parses.
 
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import type { AIProvider, ModelInfo, ModelCapability } from "../provider.ts";
 import type { ModelClass } from "../routing/registry.ts";
 import type {
@@ -185,7 +185,8 @@ export class AnthropicAdapter implements AIProvider {
   readonly name = "Anthropic";
   readonly supportsSearchGrounding = true;
   readonly defaultMaxTokens = DEFAULT_MAX_TOKENS;
-  private client: Anthropic;
+  private client?: Anthropic;
+  private readonly apiKey: string;
   /**
    * Schemas Claude declined to compile, by model and schema hash, for the
    * grammar errors the local limit check does not predict. Remembered so the
@@ -196,7 +197,15 @@ export class AnthropicAdapter implements AIProvider {
   private noEffort = new Set<string>();
 
   constructor(apiKey: string) {
-    this.client = new Anthropic({ apiKey, maxRetries: 0 });
+    this.apiKey = apiKey;
+  }
+
+  private async getClient(): Promise<Anthropic> {
+    if (!this.client) {
+      const { default: AnthropicClient } = await import("@anthropic-ai/sdk");
+      this.client = new AnthropicClient({ apiKey: this.apiKey, maxRetries: 0 });
+    }
+    return this.client;
   }
 
   /**
@@ -206,8 +215,9 @@ export class AnthropicAdapter implements AIProvider {
    * than offered to fail.
    */
   async listModels(): Promise<ModelInfo[]> {
+    const client = await this.getClient();
     const models: ModelInfo[] = [];
-    for await (const model of this.client.models.list()) {
+    for await (const model of client.models.list()) {
       const capabilities: ModelCapability[] = ["chat"];
       if (supportsWebSearch(model.id)) capabilities.push("grounding");
       const declared = model as unknown as {
@@ -410,6 +420,7 @@ export class AnthropicAdapter implements AIProvider {
     startMs: number,
     useSchema: boolean,
   ): Promise<AIGenerateResult> {
+    const client = await this.getClient();
     let systemPrompt = options.systemPrompt ?? "";
     // Without a schema to constrain it, the model needs the shape in words.
     if (options.responseFormat === "json" && !useSchema) {
@@ -466,9 +477,9 @@ export class AnthropicAdapter implements AIProvider {
       }
       if (Object.keys(outputConfig).length > 0)
         requestParams.output_config = outputConfig;
-      return this.client.messages.create(
+      return client.messages.create(
         requestParams as unknown as Parameters<
-          typeof this.client.messages.create
+          typeof client.messages.create
         >[0],
         { signal },
       ) as unknown as Promise<ClaudeMessageResponse>;
@@ -550,6 +561,7 @@ export class AnthropicAdapter implements AIProvider {
     signal: AbortSignal,
     send: (piece: string) => void,
   ): Promise<AIGenerateResult> {
+    const client = await this.getClient();
     const startMs = Date.now();
     // Local event shape: the fields of the three events that carry the text
     // and the usage. Thinking arrives in other deltas and is not sent.
@@ -569,9 +581,9 @@ export class AnthropicAdapter implements AIProvider {
       const system = options.systemPrompt?.trim();
       if (system) requestParams.system = system;
       if (effort) requestParams.output_config = { effort };
-      return this.client.messages.create(
+      return client.messages.create(
         requestParams as unknown as Parameters<
-          typeof this.client.messages.create
+          typeof client.messages.create
         >[0],
         { signal },
       ) as unknown as Promise<AsyncIterable<ClaudeStreamEvent>>;

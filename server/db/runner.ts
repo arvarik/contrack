@@ -30,7 +30,7 @@ export interface Migration {
   up: (db: Database.Database) => void;
 }
 
-const RETIRED_PRE_V2_MIGRATIONS = [
+const RETIRED_LEGACY_MIGRATIONS = [
   "0002_events_and_jobs",
   "0003_map_pins",
   "0004_oauth",
@@ -41,12 +41,12 @@ const RETIRED_PRE_V2_MIGRATIONS = [
 ] as const;
 
 function retireConsolidatedMigrations(db: Database.Database): void {
-  const placeholders = RETIRED_PRE_V2_MIGRATIONS.map(() => "?").join(", ");
+  const placeholders = RETIRED_LEGACY_MIGRATIONS.map(() => "?").join(", ");
   const res = db
     .prepare(
       `DELETE FROM schema_migrations WHERE kind = 'migration' AND id IN (${placeholders})`,
     )
-    .run(...RETIRED_PRE_V2_MIGRATIONS);
+    .run(...RETIRED_LEGACY_MIGRATIONS);
   if (res.changes > 0) {
     const hasAddresses =
       db

@@ -86,6 +86,7 @@ export default defineConfig({
          * dependency it wants, the compression library PMTiles reads with.
          */
         codeSplitting: {
+          minSize: 10_000,
           groups: [
             {
               name: "vendor-react",
@@ -122,6 +123,17 @@ export default defineConfig({
                 id.includes("/node_modules/") && id.includes("motion"),
             },
             { name: "vendor-tanstack", test: /\/node_modules\/@tanstack\// },
+            {
+              name: "vendor-tz",
+              test: /\/node_modules\/@photostructure\/tz-lookup\//,
+            },
+            {
+              name: "app-shared",
+              tags: ["$initial"],
+              minShareCount: 2,
+              priority: -10,
+              includeDependenciesRecursively: false,
+            },
           ],
         },
       },

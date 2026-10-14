@@ -68,8 +68,10 @@ describe("in production", () => {
   it("lets a browser keep the versioned boot script a year, and revalidate an old link", async () => {
     // It blocks the first paint, so a revalidation cost each start a trip.
     const distPath = fs.mkdtempSync(path.join(os.tmpdir(), "contrack-"));
+    fs.mkdirSync(path.join(distPath, "fonts"), { recursive: true });
     fs.writeFileSync(path.join(distPath, "index.html"), "<!doctype html>");
     fs.writeFileSync(path.join(distPath, "theme-boot.js"), "void 0;");
+    fs.writeFileSync(path.join(distPath, "fonts", "inter.woff2"), "font");
     const host = await start({ production: true, distPath });
 
     const kept = await fetch(`http://${host}/theme-boot.js?v=abc123`);
@@ -81,6 +83,12 @@ describe("in production", () => {
     const old = await fetch(`http://${host}/theme-boot.js`);
     expect(old.status).toBe(200);
     expect(old.headers.get("cache-control")).toBe("public, max-age=0");
+
+    const font = await fetch(`http://${host}/fonts/inter.woff2`);
+    expect(font.status).toBe(200);
+    expect(font.headers.get("cache-control")).toBe(
+      "public, max-age=31536000, immutable",
+    );
   });
 });
 

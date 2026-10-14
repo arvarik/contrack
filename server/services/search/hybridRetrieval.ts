@@ -699,7 +699,7 @@ export async function localRetrieval(
         items: passage,
       });
   }
-  // TODO(v2.1): Expand the candidate budget only when held-out recall improves enough to justify added verification latency.
+  // TODO: Expand the candidate budget only when held-out recall improves enough to justify added verification latency.
   const candidates = reciprocalRankFusion(channels, options.rrfK);
   return {
     candidates: options.limit ? candidates.slice(0, options.limit) : candidates,

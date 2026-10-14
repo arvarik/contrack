@@ -162,3 +162,40 @@ export function isoWeekStart(date: Date | string | number): string {
   const dd = String(localDate.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
+
+/**
+ * The elapsed time between two dates as a single unit ("3 months", "2 years",
+ * "10 days"), rounded down to the nearest whole unit.
+ */
+export function formatDistanceStrictFloor(earlier: Date, later: Date): string {
+  const [start, end] =
+    earlier.getTime() <= later.getTime() ? [earlier, later] : [later, earlier];
+  const ms = end.getTime() - start.getTime();
+  const minutes = ms / 60_000;
+  const tzOffsetMs =
+    (start.getTimezoneOffset() - end.getTimezoneOffset()) * 60_000;
+  const dstMinutes = (ms - tzOffsetMs) / 60_000;
+
+  if (minutes < 1) {
+    const s = Math.floor(ms / 1000);
+    return `${s} ${s === 1 ? "second" : "seconds"}`;
+  }
+  if (minutes < 60) {
+    const m = Math.floor(minutes);
+    return `${m} ${m === 1 ? "minute" : "minutes"}`;
+  }
+  if (minutes < 1440) {
+    const h = Math.floor(minutes / 60);
+    return `${h} ${h === 1 ? "hour" : "hours"}`;
+  }
+  if (dstMinutes < 43_200) {
+    const d = Math.floor(dstMinutes / 1440);
+    return `${d} ${d === 1 ? "day" : "days"}`;
+  }
+  if (dstMinutes < 525_600) {
+    const mo = Math.floor(dstMinutes / 43_200);
+    return mo === 12 ? "1 year" : `${mo} ${mo === 1 ? "month" : "months"}`;
+  }
+  const y = Math.floor(dstMinutes / 525_600);
+  return `${y} ${y === 1 ? "year" : "years"}`;
+}

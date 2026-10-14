@@ -4,7 +4,7 @@
 // the text comes from the contact's own fields, so it is exact, short and the
 // same on every run.
 
-import { formatDistanceStrict } from "date-fns";
+import { formatDistanceStrictFloor } from "../../../shared/dates.ts";
 
 /** A field that proved a match. */
 export type ReasonField =
@@ -94,7 +94,7 @@ function contactDate(value: unknown): Date | null {
 export function lastContactAgo(at: unknown, now: Date): string | null {
   const date = contactDate(at);
   if (!date) return null;
-  const distance = formatDistanceStrict(date, now, { roundingMethod: "floor" });
+  const distance = formatDistanceStrictFloor(date, now);
   return `${distance} ago`;
 }
 

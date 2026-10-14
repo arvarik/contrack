@@ -262,5 +262,5 @@ export function currentPassage(
     : null;
 }
 
-// TODO(v2.1): Compile explicit current/former employment conditions against the source row identified here.
+// TODO: Compile explicit current/former employment conditions against the source row identified here.
 // Keep date and employer predicates on the same row so unrelated jobs cannot jointly prove one condition.

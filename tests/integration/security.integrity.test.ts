@@ -28,7 +28,7 @@ import { getUserById } from "../../server/services/authService.ts";
 import { renamePasskey } from "../../server/services/passkeyService.ts";
 import { deleteSetting } from "../../server/services/settingsService.ts";
 
-describe("v2 Pre-launch Security, Resiliency & Integrity Regression Suite", () => {
+describe("Security, resiliency, and integrity regressions", () => {
   let server: http.Server;
   let actor: Actor;
 

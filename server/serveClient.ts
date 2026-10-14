@@ -67,6 +67,13 @@ export async function serveClient(
   app.use("/assets", (_req, res) => {
     res.status(404).type("text/plain").send("Not found");
   });
+  app.use(
+    "/fonts",
+    express.static(path.join(distPath, "fonts"), {
+      immutable: true,
+      maxAge: "1y",
+    }),
+  );
   // The render-blocking boot script carries its content hash (`?v=`, from
   // vite.config.ts), so a browser keeps that copy a year, as it does /assets.
   // A request with no hash, from a page built before, revalidates as before.

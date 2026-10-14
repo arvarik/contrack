@@ -7,8 +7,14 @@
  * found little, or was taken back, `ResearchNextSteps` asks for a detail.
  * It reads `contact.aiResearch` (shared/researchRecord.ts).
  */
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ExternalLink,
   Globe,
@@ -880,28 +886,76 @@ export function ResearchCard({
             Research notes
           </summary>
           <div className="mt-3 prose prose-sm max-w-none break-words text-on-surface-variant">
-            <ReactMarkdown
-              skipHtml
-              urlTransform={(url) => (/^https?:\/\//i.test(url) ? url : "")}
-              components={{
-                a: ({ children, href }) => (
-                  <a
-                    href={href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary underline"
-                  >
-                    {children}
-                  </a>
-                ),
-                img: () => null,
-              }}
-            >
-              {notes}
-            </ReactMarkdown>
+            <ResearchNotesMarkdown text={notes} />
           </div>
         </details>
       )}
     </section>
+  );
+}
+
+const INLINE_MARKDOWN = /\[([^\]]+)\]\(([^)]+)\)|\*\*([^*]+)\*\*/g;
+
+function renderInlineMarkdown(text: string): ReactNode[] {
+  const nodes: ReactNode[] = [];
+  let lastIndex = 0;
+  for (const match of text.matchAll(INLINE_MARKDOWN)) {
+    const idx = match.index ?? 0;
+    if (idx > lastIndex) nodes.push(text.slice(lastIndex, idx));
+    const [, label, rawUrl, bold] = match;
+    if (label !== undefined && rawUrl !== undefined) {
+      const url = rawUrl.trim();
+      nodes.push(
+        <a
+          key={idx}
+          href={/^https?:\/\//i.test(url) ? url : undefined}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary underline"
+        >
+          {label}
+        </a>,
+      );
+    } else if (bold !== undefined) {
+      nodes.push(<strong key={idx}>{bold}</strong>);
+    }
+    lastIndex = idx + match[0].length;
+  }
+  if (lastIndex < text.length) nodes.push(text.slice(lastIndex));
+  return nodes;
+}
+
+/**
+ * Legacy `contact.aiBackground` notes: paragraphs, bullet lists, bold text and
+ * `http`/`https` links, with raw HTML rendered as plain text and images
+ * stripped.
+ */
+function ResearchNotesMarkdown({ text }: { text: string }) {
+  const blocks = text
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean);
+  return (
+    <>
+      {blocks.map((block, blockIdx) => {
+        const lines = block
+          .split("\n")
+          .map((line) => line.trim())
+          .filter(Boolean);
+        if (lines.length > 0 && lines.every((line) => /^[-*]\s+/.test(line))) {
+          return (
+            <ul key={blockIdx}>
+              {lines.map((line, lineIdx) => (
+                <li key={lineIdx}>
+                  {renderInlineMarkdown(line.replace(/^[-*]\s+/, ""))}
+                </li>
+              ))}
+            </ul>
+          );
+        }
+        return <p key={blockIdx}>{renderInlineMarkdown(block)}</p>;
+      })}
+    </>
   );
 }

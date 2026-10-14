@@ -159,7 +159,7 @@ describe("a new database", () => {
     expect(actual.filter(kept)).toEqual(fixtureRows().filter(kept));
   });
 
-  it("retires pre-v2 migration rows and backfills contact_addresses from contacts.location", () => {
+  it("retires legacy migration rows and backfills contact_addresses from contacts.location", () => {
     const dev = new Database(":memory:");
     runMigrations(dev, MIGRATIONS);
     const owner = dev.prepare("SELECT id FROM users LIMIT 1").get() as {
