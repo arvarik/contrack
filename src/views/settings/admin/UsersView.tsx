@@ -50,6 +50,7 @@ import { Modal } from "../../../components/ui/Modal";
 import { SecretReveal } from "../../../components/ui/SecretReveal";
 import { formatRelative, formatWhen } from "../../../lib/datetime";
 import { ChoiceGroup } from "../../../components/ui/ChoiceGroup";
+import { DIALOG_ACTIONS } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { SETTINGS_INPUT, SETTINGS_LABEL } from "../layout";
 import {
@@ -257,7 +258,7 @@ const CreateUserModal = ({
             label="Temporary password"
             grouped
           />
-          <div className="flex justify-end">
+          <div className={DIALOG_ACTIONS}>
             <AdminButton onClick={close}>I&rsquo;ve copied it</AdminButton>
           </div>
         </div>
@@ -273,9 +274,6 @@ const CreateUserModal = ({
             autoComplete="off"
             {...NO_AUTOCORRECT}
             required
-            // The dialog opens on this field with nothing else to do.
-            // eslint-disable-next-line jsx-a11y/no-autofocus
-            autoFocus
           />
           <AdminField
             id="new-user-username"
@@ -300,7 +298,7 @@ const CreateUserModal = ({
             autoComplete="off"
           />
           <RolePicker value={role} onChange={setRole} />
-          <div className="flex justify-end">
+          <div className={DIALOG_ACTIONS}>
             <AdminButton
               type="submit"
               busy={create.isPending}
@@ -382,7 +380,7 @@ const EditUserModal = ({
           The email and username are {user.username}&rsquo;s own to change,
           under their account settings
         </p>
-        <div className="flex justify-end">
+        <div className={DIALOG_ACTIONS}>
           <AdminButton
             type="submit"
             busy={update.isPending}
@@ -772,7 +770,7 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
               onChange={setResetMethod}
             />
 
-            <div className="flex items-center justify-end gap-2 pt-2">
+            <div className={DIALOG_ACTIONS}>
               <AdminButton
                 tone="secondary"
                 onClick={() => setResetting(null)}
@@ -832,7 +830,7 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
               grouped
             />
           )}
-          <div className="flex justify-end">
+          <div className={DIALOG_ACTIONS}>
             <AdminButton
               icon={<ShieldCheck className="w-4 h-4" />}
               onClick={() => setTemporaryPassword(null)}

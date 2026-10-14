@@ -70,6 +70,34 @@ export const ArchivedContactsView = () => {
   const selectAll = () => setSelectedIds(new Set(contacts.map((c) => c.id)));
   const selectedCount = selectedIds.size;
 
+  // While the bar shows, its height, sticky offset and a gap are scroll
+  // padding, so Tab stops on a row above the bar, not under it.
+  const [barRoom, setBarRoom] = useState(0);
+  const measureBar = useCallback((bar: HTMLDivElement | null) => {
+    if (!bar) return;
+    const scroller = bar.closest<HTMLElement>(".overflow-y-auto");
+    const measure = () => {
+      const room =
+        bar.offsetHeight + (parseFloat(getComputedStyle(bar).bottom) || 0) + 8;
+      setBarRoom(room);
+      if (scroller) scroller.style.scrollPaddingBottom = `${room}px`;
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") {
+      return () => {
+        setBarRoom(0);
+        if (scroller) scroller.style.scrollPaddingBottom = "";
+      };
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    return () => {
+      observer.disconnect();
+      setBarRoom(0);
+      if (scroller) scroller.style.scrollPaddingBottom = "";
+    };
+  }, []);
+
   const handleUnarchive = (id: string, name: string) => {
     unarchive.mutate(id, {
       onSuccess: () => toast.success(`${name} restored to Network`),
@@ -120,7 +148,10 @@ export const ArchivedContactsView = () => {
   return (
     // The bottom padding stays tall at every width: the bulk bar floats over
     // the end of the list. From md the shell's own 40 px end adds to it.
-    <div className={cn(SETTINGS_PAGE, "md:pb-18")}>
+    <div
+      className={cn(SETTINGS_PAGE, "pb-24 md:pb-18")}
+      style={barRoom ? { scrollPaddingBottom: barRoom } : undefined}
+    >
       {isLoading && (
         <div className="flex justify-center py-12">
           <Loader2
@@ -286,6 +317,7 @@ export const ArchivedContactsView = () => {
       <AnimatePresence>
         {isSelectMode && selectedCount > 0 && (
           <motion.div
+            ref={measureBar}
             initial={{ y: 80, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}

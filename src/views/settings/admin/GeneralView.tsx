@@ -629,7 +629,7 @@ const GoogleRow = () => {
                   <button
                     type="button"
                     onClick={() => setShowSecret(!showSecret)}
-                    className="state-layer absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md text-on-surface-variant hover:text-on-surface p-1 transition-colors"
+                    className="hit-area state-layer absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md text-on-surface-variant hover:text-on-surface p-1 transition-colors"
                     title={showSecret ? "Hide secret" : "Show secret"}
                     aria-label={showSecret ? "Hide secret" : "Show secret"}
                   >

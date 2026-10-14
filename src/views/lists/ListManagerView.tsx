@@ -159,7 +159,7 @@ export const ListManagerView = () => {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto py-3 px-4 @2xl:px-2">
+      <div className="flex-1 overflow-y-auto pt-3 pb-[calc(var(--tabbar-space)+1rem)] md:pb-4 px-4 @2xl:px-2">
         {isLoading ? (
           <div className="space-y-2 p-1">
             {[1, 2, 3].map((i) => (

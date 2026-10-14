@@ -17,7 +17,7 @@ import {
 import { Modal } from "../../../components/ui/Modal";
 import { useConnectorKinds } from "../../../api/connectors";
 import type { ConnectorKind, KindInfo } from "../../../../shared/connectors";
-import { TONE_WASH } from "../../../lib/styles";
+import { DIALOG_ACTIONS, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 
 interface AddConnectorSheetProps {
@@ -107,7 +107,7 @@ export const AddConnectorSheet: React.FC<AddConnectorSheetProps> = ({
           </div>
         )}
 
-        <div className="flex justify-end pt-2">
+        <div className={DIALOG_ACTIONS}>
           <button type="button" onClick={onClose} className="btn-secondary">
             Cancel
           </button>

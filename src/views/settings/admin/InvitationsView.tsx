@@ -26,6 +26,7 @@ import {
   Segmented,
   type SegmentedOption,
 } from "../../../components/ui/Segmented";
+import { DIALOG_ACTIONS } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { Switch } from "../../../components/ui/Switch";
 import { SETTINGS_INPUT, SETTINGS_LABEL } from "../layout";
@@ -115,7 +116,7 @@ const NewInvitationModal = ({
               Sending failed. Copy the link instead
             </p>
           )}
-          <div className="flex justify-end">
+          <div className={DIALOG_ACTIONS}>
             <AdminButton onClick={close}>I&rsquo;ve copied it</AdminButton>
           </div>
         </div>
@@ -160,9 +161,6 @@ const NewInvitationModal = ({
               className={SETTINGS_INPUT}
               autoComplete="off"
               {...NO_AUTOCORRECT}
-              // The dialog opens on this field.
-              // eslint-disable-next-line jsx-a11y/no-autofocus
-              autoFocus
             />
             {/* Not a rule: the server does not check the accepted email
                 against this one, so a forwarded invitation still works. */}
@@ -205,7 +203,7 @@ const NewInvitationModal = ({
             />
           </div>
 
-          <div className="flex justify-end">
+          <div className={DIALOG_ACTIONS}>
             <AdminButton
               type="submit"
               busy={create.isPending}

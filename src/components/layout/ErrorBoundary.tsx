@@ -30,7 +30,7 @@ export class ErrorBoundary extends Component<Props, State> {
   public override render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-surface flex items-center justify-center p-6 text-on-surface">
+        <div className="min-h-dvh bg-surface flex items-center justify-center p-6 pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1.5rem,env(safe-area-inset-left))] pr-[max(1.5rem,env(safe-area-inset-right))] text-on-surface">
           <div className="max-w-md w-full bg-surface-container-low rounded-3xl p-8 shadow-xl text-center">
             <div
               className={cn(

@@ -71,7 +71,7 @@ export class RouteErrorBoundary extends Component<Props, State> {
       const isChunk = isChunkLoadError(this.state.error);
 
       return (
-        <div className="flex items-center justify-center h-full p-8 text-on-surface">
+        <div className="flex items-center justify-center h-full p-8 pb-[calc(2rem+var(--tabbar-space))] md:pb-8 text-on-surface">
           <div className="max-w-sm w-full text-center space-y-4">
             <div
               className={cn(

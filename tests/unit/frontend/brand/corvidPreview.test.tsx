@@ -47,6 +47,7 @@ describe("CorvidPreview", () => {
   it("is a named button whose drawing says nothing", () => {
     render(<CorvidPreview />);
     const button = screen.getByRole("button", { name: "Try the corvid" });
+    expect(button.className).toContain("hit-area");
     expect(button.getAttribute("title")).toBe("Press to see what it does");
     expect(button.querySelector("svg")!.getAttribute("aria-hidden")).toBe(
       "true",

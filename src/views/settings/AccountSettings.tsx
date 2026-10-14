@@ -53,7 +53,12 @@ import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../components/ui/EmptyState";
 import { SecretReveal } from "../../components/ui/SecretReveal";
 import { Segmented, type SegmentedOption } from "../../components/ui/Segmented";
-import { CARD, LABEL_PRIMARY, TONE_WASH } from "../../lib/styles";
+import {
+  CARD,
+  DIALOG_ACTIONS,
+  LABEL_PRIMARY,
+  TONE_WASH,
+} from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { describeDevice, describeSessionMethod } from "../../../shared/devices";
 import { PasskeysCard, passkeysQuery } from "./account/PasskeysCard";
@@ -728,7 +733,7 @@ const CreateTokenModal = ({
               : "It acts as your account and reaches only your data"}
           </p>
           <SecretReveal value={created.token} label="Token" />
-          <div className="flex justify-end">
+          <div className={DIALOG_ACTIONS}>
             <button type="button" onClick={close} className="btn-primary">
               I've copied it
             </button>
@@ -750,9 +755,6 @@ const CreateTokenModal = ({
             onChange={(e) => setName(e.target.value)}
             maxLength={60}
             placeholder="Claude Desktop on the laptop"
-            // The dialog opens with one field to fill in.
-            // eslint-disable-next-line jsx-a11y/no-autofocus
-            autoFocus
           />
           <div className="space-y-1.5">
             <span className={SETTINGS_LABEL}>Expires</span>
@@ -785,7 +787,7 @@ const CreateTokenModal = ({
                 : "It can read and change your contacts, notes, lists, and follow-ups"}
             </p>
           </div>
-          <div className="flex justify-end">
+          <div className={DIALOG_ACTIONS}>
             <SaveButton busy={create.isPending} disabled={!name.trim()}>
               <Plus className="w-4 h-4" />
               Create token

@@ -337,7 +337,7 @@ export const ConnectorCard: React.FC<ConnectorCardProps> = ({
             delete it too
           </p>
 
-          <label className="flex items-start gap-2.5 text-sm text-on-surface cursor-pointer select-none">
+          <label className="flex items-start gap-2.5 min-h-[44px] sm:pointer-fine:min-h-0 text-sm text-on-surface cursor-pointer select-none">
             <input
               type="checkbox"
               checked={deleteImported}

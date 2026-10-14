@@ -8,7 +8,8 @@ import { SECTION_HEADING } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 import { formatCompact } from "../formatCompact";
 
-const COLUMNS = "grid-cols-[minmax(0,1fr)_72px_72px_84px]";
+const COLUMNS =
+  "grid-cols-[minmax(0,1fr)_48px_56px_68px] sm:grid-cols-[minmax(0,1fr)_72px_72px_84px]";
 
 export const InstanceUsageTable = ({
   byUser,

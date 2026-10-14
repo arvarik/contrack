@@ -106,6 +106,7 @@ describe("What each feature uses, on the AI page", () => {
         .getByRole("link", { name: "Choose a Strong model" })
         .getAttribute("href"),
     ).toBe("/#strong-model");
+    expect(ask.querySelector("[title]")).toBeNull();
   });
 
   it("is the page's empty state when no provider is connected", () => {

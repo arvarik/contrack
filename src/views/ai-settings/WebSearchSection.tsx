@@ -20,7 +20,7 @@ import { cn, errorText } from "../../lib/utils";
 import { ModelRow } from "./ModelRow";
 
 const FIELD =
-  "w-full min-h-[44px] sm:pointer-fine:min-h-0 px-3 py-2 rounded-xl bg-surface-container-highest text-sm font-mono";
+  "w-full min-h-[44px] sm:pointer-fine:min-h-0 px-3 py-2 rounded-xl bg-surface-container-highest text-base sm:text-sm font-mono";
 
 export function WebSearchSection({ settings }: { settings: AISettings }) {
   const setWebSearch = useSetWebSearch();

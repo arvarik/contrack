@@ -87,7 +87,7 @@ export const ForcedPasswordChange = ({
           <button
             type="button"
             onClick={() => void signOut()}
-            className="text-primary font-bold hover:underline inline-flex items-center gap-1"
+            className="text-primary font-bold hover:underline min-h-[44px] sm:pointer-fine:min-h-0 inline-flex items-center gap-1"
           >
             <LogOut className="w-3 h-3" />
             Sign out instead

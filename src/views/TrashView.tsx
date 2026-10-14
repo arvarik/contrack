@@ -9,6 +9,7 @@ import {
   useTrash,
 } from "../api";
 import { ConfirmDialog } from "../components/ui/ConfirmDialog";
+import { RailTooltip } from "../components/ui/RailTooltip";
 import { CARD, ICON_BTN, SECTION_HEADING } from "../lib/styles";
 import { EmptyState } from "../components/ui/EmptyState";
 import { CorvidMark } from "../components/brand/CorvidMark";
@@ -156,16 +157,21 @@ export const TrashView = () => {
                     />
                     Restore
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setPurgeTarget(item)}
-                    disabled={purge.isPending}
-                    className={cn(ICON_BTN, "hover:text-error shrink-0")}
-                    title="Delete forever"
-                    aria-label={`Delete ${item.name} forever`}
+                  <RailTooltip
+                    label="Delete forever"
+                    side="left"
+                    className="shrink-0"
                   >
-                    <Trash2 aria-hidden="true" className="w-4 h-4" />
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => setPurgeTarget(item)}
+                      disabled={purge.isPending}
+                      className={cn(ICON_BTN, "hover:text-error")}
+                      aria-label={`Delete ${item.name} forever`}
+                    >
+                      <Trash2 aria-hidden="true" className="w-4 h-4" />
+                    </button>
+                  </RailTooltip>
                 </motion.div>
               );
             })}

@@ -68,8 +68,6 @@
   still meets the API's 401 JSON at the callback.
 - **Map selection.** A keyboard user can select with **All in view** only. Box
   and lasso still need a pointer.
-- **Touch tooltips.** The Tags page row icons wait for the shared tooltip
-  that shows on touch.
 - **Test-only seams.** The ones PR #147 listed are gone. A few exports still
   exist only so a test can reset module state, such as `resetPendingDeletes`
   in `src/lib/pendingDeletes.ts`, and the `__reset*` functions of the rate
