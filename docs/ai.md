@@ -221,9 +221,9 @@ still bill a request that it already took.
 
 ![Enrich contact on the Dossier tab: the run, then the Research card with what it found and its sources](images/flow-enrich.gif)
 
-- In the contact's actions menu, choose **Enrich contact** (Standard) or
-  **Enrich deeply** (Deep). On the **Dossier** tab, **Enrich contact** and
-  **Enrich again** open a menu with both depths. One contact needs no
+- In the contact's actions menu, point at or tap **Enrich contact** and choose
+  **Standard** or **Deep**. On the **Dossier** tab, **Enrich contact** and
+  **Enrich again** open the same menu with both depths. One contact needs no
   confirmation. When research searches with SearXNG or both, the menu's
   heading names it, such as "Depth · with SearXNG".
 - Turn on **Enrich new contacts automatically** on the **Contact enrichment**

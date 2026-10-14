@@ -47,9 +47,11 @@ sits beside the open contact, and you can drag its edge to resize it. Under
 ### Select several contacts
 
 1. Press **Select**, the square button above the list. On a touch screen,
-   you can also press and hold a row, which selects that row.
-2. Press the rows you want. Shift-click selects every row between two rows,
-   and **Select all** selects every contact the list shows.
+   you can also press and hold a row, which selects that row. A checkbox
+   appears on the right side of each row so avatars and names stay in place.
+2. Press the rows you want. Shift-click (or `Shift+Space` from the keyboard)
+   selects every row between two rows, and **Select all** selects every
+   contact the list shows.
 3. Press a button in the bar at the bottom. Select mode ends when the action
    is done.
 
@@ -74,14 +76,17 @@ Press **New**, the plus button above the list.
 
 - **New contact** opens a form. Only **Full name** is required. Press
   **Save contact**. In the list, `N` opens the form too.
-- **Add from text**: paste an email signature, a bio or notes from a
-  meeting, and press **Extract contact**. AI fills in the **New contact**
-  form for you to check. Below the fields are the tags and the past
-  meetings, calls and emails that it found, each with a check box and each
-  interaction with its date. Clear a box to leave one out. The other things
-  it found, such as jobs and links, save with the contact. `V` opens it too. It needs AI. When AI is off or no model is set up,
-  the dialog says what is missing, and links to the fix when you can make it.
-  See [Connect a provider](ai.md#connect-a-provider).
+- **Add from text**: paste an email signature, a bio or notes about someone —
+  whether personal (`"Met at Sarah's wedding — loves natural wine, kids are Leo and Maya, catch up every quarter"`)
+  or work (`"Partner at Sequoia — follow up next Tuesday on seed round"`) —
+  and press **Extract contact**. AI fills in the **New contact** form for you
+  to check. Below the fields are the tags and the past meetings, calls and
+  emails that it found, each with a check box and each interaction with its
+  date. Clear a box to leave one out. The other things it found, such as
+  family or how-you-met facts, interests, jobs and links, save with the
+  contact. `V` opens it too. It needs AI. When AI is off or no model is set
+  up, the dialog says what is missing, and links to the fix when you can make
+  it. See [Connect a provider](ai.md#connect-a-provider).
 - **New list**: see [Lists](#lists).
 
 A contact you add by hand starts tracked when **Track new contacts** is on in
@@ -99,9 +104,10 @@ phone, it shows a short header and three tabs: **Timeline**, **Details** and
 **Dossier**. Under 1024 px wide, **Back** names the page it returns to, and
 returns to the same place in the list.
 
-A link to a merged contact opens the contact it merged into. When a contact
-does not load, the page says "Could not load the contact" and offers
-**Try again**.
+Each contact has a readable URL slug built from their name and a short random
+suffix, such as `/contact/lori-daugherty-8f3a1c2e`. A link to a merged contact
+opens the contact it merged into. When a contact does not load, the page says
+"Could not load the contact" and offers **Try again**.
 
 ### The header
 
@@ -142,8 +148,9 @@ The **Contact actions** menu, the three dots, holds these items in order:
 
 1. **Change color**: paints this contact's page only, in Blue, Emerald,
    Amber, Rose, Pink or Teal.
-2. **Enrich contact** and **Enrich deeply**: contact research at the Standard
-   or the Deep depth. They show only when AI is on for you. See
+2. **Enrich contact**: opens a submenu with **Standard** and **Deep** contact
+   research (point at it with a mouse, or tap it on a touch screen). It shows
+   only when AI is on for you. See
    [Research contacts](ai.md#research-contacts).
 3. **Copy basic details** and **Copy full details**: the name, emails and
    phones, or also the role, company, birthday and addresses.
@@ -157,16 +164,16 @@ The **Contact actions** menu, the three dots, holds these items in order:
 
 ### The Details card
 
-| Field              | What it holds                                                                                     |
-| ------------------ | ------------------------------------------------------------------------------------------------- |
-| **Location**       | Addresses, each labeled home, work or other. The first one places the map pin.                    |
-| **Email**          | Email addresses, each labeled work, personal or other.                                            |
-| **Phone**          | Phone numbers, each labeled mobile, work, home or other.                                          |
-| **Birthday**       | A day, with a year or without: "May 14", "May 14, 1990". A badge shows when it is within 30 days. |
-| **Industry**       | One industry. The box suggests common ones.                                                       |
-| **Preferences**    | Short notes, such as "Tea" or "Morning calls".                                                    |
-| **Interests**      | Topics the person cares about. A topic that research found has a sparkle.                         |
-| **Next follow-up** | The next open follow-up and its day. Its menu has **Change date** and **Mark done**.              |
+| Field              | What it holds                                                                                                                                                                                                                |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Location**       | Addresses, each labeled home, work or other. The first one places the map pin.                                                                                                                                               |
+| **Email**          | Email addresses, each labeled work, personal or other.                                                                                                                                                                       |
+| **Phone**          | Phone numbers, each labeled mobile, work, home or other.                                                                                                                                                                     |
+| **Dates**          | Birthdays, anniversaries and custom milestones, with or without a year ("May 14" or "May 14, 1990"). Each has a label (**birthday**, **anniversary**, **other** or **custom…**) and shows a badge when it is within 30 days. |
+| **Industry**       | One industry. The box suggests common ones.                                                                                                                                                                                  |
+| **Preferences**    | Short notes, such as "Tea", "Natural wine" or "Morning calls".                                                                                                                                                               |
+| **Interests**      | Topics the person cares about. A topic that research found has a sparkle.                                                                                                                                                    |
+| **Next follow-up** | The next open follow-up and its day. Its menu has **Change date** and **Mark done**.                                                                                                                                         |
 
 - **Edit**: click a value, or give it focus and press `Enter`. `Enter` saves
   and `Esc` cancels. Press a row's label to change the label. An email must
@@ -211,7 +218,9 @@ and then one heading per month. The week starts on the day set in
    follow-up needs a date. With only a follow-up and no note, Save adds the
    follow-up alone, and "last contacted" does not change.
 4. Choose **Note**, **Call**, **Meeting** or **Email**, and the date. The
-   date is today. For a meeting that happened before, choose its day.
+   calendar button defaults to **Today**; for an interaction that happened
+   before, press the calendar button to choose its day (press it again to
+   close the picker).
 5. Press **Save**, or `Cmd+Enter` (`Ctrl+Enter` on Windows and Linux).
 
 The entry takes its type as its title: "Note", "Call", "Meeting" or "Email".
@@ -232,13 +241,15 @@ unsaved note when it closes, for the next time it opens.
   that page for its title and shows a card in the editor. The saved entry
   shows the link with the page's title. With AI off the card does not load,
   and the entry shows the address.
-- **Files**: drop files on the **Timeline** tab, or press **Attach a file**,
-  up to 50 MB each. Contrack takes PDFs, PNG, JPEG, GIF and WebP images,
-  `.txt`, `.md` and `.csv` files, and `.eml` email files. Each file becomes
-  an entry of its own, titled "File:" and the file name, and an image shows
-  in the entry. An `.eml` file becomes an email entry, titled "Email:" and
-  the file name. When AI is set up and on for you, AI writes a summary of the
-  email into it. Otherwise the entry holds the file with no summary.
+- **Files and images**: press the paperclip button (**Attach a file**) in the
+  composer, drag and drop files onto the composer or the **Timeline** tab, or
+  paste an image from the clipboard into the note editor, up to 50 MB each.
+  Contrack takes PDFs, PNG, JPEG, GIF and WebP images, `.txt`, `.md` and
+  `.csv` files, and `.eml` email files. Each file becomes an entry of its
+  own, titled "File:" and the file name, and an image shows in the entry. An
+  `.eml` file becomes an email entry, titled "Email:" and the file name. When
+  AI is set up and on for you, AI writes a summary of the email into it.
+  Otherwise the entry holds the file with no summary.
 - **Badges**: **via Calendar**, **via Email** and **via Google** mark entries
   from a connector. **via** and a name marks a note, logged on another
   contact, that mentions this person. Press it to open that contact.

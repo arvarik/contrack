@@ -153,6 +153,7 @@ What a delete does not reach:
 | `contrack.theme` and others  | Local storage   | Your theme, layout and last import source                      | Kept                                                                                                                                 |
 | `contrack_recent_contacts:…` | Session storage | The ids of contacts you opened                                 | Until the tab closes                                                                                                                 |
 | `contrack_scroll_…`          | Session storage | The list's scroll place. The key holds the search you typed    | Until the tab closes                                                                                                                 |
+| `contrack.settings.lastPath` | Session storage | The last settings page you visited                             | Until the tab closes                                                                                                                 |
 
 **Sign out** ends the session on the server, and removes your note drafts and
 the map's last view from the browser. The remembered sign-in name and the

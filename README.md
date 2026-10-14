@@ -5,7 +5,7 @@
       <img src="docs/brand/contrack-lockup-animated.svg" alt="Contrack" width="400" />
     </picture>
   </h1>
-  <p><b>People Relationship Manager for Proactive Networking</b></p>
+  <p><b>Personal &amp; Professional Relationship Manager for Friends, Family, and Your Network</b></p>
 
 [![CI](https://github.com/arvarik/contrack/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/arvarik/contrack/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/arvarik/contrack)](https://github.com/arvarik/contrack/releases)
@@ -22,9 +22,9 @@
   <img src="docs/images/tour.gif" alt="A tour of Contrack: the Pulse page, the command palette opening a contact, a question answered in Ask Contrack, and the map of the network" width="100%" />
 </p>
 
-Relationships are your most valuable asset, and the hardest thing to keep track of. Your contacts are scattered across Apple, Google and LinkedIn. A name looks familiar, but you can't place it. You meant to follow up, and you never did. **Contrack fixes that.**
+Relationships are your most valuable asset, and the hardest thing to keep track of — across close friends, family, and the people you work with. Your contacts are scattered across Apple, Google and LinkedIn. A name looks familiar, or a birthday slips by, or you meant to follow up and never did. **Contrack fixes that.**
 
-Contrack is a personal CRM that you run yourself. Your network stays on your machine, search runs on small local models, and AI is optional: bring a Gemini, OpenAI or Anthropic key, point it at a model server of your own, or use none at all.
+Contrack is a self-hosted personal CRM for both your personal life and your work. Keep birthdays, anniversaries, gift ideas and how you met right alongside roles, meeting notes and follow-ups. Your data lives in one SQLite file on your machine, multiple family or team accounts stay completely isolated on one server, search runs on small local models, and AI is optional: bring a Gemini, OpenAI or Anthropic key, point it at a model server of your own, or use none at all.
 
 ## Import → Dedupe → Enrich → Track
 
@@ -49,13 +49,13 @@ Contrack is a personal CRM that you run yourself. Your network stays on your mac
 
 ### 3. Enrich
 
-**The context you never had time to type.** With an AI provider connected, Contrack researches a contact on the web, fills in roles, companies and links, and cites a source for every fact. Paste a bio or an email signature, and it becomes a contact.
+**The context you never had time to type.** With an AI provider connected, Contrack researches a contact on the web, fills in roles, companies and links, and cites a source for every fact. Or open **Add from text** and paste a quick note from either world — _"Met at Sarah's wedding — loves natural wine, kids are Leo and Maya, catch up every quarter"_ or _"Partner at Sequoia — follow up next Tuesday on seed round"_ — and it becomes a contact with tags, facts and dated interactions.
 
 <img src="docs/images/flow-enrich.gif" alt="Research on a contact: the run, and the Research card filling in with facts and their sources" width="100%" />
 
 ### 4. Track
 
-**Never let a relationship go quiet.** Log a note in one line, and "next Tuesday" becomes a follow-up. Choose who to keep up with and how often. Each morning, Pulse shows who is due, who is drifting and what is coming up.
+**Never let a relationship go quiet.** Log a note in one line, and "next Tuesday" becomes a follow-up. Choose who to keep up with and how often. Each morning, Pulse shows who is due, who is drifting, and which birthdays or milestones are coming up.
 
 <img src="docs/images/flow-track.gif" alt="A note logged with the follow-up 'Send the deck next Tuesday', then the contact tracked monthly" width="100%" />
 
@@ -66,7 +66,7 @@ Contrack is a personal CRM that you run yourself. Your network stays on your mac
 <td width="50%" valign="top">
 <img src="docs/images/showcase-pulse.png" alt="Pulse: the day's sentence, Up next and Keeping up" width="100%" />
 <h3>Pulse</h3>
-Your morning page: follow-ups that are due, people to catch up with, birthdays, and how your network is doing.
+Your morning page: follow-ups that are due, people to catch up with, birthdays, anniversaries and custom milestones, and how your network is doing.
 </td>
 <td width="50%" valign="top">
 <img src="docs/images/showcase-ask.png" alt="Ask Contrack answering a question with matching people" width="100%" />
@@ -106,7 +106,9 @@ Install it on your home screen. A contact is one tap from a call, a message or a
 </tr>
 </table>
 
-**Also:** note search, @mentions that link people, lists and tags, passkeys, several accounts on one server, a trash with undo, vCard, CSV and JSON export, verified backups, and light and dark themes.
+**Also:** note search, @mentions that link people, custom dates and anniversaries, lists and tags, passkeys, isolated family and team accounts on one server, a trash with undo, vCard, CSV and JSON export, verified backups, and light and dark themes.
+
+**Comparing self-hosted CRMs?** Read [Contrack vs Monica](docs/comparisons/contrack-vs-monica.md), [Contrack vs Twenty](docs/comparisons/contrack-vs-twenty.md), and [Contrack vs EspoCRM](docs/comparisons/contrack-vs-espocrm.md).
 
 ## Quick start
 

@@ -1,9 +1,11 @@
 # Contrack documentation
 
-Contrack is a self-hosted personal CRM. It brings your contacts from every
-source into one network, keeps a timeline of what you talk about, and shows
-you each morning who needs your attention. It runs on your own machine, and AI
-is optional.
+Contrack is a self-hosted personal CRM for the people in your life and work —
+friends, family, colleagues, founders, and collaborators. It brings your
+contacts from every source into one network, keeps a timeline of what you talk
+about, remembers birthdays, anniversaries, and custom milestones, and shows you
+each morning who needs your attention. It runs on your own machine, and AI is
+optional.
 
 ![Pulse, the morning page: follow-ups that are due, people to catch up with, and what changed in the network](images/pulse.png)
 
@@ -13,8 +15,8 @@ is optional.
 
 ## Use Contrack
 
-- [Contacts](contacts.md): the Network list, the contact page, notes, follow-ups, lists, tags, archive, and trash
-- [Pulse and tracking](pulse.md): choose who to keep up with, read the score, and work through each day
+- [Contacts](contacts.md): the Network list, the contact page, notes, dates, follow-ups, lists, tags, archive, and trash
+- [Pulse and tracking](pulse.md): choose who to keep up with, track milestones, read the score, and work through each day
 - [Search and Ask Contrack](search.md): the command palette, filters, questions in plain words, and note search
 - [Map](map.md): see your network by place, and select people to act on them
 - [Duplicates](duplicates.md): find and merge contacts that are the same person
@@ -29,6 +31,12 @@ is optional.
 - [Accounts and sign-in](accounts.md): sign-in, passkeys, API tokens, and administration
 - [Privacy](privacy.md): what the server keeps, what leaves it, who can see what, and what a delete removes
 - [Configuration reference](configuration.md): every environment variable and setting
+
+## Comparisons
+
+- [Contrack vs Monica](comparisons/contrack-vs-monica.md): single-file SQLite, automated connectors, local hybrid search, and MCP compared with Monica
+- [Contrack vs Twenty](comparisons/contrack-vs-twenty.md): personal and professional relationship management compared with a B2B sales pipeline CRM
+- [Contrack vs EspoCRM](comparisons/contrack-vs-espocrm.md): a calm daily habit, Smart Paste, and local search compared with a traditional PHP business CRM
 
 ## Build on Contrack
 

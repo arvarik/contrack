@@ -34,8 +34,9 @@ function indexedPages(): string[] {
 }
 
 /**
- * The pages at the top of docs/ that belong to the repository. `.gitignore`
- * keeps a few local notes there, and a checkout that has them must still pass.
+ * The pages in docs/ and docs/comparisons/ that belong to the repository.
+ * `.gitignore` keeps a few local notes there, and a checkout that has them
+ * must still pass.
  */
 function docsPages(): string[] {
   const ignored = new Set(
@@ -44,10 +45,16 @@ function docsPages(): string[] {
       .map((line) => line.trim())
       .filter((line) => line.startsWith("docs/") && line.endsWith(".md")),
   );
-  return readdirSync(path.join(ROOT, "docs"))
+  const top = readdirSync(path.join(ROOT, "docs"))
     .filter((name) => name.endsWith(".md"))
-    .map((name) => `docs/${name}`)
-    .filter((file) => !ignored.has(file));
+    .map((name) => `docs/${name}`);
+  const comparisonsDir = path.join(ROOT, "docs/comparisons");
+  const comparisons = existsSync(comparisonsDir)
+    ? readdirSync(comparisonsDir)
+        .filter((name) => name.endsWith(".md"))
+        .map((name) => `docs/comparisons/${name}`)
+    : [];
+  return [...top, ...comparisons].filter((file) => !ignored.has(file));
 }
 
 const CHECKED = [

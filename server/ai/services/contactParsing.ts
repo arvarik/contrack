@@ -126,8 +126,8 @@ Rules:
 - location: where they live or work, as "City, State or Region, Country".
 - birthday: as "YYYY-MM-DD", or "MM-DD" when the text gives no year.
 - tags: up to eight short lower-case tags for their specialties and domain expertise, like "fintech" or "machine learning".
-- interests: up to six short labels for hobbies and personal interests, like "Marathon running".
-- attributes: notable facts that fit no field above, like languages, awards, board seats or how the user met them. Name each kind for what it is ("Languages", "How we met"), and join several values with "; ".
+- interests: up to six short labels for hobbies and personal interests, like "Marathon running" or "Natural wine".
+- attributes: notable facts that fit no field above, like family members, kids, gift ideas, languages, awards, board seats or how the user met them. Name each kind for what it is ("Kids", "Gift ideas", "Languages", "How we met"), and join several values with "; ".
 - addresses: a postal address the text gives as theirs, as it is written.
 - interactions: each meeting, call, email or message between the user and this person that the text says already happened, at most ${MAX_INTERACTIONS}. type is meeting, call, email or note. date is the day as "YYYY-MM-DD" when the text gives or implies it, else null. A day written with no year, like "Sept 3", is the last one on or before today. "Yesterday" is the first of the seven days, and a weekday alone or after "last" is the one among them: "last ${weekday(week[2])}" is ${week[2]}. summary is one to three sentences on what was discussed or agreed. Leave out a meeting that is only planned.
 Return null or an empty list for anything the text does not state.
