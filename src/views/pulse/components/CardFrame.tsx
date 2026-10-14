@@ -16,7 +16,6 @@ import {
   type ActionMenuItem,
 } from "../../../components/ui/ActionMenu";
 import { RailTooltip } from "../../../components/ui/RailTooltip";
-import { useMediaQuery } from "../../../hooks/useMediaQuery";
 import { PULSE_TYPE } from "../lib/pulseStyles";
 import { COLUMN_NAMES, PULSE_COLUMNS } from "../lib/layout";
 import {
@@ -60,26 +59,18 @@ const CustomizeControls = ({
   customize: CardCustomizeContextValue;
   className?: string;
 }) => {
-  const isStacked = !useMediaQuery("(min-width: 1024px)");
   const moveActions: ActionMenuItem[] = [];
   const index = customize.index ?? 0;
   const total = customize.totalInColumn ?? 1;
-  const colIdx = customize.column
-    ? PULSE_COLUMNS.indexOf(customize.column)
-    : -1;
-  const canMoveUp = index > 0 || (isStacked && colIdx > 0);
-  const canMoveDown =
-    index < total - 1 ||
-    (isStacked && colIdx !== -1 && colIdx < PULSE_COLUMNS.length - 1);
   if (customize.onMoveStep) {
-    if (canMoveUp) {
+    if (index > 0) {
       moveActions.push({
         id: "move-up",
         label: "Move up",
         onSelect: () => customize.onMoveStep?.(cardId, -1),
       });
     }
-    if (canMoveDown) {
+    if (index < total - 1) {
       moveActions.push({
         id: "move-down",
         label: "Move down",
@@ -181,15 +172,19 @@ export const CardFrame = ({
         )}
       >
         {heading}
-        {/* In customize mode the words hide so wrapped lines do not leave a
-            tall blank box under the floating controls. */}
+        {/* In customize mode the words keep their place, invisible, and the
+            controls sit over the row's end, so the line keeps its height. */}
         <div
-          className={cn(PULSE_TYPE.meta, "min-w-0", isCustomizing && "hidden")}
+          className={cn(
+            PULSE_TYPE.meta,
+            "min-w-0",
+            isCustomizing && "invisible",
+          )}
         >
           {children}
         </div>
         {headerAction && isCustomizing ? (
-          <span className="hidden">{headerAction}</span>
+          <span className="invisible">{headerAction}</span>
         ) : (
           headerAction
         )}

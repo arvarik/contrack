@@ -299,7 +299,9 @@ export const HistoryPane = ({
         </div>
         <div className="flex items-center gap-3">
           {actions}
-          {onClose && <DialogCloseButton onClick={onClose} />}
+          {onClose && (
+            <DialogCloseButton onClick={onClose} aria-label="Close history" />
+          )}
         </div>
       </div>
       <div className="flex-1 min-h-0 flex flex-col">{body}</div>
