@@ -2,10 +2,9 @@
  * Masthead: the page title, the day, and one line of facts such as
  * "2 overdue · 2 due today · 12 days in a row".
  *
- * From `sm` up each count is a button that jumps to its card. Below `sm` the
- * counts are plain text, because inline 44 px tap boxes would overlap across
- * two wrapped lines. Log note is the one primary action. New contact and
- * Customize layout sit in the More menu, and the `c` key toggles customize.
+ * Each count with a target is a button that jumps to its card. Log note is
+ * the one primary action. New contact and Customize layout sit in the More
+ * menu, and the `c` key toggles customize.
  */
 import React from "react";
 import { useNavigate } from "react-router-dom";
@@ -34,7 +33,7 @@ interface MastheadProps {
   moreRef?: React.Ref<HTMLButtonElement>;
 }
 
-/** The Tailwind `sm` breakpoint, where the counts become buttons. */
+/** The Tailwind `sm` breakpoint, where the primary button takes its full size. */
 const SM_QUERY = "(min-width: 640px)";
 
 export const Masthead = ({
@@ -55,18 +54,17 @@ export const Masthead = ({
   }).format(new Date());
 
   const items = buildDayLine(counts).map((item, index) => {
-    const words =
-      item.target && wide ? (
-        <button
-          type="button"
-          onClick={() => onJumpTo(item.target!)}
-          className="hit-area underline decoration-outline-variant underline-offset-4 hover:decoration-primary hover:text-on-surface transition-colors"
-        >
-          {item.text}
-        </button>
-      ) : (
-        item.text
-      );
+    const words = item.target ? (
+      <button
+        type="button"
+        onClick={() => onJumpTo(item.target!)}
+        className="hit-area underline decoration-outline-variant underline-offset-4 hover:decoration-primary hover:text-on-surface transition-colors"
+      >
+        {item.text}
+      </button>
+    ) : (
+      item.text
+    );
     // The dot rides with the item after it in a 1em box, and the line breaks
     // only before a box (`wbr`). A screen reader hears a comma for the dot.
     return (

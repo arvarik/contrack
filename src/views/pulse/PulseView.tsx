@@ -42,7 +42,7 @@ import { cn } from "../../lib/utils";
 import {
   resolveLayout,
   pulseLayoutReducer,
-  PULSE_COLUMNS,
+  stepCard,
   CARD_TITLES,
   COLUMN_NAMES,
   DEFAULT_PULSE_LAYOUT,
@@ -72,6 +72,7 @@ import { ActivityCard } from "./cards/ActivityCard";
 import { KeepingUpCard } from "./cards/KeepingUpCard";
 import { CompositionCard } from "./cards/CompositionCard";
 import { LoadFailed } from "../../components/ui/LoadFailed";
+import { RailTooltip } from "../../components/ui/RailTooltip";
 
 const DuplicatesPage = React.lazy(() =>
   import("./pages/DuplicatesPage").then((m) => ({ default: m.DuplicatesPage })),
@@ -248,27 +249,20 @@ const PulseOffice = () => {
   const handleMoveStep = useCallback(
     (cardId: string, direction: -1 | 1) => {
       const raw = preferences?.pulseLayout ?? DEFAULT_PULSE_LAYOUT;
-      const resolved = resolveLayout(raw);
-      for (const col of PULSE_COLUMNS) {
-        const idx = resolved.visible[col].indexOf(cardId as PulseCardId);
-        if (idx !== -1) {
-          const targetIdx = idx + direction;
-          if (targetIdx >= 0 && targetIdx < resolved.visible[col].length) {
-            const list = [...resolved.visible[col]];
-            [list[idx], list[targetIdx]] = [list[targetIdx], list[idx]];
-            const next = pulseLayoutReducer(raw, {
-              type: "reorder",
-              column: col,
-              cardIds: list,
-            });
-            setPreference("pulseLayout", next);
-            const title = CARD_TITLES[cardId as PulseCardId] || cardId;
-            setAnnouncement(
-              `Moved ${title} to position ${targetIdx + 1} of ${list.length}`,
-            );
-          }
-          break;
-        }
+      const stepped = stepCard(raw, cardId, direction);
+      if (!stepped) return;
+      setPreference("pulseLayout", stepped.next);
+      const title = CARD_TITLES[cardId as PulseCardId] || cardId;
+      setAnnouncement(
+        stepped.movedAcrossColumn
+          ? `Moved ${title} to ${COLUMN_NAMES[stepped.column]}, position ${stepped.position} of ${stepped.total}`
+          : `Moved ${title} to position ${stepped.position} of ${stepped.total}`,
+      );
+      if (stepped.movedAcrossColumn) {
+        refocusRef.current = () =>
+          document.querySelector(
+            `[data-flip-id="${cardId}"] [aria-label="Move ${title}"]`,
+          );
       }
     },
     [preferences?.pulseLayout, setPreference],
@@ -702,15 +696,19 @@ const PulseOffice = () => {
                     className="inline-flex items-center gap-2 pl-3 pr-2 py-1.5 rounded-xl bg-surface-container-high text-xs sm:text-sm font-medium text-on-surface"
                   >
                     <span>{title}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleShowCard(cardId)}
-                      aria-label={`Show ${title}`}
-                      title={`Restore ${title} to ${COLUMN_NAMES[defaultCol]}`}
-                      className="hit-area state-layer p-1 rounded-lg text-primary cursor-pointer"
+                    <RailTooltip
+                      label={`Restore ${title} to ${COLUMN_NAMES[defaultCol]}`}
+                      side="bottom"
                     >
-                      <Eye className="w-4 h-4" />
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => handleShowCard(cardId)}
+                        aria-label={`Show ${title}`}
+                        className="hit-area state-layer p-1 rounded-lg text-primary cursor-pointer"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </RailTooltip>
                   </div>
                 );
               })}

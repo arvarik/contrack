@@ -52,7 +52,7 @@ export const CompareStage = ({
       {/* Sticks to the bottom of the screen, above the tab bar below md. */}
       <div
         ref={roomAtBottom}
-        className="sticky bottom-[calc(3.375rem+max(0.75rem,env(safe-area-inset-bottom)))] md:bottom-0 z-10 py-4 bg-surface flex gap-3"
+        className="sticky bottom-[var(--tabbar-space)] md:bottom-0 z-10 py-4 bg-surface flex gap-3"
       >
         <button type="button" onClick={onBack} className="btn-secondary flex-1">
           <ChevronLeft className="w-4 h-4" aria-hidden="true" />

@@ -15,6 +15,8 @@ import {
   ActionMenu,
   type ActionMenuItem,
 } from "../../../components/ui/ActionMenu";
+import { RailTooltip } from "../../../components/ui/RailTooltip";
+import { useMediaQuery } from "../../../hooks/useMediaQuery";
 import { PULSE_TYPE } from "../lib/pulseStyles";
 import { COLUMN_NAMES, PULSE_COLUMNS } from "../lib/layout";
 import {
@@ -58,18 +60,26 @@ const CustomizeControls = ({
   customize: CardCustomizeContextValue;
   className?: string;
 }) => {
+  const isStacked = !useMediaQuery("(min-width: 1024px)");
   const moveActions: ActionMenuItem[] = [];
   const index = customize.index ?? 0;
   const total = customize.totalInColumn ?? 1;
+  const colIdx = customize.column
+    ? PULSE_COLUMNS.indexOf(customize.column)
+    : -1;
+  const canMoveUp = index > 0 || (isStacked && colIdx > 0);
+  const canMoveDown =
+    index < total - 1 ||
+    (isStacked && colIdx !== -1 && colIdx < PULSE_COLUMNS.length - 1);
   if (customize.onMoveStep) {
-    if (index > 0) {
+    if (canMoveUp) {
       moveActions.push({
         id: "move-up",
         label: "Move up",
         onSelect: () => customize.onMoveStep?.(cardId, -1),
       });
     }
-    if (index < total - 1) {
+    if (canMoveDown) {
       moveActions.push({
         id: "move-down",
         label: "Move down",
@@ -112,15 +122,16 @@ const CustomizeControls = ({
       </button>
 
       {/* The tray above the grid brings a hidden card back. */}
-      <button
-        type="button"
-        onClick={() => customize.onHide?.(cardId)}
-        aria-label={`Hide ${title}`}
-        title={`Hide ${title}`}
-        className={cn(CONTROL_BTN, "cursor-pointer")}
-      >
-        <EyeOff className="w-4 h-4" />
-      </button>
+      <RailTooltip label={`Hide ${title}`} side="bottom">
+        <button
+          type="button"
+          onClick={() => customize.onHide?.(cardId)}
+          aria-label={`Hide ${title}`}
+          className={cn(CONTROL_BTN, "cursor-pointer")}
+        >
+          <EyeOff className="w-4 h-4" />
+        </button>
+      </RailTooltip>
 
       {moveActions.length > 0 && (
         <ActionMenu
@@ -170,19 +181,15 @@ export const CardFrame = ({
         )}
       >
         {heading}
-        {/* In customize mode the words keep their place, invisible, and the
-            controls sit over the row's end, so the line keeps its height. */}
+        {/* In customize mode the words hide so wrapped lines do not leave a
+            tall blank box under the floating controls. */}
         <div
-          className={cn(
-            PULSE_TYPE.meta,
-            "min-w-0",
-            isCustomizing && "invisible",
-          )}
+          className={cn(PULSE_TYPE.meta, "min-w-0", isCustomizing && "hidden")}
         >
           {children}
         </div>
         {headerAction && isCustomizing ? (
-          <span className="invisible">{headerAction}</span>
+          <span className="hidden">{headerAction}</span>
         ) : (
           headerAction
         )}

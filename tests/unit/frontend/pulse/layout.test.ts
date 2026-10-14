@@ -7,6 +7,7 @@ import {
   moveCard,
   sameColumns,
   dropAction,
+  stepCard,
 } from "../../../../src/views/pulse/lib/layout";
 import type {
   PulseLayout,
@@ -391,5 +392,43 @@ describe("pulse.layout: the drag's draft", () => {
     const there = moveCard(start(), "inbox", "focus", 0);
     const back = moveCard(there, "inbox", "intel", 1);
     expect(dropAction(start(), back, "inbox")).toBeNull();
+  });
+
+  it("steps a card within its column and across columns when stacked", () => {
+    expect(stepCard(DEFAULT_PULSE_LAYOUT, "up-next", -1)).toBeNull();
+
+    const withinCol = stepCard(DEFAULT_PULSE_LAYOUT, "up-next", 1);
+    expect(withinCol).toMatchObject({
+      column: "focus",
+      position: 2,
+      total: 2,
+      movedAcrossColumn: false,
+    });
+    expect(resolveLayout(withinCol!.next).visible.focus).toEqual([
+      "completed",
+      "up-next",
+    ]);
+
+    const acrossDown = stepCard(DEFAULT_PULSE_LAYOUT, "completed", 1);
+    expect(acrossDown).toMatchObject({
+      column: "network",
+      position: 1,
+      total: 3,
+      movedAcrossColumn: true,
+    });
+    expect(resolveLayout(acrossDown!.next).visible.network[0]).toBe(
+      "completed",
+    );
+
+    const acrossUp = stepCard(DEFAULT_PULSE_LAYOUT, "keeping-up", -1);
+    expect(acrossUp).toMatchObject({
+      column: "focus",
+      position: 3,
+      total: 3,
+      movedAcrossColumn: true,
+    });
+    expect(resolveLayout(acrossUp!.next).visible.focus[2]).toBe("keeping-up");
+
+    expect(stepCard(DEFAULT_PULSE_LAYOUT, "composition", 1)).toBeNull();
   });
 });

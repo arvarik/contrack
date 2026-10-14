@@ -355,12 +355,13 @@ describe("Undo", () => {
 });
 
 describe("the list", () => {
-  it("shows the caveat on the row, before anything opens", async () => {
+  it("shows the caveat on the row before anything opens, and the match reason in the mobile sheet", async () => {
     wide = false;
     stubApi([
       pair("ab", ada, quill, 0.85, {
         matchType: "phone",
         reasoning: "Same phone number",
+        matchedField: "+1 555-0100",
         caveat: "First names differ: Ada and Ben",
       }),
     ]);
@@ -368,6 +369,11 @@ describe("the list", () => {
     await screen.findByText("First names differ: Ada and Ben");
     screen.getByRole("heading", { name: /Check carefully/ });
     expect(screen.queryByRole("radiogroup")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Compare" }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog.textContent).toContain("Same phone number");
+    expect(dialog.textContent).toContain("+1 555-0100");
   });
 
   it("offers Merge all for Very likely only, never for a pair with a caveat", async () => {

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Modal } from "../../components/ui/Modal";
 import type { MapLayer } from "../../api/mapViews";
-import { FORM_INPUT, FORM_LABEL } from "../../lib/styles";
+import { touchFirst } from "../../lib/platform";
+import { DIALOG_ACTIONS, FORM_INPUT, FORM_LABEL } from "../../lib/styles";
 import { errorText } from "../../lib/utils";
 
 interface SaveViewModalProps {
@@ -35,7 +36,9 @@ export const SaveViewModal: React.FC<SaveViewModalProps> = ({
       setName("");
       setError(null);
       setIsSaving(false);
-      setTimeout(() => inputRef.current?.focus(), 50);
+      setTimeout(() => {
+        if (!touchFirst()) inputRef.current?.focus();
+      }, 50);
     }
   }, [isOpen]);
 
@@ -70,18 +73,13 @@ export const SaveViewModal: React.FC<SaveViewModalProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       size="sm"
-      ariaLabel="Save current view"
+      title="Save current view"
     >
-      <form onSubmit={handleSubmit} className="p-6 space-y-4">
-        <div>
-          <h2 className="text-lg font-headline font-bold text-on-surface">
-            Save current view
-          </h2>
-          <p className="text-xs text-on-surface-variant mt-1">
-            Save current map position, zoom, filters, and active layer to come
-            back to it anytime
-          </p>
-        </div>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <p className="text-xs text-on-surface-variant">
+          Save current map position, zoom, filters, and active layer to come
+          back to it anytime
+        </p>
 
         <div className="space-y-1.5">
           <label htmlFor="save-view-name" className={FORM_LABEL}>
@@ -123,7 +121,7 @@ export const SaveViewModal: React.FC<SaveViewModalProps> = ({
           {fromAsk && <p>The people from Ask are not saved with the view</p>}
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-2">
+        <div className={DIALOG_ACTIONS}>
           <button
             type="button"
             onClick={onClose}

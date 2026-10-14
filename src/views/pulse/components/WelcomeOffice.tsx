@@ -87,8 +87,8 @@ export const WelcomeOffice = () => {
                 <span className={STEP_TITLE}>Log your first note</span>
                 <span className="text-xs text-on-surface-variant mt-0.5 block">
                   Record a recent interaction or set a follow-up date
-                  {/* A phone has no keyboard to press it on. */}
-                  <span className="hidden sm:inline">
+                  {/* A phone or touch tablet has no keyboard to press it on. */}
+                  <span className="hidden sm:pointer-fine:inline">
                     {" "}
                     (press{" "}
                     <kbd className={KBD_SM}>

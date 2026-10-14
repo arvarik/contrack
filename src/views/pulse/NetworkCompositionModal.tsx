@@ -5,7 +5,7 @@ import { type DashboardPayload } from "../../api";
 
 import { SECTION_HEADING } from "../../lib/styles";
 import { DURATION, EASE, prefersReducedMotion } from "../../lib/motion";
-import { DialogCloseButton, Modal } from "../../components/ui/Modal";
+import { Modal } from "../../components/ui/Modal";
 
 interface NetworkCompositionModalProps {
   isOpen: boolean;
@@ -94,38 +94,24 @@ export const NetworkCompositionModal = ({
       isOpen={isOpen}
       onClose={onClose}
       size="2xl"
-      ariaLabel="Network composition"
+      title="Network composition"
     >
-      <div className="px-6 py-5 bg-surface-container-low flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-primary/10">
-            <PieChart className="w-5 h-5 text-primary" />
-          </div>
-          <h2 className="text-xl font-bold text-on-surface">
-            Network composition
-          </h2>
-        </div>
-        <DialogCloseButton onClick={onClose} />
-      </div>
-
-      <div className="p-6 sm:p-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-8">
-          <CompositionColumn
-            title="Industry"
-            icon={PieChart}
-            data={composition.industryComposition}
-          />
-          <CompositionColumn
-            title="Location"
-            icon={MapPin}
-            data={composition.locationComposition}
-          />
-          <CompositionColumn
-            title="Role"
-            icon={Briefcase}
-            data={composition.roleComposition}
-          />
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-10 md:gap-8">
+        <CompositionColumn
+          title="Industry"
+          icon={PieChart}
+          data={composition.industryComposition}
+        />
+        <CompositionColumn
+          title="Location"
+          icon={MapPin}
+          data={composition.locationComposition}
+        />
+        <CompositionColumn
+          title="Role"
+          icon={Briefcase}
+          data={composition.roleComposition}
+        />
       </div>
     </Modal>
   );

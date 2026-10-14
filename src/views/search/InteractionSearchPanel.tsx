@@ -41,6 +41,7 @@ import { useRecordSearch } from "../../api/searchHistory";
 import { useLoadingShown } from "../../hooks/useLoadingShown";
 import { useSingleKeyShortcuts } from "../../hooks/useSingleKeyShortcuts";
 import { isPageKeyTaken } from "../../lib/keyboard";
+import { touchFirst } from "../../lib/platform";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 import { formatDay, formatRelative, parseServerTime } from "../../lib/datetime";
 import {
@@ -278,9 +279,11 @@ export const InteractionSearchPanel = () => {
     }
   }, [q]);
 
-  // Focus the box on arrival, except after an arrow key on the People / Notes
-  // radiogroup: the next arrow press must move between its options, not type.
+  // Focus the box on arrival, except on touch screens or after an arrow key on
+  // the People / Notes radiogroup: the next arrow press must move between its
+  // options, not type.
   useEffect(() => {
+    if (touchFirst()) return;
     if (document.activeElement?.getAttribute("role") === "radio") return;
     inputRef.current?.focus();
   }, []);
@@ -435,7 +438,7 @@ export const InteractionSearchPanel = () => {
             options={TYPES}
             className={cn(
               filterPill(type !== ""),
-              "hit-area min-h-[44px] sm:min-h-[36px]",
+              "hit-area min-h-[44px] sm:pointer-fine:min-h-[36px]",
             )}
           />
           <span aria-hidden="true" className="w-1 shrink-0" />
@@ -459,7 +462,7 @@ export const InteractionSearchPanel = () => {
                 onClick={() => choosePeriod(p.value)}
                 className={cn(
                   filterPill(shownPeriod === p.value),
-                  "min-h-[36px]",
+                  "min-h-[44px] sm:pointer-fine:min-h-[36px]",
                 )}
                 aria-pressed={shownPeriod === p.value}
               >
@@ -469,7 +472,10 @@ export const InteractionSearchPanel = () => {
             <button
               type="button"
               onClick={() => choosePeriod("custom")}
-              className={cn(filterPill(period === "custom"), "min-h-[36px]")}
+              className={cn(
+                filterPill(period === "custom"),
+                "min-h-[44px] sm:pointer-fine:min-h-[36px]",
+              )}
               aria-pressed={period === "custom"}
             >
               Custom
@@ -486,7 +492,7 @@ export const InteractionSearchPanel = () => {
                 value={from}
                 max={to || undefined}
                 onChange={(e) => update({ from: e.target.value })}
-                className="bg-surface-container-low rounded-xl px-3 py-2 text-sm text-on-surface min-h-[44px] sm:min-h-[36px]"
+                className="bg-surface-container-low rounded-xl px-3 py-2 text-sm text-on-surface min-h-[44px] sm:pointer-fine:min-h-[36px]"
               />
             </label>
             <label className="flex items-center gap-2 text-xs font-bold text-on-surface-variant">
@@ -496,7 +502,7 @@ export const InteractionSearchPanel = () => {
                 value={to}
                 min={from || undefined}
                 onChange={(e) => update({ to: e.target.value })}
-                className="bg-surface-container-low rounded-xl px-3 py-2 text-sm text-on-surface min-h-[44px] sm:min-h-[36px]"
+                className="bg-surface-container-low rounded-xl px-3 py-2 text-sm text-on-surface min-h-[44px] sm:pointer-fine:min-h-[36px]"
               />
             </label>
           </div>
@@ -568,7 +574,7 @@ export const InteractionSearchPanel = () => {
                     onClick={() => setMode(mode === "all" ? "auto" : "all")}
                     className={cn(
                       filterPill(result.query.mode === "all"),
-                      "min-h-[44px] sm:min-h-[36px]",
+                      "min-h-[44px] sm:pointer-fine:min-h-[36px]",
                     )}
                     aria-pressed={result.query.mode === "all"}
                   >
@@ -579,7 +585,7 @@ export const InteractionSearchPanel = () => {
                     onClick={() => setMode(mode === "any" ? "auto" : "any")}
                     className={cn(
                       filterPill(result.query.mode === "any"),
-                      "min-h-[44px] sm:min-h-[36px]",
+                      "min-h-[44px] sm:pointer-fine:min-h-[36px]",
                     )}
                     aria-pressed={result.query.mode === "any"}
                   >
@@ -601,7 +607,7 @@ export const InteractionSearchPanel = () => {
                     onClick={() => setSort("relevance")}
                     className={cn(
                       filterPill(sort === "relevance"),
-                      "min-h-[44px] sm:min-h-[36px]",
+                      "min-h-[44px] sm:pointer-fine:min-h-[36px]",
                     )}
                     aria-pressed={sort === "relevance"}
                   >
@@ -612,7 +618,7 @@ export const InteractionSearchPanel = () => {
                     onClick={() => setSort("date")}
                     className={cn(
                       filterPill(sort === "date"),
-                      "min-h-[44px] sm:min-h-[36px]",
+                      "min-h-[44px] sm:pointer-fine:min-h-[36px]",
                     )}
                     aria-pressed={sort === "date"}
                   >

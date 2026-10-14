@@ -5,7 +5,12 @@ import { Loader2, Calendar } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import { useBulkCreateActionItems } from "../../api/actionItems";
 import { MAX_BULK_ACTION_ITEMS } from "../../../shared/contracts/actionItems";
-import { FORM_INPUT, FORM_LABEL, SELECTED_TINT } from "../../lib/styles";
+import {
+  DIALOG_ACTIONS,
+  FORM_INPUT,
+  FORM_LABEL,
+  SELECTED_TINT,
+} from "../../lib/styles";
 import { cn, errorText } from "../../lib/utils";
 import { RadioDot } from "../../components/ui/RadioDot";
 
@@ -158,7 +163,9 @@ export const FollowUpModal: React.FC<FollowUpModalProps> = ({
           </p>
         )}
 
-        <div className="flex items-center justify-end gap-2 pt-2 border-t border-outline-variant/20">
+        <div
+          className={cn(DIALOG_ACTIONS, "border-t border-outline-variant/20")}
+        >
           <button
             type="button"
             onClick={handleClose}

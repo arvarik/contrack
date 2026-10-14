@@ -9,6 +9,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import type { MapView } from "../../api/mapViews";
+import { RailTooltip } from "../../components/ui/RailTooltip";
+import { usePanelPlacement } from "../../hooks/usePanelPlacement";
 import { cn } from "../../lib/utils";
 import { focusOnPointer } from "../../lib/a11y";
 import {
@@ -58,6 +60,15 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
   const [dragged, setDragged] = useState<MapView | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const placement = usePanelPlacement({
+    open: isOpen,
+    align: isMobile ? "end" : "start",
+    trigger: triggerRef,
+    panel: panelRef,
+    measureKey: views.length,
+    onClose: () => setIsOpen(false),
+  });
   // A moved row can lose the focus as the list reorders, so it takes it back.
   const moved = useRef<string | null>(null);
   useLayoutEffect(() => {
@@ -158,13 +169,14 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
 
       {isOpen && (
         <div
+          ref={panelRef}
           role="menu"
           aria-label="Saved views"
+          {...placement.panelProps}
           className={cn(
+            placement.panelProps.className,
             MENU_PANEL,
-            "absolute z-50 w-max min-w-[14rem] max-w-[20rem]",
-            // On a phone the button ends the sheet's last row: open up and in.
-            isMobile ? "right-0 bottom-full mb-1" : "mt-1 right-0 lg:left-0",
+            "w-max min-w-[14rem] max-w-[20rem]",
           )}
         >
           <div role="presentation" className={MENU_HEADING}>
@@ -254,39 +266,41 @@ export const ViewsMenu: React.FC<ViewsMenuProps> = ({
                     {/* Rename and Delete are menu items too, so the arrows
                         reach them and the menu holds only items. Each is a
                         24 px target with a 44 px tap box. */}
-                    <div className="flex items-center gap-0.5 pr-1 opacity-80 group-hover:opacity-100 shrink-0">
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onPointerMove={focusOnPointer}
-                        tabIndex={-1}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          closeMenu();
-                          onStartRename(view);
-                        }}
-                        aria-label={`Rename ${view.name}`}
-                        title="Rename view"
-                        className="hit-area state-layer w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-on-surface rounded-lg cursor-pointer"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onPointerMove={focusOnPointer}
-                        tabIndex={-1}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          closeMenu();
-                          onDeleteView(view);
-                        }}
-                        aria-label={`Delete ${view.name}`}
-                        title="Delete view"
-                        className="hit-area state-layer w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-error rounded-lg cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                    <div className="flex items-center gap-3 pr-1 opacity-80 group-hover:opacity-100 shrink-0">
+                      <RailTooltip label="Rename view" side="bottom-end">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onPointerMove={focusOnPointer}
+                          tabIndex={-1}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            closeMenu();
+                            onStartRename(view);
+                          }}
+                          aria-label={`Rename ${view.name}`}
+                          className="hit-area state-layer w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-on-surface rounded-lg cursor-pointer"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                      </RailTooltip>
+                      <RailTooltip label="Delete view" side="bottom-end">
+                        <button
+                          type="button"
+                          role="menuitem"
+                          onPointerMove={focusOnPointer}
+                          tabIndex={-1}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            closeMenu();
+                            onDeleteView(view);
+                          }}
+                          aria-label={`Delete ${view.name}`}
+                          className="hit-area state-layer w-6 h-6 flex items-center justify-center text-on-surface-variant hover:text-error rounded-lg cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </RailTooltip>
                     </div>
                   </div>
                 );

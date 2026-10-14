@@ -185,6 +185,8 @@ interface ContactMapProps {
   loading?: boolean;
   /** A card's button other than Open, which opens the contact. */
   onCardAction?: (action: Exclude<CardAction, "open">, id: string) => void;
+  /** Reports the phone sheet element when it opens or closes. */
+  onPeekSheetChange?: (node: HTMLDivElement | null) => void;
   /** The contact a list row points at, whose pin stands out. */
   highlightedId?: string | null;
   /** Show this contact's card, pinned. Each new object asks again. */
@@ -212,6 +214,7 @@ export const ContactMap = ({
   onMapReady,
   loading = false,
   onCardAction,
+  onPeekSheetChange,
   highlightedId = null,
   cardRequest = null,
   layer = "pins",
@@ -915,8 +918,18 @@ export const ContactMap = ({
       {card?.kind === "contact" && card.mode === "sheet" && cardContact && (
         <MapPeekSheet
           contact={cardContact}
+          selected={selectedIds?.has(cardContact.id) ?? false}
+          onToggleSelect={
+            onToggleSelectIds
+              ? () => {
+                  toggleContact(cardContact.id);
+                  handleCloseCard();
+                }
+              : undefined
+          }
           onAction={runAction}
           onClose={handleCloseCard}
+          sheetRef={onPeekSheetChange}
         />
       )}
     </div>

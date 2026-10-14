@@ -358,3 +358,69 @@ export function dropAction(
     targetIndex: after[to].indexOf(cardId),
   };
 }
+
+/**
+ * Moves a card one step up (-1) or down (1) within its column, or into the
+ * adjacent column in `PULSE_COLUMNS` when at a column boundary.
+ */
+export function stepCard(
+  state: PulseLayout,
+  cardId: string,
+  direction: -1 | 1,
+): {
+  next: PulseLayout;
+  column: PulseColumn;
+  position: number;
+  total: number;
+  movedAcrossColumn: boolean;
+} | null {
+  const resolved = resolveLayout(state);
+  const colIdx = PULSE_COLUMNS.findIndex((col) =>
+    (resolved.visible[col] as readonly string[]).includes(cardId),
+  );
+  if (colIdx === -1) return null;
+  const col = PULSE_COLUMNS[colIdx];
+  const list = [...resolved.visible[col]];
+  const idx = list.indexOf(cardId as PulseCardId);
+  const targetIdx = idx + direction;
+
+  if (targetIdx >= 0 && targetIdx < list.length) {
+    [list[idx], list[targetIdx]] = [list[targetIdx], list[idx]];
+    const next = pulseLayoutReducer(state, {
+      type: "reorder",
+      column: col,
+      cardIds: list,
+    });
+    return {
+      next,
+      column: col,
+      position: targetIdx + 1,
+      total: list.length,
+      movedAcrossColumn: false,
+    };
+  }
+
+  const adjColIdx = colIdx + direction;
+  if (adjColIdx < 0 || adjColIdx >= PULSE_COLUMNS.length) return null;
+  const targetColumn = PULSE_COLUMNS[adjColIdx];
+  const targetListLen = resolved.visible[targetColumn].length;
+  const insertAt = direction < 0 ? targetListLen : 0;
+  const next = pulseLayoutReducer(state, {
+    type: "move",
+    cardId,
+    targetColumn,
+    targetIndex: insertAt,
+  });
+  const nextResolved = resolveLayout(next);
+  const newTotal = nextResolved.visible[targetColumn].length;
+  const newPos = nextResolved.visible[targetColumn].indexOf(
+    cardId as PulseCardId,
+  );
+  return {
+    next,
+    column: targetColumn,
+    position: newPos + 1,
+    total: newTotal,
+    movedAcrossColumn: true,
+  };
+}

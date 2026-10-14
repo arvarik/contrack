@@ -80,7 +80,7 @@ export const ContactPicker = ({
               animate={{ height: "auto", opacity: 1 }}
               exit={{ height: 0, opacity: 0 }}
               // Padding inside the animation's clip keeps the 44 px tap boxes.
-              className="flex flex-wrap gap-2 -mx-2 -mt-2 mb-2 p-2 overflow-hidden"
+              className="flex flex-wrap gap-x-2 gap-y-3 -mx-2 -mt-2 mb-2 p-2 overflow-hidden"
             >
               {selected.map((c) => (
                 <motion.div
@@ -90,7 +90,7 @@ export const ContactPicker = ({
                   exit={{ scale: 0.8, opacity: 0 }}
                   layout
                   className={cn(
-                    "inline-flex items-center gap-2 px-3 py-1.5 rounded-md",
+                    "inline-flex items-center gap-2 min-h-[36px] px-3 py-1.5 rounded-md",
                     SELECTED_TINT,
                   )}
                 >

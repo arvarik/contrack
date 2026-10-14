@@ -42,7 +42,7 @@ export const SelectStage = ({
           the offset is the tab bar's height, as in InteractionComposer. */}
       <div
         ref={roomAtBottom}
-        className="sticky bottom-[calc(3.375rem+max(0.75rem,env(safe-area-inset-bottom)))] md:bottom-0 z-10 pt-4 pb-4 bg-surface"
+        className="sticky bottom-[var(--tabbar-space)] md:bottom-0 z-10 pt-4 pb-4 bg-surface"
       >
         <button
           onClick={onNext}

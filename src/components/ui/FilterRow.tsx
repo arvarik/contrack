@@ -66,7 +66,7 @@ export function FilterRow<T extends string>({
         aria-labelledby={labelId}
         // A phone scrolls the pills sideways in one line: wrapped, the two
         // Tracked rows took five lines. The padding keeps the tap boxes in.
-        className="flex flex-1 flex-wrap gap-1.5 max-sm:flex-nowrap max-sm:overflow-x-auto scrollbar-hide max-sm:py-2 max-sm:-my-2"
+        className="flex flex-1 flex-wrap gap-x-1.5 gap-y-2.5 max-sm:flex-nowrap max-sm:overflow-x-auto scrollbar-hide max-sm:py-2 max-sm:-my-2"
       >
         {pills.map((pill) => (
           <button

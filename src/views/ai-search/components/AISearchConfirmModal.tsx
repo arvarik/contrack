@@ -4,6 +4,8 @@ import { Modal } from "../../../components/ui/Modal";
 import type { Contact } from "../../../types";
 import type { ResearchDepth } from "../../../../shared/researchDepth";
 import { batchEstimate, DEPTH_WORDS } from "../../../lib/researchDepth";
+import { DIALOG_ACTIONS } from "../../../lib/styles";
+import { cn } from "../../../lib/utils";
 
 interface Props {
   isOpen: boolean;
@@ -65,7 +67,7 @@ export function AISearchConfirmModal({
           </p>
         )}
 
-        <div className="flex gap-3 pt-1">
+        <div className={cn(DIALOG_ACTIONS, "pt-1")}>
           <button
             onClick={onClose}
             disabled={isStarting}

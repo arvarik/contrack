@@ -14,6 +14,7 @@ import {
   ActionMenu,
   type ActionMenuItem,
 } from "../../../components/ui/ActionMenu";
+import { RailTooltip } from "../../../components/ui/RailTooltip";
 import { formatRelative } from "../../../lib/datetime";
 import { SELECTED_ROW, TONE_TEXT, TONE_WASH } from "../../../lib/styles";
 import {
@@ -261,52 +262,60 @@ export const ActionRow = memo(
       >
         {/* The check for a follow-up, Log for a birthday or a catch-up. */}
         {item.hasCheckAction ? (
-          <button
-            type="button"
-            onClick={handleComplete}
-            disabled={isCompleting}
-            tabIndex={tabIndex}
-            aria-label={`Mark "${item.title}" done`}
-            className={cn(
-              GLYPH,
-              "border-2 transition-all duration-(--dur-fast)",
-              // The success wash and ink clear AA. White on raw green does not.
-              isCompleting
-                ? cn(TONE_WASH.success, "border-success scale-110")
-                : cn(TONE_TEXT[tone], CHECK_RING_REST, "hover:border-current"),
-            )}
-          >
-            <Check
+          <RailTooltip label="Done" side="bottom-start">
+            <button
+              type="button"
+              onClick={handleComplete}
+              disabled={isCompleting}
+              tabIndex={tabIndex}
+              aria-label={`Mark "${item.title}" done`}
               className={cn(
-                "w-3.5 h-3.5 transition-opacity",
+                GLYPH,
+                "border-2 transition-all duration-(--dur-fast)",
+                // The success wash and ink clear AA. White on raw green does not.
                 isCompleting
-                  ? "opacity-100"
-                  : "opacity-40 group-hover:opacity-100 group-focus-within:opacity-100",
+                  ? cn(TONE_WASH.success, "border-success scale-110")
+                  : cn(
+                      TONE_TEXT[tone],
+                      CHECK_RING_REST,
+                      "hover:border-current",
+                    ),
               )}
-            />
-          </button>
+            >
+              <Check
+                className={cn(
+                  "w-3.5 h-3.5 transition-opacity",
+                  isCompleting
+                    ? "opacity-100"
+                    : "opacity-40 group-hover:opacity-100 group-focus-within:opacity-100",
+                )}
+              />
+            </button>
+          </RailTooltip>
         ) : item.kind === "birthday" ? (
-          <button
-            type="button"
-            onClick={handleLog}
-            tabIndex={tabIndex}
-            title="Log a birthday note"
-            aria-label={`Wish ${item.contactName} a happy birthday`}
-            className={cn(GLYPH, TONE_WASH[tone])}
-          >
-            <Cake className="w-3.5 h-3.5" />
-          </button>
+          <RailTooltip label="Log wishes" side="bottom-start">
+            <button
+              type="button"
+              onClick={handleLog}
+              tabIndex={tabIndex}
+              aria-label={`Wish ${item.contactName} a happy birthday`}
+              className={cn(GLYPH, TONE_WASH[tone])}
+            >
+              <Cake className="w-3.5 h-3.5" />
+            </button>
+          </RailTooltip>
         ) : (
-          <button
-            type="button"
-            onClick={handleLog}
-            tabIndex={tabIndex}
-            title="Log an interaction"
-            aria-label={`Log note for ${item.contactName}`}
-            className={cn(GLYPH, TONE_WASH[tone])}
-          >
-            <HeartPulse className="w-3.5 h-3.5" />
-          </button>
+          <RailTooltip label="Reach out" side="bottom-start">
+            <button
+              type="button"
+              onClick={handleLog}
+              tabIndex={tabIndex}
+              aria-label={`Log note for ${item.contactName}`}
+              className={cn(GLYPH, TONE_WASH[tone])}
+            >
+              <HeartPulse className="w-3.5 h-3.5" />
+            </button>
+          </RailTooltip>
         )}
 
         <div className="shrink-0">

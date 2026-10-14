@@ -19,6 +19,7 @@ import { BTN_QUIET, CARD, ICON_BTN, TAG_PILL } from "../../../lib/styles";
 import { DEPTH_WORDS } from "../../../lib/researchDepth";
 import { DURATION, EASE } from "../../../lib/motion";
 import { NAMES } from "../../../lib/names";
+import { RailTooltip } from "../../../components/ui/RailTooltip";
 
 interface Props {
   batch: AISearchBatch;
@@ -138,24 +139,28 @@ export function AISearchProgressOverlay({
           <span className="text-xs text-on-surface-variant tabular-nums">
             {completed}/{total}
           </span>
-          <button
-            aria-label="Minimize research progress"
-            onClick={() => setIsMinimized(true)}
-            className={cn(ICON_BTN, "p-1")}
-          >
-            <ChevronDown className="w-3.5 h-3.5" />
-          </button>
-          <button
-            aria-label={
-              isComplete
-                ? "Dismiss research progress"
-                : "Minimize research progress"
-            }
-            onClick={isComplete ? onDismiss : () => setIsMinimized(true)}
-            className={cn(ICON_BTN, "p-1 hover:text-error")}
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
+          <div className="flex items-center gap-3">
+            <RailTooltip label="Minimize research progress" side="bottom-end">
+              <button
+                aria-label="Minimize research progress"
+                onClick={() => setIsMinimized(true)}
+                className={cn(ICON_BTN, "p-1")}
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+            </RailTooltip>
+            {isComplete && (
+              <RailTooltip label="Dismiss research progress" side="bottom-end">
+                <button
+                  aria-label="Dismiss research progress"
+                  onClick={onDismiss}
+                  className={cn(ICON_BTN, "p-1 hover:text-error")}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </RailTooltip>
+            )}
+          </div>
         </div>
 
         <div className="h-1 bg-surface-container-high">

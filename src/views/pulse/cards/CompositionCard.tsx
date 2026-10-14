@@ -127,6 +127,10 @@ export const CompositionCard = ({ dashboard }: CompositionCardProps) => {
                 className={cn(PULSE_TYPE.meta, "w-full min-w-0 flex flex-col")}
               >
                 {slices.map((slice) => {
+                  const pct =
+                    totalCount > 0
+                      ? Math.round((slice.count / totalCount) * 100)
+                      : 0;
                   const dot = (
                     <span
                       aria-hidden="true"
@@ -143,7 +147,10 @@ export const CompositionCard = ({ dashboard }: CompositionCardProps) => {
                         {slice.label}
                       </span>{" "}
                       <span className="ml-auto tabular-nums shrink-0">
-                        {slice.count}
+                        {slice.count}{" "}
+                        <span className="text-[11px] text-on-surface-variant">
+                          ({pct}%)
+                        </span>
                       </span>
                     </>
                   );

@@ -415,7 +415,7 @@ export const MapView = () => {
 
   // The bottom line's height, which lifts MapLibre's zoom buttons and credit
   // over it on a phone (index.css). While the line steps aside they keep its
-  // last height, so they do not drop under the bulk bar.
+  // last height, or lift over the peek sheet or selection bars.
   const [lineHeight, setLineHeight] = useState(0);
   const measureLine = useCallback((corner: HTMLDivElement | null) => {
     if (!corner) return;
@@ -426,6 +426,40 @@ export const MapView = () => {
     observer.observe(corner);
     return () => observer.disconnect();
   }, []);
+
+  const [selectionBarHeight, setSelectionBarHeight] = useState(0);
+  const measureSelectionBar = useCallback((bar: HTMLDivElement | null) => {
+    if (!bar) {
+      setSelectionBarHeight(0);
+      return;
+    }
+    const measure = () => setSelectionBarHeight(bar.offsetHeight + 8);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, []);
+
+  const [peekHeight, setPeekHeight] = useState(0);
+  const measurePeekSheet = useCallback((sheet: HTMLDivElement | null) => {
+    if (!sheet) {
+      setPeekHeight(0);
+      return;
+    }
+    const measure = () => setPeekHeight(sheet.offsetHeight);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(sheet);
+    return () => observer.disconnect();
+  }, []);
+  const peekOpen = peekHeight > 0;
+  const activeBottomLine = peekOpen
+    ? peekHeight
+    : selection.selectedCount > 0
+      ? Math.max(lineHeight, Math.max(0, bulkRoom - 80) + selectionBarHeight)
+      : lineHeight;
 
   const [isLassoMode, setIsLassoMode] = useState(false);
   const [quickNoteContactId, setQuickNoteContactId] = useState<string | null>(
@@ -733,7 +767,7 @@ export const MapView = () => {
       data-cramped={cramped || undefined}
       style={
         {
-          "--map-line": `${lineHeight}px`,
+          "--map-line": `${activeBottomLine}px`,
           "--map-open": room !== null ? `${room}px` : undefined,
         } as CSSProperties
       }
@@ -792,15 +826,16 @@ export const MapView = () => {
         {/*
           The bottom line. `z-[3]` draws it over every pin (the selected one
           is z 2), and the pin cards, also z 3, come later and draw over it.
-          It steps aside when an open contact leaves too little room, and
-          while contacts are selected, since the bulk bar spans the bottom.
+          It steps aside when an open contact leaves too little room, while a
+          pin sheet is open, and while contacts are selected, since the bulk
+          bar spans the bottom.
         */}
-        {!cramped && selection.selectedCount === 0 && (
+        {!cramped && selection.selectedCount === 0 && !peekOpen && (
           <div
             ref={measureLine}
             data-map-chrome="bottom"
             className={cn(
-              "absolute left-4 bottom-[calc(env(safe-area-inset-bottom)+5rem)] md:bottom-4 z-[3] flex items-start max-w-[calc(100%-2rem)] pointer-events-none",
+              "absolute left-4 bottom-[calc(env(safe-area-inset-bottom)+5rem)] md:bottom-4 z-[3] flex flex-wrap items-start gap-x-2 gap-y-1 max-w-[calc(100%-2rem)] pointer-events-none",
               isPaneOpen && "lg:max-w-[calc(100%-22rem)]",
             )}
             style={room !== null ? { maxWidth: room - 32 } : undefined}
@@ -817,7 +852,7 @@ export const MapView = () => {
               onZoomToHeat={zoomToHeat}
             />
             <NotOnMap
-              className="pointer-events-auto ml-2 shrink-0"
+              className="pointer-events-auto shrink-0"
               onSetLocation={setAdjusting}
             />
           </div>
@@ -852,6 +887,7 @@ export const MapView = () => {
           reuse
           layer={layer}
           onCardAction={handleCardAction}
+          onPeekSheetChange={measurePeekSheet}
         />
         {/* The contacts did not load: say so over the map, clear of the
             open insights panel, with a way to ask again. */}
@@ -895,7 +931,7 @@ export const MapView = () => {
           </div>
         )}
 
-        {selection.selectedCount > 0 && !cramped && (
+        {selection.selectedCount > 0 && !cramped && !peekOpen && (
           <div
             className={cn(
               "absolute inset-y-0 left-0 right-0 pointer-events-none z-40",
@@ -904,6 +940,7 @@ export const MapView = () => {
             style={room !== null ? { width: room, right: "auto" } : undefined}
           >
             <div
+              ref={measureSelectionBar}
               role="toolbar"
               aria-label="Map selection actions"
               data-map-chrome="bottom"
