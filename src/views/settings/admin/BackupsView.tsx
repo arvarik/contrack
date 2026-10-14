@@ -24,6 +24,7 @@ import {
 import { useConnectors } from "../../../api/connectors";
 import { Badge } from "../../../components/ui/Badge";
 import { IconButton } from "../../../components/ui/IconButton";
+import { RailTooltip } from "../../../components/ui/RailTooltip";
 import { formatBytes, formatRelative, formatWhen } from "../../../lib/datetime";
 import { SELECTED_ROW, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
@@ -68,22 +69,27 @@ const VerificationBadge = ({
       </Badge>
     );
   }
+  const detail = verificationDetail(verification);
   if (!verification.ok) {
     return (
-      <span title={verificationDetail(verification)}>
-        <Badge icon={<ShieldAlert className="w-3 h-3" />} tone="danger">
-          Failed
-        </Badge>
-      </span>
+      <RailTooltip label={detail} side="bottom-start">
+        <span className="inline-flex rounded-lg">
+          <Badge icon={<ShieldAlert className="w-3 h-3" />} tone="danger">
+            Failed
+          </Badge>
+        </span>
+      </RailTooltip>
     );
   }
 
   return (
-    <span title={verificationDetail(verification)}>
-      <Badge icon={<ShieldCheck className="w-3 h-3" />} tone="success">
-        Verified
-      </Badge>
-    </span>
+    <RailTooltip label={detail} side="bottom-start">
+      <span className="inline-flex rounded-lg">
+        <Badge icon={<ShieldCheck className="w-3 h-3" />} tone="success">
+          Verified
+        </Badge>
+      </span>
+    </RailTooltip>
   );
 };
 
@@ -208,20 +214,24 @@ export const BackupsView = () => {
               </span>
             </AdminCell>
 
-            <IconButton
-              aria-label={`Download ${backup.filename}`}
-              title="Download"
-              tone="subtle"
+            <RailTooltip
+              label="Download"
+              side="left"
               className="self-end sm:self-auto"
-              onClick={() =>
-                downloadFile(
-                  `/admin/backups/${encodeURIComponent(backup.filename)}`,
-                  backup.filename,
-                ).catch((error: Error) => toast.error(error.message))
-              }
             >
-              <Download className="w-4 h-4" />
-            </IconButton>
+              <IconButton
+                aria-label={`Download ${backup.filename}`}
+                tone="subtle"
+                onClick={() =>
+                  downloadFile(
+                    `/admin/backups/${encodeURIComponent(backup.filename)}`,
+                    backup.filename,
+                  ).catch((error: Error) => toast.error(error.message))
+                }
+              >
+                <Download className="w-4 h-4" />
+              </IconButton>
+            </RailTooltip>
 
             {/* The reason shows in the row, not in a tooltip, because a phone
                 has no hover. `col-span-full` puts it under the grid. */}

@@ -24,6 +24,7 @@ import { formatRelative } from "../../../lib/datetime";
 import {
   BTN_QUIET,
   CARD,
+  DIALOG_ACTIONS,
   FORM_INPUT,
   FORM_LABEL,
   SECTION_HEADING,
@@ -247,9 +248,6 @@ export const CorrespondentsView: React.FC = () => {
             <input
               id="correspondent-name"
               required
-              // The one field: a dialog opened to type a name.
-              // eslint-disable-next-line jsx-a11y/no-autofocus
-              autoFocus
               value={draftName}
               onChange={(e) => setDraftName(e.target.value)}
               className={FORM_INPUT}
@@ -258,7 +256,7 @@ export const CorrespondentsView: React.FC = () => {
               {naming?.email ?? naming?.phone}
             </p>
           </div>
-          <div className="flex justify-end gap-2">
+          <div className={DIALOG_ACTIONS}>
             <button
               type="button"
               onClick={() => setNaming(null)}

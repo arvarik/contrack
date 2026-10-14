@@ -399,7 +399,7 @@ const MagicLinkRequest = ({
           <button
             type="button"
             onClick={onBack}
-            className="text-primary font-bold hover:underline inline-flex items-center gap-1.5"
+            className="text-primary font-bold hover:underline min-h-[44px] sm:pointer-fine:min-h-0 inline-flex items-center gap-1.5"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             Back to sign in
@@ -428,7 +428,7 @@ const MagicLinkRequest = ({
         <button
           type="button"
           onClick={onBack}
-          className="text-primary font-bold hover:underline inline-flex items-center gap-1.5"
+          className="text-primary font-bold hover:underline min-h-[44px] sm:pointer-fine:min-h-0 inline-flex items-center gap-1.5"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           Back to sign in

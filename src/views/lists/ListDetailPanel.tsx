@@ -28,6 +28,7 @@ import {
 } from "../../lib/styles";
 import { AddPeople } from "./AddPeople";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
+import { RailTooltip } from "../../components/ui/RailTooltip";
 
 interface ListDetailPanelProps {
   list: ContactList;
@@ -131,15 +132,16 @@ export const ListDetailPanel = ({
     <div className="@container h-full flex flex-col overflow-hidden">
       {!hideMobileHeader && (
         <div className="p-5 bg-surface-container-low shrink-0 flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className={ICON_BTN}
-            aria-label="Close list"
-            title="Close"
-          >
-            <X className="w-5 h-5" aria-hidden="true" />
-          </button>
+          <RailTooltip label="Close" side="bottom-start">
+            <button
+              type="button"
+              onClick={onClose}
+              className={ICON_BTN}
+              aria-label="Close list"
+            >
+              <X className="w-5 h-5" aria-hidden="true" />
+            </button>
+          </RailTooltip>
           <div className="flex-1 min-w-0">
             <h3 className="font-bold font-headline text-base leading-tight truncate">
               {list.name}
@@ -182,39 +184,44 @@ export const ListDetailPanel = ({
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto pb-[calc(var(--tabbar-space)+1rem)] md:pb-4">
         <section className="p-5 space-y-4">
           <h4 className={cn(SECTION_HEADING, "flex items-center gap-2")}>
             <ListIcon icon={icon} className="w-4 h-4 text-primary" />
             Icon & name
           </h4>
 
-          <div className="grid grid-cols-8 gap-1.5">
+          <div className="grid grid-cols-4 sm:grid-cols-8 gap-2.5">
             {ICON_OPTIONS.map((key) => {
               const active = icon === key;
               return (
-                <button
+                <RailTooltip
                   key={key}
-                  type="button"
-                  onClick={() => handleIconChange(key)}
-                  aria-pressed={active}
-                  className={cn(
-                    "hit-area state-layer p-2 rounded-xl transition-colors flex items-center justify-center",
-                    // The tint says "chosen" by hue alone, so the ring is a
-                    // second cue. Its gap takes the surface color.
-                    active
-                      ? cn(
-                          SELECTED_TINT,
-                          SWATCH_SELECTED,
-                          "ring-offset-surface",
-                        )
-                      : "text-on-surface-variant hover:text-on-surface",
-                  )}
-                  title={key}
-                  aria-label={key}
+                  label={key}
+                  side="bottom"
+                  className="justify-center"
                 >
-                  <ListIcon icon={key} className="w-4 h-4" />
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => handleIconChange(key)}
+                    aria-pressed={active}
+                    className={cn(
+                      "hit-area state-layer w-full min-h-[44px] sm:pointer-fine:min-h-0 p-2 rounded-xl transition-colors flex items-center justify-center",
+                      // The tint says "chosen" by hue alone, so the ring is a
+                      // second cue. Its gap takes the surface color.
+                      active
+                        ? cn(
+                            SELECTED_TINT,
+                            SWATCH_SELECTED,
+                            "ring-offset-surface",
+                          )
+                        : "text-on-surface-variant hover:text-on-surface",
+                    )}
+                    aria-label={key}
+                  >
+                    <ListIcon icon={key} className="w-4 h-4" />
+                  </button>
+                </RailTooltip>
               );
             })}
           </div>
@@ -233,7 +240,7 @@ export const ListDetailPanel = ({
                 setName(savedName.current);
               }
             }}
-            className="w-full min-h-[44px] sm:pointer-fine:min-h-0 bg-surface-container-low rounded-xl px-4 py-2.5 text-sm font-bold"
+            className="w-full min-h-[44px] sm:pointer-fine:min-h-0 bg-surface-container-low rounded-xl px-4 py-2.5 text-base sm:text-sm font-bold"
             placeholder="List name"
           />
         </section>
@@ -300,20 +307,21 @@ export const ListDetailPanel = ({
                   </div>
 
                   {/* Hidden until hover only for a mouse: a tablet has no hover. */}
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveMember(contact)}
-                    disabled={removingId === contact.id}
-                    aria-label={`Remove ${contact.name} from list`}
-                    className="hit-area state-layer p-1.5 rounded-lg text-on-surface-variant hover:text-error pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:focus-visible:opacity-100 transition-all disabled:opacity-50"
-                    title="Remove from list"
-                  >
-                    {removingId === contact.id ? (
-                      <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                    ) : (
-                      <UserMinus className="w-3.5 h-3.5" />
-                    )}
-                  </button>
+                  <RailTooltip label="Remove from list" side="left">
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMember(contact)}
+                      disabled={removingId === contact.id}
+                      aria-label={`Remove ${contact.name} from list`}
+                      className="hit-area state-layer p-1.5 rounded-lg text-on-surface-variant hover:text-error pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:focus-visible:opacity-100 transition-all disabled:opacity-50"
+                    >
+                      {removingId === contact.id ? (
+                        <div className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <UserMinus className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </RailTooltip>
                 </motion.div>
               ))}
             </div>

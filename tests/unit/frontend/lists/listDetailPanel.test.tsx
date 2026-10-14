@@ -94,4 +94,12 @@ describe("ListDetailPanel icon", () => {
     expect(chosen("heart")).toBe("true");
     expect(chosen("crown")).toBe("false");
   });
+
+  it("uses a 4-column mobile icon grid and 16px list name input", () => {
+    mount();
+    const input = screen.getByRole("textbox", { name: "List name" });
+    expect(input.className).toContain("text-base");
+    const heartBtn = screen.getByRole("button", { name: "heart" });
+    expect(heartBtn.className).toContain("min-h-[44px]");
+  });
 });

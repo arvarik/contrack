@@ -27,6 +27,7 @@ import {
 import { Badge } from "../../../components/ui/Badge";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../../components/ui/EmptyState";
+import { RailTooltip } from "../../../components/ui/RailTooltip";
 import { ICON_BTN, TONE_WASH } from "../../../lib/styles";
 import { cn, errorText } from "../../../lib/utils";
 import { SETTINGS_CARD, SETTINGS_INPUT } from "../layout";
@@ -245,24 +246,26 @@ export const PasskeysCard = () => {
               </div>
 
               <div className="flex items-center gap-3 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => startEditing(passkey)}
-                  className={ICON_BTN}
-                  aria-label={`Rename ${passkey.name}`}
-                  title="Rename"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDeleteTarget(passkey)}
-                  className={cn(ICON_BTN, "hover:text-error")}
-                  aria-label={`Remove ${passkey.name}`}
-                  title="Remove"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <RailTooltip label="Rename" side="bottom">
+                  <button
+                    type="button"
+                    onClick={() => startEditing(passkey)}
+                    className={ICON_BTN}
+                    aria-label={`Rename ${passkey.name}`}
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                </RailTooltip>
+                <RailTooltip label="Remove" side="bottom-end">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(passkey)}
+                    className={cn(ICON_BTN, "hover:text-error")}
+                    aria-label={`Remove ${passkey.name}`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </RailTooltip>
               </div>
             </li>
           ))}

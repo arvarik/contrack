@@ -25,6 +25,7 @@ import {
 import { EmptyState } from "../../../components/ui/EmptyState";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { Modal } from "../../../components/ui/Modal";
+import { RailTooltip } from "../../../components/ui/RailTooltip";
 import { CARD, FORM_INPUT, FORM_LABEL } from "../../../lib/styles";
 import { cn, errorText, plural } from "../../../lib/utils";
 import { tagFilterPath } from "../../contact-list/hooks/useContactListFilters";
@@ -252,61 +253,69 @@ export const TagsPage = () => {
                     ) : (
                       // The name and its count are one link, to the
                       // Network list showing the contacts with the tag.
-                      <Link
-                        to={tagFilterPath(item.tag)}
-                        aria-label={`${item.tag}, ${contacts(item.count)}`}
-                        title="See who has this tag"
-                        className="hit-area group/tag flex items-center gap-3 min-w-0 rounded-md"
+                      <RailTooltip
+                        label="See who has this tag"
+                        side="bottom"
+                        className="min-w-0"
                       >
-                        <span className="font-semibold text-sm text-on-surface break-words min-w-0 underline-offset-2 group-hover/tag:underline">
-                          {item.tag}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-primary/10 text-on-primary-wash shrink-0">
-                          {item.count}
-                        </span>
-                        <ChevronRight
-                          aria-hidden="true"
-                          className="w-4 h-4 text-on-surface-variant shrink-0"
-                        />
-                      </Link>
+                        <Link
+                          to={tagFilterPath(item.tag)}
+                          aria-label={`${item.tag}, ${contacts(item.count)}`}
+                          className="hit-area group/tag flex items-center gap-3 min-w-0 rounded-md"
+                        >
+                          <span className="font-semibold text-sm text-on-surface break-words min-w-0 underline-offset-2 group-hover/tag:underline">
+                            {item.tag}
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-primary/10 text-on-primary-wash shrink-0">
+                            {item.count}
+                          </span>
+                          <ChevronRight
+                            aria-hidden="true"
+                            className="w-4 h-4 text-on-surface-variant shrink-0"
+                          />
+                        </Link>
+                      </RailTooltip>
                     )}
                   </div>
 
                   {!isEditing && (
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => startEditing(item)}
-                        data-rename-tag={item.tag}
-                        className={cn(ROW_ACTION, "hover:text-on-surface")}
-                        aria-label={`Rename ${item.tag}`}
-                        title="Rename"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <RailTooltip label="Rename" side="bottom">
+                        <button
+                          type="button"
+                          onClick={() => startEditing(item)}
+                          data-rename-tag={item.tag}
+                          className={cn(ROW_ACTION, "hover:text-on-surface")}
+                          aria-label={`Rename ${item.tag}`}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                      </RailTooltip>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setMergeSource(item);
-                          setMergeTarget("");
-                        }}
-                        className={cn(ROW_ACTION, "hover:text-on-surface")}
-                        aria-label={`Merge ${item.tag} into another tag`}
-                        title="Merge into…"
-                      >
-                        <Merge className="w-4 h-4" />
-                      </button>
+                      <RailTooltip label="Merge into…" side="bottom">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setMergeSource(item);
+                            setMergeTarget("");
+                          }}
+                          className={cn(ROW_ACTION, "hover:text-on-surface")}
+                          aria-label={`Merge ${item.tag} into another tag`}
+                        >
+                          <Merge className="w-4 h-4" />
+                        </button>
+                      </RailTooltip>
 
-                      <button
-                        type="button"
-                        onClick={() => setTagToDelete(item)}
-                        className={cn(ROW_ACTION, "hover:text-error")}
-                        aria-label={`Delete tag ${item.tag}`}
-                        title="Delete"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <RailTooltip label="Delete" side="bottom-end">
+                        <button
+                          type="button"
+                          onClick={() => setTagToDelete(item)}
+                          className={cn(ROW_ACTION, "hover:text-error")}
+                          aria-label={`Delete tag ${item.tag}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </RailTooltip>
                     </div>
                   )}
                 </div>

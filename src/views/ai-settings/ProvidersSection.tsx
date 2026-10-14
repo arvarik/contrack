@@ -25,8 +25,9 @@ import {
 } from "../../api/aiSettings";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Modal } from "../../components/ui/Modal";
+import { RailTooltip } from "../../components/ui/RailTooltip";
 import { useHashTarget } from "../settings/SettingRow";
-import { ICON_BTN, LABEL } from "../../lib/styles";
+import { DIALOG_ACTIONS, ICON_BTN, LABEL } from "../../lib/styles";
 import { cn, errorText } from "../../lib/utils";
 import { SETTINGS_CARD, SETTINGS_SECTION_HEADING } from "../settings/layout";
 
@@ -176,12 +177,9 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
                       </span>
                     )}
                     {provider.modelsError && (
-                      <span
-                        className="text-error flex items-center gap-1"
-                        title={provider.modelsError}
-                      >
-                        <AlertTriangle className="w-3 h-3" />
-                        Refresh failed
+                      <span className="text-error flex items-center gap-1 text-pretty">
+                        <AlertTriangle className="w-3 h-3 shrink-0" />
+                        Refresh failed: {provider.modelsError}
                       </span>
                     )}
                   </div>
@@ -197,41 +195,43 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
                   )}
                 </div>
                 {provider.supportsDiscovery && (
-                  <button
-                    onClick={() =>
-                      refreshModels
-                        .mutateAsync(provider.id)
-                        .then((r) => toast.success(`${r.modelCount} models`))
-                        .catch((e) => toast.error(String(e.message ?? e)))
-                    }
-                    disabled={refreshModels.isPending}
-                    className={ICON_BTN}
-                    title="Refresh the model list"
-                    aria-label={`Refresh models for ${provider.label}`}
-                  >
-                    <RefreshCw
-                      className={cn(
-                        "w-4 h-4",
-                        refreshModels.isPending && "animate-spin",
-                      )}
-                    />
-                  </button>
+                  <RailTooltip label="Refresh the model list" side="bottom">
+                    <button
+                      onClick={() =>
+                        refreshModels
+                          .mutateAsync(provider.id)
+                          .then((r) => toast.success(`${r.modelCount} models`))
+                          .catch((e) => toast.error(String(e.message ?? e)))
+                      }
+                      disabled={refreshModels.isPending}
+                      className={ICON_BTN}
+                      aria-label={`Refresh models for ${provider.label}`}
+                    >
+                      <RefreshCw
+                        className={cn(
+                          "w-4 h-4",
+                          refreshModels.isPending && "animate-spin",
+                        )}
+                      />
+                    </button>
+                  </RailTooltip>
                 )}
                 {provider.source === "settings" && (
-                  <button
-                    onClick={() =>
-                      setRemoving({
-                        kind: "key",
-                        id: provider.id,
-                        label: provider.label,
-                      })
-                    }
-                    className={cn(ICON_BTN, "text-error")}
-                    title="Remove key"
-                    aria-label={`Remove ${provider.label} key`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <RailTooltip label="Remove key" side="bottom">
+                    <button
+                      onClick={() =>
+                        setRemoving({
+                          kind: "key",
+                          id: provider.id,
+                          label: provider.label,
+                        })
+                      }
+                      className={cn(ICON_BTN, "text-error")}
+                      aria-label={`Remove ${provider.label} key`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </RailTooltip>
                 )}
               </div>
             ))}
@@ -299,39 +299,41 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
                       )}
                     </div>
                   </div>
-                  <button
-                    onClick={() =>
-                      refreshModels
-                        .mutateAsync(`custom:${endpoint.id}`)
-                        .then((r) => toast.success(`${r.modelCount} models`))
-                        .catch((e) => toast.error(String(e.message ?? e)))
-                    }
-                    disabled={refreshModels.isPending}
-                    className={ICON_BTN}
-                    title="Refresh the model list"
-                    aria-label={`Refresh models for ${endpoint.label}`}
-                  >
-                    <RefreshCw
-                      className={cn(
-                        "w-4 h-4",
-                        refreshModels.isPending && "animate-spin",
-                      )}
-                    />
-                  </button>
-                  <button
-                    onClick={() =>
-                      setRemoving({
-                        kind: "server",
-                        id: endpoint.id,
-                        label: endpoint.label,
-                      })
-                    }
-                    className={cn(ICON_BTN, "text-error")}
-                    title="Remove server"
-                    aria-label={`Remove ${endpoint.label}`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <RailTooltip label="Refresh the model list" side="bottom">
+                    <button
+                      onClick={() =>
+                        refreshModels
+                          .mutateAsync(`custom:${endpoint.id}`)
+                          .then((r) => toast.success(`${r.modelCount} models`))
+                          .catch((e) => toast.error(String(e.message ?? e)))
+                      }
+                      disabled={refreshModels.isPending}
+                      className={ICON_BTN}
+                      aria-label={`Refresh models for ${endpoint.label}`}
+                    >
+                      <RefreshCw
+                        className={cn(
+                          "w-4 h-4",
+                          refreshModels.isPending && "animate-spin",
+                        )}
+                      />
+                    </button>
+                  </RailTooltip>
+                  <RailTooltip label="Remove server" side="bottom">
+                    <button
+                      onClick={() =>
+                        setRemoving({
+                          kind: "server",
+                          id: endpoint.id,
+                          label: endpoint.label,
+                        })
+                      }
+                      className={cn(ICON_BTN, "text-error")}
+                      aria-label={`Remove ${endpoint.label}`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </RailTooltip>
                 </div>
               );
             })}
@@ -362,12 +364,9 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
             value={keyInput}
             onChange={(e) => setKeyInput(e.target.value)}
             placeholder="API key"
-            // Capturing this one value is the modal's entire purpose.
-            // eslint-disable-next-line jsx-a11y/no-autofocus
-            autoFocus
-            className="w-full px-4 py-3 rounded-xl bg-surface-container-highest text-sm font-mono"
+            className="w-full px-4 py-3 rounded-xl bg-surface-container-highest text-base sm:text-sm font-mono"
           />
-          <div className="flex justify-end gap-3">
+          <div className={DIALOG_ACTIONS}>
             <button
               onClick={() => setKeyModalProvider(null)}
               className="btn-secondary"
@@ -459,11 +458,11 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
                   }))
                 }
                 placeholder={field.placeholder}
-                className="w-full mt-1 min-h-[44px] sm:pointer-fine:min-h-0 px-3 py-2 rounded-xl bg-surface-container-highest text-sm font-mono"
+                className="w-full mt-1 min-h-[44px] sm:pointer-fine:min-h-0 px-3 py-2 rounded-xl bg-surface-container-highest text-base sm:text-sm font-mono"
               />
             </label>
           ))}
-          <div className="flex justify-end gap-3 pt-1">
+          <div className={cn(DIALOG_ACTIONS, "pt-1")}>
             <button
               onClick={() => setEndpointModalOpen(false)}
               className="btn-secondary"

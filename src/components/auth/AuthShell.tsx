@@ -83,8 +83,8 @@ export const AuthShell = ({
   return (
     // The status bar and the home indicator, for a screen that fills a
     // phone outside the app's shell, such as sign-in or an app's consent.
-    <div className="min-h-dvh bg-surface text-on-surface flex items-center justify-center p-0 sm:p-6 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
-      <main className="w-full sm:max-w-md">
+    <div className="min-h-dvh bg-surface-container-low sm:bg-surface text-on-surface flex flex-col sm:flex-row sm:items-center sm:justify-center pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] sm:pt-[max(1.5rem,env(safe-area-inset-top))] sm:pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:pl-[max(1.5rem,env(safe-area-inset-left))] sm:pr-[max(1.5rem,env(safe-area-inset-right))]">
+      <main className="w-full sm:max-w-md flex-1 sm:flex-initial flex flex-col">
         <form
           onSubmit={onSubmit}
           // Our validation, not the browser's bubbles. The fields keep `type`
@@ -92,7 +92,7 @@ export const AuthShell = ({
           noValidate
           className={cn(
             "bg-surface-container-low p-6 sm:p-8 space-y-6",
-            "min-h-dvh sm:min-h-0 sm:rounded-3xl sm:shadow-xl",
+            "flex-1 sm:flex-initial sm:rounded-3xl sm:shadow-xl",
             "flex flex-col justify-center sm:block",
           )}
         >

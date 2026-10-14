@@ -41,6 +41,7 @@ import { useContacts } from "../api";
 import { ActionMenu } from "../components/ui/ActionMenu";
 import { EmptyState } from "../components/ui/EmptyState";
 import { FilterRow, type FilterPill } from "../components/ui/FilterRow";
+import { RailTooltip } from "../components/ui/RailTooltip";
 import { Segmented } from "../components/ui/Segmented";
 import { ScoreRingAvatar } from "../components/ScoreRingAvatar";
 import { VIRTUAL_ROWS } from "../components/ui/VirtualRows";
@@ -324,22 +325,27 @@ const TrackedRow = React.memo(function TrackedRow({
       </div>
 
       {!selectMode && (
-        <button
-          type="button"
-          aria-label={`${tracked ? "Stop tracking" : "Track"} ${contact.name}`}
-          title={tracked ? "Stop tracking" : "Track"}
-          disabled={flipPending}
-          onClick={() => onFlip(contact)}
-          className={cn(
-            ICON_BTN,
-            "shrink-0 disabled:opacity-50",
-            // A toggle that is on wears the selected tint, and keeps its ink
-            // on hover so it does not read as off.
-            tracked && cn(SELECTED_TINT, "hover:text-on-primary-wash"),
-          )}
+        <RailTooltip
+          label={tracked ? "Stop tracking" : "Track"}
+          side="left"
+          className="shrink-0"
         >
-          <Radar className="w-4 h-4" aria-hidden="true" />
-        </button>
+          <button
+            type="button"
+            aria-label={`${tracked ? "Stop tracking" : "Track"} ${contact.name}`}
+            disabled={flipPending}
+            onClick={() => onFlip(contact)}
+            className={cn(
+              ICON_BTN,
+              "disabled:opacity-50",
+              // A toggle that is on wears the selected tint, and keeps its ink
+              // on hover so it does not read as off.
+              tracked && cn(SELECTED_TINT, "hover:text-on-primary-wash"),
+            )}
+          >
+            <Radar className="w-4 h-4" aria-hidden="true" />
+          </button>
+        </RailTooltip>
       )}
     </div>
   );
@@ -697,18 +703,19 @@ export const TrackedContactsView = () => {
             Done
           </button>
         ) : (
-          <button
-            key="select"
-            ref={selectButtonRef}
-            type="button"
-            onClick={() => setSelectMode(true)}
-            disabled={visible.length === 0}
-            className={cn(ICON_BTN, "disabled:opacity-40")}
-            aria-label="Select"
-            title="Select"
-          >
-            <Square className="w-5 h-5" aria-hidden="true" />
-          </button>
+          <RailTooltip label="Select" side="bottom">
+            <button
+              key="select"
+              ref={selectButtonRef}
+              type="button"
+              onClick={() => setSelectMode(true)}
+              disabled={visible.length === 0}
+              className={cn(ICON_BTN, "disabled:opacity-40")}
+              aria-label="Select"
+            >
+              <Square className="w-5 h-5" aria-hidden="true" />
+            </button>
+          </RailTooltip>
         )}
       </SettingsHeaderActions>
 

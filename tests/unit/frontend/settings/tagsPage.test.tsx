@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import React from "react";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { TagsPage } from "../../../../src/views/settings/pages/TagsPage";
@@ -110,5 +116,22 @@ describe("TagsPage", () => {
     ).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Delete tag" }));
     await waitFor(() => expect(mockDelete).toHaveBeenCalledWith("old-tag"));
+  });
+
+  it("wraps row actions in touch tooltips with non-overlapping spacing", () => {
+    vi.useFakeTimers();
+    try {
+      withTags([{ tag: "friends", count: 5 }]);
+      renderComponent();
+      const renameBtn = screen.getByRole("button", { name: "Rename friends" });
+      expect(renameBtn.hasAttribute("title")).toBe(false);
+      const anchor = renameBtn.parentElement!;
+      expect(anchor.parentElement!.className).toContain("gap-1.5");
+      fireEvent.pointerEnter(anchor, { pointerType: "mouse" });
+      act(() => vi.advanceTimersByTime(260));
+      expect(screen.getByText("Rename")).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

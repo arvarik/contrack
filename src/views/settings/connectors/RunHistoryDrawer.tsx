@@ -12,8 +12,9 @@ import { Badge, type BadgeTone } from "../../../components/ui/Badge";
 import { useConnectorRuns } from "../../../api/connectors";
 import { formatRelative, formatWhen } from "../../../lib/datetime";
 import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
-import { TONE_WASH } from "../../../lib/styles";
+import { DIALOG_ACTIONS, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
+import { RailTooltip } from "../../../components/ui/RailTooltip";
 import type {
   ConnectorRun,
   ConnectorSummary,
@@ -119,7 +120,7 @@ export const RunHistoryDrawer: React.FC<RunHistoryDrawerProps> = ({
 
         {/* A tile for each run, on the dialog's wash: no line between. */}
         {!isLoading && runs && runs.length > 0 && (
-          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+          <div className="space-y-2">
             {runs.map((run) => (
               <div
                 key={run.id}
@@ -144,22 +145,23 @@ export const RunHistoryDrawer: React.FC<RunHistoryDrawerProps> = ({
                     <span className="text-xs font-mono text-on-surface-variant">
                       {computeDuration(run)}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(run)}
-                      aria-label="Copy run details"
-                      className="hit-area state-layer p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors"
-                      title="Copy JSON details"
-                    >
-                      {copiedId === run.id ? (
-                        <Check
-                          className="w-3.5 h-3.5 text-success"
-                          aria-hidden="true"
-                        />
-                      ) : (
-                        <Copy className="w-3.5 h-3.5" aria-hidden="true" />
-                      )}
-                    </button>
+                    <RailTooltip label="Copy JSON details" side="left">
+                      <button
+                        type="button"
+                        onClick={() => handleCopy(run)}
+                        aria-label="Copy run details"
+                        className="hit-area state-layer p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors"
+                      >
+                        {copiedId === run.id ? (
+                          <Check
+                            className="w-3.5 h-3.5 text-success"
+                            aria-hidden="true"
+                          />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" aria-hidden="true" />
+                        )}
+                      </button>
+                    </RailTooltip>
                   </div>
                 </div>
 
@@ -183,7 +185,7 @@ export const RunHistoryDrawer: React.FC<RunHistoryDrawerProps> = ({
           </div>
         )}
 
-        <div className="flex justify-end pt-2">
+        <div className={DIALOG_ACTIONS}>
           <button type="button" onClick={onClose} className="btn-secondary">
             Close
           </button>

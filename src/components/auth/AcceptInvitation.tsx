@@ -125,7 +125,7 @@ export const AcceptInvitation = ({
           <button
             type="button"
             onClick={onCancel}
-            className="text-primary font-bold hover:underline"
+            className="text-primary font-bold hover:underline min-h-[44px] sm:pointer-fine:min-h-0 inline-flex items-center"
           >
             Go to sign-in
           </button>

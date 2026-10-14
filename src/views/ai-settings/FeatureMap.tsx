@@ -19,6 +19,7 @@ import {
   type FeatureState,
   type FeatureViewer,
 } from "../../lib/aiFeatures";
+import { RailTooltip } from "../../components/ui/RailTooltip";
 import { TONE_WASH, type Tone } from "../../lib/styles";
 import { cn } from "../../lib/utils";
 import { TOUCH_LINK } from "../settings/layout";
@@ -101,35 +102,43 @@ export function FeatureMap({ scope }: { scope: "instance" | "account" }) {
                   {STATE_WORDS[status.state]}
                 </span>
               </div>
-              <p className="mt-1.5 text-xs text-on-surface-variant flex flex-wrap gap-y-1">
+              <div className="mt-1.5 text-xs text-on-surface-variant flex flex-wrap gap-y-1">
                 {parts.map((part, index) => (
-                  <span key={part.role} title={part.does}>
+                  <span key={part.role} className="inline-flex items-baseline">
                     {index > 0 && (
                       <span aria-hidden="true" className="px-1.5">
                         ·
                       </span>
                     )}
-                    {links ? (
-                      // Underlined, so the link does not rely on its color.
-                      <Link
-                        to={`#${ROLE_ANCHORS[part.role]}`}
-                        className={cn(
-                          "text-primary underline underline-offset-2",
-                          TOUCH_LINK,
+                    <RailTooltip
+                      label={part.does}
+                      side="bottom"
+                      className="inline-flex items-baseline"
+                    >
+                      <span>
+                        {links ? (
+                          // Underlined, so the link does not rely on its color.
+                          <Link
+                            to={`#${ROLE_ANCHORS[part.role]}`}
+                            className={cn(
+                              "text-primary underline underline-offset-2",
+                              TOUCH_LINK,
+                            )}
+                          >
+                            {part.name}
+                          </Link>
+                        ) : (
+                          part.name
                         )}
-                      >
-                        {part.name}
-                      </Link>
-                    ) : (
-                      part.name
-                    )}
-                    :{" "}
-                    <span className="font-semibold text-on-surface">
-                      {part.runs}
-                    </span>
+                        :{" "}
+                        <span className="font-semibold text-on-surface">
+                          {part.runs}
+                        </span>
+                      </span>
+                    </RailTooltip>
                   </span>
                 ))}
-              </p>
+              </div>
               {status.reason && (
                 <p className="mt-1 text-xs text-on-surface-variant text-pretty">
                   {status.reason}

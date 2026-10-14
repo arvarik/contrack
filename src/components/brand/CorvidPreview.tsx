@@ -39,7 +39,7 @@ export const CorvidPreview = () => {
       onPointerLeave={() => bird.hover(false)}
       onFocus={() => bird.hover(true)}
       onBlur={() => bird.hover(false)}
-      className="shrink-0 rounded-xl p-1 text-primary"
+      className="hit-area shrink-0 rounded-xl p-1 text-primary"
       aria-label="Try the corvid"
       title="Press to see what it does"
     >
