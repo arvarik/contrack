@@ -46,7 +46,6 @@ import {
   birdLines,
   birdTracks,
   fixed,
-  loopFrames,
   loopPose,
   perchLoop,
   type ActName,
@@ -136,31 +135,6 @@ const flying = (frame: FlightFrame): SceneFrame => ({
   center: bodyCenter(frame.pose),
 });
 
-/** A scene being written: its random source, its room and its frames so far. */
-interface Scene {
-  rng: Rng;
-  viewport: FlightViewport;
-  frames: SceneFrame[];
-}
-
-/**
- * The bird sits in `perch` and plays `acts`, each after a still moment, with
- * blinks between, as the lockup's loop does. Each stay draws its own seed
- * from the scene's random source.
- */
-function stay(
-  scene: Scene,
-  perch: FlightPerch,
-  acts: readonly ActName[],
-  pause: readonly [number, number] = [1_600, 2_400],
-): void {
-  const loop = perchLoop(Math.floor(scene.rng() * 1e9), acts, pause);
-  const frames = loopFrames(loop);
-  for (let i = 0; i < frames; i++) {
-    scene.frames.push(perched(perch, loopPose(loop, i * STEP)));
-  }
-}
-
 /**
  * The frames of a flight from `from` to `to`: a takeoff of `kind`, then a
  * call home to `to` once the bird is in the air and `ready`.
@@ -198,23 +172,6 @@ function flightBetween(
     frames.push(flying(home.frame(s)));
   }
   return frames;
-}
-
-/**
- * The bird leaves `from` on a flight of `kind`, as it leaves the perch in
- * the app, and once it is in the air and `ready` it is called home to `to`.
- * A landing ends on the logo in `to`.
- */
-function flyTo(
-  scene: Scene,
-  kind: FlightKind,
-  from: FlightPerch,
-  to: FlightPerch,
-  ready: (at: FlightFrame) => boolean = () => true,
-): void {
-  scene.frames.push(
-    ...flightBetween(scene.rng, scene.viewport, kind, from, to, ready),
-  );
 }
 
 /**
@@ -318,12 +275,21 @@ function sceneBird(
 // 1. The four vertical steps (readme-flow.svg / readme-flow-dark.svg)
 // ============================================================================
 
-/** The steps the README tells, in order, and the acts the bird plays at each. */
-export const FLOW_STEPS: readonly { label: string; acts: ActName[] }[] = [
-  { label: "Import", acts: ["glance", "cock"] },
-  { label: "Dedupe", acts: ["lookBack", "preen"] },
-  { label: "Enrich", acts: ["caw", "glance"] },
-  { label: "Track", acts: ["nod", "ruffle"] },
+/**
+ * The steps the README tells, in order, the acts the bird plays at each, and
+ * how many seconds each step's leg (perched stay + downward flight) lasts.
+ * The 14-9-10-8 rhythm matches the complexity of each step and gives visitors
+ * extra time on Import while taking in the initial screen.
+ */
+export const FLOW_STEPS: readonly {
+  label: string;
+  acts: ActName[];
+  seconds: number;
+}[] = [
+  { label: "Import", acts: ["glance", "cock"], seconds: 14 },
+  { label: "Dedupe", acts: ["lookBack", "preen"], seconds: 9 },
+  { label: "Enrich", acts: ["caw", "glance"], seconds: 10 },
+  { label: "Track", acts: ["nod", "ruffle"], seconds: 8 },
 ];
 
 /** The seed of the flow scene, chosen for routes that read well. */
@@ -371,57 +337,73 @@ export function flowPerches(): FlightPerch[] {
   }));
 }
 
-/** Every frame of the vertical flow scene, from the bird at home in the first ring. */
-export function flowFrames(seed: number = FLOW_SEED): SceneFrame[] {
-  const perches = flowPerches();
-  const scene: Scene = {
-    rng: createRng(seed),
-    viewport: FLOW_ROOM,
-    frames: [],
-  };
-  FLOW_STEPS.forEach(({ acts }, i) => {
-    stay(scene, perches[i]!, acts, [1_600, 2_400]);
-    if (i < perches.length - 1) {
-      flyTo(scene, "sortie", perches[i]!, perches[i + 1]!);
-    }
-  });
-
-  // Off the bottom: toward a ring beyond the picture's bottom edge, until all
-  // of the bird is past the edge.
+/**
+ * The wrap-around flight from the last ring (`Track`) off the bottom of the
+ * picture and back in from the top to land in the first ring (`Import`).
+ */
+function flowReturnFlight(
+  rng: Rng,
+  perches: readonly FlightPerch[],
+): SceneFrame[] {
   const edge = FLOW_VIEW.top + FLOW_VIEW.height;
   const beyond = { ...perches.at(-1)!, top: FLOW_ROOM.height - FLOW_RING };
-  const leaving = scene.frames.length;
-  flyTo(scene, "sortie", perches.at(-1)!, beyond);
-  const gone = scene.frames.findIndex(
-    (frame, i) => i > leaving && inkBox(frame).top > edge,
-  );
+  const down = flightBetween(rng, FLOW_ROOM, "sortie", perches.at(-1)!, beyond);
+  const gone = down.findIndex((frame) => inkBox(frame).top > edge);
   if (gone < 0) throw new Error("The bird never left the picture");
-  scene.frames.length = gone + 1;
-  scene.frames[gone]!.hidden = true;
+  const leaving = down.slice(0, gone + 1);
+  leaving[gone] = { ...leaving[gone]!, hidden: true };
 
-  // Back in from the top, already flying, and home to the first ring.
   const [first] = perches;
   const back = planFlight({
     kind: "loop",
     viewport: FLOW_ROOM,
     perch: first!,
-    rng: scene.rng,
+    rng,
     airborne: {
       x: first!.left + FLOW_RING * 0.8,
       y: -4,
       facing: -1,
     },
   });
+  const returning: SceneFrame[] = [];
   for (let s = 0; s < back.duration; s += STEP) {
-    scene.frames.push(flying(back.frame(s)));
+    returning.push(flying(back.frame(s)));
   }
-  scene.frames[gone + 1]!.hidden = true;
-  // The bird is home in the first ring. It rests there until the scene is a
-  // whole number of tenths of a second, six frames each.
-  while (scene.frames.length % (FRAME_RATE / 10) !== 0) {
-    scene.frames.push(perched(perches[0]!, { ...HOME_POSE }));
-  }
-  return scene.frames;
+  returning[0] = { ...returning[0]!, hidden: true };
+  return [...leaving, ...returning];
+}
+
+/**
+ * Every frame of the vertical flow scene, from the bird at home in the first
+ * ring, following the 14-9-10-8 second rhythm across the four steps.
+ */
+export function flowFrames(seed: number = FLOW_SEED): SceneFrame[] {
+  const perches = flowPerches();
+  const rng = createRng(seed);
+  const frames: SceneFrame[] = [];
+
+  FLOW_STEPS.forEach(({ acts, seconds }, i) => {
+    const staySeed = Math.floor(rng() * 1e9);
+    const flight =
+      i < perches.length - 1
+        ? flightBetween(rng, FLOW_ROOM, "sortie", perches[i]!, perches[i + 1]!)
+        : flowReturnFlight(rng, perches);
+    const legFrames = seconds * FRAME_RATE;
+    const stayCount = legFrames - flight.length;
+    if (stayCount < FRAME_RATE * 2) {
+      throw new Error(`Flight ${i} left too few frames to rest in the ring`);
+    }
+    const pause: [number, number] =
+      seconds >= 12 ? [1_600, 2_400] : [900, 1_200];
+    const loop = perchLoop(staySeed, acts, pause);
+    for (let f = 0; f < stayCount; f++) {
+      const t = Math.min(f * STEP, loop.duration);
+      frames.push(perched(perches[i]!, loopPose(loop, t)));
+    }
+    frames.push(...flight);
+  });
+
+  return frames;
 }
 
 /** One ring, drawn as the mark's ring in `perch`'s box. */
