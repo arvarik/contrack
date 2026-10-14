@@ -8,7 +8,7 @@
 // remembered, `json_object`, then prompt-only instructions, as a backend
 // refuses the richer forms. Many local servers support only the simpler ones.
 
-import OpenAI from "openai";
+import type OpenAI from "openai";
 import type { AIProvider, ModelInfo } from "../provider.ts";
 import type {
   AIGenerateOptions,
@@ -72,21 +72,30 @@ function translateSchemaNode(node: JsonSchemaNode): Record<string, unknown> {
 export class OpenAICompatibleAdapter implements AIProvider {
   readonly name: string;
   readonly supportsSearchGrounding = false;
-  private client: OpenAI;
-  private baseUrl: string;
+  private client?: OpenAI;
+  private readonly baseUrl: string;
+  private readonly apiKey: string;
   /** Remembered JSON-mode downgrades, keyed by model id. */
   private jsonModes = new Map<string, JsonMode>();
 
   constructor(options: OpenAICompatibleOptions) {
     this.name = options.label || "OpenAI-Compatible";
     this.baseUrl = options.baseUrl.replace(/\/+$/, "");
-    this.client = new OpenAI({
-      baseURL: this.baseUrl,
-      maxRetries: 0,
-      // Local servers (Ollama, LM Studio) ignore the key but the SDK requires
-      // a non-empty string.
-      apiKey: options.apiKey || "not-needed",
-    });
+    // Local servers (Ollama, LM Studio) ignore the key but the SDK requires
+    // a non-empty string.
+    this.apiKey = options.apiKey || "not-needed";
+  }
+
+  private async getClient(): Promise<OpenAI> {
+    if (!this.client) {
+      const { default: OpenAIClient } = await import("openai");
+      this.client = new OpenAIClient({
+        baseURL: this.baseUrl,
+        maxRetries: 0,
+        apiKey: this.apiKey,
+      });
+    }
+    return this.client;
   }
 
   /**
@@ -95,7 +104,8 @@ export class OpenAICompatibleAdapter implements AIProvider {
    * Settings.
    */
   async listModels(): Promise<ModelInfo[]> {
-    const response = await this.client.models.list();
+    const client = await this.getClient();
+    const response = await client.models.list();
     const models: ModelInfo[] = [];
     for await (const model of response) {
       const id = model.id;
@@ -131,7 +141,8 @@ export class OpenAICompatibleAdapter implements AIProvider {
     _use?: unknown,
     signal?: AbortSignal,
   ): Promise<number[][]> {
-    const response = await this.client.embeddings.create(
+    const client = await this.getClient();
+    const response = await client.embeddings.create(
       {
         model,
         input: texts,
@@ -306,6 +317,7 @@ export class OpenAICompatibleAdapter implements AIProvider {
     signal: AbortSignal,
     startMs: number,
   ): Promise<AIGenerateResult> {
+    const client = await this.getClient();
     const messages: Array<{ role: "system" | "user"; content: string }> = [];
 
     // The OpenAI wire format takes an object at the root, and a json_object
@@ -363,9 +375,9 @@ export class OpenAICompatibleAdapter implements AIProvider {
         completion_tokens?: number;
       };
     }
-    const response = (await this.client.chat.completions.create(
+    const response = (await client.chat.completions.create(
       requestParams as unknown as Parameters<
-        typeof this.client.chat.completions.create
+        typeof client.chat.completions.create
       >[0],
       { signal },
     )) as unknown as ChatCompletionResponse;
@@ -407,6 +419,7 @@ export class OpenAICompatibleAdapter implements AIProvider {
     signal: AbortSignal,
     send: (piece: string) => void,
   ): Promise<AIGenerateResult> {
+    const client = await this.getClient();
     const startMs = Date.now();
     const messages: Array<{ role: "system" | "user"; content: string }> = [];
     const systemPrompt = options.systemPrompt?.trim();
@@ -436,9 +449,9 @@ export class OpenAICompatibleAdapter implements AIProvider {
         completion_tokens?: number;
       } | null;
     }
-    const stream = (await this.client.chat.completions.create(
+    const stream = (await client.chat.completions.create(
       requestParams as unknown as Parameters<
-        typeof this.client.chat.completions.create
+        typeof client.chat.completions.create
       >[0],
       { signal },
     )) as unknown as AsyncIterable<ChatCompletionChunk>;

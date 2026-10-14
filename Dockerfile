@@ -9,29 +9,32 @@
 # requires 26.10 or later.
 
 # Stage 1: Build the frontend
-FROM node:26-trixie AS builder
+FROM node:26-trixie-slim AS builder
 
 WORKDIR /app
-
-# Install dependencies. ONNXRUNTIME_NODE_INSTALL=skip stops onnxruntime-node
-# from downloading its CUDA 12 binaries from NuGet on linux/x64, as CI already
-# does. The embedding model runs on the CPU, so those files were never loaded.
-COPY package.json package-lock.json ./
-RUN ONNXRUNTIME_NODE_INSTALL=skip npm ci
 
 # Download the two local search models here, at build time, so a container
 # never reaches huggingface.co. The script checks each file's SHA-256 against
 # the pinned list in modelFiles.ts. Only these three files are copied first,
-# so a code change elsewhere reuses this layer instead of downloading again.
-# The script reads `.env` through loadEnv.ts. `.dockerignore` keeps `.env`
-# out of the image, so here that reads nothing.
+# so a code or dependency change elsewhere reuses this layer instead of
+# downloading again. The script reads `.env` through loadEnv.ts.
+# `.dockerignore` keeps `.env` out of the image, so here that reads nothing.
 COPY scripts/fetch-models.ts ./scripts/
 COPY server/services/search/modelFiles.ts ./server/services/search/
 COPY server/utils/loadEnv.ts ./server/utils/
 RUN node scripts/fetch-models.ts /app/models
 
-# Copy source and build
-COPY . .
+# Install dependencies. ONNXRUNTIME_NODE_INSTALL=skip stops onnxruntime-node
+# from downloading its CUDA 12 binaries from NuGet on linux/x64, as CI already
+# does. The embedding model runs on the CPU, so those files were never loaded.
+COPY package.json package-lock.json ./
+RUN ONNXRUNTIME_NODE_INSTALL=skip npm ci && rm -rf /root/.npm
+
+# Copy frontend build inputs and build
+COPY index.html vite.config.ts tsconfig.json ./
+COPY public/ ./public/
+COPY shared/ ./shared/
+COPY src/ ./src/
 RUN npm run build
 
 # Stage 2: Production runtime
@@ -54,16 +57,36 @@ WORKDIR /app
 #   stays. The step fails if that folder is missing.
 # - onnxruntime-web is the browser runtime. @huggingface/transformers lists
 #   it, but its Node build loads onnxruntime-node and never imports it.
+# - Unreachable transitive packages, non-Node/non-SQLite bundles, C/C++ and
+#   TypeScript sources, type declarations, source maps and markdown docs in
+#   node_modules are never loaded at runtime.
 COPY package.json package-lock.json ./
 RUN npm pkg delete scripts.prepare \
     && ONNXRUNTIME_NODE_INSTALL=skip npm ci --omit=dev \
-    && npm cache clean --force \
     && ort=node_modules/onnxruntime-node/bin/napi-v6 \
     && keep="linux/$(node -p process.arch)" \
     && test -f "$ort/$keep/onnxruntime_binding.node" \
     && find "$ort" -mindepth 2 -maxdepth 2 -type d ! -path "$ort/$keep" -exec rm -rf {} + \
     && find "$ort" -mindepth 1 -maxdepth 1 -type d -empty -delete \
-    && rm -rf node_modules/onnxruntime-web
+    && rm -rf /root/.npm package-lock.json \
+         node_modules/onnxruntime-web \
+         node_modules/web-streams-polyfill \
+         node_modules/protobufjs \
+         node_modules/@types \
+         node_modules/better-sqlite3/deps \
+         node_modules/better-sqlite3/src \
+         node_modules/openai/src \
+         node_modules/@anthropic-ai/sdk/src \
+         node_modules/zod/src \
+         node_modules/@google/genai/dist/web \
+         node_modules/@google/genai/dist/tokenizer \
+         node_modules/@google/genai/dist/vertex_internal \
+         node_modules/@huggingface/transformers/src \
+         node_modules/@huggingface/transformers/types \
+         node_modules/cheerio/node_modules/undici \
+         node_modules/parse5* \
+    && find node_modules/@huggingface/transformers/dist -type f ! -name 'transformers.node.mjs' -delete \
+    && find node_modules -type f \( -name '*.d.ts' -o -name '*.d.mts' -o -name '*.d.cts' -o -name '*.map' -o -name '*.md' \) -delete
 
 # Copy built frontend from builder
 COPY --from=builder /app/dist ./dist
@@ -99,6 +122,7 @@ COPY scripts/model-smoke.ts ./scripts/
 # The server logs a warning at startup whenever it binds a non-loopback address
 # with auth off.
 ENV NODE_ENV=production \
+    NODE_COMPILE_CACHE=/app/.compile-cache \
     DATA_DIR=/app/data \
     PORT=3210 \
     HOST=0.0.0.0 \
@@ -106,17 +130,22 @@ ENV NODE_ENV=production \
     MODEL_DIR=/app/models \
     MODEL_DOWNLOADS=false
 
-# Prove the trimmed image still runs its search models, on the CPU it is for.
-# The model library's cache goes to a temporary folder, so the check leaves
-# nothing in the image.
-RUN TRANSFORMERS_CACHE=/tmp/model-smoke node scripts/model-smoke.ts \
+# Prove the trimmed image still runs its search models and boots the server
+# module graph on the CPU it is for, while warming NODE_COMPILE_CACHE. The
+# temporary folder is removed in the same step so nothing stays in the layer.
+RUN mkdir -p /tmp/model-smoke/data \
+    && TRANSFORMERS_CACHE=/tmp/model-smoke node scripts/model-smoke.ts \
+    && DATA_DIR=/tmp/model-smoke/data DISABLE_BACKGROUND_JOBS=true DISABLE_CPU_WORKER=true \
+       node --input-type=module -e 'await import("./server/app.ts"); await import("@google/genai"); await import("openai"); await import("@anthropic-ai/sdk"); process.exit(0)' \
     && rm -rf /tmp/model-smoke
 
-# Create the data directory and drop root privileges. npm and npx built the
-# dependencies above and nothing runs them after that. Their files stay in
-# the base image's layer, so removing them saves no space, but it takes them,
-# and the findings an image scan reports inside them, out of the container.
-RUN mkdir -p /app/data && chown -R node:node /app/data \
+# Create the data and compile-cache directories and drop root privileges. npm
+# and npx built the dependencies above and nothing runs them after that. Their
+# files stay in the base image's layer, so removing them saves no space, but
+# it takes them, and the findings an image scan reports inside them, out of
+# the container.
+RUN mkdir -p /app/data /app/.compile-cache \
+    && chown -R node:node /app/data /app/.compile-cache \
     && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx
 USER node
 

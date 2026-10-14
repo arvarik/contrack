@@ -9,7 +9,7 @@
 // - When the caller's AbortSignal aborts, nothing more is retried and an
 //   AppError(code: CANCELLED) is thrown.
 
-import OpenAI from "openai";
+import type OpenAI from "openai";
 import type { AIProvider, ModelInfo, ModelCapability } from "../provider.ts";
 import type { ModelClass } from "../routing/registry.ts";
 import type {
@@ -159,7 +159,8 @@ type ResponsesSource = RawSource;
 export class OpenAIAdapter implements AIProvider {
   readonly name = "OpenAI";
   readonly supportsSearchGrounding = true;
-  private client: OpenAI;
+  private client?: OpenAI;
+  private readonly apiKey: string;
   /**
    * The effort each model turned out to accept, learned from its first
    * refusal: `gpt-6-astra` refuses "none", `gpt-5-nano` wants "minimal", and
@@ -168,7 +169,15 @@ export class OpenAIAdapter implements AIProvider {
   private learnedEffort = new Map<string, Effort | "omit">();
 
   constructor(apiKey: string) {
-    this.client = new OpenAI({ apiKey, maxRetries: 0 });
+    this.apiKey = apiKey;
+  }
+
+  private async getClient(): Promise<OpenAI> {
+    if (!this.client) {
+      const { default: OpenAIClient } = await import("openai");
+      this.client = new OpenAIClient({ apiKey: this.apiKey, maxRetries: 0 });
+    }
+    return this.client;
   }
 
   /**
@@ -177,8 +186,9 @@ export class OpenAIAdapter implements AIProvider {
    * `releasedAt`, so the catalog can drop chat models more than a year old.
    */
   async listModels(): Promise<ModelInfo[]> {
+    const client = await this.getClient();
     const models: ModelInfo[] = [];
-    for await (const model of this.client.models.list()) {
+    for await (const model of client.models.list()) {
       const id = model.id;
       const releasedAt =
         typeof model.created === "number" ? model.created * 1000 : undefined;
@@ -222,7 +232,8 @@ export class OpenAIAdapter implements AIProvider {
     _use?: unknown,
     signal?: AbortSignal,
   ): Promise<number[][]> {
-    const response = await this.client.embeddings.create(
+    const client = await this.getClient();
+    const response = await client.embeddings.create(
       {
         model,
         input: texts,
@@ -436,6 +447,7 @@ export class OpenAIAdapter implements AIProvider {
     signal: AbortSignal,
     startMs: number,
   ): Promise<AIGenerateResult> {
+    const client = await this.getClient();
     const messages: Array<{ role: "system" | "user"; content: string }> = [];
     if (options.systemPrompt)
       messages.push({ role: "system", content: options.systemPrompt });
@@ -468,9 +480,9 @@ export class OpenAIAdapter implements AIProvider {
       } else if (options.responseFormat === "json") {
         requestParams.response_format = { type: "json_object" };
       }
-      return this.client.chat.completions.create(
+      return client.chat.completions.create(
         requestParams as unknown as Parameters<
-          typeof this.client.chat.completions.create
+          typeof client.chat.completions.create
         >[0],
         { signal },
       ) as unknown as Promise<ChatCompletionResponse>;
@@ -505,6 +517,7 @@ export class OpenAIAdapter implements AIProvider {
     signal: AbortSignal,
     send: (piece: string) => void,
   ): Promise<AIGenerateResult> {
+    const client = await this.getClient();
     const startMs = Date.now();
     const messages: Array<{ role: "system" | "user"; content: string }> = [];
     if (options.systemPrompt)
@@ -534,9 +547,9 @@ export class OpenAIAdapter implements AIProvider {
       const max = this.budget(options, effort);
       if (max) requestParams.max_completion_tokens = max;
       if (effort !== "omit") requestParams.reasoning_effort = effort;
-      return this.client.chat.completions.create(
+      return client.chat.completions.create(
         requestParams as unknown as Parameters<
-          typeof this.client.chat.completions.create
+          typeof client.chat.completions.create
         >[0],
         { signal },
       ) as unknown as Promise<AsyncIterable<ChatCompletionChunk>>;
@@ -581,6 +594,7 @@ export class OpenAIAdapter implements AIProvider {
     signal: AbortSignal,
     startMs: number,
   ): Promise<AIGenerateResult> {
+    const client = await this.getClient();
     const input: Array<{ role: "system" | "user"; content: string }> = [];
     if (options.systemPrompt)
       input.push({ role: "system", content: options.systemPrompt });
@@ -628,9 +642,9 @@ export class OpenAIAdapter implements AIProvider {
           format: this.translateResponsesFormat(options.jsonSchema),
         };
       }
-      return this.client.responses.create(
+      return client.responses.create(
         requestParams as unknown as Parameters<
-          typeof this.client.responses.create
+          typeof client.responses.create
         >[0],
         { signal },
       ) as unknown as Promise<ResponsesAPIResponse>;

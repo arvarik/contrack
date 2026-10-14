@@ -6,7 +6,7 @@
  */
 
 import { z } from "zod";
-import { startOfDay, isBefore, isSameDay, isAfter, addDays } from "date-fns";
+import { calendarDaysBetween, parseServerTime } from "../../../shared/dates.ts";
 import type { McpToolContext } from "../../modules/module.ts";
 import { actionItemService } from "../../services/actionItemService.ts";
 import {
@@ -27,11 +27,12 @@ type Due = "overdue" | "today" | "week" | "all";
 /** Whether a follow-up due at `dueAt` falls in the urgency filter. */
 function isDue(dueAt: string | null, due: Due, today: Date): boolean {
   if (due === "all") return true;
-  if (!dueAt) return false;
-  const day = startOfDay(new Date(dueAt));
-  if (due === "overdue") return isBefore(day, today);
-  if (due === "today") return isSameDay(day, today);
-  return !isAfter(day, addDays(today, 7));
+  const day = parseServerTime(dueAt);
+  if (!day) return false;
+  const diff = calendarDaysBetween(today, day);
+  if (due === "overdue") return diff < 0;
+  if (due === "today") return diff === 0;
+  return diff <= 7;
 }
 
 export function registerActionItemTools({ tool, scope }: McpToolContext): void {
@@ -55,7 +56,7 @@ export function registerActionItemTools({ tool, scope }: McpToolContext): void {
     },
     ({ due, cursor, limit }) => {
       const filter = due ?? "all";
-      const today = startOfDay(new Date());
+      const today = new Date();
       const pending = (
         actionItemService.getAllPending(scope) as Array<{
           dueAt: string | null;

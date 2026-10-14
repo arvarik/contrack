@@ -6,10 +6,9 @@
 // asks, and the retry goes to the next model. The QuotaTracker only counts what
 // was sent, for the Health page.
 
-import {
+import type {
   GoogleGenAI,
-  Type,
-  type GenerateContentResponseUsageMetadata,
+  GenerateContentResponseUsageMetadata,
 } from "@google/genai";
 import type { AIProvider } from "../provider.ts";
 import type { ModelInfo, ModelCapability } from "../provider.ts";
@@ -48,6 +47,15 @@ const GEMINI_TASK_TYPES: Record<EmbedUse, string> = {
 };
 
 // JSON Schema translation: a JsonSchemaNode tree into Gemini's `Type.*` schema.
+
+const Type = {
+  OBJECT: "OBJECT",
+  ARRAY: "ARRAY",
+  STRING: "STRING",
+  NUMBER: "NUMBER",
+  INTEGER: "INTEGER",
+  BOOLEAN: "BOOLEAN",
+} as const;
 
 /** Gemini SDK schema node — recursive Record type used by generateContent config. */
 type GeminiSchemaNode = {
@@ -194,7 +202,7 @@ function supportsGrounding(modelId: string): boolean {
 export class GeminiAdapter implements AIProvider {
   readonly name = "Gemini";
   readonly supportsSearchGrounding = true;
-  private client: GoogleGenAI;
+  private client?: GoogleGenAI;
   private apiKey: string;
 
   // Routing infrastructure (shared across all generate() calls)
@@ -208,10 +216,17 @@ export class GeminiAdapter implements AIProvider {
 
   constructor(apiKey: string) {
     this.apiKey = apiKey;
-    this.client = new GoogleGenAI({
-      apiKey,
-      httpOptions: { retryOptions: { attempts: 1 } },
-    });
+  }
+
+  private async getClient(): Promise<GoogleGenAI> {
+    if (!this.client) {
+      const { GoogleGenAI: Client } = await import("@google/genai");
+      this.client = new Client({
+        apiKey: this.apiKey,
+        httpOptions: { retryOptions: { attempts: 1 } },
+      });
+    }
+    return this.client;
   }
 
   /**
@@ -347,7 +362,8 @@ export class GeminiAdapter implements AIProvider {
     const config: { taskType?: string; abortSignal?: AbortSignal } = {};
     if (use) config.taskType = GEMINI_TASK_TYPES[use];
     if (signal) config.abortSignal = signal;
-    const response = await this.client.models.embedContent({
+    const client = await this.getClient();
+    const response = await client.models.embedContent({
       model,
       // Each text must be its own Content: `contents: texts` reads as one
       // content with many parts and returns one merged vector, a short batch
@@ -479,6 +495,7 @@ export class GeminiAdapter implements AIProvider {
     model: string,
     startMs: number,
   ): Promise<AIGenerateResult> {
+    const client = await this.getClient();
     const config = this.configFor(options, model);
 
     // Forward cancellation to the SDK and bound callers even if the transport stalls.
@@ -486,7 +503,7 @@ export class GeminiAdapter implements AIProvider {
     const response = await this.withThinkingLevel(model, config, () =>
       withTimeout(
         async (abortSignal) =>
-          this.client.models.generateContent({
+          client.models.generateContent({
             model,
             contents: options.prompt,
             config: { ...config, abortSignal },
@@ -575,9 +592,10 @@ export class GeminiAdapter implements AIProvider {
     startMs: number,
     send: (piece: string) => void,
   ): Promise<AIGenerateResult> {
+    const client = await this.getClient();
     const config = this.configFor(options, model);
     const stream = await this.withThinkingLevel(model, config, () =>
-      this.client.models.generateContentStream({
+      client.models.generateContentStream({
         model,
         contents: options.prompt,
         config: { ...config, abortSignal: signal },

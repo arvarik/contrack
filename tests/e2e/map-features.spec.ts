@@ -465,7 +465,7 @@ test.describe("map features - filters and place search", () => {
     await expect(map).toBeVisible();
     const line = page.getByRole("region", { name: "In view" });
     await expect(line).not.toContainText("Fewer");
-    // Two layers. Health went in v2.
+    // Two layers: Pins and Heat.
     await expect(page.getByRole("radio", { name: "Health" })).toHaveCount(0);
 
     await page.getByRole("radio", { name: "Heat" }).click();
@@ -483,7 +483,7 @@ test.describe("map features - filters and place search", () => {
     await expect(page).not.toHaveURL(/layer=/);
     await expect(line).not.toContainText("Fewer");
 
-    // A link from before v2 opens on Pins, and nothing fails to load.
+    // A legacy ?layer=health link opens on Pins, and nothing fails to load.
     await page.goto("/map?layer=health");
     await expect(page.getByRole("radio", { name: "Pins" })).toHaveAttribute(
       "aria-checked",

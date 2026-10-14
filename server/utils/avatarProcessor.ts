@@ -14,6 +14,9 @@ import { ensureDir, ownerUploadDir, ownerUploadUrl } from "./paths.ts";
 import { ValidationError } from "./AppError.ts";
 import type { Scope } from "../tenancy/scope.ts";
 
+sharp.cache(false);
+sharp.concurrency(2);
+
 // Raster image types only. SVG is left out on purpose: it can carry scripts and
 // is served from the app origin. The extension comes from the MIME type, never
 // from the client's file name.

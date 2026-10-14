@@ -9,6 +9,12 @@ node_modules
 .agent
 .claude
 .husky
+.devcontainer
+.gitignore
+.nvmrc
+.tool-versions
+.oxlintrc.json
+.prettierignore
 
 # Secrets — must never enter image layers
 .env
@@ -49,9 +55,16 @@ scripts
 Dockerfile
 docker-compose.yml
 .dockerignore
-README.md
+AGENTS.md
+CHANGELOG.md
+CODE_OF_CONDUCT.md
 CONTRIBUTING.md
 LICENSE
+README.md
+SECURITY.md
+knip.jsonc
+playwright.config.ts
+vitest.config.ts
 
 # OS noise
 .DS_Store

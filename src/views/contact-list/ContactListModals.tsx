@@ -18,7 +18,6 @@ import type {
   ParsedContactData,
 } from "../../types";
 import { Modal } from "../../components/ui/Modal";
-import { ImportModal } from "../../components/ImportModal";
 import { BulkModals } from "../../components/bulk/BulkModals";
 import { AnimatedSkeleton } from "../../components/ui/AnimatedSkeleton";
 import { FORM_INPUT, FORM_LABEL, formInputHighlight } from "../../lib/styles";
@@ -27,6 +26,12 @@ import { CreateListModal } from "./CreateListModal";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 import { INTERACTION_LABELS } from "../../lib/interactionKinds";
 import { dayInZone } from "../../../shared/dates";
+
+const ImportModal = React.lazy(() =>
+  import("../../components/ImportModal").then((m) => ({
+    default: m.ImportModal,
+  })),
+);
 
 interface ContactListModalsProps {
   selectedCount: number;
@@ -88,6 +93,10 @@ export const ContactListModals = ({
   const [parsedData, setParsedData] = useState<ParsedContactData | null>(null);
   /** From the first request to the last: the contact, then its interactions. */
   const [isSaving, setIsSaving] = useState(false);
+  const [hasOpenedImport, setHasOpenedImport] = useState(isImportOpen);
+  useEffect(() => {
+    if (isImportOpen) setHasOpenedImport(true);
+  }, [isImportOpen]);
 
   const createContact = useCreateContact();
   const addInteraction = useAddInteraction();
@@ -426,11 +435,15 @@ export const ContactListModals = ({
       />
 
       {/* The import's own summary says how it went: no second toast. */}
-      <ImportModal
-        isOpen={isImportOpen}
-        onClose={onCloseImport}
-        onSuccess={() => {}}
-      />
+      {(isImportOpen || hasOpenedImport) && (
+        <React.Suspense fallback={null}>
+          <ImportModal
+            isOpen={isImportOpen}
+            onClose={onCloseImport}
+            onSuccess={() => {}}
+          />
+        </React.Suspense>
+      )}
     </>
   );
 };

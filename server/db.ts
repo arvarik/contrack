@@ -254,11 +254,10 @@ for (const table of OWNED_TABLES) {
   }
 }
 
-// Planner statistics for the indexes the migrations built. `PRAGMA optimize`
-// alone only re-analyzes tables that already have sqlite_stat1 rows, so this
-// runs ANALYZE once per boot, which is cheap at this size.
-sqlite.exec("ANALYZE");
-sqlite.pragma("optimize");
+// Planner statistics for the indexes the migrations built. `optimize=0x10002`
+// analyzes any table without `sqlite_stat1` rows or whose row count moved
+// tenfold, without scanning the whole database on every warm restart.
+sqlite.pragma("optimize=0x10002");
 
 /**
  * Bring the planner's row counts up to date after a batch of writes.

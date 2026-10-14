@@ -455,7 +455,7 @@ export async function ensureEmbeddingStore(): Promise<number> {
  */
 const OWNER_ROUND_SIZE = 200;
 
-// TODO(v2.1): Compare newer embedding models on held-out precision, recall and CPU latency before changing the default.
+// TODO: Compare newer embedding models on held-out precision, recall and CPU latency before changing the default.
 // The representation version and model signature let the index rebuild without replacing contact data.
 
 /** Every account that owns at least one contact. */
