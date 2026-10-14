@@ -108,7 +108,7 @@ Install it on your home screen. A contact is one tap from a call, a message or a
 
 **Also:** note search, @mentions that link people, custom dates and anniversaries, lists and tags, passkeys, isolated family and team accounts on one server, a trash with undo, vCard, CSV and JSON export, verified backups, and light and dark themes.
 
-**Comparing self-hosted CRMs?** Read [Contrack vs Monica](docs/comparisons/contrack-vs-monica.md), [Contrack vs Twenty](docs/comparisons/contrack-vs-twenty.md), and [Contrack vs EspoCRM](docs/comparisons/contrack-vs-espocrm.md).
+**Comparing CRMs?** Read [Contrack vs Monica](docs/comparisons/contrack-vs-monica.md), [Contrack vs Clay](docs/comparisons/contrack-vs-clay.md), [Contrack vs Folk](docs/comparisons/contrack-vs-folk.md), [Contrack vs Twenty](docs/comparisons/contrack-vs-twenty.md), [Contrack vs Huly](docs/comparisons/contrack-vs-huly.md), [Contrack vs EspoCRM](docs/comparisons/contrack-vs-espocrm.md), and [Contrack vs Nextcloud Contacts](docs/comparisons/contrack-vs-nextcloud-contacts.md).
 
 ## Quick start
 

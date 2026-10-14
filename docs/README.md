@@ -35,8 +35,12 @@ optional.
 ## Comparisons
 
 - [Contrack vs Monica](comparisons/contrack-vs-monica.md): single-file SQLite, automated connectors, local hybrid search, and MCP compared with Monica
+- [Contrack vs Clay](comparisons/contrack-vs-clay.md): self-hosted privacy, local semantic search, and intentional tracking compared with Clay
+- [Contrack vs Folk](comparisons/contrack-vs-folk.md): relationship timelines, Pulse, and zero seat limits compared with Folk's spreadsheet CRM
 - [Contrack vs Twenty](comparisons/contrack-vs-twenty.md): personal and professional relationship management compared with a B2B sales pipeline CRM
+- [Contrack vs Huly](comparisons/contrack-vs-huly.md): a single SQLite relationship manager compared with an all-in-one microservice workspace
 - [Contrack vs EspoCRM](comparisons/contrack-vs-espocrm.md): a calm daily habit, Smart Paste, and local search compared with a traditional PHP business CRM
+- [Contrack vs Nextcloud Contacts](comparisons/contrack-vs-nextcloud-contacts.md): interaction timelines, stay-in-touch cadences, and local search compared with a CardDAV address book
 
 ## Build on Contrack
 
