@@ -50,6 +50,7 @@ export interface AiModeProps {
   onAsk: () => void;
   onPickStarter: (question: string) => void;
   onOpenContact: (id: string) => void;
+  onActions?: (match: SemanticMatch) => void;
   onNavigate: (path: string) => void;
 }
 
@@ -213,6 +214,9 @@ export const AiMode = (props: AiModeProps) => {
               isFallback={fallback}
               ai={!setup}
               onSelect={() => props.onOpenContact(match.id)}
+              onActions={
+                props.onActions ? () => props.onActions!(match) : undefined
+              }
             />
           ))}
         </Command.Group>
@@ -240,6 +244,7 @@ export const AiMode = (props: AiModeProps) => {
   const link = (path: string, label: string) => (
     <button
       type="button"
+      onMouseDown={(e) => e.preventDefault()}
       onClick={() => props.onNavigate(path)}
       className="hit-area text-xs text-primary flex items-center gap-1 group"
     >

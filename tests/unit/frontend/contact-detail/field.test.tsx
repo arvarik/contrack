@@ -253,7 +253,7 @@ describe("DetailsCard", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Actions for 1 Main St, London" }),
     );
-    expect(menuItems()).toEqual(["Show on map", "Remove"]);
+    expect(menuItems()).toEqual(["Copy address", "Show on map", "Remove"]);
     // jsdom is a narrow screen: the map opens at the pin, not under the
     // contact (`useMapLink`).
     expect(
@@ -266,19 +266,24 @@ describe("DetailsCard", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Actions for 2 High St, Leeds" }),
     );
-    expect(menuItems()).toEqual(["Make primary", "Show on map", "Remove"]);
+    expect(menuItems()).toEqual([
+      "Copy address",
+      "Make primary",
+      "Show on map",
+      "Remove",
+    ]);
     fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
 
     fireEvent.click(
       screen.getByRole("button", { name: "Actions for ada@example.com" }),
     );
-    expect(menuItems()).toEqual(["Remove"]);
+    expect(menuItems()).toEqual(["Copy email", "Remove"]);
     fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
 
     fireEvent.click(
       screen.getByRole("button", { name: "Actions for ada@home.test" }),
     );
-    expect(menuItems()).toEqual(["Make primary", "Remove"]);
+    expect(menuItems()).toEqual(["Copy email", "Make primary", "Remove"]);
   });
 
   it("marks the map pin on the first address only while the contact is placed", () => {
@@ -297,7 +302,7 @@ describe("DetailsCard", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Actions for 1 Main St, London" }),
     );
-    expect(menuItems()).toEqual(["Remove"]);
+    expect(menuItems()).toEqual(["Copy address", "Remove"]);
   });
 
   it("saves the whole address list with the new primary first", () => {
@@ -748,5 +753,34 @@ describe("an add form opened from elsewhere on the page", () => {
       screen.getByRole("combobox", { name: "Label for new email" }).textContent,
     ).toContain("work");
     expect(screen.queryByRole("textbox", { name: "New address" })).toBeNull();
+  });
+
+  it("cancels an open add row when the Cancel button is pressed on a touch screen", () => {
+    const onSave = vi.fn();
+    drawEmails(EMAILS, { onSave });
+    fireEvent.click(screen.getByRole("button", { name: "Add email" }));
+    const input = screen.getByRole("textbox", { name: "New email" });
+    fireEvent.change(input, { target: { value: "half@typed.test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel new email" }));
+    expect(screen.queryByRole("textbox", { name: "New email" })).toBeNull();
+    expect(onSave).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Add email" }),
+    );
+  });
+
+  it("keeps the date add form open and focuses the custom type input when custom… is chosen", () => {
+    drawCard({ birthday: null });
+    fireEvent.click(screen.getByRole("button", { name: "Add date" }));
+    fireEvent.click(
+      screen.getByRole("combobox", { name: "Label for new date" }),
+    );
+    fireEvent.click(screen.getByRole("option", { name: "custom…" }));
+    const customInput = screen.getByRole("textbox", {
+      name: "Custom date type",
+    });
+    expect(customInput).toBeTruthy();
+    expect(document.activeElement).toBe(customInput);
+    expect(screen.getByRole("textbox", { name: "Birthday" })).toBeTruthy();
   });
 });

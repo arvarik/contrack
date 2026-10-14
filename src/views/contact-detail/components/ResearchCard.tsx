@@ -767,7 +767,7 @@ export function ResearchCard({
                             href={safeHref(source.url)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+                            className="hit-area text-xs font-medium text-primary underline underline-offset-2"
                           >
                             {sourceDisplay(source).site}
                             <span className="sr-only">

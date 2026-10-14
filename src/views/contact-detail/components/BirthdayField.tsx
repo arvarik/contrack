@@ -86,6 +86,7 @@ export const BirthdayField = ({
   const addFormRef = useRef<HTMLDivElement>(null);
   const closedByKey = useRef(false);
   const focusAddAfterClose = useRef(false);
+  const switchingToCustomRef = useRef(false);
 
   useEffect(() => {
     if (adding || !focusAddAfterClose.current) return;
@@ -339,7 +340,7 @@ export const BirthdayField = ({
                     setCustomLabelDraft("");
                   }
                 }}
-                className={cn(INLINE_INPUT, "w-32 text-xs")}
+                className={cn(INLINE_INPUT, "w-32 sm:text-xs")}
               />
             ) : (
               <CustomSelect
@@ -375,6 +376,10 @@ export const BirthdayField = ({
           ref={addFormRef}
           className="flex flex-col gap-1"
           onBlur={(e) => {
+            if (switchingToCustomRef.current) {
+              switchingToCustomRef.current = false;
+              return;
+            }
             if (addFormRef.current?.contains(e.relatedTarget as Node | null)) {
               return;
             }
@@ -397,6 +402,8 @@ export const BirthdayField = ({
             {draftCustomMode ? (
               <input
                 aria-label="Custom date type"
+                // eslint-disable-next-line jsx-a11y/no-autofocus
+                autoFocus
                 value={draftCustomLabel}
                 onChange={(e) => setDraftCustomLabel(e.target.value)}
                 placeholder="Type (e.g. Graduation)"
@@ -408,13 +415,14 @@ export const BirthdayField = ({
                     setDraftCustomLabel("");
                   }
                 }}
-                className={cn(INLINE_INPUT, "w-32 text-xs shrink-0")}
+                className={cn(INLINE_INPUT, "w-32 sm:text-xs shrink-0")}
               />
             ) : (
               <CustomSelect
                 value={draftLabel}
                 onChange={(val) => {
                   if (val === CUSTOM_OPTION) {
+                    switchingToCustomRef.current = true;
                     setDraftCustomMode(true);
                     setDraftCustomLabel("");
                   } else {

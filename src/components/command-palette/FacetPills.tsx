@@ -61,6 +61,7 @@ export const FacetPills: React.FC<FacetPillsProps> = ({
                 tap on its words, to read them, took the filter away. */}
             <button
               type="button"
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => onRemove(i)}
               aria-label={`Remove filter ${filter.field}: ${pillValue(filter)}`}
               className="hit-area state-layer inline-flex items-center justify-center w-4 h-4 rounded"

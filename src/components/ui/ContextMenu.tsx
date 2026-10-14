@@ -78,19 +78,23 @@ export const ContextMenu = ({
     opener.current?.focus({ preventScroll: true });
   };
 
-  // Close on an outside click.
+  // Close on an outside click or tap.
   useEffect(() => {
     if (!isOpen) return;
-    const handleClick = (e: MouseEvent) => {
+    const handleClick = (e: MouseEvent | PointerEvent) => {
       if (menuRef.current && !menuRef.current.contains(e.target as Node))
         onClose();
     };
     // Use capture to fire before other handlers
+    window.addEventListener("pointerdown", handleClick, true);
     window.addEventListener("mousedown", handleClick, true);
-    return () => window.removeEventListener("mousedown", handleClick, true);
+    return () => {
+      window.removeEventListener("pointerdown", handleClick, true);
+      window.removeEventListener("mousedown", handleClick, true);
+    };
   }, [isOpen, onClose]);
 
-  // Clamp to viewport so menu never clips off-screen
+  // Clamp to viewport (and above the mobile tab bar) so menu never clips off-screen
   const [adjustedPos, setAdjustedPos] = useState({ x, y });
   useEffect(() => {
     if (!isOpen || !menuRef.current) {
@@ -99,9 +103,15 @@ export const ContextMenu = ({
     }
     const rect = menuRef.current.getBoundingClientRect();
     const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const nx = x + rect.width > vw ? Math.max(0, vw - rect.width - 8) : x;
-    const ny = y + rect.height > vh ? Math.max(0, vh - rect.height - 8) : y;
+    const tabbarHeight =
+      vw < 768 && !document.documentElement.hasAttribute("data-typing")
+        ? (document
+            .querySelector<HTMLElement>(".mobile-tabbar")
+            ?.getBoundingClientRect().height ?? 0)
+        : 0;
+    const vh = window.innerHeight - tabbarHeight;
+    const nx = x + rect.width > vw ? Math.max(8, vw - rect.width - 8) : x;
+    const ny = y + rect.height > vh ? Math.max(8, vh - rect.height - 8) : y;
     setAdjustedPos({ x: nx, y: ny });
   }, [isOpen, x, y]);
 

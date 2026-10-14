@@ -15,11 +15,13 @@ import { scrollBehavior } from "../../../lib/a11y";
 import { toast } from "sonner";
 import {
   Check,
+  Copy,
   GripVertical,
   MapPin,
   MessageCircle,
   Star,
   Trash2,
+  X,
 } from "lucide-react";
 import {
   DndContext,
@@ -38,12 +40,14 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { CustomSelect } from "../../../components/ui/CustomSelect";
+import { IconButton } from "../../../components/ui/IconButton";
 import {
   ActionMenu,
   type ActionMenuItem,
 } from "../../../components/ui/ActionMenu";
 import { cn } from "../../../lib/utils";
 import { INLINE_INPUT } from "../../../lib/styles";
+import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
 import { mailtoHref, smsHref, telHref } from "../../../lib/contactLinks";
 import { useMediaQuery } from "../../../hooks/useMediaQuery";
 import { TOUCH_QUERY } from "../../../lib/platform";
@@ -177,6 +181,20 @@ const SortableRow = ({
       onSelect: () => window.location.assign(sms),
     });
   }
+  actions.push({
+    id: "copy",
+    label: `Copy ${noun}`,
+    icon: Copy,
+    onSelect: () => {
+      copyToClipboard(item.value).then(
+        () =>
+          toast.success(
+            `${noun.charAt(0).toUpperCase() + noun.slice(1)} copied`,
+          ),
+        () => toast.error(CLIPBOARD_DENIED),
+      );
+    },
+  });
   if (index > 0) {
     actions.push({
       id: "primary",
@@ -625,6 +643,15 @@ export const MultiValueField = ({
             // 16 px on a phone, so iOS does not zoom in on focus.
             className={cn(INLINE_INPUT, "flex-1 min-w-[10rem]")}
           />
+          <IconButton
+            aria-label={`Cancel new ${noun}`}
+            tone="subtle"
+            size="sm"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => closeAdd(true)}
+          >
+            <X className="w-4 h-4" />
+          </IconButton>
         </div>
       ) : (
         <AddButton ref={addButton} label={addLabel} onClick={openAdd} />

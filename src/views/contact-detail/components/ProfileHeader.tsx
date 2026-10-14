@@ -569,6 +569,28 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
   const narrow = layout === "narrow";
   const { preferences } = usePreferences();
   const [ghostInfoOpen, setGhostInfoOpen] = useState(false);
+  const ghostInfoRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!ghostInfoOpen) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (
+        ghostInfoRef.current &&
+        !ghostInfoRef.current.contains(e.target as Node)
+      ) {
+        setGhostInfoOpen(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setGhostInfoOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [ghostInfoOpen]);
 
   /**
    * Opening a contact moves focus to its name, the h1, so the next Tab starts
@@ -835,16 +857,23 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                     : "Named in a note, and not added yet";
 
                   return (
-                    // eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
-                    <div
+                    <button
+                      type="button"
+                      ref={ghostInfoRef}
+                      aria-label={`Not in your network: ${ghostText}`}
+                      aria-expanded={ghostInfoOpen}
                       title={`Not in your network — ${ghostText}`}
                       onClick={() => setGhostInfoOpen((o) => !o)}
-                      className="absolute -top-3 -right-3 flex items-center justify-center w-8 h-8 rounded-full bg-surface-container-highest border-2 border-surface-container-lowest shadow-sm z-20 group/ghosticon cursor-help"
+                      className="hit-area state-layer absolute -top-3 -right-3 flex items-center justify-center w-8 h-8 rounded-full bg-surface-container-highest border-2 border-surface-container-lowest shadow-sm z-20 group/ghosticon cursor-help"
                     >
-                      <Sparkles className="w-4 h-4 text-primary opacity-80 group-hover/ghosticon:opacity-100 transition-opacity" />
+                      <Sparkles
+                        aria-hidden="true"
+                        className="w-4 h-4 text-primary opacity-80 group-hover/ghosticon:opacity-100 transition-opacity"
+                      />
                       <div
                         className={cn(
-                          "absolute top-full left-1/2 -translate-x-1/2 mt-2 w-48 bg-surface text-on-surface text-xs font-medium p-2.5 rounded-xl shadow-lg border border-surface-container pointer-events-none transition-all z-50 text-center leading-relaxed",
+                          "absolute top-full mt-2 w-48 bg-surface text-on-surface text-xs font-medium p-2.5 rounded-xl shadow-lg border border-surface-container pointer-events-none transition-all z-50 text-center leading-relaxed",
+                          narrow ? "left-0" : "left-1/2 -translate-x-1/2",
                           ghostInfoOpen
                             ? "opacity-100"
                             : "opacity-0 group-hover/ghosticon:opacity-100",
@@ -855,7 +884,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
                         </strong>
                         {ghostText}
                       </div>
-                    </div>
+                    </button>
                   );
                 })()
               : null}

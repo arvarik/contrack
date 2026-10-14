@@ -4,6 +4,7 @@ import { cn, errorText } from "../../../lib/utils";
 import { EDITABLE_INPUT } from "../../../lib/styles";
 import { useMediaQuery } from "../../../hooks/useMediaQuery";
 import { TOUCH_QUERY } from "../../../lib/platform";
+import { NO_AUTOCORRECT } from "../../../components/ui/SearchField";
 
 /**
  * The pencil after an editable value. A phone has no hover, so the pencil
@@ -27,7 +28,12 @@ export const EditHint = () => (
  * are another person's details, and autofill offers the owner's own.
  */
 export const INPUT_KIND = {
-  email: { type: "email", inputMode: "email", autoComplete: "off" },
+  email: {
+    type: "email",
+    inputMode: "email",
+    autoComplete: "off",
+    ...NO_AUTOCORRECT,
+  },
   tel: { type: "tel", inputMode: "tel", autoComplete: "off" },
 } as const;
 

@@ -195,6 +195,8 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
         {phase === "idle" && (
           <div className={compact ? "px-1" : ""}>
             <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
               onClick={handleSynthesize}
               className={`
                 state-layer w-full ${px} min-h-[44px] pointer-fine:min-h-0 rounded-xl flex items-center gap-2
@@ -254,6 +256,8 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
             </div>
             {!streaming && (
               <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={handleDismiss}
                 className="hit-area state-layer absolute top-2 right-2 p-1 rounded-lg pointer-fine:opacity-0 pointer-fine:group-hover:opacity-60 pointer-coarse:opacity-60 hover:!opacity-100 transition-opacity"
                 aria-label="Dismiss synthesis"
@@ -276,12 +280,16 @@ export const SynthesisBar: React.FC<SynthesisBarProps> = ({
                 {errorMessage ? `: ${errorMessage}` : ""}
               </span>
               <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={handleSynthesize}
                 className="hit-area ml-auto text-xs text-primary hover:underline"
               >
                 Try again
               </button>
               <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={handleDismiss}
                 className="hit-area state-layer p-1 rounded-lg transition-colors"
                 aria-label="Dismiss error"

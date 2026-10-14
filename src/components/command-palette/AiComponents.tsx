@@ -1,7 +1,7 @@
 import React from "react";
 import { Command } from "cmdk";
 import { motion } from "motion/react";
-import { HelpCircle, Sparkles } from "lucide-react";
+import { ChevronsRight, HelpCircle, Sparkles } from "lucide-react";
 import type { SemanticMatch } from "../../types";
 import { fallbackAvatarUrl } from "../../lib/avatar";
 import { DURATION, EASE } from "../../lib/motion";
@@ -30,6 +30,7 @@ interface AIResultCardProps {
   match: SemanticMatch;
   index: number;
   onSelect: () => void;
+  onActions?: () => void;
   /** The chunk's `fallback`. It decides the badge when the match has no `verified`. */
   isFallback: boolean;
   /**
@@ -43,6 +44,7 @@ export const AIResultCard = ({
   match,
   index,
   onSelect,
+  onActions,
   isFallback,
   ai = true,
 }: AIResultCardProps) => (
@@ -51,7 +53,7 @@ export const AIResultCard = ({
     value={`ai_${match.id}_${match.name}`}
     onSelect={onSelect}
     className={cn(
-      "flex items-start gap-3 px-3 py-2 rounded-xl cursor-default select-none transition-colors text-on-surface group",
+      "flex items-start gap-3 px-3 py-2 rounded-xl cursor-default select-none transition-colors text-on-surface group group/result",
       ITEM_CURRENT,
     )}
   >
@@ -107,6 +109,20 @@ export const AIResultCard = ({
           className="shrink-0 mt-0.5 text-warning"
         >
           <HelpCircle className="w-[18px] h-[18px]" aria-hidden="true" />
+        </span>
+      )}
+
+      {onActions && (
+        <span
+          aria-hidden="true"
+          title="Actions"
+          onClick={(e) => {
+            e.stopPropagation();
+            onActions();
+          }}
+          className="hit-area shrink-0 p-1.5 -mr-1 rounded-lg text-on-surface-variant opacity-40 pointer-fine:opacity-0 pointer-fine:group-hover/result:opacity-50 pointer-fine:group-aria-selected/result:opacity-50 pointer-coarse:opacity-60 active:opacity-80 transition-opacity"
+        >
+          <ChevronsRight className="w-4 h-4 pointer-fine:w-3.5 pointer-fine:h-3.5" />
         </span>
       )}
     </motion.div>

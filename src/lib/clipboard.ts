@@ -13,8 +13,9 @@ export function copyToClipboard(text: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const el = document.createElement("textarea");
     el.value = text;
+    el.readOnly = true;
     el.style.cssText =
-      "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
+      "position:fixed;top:0;left:0;opacity:0;pointer-events:none;font-size:16px";
     document.body.appendChild(el);
     el.focus();
     el.select();

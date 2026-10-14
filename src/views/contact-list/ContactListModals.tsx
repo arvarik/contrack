@@ -18,9 +18,15 @@ import type {
   ParsedContactData,
 } from "../../types";
 import { Modal } from "../../components/ui/Modal";
+import { NO_AUTOCORRECT } from "../../components/ui/SearchField";
 import { BulkModals } from "../../components/bulk/BulkModals";
 import { AnimatedSkeleton } from "../../components/ui/AnimatedSkeleton";
-import { FORM_INPUT, FORM_LABEL, formInputHighlight } from "../../lib/styles";
+import {
+  DIALOG_ACTIONS,
+  FORM_INPUT,
+  FORM_LABEL,
+  formInputHighlight,
+} from "../../lib/styles";
 import { cn, errorText, plural } from "../../lib/utils";
 import { CreateListModal } from "./CreateListModal";
 import { fallbackAvatarUrl } from "../../lib/avatar";
@@ -299,7 +305,9 @@ export const ContactListModals = ({
                 id="new-contact-email"
                 name="email"
                 type="email"
+                inputMode="email"
                 autoComplete="off"
+                {...NO_AUTOCORRECT}
                 defaultValue={pd?.emails?.[0]?.email ?? ""}
                 className={cn(
                   FORM_INPUT,
@@ -316,6 +324,7 @@ export const ContactListModals = ({
                 id="new-contact-phone"
                 name="phone"
                 type="tel"
+                inputMode="tel"
                 autoComplete="off"
                 defaultValue={pd?.phones?.[0]?.phone ?? ""}
                 className={cn(
@@ -398,21 +407,18 @@ export const ContactListModals = ({
               </p>
               <textarea
                 aria-label="Paste contact details"
-                // Dialog whose whole purpose is the pasted text.
-                // eslint-disable-next-line jsx-a11y/no-autofocus
-                autoFocus
                 value={smartPasteText}
                 onChange={(e) => setSmartPasteText(e.target.value)}
                 rows={5}
                 // A phone grows the box with a long paste, up to 40 percent
                 // of the screen, then it scrolls.
-                className="w-full bg-surface-container border-none rounded-xl p-4 text-sm font-mono text-on-surface resize-none max-sm:[field-sizing:content] max-sm:min-h-32 max-sm:max-h-[40dvh]"
+                className="w-full bg-surface-container border-none rounded-xl p-4 text-base sm:text-sm font-mono text-on-surface resize-none max-sm:[field-sizing:content] max-sm:min-h-32 max-sm:max-h-[40dvh]"
                 placeholder={`Examples:\n• "Met at Sarah's wedding — loves natural wine, kids are Leo and Maya, catch up every quarter"\n• "Partner at Sequoia — follow up next Tuesday on seed round"\n• "Jane Kim | VP Eng @ Stripe | jane@stripe.com | based in NYC"`}
               />
             </>
           )}
           {!aiBlocked && (
-            <div className="flex justify-end pt-2">
+            <div className={cn(DIALOG_ACTIONS, "sm:justify-end")}>
               <button
                 type="button"
                 onClick={handleExtract}
@@ -432,6 +438,7 @@ export const ContactListModals = ({
         onClose={onCloseCreateList}
         onCreate={onCreateList}
         isPending={isCreateListPending}
+        returnFocusRef={returnFocusRef}
       />
 
       {/* The import's own summary says how it went: no second toast. */}

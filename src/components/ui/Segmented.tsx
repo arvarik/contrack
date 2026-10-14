@@ -89,7 +89,7 @@ export const Segmented = <T extends string | number>({
             onKeyDown={onKeyDown}
             onClick={() => onChange(option.value)}
             className={cn(
-              "relative flex-1 sm:flex-none px-3 sm:px-4 min-h-[44px] sm:pointer-fine:min-h-0 sm:pointer-fine:h-full rounded-md text-xs font-bold",
+              "relative flex-1 sm:flex-none px-2.5 sm:px-3.5 min-h-[44px] sm:pointer-fine:min-h-0 sm:pointer-fine:h-full rounded-md text-xs font-bold",
               "flex items-center justify-center whitespace-nowrap transition-colors",
               // A glyph alone is narrower than a thumb, so it gets the width
               // floor as well as the height.
@@ -120,7 +120,7 @@ export const Segmented = <T extends string | number>({
                   <span
                     className={
                       value === option.value
-                        ? "max-sm:ml-1.5"
+                        ? "max-sm:ml-1"
                         : "sr-only sm:not-sr-only"
                     }
                   >

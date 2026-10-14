@@ -6,7 +6,7 @@ import {
   EDITABLE_INPUT,
   MENU_ITEM_SELECTED,
 } from "../../lib/styles";
-import { activateOnKey } from "../../lib/a11y";
+import { NO_AUTOCORRECT } from "./SearchField";
 
 export const Combobox = ({
   value,
@@ -39,7 +39,11 @@ export const Combobox = ({
         // Opened by the caller in response to a click-to-edit.
         // eslint-disable-next-line jsx-a11y/no-autofocus
         autoFocus={autoFocus}
-        className={cn(EDITABLE_INPUT, "text-sm font-medium w-full")}
+        {...NO_AUTOCORRECT}
+        className={cn(
+          EDITABLE_INPUT,
+          "min-h-[44px] sm:pointer-fine:min-h-0 text-base sm:text-sm font-medium w-full",
+        )}
         value={value}
         onChange={(e) => {
           onChange(e.target.value);
@@ -64,22 +68,20 @@ export const Combobox = ({
       {isOpen && filteredOptions.length > 0 && (
         <ul className={cn(DROPDOWN_MENU)}>
           {filteredOptions.map((opt) => (
+            // Keyboard users type in the input above; keeping options out of
+            // Tab order stops touch scrolling from focusing an item and
+            // blurring the input before the tap completes.
+            // eslint-disable-next-line jsx-a11y/click-events-have-key-events
             <li
               key={opt}
               role="option"
               aria-selected={opt === value}
-              tabIndex={0}
-              // Mouse commits on mousedown to beat the input's blur; the
-              // keyboard path has no blur to race, so it commits directly.
-              onKeyDown={activateOnKey(() => {
-                onChange(opt);
-                setIsOpen(false);
-                onSave(opt);
-              })}
               className={cn(DROPDOWN_ITEM, opt === value && MENU_ITEM_SELECTED)}
               onMouseDown={(e) => {
-                // Prevent input blur so we can process the click securely
+                // Keep focus on the input while the option is pressed.
                 e.preventDefault();
+              }}
+              onClick={() => {
                 onChange(opt);
                 setIsOpen(false);
                 onSave(opt);

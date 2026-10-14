@@ -292,7 +292,7 @@ const TimelineEntry = React.memo(
         id={`interaction-${item.id}`}
         title={formatDay(item.date)}
         className={cn(
-          "group/entry relative flex gap-3 sm:gap-4",
+          "group/entry relative flex gap-3 @sm:gap-4",
           arrived && "timeline-entry",
           menuOpen && "z-10",
         )}
@@ -304,7 +304,7 @@ const TimelineEntry = React.memo(
       >
         {/* A phone has no room for the date column: the date and the kind's
             icon move into the card's title row, so the text gets the width. */}
-        <div className="w-16 shrink-0 pt-4 max-sm:hidden">
+        <div className="w-16 shrink-0 pt-4 hidden @sm:block">
           {date && (
             <time
               dateTime={date.toISOString()}
@@ -323,7 +323,7 @@ const TimelineEntry = React.memo(
         <div className={cn(TIMELINE_CARD, "flex min-w-0 flex-1 gap-3")}>
           <div
             className={cn(
-              "flex h-8 w-8 shrink-0 items-center justify-center rounded-full max-sm:hidden",
+              "hidden @sm:flex h-8 w-8 shrink-0 items-center justify-center rounded-full",
               tone,
             )}
           >
@@ -336,7 +336,7 @@ const TimelineEntry = React.memo(
                 <span
                   aria-hidden="true"
                   className={cn(
-                    "sm:hidden flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
+                    "@sm:hidden flex h-6 w-6 shrink-0 items-center justify-center rounded-full",
                     tone,
                   )}
                 >
@@ -360,7 +360,7 @@ const TimelineEntry = React.memo(
               {date && (
                 <time
                   dateTime={date.toISOString()}
-                  className="sm:hidden shrink-0 pt-1.5 text-xs font-medium tabular-nums text-on-surface-variant"
+                  className="@sm:hidden shrink-0 pt-1.5 text-xs font-medium tabular-nums text-on-surface-variant"
                 >
                   {SHORT_DAY.format(date)}
                 </time>
@@ -599,7 +599,7 @@ export const Timeline = ({
   return (
     <>
       {groups.length > 0 && (
-        <div className="flex flex-col gap-8">
+        <div className="@container flex flex-col gap-8">
           {groups.map((group, groupIndex) => {
             const headingId = `${headingPrefix}-group-${groupIndex}`;
             return (
