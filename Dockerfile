@@ -24,11 +24,11 @@ COPY server/services/search/modelFiles.ts ./server/services/search/
 COPY server/utils/loadEnv.ts ./server/utils/
 RUN node scripts/fetch-models.ts /app/models
 
-# Install dependencies. ONNXRUNTIME_NODE_INSTALL=skip stops onnxruntime-node
-# from downloading its CUDA 12 binaries from NuGet on linux/x64, as CI already
-# does. The embedding model runs on the CPU, so those files were never loaded.
+# Install dependencies. --ignore-scripts skips lifecycle install scripts:
+# better-sqlite3 13+ and onnxruntime-node already ship prebuilt Linux binaries
+# inside their tarballs, and node:26-trixie-slim has no Python for node-gyp.
 COPY package.json package-lock.json ./
-RUN ONNXRUNTIME_NODE_INSTALL=skip npm ci && rm -rf /root/.npm
+RUN npm ci --ignore-scripts && rm -rf /root/.npm
 
 # Copy frontend build inputs and build
 COPY index.html vite.config.ts tsconfig.json ./
@@ -50,24 +50,26 @@ WORKDIR /app
 #
 # The same step removes what this image can never load. It has to be the same
 # step: a file removed in a later step still ships in this layer.
-# - onnxruntime-node carries its native library for macOS, Windows and Linux
-#   on both CPUs, and loads bin/napi-v6/<platform>/<arch> when it starts. A
-#   container is always Linux, even under Docker Desktop on a Mac or a
-#   Windows PC, and each image is built for one CPU, so only linux/<this CPU>
-#   stays. The step fails if that folder is missing.
+# - onnxruntime-node and better-sqlite3 carry native libraries for macOS,
+#   Windows and Linux on both CPUs. A container is always Linux (glibc), and
+#   each image is built for one CPU, so only linux/<this CPU> stays. The step
+#   fails if either binary is missing.
 # - onnxruntime-web is the browser runtime. @huggingface/transformers lists
 #   it, but its Node build loads onnxruntime-node and never imports it.
 # - Unreachable transitive packages, non-Node/non-SQLite bundles, C/C++ and
 #   TypeScript sources, type declarations, source maps and markdown docs in
 #   node_modules are never loaded at runtime.
 COPY package.json package-lock.json ./
-RUN npm pkg delete scripts.prepare \
-    && ONNXRUNTIME_NODE_INSTALL=skip npm ci --omit=dev \
+RUN npm ci --omit=dev --ignore-scripts \
     && ort=node_modules/onnxruntime-node/bin/napi-v6 \
     && keep="linux/$(node -p process.arch)" \
     && test -f "$ort/$keep/onnxruntime_binding.node" \
     && find "$ort" -mindepth 2 -maxdepth 2 -type d ! -path "$ort/$keep" -exec rm -rf {} + \
     && find "$ort" -mindepth 1 -maxdepth 1 -type d -empty -delete \
+    && bsq=node_modules/better-sqlite3/prebuilds \
+    && bsq_keep="linux-$(node -p process.arch).node" \
+    && test -f "$bsq/$bsq_keep" \
+    && find "$bsq" -maxdepth 1 -type f ! -name "$bsq_keep" -delete \
     && rm -rf /root/.npm package-lock.json \
          node_modules/onnxruntime-web \
          node_modules/web-streams-polyfill \
