@@ -2,7 +2,10 @@
 import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MapHoverCard } from "../../../../src/views/map/MapHoverCard";
+import {
+  MapHoverCard,
+  MapPeekSheet,
+} from "../../../../src/views/map/MapHoverCard";
 import type { MapContact } from "../../../../shared/geo";
 
 vi.mock("@vis.gl/react-maplibre", () => ({
@@ -95,5 +98,40 @@ describe("MapHoverCard", () => {
     expect(call.previousElementSibling?.getAttribute("aria-label")).toBe(
       "Open contact",
     );
+  });
+});
+
+describe("MapPeekSheet", () => {
+  it("toggles pin selection from the touch peek sheet", () => {
+    const onToggleSelect = vi.fn();
+    const { rerender } = render(
+      <MapPeekSheet
+        contact={contact}
+        selected={false}
+        onToggleSelect={onToggleSelect}
+        onAction={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    const selectBtn = screen.getByRole("button", { name: "Select contact" });
+    expect(selectBtn.getAttribute("aria-pressed")).toBe("false");
+    expect(selectBtn.textContent).toContain("Select");
+    fireEvent.click(selectBtn);
+    expect(onToggleSelect).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <MapPeekSheet
+        contact={contact}
+        selected={true}
+        onToggleSelect={onToggleSelect}
+        onAction={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+    const deselectBtn = screen.getByRole("button", {
+      name: "Deselect contact",
+    });
+    expect(deselectBtn.getAttribute("aria-pressed")).toBe("true");
+    expect(deselectBtn.textContent).toContain("Selected");
   });
 });

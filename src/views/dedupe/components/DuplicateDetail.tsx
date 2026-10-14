@@ -130,9 +130,21 @@ export const DuplicateDetail = ({
     </>
   );
 
+  const reasonLine = !ai ? (
+    <p className="flex flex-wrap items-center gap-x-2 text-sm text-on-surface-variant">
+      <Icon aria-hidden="true" className="w-4 h-4 shrink-0" />
+      {reason}
+      {showValue && (
+        <span className="break-words min-w-0 text-on-surface">
+          {breakable(showValue)}
+        </span>
+      )}
+    </p>
+  ) : null;
+
   return (
     <div className="flex flex-col gap-4">
-      {heading && (
+      {heading ? (
         <div
           className={cn(
             "flex flex-wrap items-start gap-3",
@@ -144,22 +156,14 @@ export const DuplicateDetail = ({
             <h2 className="text-lg font-headline font-bold text-on-surface break-words">
               {groupName(contacts)}
             </h2>
-            {!ai && (
-              <p className="flex flex-wrap items-center gap-x-2 text-sm text-on-surface-variant">
-                <Icon aria-hidden="true" className="w-4 h-4 shrink-0" />
-                {reason}
-                {showValue && (
-                  <span className="break-words min-w-0 text-on-surface">
-                    {breakable(showValue)}
-                  </span>
-                )}
-              </p>
-            )}
+            {reasonLine}
           </div>
           {actionsAt === "top" && (
             <div className="flex flex-wrap items-center gap-2">{actions}</div>
           )}
         </div>
+      ) : (
+        reasonLine
       )}
 
       {ai && (
@@ -226,7 +230,7 @@ export const DuplicateDetail = ({
       />
 
       {actionsAt === "bottom" && (
-        <div className="sticky bottom-0 z-10 -mx-1 px-1 py-3 bg-surface-container-lowest flex flex-wrap justify-end gap-2">
+        <div className="sticky -bottom-5 sm:-bottom-6 z-10 -mx-5 sm:-mx-6 -mb-5 sm:-mb-6 px-5 sm:px-6 py-3.5 bg-surface-container-low/95 backdrop-blur-md border-t border-outline-variant/40 flex flex-wrap justify-end gap-2">
           {actions}
         </div>
       )}

@@ -15,6 +15,7 @@ import React, {
 } from "react";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import {
+  ArrowRight,
   Search,
   MapPin,
   Maximize2,
@@ -40,11 +41,10 @@ import type { MapFilter } from "./useMapFilter";
 import { prefersReducedMotion } from "../../lib/motion";
 import { MIN_OPEN_PX, measureInsets, paddingFor } from "./insets";
 import { cn, errorText } from "../../lib/utils";
-import { SELECTED_TINT, TONE_WASH } from "../../lib/styles";
+import { ICON_BTN, SELECTED_TINT, TONE_WASH } from "../../lib/styles";
 import { useMediaQuery, WIDE_QUERY } from "../../hooks/useMediaQuery";
 import { PaletteButton } from "../../components/command-palette/PaletteButton";
-import { NO_AUTOCORRECT } from "../../components/ui/SearchField";
-import { ClearButton } from "../../components/ui/SearchField";
+import { NO_AUTOCORRECT, ClearButton } from "../../components/ui/SearchField";
 
 const LAYER_OPTIONS: readonly SegmentedOption<MapLayer>[] = [
   { value: "pins", label: "Pins" },
@@ -261,7 +261,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
                   keyHint ? "Filter contacts… (/)" : "Filter contacts…"
                 }
                 aria-label="Filter contacts"
-                className="w-full bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/70 py-2 pl-9 pr-8"
+                className="w-full min-h-[44px] sm:pointer-fine:min-h-0 bg-transparent text-base sm:text-sm text-on-surface placeholder:text-on-surface-variant/70 py-2 pl-9 pr-8"
               />
               {filter.rawInput && (
                 <ClearButton
@@ -296,21 +296,38 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
                 }}
                 placeholder="Go to place… (e.g. London)"
                 aria-label="Go to place"
-                className="w-full bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/70 py-2 pl-9 pr-8"
+                className="flex-1 min-w-0 min-h-[44px] sm:pointer-fine:min-h-0 bg-transparent text-base sm:text-sm text-on-surface placeholder:text-on-surface-variant/70 py-2 pl-9 pr-2"
               />
-              {gotoLoading ? (
-                <Loader2 className="absolute right-2.5 w-4 h-4 text-primary animate-spin" />
-              ) : (
-                gotoQuery && (
-                  <ClearButton
-                    label="Clear place search"
-                    onClick={() => {
-                      setGotoQuery("");
-                      setGotoError(null);
-                    }}
-                  />
-                )
-              )}
+              <div className="flex items-center gap-3 pr-2 shrink-0">
+                {gotoLoading ? (
+                  <Loader2 className="w-4 h-4 text-primary animate-spin" />
+                ) : (
+                  <>
+                    {gotoQuery && (
+                      <ClearButton
+                        label="Clear place search"
+                        className="static translate-y-0"
+                        onClick={() => {
+                          setGotoQuery("");
+                          setGotoError(null);
+                        }}
+                      />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void handleGoTo()}
+                      disabled={gotoQuery.trim().length < 2}
+                      aria-label="Go to place"
+                      className={cn(
+                        ICON_BTN,
+                        "p-1 text-primary disabled:opacity-40 disabled:pointer-events-none",
+                      )}
+                    >
+                      <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                    </button>
+                  </>
+                )}
+              </div>
             </>
           )}
         </div>
@@ -401,6 +418,7 @@ export const MapToolbar: React.FC<MapToolbarProps> = ({
               partial={filter.parsed.activePrefix.partial}
               onSelect={filter.addFacet}
               onDismiss={() => setSuggestIn(null)}
+              className="mx-0"
             />
           </div>
         )}

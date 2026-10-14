@@ -466,4 +466,25 @@ describe("InteractionSearchPanel", () => {
     // The title's two ranges are the bad ones: no mark, and every letter.
     expect(within(card).getByText("short").textContent).toBe("short");
   });
+
+  it("does not focus the search input on mount on a touch screen", () => {
+    stubFetch();
+    vi.stubGlobal(
+      "matchMedia",
+      vi.fn((query: string) => ({
+        matches: query.includes("coarse"),
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    );
+    mount();
+    expect(document.activeElement).not.toBe(
+      screen.getByLabelText("Search your notes"),
+    );
+  });
 });

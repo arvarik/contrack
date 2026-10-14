@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Modal } from "../../components/ui/Modal";
 import type { MapView } from "../../api/mapViews";
-import { FORM_INPUT, FORM_LABEL } from "../../lib/styles";
+import { touchFirst } from "../../lib/platform";
+import { DIALOG_ACTIONS, FORM_INPUT, FORM_LABEL } from "../../lib/styles";
 import { errorText } from "../../lib/utils";
 
 interface RenameViewModalProps {
@@ -27,7 +28,9 @@ export const RenameViewModal: React.FC<RenameViewModalProps> = ({
       setName(view.name);
       setError(null);
       setIsSaving(false);
-      setTimeout(() => inputRef.current?.focus(), 50);
+      setTimeout(() => {
+        if (!touchFirst()) inputRef.current?.focus();
+      }, 50);
     }
   }, [isOpen, view]);
 
@@ -57,14 +60,8 @@ export const RenameViewModal: React.FC<RenameViewModalProps> = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="sm" ariaLabel="Rename view">
-      <form onSubmit={handleSubmit} className="p-6 space-y-4">
-        <div>
-          <h2 className="text-lg font-headline font-bold text-on-surface">
-            Rename view
-          </h2>
-        </div>
-
+    <Modal isOpen={isOpen} onClose={onClose} size="sm" title="Rename view">
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-1.5">
           <label htmlFor="rename-view-name" className={FORM_LABEL}>
             View name
@@ -89,7 +86,7 @@ export const RenameViewModal: React.FC<RenameViewModalProps> = ({
           )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 pt-2">
+        <div className={DIALOG_ACTIONS}>
           <button
             type="button"
             onClick={onClose}

@@ -5,7 +5,7 @@
  * tooltip. The squares are not tab stops, so a hidden list carries the same
  * words and the weekly totals for a screen reader.
  */
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { heatmapScale, getHeatmapAlpha } from "../lib/heatmapScale";
 import type { ActivityDay } from "../../../../shared/pulse";
 import { weekStartsOn, type WeekStartPref } from "../../../../shared/dates";
@@ -27,8 +27,33 @@ const PAD = (STEP - CELL) / 2;
 const VIEW_W = COLS * STEP;
 const VIEW_H = ROWS * STEP;
 
-/** The tooltip's half width, so it never leaves the card. */
+/** Minimum tooltip half-width clamp, expanded dynamically for longer text. */
 const TOOLTIP_HALF = 90;
+const TOOLTIP_MARGIN = 4;
+
+/**
+ * Clamps the tooltip's center x so a wide multi-type summary never clips
+ * against the parent CardFrame's `overflow-hidden` edge on narrow viewports.
+ */
+export function clampTooltipX(
+  x: number,
+  wrapperWidth: number,
+  words: string,
+  measuredWidth = 0,
+): number {
+  if (wrapperWidth <= 0) return x;
+  const estimatedWidth = Math.max(
+    TOOLTIP_HALF * 2,
+    Math.ceil(words.length * 6.8 + 22),
+  );
+  const width = Math.min(
+    Math.max(0, wrapperWidth - TOOLTIP_MARGIN * 2),
+    measuredWidth > 0 ? measuredWidth : estimatedWidth,
+  );
+  const half = width / 2 + TOOLTIP_MARGIN;
+  if (wrapperWidth <= half * 2) return wrapperWidth / 2;
+  return Math.min(Math.max(x, half), wrapperWidth - half);
+}
 
 /** "Wed, Sep 17" in the person's own locale. */
 function formatCellDate(date: Date): string {
@@ -84,7 +109,9 @@ export const Heatmap = ({
   weekStartPref = "monday",
 }: HeatmapProps) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState<ActiveCell | null>(null);
+  const [tooltipWidth, setTooltipWidth] = useState(0);
 
   const total12Weeks = useMemo(
     () => weekTotals.reduce((sum, w) => sum + w, 0),
@@ -196,11 +223,18 @@ export const Heatmap = ({
     });
   };
 
+  useLayoutEffect(() => {
+    if (!active || !tooltipRef.current) {
+      setTooltipWidth(0);
+      return;
+    }
+    const w = tooltipRef.current.getBoundingClientRect().width;
+    setTooltipWidth(w);
+  }, [active]);
+
   const wrapperWidth = wrapperRef.current?.getBoundingClientRect().width ?? 0;
   const tooltipLeft = active
-    ? wrapperWidth > TOOLTIP_HALF * 2
-      ? Math.min(Math.max(active.x, TOOLTIP_HALF), wrapperWidth - TOOLTIP_HALF)
-      : active.x
+    ? clampTooltipX(active.x, wrapperWidth, active.words, tooltipWidth)
     : 0;
 
   const daysWithWords = useMemo(
@@ -338,9 +372,10 @@ export const Heatmap = ({
 
       {active && (
         <div
+          ref={tooltipRef}
           data-heatmap-tooltip=""
           aria-hidden="true"
-          className="menu-panel absolute z-20 px-2.5 py-1.5 text-xs font-medium whitespace-nowrap pointer-events-none -translate-x-1/2 -translate-y-full"
+          className="menu-panel absolute z-20 max-w-[calc(100%-0.5rem)] truncate px-2.5 py-1.5 text-xs font-medium whitespace-nowrap pointer-events-none -translate-x-1/2 -translate-y-full"
           style={{ left: tooltipLeft, top: active.y - 6 }}
         >
           {active.words}

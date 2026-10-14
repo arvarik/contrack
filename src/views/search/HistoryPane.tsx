@@ -5,7 +5,7 @@
  */
 
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { Search, SearchX, Sparkles, X } from "lucide-react";
+import { Search, SearchX, Sparkles } from "lucide-react";
 import type { HistoryEntry, HistoryMode } from "../../../shared/searchHistory";
 import { normalizeQuery } from "../../../shared/searchHistory";
 import {
@@ -17,6 +17,7 @@ import {
 import { Badge } from "../../components/ui/Badge";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { DialogCloseButton } from "../../components/ui/Modal";
 import { Segmented, type SegmentedOption } from "../../components/ui/Segmented";
 import { usePreferences } from "../../contexts/PreferencesContext";
 import { useDebounce } from "../../hooks/useDebounce";
@@ -24,7 +25,7 @@ import {
   startPendingDelete,
   useHiddenPendingIds,
 } from "../../lib/pendingDeletes";
-import { BTN_QUIET, ICON_BTN, SECTION_HEADING } from "../../lib/styles";
+import { BTN_QUIET, SECTION_HEADING } from "../../lib/styles";
 import { SIDE_PANEL_SCROLLER } from "../../components/layout/SidePanel";
 import { cn } from "../../lib/utils";
 import { HistoryEntryRow } from "./HistoryEntryRow";
@@ -187,7 +188,7 @@ export const HistoryPane = ({
             placeholder="Filter questions"
             aria-label="Filter history"
             {...NO_AUTOCORRECT}
-            className="w-full pl-9 pr-8 py-1.5 text-sm bg-surface-container-highest rounded-xl border-none text-on-surface placeholder:text-on-surface-variant"
+            className="w-full min-h-[44px] sm:pointer-fine:min-h-0 pl-9 pr-8 py-1.5 text-base sm:text-sm bg-surface-container-highest rounded-xl border-none text-on-surface placeholder:text-on-surface-variant"
           />
           {filterText.length > 0 && (
             <ClearButton
@@ -245,7 +246,7 @@ export const HistoryPane = ({
               type="button"
               onClick={() => fetchNextPage()}
               disabled={isFetchingNextPage}
-              className="state-layer w-full py-2 text-xs font-semibold text-primary rounded-xl transition-colors cursor-pointer disabled:opacity-50"
+              className="hit-area state-layer w-full min-h-[44px] sm:pointer-fine:min-h-0 py-2 text-xs font-semibold text-primary rounded-xl transition-colors cursor-pointer disabled:opacity-50"
             >
               {isFetchingNextPage ? "Loading…" : "Load more"}
             </button>
@@ -290,8 +291,8 @@ export const HistoryPane = ({
   }
 
   return (
-    <div className="flex flex-col gap-4 p-4">
-      <div className="flex items-center justify-between gap-2">
+    <div className="flex flex-col gap-4 p-4 h-[70dvh] max-h-[520px]">
+      <div className="flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-2">
           <h2 className="text-base font-semibold text-on-surface">History</h2>
           <Badge tone="neutral">{totalCount}</Badge>
@@ -299,18 +300,11 @@ export const HistoryPane = ({
         <div className="flex items-center gap-3">
           {actions}
           {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close history"
-              className={cn(ICON_BTN, "-mr-2")}
-            >
-              <X className="w-4 h-4" aria-hidden="true" />
-            </button>
+            <DialogCloseButton onClick={onClose} aria-label="Close history" />
           )}
         </div>
       </div>
-      {body}
+      <div className="flex-1 min-h-0 flex flex-col">{body}</div>
     </div>
   );
 };

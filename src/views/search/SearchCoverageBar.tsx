@@ -21,7 +21,13 @@ import {
 } from "../../api";
 import { Modal } from "../../components/ui/Modal";
 import { useAiAllowed } from "../../hooks/useAiAllowed";
-import { BTN_QUIET, TONE_DOT, TONE_WASH, type Tone } from "../../lib/styles";
+import {
+  BTN_QUIET,
+  DIALOG_ACTIONS,
+  TONE_DOT,
+  TONE_WASH,
+  type Tone,
+} from "../../lib/styles";
 import { cn } from "../../lib/utils";
 
 interface SearchCoverageBarProps {
@@ -278,7 +284,7 @@ export function SearchCoverageBar({
                 {coverage.coverage}%
               </span>
             </div>
-            <p className="text-xs text-on-surface-variant truncate">
+            <p className="text-xs text-on-surface-variant line-clamp-2 sm:truncate">
               {coverage.indexed} of {coverage.total} contacts indexed
               {coverage.pending > 0 && ` • ${coverage.pending} indexing`}
               {coverage.failed > 0 && ` • ${coverage.failed} failed`}
@@ -386,7 +392,7 @@ function ProviderConfirmModal({
           never costs money without your say
         </p>
 
-        <div className="flex items-center justify-end gap-2 pt-2">
+        <div className={DIALOG_ACTIONS}>
           <button
             type="button"
             onClick={onClose}
@@ -467,11 +473,11 @@ function FailedInspectModal({
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-2 pt-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2">
           <p className="text-[11px] text-on-surface-variant">
             Try again puts these contacts back in line for the index
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 ml-auto">
             <button type="button" onClick={onClose} className="btn-secondary">
               Close
             </button>

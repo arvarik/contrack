@@ -7,6 +7,7 @@
 import React from "react";
 import { FileText, Pin, PinOff, Search, Sparkles, Trash2 } from "lucide-react";
 import type { HistoryEntry } from "../../../shared/searchHistory";
+import { RailTooltip } from "../../components/ui/RailTooltip";
 import { formatRelative } from "../../lib/datetime";
 import { ICON_BTN, SELECTED_ROW } from "../../lib/styles";
 import { cn } from "../../lib/utils";
@@ -96,7 +97,7 @@ export const HistoryEntryRow = React.memo(
             >
               {entry.query}
             </div>
-            <div className="text-xs text-on-surface-variant mt-0.5 pr-14 truncate">
+            <div className="text-xs text-on-surface-variant mt-0.5 pr-20 truncate">
               {renderMeta()}
             </div>
           </div>
@@ -105,35 +106,37 @@ export const HistoryEntryRow = React.memo(
         {/* With a fine pointer they show on hover or focus, and take no
             pointer events while hidden, so an invisible Delete takes no
             taps. A touch screen has no hover, so there they always show. */}
-        <div className="absolute right-2 bottom-1.5 flex items-center gap-0.5 transition-opacity pointer-fine:opacity-0 pointer-fine:pointer-events-none pointer-fine:group-hover:opacity-100 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-focus-within:opacity-100 pointer-fine:group-focus-within:pointer-events-auto">
-          <button
-            type="button"
-            aria-label={entry.pinned ? "Unpin question" : "Pin question"}
-            title={entry.pinned ? "Unpin" : "Pin"}
-            onClick={(e) => {
-              e.stopPropagation();
-              onTogglePin(entry.id, !entry.pinned);
-            }}
-            className={cn(ICON_BTN, "p-1 rounded-md")}
-          >
-            {entry.pinned ? (
-              <PinOff className="w-4 h-4 text-primary" aria-hidden="true" />
-            ) : (
-              <Pin className="w-4 h-4" aria-hidden="true" />
-            )}
-          </button>
-          <button
-            type="button"
-            aria-label="Delete question"
-            title="Delete"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(entry.id);
-            }}
-            className={cn(ICON_BTN, "p-1 rounded-md hover:text-error")}
-          >
-            <Trash2 className="w-4 h-4" aria-hidden="true" />
-          </button>
+        <div className="absolute right-2 bottom-1.5 flex items-center gap-3 transition-opacity pointer-fine:opacity-0 pointer-fine:pointer-events-none pointer-fine:group-hover:opacity-100 pointer-fine:group-hover:pointer-events-auto pointer-fine:group-focus-within:opacity-100 pointer-fine:group-focus-within:pointer-events-auto">
+          <RailTooltip label={entry.pinned ? "Unpin" : "Pin"} side="bottom-end">
+            <button
+              type="button"
+              aria-label={entry.pinned ? "Unpin question" : "Pin question"}
+              onClick={(e) => {
+                e.stopPropagation();
+                onTogglePin(entry.id, !entry.pinned);
+              }}
+              className={cn(ICON_BTN, "p-1 rounded-md")}
+            >
+              {entry.pinned ? (
+                <PinOff className="w-4 h-4 text-primary" aria-hidden="true" />
+              ) : (
+                <Pin className="w-4 h-4" aria-hidden="true" />
+              )}
+            </button>
+          </RailTooltip>
+          <RailTooltip label="Delete" side="bottom-end">
+            <button
+              type="button"
+              aria-label="Delete question"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(entry.id);
+              }}
+              className={cn(ICON_BTN, "p-1 rounded-md hover:text-error")}
+            >
+              <Trash2 className="w-4 h-4" aria-hidden="true" />
+            </button>
+          </RailTooltip>
         </div>
       </div>
     );

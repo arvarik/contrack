@@ -3,6 +3,7 @@ import {
   heatmapScale,
   getHeatmapAlpha,
 } from "../../../../src/views/pulse/lib/heatmapScale";
+import { clampTooltipX } from "../../../../src/views/pulse/cards/Heatmap";
 
 describe("pulse.heatmapScale", () => {
   it("maps zero or negative count to step 0", () => {
@@ -46,5 +47,18 @@ describe("pulse.heatmapScale", () => {
     expect(scale(1)).toBe(1);
     expect(scale(2)).toBe(3);
     expect(scale(3)).toBe(5);
+  });
+
+  it("clamps heatmap tooltip x inside the card bounds", () => {
+    expect(clampTooltipX(12, 320, "Wed, Sep 17 · 10 interactions", 120)).toBe(
+      64,
+    );
+    expect(clampTooltipX(310, 320, "Wed, Sep 17 · 10 interactions", 120)).toBe(
+      256,
+    );
+    expect(clampTooltipX(160, 320, "Wed, Sep 17 · 10 interactions", 120)).toBe(
+      160,
+    );
+    expect(clampTooltipX(40, 0, "Wed, Sep 17 · 10 interactions", 120)).toBe(40);
   });
 });

@@ -24,6 +24,7 @@ interface FacetAutocompleteProps {
   onSelect: (filter: FacetFilter) => void;
   /** Called when user dismisses without selecting */
   onDismiss: () => void;
+  className?: string;
 }
 
 // Preset suggestions for non-text fields
@@ -84,6 +85,7 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
   partial,
   onSelect,
   onDismiss,
+  className,
 }) => {
   const { data: slimContacts } = useSlimContactsForSearch();
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -228,7 +230,11 @@ export const FacetAutocomplete: React.FC<FacetAutocompleteProps> = ({
         transition={{ duration: DURATION.fast, ease: EASE }}
         // Motion draws the entrance, so the panel's own CSS entrance is
         // taken off.
-        className={cn(MENU_PANEL, "menu-enter-none mx-4 mb-1 min-w-0")}
+        className={cn(
+          MENU_PANEL,
+          "menu-enter-none mx-4 mb-1 min-w-0",
+          className,
+        )}
       >
         <div className={MENU_HEADING} aria-hidden="true">
           {field} values

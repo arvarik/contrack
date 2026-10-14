@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { CheckCircle2 } from "lucide-react";
 import { CardFrame } from "../components/CardFrame";
+import { useCardCustomize } from "../context/CardCustomizeContext";
 import { useCompletedActionItems } from "../../../api";
 import { formatWhen } from "../../../lib/datetime";
 import { BTN_QUIET, TONE_TEXT } from "../../../lib/styles";
@@ -16,9 +17,10 @@ const LIST_ID = "completed-card-content";
  */
 export const CompletedCard = () => {
   const { data: completedItems = [] } = useCompletedActionItems();
+  const { isEditing } = useCardCustomize();
   const [expanded, setExpanded] = useState(false);
   const count = completedItems.length;
-  const open = expanded && count > 0;
+  const open = expanded && count > 0 && !isEditing;
 
   return (
     <div className="flex flex-col gap-2">

@@ -15,6 +15,7 @@ import {
   ActionMenu,
   type ActionMenuItem,
 } from "../../../components/ui/ActionMenu";
+import { RailTooltip } from "../../../components/ui/RailTooltip";
 import { PULSE_TYPE } from "../lib/pulseStyles";
 import { COLUMN_NAMES, PULSE_COLUMNS } from "../lib/layout";
 import {
@@ -112,15 +113,16 @@ const CustomizeControls = ({
       </button>
 
       {/* The tray above the grid brings a hidden card back. */}
-      <button
-        type="button"
-        onClick={() => customize.onHide?.(cardId)}
-        aria-label={`Hide ${title}`}
-        title={`Hide ${title}`}
-        className={cn(CONTROL_BTN, "cursor-pointer")}
-      >
-        <EyeOff className="w-4 h-4" />
-      </button>
+      <RailTooltip label={`Hide ${title}`} side="bottom">
+        <button
+          type="button"
+          onClick={() => customize.onHide?.(cardId)}
+          aria-label={`Hide ${title}`}
+          className={cn(CONTROL_BTN, "cursor-pointer")}
+        >
+          <EyeOff className="w-4 h-4" />
+        </button>
+      </RailTooltip>
 
       {moveActions.length > 0 && (
         <ActionMenu

@@ -175,7 +175,11 @@ export const UpNextCard = ({
       title="Up next"
       count={items.length}
       headerAction={
-        <InfoTip label="Keyboard" align="end" className="hidden sm:inline-flex">
+        <InfoTip
+          label="Keyboard"
+          align="end"
+          className="hidden sm:pointer-fine:inline-flex"
+        >
           <span className="block font-semibold mb-1">Keys</span>
           <Key>J</Key> <Key>K</Key> walk the rows. <Key>D</Key> done,{" "}
           <Key>S</Key> snooze a day, <Key>L</Key> log a note. Tab into the list,

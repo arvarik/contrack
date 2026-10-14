@@ -397,29 +397,37 @@ export function AISearchView({
               </div>
             )}
 
-            <button
-              onClick={() => {
-                clearLimit();
-                setShowConfirm(true);
-              }}
-              disabled={selectedIds.size === 0 || isStarting}
-              className="btn-primary w-full"
+            <div
+              className={cn(
+                "space-y-2",
+                selectedIds.size > 0 &&
+                  "sticky bottom-[var(--tabbar-space)] z-20 -mx-2 rounded-2xl bg-surface/95 p-2 backdrop-blur-md md:static md:mx-0 md:bg-transparent md:p-0 md:backdrop-blur-none",
+              )}
             >
-              <Sparkles className="w-4 h-4" />
-              {selectedIds.size > 0
-                ? `Start enrichment (${selectedIds.size} selected)`
-                : "Select contacts to search"}
-            </button>
-            {/* The batch estimate, before the press. */}
-            {selectedIds.size > 0 && depthFiguresApply && (
-              <p
-                aria-live="polite"
-                className="-mt-2 text-center text-xs text-on-surface-variant tabular-nums"
+              <button
+                onClick={() => {
+                  clearLimit();
+                  setShowConfirm(true);
+                }}
+                disabled={selectedIds.size === 0 || isStarting}
+                className="btn-primary w-full"
               >
-                {DEPTH_WORDS[depth].name} ·{" "}
-                {batchEstimate(depth, selectedIds.size)}
-              </p>
-            )}
+                <Sparkles className="w-4 h-4" />
+                {selectedIds.size > 0
+                  ? `Start enrichment (${selectedIds.size} selected)`
+                  : "Select contacts to search"}
+              </button>
+              {/* The batch estimate, before the press. */}
+              {selectedIds.size > 0 && depthFiguresApply && (
+                <p
+                  aria-live="polite"
+                  className="text-center text-xs text-on-surface-variant tabular-nums"
+                >
+                  {DEPTH_WORDS[depth].name} ·{" "}
+                  {batchEstimate(depth, selectedIds.size)}
+                </p>
+              )}
+            </div>
           </>
         )}
 

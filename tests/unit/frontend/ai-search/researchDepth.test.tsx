@@ -728,7 +728,7 @@ describe("the Enrichment page's filters", () => {
 });
 
 describe("the progress panel", () => {
-  it("marks a Deep job, and leaves the default unsaid", () => {
+  it("marks a Deep job, leaves the default unsaid, and shows Dismiss only when complete", () => {
     const batch = {
       id: "b1",
       strategy: "two-pass",
@@ -754,7 +754,7 @@ describe("the progress panel", () => {
         },
       ],
     } as AISearchBatch;
-    render(
+    const { rerender } = render(
       <AISearchProgressOverlay
         batch={batch}
         onDismiss={vi.fn()}
@@ -765,5 +765,27 @@ describe("the progress panel", () => {
     );
     expect(screen.getAllByText("Deep")).toHaveLength(1);
     expect(screen.queryByText("Standard")).toBeNull();
+    expect(
+      screen.getAllByRole("button", { name: "Minimize research progress" }),
+    ).toHaveLength(1);
+    expect(
+      screen.queryByRole("button", { name: "Dismiss research progress" }),
+    ).toBeNull();
+
+    rerender(
+      <AISearchProgressOverlay
+        batch={{ ...batch, status: "complete" }}
+        onDismiss={vi.fn()}
+        onCancel={vi.fn()}
+        isCanceling={false}
+        connectionError={false}
+      />,
+    );
+    expect(
+      screen.getAllByRole("button", { name: "Minimize research progress" }),
+    ).toHaveLength(1);
+    expect(
+      screen.getAllByRole("button", { name: "Dismiss research progress" }),
+    ).toHaveLength(2);
   });
 });

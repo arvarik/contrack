@@ -13,12 +13,14 @@ import type { PaddingOptions } from "maplibre-gl";
 import { motion } from "motion/react";
 import {
   CalendarPlus,
+  CheckSquare,
   ExternalLink,
   ListPlus,
   MapPin,
   MapPinPen,
   PenLine,
   Phone,
+  Square,
   X,
 } from "lucide-react";
 import type { MapContact } from "../../../shared/geo";
@@ -276,14 +278,21 @@ export const MapHoverCard = ({
 /** A finger cannot hover, so a tap on a pin shows its card here first. */
 export const MapPeekSheet = ({
   contact,
+  selected = false,
+  onToggleSelect,
   onAction,
   onClose,
+  sheetRef,
 }: {
   contact: MapContact;
+  selected?: boolean;
+  onToggleSelect?: () => void;
   onAction: (action: CardAction) => void;
   onClose: () => void;
+  sheetRef?: React.Ref<HTMLDivElement>;
 }) => (
   <motion.div
+    ref={sheetRef}
     role="dialog"
     aria-label={contact.name}
     initial={{ opacity: 0, y: 16 }}
@@ -305,7 +314,7 @@ export const MapPeekSheet = ({
         </IconButton>
       }
     >
-      <div className="flex gap-1 border-t border-outline-variant/20 pt-2">
+      <div className="flex flex-wrap gap-1 border-t border-outline-variant/20 pt-2">
         {ACTIONS.map(({ action, label, short, Icon }) => (
           <React.Fragment key={action}>
             <button
@@ -320,6 +329,22 @@ export const MapPeekSheet = ({
             {action === "open" && <SheetCall contact={contact} />}
           </React.Fragment>
         ))}
+        {onToggleSelect && (
+          <button
+            type="button"
+            aria-label={selected ? "Deselect contact" : "Select contact"}
+            aria-pressed={selected}
+            onClick={onToggleSelect}
+            className={cn(SHEET_ACTION, selected && "text-primary")}
+          >
+            {selected ? (
+              <CheckSquare className="h-4 w-4" />
+            ) : (
+              <Square className="h-4 w-4" />
+            )}
+            {selected ? "Selected" : "Select"}
+          </button>
+        )}
       </div>
     </CardBody>
   </motion.div>
