@@ -163,7 +163,7 @@
     "lint-staged": "^17.6.0",
     "lucide-react": "^1.48.0",
     "maplibre-gl": "^6.11.2",
-    "motion": "^13.4.4",
+    "motion": "^14.0.0",
     "oxlint": "^1.85.0",
     "papaparse": "^5.7.0",
     "pmtiles": "^4.5.0",
