@@ -5,7 +5,7 @@
       <img src="docs/brand/contrack-lockup-animated.svg" alt="Contrack" width="400" />
     </picture>
   </h1>
-  <p><b>People Relationship Manager for Proactive Networking</b></p>
+  <p><b>Personal &amp; Professional Relationship Manager for Friends, Family, and Your Network</b></p>
 
 [![CI](https://github.com/arvarik/contrack/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/arvarik/contrack/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/arvarik/contrack)](https://github.com/arvarik/contrack/releases)
@@ -22,42 +22,50 @@
   <img src="docs/images/tour.gif" alt="A tour of Contrack: the Pulse page, the command palette opening a contact, a question answered in Ask Contrack, and the map of the network" width="100%" />
 </p>
 
-Relationships are your most valuable asset, and the hardest thing to keep track of. Your contacts are scattered across Apple, Google and LinkedIn. A name looks familiar, but you can't place it. You meant to follow up, and you never did. **Contrack fixes that.**
+Relationships are the most meaningful part of your life — and the easiest thing to lose track of. The people who matter most to you — close friends, family, mentors, and the people you work with — are scattered across half a dozen apps, inboxes, and address books. A birthday slips by. A note from a great conversation gets buried. Months pass before you realize you never followed up. **Contrack brings everyone together.**
 
-Contrack is a personal CRM that you run yourself. Your network stays on your machine, search runs on small local models, and AI is optional: bring a Gemini, OpenAI or Anthropic key, point it at a model server of your own, or use none at all.
+Keep the personal moments that make a friendship — how you met at a wedding, their kids' names, anniversary dates, and gift ideas — right alongside the context of your work: roles, intros, meeting notes, and next week's follow-up.
+
+**Privacy isn't a setting. It's the foundation.** Contrack lives on your own computer or home server. Your relationships aren't training anyone's model, sitting on a rented cloud, or locked behind a monthly subscription. Search happens right on your device. Share one home server with your family or team while keeping everyone's address book completely private to them. And when you want AI to research a contact or turn a quick note into a rich profile, you bring the model you trust — or use none at all.
 
 ## Import → Dedupe → Enrich → Track
 
-<p align="center">
+<table>
+<tr>
+<td rowspan="4" width="19%" align="center" valign="middle">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/brand/readme-flow-dark.svg" />
-    <img src="docs/brand/readme-flow.svg" alt="Import, Dedupe, Enrich and Track: the Contrack corvid flies from step to step" width="100%" />
+    <img src="docs/brand/readme-flow.svg" alt="Import, Dedupe, Enrich and Track: the Contrack corvid flies down from step to step" width="100%" />
   </picture>
-</p>
-
-### 1. Import
-
-**Everyone, from everywhere.** Drop in a vCard from any address book, or your LinkedIn and Google exports. Connect Google, a calendar or a mailbox, and your meetings and email land on each person's timeline.
-
-<img src="docs/images/flow-import.gif" alt="A contacts file dropped on the Import page: the import runs, merges one duplicate by itself, and lists three to review" width="100%" />
-
-### 2. Dedupe
-
-**One person, one contact.** The same friend from three sources becomes one record. Contrack merges the sure matches by itself and asks you about the rest in one review list. Each pair says why it matched and shows what a merge keeps, and every merge can be undone for 90 days.
-
-<img src="docs/images/flow-dedupe.gif" alt="Possible duplicates: a pair with the reason it matched, what the merge keeps, the merge, and Undo" width="100%" />
-
-### 3. Enrich
-
-**The context you never had time to type.** With an AI provider connected, Contrack researches a contact on the web, fills in roles, companies and links, and cites a source for every fact. Paste a bio or an email signature, and it becomes a contact.
-
-<img src="docs/images/flow-enrich.gif" alt="Research on a contact: the run, and the Research card filling in with facts and their sources" width="100%" />
-
-### 4. Track
-
-**Never let a relationship go quiet.** Log a note in one line, and "next Tuesday" becomes a follow-up. Choose who to keep up with and how often. Each morning, Pulse shows who is due, who is drifting and what is coming up.
-
-<img src="docs/images/flow-track.gif" alt="A note logged with the follow-up 'Send the deck next Tuesday', then the contact tracked monthly" width="100%" />
+</td>
+<td width="81%" valign="middle">
+  <h3>1. Import</h3>
+  <p><b>Everyone, from everywhere.</b> Drop in your contacts from Apple, Google, or LinkedIn. Connect your calendar or inbox, and past conversations and meetings appear right on each person's timeline.</p>
+  <img src="docs/images/flow-import.gif" alt="A contacts file dropped on the Import page: the import runs, merges one duplicate by itself, and lists three to review" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="81%" valign="middle">
+  <h3>2. Dedupe</h3>
+  <p><b>One person. One clean story.</b> The same friend from three address books becomes a single profile. Contrack merges the obvious matches automatically and lets you review the rest side by side — with a 90-day undo if you ever change your mind.</p>
+  <img src="docs/images/flow-dedupe.gif" alt="Possible duplicates: a pair with the reason it matched, what the merge keeps, the merge, and Undo" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="81%" valign="middle">
+  <h3>3. Enrich</h3>
+  <p><b>All the context you never had time to type.</b> Paste a quick note from either world — <i>"Met at Sarah's wedding — loves natural wine, kids are Leo and Maya, catch up every quarter"</i> or <i>"Partner at Sequoia — follow up next Tuesday on seed round"</i> — and Contrack turns it into a complete profile with dates, tags, and reminders. Or let web research fill in roles and links with cited sources.</p>
+  <img src="docs/images/flow-enrich.gif" alt="Research on a contact: the run, and the Research card filling in with facts and their sources" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="81%" valign="middle">
+  <h3>4. Track</h3>
+  <p><b>Never let someone important drift away.</b> Write a note in plain language and <i>"next Tuesday"</i> becomes a reminder automatically. Set how often you want to stay in touch, and each morning Contrack gently shows who is due and whose birthday or milestone is coming up.</p>
+  <img src="docs/images/flow-track.gif" alt="A note logged with the follow-up 'Send the deck next Tuesday', then the contact tracked monthly" width="100%" />
+</td>
+</tr>
+</table>
 
 ## Highlights
 
@@ -66,12 +74,12 @@ Contrack is a personal CRM that you run yourself. Your network stays on your mac
 <td width="50%" valign="top">
 <img src="docs/images/showcase-pulse.png" alt="Pulse: the day's sentence, Up next and Keeping up" width="100%" />
 <h3>Pulse</h3>
-Your morning page: follow-ups that are due, people to catch up with, birthdays, and how your network is doing.
+Your calm morning briefing. See the follow-ups due today, friends and colleagues you haven't spoken with in a while, and upcoming birthdays, anniversaries, and custom milestones.
 </td>
 <td width="50%" valign="top">
 <img src="docs/images/showcase-ask.png" alt="Ask Contrack answering a question with matching people" width="100%" />
 <h3>Ask Contrack</h3>
-Ask in plain words, such as "Who do I know in Lisbon?" Answers come from your own contacts and notes, and search runs on your machine.
+Ask in plain words — <i>"Who do I know in Lisbon?"</i> or <i>"Who loves natural wine?"</i> Answers come straight from your own contacts and notes, searched privately on your machine.
 </td>
 </tr>
 </table>
@@ -81,12 +89,27 @@ Ask in plain words, such as "Who do I know in Lisbon?" Answers come from your ow
 <td width="50%" valign="top">
 <img src="docs/images/showcase-palette.png" alt="The command palette with search results and a facet filter" width="100%" />
 <h3>Command palette</h3>
-Press <kbd>Cmd</kbd>+<kbd>K</kbd> to find anyone, filter by company or tag, or run any action without touching the mouse.
+Press <kbd>Cmd</kbd>+<kbd>K</kbd> to jump to anyone, filter by company or tag, or log a quick note without ever lifting your hands from the keyboard.
 </td>
 <td width="50%" valign="top">
 <img src="docs/images/showcase-map.png" alt="The map with clusters of people and the People pane" width="100%" />
 <h3>Map</h3>
-See where your network lives. Draw around a city to select everyone in it, then track them or add them to a list.
+Planning a trip? See everyone you know in a city at a glance. Draw a loop around a neighborhood to select everyone there and add them to a dinner list.
+</td>
+</tr>
+</table>
+
+<table>
+<tr>
+<td width="50%" valign="top">
+<img src="docs/images/showcase-accounts.png" alt="Accounts: multiple family or team profiles with isolated address books" width="100%" />
+<h3>Multiple profiles, one home</h3>
+Run one Contrack for your family or team. Invite someone with a link or create their profile in seconds — every person gets their own private address book, notes, and reminders.
+</td>
+<td width="50%" valign="top">
+<img src="docs/images/showcase-backups.png" alt="Backups: verified snapshots of your database" width="100%" />
+<h3>Verified backups</h3>
+Your history is irreplaceable. Take a complete, integrity-checked snapshot of your address book in one click, or let Contrack back itself up automatically on your schedule.
 </td>
 </tr>
 </table>
@@ -96,28 +119,30 @@ See where your network lives. Draw around a city to select everyone in it, then 
 <td width="50%" valign="top">
 <img src="docs/images/showcase-mcp.png" alt="Settings, MCP and API: connecting Claude, Cursor and other clients" width="100%" />
 <h3>Works with your AI assistant</h3>
-A built-in MCP server lets Claude, ChatGPT, Cursor and other clients search and update your network. Give them read-only access if you prefer.
+Connect Claude, ChatGPT, or Cursor in one click so your favorite assistant can look up context and log notes for you — with read-only access whenever you prefer.
 </td>
 <td width="50%" valign="top">
 <img src="docs/images/showcase-phone.png" alt="Contrack on a phone: Pulse and a contact page" width="100%" />
-<h3>On your phone</h3>
-Install it on your home screen. A contact is one tap from a call, a message or an email.
+<h3>Right in your pocket</h3>
+Add Contrack to your phone's home screen. Before you walk into coffee or a meeting, every note and detail is one tap away.
 </td>
 </tr>
 </table>
 
-**Also:** note search, @mentions that link people, lists and tags, passkeys, several accounts on one server, a trash with undo, vCard, CSV and JSON export, verified backups, and light and dark themes.
+**And everything else you expect:** rich notes with file & image attachments, `@mentions` that link people together, custom dates and anniversaries, lists and tags, passkey sign-in, a 90-day trash with undo, open exports anytime, and warm light and dark themes.
 
-## Quick start
+**Comparing personal CRMs?** Read [Contrack vs Monica](docs/comparisons/contrack-vs-monica.md), [Contrack vs Clay](docs/comparisons/contrack-vs-clay.md), [Contrack vs Folk](docs/comparisons/contrack-vs-folk.md), [Contrack vs Twenty](docs/comparisons/contrack-vs-twenty.md), [Contrack vs Huly](docs/comparisons/contrack-vs-huly.md), [Contrack vs EspoCRM](docs/comparisons/contrack-vs-espocrm.md), and [Contrack vs Nextcloud Contacts](docs/comparisons/contrack-vs-nextcloud-contacts.md).
 
-Run Contrack with Docker:
+## Start in a minute
+
+Run Contrack on your machine with Docker:
 
 ```bash
 docker run -d --name contrack -p 127.0.0.1:3210:3210 \
   -v contrack-data:/app/data ghcr.io/arvarik/contrack:latest
 ```
 
-Then open [http://localhost:3210](http://localhost:3210). There is no account to create and no key to add. Your data lives in the `contrack-data` volume. To turn on AI later, open **Settings → Administration → AI** and add a key.
+Then open [http://localhost:3210](http://localhost:3210). There is no cloud account to sign up for and no API key required. Everything stays in your `contrack-data` folder. Whenever you want AI features, open **Settings → Administration → AI**.
 
 <details>
 <summary><b>Other ways to run it</b></summary>
@@ -139,7 +164,7 @@ npm install
 npm run dev
 ```
 
-**On a server or for other devices:** turn on sign-in first with `-e AUTH_REQUIRED=true`. The first visit then creates the admin account. [Self-hosting](docs/self-hosting.md) covers remote access, reverse proxies, backups and upgrades.
+**For your household or team:** turn on sign-in with `-e AUTH_REQUIRED=true`. Your first visit creates the admin profile, and you can invite family or teammates from **Settings → Administration → Accounts**. See the [Self-hosting guide](docs/self-hosting.md) for remote access, backups, and upgrades.
 
 </details>
 
@@ -147,42 +172,13 @@ npm run dev
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/arvarik/contrack?quickstart=1)
 
-A Codespace builds Contrack, fills it with 400 fictional people, starts it and opens it in a new tab, with no sign-in and no key. The first start takes a few minutes, and it runs on your GitHub account's Codespaces hours.
+Open a live demo in your browser preloaded with 400 fictional people — no installation and no API key needed.
 
 <br/>
 
-<table>
-<tr>
-<td width="33%" align="center" valign="top">
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="docs/brand/readme-perch-help-dark.svg" />
-<img src="docs/brand/readme-perch-help.svg" alt="" width="72" />
-</picture>
-<h3>Get help</h3>
-<a href="docs/README.md">Read the docs</a><br/>
-<a href="https://github.com/arvarik/contrack/discussions/categories/q-a">Ask a question</a><br/>
-<a href="https://github.com/arvarik/contrack/issues/new/choose">Report a bug or ask for a feature</a><br/>
-<a href="SECURITY.md">Report a security problem privately</a><br/>
-<a href="mailto:arvind.arikatla@gmail.com">Email the maintainer</a>
-</td>
-<td width="33%" align="center" valign="top">
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="docs/brand/readme-perch-contribute-dark.svg" />
-<img src="docs/brand/readme-perch-contribute.svg" alt="" width="72" />
-</picture>
-<h3>Contribute</h3>
-<a href="CONTRIBUTING.md">Set up and send a change</a><br/>
-<a href="AGENTS.md">Instructions for coding agents</a><br/>
-<a href="CODE_OF_CONDUCT.md">Code of Conduct</a><br/>
-<a href="CHANGELOG.md">What changed in each release</a>
-</td>
-<td width="33%" align="center" valign="top">
-<picture>
-<source media="(prefers-color-scheme: dark)" srcset="docs/brand/readme-perch-license-dark.svg" />
-<img src="docs/brand/readme-perch-license.svg" alt="" width="72" />
-</picture>
-<h3>License</h3>
-Free software under the <a href="LICENSE">GNU AGPL v3</a>. Use it, change it and share it. If you offer a changed version as a network service, share its source too.
-</td>
-</tr>
-</table>
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/readme-tree-dark.svg" />
+    <img src="docs/brand/readme-tree.svg" alt="The Contrack tree: Get help, Contribute, and License branches with the corvid flying from nest to nest" width="100%" />
+  </picture>
+</p>

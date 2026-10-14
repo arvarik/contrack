@@ -107,12 +107,23 @@ with an empty `DATA_DIR`.
   its own day, and offers a calendar only when none is connected.
 - Pulse keys do nothing while a menu or a dialog is open. Up next is one Tab
   stop and shows eight rows on a phone, and a snooze and **Reset layout**
-  offer Undo. The Insight card tells a failed provider from a missing model.
+  offer Undo. The Insight card tells a failed provider from a missing model,
+  and **Daily insight** draws on your contacts' roles and locations alongside
+  their industries.
+- **Up next** groups upcoming birthdays, anniversaries and custom dates under
+  **Milestones**, and **Coming up** lists dates 8 to 14 days away.
 
 ### Contacts
 
 - The contact page fits the width of its pane. One composer logs a note, a
-  call, a meeting or an email, with a follow-up, on today or a past day.
+  call, a meeting or an email, with a follow-up, on today or a past day, and
+  accepts files by paperclip button, drag-and-drop or pasting an image from
+  the clipboard.
+- Contacts use human-readable URL slugs (`<name>-<8-char-id>`), **Dates** in
+  **Details** holds birthdays, anniversaries and custom milestones, and
+  **Select** mode places checkboxes on the right so contact rows stay still.
+- Opening **Settings** on a wide screen goes straight to the first page and
+  remembers the last settings page you visited during the session.
 - **Add from text** also reads meeting notes. It finds tags, interests and
   other facts, and the past meetings, calls and emails, each with a date to
   check before it saves.
@@ -177,6 +188,9 @@ with an empty `DATA_DIR`.
   who is not on the map yet.
 - Place a pin by hand, find a place by name, and open the results of a
   question on the map.
+- The geocoder strips building and suite noise and normalizes metro-area
+  labels (such as "Greater New York City Area" or "San Francisco Bay Area") to
+  place pins at a representative city center.
 - The map keeps the keyboard's place: **Go to** puts focus in its box, a
   closed contact or a cluster zoom gives focus to a pin, and Esc in the
   filter box clears it. On a narrow window, `/` opens **Filters**.

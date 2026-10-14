@@ -50,7 +50,7 @@ import {
 } from "../../src/assets/corvidPaths.ts";
 import { REDUCED_MOTION_STYLE, livingBird } from "./animatedLockup.ts";
 import { renderPoseSheet } from "./poseSheet.ts";
-import { PERCHES, renderFlowSvg, renderPerchSvg } from "./readmeScenes.ts";
+import { renderFlowSvg, renderTreeSvg } from "./readmeScenes.ts";
 import { face, outline, textPath, wrap, type FaceName } from "./type.ts";
 
 const ROOT = path.resolve(
@@ -729,12 +729,12 @@ export async function build(): Promise<string[]> {
         await renderFlowSvg(dark),
       ]),
     )),
-    ...(Object.keys(PERCHES) as (keyof typeof PERCHES)[]).flatMap((which) =>
-      [false, true].map((dark): [string, string] => [
-        path.join(BRAND_DIR, `readme-perch-${which}${dark ? "-dark" : ""}.svg`),
-        renderPerchSvg(which, dark),
+    ...(await Promise.all(
+      [false, true].map(async (dark): Promise<[string, string]> => [
+        path.join(BRAND_DIR, `readme-tree${dark ? "-dark" : ""}.svg`),
+        await renderTreeSvg(dark),
       ]),
-    ),
+    )),
     [
       path.join(BRAND_DIR, "social-preview.png"),
       await png(await renderCardSvg(1280, 640, line)),

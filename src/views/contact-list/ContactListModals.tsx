@@ -383,9 +383,9 @@ export const ContactListModals = ({
           ) : (
             <>
               <p className="text-sm text-on-surface-variant leading-relaxed">
-                Paste an email signature, a LinkedIn bio or notes from a
-                meeting, and AI picks out the person's details, their
-                specialties and the meetings the text describes
+                Paste an email signature, a LinkedIn bio or notes about someone,
+                and AI picks out their details, personal context and the
+                meetings or catch-ups the text describes
               </p>
               <textarea
                 aria-label="Paste contact details"
@@ -398,7 +398,7 @@ export const ContactListModals = ({
                 // A phone grows the box with a long paste, up to 40 percent
                 // of the screen, then it scrolls.
                 className="w-full bg-surface-container border-none rounded-xl p-4 text-sm font-mono text-on-surface resize-none max-sm:[field-sizing:content] max-sm:min-h-32 max-sm:max-h-[40dvh]"
-                placeholder={`Examples:\n• "Jane Kim | VP Eng @ Stripe | jane@stripe.com | based in NYC"\n• A copied LinkedIn summary\n• "Met Jane at SaaStr on Tuesday, talked about her Series A"`}
+                placeholder={`Examples:\n• "Met at Sarah's wedding — loves natural wine, kids are Leo and Maya, catch up every quarter"\n• "Partner at Sequoia — follow up next Tuesday on seed round"\n• "Jane Kim | VP Eng @ Stripe | jane@stripe.com | based in NYC"`}
               />
             </>
           )}

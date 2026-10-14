@@ -1,24 +1,19 @@
 /**
  * readmeScenes: the corvid at work across the README, drawn by its rig.
  *
- * - `renderFlowSvg`: the four steps, Import, Dedupe, Enrich and Track, as
- *   four rings. The bird sits in each in turn, plays an act there, and flies
- *   on to the next. From Track it flies out of the picture and comes back in
- *   on the left to land in Import, so the loop repeats with no seam.
- * - `renderPerchSvg`: one bird in its ring, for a card at the foot of the
- *   README, with acts of its own.
+ * - `renderFlowSvg`: the four steps, Import, Dedupe, Enrich and Track, stacked
+ *   vertically beside their GIFs. The bird sits in each ring for the time it
+ *   takes to watch the step, plays two acts there, and flies down to the next.
+ *   From Track it flies off the bottom and comes back in at the top to land in
+ *   Import, so the loop repeats with no seam.
+ * - `renderTreeSvg`: a minimal mono-line tree at the foot of the README whose
+ *   three main boughs hold Get help, Contribute and License. Each bough
+ *   cradles a nest ring, and one corvid flies in a triangle from nest to nest
+ *   every nine seconds, playing perched acts while in each nest.
  *
  * As in `animatedLockup.ts`, a README image runs no script, so the motion is
  * SMIL. Every pose is the rig's, every flight is `planFlight`'s, and one
- * seeded random source makes every build write the same file. A flight takes
- * off with the app's launch and lands with its landing: the takeoff is a
- * sortie from one ring, and once the bird is in the air it is called home to
- * the next ring, as a second press on the perch calls it home in the app.
- *
- * A flying bird is placed as `CorvidFlight` places it: the body's middle at
- * the route's point, turned and scaled about it. Four nested groups carry
- * that, each with one `<animateTransform>`, and the strokes keep the rig's
- * own units inside them.
+ * seeded random source makes every build write the same file.
  */
 import {
   BIRD_PART_ORDER,
@@ -51,7 +46,6 @@ import {
   birdLines,
   birdTracks,
   fixed,
-  livingBird,
   loopFrames,
   loopPose,
   perchLoop,
@@ -158,7 +152,7 @@ function stay(
   scene: Scene,
   perch: FlightPerch,
   acts: readonly ActName[],
-  pause: readonly [number, number] = [700, 1_300],
+  pause: readonly [number, number] = [1_600, 2_400],
 ): void {
   const loop = perchLoop(Math.floor(scene.rng() * 1e9), acts, pause);
   const frames = loopFrames(loop);
@@ -168,25 +162,25 @@ function stay(
 }
 
 /**
- * The bird leaves `from` on a flight of `kind`, as it leaves the perch in
- * the app, and once it is in the air and `ready` it is called home to `to`.
- * A landing ends on the logo in `to`.
+ * The frames of a flight from `from` to `to`: a takeoff of `kind`, then a
+ * call home to `to` once the bird is in the air and `ready`.
  */
-function flyTo(
-  scene: Scene,
+function flightBetween(
+  rng: Rng,
+  viewport: FlightViewport,
   kind: FlightKind,
   from: FlightPerch,
   to: FlightPerch,
   ready: (at: FlightFrame) => boolean = () => true,
-): void {
-  const { rng, viewport } = scene;
+): SceneFrame[] {
   const out = planFlight({ kind, viewport, perch: from, rng });
   let t = 0;
   while (!out.interruptible(t) || !ready(out.frame(t))) {
     t += STEP;
     if (t > out.duration) throw new Error(`The ${kind} never turned home`);
   }
-  for (let s = 0; s < t; s += STEP) scene.frames.push(flying(out.frame(s)));
+  const frames: SceneFrame[] = [];
+  for (let s = 0; s < t; s += STEP) frames.push(flying(out.frame(s)));
   const at = out.frame(t);
   const home = planFlight({
     kind: "loop",
@@ -201,8 +195,26 @@ function flyTo(
     },
   });
   for (let s = 0; s < home.duration; s += STEP) {
-    scene.frames.push(flying(home.frame(s)));
+    frames.push(flying(home.frame(s)));
   }
+  return frames;
+}
+
+/**
+ * The bird leaves `from` on a flight of `kind`, as it leaves the perch in
+ * the app, and once it is in the air and `ready` it is called home to `to`.
+ * A landing ends on the logo in `to`.
+ */
+function flyTo(
+  scene: Scene,
+  kind: FlightKind,
+  from: FlightPerch,
+  to: FlightPerch,
+  ready: (at: FlightFrame) => boolean = () => true,
+): void {
+  scene.frames.push(
+    ...flightBetween(scene.rng, scene.viewport, kind, from, to, ready),
+  );
 }
 
 /**
@@ -302,50 +314,64 @@ function sceneBird(
   return lines;
 }
 
-// The four steps
+// ============================================================================
+// 1. The four vertical steps (readme-flow.svg / readme-flow-dark.svg)
+// ============================================================================
 
-/** The steps the README tells, in order, and the act the bird plays at each. */
+/** The steps the README tells, in order, and the acts the bird plays at each. */
 export const FLOW_STEPS: readonly { label: string; acts: ActName[] }[] = [
-  { label: "Import", acts: ["glance"] },
-  { label: "Dedupe", acts: ["lookBack"] },
-  { label: "Enrich", acts: ["caw"] },
-  { label: "Track", acts: ["nod"] },
+  { label: "Import", acts: ["glance", "cock"] },
+  { label: "Dedupe", acts: ["lookBack", "preen"] },
+  { label: "Enrich", acts: ["caw", "glance"] },
+  { label: "Track", acts: ["nod", "ruffle"] },
 ];
 
 /** The seed of the flow scene, chosen for routes that read well. */
 const FLOW_SEED = 22;
 
 /**
- * The room the flights are planned in. It is wider than the picture, so the
- * bird can fly out of the picture on the right and come back in on the left
- * without crossing the rings.
+ * The vertical room the flights are planned in. It is taller than the picture,
+ * so the bird can fly out of the picture at the bottom and come back in at the
+ * top without crossing the rings.
  */
-export const FLOW_ROOM = { width: 1000, height: 250 } as const;
+export const FLOW_ROOM = { width: 116, height: 2540 } as const;
 
 /** The part of the room the picture shows: all of the bird, every frame. */
 export const FLOW_VIEW = {
-  left: 100,
-  width: 800,
-  top: 58,
-  height: 138,
+  left: -19,
+  width: 154,
+  top: 68,
+  height: 2360,
 } as const;
 
-/** Each ring's box. The flying bird is `flightSize`, a little nearer. */
-const FLOW_RING = 60;
-const FLOW_RING_TOP = 90;
-const FLOW_LABEL_SIZE = 22;
+/** Each ring's box, centered horizontally in the vertical column. */
+const FLOW_RING = 56;
+const FLOW_RING_LEFT = (FLOW_ROOM.width - FLOW_RING) / 2;
+const FLOW_LABEL_SIZE = 19;
 
-/** Where each step's ring sits: evenly across the picture. */
+/**
+ * Vertical fractions of `FLOW_VIEW.height` where each GIF's midpoint sits in
+ * the 4-row README table (accounting for the heading + copy above each GIF).
+ */
+const FLOW_STEP_FRACTIONS = [0.141, 0.391, 0.648, 0.898] as const;
+
+/**
+ * Where each step's ring sits: aligned with the vertical midpoint of its
+ * corresponding GIF in the README table.
+ */
 export function flowPerches(): FlightPerch[] {
-  const gap = FLOW_VIEW.width / FLOW_STEPS.length;
   return FLOW_STEPS.map((_, i) => ({
-    left: FLOW_VIEW.left + gap * (i + 0.5) - FLOW_RING / 2,
-    top: FLOW_RING_TOP,
+    left: FLOW_RING_LEFT,
+    top:
+      FLOW_VIEW.top +
+      FLOW_VIEW.height * FLOW_STEP_FRACTIONS[i]! -
+      FLOW_RING / 2 -
+      14,
     size: FLOW_RING,
   }));
 }
 
-/** Every frame of the flow scene, from the bird at home in the first ring. */
+/** Every frame of the vertical flow scene, from the bird at home in the first ring. */
 export function flowFrames(seed: number = FLOW_SEED): SceneFrame[] {
   const perches = flowPerches();
   const scene: Scene = {
@@ -354,33 +380,37 @@ export function flowFrames(seed: number = FLOW_SEED): SceneFrame[] {
     frames: [],
   };
   FLOW_STEPS.forEach(({ acts }, i) => {
-    stay(scene, perches[i]!, acts);
+    stay(scene, perches[i]!, acts, [1_600, 2_400]);
     if (i < perches.length - 1) {
       flyTo(scene, "sortie", perches[i]!, perches[i + 1]!);
     }
   });
 
-  // Off to the right: toward a ring beyond the picture's edge, until all of
-  // the bird is past the edge.
-  const edge = FLOW_VIEW.left + FLOW_VIEW.width;
-  const beyond = { ...perches.at(-1)!, left: FLOW_ROOM.width - FLOW_RING };
+  // Off the bottom: toward a ring beyond the picture's bottom edge, until all
+  // of the bird is past the edge.
+  const edge = FLOW_VIEW.top + FLOW_VIEW.height;
+  const beyond = { ...perches.at(-1)!, top: FLOW_ROOM.height - FLOW_RING };
   const leaving = scene.frames.length;
   flyTo(scene, "sortie", perches.at(-1)!, beyond);
   const gone = scene.frames.findIndex(
-    (frame, i) => i > leaving && inkBox(frame).left > edge,
+    (frame, i) => i > leaving && inkBox(frame).top > edge,
   );
   if (gone < 0) throw new Error("The bird never left the picture");
   scene.frames.length = gone + 1;
   scene.frames[gone]!.hidden = true;
 
-  // Back in from the left, already flying, and home to the first ring.
+  // Back in from the top, already flying, and home to the first ring.
   const [first] = perches;
   const back = planFlight({
     kind: "loop",
     viewport: FLOW_ROOM,
     perch: first!,
     rng: scene.rng,
-    airborne: { x: 0, y: first!.top + FLOW_RING * 0.7, facing: 1 },
+    airborne: {
+      x: first!.left + FLOW_RING * 0.8,
+      y: -4,
+      facing: -1,
+    },
   });
   for (let s = 0; s < back.duration; s += STEP) {
     scene.frames.push(flying(back.frame(s)));
@@ -425,26 +455,26 @@ const paint = (dark: boolean) => ({
 });
 
 /**
- * The flow scene, for a light or a dark page: the four rings with their
- * names, a dotted trail from each to the next, and the bird going round.
+ * The vertical flow scene, for a light or a dark page: the four rings stacked
+ * top-to-bottom with their names, a vertical dotted trail from each to the
+ * next, and the bird flying down from step to step.
  */
 export async function renderFlowSvg(dark: boolean): Promise<string> {
   const { left, top, width, height } = FLOW_VIEW;
   const colors = paint(dark);
   const perches = flowPerches();
   const name = await face("name");
-  const ringMiddle = FLOW_RING_TOP + FLOW_RING / 2;
+  const ringMiddleX = FLOW_RING_LEFT + FLOW_RING / 2;
   const labels = FLOW_STEPS.map(({ label }, i) => {
     const line = outline(name, label, FLOW_LABEL_SIZE, -0.025);
-    const middle = perches[i]!.left + FLOW_RING / 2;
-    const x = middle - (line.ink.left + line.ink.right) / 2;
-    return `  ${textPath(line, x, FLOW_RING_TOP + FLOW_RING + 34, colors.text)}`;
+    const x = ringMiddleX - (line.ink.left + line.ink.right) / 2;
+    return `  ${textPath(line, x, perches[i]!.top + FLOW_RING + 28, colors.text)}`;
   });
-  // A dotted trail from the open side of each ring to the back of the next.
+  // A vertical dotted trail from beneath each step's label to the top of the next ring.
   const trails = perches.slice(0, -1).map((perch, i) => {
-    const from = perch.left + FLOW_RING + 10;
-    const to = perches[i + 1]!.left - 6;
-    return `    <path d="M${fixed(from, 2)} ${ringMiddle} H${fixed(to, 2)}" />`;
+    const from = perch.top + FLOW_RING + 48;
+    const to = perches[i + 1]!.top - 16;
+    return `    <path d="M${fixed(ringMiddleX, 2)} ${fixed(from, 2)} V${fixed(to, 2)}" />`;
   });
   const alt = `${FLOW_STEPS.map((step) => step.label).join(", then ")}: the Contrack corvid flies from step to step.`;
   const stroke = `fill="none" stroke="${colors.ink}" stroke-width="${CORVID_OPTICAL.large.stroke}" stroke-linecap="round" stroke-linejoin="round"`;
@@ -453,7 +483,7 @@ export async function renderFlowSvg(dark: boolean): Promise<string> {
     `  <title>${alt}</title>`,
     `  <!-- Generated by scripts/brand/build-icons.ts from scripts/brand/readmeScenes.ts. Do not edit. -->`,
     ...REDUCED_MOTION_STYLE.map((line) => `  ${line}`),
-    `  <g fill="none" stroke="${colors.trail}" stroke-width="2" stroke-linecap="round" stroke-dasharray="0.1 7">`,
+    `  <g fill="none" stroke="${colors.trail}" stroke-width="2" stroke-linecap="round" stroke-dasharray="0.1 9">`,
     ...trails,
     `  </g>`,
     ...labels,
@@ -469,32 +499,427 @@ export async function renderFlowSvg(dark: boolean): Promise<string> {
   ].join("\n");
 }
 
-// The birds at the foot of the README
+// ============================================================================
+// 2. The branched tree at the foot of the README (readme-tree.svg)
+// ============================================================================
 
-/** The cards at the foot of the README, and the acts each one's bird plays. */
-export const PERCHES = {
-  help: { seed: 11, acts: ["cock", "caw", "glance"] },
-  contribute: { seed: 23, acts: ["preen", "glance", "stretch"] },
-  license: { seed: 31, acts: ["lookBack", "ruffle", "cock"] },
-} as const satisfies Record<string, { seed: number; acts: ActName[] }>;
-export type PerchName = keyof typeof PERCHES;
+const REPO_URL = "https://github.com/arvarik/contrack";
+
+export interface TreeTwig {
+  text: string;
+  /** Optional link target when the twig label is a clickable resource. */
+  href?: string;
+  /** Where the twig splits from its main bough. */
+  from: Vec;
+  /** Control point of the twig's curve toward the text stem. */
+  ctrl: Vec;
+  /** Baseline start `(x, y)` of the text; for `"left"` alignment `x` is the right edge. */
+  anchor: Vec;
+  align: "left" | "right";
+  /** Angle (degrees) of the terminal leaf at the tip of the text stem. */
+  leafAngle: number;
+}
+
+export interface TreeBranch {
+  id: "help" | "contribute" | "license";
+  title: string;
+  titlePos: Vec;
+  perch: FlightPerch;
+  acts: readonly ActName[];
+  twigs: readonly TreeTwig[];
+}
 
 /**
- * One bird in its ring, in the mark's own box, for a light or a dark page.
- * It is the animated lockup's mark without the name, with acts of its own.
+ * The three main boughs of the tree, arranged in a canopy triangle:
+ * - `help` on the lower-left bough
+ * - `contribute` on the high central crown bough
+ * - `license` on the lower-right bough
  */
-export function renderPerchSvg(which: PerchName, dark: boolean): string {
-  const { seed, acts } = PERCHES[which];
-  const colors = paint(dark);
+export const TREE_BRANCHES: readonly TreeBranch[] = [
+  {
+    id: "help",
+    title: "Get help",
+    titlePos: [264, 315],
+    perch: { left: 235, top: 224, size: 58 },
+    acts: ["cock", "caw"],
+    twigs: [
+      {
+        text: "Read the docs",
+        href: `${REPO_URL}/blob/main/docs/README.md`,
+        from: [224, 282],
+        ctrl: [208, 200],
+        anchor: [192, 194],
+        align: "left",
+        leafAngle: -165,
+      },
+      {
+        text: "Ask a question",
+        href: `${REPO_URL}/discussions/categories/q-a`,
+        from: [216, 294],
+        ctrl: [202, 254],
+        anchor: [188, 248],
+        align: "left",
+        leafAngle: 175,
+      },
+      {
+        text: "Report a bug or idea",
+        href: `${REPO_URL}/issues/new/choose`,
+        from: [222, 328],
+        ctrl: [206, 356],
+        anchor: [192, 354],
+        align: "left",
+        leafAngle: 168,
+      },
+      {
+        text: "Security policy",
+        href: `${REPO_URL}/blob/main/SECURITY.md`,
+        from: [272, 338],
+        ctrl: [248, 398],
+        anchor: [216, 400],
+        align: "left",
+        leafAngle: 162,
+      },
+      {
+        text: "Email the maintainer",
+        href: "mailto:arvind.arikatla@gmail.com",
+        from: [298, 335],
+        ctrl: [276, 444],
+        anchor: [244, 446],
+        align: "left",
+        leafAngle: 158,
+      },
+    ],
+  },
+  {
+    id: "contribute",
+    title: "Contribute",
+    titlePos: [480, 148],
+    perch: { left: 451, top: 54, size: 58 },
+    acts: ["preen", "glance"],
+    twigs: [
+      {
+        text: "Send a change",
+        href: `${REPO_URL}/blob/main/CONTRIBUTING.md`,
+        from: [449, 99],
+        ctrl: [420, 64],
+        anchor: [388, 66],
+        align: "left",
+        leafAngle: -168,
+      },
+      {
+        text: "Agent instructions",
+        href: `${REPO_URL}/blob/main/AGENTS.md`,
+        from: [414, 134],
+        ctrl: [396, 122],
+        anchor: [378, 120],
+        align: "left",
+        leafAngle: 172,
+      },
+      {
+        text: "Code of Conduct",
+        href: `${REPO_URL}/blob/main/CODE_OF_CONDUCT.md`,
+        from: [511, 99],
+        ctrl: [540, 64],
+        anchor: [572, 66],
+        align: "right",
+        leafAngle: -12,
+      },
+      {
+        text: "What changed",
+        href: `${REPO_URL}/blob/main/CHANGELOG.md`,
+        from: [546, 134],
+        ctrl: [564, 122],
+        anchor: [582, 120],
+        align: "right",
+        leafAngle: 8,
+      },
+    ],
+  },
+  {
+    id: "license",
+    title: "License",
+    titlePos: [696, 315],
+    perch: { left: 667, top: 224, size: 58 },
+    acts: ["lookBack", "ruffle"],
+    twigs: [
+      {
+        text: "GNU AGPL v3",
+        href: `${REPO_URL}/blob/main/LICENSE`,
+        from: [736, 282],
+        ctrl: [752, 200],
+        anchor: [768, 194],
+        align: "right",
+        leafAngle: -15,
+      },
+      {
+        text: "Free to use & change",
+        from: [744, 292],
+        ctrl: [758, 254],
+        anchor: [772, 248],
+        align: "right",
+        leafAngle: 5,
+      },
+      {
+        text: "Share your changes",
+        from: [738, 328],
+        ctrl: [754, 356],
+        anchor: [768, 354],
+        align: "right",
+        leafAngle: 14,
+      },
+    ],
+  },
+];
+
+const TREE_SEED = 31;
+export const TREE_ROOM = { width: 960, height: 540 } as const;
+export const TREE_VIEW = {
+  left: 0,
+  top: 12,
+  width: 960,
+  height: 516,
+} as const;
+
+/** Exact frames per leg of the triangle: 9.0 seconds at 60 fps. */
+export const TREE_LEG_FRAMES = 9 * FRAME_RATE;
+
+/** Where the three nests sit in the tree. */
+export function treePerches(): FlightPerch[] {
+  return TREE_BRANCHES.map((b) => b.perch);
+}
+
+/**
+ * Every frame of the tree scene: for each of the three nests in the triangle,
+ * the bird stays in the nest playing its perched acts and then flies to the
+ * next nest, taking exactly 9 seconds (`TREE_LEG_FRAMES`) per branch.
+ */
+export function treeFrames(seed: number = TREE_SEED): SceneFrame[] {
+  const perches = treePerches();
+  const rng = createRng(seed);
+  const frames: SceneFrame[] = [];
+
+  TREE_BRANCHES.forEach(({ acts }, i) => {
+    const from = perches[i]!;
+    const to = perches[(i + 1) % perches.length]!;
+    const staySeed = Math.floor(rng() * 1e9);
+    const flight = flightBetween(rng, TREE_ROOM, "sortie", from, to);
+    const stayCount = TREE_LEG_FRAMES - flight.length;
+    if (stayCount < FRAME_RATE * 2) {
+      throw new Error(`Flight ${i} left too few frames to rest in the nest`);
+    }
+    const loop = perchLoop(staySeed, acts, [1_100, 1_500]);
+    for (let f = 0; f < stayCount; f++) {
+      const t = Math.min(f * STEP, loop.duration);
+      frames.push(perched(from, loopPose(loop, t)));
+    }
+    frames.push(...flight);
+  });
+
+  return frames;
+}
+
+/** A mono-line botanical leaf sprouting at `(x, y)` at `angleDeg` degrees. */
+function leafPath(
+  x: number,
+  y: number,
+  angleDeg: number,
+  length = 18,
+  halfWidth = 5.2,
+): string {
+  const rad = (angleDeg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const pt = (u: number, v: number): string =>
+    `${fixed(x + u * cos - v * sin, 1)} ${fixed(y + u * sin + v * cos, 1)}`;
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="The Contrack corvid">`,
-    `  <title>The Contrack corvid</title>`,
+    `M${pt(0, 0)}`,
+    `C${pt(length * 0.32, -halfWidth)} ${pt(length * 0.72, -halfWidth * 0.85)} ${pt(length, 0)}`,
+    `C${pt(length * 0.72, halfWidth * 0.85)} ${pt(length * 0.32, halfWidth)} ${pt(0, 0)}`,
+    `M${pt(1.5, 0)} L${pt(length * 0.68, 0)}`,
+  ].join(" ");
+}
+
+/** Woven mono-line nest twigs cradling `perch`'s ring in the fork of its branch. */
+function nestCradlePaths(perch: FlightPerch): string[] {
+  const cx = perch.left + perch.size * 0.5;
+  const by = perch.top + perch.size * 0.92;
+  const r = perch.size * 0.54;
+  return [
+    `M${fixed(cx - r, 1)} ${fixed(by - 8, 1)} Q${fixed(cx, 1)} ${fixed(by + 12, 1)} ${fixed(cx + r, 1)} ${fixed(by - 9, 1)}`,
+    `M${fixed(cx - r * 0.82, 1)} ${fixed(by - 2, 1)} Q${fixed(cx + 3, 1)} ${fixed(by + 15, 1)} ${fixed(cx + r * 0.86, 1)} ${fixed(by - 3, 1)}`,
+    `M${fixed(cx - r * 1.08, 1)} ${fixed(by - 14, 1)} Q${fixed(cx - r * 0.25, 1)} ${fixed(by + 8, 1)} ${fixed(cx + r * 0.55, 1)} ${fixed(by + 3, 1)}`,
+  ];
+}
+
+/**
+ * The trunk, roots, three primary boughs and decorative canopy twigs & leaves.
+ */
+function treeStructurePaths(): {
+  heavy: string[];
+  medium: string[];
+  fine: string[];
+} {
+  // Primary trunk, roots, and the three main boughs leading to each nest fork.
+  const heavy = [
+    // Left root -> left trunk -> left main bough into Get help nest fork
+    "M388 512 C432 510 458 492 465 446 C470 408 468 372 456 352 C416 318 352 296 290 278",
+    // Right root -> right trunk -> right main bough into License nest fork
+    "M572 512 C528 510 502 492 495 446 C490 408 492 372 504 352 C544 318 608 296 670 278",
+    // Center heartwood -> rises from trunk base and forks into a chalice around "Contribute"
+    "M480 514 C479 448 478 388 475 322 C472 258 470 212 458 184 C432 168 414 152 414 134 C414 116 430 106 452 106",
+    "M487 486 C485 420 484 360 486 296 C488 248 490 208 502 184 C528 168 546 152 546 134 C546 116 530 106 508 106",
+    // Supporting under-boughs for left and right nests, parting around "Get help" and "License"
+    "M462 376 C414 342 362 318 326 308 C312 330 286 340 254 340 C228 340 214 326 214 308 C214 290 226 278 242 274",
+    "M498 376 C546 342 598 318 634 308 C648 330 674 340 706 340 C732 340 746 326 746 308 C746 290 734 278 718 274",
+  ];
+
+  // Secondary structural limbs, root flares, and nest cradles.
+  const medium = [
+    // Root flares at the base of the trunk
+    "M356 515 Q422 516 468 498",
+    "M604 515 Q538 516 492 498",
+    "M422 520 Q462 516 480 502",
+    "M538 520 Q498 516 480 502",
+    // Canopy limbs arching above and beside the three nests
+    "M356 306 C330 258 298 218 262 192",
+    "M604 306 C630 258 662 218 698 192",
+    "M472 238 C438 198 408 172 374 156",
+    "M488 238 C522 198 552 172 586 156",
+    ...TREE_BRANCHES.flatMap((b) => nestCradlePaths(b.perch)),
+  ];
+
+  // Decorative canopy leaves along the trunk forks and boughs.
+  const leaves: Array<[number, number, number, number, number]> = [
+    [358, 302, -125, 17, 4.8],
+    [402, 326, -135, 16, 4.5],
+    [602, 302, -55, 17, 4.8],
+    [558, 326, -45, 16, 4.5],
+    [262, 192, -145, 18, 5.0],
+    [276, 198, -75, 15, 4.4],
+    [698, 192, -35, 18, 5.0],
+    [684, 198, -105, 15, 4.4],
+    [374, 156, -155, 18, 5.0],
+    [390, 162, -105, 15, 4.2],
+    [586, 156, -25, 18, 5.0],
+    [570, 162, -75, 15, 4.2],
+    [468, 206, -140, 16, 4.5],
+    [492, 206, -40, 16, 4.5],
+    [480, 44, -90, 17, 4.8],
+    [454, 52, -135, 15, 4.4],
+    [506, 52, -45, 15, 4.4],
+    [356, 515, -165, 15, 4.2],
+    [604, 515, -15, 15, 4.2],
+  ];
+
+  const fine = leaves.map(([x, y, a, l, w]) => leafPath(x, y, a, l, w));
+  return { heavy, medium, fine };
+}
+
+/**
+ * The branched tree at the foot of the README: three main boughs ("Get help",
+ * "Contribute" and "License") with sub-branches, leaves and text growing from
+ * them, a nest ring in each bough, and one corvid flying in a triangle from
+ * nest to nest every 9 seconds.
+ */
+export async function renderTreeSvg(dark: boolean): Promise<string> {
+  const { left, top, width, height } = TREE_VIEW;
+  const colors = paint(dark);
+  const perches = treePerches();
+  const nameFace = await face("name");
+  const bodyFace = await face("body");
+  const { heavy, medium, fine } = treeStructurePaths();
+
+  const twigStemPaths: string[] = [];
+  const twigLeafPaths: string[] = [];
+  const textPaths: string[] = [];
+
+  for (const branch of TREE_BRANCHES) {
+    const heading = outline(nameFace, branch.title, 21, -0.025);
+    const hx = branch.titlePos[0] - (heading.ink.left + heading.ink.right) / 2;
+    textPaths.push(textPath(heading, hx, branch.titlePos[1], colors.text));
+
+    for (const twig of branch.twigs) {
+      const line = outline(bodyFace, twig.text, 15);
+      const textW = line.ink.right - line.ink.left;
+      const stemY = twig.anchor[1] + 7;
+      // Leave 8px between the stem's node leaf and the first/last letter so
+      // the leaf points back toward the trunk without touching the glyphs.
+      const padIn = 8;
+      const padOut = 10;
+      const textX =
+        twig.align === "left"
+          ? twig.anchor[0] - padIn - line.ink.right
+          : twig.anchor[0] + padIn - line.ink.left;
+      const stemEnd =
+        twig.align === "left"
+          ? twig.anchor[0] - padIn - textW - padOut
+          : twig.anchor[0] + padIn + textW + padOut;
+
+      twigStemPaths.push(
+        `M${fixed(twig.from[0], 1)} ${fixed(twig.from[1], 1)} Q${fixed(twig.ctrl[0], 1)} ${fixed(twig.ctrl[1], 1)} ${fixed(twig.anchor[0], 1)} ${fixed(stemY, 1)} L${fixed(stemEnd, 1)} ${fixed(stemY, 1)}`,
+      );
+      // Node leaf angles back toward the trunk (-45° on left twigs, -135° on right twigs).
+      const nodeLeafAngle = twig.align === "left" ? -42 : -138;
+      twigLeafPaths.push(
+        leafPath(twig.anchor[0], stemY, nodeLeafAngle, 12, 3.6),
+        leafPath(stemEnd, stemY, twig.leafAngle, 17, 4.8),
+      );
+      const glyph = textPath(
+        line,
+        textX,
+        twig.anchor[1],
+        twig.href ? colors.ink : colors.text,
+      );
+      const hitLeft = fixed(textX + line.ink.left - 4, 1);
+      const hitTop = fixed(twig.anchor[1] - 16, 1);
+      const hitW = fixed(textW + 8, 1);
+      textPaths.push(
+        twig.href
+          ? `<a href="${twig.href}" target="_top"><rect x="${hitLeft}" y="${hitTop}" width="${hitW}" height="24" fill="transparent" />${glyph}</a>`
+          : glyph,
+      );
+    }
+  }
+
+  // Subtle curved dotted triangle connecting the three nests across the canopy.
+  const triangleTrails = [
+    "M276 218 Q362 128 444 86",
+    "M516 86 Q598 128 684 218",
+    "M660 262 Q480 294 300 262",
+  ];
+
+  const alt =
+    "The Contrack tree: Get help, Contribute and License branches, with the corvid flying from nest to nest.";
+  const birdStroke = `fill="none" stroke="${colors.ink}" stroke-width="${CORVID_OPTICAL.large.stroke}" stroke-linecap="round" stroke-linejoin="round"`;
+
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${left} ${top} ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="${alt}">`,
+    `  <title>${alt}</title>`,
     `  <!-- Generated by scripts/brand/build-icons.ts from scripts/brand/readmeScenes.ts. Do not edit. -->`,
     ...REDUCED_MOTION_STYLE.map((line) => `  ${line}`),
-    `  <g fill="none" stroke="${colors.ink}" stroke-width="${CORVID_OPTICAL.large.stroke}" stroke-linecap="round" stroke-linejoin="round">`,
-    `    <path d="${CORVID_PATHS[CORVID_RING]}" />`,
-    ...stillBird(colors.eye, "    "),
-    ...livingBird(colors.eye, "    ", perchLoop(seed, acts)),
+    `  <g fill="none" stroke="${colors.trail}" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="0.1 9">`,
+    ...triangleTrails.map((d) => `    <path d="${d}" />`),
+    `  </g>`,
+    `  <g fill="none" stroke="${colors.ink}" stroke-linecap="round" stroke-linejoin="round">`,
+    `    <g stroke-width="2.2">`,
+    ...heavy.map((d) => `      <path d="${d}" />`),
+    `    </g>`,
+    `    <g stroke-width="1.55">`,
+    ...medium.map((d) => `      <path d="${d}" />`),
+    ...twigStemPaths.map((d) => `      <path d="${d}" />`),
+    `    </g>`,
+    `    <g stroke-width="1.25">`,
+    ...fine.map((d) => `      <path d="${d}" />`),
+    ...twigLeafPaths.map((d) => `      <path d="${d}" />`),
+    `    </g>`,
+    `  </g>`,
+    ...textPaths.map((line) => `  ${line}`),
+    `  <g ${birdStroke}>`,
+    ...perches.map((perch) => ringLine(perch, "    ")),
+    ...stillBird(colors.eye, "    ", perches[0]!),
+    `    <g class="alive">`,
+    ...sceneBird(treeFrames(), colors.eye, "      "),
+    `    </g>`,
     `  </g>`,
     `</svg>`,
     ``,

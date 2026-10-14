@@ -237,7 +237,7 @@ The map opens where you left it in this browser, also after a reload. This posit
 Contrack finds the place for an address with Nominatim, the OpenStreetMap geocoder. Nominatim needs no key, and Contrack sends it only the address text. The first address places the pin, and the location places it when there is no address.
 
 - The lookups run in the background. Every call to Nominatim, from these lookups and from place searches such as **Go to**, keeps to one a second.
-- When Nominatim finds nothing for an address, Contrack drops the part before the first comma and tries the rest, up to four tries. So a street that Nominatim does not know can still place the pin in the right town.
+- When Nominatim finds nothing for an address, Contrack strips building, floor and suite notes, normalizes regional or metro labels (such as "Greater New York City Area" to Manhattan, NY, or "San Francisco Bay Area" to San Francisco, CA), and drops the part before the first comma to try the rest, up to four tries. So a street that Nominatim does not know or a metro-area label still places the pin in a representative spot.
 - Contrack keeps each answer while a contact uses that address, and it does not try an address that found nothing again for seven days.
 - When Nominatim does not answer, Contrack does not remember that as "nothing found". It tries again after 30 seconds, then waits twice as long each time, up to 15 minutes, until Nominatim answers.
 - When the server starts, it queues every contact that has an address or a location and no pin.

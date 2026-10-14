@@ -442,7 +442,9 @@ off, leave out the `Authorization` header.
 
 A contact carries its child records: `emails`, `phones`, `addresses`,
 `socialLinks`, `education`, `experience`, `sources`, `tags`, `interests` and
-`attributes`. It also carries `lists` and `interactionCount`.
+`attributes` (including extra dates stored as `name: "date:<label>"`). It also
+carries `lists` and `interactionCount`. A contact's `id` is a lowercase name
+slug with an 8-character random hex suffix, such as `jane-smith-f60e8536`.
 
 | Endpoint                                 | What it does                                                                                                                                                                                                                                                                | Access               |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- |

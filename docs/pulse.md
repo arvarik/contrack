@@ -123,7 +123,7 @@ With no contacts yet, Pulse shows **Welcome to Pulse** with four first steps: **
 | **Overdue**   | Follow-ups whose due day has passed, the oldest first                | "3 days overdue"        |
 | **Today**     | Follow-ups due today                                                 | "Today"                 |
 | **This week** | Follow-ups due in the next seven days                                | "Tomorrow", "Wednesday" |
-| **Birthdays** | Birthdays in the next seven days                                     | "Today", "Friday"       |
+| **Birthdays** | Birthdays, anniversaries and custom dates in the next seven days     | "Today", "Friday"       |
 | **Catch up**  | Tracked contacts past their cadence, the furthest first, ten at most | "3 weeks past due"      |
 
 The **Catch up** clock starts at your last interaction with the contact. With nothing logged, it starts on the day you tracked the contact. A contact comes due the day after its cadence ends. When more than ten contacts are past due, the heading shows the total, for example "10 of 14".
@@ -131,7 +131,7 @@ The **Catch up** clock starts at your last interaction with the contact. With no
 Each row shows the name, the chip and what to do. A row that is not a catch-up also says when you last spoke, for example "Last spoke 2 weeks ago" ("Spoke 2 weeks ago" on a phone). Press a row to open the contact. The round button at the start of the row does the row's job:
 
 - On a follow-up, the check marks it done.
-- On a birthday ("Wish Rowan Vale a happy birthday"), the cake opens a note to log.
+- On a birthday or other date ("Wish Rowan Vale a happy birthday", "Wish Rowan Vale a happy anniversary", or "Rowan Vale · Work anniversary"), the cake opens a note to log.
 - On a catch-up ("Check in with Rowan Vale"), the button opens a note to log.
 
 A follow-up row also has a snooze button. It opens **Snooze until** with **Tomorrow**, **In 3 days**, **Next week** and **Next month**. A toast says the new day, for example "Follow-up snoozed to Thursday, Oct 8", and **Undo** puts the old date back. On a computer, the button shows when you point at the row or focus it. On a touch screen, it always shows. Birthday and catch-up rows have no snooze.
@@ -172,7 +172,7 @@ The **Completed** line says "Nothing completed yet", or for example "3 completed
 
 **Activity** shows the last 12 weeks as squares, one for each day. A stronger color means more interactions. Each column is a week that starts on the day **Week starts on** sets in **Settings → Network and contacts**. Point at a square, or tap it, to read the day, for example "Wed, Sep 17: 2 notes, 1 call". Under the squares, a line shows the weekly totals, the last four weeks against the four before, and this week by type.
 
-**Daily insight** shows one observation that AI writes about your network. AI writes a new one each day, and again after your contacts change. Without an insight, the card says why in one line:
+**Daily insight** shows one observation that AI writes about your network, drawing on your contacts' industries, roles, locations and recent activity. AI writes a new one each day, and again after your contacts change. Without an insight, the card says why in one line:
 
 - With AI off for your account, it reads "AI is off for your account", with a link to **Settings → Privacy and AI**.
 - With no Fast model set up, an admin reads "Set up a Fast model to get one", with **Open AI settings**. A member reads "Your admin has not set up AI yet".
@@ -191,7 +191,7 @@ See [Connect a provider](ai.md#connect-a-provider).
 
 With nothing to do, the card says "Nothing to clean up".
 
-**Coming up** lists the birthdays eight to fourteen days away and the meetings in the next seven days from a connected calendar, in date order. Each row has a chip such as "Tomorrow", "Thursday" or "In 10 days". A birthday row says, for example, "Turns 34", or "Birthday" when the year is not known. A meeting row shows its title, its time and the people in it. An all-day event shows its day and "all day". With nothing to show, the card says "Nothing coming up". When no calendar is connected, it also offers **Connect a calendar**.
+**Coming up** lists the birthdays, anniversaries and custom dates eight to fourteen days away and the meetings in the next seven days from a connected calendar, in date order. Each row has a chip such as "Tomorrow", "Thursday" or "In 10 days". A birthday row says, for example, "Turns 34", or "Birthday" when the year is not known; an anniversary or custom date shows its years or its label. A meeting row shows its title, its time and the people in it. An all-day event shows its day and "all day". With nothing to show, the card says "Nothing coming up". When no calendar is connected, it also offers **Connect a calendar**.
 
 **Composition** is a ring chart of your network by **Industry**, **Role** or **Location**. It shows the six largest groups and **Other**. Each group opens the Network list filtered to it. **See all** or **Other** opens **Network composition**, which lists the eight largest groups by industry, location and role, each with its count and share.
 
