@@ -156,7 +156,9 @@ export function localEmbedder(local: LocalModel): Embedder {
   const embedder: Embedder = {
     id: builtinSignature(local.model),
     local: true,
-    ready: () => readyModels.has(local.model),
+    ready: () =>
+      readyModels.has(local.model) &&
+      (isWorkerActive() || fallbackExtractors.has(local.model)),
     dimension: async () => local.dimension,
     embed: (texts, use, signal) => {
       const prefix = local.prefix?.[use];
@@ -237,24 +239,32 @@ async function embedLocal(
   // 129 ms, and every other account's requests waited. Queries go the same way
   // (a round trip of 0.44 ms against 0.39 ms in process), so there is one copy
   // of the model in memory.
-  const vectors = await runOnWorker(
-    {
-      kind: "embed",
-      model: local.model,
-      pooling: local.pooling,
-      texts,
-      batchSize: BATCH_SIZE,
-    },
-    () => embedInProcess(local, texts),
-    (result) => {
-      if (result.kind !== "embed") throw new AppError("Wrong worker result");
-      // Copied out of the transferred buffer. `subarray` is a view, and the
-      // caller keeps these vectors past the life of the message.
-      return unflatten(result).map((v) => new Float32Array(v));
-    },
-    undefined,
-    signal,
-  );
+  let vectors: Float32Array[];
+  try {
+    vectors = await runOnWorker(
+      {
+        kind: "embed",
+        model: local.model,
+        pooling: local.pooling,
+        texts,
+        batchSize: BATCH_SIZE,
+      },
+      () => embedInProcess(local, texts),
+      (result) => {
+        if (result.kind !== "embed") throw new AppError("Wrong worker result");
+        // Copied out of the transferred buffer. `subarray` is a view, and the
+        // caller keeps these vectors past the life of the message.
+        return unflatten(result).map((v) => new Float32Array(v));
+      },
+      undefined,
+      signal,
+    );
+  } catch (err) {
+    if (!isWorkerActive() && !fallbackExtractors.has(local.model)) {
+      readyModels.delete(local.model);
+    }
+    throw err;
+  }
 
   if (vectors.length !== texts.length) {
     throw new AppError(
@@ -333,7 +343,9 @@ function providerEmbedder(
     async embed(texts, use, signal) {
       signal?.throwIfAborted();
       if (texts.length === 0) return [];
-      const vectors = await embedWithProvider(providerId, model, texts, use);
+      const vectors = signal
+        ? await embedWithProvider(providerId, model, texts, use, signal)
+        : await embedWithProvider(providerId, model, texts, use);
       return vectors.map((v) => new Float32Array(v));
     },
   };

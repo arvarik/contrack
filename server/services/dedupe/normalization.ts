@@ -270,7 +270,7 @@ export function normalizeContacts(scope: Scope): NormalizedContact[] {
   const allContacts = sqlite
     .prepare(
       `SELECT id, name, firstName, lastName, company, role, location, industry, headline, about, preferences
-     FROM contacts WHERE ownerId = ? AND (isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL)`,
+     FROM contacts WHERE ownerId = ? AND isGhost = 0 AND (isArchived = 0 OR isArchived IS NULL) AND canonicalId IS NULL AND deletedAt IS NULL`,
     )
     .all(scope.ownerId) as RawContactRow[];
 
@@ -282,7 +282,8 @@ export function normalizeContacts(scope: Scope): NormalizedContact[] {
   const allEmails = sqlite
     .prepare(
       `SELECT ce.contactId, ce.email FROM contact_emails ce
-       JOIN contacts c ON c.id = ce.contactId WHERE c.ownerId = ?`,
+       JOIN contacts c ON c.id = ce.contactId
+       WHERE c.ownerId = ? AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 0`,
     )
     .all(scope.ownerId) as { contactId: string; email: string }[];
 
@@ -296,7 +297,8 @@ export function normalizeContacts(scope: Scope): NormalizedContact[] {
   const allPhones = sqlite
     .prepare(
       `SELECT cp.contactId, cp.phone FROM contact_phones cp
-       JOIN contacts c ON c.id = cp.contactId WHERE c.ownerId = ?`,
+       JOIN contacts c ON c.id = cp.contactId
+       WHERE c.ownerId = ? AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 0`,
     )
     .all(scope.ownerId) as { contactId: string; phone: string }[];
 
@@ -310,7 +312,8 @@ export function normalizeContacts(scope: Scope): NormalizedContact[] {
   const allSources = sqlite
     .prepare(
       `SELECT cs.contactId, cs.platform FROM contact_sources cs
-       JOIN contacts c ON c.id = cs.contactId WHERE c.ownerId = ?`,
+       JOIN contacts c ON c.id = cs.contactId
+       WHERE c.ownerId = ? AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 0`,
     )
     .all(scope.ownerId) as { contactId: string; platform: string }[];
 
@@ -326,7 +329,8 @@ export function normalizeContacts(scope: Scope): NormalizedContact[] {
   const allTags = sqlite
     .prepare(
       `SELECT ct.contactId, ct.tag FROM contact_tags ct
-       JOIN contacts c ON c.id = ct.contactId WHERE c.ownerId = ?`,
+       JOIN contacts c ON c.id = ct.contactId
+       WHERE c.ownerId = ? AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 0`,
     )
     .all(scope.ownerId) as { contactId: string; tag: string }[];
 
@@ -340,7 +344,8 @@ export function normalizeContacts(scope: Scope): NormalizedContact[] {
   const allInterests = sqlite
     .prepare(
       `SELECT ci.contactId, ci.interest FROM contact_interests ci
-       JOIN contacts c ON c.id = ci.contactId WHERE c.ownerId = ?`,
+       JOIN contacts c ON c.id = ci.contactId
+       WHERE c.ownerId = ? AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 0`,
     )
     .all(scope.ownerId) as { contactId: string; interest: string }[];
 
@@ -429,7 +434,8 @@ export function loadProfileUrls(scope: Scope): Map<string, string[]> {
   const rows = sqlite
     .prepare(
       `SELECT sl.contactId, sl.url FROM contact_social_links sl
-       JOIN contacts c ON c.id = sl.contactId WHERE c.ownerId = ?`,
+       JOIN contacts c ON c.id = sl.contactId
+       WHERE c.ownerId = ? AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 0`,
     )
     .all(scope.ownerId) as { contactId: string; url: string | null }[];
   const byContact = new Map<string, string[]>();
@@ -457,7 +463,7 @@ export function normalizeContactById(
   const raw = sqlite
     .prepare(
       `SELECT id, name, firstName, lastName, company, role, location, industry, headline, about, preferences
-       FROM contacts WHERE id = ? AND ownerId = ?`,
+       FROM contacts WHERE id = ? AND ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0`,
     )
     .get(contactId, scope.ownerId) as RawContactRow | undefined;
 

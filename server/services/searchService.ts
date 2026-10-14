@@ -1009,10 +1009,15 @@ async function runSearch(
           cached: true,
         };
       }
+      const sharedQueryVector = queryVector.then((vec) =>
+        vec === null && signal?.aborted && !sharedSignal.aborted
+          ? embedQuery(scope, text, aiAllowed, sharedSignal)
+          : vec,
+      );
       const fallback = async (path: string) =>
         done(
           {
-            matches: (await localList(await queryVector)).matches,
+            matches: (await localList(await sharedQueryVector)).matches,
             fallback: true,
           },
           intent.kind,
@@ -1024,7 +1029,7 @@ async function runSearch(
         answered = await withTimeout(
           async (budget) => {
             const retrieval = await hybridRetrieval(scope, text, rid, budget, {
-              vector: { text, vector: queryVector },
+              vector: { text, vector: sharedQueryVector },
               aiAllowed,
               intent,
               facets,

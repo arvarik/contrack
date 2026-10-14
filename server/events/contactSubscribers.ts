@@ -29,7 +29,10 @@ import { getErrorMessage } from "../utils/helpers.ts";
 import { aiCache } from "../utils/aiCache.ts";
 import { scopeForOwnerId } from "../tenancy/scope.ts";
 import { runWithContext } from "../tenancy/requestContext.ts";
-import { scheduleSearchIndex } from "../services/search/indexQueue.ts";
+import {
+  scheduleSearchIndex,
+  triggerIndexDrain,
+} from "../services/search/indexQueue.ts";
 import { generateAndStoreEmbedding } from "../services/dedupe/embeddings.ts";
 import {
   cancelGeocode,
@@ -136,6 +139,16 @@ const searchIndex: Subscriber = {
       event.type === "contact.updated" &&
       !touches(event.payload.changed, SEARCH_FIELDS)
     ) {
+      return;
+    }
+    if (
+      event.type === "contact.updated" &&
+      event.payload.bulk &&
+      !touches(event.payload.changed, ["tags", "interests"])
+    ) {
+      if (process.env.DISABLE_BACKGROUND_JOBS !== "true") {
+        triggerIndexDrain();
+      }
       return;
     }
     scheduleSearchIndex(event.subjectId);

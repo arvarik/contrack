@@ -182,3 +182,40 @@ describe("two owners' jobs", () => {
     expect(order).toEqual(["a1", "b1", "a2", "a3"]);
   });
 });
+
+describe("dedupeKey while running", () => {
+  it("re-queues the latest payload after a running job with the same dedupeKey finishes", async () => {
+    const seen: number[] = [];
+    registerJob(
+      defineJob<{ version: number }>({
+        kind: "test.dedupeRunning",
+        run({ version }) {
+          seen.push(version);
+          if (version === 1) {
+            // Simulate a new edit arriving while version 1 is mid-flight.
+            const queuedId = enqueueJob(
+              "test.dedupeRunning",
+              { version: 2 },
+              { ownerId: ownerA, dedupeKey: "dedupe:owner-a" },
+            );
+            expect(queuedId).toBeNull();
+          }
+        },
+      }),
+    );
+
+    const firstId = enqueueJob(
+      "test.dedupeRunning",
+      { version: 1 },
+      { ownerId: ownerA, dedupeKey: "dedupe:owner-a" },
+    );
+    expect(firstId).not.toBeNull();
+
+    await pollJobs();
+    expect(seen).toEqual([1]);
+
+    // The follow-up job should now be queued with version 2 and run on the next poll.
+    await pollJobs();
+    expect(seen).toEqual([1, 2]);
+  });
+});

@@ -284,26 +284,23 @@ export async function drainIndexQueue(
   return result;
 }
 
-/**
- * Queue a contact for local indexing after an edit (FTS updates inside the
- * contact's transaction). A pending, running or failed job for the contact is
- * reset with the new timestamp, so newer edits supersede older attempts.
- */
-export function scheduleSearchIndex(id: string): void {
-  sqlite
-    .prepare(
-      // Each of the three callers has already proved the caller owns this
-      // contact: contactService after a create or update, mergeEngine after a
-      // scoped batch, and dedupe/merging after loadMergePair. The column is a
-      // derived cache.
+let _queueStmts: {
+  clearExpansion: ReturnType<typeof sqlite.prepare>;
+  enqueueContact: ReturnType<typeof sqlite.prepare>;
+  enqueueBatch: (ids: string[]) => void;
+} | null = null;
+
+function getQueueStmts() {
+  if (!_queueStmts) {
+    const clearExpansion = sqlite.prepare(
+      // Each caller of scheduleSearchIndex / scheduleSearchIndexBatch has already
+      // proved the caller owns the contact(s): contactService after a create or
+      // update, mergeEngine after a scoped batch, and dedupe/merging after
+      // loadMergePair. searchExpansion is a derived cache.
       // tenant-lint: allow owner-checked by caller
       "UPDATE contacts SET searchExpansion = NULL WHERE id = ? AND searchExpansion IS NOT NULL",
-    )
-    .run(id);
-
-  // Persist the task in SQLite. If already queued or failed, reset to pending with attempts=0.
-  sqlite
-    .prepare(
+    );
+    const enqueueContact = sqlite.prepare(
       `INSERT INTO search_index_queue (contactId, ownerId, status, attempts, queuedAt, nextAttemptAt, contactUpdatedAt)
        SELECT c.id, c.ownerId, 'pending', 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, c.updatedAt
        FROM contacts c
@@ -316,9 +313,38 @@ export function scheduleSearchIndex(id: string): void {
          queuedAt = CURRENT_TIMESTAMP,
          nextAttemptAt = CURRENT_TIMESTAMP,
          contactUpdatedAt = excluded.contactUpdatedAt`,
-    )
-    .run(id);
+    );
+    const enqueueBatch = sqlite.transaction((ids: string[]) => {
+      for (const id of ids) {
+        enqueueContact.run(id);
+      }
+    });
+    _queueStmts = { clearExpansion, enqueueContact, enqueueBatch };
+  }
+  return _queueStmts;
+}
 
+/**
+ * Queue a contact for local indexing after an edit (FTS updates inside the
+ * contact's transaction). A pending, running or failed job for the contact is
+ * reset with the new timestamp, so newer edits supersede older attempts.
+ */
+export function scheduleSearchIndex(id: string): void {
+  const stmts = getQueueStmts();
+  stmts.clearExpansion.run(id);
+  stmts.enqueueContact.run(id);
+
+  if (process.env.DISABLE_BACKGROUND_JOBS === "true") return;
+  triggerIndexDrain(DEFAULT_DEBOUNCE_MS);
+}
+
+/**
+ * Queue a batch of newly created or updated contacts in a single transaction
+ * and schedule one debounced index drain.
+ */
+export function scheduleSearchIndexBatch(ids: string[]): void {
+  if (ids.length === 0) return;
+  getQueueStmts().enqueueBatch(ids);
   if (process.env.DISABLE_BACKGROUND_JOBS === "true") return;
   triggerIndexDrain(DEFAULT_DEBOUNCE_MS);
 }

@@ -24,6 +24,7 @@ import {
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { AppError } from "../utils/AppError.ts";
+import { withTimeout } from "./resilience.ts";
 import type { EmbedUse } from "./embedder.ts";
 
 /** Dimension of the bundled local model. */
@@ -132,6 +133,7 @@ export async function embedWithProvider(
   model: string,
   texts: string[],
   use?: EmbedUse,
+  signal?: AbortSignal,
 ): Promise<number[][]> {
   if (isAiOffForInstance()) {
     throw new AppError("An admin turned AI off for this instance", 503, {
@@ -144,14 +146,19 @@ export async function embedWithProvider(
       code: "PROVIDER_NOT_CONFIGURED",
     });
   }
-  if (!provider.embed) {
+  const embedFn = provider.embed?.bind(provider);
+  if (!embedFn) {
     throw new AppError(
       `Provider "${providerId}" does not support embeddings`,
       400,
       { code: "EMBEDDINGS_UNSUPPORTED" },
     );
   }
-  const vectors = await provider.embed(texts, model, use);
+  const vectors = await withTimeout(
+    (sig) => embedFn(texts, model, use, sig),
+    30_000,
+    signal,
+  );
   // A provider that returns fewer vectors than inputs would otherwise be
   // absorbed by callers as "some contacts just didn't embed", leaving the
   // index quietly incomplete. Make it a hard error.

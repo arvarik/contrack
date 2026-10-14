@@ -171,6 +171,21 @@ function startDelayOf(definition: JobDefinition<unknown>): number | null {
 
 // Writing rows
 
+interface PendingReenqueue {
+  kind: string;
+  ownerId: string | null;
+  payload: string;
+  runAt: number;
+  maxAttempts: number;
+  dedupeKey: string;
+}
+
+/**
+ * Enqueues that arrived while a `running` row held the same `dedupeKey`, so
+ * changes made while a job is already running are not lost when it finishes.
+ */
+const pendingAfterRunning = new Map<string, PendingReenqueue>();
+
 /**
  * Put a row in the queue, or move the queued row that holds `dedupeKey`.
  * Returns the row's id, or null when a running row holds the key.
@@ -205,10 +220,21 @@ function upsertQueued(
       dedupeKey,
       iso(Date.now()),
     ) as { id: string } | undefined;
+  if (!row && dedupeKey !== null) {
+    pendingAfterRunning.set(dedupeKey, {
+      kind,
+      ownerId,
+      payload,
+      runAt,
+      maxAttempts,
+      dedupeKey,
+    });
+  }
   return row?.id ?? null;
 }
 
 function cancelQueued(dedupeKey: string): void {
+  pendingAfterRunning.delete(dedupeKey);
   sqlite
     .prepare(
       // tenant-lint: allow instance sweep
@@ -343,6 +369,21 @@ function settle(
     definition.every !== undefined &&
     row.dedupeKey === recurringKey(row.kind);
   const scheduleNext = () => {
+    if (row.dedupeKey) {
+      const pending = pendingAfterRunning.get(row.dedupeKey);
+      if (pending) {
+        pendingAfterRunning.delete(row.dedupeKey);
+        upsertQueued(
+          pending.kind,
+          pending.ownerId,
+          pending.payload,
+          Math.max(pending.runAt, now),
+          pending.maxAttempts,
+          pending.dedupeKey,
+        );
+        return;
+      }
+    }
     if (!recurring) return;
     const every = intervalOf(definition);
     if (every !== null) {
@@ -374,12 +415,18 @@ function settle(
     const message = getErrorMessage(error).slice(0, 2_000);
     if (definition !== undefined && attempt < row.maxAttempts) {
       const wait = Math.min(RETRY_BASE_MS * 2 ** (attempt - 1), RETRY_MAX_MS);
+      const pending = row.dedupeKey
+        ? pendingAfterRunning.get(row.dedupeKey)
+        : undefined;
+      if (row.dedupeKey && pending) {
+        pendingAfterRunning.delete(row.dedupeKey);
+      }
       sqlite
         .prepare(
           // tenant-lint: allow instance sweep
-          `UPDATE jobs SET status = 'queued', runAt = ?, lastError = ? WHERE id = ?`,
+          `UPDATE jobs SET status = 'queued', runAt = ?, payload = ?, lastError = ? WHERE id = ?`,
         )
-        .run(iso(now + wait), message, row.id);
+        .run(iso(now + wait), pending?.payload ?? row.payload, message, row.id);
       log.warn(
         "Jobs",
         `${row.kind} failed on try ${attempt} of ${row.maxAttempts} and runs again in ${Math.round(wait / 1000)}s: ${message}`,
@@ -564,6 +611,7 @@ export async function runJobNow(
  * @returns how many rows went back to the queue.
  */
 export function requeueInterruptedJobs(): number {
+  pendingAfterRunning.clear();
   const now = iso(Date.now());
   return sqlite.transaction(() => {
     sqlite

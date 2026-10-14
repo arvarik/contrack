@@ -54,6 +54,7 @@ import {
   requirePasswordCurrent,
   requireSession,
   isAuthRequired,
+  setForcedAuth,
   isAuthenticated,
   currentUser,
   currentSessionId,
@@ -289,7 +290,10 @@ router.post(
     // account. The id stays, so every row it owns stays owned.
     const user = hasLocalOwner()
       ? await convertLocalOwner(input)
-      : await createUser(input);
+      : await createUser({ ...input, setupOnly: true });
+    if (!isAuthRequired()) {
+      setForcedAuth(true);
+    }
 
     // Sign the new account in immediately — making someone re-type the
     // password they just chose twice in a row is pure friction.
@@ -649,6 +653,7 @@ router.get("/me", requireSession, (req, res) => {
 router.patch(
   "/me",
   requireSession,
+  requirePasswordCurrent,
   asyncHandler(async (req, res) => {
     const body = (req.body ?? {}) as Record<string, unknown>;
     const user = await updateUser(currentUser(req)!.id, {
@@ -667,6 +672,7 @@ router.patch(
 router.post(
   "/me/avatar",
   requireSession,
+  requirePasswordCurrent,
   uploadAccountAvatar.single("avatar"),
   asyncHandler(async (req, res) => {
     if (!req.file) throw new ValidationError("No image file provided");
@@ -702,6 +708,7 @@ router.post(
 router.delete(
   "/me/avatar",
   requireSession,
+  requirePasswordCurrent,
   asyncHandler(async (req, res) => {
     const user = currentUser(req)!;
     const latest = getUserById(user.id) ?? user;
@@ -902,6 +909,7 @@ router.get(
 router.patch(
   "/passkeys/:id",
   requireSession,
+  requirePasswordCurrent,
   asyncHandler(async (req, res) => {
     const user = req.principal!.user;
     const name = bodyString(req, "name");
@@ -913,6 +921,7 @@ router.patch(
 router.delete(
   "/passkeys/:id",
   requireSession,
+  requirePasswordCurrent,
   asyncHandler(async (req, res) => {
     const user = req.principal!.user;
     const result = removePasskey(req, user.id, String(req.params.id));

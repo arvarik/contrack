@@ -59,15 +59,15 @@ export interface ImapCursor {
  * Validates that the host does not resolve to a private/internal IP address
  * unless CONNECTORS_ALLOW_PRIVATE_HOSTS is enabled.
  */
-export async function assertSafeImapHost(host: string): Promise<void> {
-  if (process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS === "true") {
-    return;
-  }
-
+export async function assertSafeImapHost(host: string): Promise<string> {
   const cleanHost = host
     .replace(/^\[|\]$/g, "")
     .trim()
     .toLowerCase();
+
+  if (process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS === "true") {
+    return cleanHost || host;
+  }
 
   if (net.isIP(cleanHost)) {
     if (isPrivateAddress(cleanHost)) {
@@ -75,7 +75,7 @@ export async function assertSafeImapHost(host: string): Promise<void> {
         `Host '${host}' is a private or loopback IP address`,
       );
     }
-    return;
+    return cleanHost;
   }
 
   if (cleanHost === "localhost" || cleanHost.endsWith(".localhost")) {
@@ -94,6 +94,7 @@ export async function assertSafeImapHost(host: string): Promise<void> {
         );
       }
     }
+    return addresses[0].address;
   } catch (err: unknown) {
     if (err instanceof ConnectorConfigError) throw err;
     throw new ConnectorConfigError(
@@ -113,11 +114,16 @@ export async function assertSafeImapHost(host: string): Promise<void> {
 export function createImapClient(
   config: ImapConfig,
   secret: ImapSecret,
+  connectHost: string = config.host,
 ): ImapFlow {
+  const cleanServername = config.host.replace(/^\[|\]$/g, "").trim();
   const client = new ImapFlow({
-    host: config.host,
+    host: connectHost,
     port: config.port,
     secure: config.secure,
+    ...(connectHost !== config.host && !net.isIP(cleanServername)
+      ? { tls: { servername: cleanServername } }
+      : {}),
     auth: {
       user: config.username,
       pass: secret.password,
@@ -224,9 +230,9 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
       );
     }
 
-    await assertSafeImapHost(config.host);
+    const resolvedHost = await assertSafeImapHost(config.host);
 
-    const client = createImapClient(config, secret);
+    const client = createImapClient(config, secret, resolvedHost);
     try {
       await client.connect();
 
@@ -266,9 +272,9 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
       throw new ConnectorAuthError("Missing password for IMAP account");
     }
 
-    await assertSafeImapHost(config.host);
+    const resolvedHost = await assertSafeImapHost(config.host);
 
-    const client = createImapClient(config, secret);
+    const client = createImapClient(config, secret, resolvedHost);
     // ImapFlow times out a connection, a greeting and five quiet minutes on
     // its own. An abort, at the sync's deadline or at shutdown, closes the
     // socket too, so a command that is still waiting ends at once.
@@ -331,6 +337,9 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
       const maxPerFolder = config.maxMessagesPerFolder ?? 5000;
       let totalFetched = 0;
       let summaryCount = 0;
+      let foldersSucceeded = 0;
+      let foldersFailed = 0;
+      let firstFolderError: Error | null = null;
 
       for (const folder of targetFolders) {
         signal.throwIfAborted();
@@ -339,6 +348,14 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
         try {
           lock = await client.getMailboxLock(folder);
         } catch (err) {
+          signal.throwIfAborted();
+          if (isAuthError(err)) {
+            throw new ConnectorAuthError(
+              `IMAP authentication failed on folder ${folder}: ${(err as Error).message}`,
+            );
+          }
+          foldersFailed++;
+          firstFolderError ??= err as Error;
           ctx.log(`Could not open folder ${folder}: ${(err as Error).message}`);
           continue;
         }
@@ -511,9 +528,16 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
             uidValidity: currentUidValidity,
             lastUid: highestUid,
           };
+          foldersSucceeded++;
         } finally {
           lock.release();
         }
+      }
+
+      if (foldersFailed > 0 && foldersSucceeded === 0 && firstFolderError) {
+        throw new ConnectorConfigError(
+          `Could not open any configured IMAP folder: ${firstFolderError.message}`,
+        );
       }
 
       yield {
@@ -524,7 +548,8 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
 
       return {
         folders: updatedFolders,
-        lastSyncAt: new Date().toISOString(),
+        lastSyncAt:
+          foldersFailed === 0 ? new Date().toISOString() : cursor.lastSyncAt,
       };
     } finally {
       signal.removeEventListener("abort", closeOnAbort);

@@ -279,12 +279,15 @@ export function installSearchIndex(sqlite: Database.Database): void {
         ["au", "UPDATE", "old.contactId, new.contactId"],
       ]) {
         // searchExpansion is a derived cache, and the trigger clears it only
-        // for the contact that owns the changed child row.
+        // for the contact that owns the changed child row. While a batch child
+        // write holds scoreDirty < 0 (`withDeferredChildFts`), the final
+        // restore touches contacts once so `contacts_au` and
+        // `search_vector_update` run once per contact instead of per child row.
         // tenant-lint: allow derived table
         sqlite.exec(`
           DROP TRIGGER IF EXISTS fts_${table}_${suffix};
           CREATE TRIGGER fts_${table}_${suffix} AFTER ${event} ON contact_${table} BEGIN
-            UPDATE contacts SET searchExpansion = NULL WHERE id IN (${ids});
+            UPDATE contacts SET searchExpansion = NULL WHERE id IN (${ids}) AND COALESCE(scoreDirty, 0) >= 0;
           END;
         `);
       }

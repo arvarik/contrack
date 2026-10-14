@@ -219,6 +219,15 @@ export async function ingestStream(
       return;
     }
 
+    if (event.kind === "upcoming_cancelled") {
+      sqlite
+        .prepare(
+          `DELETE FROM upcoming_events WHERE connectorId = ? AND ownerId = ? AND externalId = ?`,
+        )
+        .run(connector.id, scope.ownerId, event.externalId);
+      return;
+    }
+
     stats.fetched = (stats.fetched ?? 0) + 1;
 
     if (event.kind === "upcoming") {
@@ -261,6 +270,13 @@ export async function ingestStream(
     }
 
     if (event.kind === "interaction") {
+      if (event.type === "meeting") {
+        sqlite
+          .prepare(
+            `DELETE FROM upcoming_events WHERE connectorId = ? AND ownerId = ? AND externalId = ?`,
+          )
+          .run(connector.id, scope.ownerId, event.externalId);
+      }
       // 1. Check idempotency via connector_links
       const existingLink = sqlite
         .prepare(
@@ -825,12 +841,30 @@ export async function ingestStream(
     })();
   }
 
-  // Refresh upcoming events: remove stale upcoming events for this connector
-  if (
-    hasUpcomingEvents ||
-    connector.kind === "ics" ||
-    connector.kind === "google"
-  ) {
+  // Refresh upcoming events: remove stale upcoming events for this connector.
+  // ICS feeds always return the full calendar snapshot, whereas Google Calendar
+  // uses incremental `syncToken` deltas and only yields changed/cancelled events.
+  if (connector.kind === "google") {
+    const nowIso = new Date().toISOString();
+    const todayIso = nowIso.slice(0, 10);
+    sqlite.transaction(() => {
+      if (connector.config.syncCalendar === false) {
+        sqlite
+          .prepare(
+            `DELETE FROM upcoming_events WHERE connectorId = ? AND ownerId = ?`,
+          )
+          .run(connector.id, scope.ownerId);
+      } else {
+        sqlite
+          .prepare(
+            `DELETE FROM upcoming_events
+             WHERE connectorId = ? AND ownerId = ?
+               AND ((length(endsAt) = 10 AND endsAt <= ?) OR (length(endsAt) > 10 AND endsAt < ?))`,
+          )
+          .run(connector.id, scope.ownerId, todayIso, nowIso);
+      }
+    })();
+  } else if (hasUpcomingEvents || connector.kind === "ics") {
     sqlite.transaction(() => {
       if (seenUpcomingExternalIds.size === 0) {
         sqlite

@@ -3,7 +3,7 @@
 // insert() for type-safe columns, and SQLite 0/1 becomes a boolean in one
 // place.
 
-import { sqlite, db } from "../db.ts";
+import { sqlite } from "../db.ts";
 import * as schema from "../db/schema.ts";
 import type { Scope } from "../tenancy/scope.ts";
 import { NotFoundError } from "../utils/AppError.ts";
@@ -567,6 +567,35 @@ export const contactRepo = {
    * @param sourceName - Origin stamp for provenance tracking (default:
    *   'manual')
    */
+  /**
+   * Defer child-table FTS triggers (`fts_${table}_*`) while `fn` runs inside a
+   * transaction so inserting or replacing many child rows refreshes the FTS5
+   * row and search queue once at the end instead of once per child row.
+   */
+  withDeferredChildFts(contactId: string, fn: () => void): void {
+    const deferred =
+      sqlite
+        .prepare(
+          // Callers (createContact, bulkCreateContacts, updateContact,
+          // bulkUpdateContacts) have already verified ownership of contactId.
+          // tenant-lint: allow owner-checked by caller
+          "UPDATE contacts SET scoreDirty = COALESCE(scoreDirty, 0) - 2 WHERE id = ? AND COALESCE(scoreDirty, 0) >= 0",
+        )
+        .run(contactId).changes > 0;
+    try {
+      fn();
+    } finally {
+      if (deferred) {
+        sqlite
+          .prepare(
+            // tenant-lint: allow owner-checked by caller
+            "UPDATE contacts SET scoreDirty = scoreDirty + 2, searchExpansion = NULL WHERE id = ? AND scoreDirty < 0",
+          )
+          .run(contactId);
+      }
+    }
+  },
+
   insertChildRecords(
     contactId: string,
     body: ChildRecordsPayload,
@@ -588,215 +617,221 @@ export const contactRepo = {
     body: ChildRecordsPayload,
     sourceName = "manual",
   ): void {
-    // Emails
-    if (Array.isArray(body.emails)) {
-      for (let i = 0; i < body.emails.length; i++) {
-        const e = body.emails[i];
-        const email = (typeof e === "string" ? e : e.email)?.trim();
-        if (!email) continue;
-        db.insert(schema.contactEmails)
-          .values({
-            id: crypto.randomUUID(),
+    const hasFtsChildren =
+      (Array.isArray(body.emails) && body.emails.length > 0) ||
+      (Array.isArray(body.phones) && body.phones.length > 0) ||
+      (Array.isArray(body.education) && body.education.length > 0) ||
+      (Array.isArray(body.experience) && body.experience.length > 0) ||
+      (Array.isArray(body.tags) && body.tags.length > 0) ||
+      (Array.isArray(body.interests) && body.interests.length > 0) ||
+      (Array.isArray(body.addresses) && body.addresses.length > 0);
+
+    const runInserts = () => {
+      // Emails
+      if (Array.isArray(body.emails) && body.emails.length > 0) {
+        const stmt = sqlite.prepare(
+          `INSERT INTO contact_emails (id, contactId, email, label, isPrimary, sortOrder, source)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        );
+        for (let i = 0; i < body.emails.length; i++) {
+          const e = body.emails[i];
+          const email = (typeof e === "string" ? e : e.email)?.trim();
+          if (!email) continue;
+          stmt.run(
+            crypto.randomUUID(),
             contactId,
             email,
-            label: (typeof e === "object" ? e.label : "personal") || "personal",
-            isPrimary:
-              typeof e === "object" ? (e.isPrimary ? 1 : 0) : i === 0 ? 1 : 0,
-            sortOrder: i,
-            source: sourceName,
-          })
-          .run();
+            (typeof e === "object" ? e.label : "personal") || "personal",
+            typeof e === "object" ? (e.isPrimary ? 1 : 0) : i === 0 ? 1 : 0,
+            i,
+            sourceName,
+          );
+        }
       }
-    }
 
-    // Phones
-    if (Array.isArray(body.phones)) {
-      for (let i = 0; i < body.phones.length; i++) {
-        const p = body.phones[i];
-        const phone = (typeof p === "string" ? p : p.phone)?.trim();
-        if (!phone) continue;
-        db.insert(schema.contactPhones)
-          .values({
-            id: crypto.randomUUID(),
+      // Phones
+      if (Array.isArray(body.phones) && body.phones.length > 0) {
+        const stmt = sqlite.prepare(
+          `INSERT INTO contact_phones (id, contactId, phone, label, isPrimary, sortOrder, source)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        );
+        for (let i = 0; i < body.phones.length; i++) {
+          const p = body.phones[i];
+          const phone = (typeof p === "string" ? p : p.phone)?.trim();
+          if (!phone) continue;
+          stmt.run(
+            crypto.randomUUID(),
             contactId,
             phone,
-            label: (typeof p === "object" ? p.label : "mobile") || "mobile",
-            isPrimary:
-              typeof p === "object" ? (p.isPrimary ? 1 : 0) : i === 0 ? 1 : 0,
-            sortOrder: i,
-            source: sourceName,
-          })
-          .run();
+            (typeof p === "object" ? p.label : "mobile") || "mobile",
+            typeof p === "object" ? (p.isPrimary ? 1 : 0) : i === 0 ? 1 : 0,
+            i,
+            sourceName,
+          );
+        }
       }
-    }
 
-    // Social Links
-    if (Array.isArray(body.socialLinks)) {
-      for (const sl of body.socialLinks) {
-        const url = (typeof sl === "string" ? sl : sl.url)?.trim();
-        if (!url) continue;
-        if (isDeadLinkPattern(url)) continue; // Skip known-dead URLs
-        const platform =
-          typeof sl === "object" && sl.platform
-            ? sl.platform
-            : detectPlatformFromUrl(url);
-        db.insert(schema.contactSocialLinks)
-          .values({
-            id: crypto.randomUUID(),
+      // Social Links
+      if (Array.isArray(body.socialLinks) && body.socialLinks.length > 0) {
+        const stmt = sqlite.prepare(
+          `INSERT INTO contact_social_links (id, contactId, platform, url, handle, source)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        );
+        for (const sl of body.socialLinks) {
+          const url = (typeof sl === "string" ? sl : sl.url)?.trim();
+          if (!url) continue;
+          if (isDeadLinkPattern(url)) continue; // Skip known-dead URLs
+          const platform =
+            typeof sl === "object" && sl.platform
+              ? sl.platform
+              : detectPlatformFromUrl(url);
+          stmt.run(
+            crypto.randomUUID(),
             contactId,
             platform,
             url,
-            handle:
-              typeof sl === "object"
-                ? sl.handle || extractHandleFromUrl(url)
-                : extractHandleFromUrl(url),
-            source: sourceName,
-          })
-          .run();
+            (typeof sl === "object"
+              ? sl.handle || extractHandleFromUrl(url)
+              : extractHandleFromUrl(url)) ?? null,
+            sourceName,
+          );
+        }
       }
-    }
 
-    // Education
-    if (Array.isArray(body.education)) {
-      for (const edu of body.education) {
-        if (!edu?.school) continue;
-        db.insert(schema.contactEducation)
-          .values({
-            id: crypto.randomUUID(),
+      // Education
+      if (Array.isArray(body.education) && body.education.length > 0) {
+        const stmt = sqlite.prepare(
+          `INSERT INTO contact_education (id, contactId, school, degree, fieldOfStudy, startDate, endDate, description, source)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        );
+        for (const edu of body.education) {
+          if (!edu?.school) continue;
+          stmt.run(
+            crypto.randomUUID(),
             contactId,
-            school: edu.school,
-            degree: edu.degree || null,
-            fieldOfStudy: edu.fieldOfStudy || null,
-            startDate: edu.startDate || null,
-            endDate: edu.endDate || null,
-            description: edu.description || null,
-            source: sourceName,
-          })
-          .run();
+            edu.school,
+            edu.degree || null,
+            edu.fieldOfStudy || null,
+            edu.startDate || null,
+            edu.endDate || null,
+            edu.description || null,
+            sourceName,
+          );
+        }
       }
-    }
 
-    // Experience
-    if (Array.isArray(body.experience)) {
-      for (const exp of body.experience) {
-        if (!exp?.company) continue;
-        db.insert(schema.contactExperience)
-          .values({
-            id: crypto.randomUUID(),
+      // Experience
+      if (Array.isArray(body.experience) && body.experience.length > 0) {
+        const stmt = sqlite.prepare(
+          `INSERT INTO contact_experience (id, contactId, company, role, startDate, endDate, isCurrent, description, location, source)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        );
+        for (const exp of body.experience) {
+          if (!exp?.company) continue;
+          stmt.run(
+            crypto.randomUUID(),
             contactId,
-            company: exp.company,
-            role: exp.role || null,
-            startDate: exp.startDate || null,
-            endDate: exp.endDate || null,
-            isCurrent: exp.isCurrent ? 1 : 0,
-            description: exp.description || null,
-            location: exp.location || null,
-            source: sourceName,
-          })
-          .run();
+            exp.company,
+            exp.role || null,
+            exp.startDate || null,
+            exp.endDate || null,
+            exp.isCurrent ? 1 : 0,
+            exp.description || null,
+            exp.location || null,
+            sourceName,
+          );
+        }
       }
-    }
 
-    // Tags: one row per tag whatever its case ("dup", "dup" and "Dup" are one
-    // tag, spelled as it came first). A unique index would need existing
-    // repeats cleaned up first, so the write dedupes instead.
-    if (Array.isArray(body.tags)) {
-      const seen = new Set(
-        (
-          sqlite
-            .prepare("SELECT tag FROM contact_tags WHERE contactId = ?")
-            .pluck()
-            .all(contactId) as string[]
-        ).map((tag) => tag.toLowerCase()),
-      );
-      for (const tag of body.tags) {
-        const val = (typeof tag === "string" ? tag : tag.tag)?.trim();
-        if (!val || seen.has(val.toLowerCase())) continue;
-        seen.add(val.toLowerCase());
-        db.insert(schema.contactTags)
-          .values({
-            id: crypto.randomUUID(),
-            contactId,
-            tag: val,
-          })
-          .run();
+      // Tags: one row per tag whatever its case ("dup", "dup" and "Dup" are one
+      // tag, spelled as it came first). A unique index would need existing
+      // repeats cleaned up first, so the write dedupes instead.
+      if (Array.isArray(body.tags) && body.tags.length > 0) {
+        const seen = new Set(
+          (
+            sqlite
+              .prepare("SELECT tag FROM contact_tags WHERE contactId = ?")
+              .pluck()
+              .all(contactId) as string[]
+          ).map((tag) => tag.toLowerCase()),
+        );
+        const stmt = sqlite.prepare(
+          `INSERT INTO contact_tags (id, contactId, tag) VALUES (?, ?, ?)`,
+        );
+        for (const tag of body.tags) {
+          const val = (typeof tag === "string" ? tag : tag.tag)?.trim();
+          if (!val || seen.has(val.toLowerCase())) continue;
+          seen.add(val.toLowerCase());
+          stmt.run(crypto.randomUUID(), contactId, val);
+        }
       }
-    }
 
-    // Sources
-    if (Array.isArray(body.sources)) {
-      for (const src of body.sources) {
-        const platform = typeof src === "string" ? src : src.platform;
-        if (!platform) continue;
-        db.insert(schema.contactSources)
-          .values({
-            id: crypto.randomUUID(),
+      // Sources
+      if (Array.isArray(body.sources) && body.sources.length > 0) {
+        const stmt = sqlite.prepare(
+          `INSERT INTO contact_sources (id, contactId, platform, externalId, connectedOn, rawData)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        );
+        for (const src of body.sources) {
+          const platform = typeof src === "string" ? src : src.platform;
+          if (!platform) continue;
+          stmt.run(
+            crypto.randomUUID(),
             contactId,
             platform,
-            externalId: typeof src === "object" ? src.externalId || null : null,
-            connectedOn:
-              typeof src === "object" ? src.connectedOn || null : null,
-            rawData: typeof src === "object" ? src.rawData || null : null,
-          })
-          .run();
+            typeof src === "object" ? src.externalId || null : null,
+            typeof src === "object" ? src.connectedOn || null : null,
+            typeof src === "object" ? src.rawData || null : null,
+          );
+        }
       }
-    }
 
-    // Interests
-    if (Array.isArray(body.interests)) {
-      for (const item of body.interests) {
-        const val = (typeof item === "string" ? item : item.interest)?.trim();
-        if (!val) continue;
-        const isAi =
-          typeof item === "object" && item.isAiGenerated === true ? 1 : 0;
-        sqlite
-          .prepare(
-            `
-          INSERT INTO contact_interests (id, contactId, interest, isAiGenerated) 
-          VALUES (?, ?, ?, ?) 
-          ON CONFLICT(contactId, interest) DO UPDATE SET isAiGenerated = excluded.isAiGenerated
-        `,
-          )
-          .run(crypto.randomUUID(), contactId, val, isAi);
+      // Interests
+      if (Array.isArray(body.interests) && body.interests.length > 0) {
+        const stmt = sqlite.prepare(
+          `INSERT INTO contact_interests (id, contactId, interest, isAiGenerated) 
+           VALUES (?, ?, ?, ?) 
+           ON CONFLICT(contactId, interest) DO UPDATE SET isAiGenerated = excluded.isAiGenerated`,
+        );
+        for (const item of body.interests) {
+          const val = (typeof item === "string" ? item : item.interest)?.trim();
+          if (!val) continue;
+          const isAi =
+            typeof item === "object" && item.isAiGenerated === true ? 1 : 0;
+          stmt.run(crypto.randomUUID(), contactId, val, isAi);
+        }
       }
-    }
 
-    // Attributes
-    if (Array.isArray(body.attributes)) {
-      for (const attr of body.attributes) {
-        if (!attr?.name || !attr?.value) continue;
-        sqlite
-          .prepare(
-            `
-          INSERT INTO contact_attributes (id, contactId, name, value) 
-          VALUES (?, ?, ?, ?)
-          ON CONFLICT(contactId, name) DO UPDATE SET value = excluded.value
-        `,
-          )
-          .run(
+      // Attributes
+      if (Array.isArray(body.attributes) && body.attributes.length > 0) {
+        const stmt = sqlite.prepare(
+          `INSERT INTO contact_attributes (id, contactId, name, value) 
+           VALUES (?, ?, ?, ?)
+           ON CONFLICT(contactId, name) DO UPDATE SET value = excluded.value`,
+        );
+        for (const attr of body.attributes) {
+          if (!attr?.name || !attr?.value) continue;
+          stmt.run(
             crypto.randomUUID(),
             contactId,
             attr.name.trim(),
             attr.value.trim(),
           );
+        }
       }
-    }
 
-    // Addresses
-    if (Array.isArray(body.addresses)) {
-      for (let i = 0; i < body.addresses.length; i++) {
-        const a = body.addresses[i];
-        const address = (typeof a === "string" ? a : a.address)?.trim();
-        if (!address) continue;
-        sqlite
-          .prepare(
-            `
-          INSERT INTO contact_addresses (id, contactId, address, label, isPrimary, sortOrder, source) 
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(contactId, address) DO UPDATE SET label = excluded.label, isPrimary = excluded.isPrimary, sortOrder = excluded.sortOrder
-        `,
-          )
-          .run(
+      // Addresses
+      if (Array.isArray(body.addresses) && body.addresses.length > 0) {
+        const stmt = sqlite.prepare(
+          `INSERT INTO contact_addresses (id, contactId, address, label, isPrimary, sortOrder, source) 
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(contactId, address) DO UPDATE SET label = excluded.label, isPrimary = excluded.isPrimary, sortOrder = excluded.sortOrder`,
+        );
+        for (let i = 0; i < body.addresses.length; i++) {
+          const a = body.addresses[i];
+          const address = (typeof a === "string" ? a : a.address)?.trim();
+          if (!address) continue;
+          stmt.run(
             crypto.randomUUID(),
             contactId,
             address,
@@ -805,7 +840,14 @@ export const contactRepo = {
             i,
             sourceName,
           );
+        }
       }
+    };
+
+    if (hasFtsChildren) {
+      contactRepo.withDeferredChildFts(contactId, runInserts);
+    } else {
+      runInserts();
     }
   },
 };

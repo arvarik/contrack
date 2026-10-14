@@ -41,6 +41,10 @@ export type SyncEvent =
       participants: Participant[];
     }
   | {
+      kind: "upcoming_cancelled";
+      externalId: string;
+    }
+  | {
       kind: "progress";
       fetched: number;
       message?: string;

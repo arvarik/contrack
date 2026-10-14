@@ -125,11 +125,19 @@ export class OpenAICompatibleAdapter implements AIProvider {
   }
 
   /** Embeddings via the standard `/v1/embeddings` route. */
-  async embed(texts: string[], model: string): Promise<number[][]> {
-    const response = await this.client.embeddings.create({
-      model,
-      input: texts,
-    });
+  async embed(
+    texts: string[],
+    model: string,
+    _use?: unknown,
+    signal?: AbortSignal,
+  ): Promise<number[][]> {
+    const response = await this.client.embeddings.create(
+      {
+        model,
+        input: texts,
+      },
+      { signal },
+    );
     return response.data.map((d) => d.embedding as number[]);
   }
 

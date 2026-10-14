@@ -342,14 +342,18 @@ export class GeminiAdapter implements AIProvider {
     texts: string[],
     model: string,
     use?: EmbedUse,
+    signal?: AbortSignal,
   ): Promise<number[][]> {
+    const config: { taskType?: string; abortSignal?: AbortSignal } = {};
+    if (use) config.taskType = GEMINI_TASK_TYPES[use];
+    if (signal) config.abortSignal = signal;
     const response = await this.client.models.embedContent({
       model,
       // Each text must be its own Content: `contents: texts` reads as one
       // content with many parts and returns one merged vector, a short batch
       // with no error.
       contents: texts.map((text) => ({ parts: [{ text }] })),
-      ...(use ? { config: { taskType: GEMINI_TASK_TYPES[use] } } : {}),
+      ...(Object.keys(config).length > 0 ? { config } : {}),
     });
     return (response.embeddings ?? []).map((e) => e.values as number[]);
   }

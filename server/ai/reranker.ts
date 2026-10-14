@@ -83,6 +83,11 @@ async function scoreOnWorker(
     if (payload.kind !== "rerank")
       throw new Error("The worker answered a rerank job with another kind");
     return payload.scores;
+  } catch (err) {
+    if (!isWorkerActive()) {
+      loaded.delete(model);
+    }
+    throw err;
   } finally {
     signal.removeEventListener("abort", cancel);
   }
@@ -98,7 +103,7 @@ export function crossEncoder(model: string): Reranker {
     reranker = {
       id: model,
       local: true,
-      ready: () => loaded.has(model),
+      ready: () => loaded.has(model) && isWorkerActive(),
       score: (query, docs, signal) => scoreOnWorker(model, query, docs, signal),
     };
     crossEncoders.set(model, reranker);

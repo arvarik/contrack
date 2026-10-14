@@ -44,6 +44,7 @@ import type {
   ContactRow,
   NormalizedContact,
 } from "./types.ts";
+import { aiAllowedForUser } from "../../ai/instanceSwitch.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
 
 const MEGA_BLOCK_THRESHOLD = 100;
@@ -55,19 +56,21 @@ const AI_BATCH_SIZE = 12;
 const AI_BATCH_TIMEOUT_MS = 30_000;
 
 async function withTimeout<T>(
-  promise: Promise<T>,
+  work: (signal: AbortSignal) => Promise<T>,
   ms: number,
   label: string,
 ): Promise<T> {
+  const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout>;
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(
-      () => reject(new Error(`${label} timed out after ${ms}ms`)),
-      ms,
-    );
+    timer = setTimeout(() => {
+      const err = new Error(`${label} timed out after ${ms}ms`);
+      controller.abort(err);
+      reject(err);
+    }, ms);
   });
   try {
-    return await Promise.race([promise, timeout]);
+    return await Promise.race([work(controller.signal), timeout]);
   } finally {
     clearTimeout(timer!);
   }
@@ -102,7 +105,8 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
   const emailRows = sqlite
     .prepare(
       `SELECT ce.contactId, ce.email FROM contact_emails ce
-       JOIN contacts c ON c.id = ce.contactId WHERE c.ownerId = ?`,
+       JOIN contacts c ON c.id = ce.contactId
+       WHERE c.ownerId = ? AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 0`,
     )
     .all(owner) as { contactId: string; email: string }[];
 
@@ -174,7 +178,8 @@ export function runDeterministicPass(ctx: PassContext): RawPair[] {
   const allPhones = sqlite
     .prepare(
       `SELECT cp.contactId, cp.phone FROM contact_phones cp
-       JOIN contacts c ON c.id = cp.contactId WHERE c.ownerId = ?`,
+       JOIN contacts c ON c.id = cp.contactId
+       WHERE c.ownerId = ? AND c.deletedAt IS NULL AND c.canonicalId IS NULL AND c.isGhost = 0`,
     )
     .all(owner) as { contactId: string; phone: string }[];
   const phoneMap = new Map<string, string[]>();
@@ -593,7 +598,11 @@ export async function runFunnelPass(
   }
 
   // 6: AI
-  if (aiQueue.length > 0 && ai.isConfigured) {
+  if (
+    aiQueue.length > 0 &&
+    ai.isConfigured &&
+    aiAllowedForUser(ctx.scope.ownerId)
+  ) {
     if (scanId) {
       dedupeQueue.update(scanId, {
         phase: "ai",
@@ -628,7 +637,7 @@ export async function runFunnelPass(
 
       try {
         const aiResults = await withTimeout(
-          evaluateBatchWithAI(batch, rid),
+          (signal) => evaluateBatchWithAI(batch, rid, signal),
           AI_BATCH_TIMEOUT_MS,
           `AI batch ${batchIdx + 1}/${totalBatches}`,
         );

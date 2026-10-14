@@ -363,6 +363,8 @@ export async function createUser(input: {
   createdBy?: string | null;
   /** Force a password change on first use. Admin-set passwords always do. */
   mustChangePassword?: boolean;
+  /** True when called from first-run setup, which must fail if another account won the race. */
+  setupOnly?: boolean;
 }): Promise<User> {
   const email = normalizeEmail(input.email);
   const username = normalizeUsername(input.username);
@@ -389,6 +391,13 @@ export async function createUser(input: {
   // transaction keeps two concurrent setup requests from both seeing zero.
   const created = sqlite.transaction(() => {
     const isFirst = countUsers() === 0;
+    if (input.setupOnly && !isFirst) {
+      throw new AppError(
+        "This instance already has an account. Sign in instead.",
+        409,
+        { code: "SETUP_COMPLETE" },
+      );
+    }
     // The first account is an admin whatever the caller asked for. After
     // that an explicit 'admin' is honored (an admin creating an admin, or
     // an invitation issued for one) and everything else is a member.
@@ -864,7 +873,13 @@ export async function convertLocalOwner(input: {
   const local = sqlite
     .prepare(`SELECT id FROM users WHERE credentialState = 'none' LIMIT 1`)
     .get() as { id: string } | undefined;
-  if (!local) throw new AppError("There is no local owner to convert", 409);
+  if (!local) {
+    throw new AppError(
+      "This instance already has an account. Sign in instead.",
+      409,
+      { code: "SETUP_COMPLETE" },
+    );
+  }
 
   assertIdentifiersFree(email, username, local.id);
 
@@ -886,7 +901,11 @@ export async function convertLocalOwner(input: {
       .run(email, username, displayName, passwordHash, local.id);
 
     if (result.changes === 0) {
-      throw new AppError("There is no local owner to convert", 409);
+      throw new AppError(
+        "This instance already has an account. Sign in instead.",
+        409,
+        { code: "SETUP_COMPLETE" },
+      );
     }
   } catch (err) {
     if (isUniqueViolation(err)) {

@@ -76,6 +76,26 @@ function countRows(db: Database.Database, table: string): number | null {
   }
 }
 
+let _liveCountsStmt: Database.Statement | null = null;
+function getLiveCountsStmt(): Database.Statement {
+  if (!_liveCountsStmt) {
+    _liveCountsStmt = sqlite.prepare(
+      // Verify backup compares instance-wide row counts between the live DB and the
+      // snapshot file.
+      // tenant-lint: allow instance sweep
+      `SELECT (SELECT COUNT(*) FROM contacts) AS contacts,
+              (SELECT COUNT(*) FROM interactions) AS interactions,
+              (SELECT COUNT(*) FROM settings) AS settings`,
+    );
+  }
+  return _liveCountsStmt;
+}
+
+const verificationCache = new Map<
+  string,
+  { mtimeMs: number; verification: BackupVerification }
+>();
+
 /**
  * Open a snapshot and decide whether it is a backup or just a file. Three
  * things can be wrong, each quieter than the last:
@@ -96,8 +116,15 @@ export function verifyBackup(file: string): BackupVerification {
   const rows: Record<string, number> = {};
   const liveRows: Record<string, number> = {};
 
-  for (const table of COUNTED_TABLES) {
-    liveRows[table] = countRows(sqlite, table) ?? 0;
+  try {
+    const counts = getLiveCountsStmt().get() as Record<string, number>;
+    for (const table of COUNTED_TABLES) {
+      liveRows[table] = counts[table] ?? 0;
+    }
+  } catch {
+    for (const table of COUNTED_TABLES) {
+      liveRows[table] = countRows(sqlite, table) ?? 0;
+    }
   }
 
   // Opening a snapshot creates its WAL companions, even read only, because it
@@ -113,6 +140,7 @@ export function verifyBackup(file: string): BackupVerification {
   let snapshot: Database.Database | null = null;
   try {
     snapshot = new Database(file, { readonly: true, fileMustExist: true });
+    snapshot.pragma("mmap_size = 268435456");
     const integrity = String(
       snapshot.pragma("quick_check", { simple: true }) ?? "unknown",
     );
@@ -175,9 +203,17 @@ export function verifyBackup(file: string): BackupVerification {
 /** Read a snapshot's recorded verification, or null when it has none. */
 function readVerification(file: string): BackupVerification | null {
   try {
-    return JSON.parse(
-      fs.readFileSync(sidecarPath(file), "utf8"),
+    const sidecar = sidecarPath(file);
+    const stat = fs.statSync(sidecar);
+    const cached = verificationCache.get(sidecar);
+    if (cached && cached.mtimeMs === stat.mtimeMs) {
+      return cached.verification;
+    }
+    const verification = JSON.parse(
+      fs.readFileSync(sidecar, "utf8"),
     ) as BackupVerification;
+    verificationCache.set(sidecar, { mtimeMs: stat.mtimeMs, verification });
+    return verification;
   } catch {
     return null;
   }
@@ -211,9 +247,21 @@ export function listBackups(): BackupInfo[] {
  * a name with a path in it, a partial file or a sidecar is never served.
  */
 export function snapshotFile(filename: string): string | null {
-  return listBackups().some((backup) => backup.filename === filename)
-    ? path.join(BACKUPS_DIR, filename)
-    : null;
+  if (
+    !filename ||
+    path.basename(filename) !== filename ||
+    !filename.startsWith("curator-") ||
+    !filename.endsWith(".db")
+  ) {
+    return null;
+  }
+  ensureDir(BACKUPS_DIR);
+  const candidate = path.join(BACKUPS_DIR, filename);
+  try {
+    return fs.statSync(candidate).isFile() ? candidate : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Delete backups beyond the rotation depth (oldest first). */
