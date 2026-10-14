@@ -1,7 +1,7 @@
 {
   "name": "contrack",
   "version": "2.0.0",
-  "description": "A local-first, AI-powered personal CRM for high-leverage individuals. Built with React 19, Express, SQLite, and Gemini.",
+  "description": "Self-hosted contact management, relationship tracking, local semantic search, and optional AI enrichment.",
   "private": true,
   "type": "module",
   "license": "AGPL-3.0-only",
@@ -9,12 +9,14 @@
   "keywords": [
     "crm",
     "contacts",
-    "ai",
-    "gemini",
+    "personal-crm",
+    "self-hosted",
     "local-first",
+    "semantic-search",
+    "mcp",
+    "ai",
     "sqlite",
-    "react",
-    "personal-crm"
+    "react"
   ],
   "engines": {
     "node": ">=26.10.0"
@@ -103,7 +105,7 @@
     "node-ical": "^0.27.2",
     "nodemailer": "^10.0.10",
     "openai": "^7.23.0",
-    "sharp": "^0.35.4",
+    "sharp": "^0.35.5",
     "sqlite-vec": "^0.1.9",
     "undici": "^8.11.2",
     "zod": "^4.6.5"
@@ -189,7 +191,8 @@
     ]
   },
   "overrides": {
-    "adm-zip": "^0.6.1"
+    "adm-zip": "^0.6.1",
+    "postcss-selector-parser": "^7.1.6"
   },
   "allowScripts": {
     "better-sqlite3@12.11.1": true,

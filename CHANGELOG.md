@@ -9,7 +9,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [2.0.0] - 2026-10-13
+## [2.0.0] - 2026-10-14
 
 Version 2 turns Contrack into a server that several people can share and reach
 from the internet. It also rebuilds search, Pulse, the map, research and the
