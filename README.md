@@ -32,34 +32,34 @@ Keep the personal moments that make a friendship — how you met at a wedding, t
 
 <table>
 <tr>
-<td rowspan="4" width="16%" align="center" valign="middle">
+<td rowspan="4" width="19%" align="center" valign="middle">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/brand/readme-flow-dark.svg" />
-    <img src="docs/brand/readme-flow.svg" alt="Import, Dedupe, Enrich and Track: the Contrack corvid flies down from step to step" width="140" />
+    <img src="docs/brand/readme-flow.svg" alt="Import, Dedupe, Enrich and Track: the Contrack corvid flies down from step to step" width="100%" />
   </picture>
 </td>
-<td width="84%" valign="middle">
+<td width="81%" valign="middle">
   <h3>1. Import</h3>
   <p><b>Everyone, from everywhere.</b> Drop in your contacts from Apple, Google, or LinkedIn. Connect your calendar or inbox, and past conversations and meetings appear right on each person's timeline.</p>
   <img src="docs/images/flow-import.gif" alt="A contacts file dropped on the Import page: the import runs, merges one duplicate by itself, and lists three to review" width="100%" />
 </td>
 </tr>
 <tr>
-<td width="84%" valign="middle">
+<td width="81%" valign="middle">
   <h3>2. Dedupe</h3>
   <p><b>One person. One clean story.</b> The same friend from three address books becomes a single profile. Contrack merges the obvious matches automatically and lets you review the rest side by side — with a 90-day undo if you ever change your mind.</p>
   <img src="docs/images/flow-dedupe.gif" alt="Possible duplicates: a pair with the reason it matched, what the merge keeps, the merge, and Undo" width="100%" />
 </td>
 </tr>
 <tr>
-<td width="84%" valign="middle">
+<td width="81%" valign="middle">
   <h3>3. Enrich</h3>
   <p><b>All the context you never had time to type.</b> Paste a quick note from either world — <i>"Met at Sarah's wedding — loves natural wine, kids are Leo and Maya, catch up every quarter"</i> or <i>"Partner at Sequoia — follow up next Tuesday on seed round"</i> — and Contrack turns it into a complete profile with dates, tags, and reminders. Or let web research fill in roles and links with cited sources.</p>
   <img src="docs/images/flow-enrich.gif" alt="Research on a contact: the run, and the Research card filling in with facts and their sources" width="100%" />
 </td>
 </tr>
 <tr>
-<td width="84%" valign="middle">
+<td width="81%" valign="middle">
   <h3>4. Track</h3>
   <p><b>Never let someone important drift away.</b> Write a note in plain language and <i>"next Tuesday"</i> becomes a reminder automatically. Set how often you want to stay in touch, and each morning Contrack gently shows who is due and whose birthday or milestone is coming up.</p>
   <img src="docs/images/flow-track.gif" alt="A note logged with the follow-up 'Send the deck next Tuesday', then the contact tracked monthly" width="100%" />
@@ -181,14 +181,4 @@ Open a live demo in your browser preloaded with 400 fictional people — no inst
     <source media="(prefers-color-scheme: dark)" srcset="docs/brand/readme-tree-dark.svg" />
     <img src="docs/brand/readme-tree.svg" alt="The Contrack tree: Get help, Contribute, and License branches with the corvid flying from nest to nest" width="100%" />
   </picture>
-</p>
-
-<p align="center">
-  <sub>
-    <b>Get help:</b> <a href="docs/README.md">Read the docs</a> · <a href="https://github.com/arvarik/contrack/discussions/categories/q-a">Ask a question</a> · <a href="https://github.com/arvarik/contrack/issues/new/choose">Report a bug or idea</a> · <a href="SECURITY.md">Security policy</a> · <a href="mailto:arvind.arikatla@gmail.com">Email</a>
-    &nbsp;&nbsp;|&nbsp;&nbsp;
-    <b>Contribute:</b> <a href="CONTRIBUTING.md">Send a change</a> · <a href="AGENTS.md">Agent instructions</a> · <a href="CODE_OF_CONDUCT.md">Code of Conduct</a> · <a href="CHANGELOG.md">What changed</a>
-    &nbsp;&nbsp;|&nbsp;&nbsp;
-    <b>License:</b> <a href="LICENSE">GNU AGPL v3</a>
-  </sub>
 </p>

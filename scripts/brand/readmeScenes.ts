@@ -334,31 +334,39 @@ const FLOW_SEED = 22;
  * so the bird can fly out of the picture at the bottom and come back in at the
  * top without crossing the rings.
  */
-export const FLOW_ROOM = { width: 180, height: 2240 } as const;
+export const FLOW_ROOM = { width: 116, height: 2540 } as const;
 
 /** The part of the room the picture shows: all of the bird, every frame. */
 export const FLOW_VIEW = {
-  left: -16,
-  width: 212,
+  left: -19,
+  width: 154,
   top: 68,
-  height: 2080,
+  height: 2360,
 } as const;
 
 /** Each ring's box, centered horizontally in the vertical column. */
-const FLOW_RING = 60;
+const FLOW_RING = 56;
 const FLOW_RING_LEFT = (FLOW_ROOM.width - FLOW_RING) / 2;
-const FLOW_LABEL_SIZE = 20;
+const FLOW_LABEL_SIZE = 19;
 
 /**
- * Where each step's ring sits: centered at 12.5%, 37.5%, 62.5%, and 87.5% of
- * `FLOW_VIEW.height` so each ring + label aligns with the vertical middle of
- * its corresponding GIF row.
+ * Vertical fractions of `FLOW_VIEW.height` where each GIF's midpoint sits in
+ * the 4-row README table (accounting for the heading + copy above each GIF).
+ */
+const FLOW_STEP_FRACTIONS = [0.141, 0.391, 0.648, 0.898] as const;
+
+/**
+ * Where each step's ring sits: aligned with the vertical midpoint of its
+ * corresponding GIF in the README table.
  */
 export function flowPerches(): FlightPerch[] {
-  const stepHeight = FLOW_VIEW.height / FLOW_STEPS.length;
   return FLOW_STEPS.map((_, i) => ({
     left: FLOW_RING_LEFT,
-    top: FLOW_VIEW.top + stepHeight * (i + 0.5) - FLOW_RING / 2 - 14,
+    top:
+      FLOW_VIEW.top +
+      FLOW_VIEW.height * FLOW_STEP_FRACTIONS[i]! -
+      FLOW_RING / 2 -
+      14,
     size: FLOW_RING,
   }));
 }
@@ -399,7 +407,7 @@ export function flowFrames(seed: number = FLOW_SEED): SceneFrame[] {
     perch: first!,
     rng: scene.rng,
     airborne: {
-      x: first!.left + FLOW_RING * 1.3,
+      x: first!.left + FLOW_RING * 0.8,
       y: -4,
       facing: -1,
     },
@@ -495,8 +503,12 @@ export async function renderFlowSvg(dark: boolean): Promise<string> {
 // 2. The branched tree at the foot of the README (readme-tree.svg)
 // ============================================================================
 
+const REPO_URL = "https://github.com/arvarik/contrack";
+
 export interface TreeTwig {
   text: string;
+  /** Optional link target when the twig label is a clickable resource. */
+  href?: string;
   /** Where the twig splits from its main bough. */
   from: Vec;
   /** Control point of the twig's curve toward the text stem. */
@@ -533,6 +545,7 @@ export const TREE_BRANCHES: readonly TreeBranch[] = [
     twigs: [
       {
         text: "Read the docs",
+        href: `${REPO_URL}/blob/main/docs/README.md`,
         from: [224, 282],
         ctrl: [208, 200],
         anchor: [192, 194],
@@ -541,6 +554,7 @@ export const TREE_BRANCHES: readonly TreeBranch[] = [
       },
       {
         text: "Ask a question",
+        href: `${REPO_URL}/discussions/categories/q-a`,
         from: [216, 294],
         ctrl: [202, 254],
         anchor: [188, 248],
@@ -549,6 +563,7 @@ export const TREE_BRANCHES: readonly TreeBranch[] = [
       },
       {
         text: "Report a bug or idea",
+        href: `${REPO_URL}/issues/new/choose`,
         from: [222, 328],
         ctrl: [206, 356],
         anchor: [192, 354],
@@ -557,11 +572,21 @@ export const TREE_BRANCHES: readonly TreeBranch[] = [
       },
       {
         text: "Security policy",
-        from: [276, 338],
-        ctrl: [250, 404],
-        anchor: [216, 406],
+        href: `${REPO_URL}/blob/main/SECURITY.md`,
+        from: [272, 338],
+        ctrl: [248, 398],
+        anchor: [216, 400],
         align: "left",
         leafAngle: 162,
+      },
+      {
+        text: "Email the maintainer",
+        href: "mailto:arvind.arikatla@gmail.com",
+        from: [298, 335],
+        ctrl: [276, 444],
+        anchor: [244, 446],
+        align: "left",
+        leafAngle: 158,
       },
     ],
   },
@@ -574,6 +599,7 @@ export const TREE_BRANCHES: readonly TreeBranch[] = [
     twigs: [
       {
         text: "Send a change",
+        href: `${REPO_URL}/blob/main/CONTRIBUTING.md`,
         from: [449, 99],
         ctrl: [420, 64],
         anchor: [388, 66],
@@ -582,6 +608,7 @@ export const TREE_BRANCHES: readonly TreeBranch[] = [
       },
       {
         text: "Agent instructions",
+        href: `${REPO_URL}/blob/main/AGENTS.md`,
         from: [414, 134],
         ctrl: [396, 122],
         anchor: [378, 120],
@@ -590,6 +617,7 @@ export const TREE_BRANCHES: readonly TreeBranch[] = [
       },
       {
         text: "Code of Conduct",
+        href: `${REPO_URL}/blob/main/CODE_OF_CONDUCT.md`,
         from: [511, 99],
         ctrl: [540, 64],
         anchor: [572, 66],
@@ -598,6 +626,7 @@ export const TREE_BRANCHES: readonly TreeBranch[] = [
       },
       {
         text: "What changed",
+        href: `${REPO_URL}/blob/main/CHANGELOG.md`,
         from: [546, 134],
         ctrl: [564, 122],
         anchor: [582, 120],
@@ -615,6 +644,7 @@ export const TREE_BRANCHES: readonly TreeBranch[] = [
     twigs: [
       {
         text: "GNU AGPL v3",
+        href: `${REPO_URL}/blob/main/LICENSE`,
         from: [736, 282],
         ctrl: [752, 200],
         anchor: [768, 194],
@@ -834,7 +864,20 @@ export async function renderTreeSvg(dark: boolean): Promise<string> {
         leafPath(twig.anchor[0], stemY, nodeLeafAngle, 12, 3.6),
         leafPath(stemEnd, stemY, twig.leafAngle, 17, 4.8),
       );
-      textPaths.push(textPath(line, textX, twig.anchor[1], colors.text));
+      const glyph = textPath(
+        line,
+        textX,
+        twig.anchor[1],
+        twig.href ? colors.ink : colors.text,
+      );
+      const hitLeft = fixed(textX + line.ink.left - 4, 1);
+      const hitTop = fixed(twig.anchor[1] - 16, 1);
+      const hitW = fixed(textW + 8, 1);
+      textPaths.push(
+        twig.href
+          ? `<a href="${twig.href}" target="_top"><rect x="${hitLeft}" y="${hitTop}" width="${hitW}" height="24" fill="transparent" />${glyph}</a>`
+          : glyph,
+      );
     }
   }
 
