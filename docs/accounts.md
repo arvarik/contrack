@@ -9,8 +9,9 @@ also covers your own account, password resets, and what an admin manages.
 
 By default, Contrack asks no one to sign in. It runs as one built-in account,
 **Local account**, which owns your data and is an admin. **Settings →
-Account** is hidden, and a link to it opens a page that says **No account
-needed**. MCP clients connect without a token.
+Account** is hidden from the list, and opening **Settings** on a wide screen
+shows **No account needed** with **Secure this instance**. MCP clients connect
+without a token.
 
 This suits one person on one machine. A native install listens on `127.0.0.1`
 only, and the Docker command in
@@ -27,28 +28,28 @@ of `PUBLIC_URL`. To use another name, add it to `ALLOWED_HOSTS` (see
 ## Turn on sign-in
 
 Turn on sign-in before any other device can reach Contrack, and before you
-create a second account.
+create a second account. You can do it in the app or in the server's
+environment:
 
-1. Set `AUTH_REQUIRED=true` for the server. In Docker, add
-   `-e AUTH_REQUIRED=true` to the `docker run` command, or set it in the
-   `.env` file that Docker Compose reads. In a native install, add it to the
-   `.env` file.
-2. Restart Contrack, and open it by a local name, such as `localhost`. The
-   setup screen appears.
-3. Create your account, see [First setup](#first-setup).
-4. Only then let other devices reach Contrack, see
-   [Remote access](self-hosting.md#remote-access).
+- **In the app:** open **Settings → Account** (or **Settings →
+  Administration → Accounts**), press **Secure this instance**, and create
+  your account.
+- **In the environment:** set `AUTH_REQUIRED=true` for the server (`-e
+AUTH_REQUIRED=true` in `docker run`, or `AUTH_REQUIRED=true` in `.env`),
+  restart Contrack, and open it by a local name such as `localhost`. The setup
+  screen appears.
 
-Until the first account exists, Contrack refuses every request for data. After
-that, a person signs in, and a script or an MCP client uses a personal token
-or OAuth (see [MCP and API tokens](mcp.md)). Without either, only the health
-check, the app's own page and its sign-in steps answer.
+Only after creating your account should you let other devices reach Contrack,
+see [Remote access](self-hosting.md#remote-access).
 
-Once an account with a password exists, sign-in stays on, even if
-`AUTH_REQUIRED` is false. The server log says so at start. So an account
-created while sign-in is off, by an admin or with an invitation, turns sign-in
-on at the next start. Setup then never runs, and your contacts stay with
-**Local account**, which nobody can sign in to.
+Until the first account exists, Contrack refuses every request for data when
+`AUTH_REQUIRED=true`, and while sign-in is off it refuses to create other
+accounts, invitations or open registration until you secure the local account
+first. Once an account with a password exists, sign-in stays on, even if
+`AUTH_REQUIRED` is false. After that, a person signs in, and a script or an
+MCP client uses a personal token or OAuth (see [MCP and API tokens](mcp.md)).
+Without either, only the health check, the app's own page and its sign-in
+steps answer.
 
 ## First setup
 

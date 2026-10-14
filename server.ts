@@ -88,7 +88,7 @@ if (process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS === "true") {
     // something is wrong.
     log.info(
       "Server",
-      "No AI provider key in the environment. Connect one in Settings → Administration → AI providers (API key or OpenAI-compatible endpoint) — until then AI features degrade gracefully and local semantic search still works.",
+      "No AI provider key in the environment. Connect one in Settings → Administration → AI (API key or OpenAI-compatible endpoint) — until then AI features degrade gracefully and local semantic search still works.",
     );
   }
 }

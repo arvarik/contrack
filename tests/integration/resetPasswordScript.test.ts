@@ -92,9 +92,19 @@ describe("scripts/reset-password.ts", () => {
     expect(verified).not.toBeNull();
   });
 
-  it("throws for unknown account", async () => {
+  it("throws for unknown account and lists existing accounts when present", async () => {
     await expect(resetPasswordCli("nobody")).rejects.toThrow(
       'Account "nobody" not found',
+    );
+
+    await createUser({
+      username: "alice",
+      email: "alice@example.com",
+      password: "initialPassword123!",
+      role: "admin",
+    });
+    await expect(resetPasswordCli("nobody")).rejects.toThrow(
+      'Account "nobody" not found. Existing accounts: alice',
     );
   });
 

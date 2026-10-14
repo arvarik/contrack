@@ -10,24 +10,22 @@ On a machine with Docker, run this command:
 ```bash
 docker run -d --name contrack \
   -p 127.0.0.1:3210:3210 \
-  -v "$PWD/contrack-data":/app/data \
+  -v contrack-data:/app/data \
+  --restart unless-stopped \
   ghcr.io/arvarik/contrack:latest
 ```
 
 Then open `http://localhost:3210` in your browser.
 
-- The `contrack-data` folder holds everything Contrack keeps: the database,
+- The `contrack-data` volume holds everything Contrack keeps: the database,
   your uploads, the backups and the key that encrypts the credentials
   Contrack stores. Back it up. See
   [Where your data lives](self-hosting.md#where-your-data-lives).
 - The port is open to this machine only.
 - You need no AI key to start. You can connect one later, in the app.
-- On Linux, the container runs as user ID 1000 and cannot write to a folder
-  that Docker creates for root. Create the folder first:
-  `mkdir contrack-data && sudo chown 1000:1000 contrack-data`.
 
-To install with Docker Compose or without Docker, see
-[Install with Docker](self-hosting.md#install-with-docker) and
+To install with a folder on the host, with Docker Compose, or without Docker,
+see [Install with Docker](self-hosting.md#install-with-docker) and
 [Install without Docker](self-hosting.md#install-without-docker).
 
 ## Open Contrack and create your account
@@ -36,9 +34,10 @@ Sign-in is off by default. Contrack opens on the **Network** page, and
 everything you add belongs to one built-in account, **Local account**. That
 is safe while only this machine can reach Contrack.
 
-To turn on sign-in, add `-e AUTH_REQUIRED=true` to the `docker run` command.
-Do this before other devices can reach Contrack. See
-[Turn on sign-in](accounts.md#turn-on-sign-in).
+To turn on sign-in, press **Secure this instance** in **Settings → Account**
+(or **Settings → Administration → Accounts**), or add `-e AUTH_REQUIRED=true`
+to the `docker run` command. Do this before other devices can reach Contrack.
+See [Turn on sign-in](accounts.md#turn-on-sign-in).
 
 ![The first-run setup screen, with the photo, name, email, username and password fields](images/setup.png)
 
@@ -110,10 +109,10 @@ find a single setting.
 | **Connect**        | **Connectors**, **Correspondents** and **MCP and API**                                                                                  |
 | **Administration** | **General**, **Accounts**, **Invitations**, **Outgoing mail**, **AI**, **AI usage**, **Backups**, **Audit log** and **Instance health** |
 
-- **Account** shows only when sign-in is on.
-- On a wide screen, opening **Settings** goes straight to **Account** (or
-  **Appearance** when sign-in is off), and returning to **Settings** during a
-  session reopens the last settings page you visited.
+- **Account** shows in the list only when sign-in is on.
+- On a wide screen, opening **Settings** goes straight to **Account**, and
+  returning to **Settings** during a session reopens the last settings page
+  you visited.
 - **Administration** shows only to an admin. With sign-in off, you are the
   admin.
 - An admin finds **AI usage** under **Administration**, where it covers every

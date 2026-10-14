@@ -39,8 +39,10 @@ Open `http://localhost:3210`.
   the app.
 
 On Linux, the container runs as user ID 1000. When Docker creates
-`contrack-data` for you, root owns it and the container cannot write there.
-Create the folder first: `mkdir contrack-data && sudo chown 1000:1000 contrack-data`.
+`contrack-data` on the host for you, root owns it and the container cannot
+write there. Create the folder first:
+`mkdir contrack-data && sudo chown 1000:1000 contrack-data` (or use a named
+Docker volume `-v contrack-data:/app/data`, which needs no `chown`).
 
 `docker ps` shows `healthy` once the app answers. `docker logs -f contrack`
 shows the log, and `docker stop contrack` shuts Contrack down cleanly.
@@ -53,6 +55,7 @@ Compose builds the image from the source code:
 git clone https://github.com/arvarik/contrack.git
 cd contrack
 cp .env.example .env
+mkdir -p data   # On Linux: sudo chown 1000:1000 data
 docker compose up -d --build
 ```
 

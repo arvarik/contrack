@@ -152,7 +152,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   // giving that caller's writes to somebody.
   if (!isAuthRequired() && countPasswordAccounts() > 0) {
     setForcedAuth(true);
-    log.error(
+    log.info(
       "Auth",
       "AUTH_REQUIRED is false but accounts exist. Auth is enforced. Set AUTH_REQUIRED=true to silence this.",
     );

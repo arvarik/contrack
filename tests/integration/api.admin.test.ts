@@ -1236,6 +1236,28 @@ describe("an instance nobody has secured", () => {
     expect(res.body.error.code).toBe("LOCAL_OWNER_PROTECTED");
   });
 
+  it("refuses to create another account, an invitation, or open registration before securing", async () => {
+    const createRes = await request(app).post("/api/admin/users").send({
+      email: "second@example.com",
+      username: "second",
+      role: "member",
+    });
+    expect(createRes.status).toBe(409);
+    expect(createRes.body.error.code).toBe("LOCAL_OWNER_PROTECTED");
+
+    const inviteRes = await request(app)
+      .post("/api/admin/invitations")
+      .send({ role: "member" });
+    expect(inviteRes.status).toBe(409);
+    expect(inviteRes.body.error.code).toBe("LOCAL_OWNER_PROTECTED");
+
+    const regRes = await request(app)
+      .put("/api/admin/settings")
+      .send({ registrationOpen: true });
+    expect(regRes.status).toBe(409);
+    expect(regRes.body.error.code).toBe("LOCAL_OWNER_PROTECTED");
+  });
+
   it("has no password on it to reset", async () => {
     // Asked by another admin. The local owner asking for itself is refused
     // by the self check first, which would hide this one.

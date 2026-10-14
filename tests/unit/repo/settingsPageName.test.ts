@@ -1,15 +1,17 @@
-// Unit: the AI page is named once: Settings → Administration → AI providers.
-// Text that sends people to "Settings → AI" (a log line an operator reads
-// after a failed boot, a comment in .env.example) points at a page that does
-// not exist. "Settings → AI usage" is a real page, so it stays. The changelog
-// keeps the earlier name, because it says what each release did.
+// Unit: the AI page is named once: Settings → Administration → AI.
+// Text that sends people to "Settings → AI" or "Settings → Administration → AI
+// providers" (a log line an operator reads after a failed boot, a comment in
+// .env.example) points at a page name that does not exist. "Settings → AI
+// usage" is a real page, so it stays. The changelog keeps the earlier name,
+// because it says what each release did.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = path.resolve(import.meta.dirname, "../../..");
-const STALE = /Settings → AI(?! usage)/;
+const STALE =
+  /Settings → AI(?! usage)|Settings → Administration → AI providers/;
 
 /** The folders and files whose text a person or an operator can read. */
 const PLACES = [

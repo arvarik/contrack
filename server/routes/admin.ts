@@ -39,6 +39,7 @@ import {
 } from "../services/integrationSettings.ts";
 import { SETTING_KEYS } from "../services/settingsService.ts";
 import {
+  assertInstanceSecured,
   listUsers,
   getUser,
   createUser,
@@ -390,6 +391,9 @@ router.put(
   validateBody(adminSettingsSchema),
   asyncHandler(async (req, res) => {
     // Validate all environment overrides and preconditions upfront before applying any writes
+    if (req.body.registrationOpen) {
+      assertInstanceSecured(req.principal!.user);
+    }
     if (req.body.magicLinkSignIn && !mailService.isConfigured()) {
       throw new AppError(
         "Outgoing mail must be configured before enabling magic links",

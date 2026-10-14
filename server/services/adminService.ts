@@ -260,6 +260,20 @@ function assertNotProtectedLocalOwner(target: UserListRow): void {
   );
 }
 
+/**
+ * Refuse to add a second account while the instance itself is unsecured. Any
+ * password account forces sign-in on at the next start, which would leave the
+ * local account's data behind an account nobody can sign in to.
+ */
+export function assertInstanceSecured(actor: User): void {
+  if (actor.credentialState !== "none") return;
+  throw new AppError(
+    "This is the local account, which holds the data while sign-in is off. Secure the instance first.",
+    409,
+    { code: "LOCAL_OWNER_PROTECTED" },
+  );
+}
+
 // Creating an account
 
 /** Letters and digits only. A temporary password gets read aloud and typed. */
@@ -291,6 +305,7 @@ export async function createUser(
     temporaryPassword?: unknown;
   },
 ): Promise<{ user: AdminUserSummary; temporaryPassword: string }> {
+  assertInstanceSecured(ctx.actor);
   const temporaryPassword =
     typeof input.temporaryPassword === "string" && input.temporaryPassword
       ? input.temporaryPassword
