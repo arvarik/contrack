@@ -264,16 +264,23 @@ export function useHeatReadout(
     let frame = 0;
     const read = () => {
       frame = 0;
+      if (!pointer.current) {
+        setReadout((prev) => (prev === null ? prev : null));
+        return;
+      }
       const box = el.getBoundingClientRect();
-      const at = pointer.current && {
+      const at = {
         x: pointer.current.x - box.left,
         y: pointer.current.y - box.top,
       };
-      const count = at ? countNear(map, contacts, at) : 0;
-      setReadout(at && count > 0 ? { count, ...at } : null);
+      const count = countNear(map, contacts, at);
+      setReadout(count > 0 ? { count, ...at } : null);
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(read);
+    };
+    const onMapMove = () => {
+      if (pointer.current) schedule();
     };
     const onMove = (event: PointerEvent) => {
       if (event.pointerType === "touch") return;
@@ -286,12 +293,12 @@ export function useHeatReadout(
     };
     el.addEventListener("pointermove", onMove);
     el.addEventListener("pointerleave", onLeave);
-    map.on("move", schedule);
+    map.on("move", onMapMove);
     schedule();
     return () => {
       el.removeEventListener("pointermove", onMove);
       el.removeEventListener("pointerleave", onLeave);
-      map.off("move", schedule);
+      map.off("move", onMapMove);
       cancelAnimationFrame(frame);
     };
   }, [map, contacts]);

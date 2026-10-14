@@ -76,9 +76,12 @@ const CardsFallback = () => (
 );
 
 /** Lazy: it sits behind a tab, so it stays out of the contact's first chunk. */
-const DossierTab = React.lazy(() =>
-  import("./DossierTab").then((m) => ({ default: m.DossierTab })),
-);
+const dossierTab = preloadable<
+  React.ComponentProps<typeof import("./DossierTab").DossierTab>
+>(() => import("./DossierTab").then((m) => ({ default: m.DossierTab })));
+const DossierTab = dossierTab.Component;
+import { whenIdle } from "../../../lib/idle";
+import { preloadable } from "../../../lib/preloadable";
 import { TimelineTab } from "./TimelineTab";
 import { vibeTokens } from "../../../lib/theme";
 import { usePreferences } from "../../../contexts/PreferencesContext";
@@ -212,6 +215,13 @@ export const ContactProfile = ({
   );
   const [briefRequest, setBriefRequest] = useState<number | null>(null);
   const spendBriefRequest = useCallback(() => setBriefRequest(null), []);
+  useEffect(
+    () =>
+      whenIdle(() => {
+        dossierTab.load().catch(() => undefined);
+      }),
+    [],
+  );
   useEffect(() => {
     if (!briefInUrl) return;
     setActiveTab("dossier");
