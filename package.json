@@ -81,7 +81,7 @@
     "@anthropic-ai/sdk": "^0.128.0",
     "@dicebear/avataaars": "^9.4.2",
     "@dicebear/bottts": "^9.4.2",
-    "@dicebear/core": "^9.4.3",
+    "@dicebear/core": "^10.7.0",
     "@dicebear/lorelei": "^9.4.2",
     "@google/genai": "^2.24.0",
     "@googleapis/calendar": "^20.0.1",
