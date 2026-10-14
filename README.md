@@ -5,7 +5,7 @@
       <img src="docs/brand/contrack-lockup-animated.svg" alt="Contrack" width="400" />
     </picture>
   </h1>
-  <p><b>Personal &amp; Professional Relationship Manager for Friends, Family, and Your Network</b></p>
+  <p><b>Privacy focused people management and search</b></p>
 
 [![CI](https://github.com/arvarik/contrack/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/arvarik/contrack/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/arvarik/contrack)](https://github.com/arvarik/contrack/releases)
@@ -22,11 +22,11 @@
   <img src="docs/images/tour.gif" alt="A tour of Contrack: the Pulse page, the command palette opening a contact, a question answered in Ask Contrack, and the map of the network" width="100%" />
 </p>
 
-Relationships are the most meaningful part of your life, and the easiest thing to lose track of. Close friends, family, mentors, and the people you work with end up scattered across half a dozen apps, inboxes, and address books. A birthday slips by. A note from a great conversation gets buried. Months pass before you realize you never followed up. **Contrack brings everyone together.**
+Contacts are scattered all over your apps, often have a large overlap, and aren't necessarily filled in with the most amount of information you'd like. When every app requests access to your contacts, it doesn't really feel like you *own* your network. 
 
-Keep the personal details that make a friendship, like how you met at a wedding, their kids' names, anniversary dates, and gift ideas, right alongside the context of your work: roles, intros, meeting notes, and next week's follow-up.
+And even when you meticulously update your private Apple contacts, there's no good way to keep building the relationship or continuously updating their important details.
 
-**Privacy isn't a setting. It's the foundation.** Contrack lives on your own computer or home server. Your relationships aren't training anyone's model, sitting on a rented cloud, or locked behind a monthly subscription. Search happens right on your device. Share one home server with your family or team while keeping everyone's address book completely private to them. And when you want AI to research a contact or turn a quick note into a rich profile, you bring the model you trust, or use none at all.
+Contrack solves all of these by being an all-in-one, self-hosted contact management app that a follows a simple 4 step process:
 
 ## Import → Dedupe → Enrich → Track
 
@@ -131,7 +131,20 @@ Add Contrack to your phone's home screen. Before you walk into coffee or a meeti
 
 **And everything else you expect:** rich notes with file & image attachments, `@mentions` that link people together, custom dates and anniversaries, lists and tags, passkey sign-in, a 90-day trash with undo, open exports anytime, and warm light and dark themes.
 
-**Comparing personal CRMs?** Read [Contrack vs Monica](docs/comparisons/contrack-vs-monica.md), [Contrack vs Clay](docs/comparisons/contrack-vs-clay.md), [Contrack vs Folk](docs/comparisons/contrack-vs-folk.md), [Contrack vs Twenty](docs/comparisons/contrack-vs-twenty.md), [Contrack vs Huly](docs/comparisons/contrack-vs-huly.md), [Contrack vs EspoCRM](docs/comparisons/contrack-vs-espocrm.md), and [Contrack vs Nextcloud Contacts](docs/comparisons/contrack-vs-nextcloud-contacts.md).
+## Privacy
+**Privacy isn't a setting. It's the foundation.** Contrack lives on your own computer or home server. Your relationships aren't training anyone's model, sitting on a rented cloud, or locked behind a monthly subscription. Search happens right on your device.
+
+Share one home server with your family or team while keeping everyone's address book completely private to them. And when you want AI to research a contact or turn a quick note into a rich profile, you bring the model you trust, or use none at all.
+
+
+## Comparing personal CRMs?
+* [Contrack vs Monica](docs/comparisons/contrack-vs-monica.md)
+* [Contrack vs Clay](docs/comparisons/contrack-vs-clay.md)
+* [Contrack vs Folk](docs/comparisons/contrack-vs-folk.md)
+* [Contrack vs Twenty](docs/comparisons/contrack-vs-twenty.md)
+* [Contrack vs Huly](docs/comparisons/contrack-vs-huly.md)
+* [Contrack vs EspoCRM](docs/comparisons/contrack-vs-espocrm.md)
+* [Contrack vs Nextcloud Contacts](docs/comparisons/contrack-vs-nextcloud-contacts.md).
 
 ## Start in a minute
 
