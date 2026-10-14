@@ -1,6 +1,6 @@
 # Contrack documentation
 
-Contrack is a self-hosted personal CRM for the people in your life and work —
+Contrack is a self-hosted personal CRM for the people in your life and work:
 friends, family, colleagues, founders, and collaborators. It brings your
 contacts from every source into one network, keeps a timeline of what you talk
 about, remembers birthdays, anniversaries, and custom milestones, and shows you

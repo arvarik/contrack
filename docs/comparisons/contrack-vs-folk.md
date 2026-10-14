@@ -42,9 +42,9 @@ context around a person over years.
   (see [Contacts](../contacts.md)):
   - Notes, calls, meetings, emails, attachments and `@mentions` live in one
     place instead of tiny spreadsheet cells.
-  - **Add from text** (Smart Paste) accepts any free-form note — whether
-    `"Met at Sarah's wedding — loves natural wine, kids are Leo and Maya, catch up every quarter"`
-    or `"Partner at Sequoia — follow up next Tuesday on seed round"` — and
+  - **Add from text** (Smart Paste) accepts any free-form note, such as
+    `"Met at Sarah's wedding, loves natural wine, kids are Leo and Maya, catch up every quarter"`
+    or `"Partner at Sequoia, follow up next Tuesday on seed round"`, and
     creates the contact, extracts work and personal facts, sets a follow-up and
     logs past dated interactions automatically.
   - [Pulse](../pulse.md) opens each morning with the people you are overdue to
@@ -69,7 +69,7 @@ context around a person over years.
   interaction and custom fact locally using `bge-small-en-v1.5` in `sqlite-vec`
   alongside SQLite FTS5, then reranks matches with a local
   `ms-marco-MiniLM-L-6-v2` cross-encoder. Switching to **Notes** mode finds the
-  exact paragraph where a topic was discussed months ago — without sending your
+  exact paragraph where a topic was discussed months ago, without sending your
   notes to an external API (see [Search and Ask Contrack](../search.md)).
 - **Interactive world map.** Contrack's [Map](../map.md) plots your contacts
   across a MapLibre world map with clustering, metro-area resolution, rectangle

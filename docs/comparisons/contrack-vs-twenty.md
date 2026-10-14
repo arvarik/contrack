@@ -11,8 +11,8 @@ the right choice comes down to a simple question: **are you managing a sales
 pipeline for a company, or relationships across your life and career?**
 
 Contrack is a personal CRM (PRM) built for individuals, households and small
-groups who want to remember context about the people they know — friends,
-family, founders, peers, mentors and investors — and stay in touch without
+groups who want to remember context about the people they know, including friends,
+family, founders, peers, mentors and investors, and stay in touch without
 turning relationships into sales tickets.
 
 ## At a glance
@@ -46,8 +46,8 @@ sales team, and poorly for the rest of your life:
     today, tracked people who have drifted past their cadence, and upcoming
     birthdays, anniversaries and calendar meetings (see [Pulse](../pulse.md)).
   - **Add from text** and the timeline composer work just as naturally for
-    `"Met at Sarah's wedding — loves natural wine, kids are Leo and Maya, catch up every quarter"`
-    as they do for `"Partner at Sequoia — follow up next Tuesday on seed round"`
+    `"Met at Sarah's wedding, loves natural wine, kids are Leo and Maya, catch up every quarter"`
+    as they do for `"Partner at Sequoia, follow up next Tuesday on seed round"`
     (see [Contacts](../contacts.md)).
   - **Tracking is a choice.** You can import thousands of contacts from Google,
     Apple Contacts or LinkedIn and track only the people you want Pulse to
@@ -87,7 +87,7 @@ external automation tools. Contrack builds them into the single binary:
   add everyone in that area to a list such as `Lisbon trip` (see
   [Map](../map.md)).
 - **Built-in MCP server.** Point Claude, ChatGPT or Cursor at `/api/mcp` and
-  authorize with OAuth 2.1 or a personal token — no extra bridge container
+  authorize with OAuth 2.1 or a personal token, with no extra bridge container
   needed (see [MCP server](../mcp.md)).
 
 ## Private accounts vs shared team workspaces

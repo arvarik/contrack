@@ -8,11 +8,6 @@
       .still { display: inline; }
     }
   </style>
-  <g fill="none" stroke="#566164" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="0.1 9">
-    <path d="M276 218 Q362 128 444 86" />
-    <path d="M516 86 Q598 128 684 218" />
-    <path d="M660 262 Q480 294 300 262" />
-  </g>
   <g fill="none" stroke="#006a91" stroke-linecap="round" stroke-linejoin="round">
     <g stroke-width="2.2">
       <path d="M388 512 C432 510 458 492 465 446 C470 408 468 372 456 352 C416 318 352 296 290 278" />

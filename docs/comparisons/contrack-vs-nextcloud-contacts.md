@@ -9,7 +9,7 @@ emails and addresses across devices over CardDAV.
 Contrack goes beyond a static address book to work as a **relationship manager**:
 it pairs your contact list with chronological interaction timelines, stay-in-touch
 cadences, automatic email and calendar sync, local semantic search across notes,
-a world map, web enrichment and a built-in MCP server — all inside a single
+a world map, web enrichment and a built-in MCP server, all inside a single
 Node.js container and a single SQLite file.
 
 ## At a glance
@@ -45,11 +45,11 @@ losing touch with?"_
     `@mentions` that cross-link connected people, and a **Next follow-up** date.
   - Turn on **Track** for the friends, family members and professional contacts
     you want to stay close to. [Pulse](../pulse.md) computes a relationship
-    health score (`0–100`) and shows who is overdue alongside upcoming
+    health score from 0 to 100 and shows who is overdue alongside upcoming
     birthdays, anniversaries and custom milestones.
-  - Use **Add from text** (Smart Paste) to paste a quick note — such as
-    `"Met at Sarah's wedding — loves natural wine, kids are Leo and Maya, catch up every quarter"`
-    or `"Partner at Sequoia — follow up next Tuesday on seed round"` — and let
+  - Use **Add from text** (Smart Paste) to paste a quick note, such as
+    `"Met at Sarah's wedding, loves natural wine, kids are Leo and Maya, catch up every quarter"`
+    or `"Partner at Sequoia, follow up next Tuesday on seed round"`, and let
     Contrack extract the contact's fields, tags, custom facts and dated
     interactions automatically.
 

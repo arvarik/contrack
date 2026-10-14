@@ -133,9 +133,9 @@ find a single setting.
 - **Add one person**: press **New**, the plus button above the list, then
   **New contact**. Or press `N` in the list.
 - **Add from text**: press **New**, then **Add from text**, and paste an email
-  signature, a bio, or notes from meeting someone — such as
-  `"Met at Sarah's wedding — loves natural wine, kids are Leo and Maya, catch up every quarter"`
-  or `"Partner at Sequoia — follow up next Tuesday on seed round"`. AI fills
+  signature, a bio, or notes from meeting someone, such as
+  `"Met at Sarah's wedding, loves natural wine, kids are Leo and Maya, catch up every quarter"`
+  or `"Partner at Sequoia, follow up next Tuesday on seed round"`. AI fills
   in the form, tags, facts, and dated interactions for you, so it needs an AI
   provider. Or press `V`.
 

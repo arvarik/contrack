@@ -22,11 +22,11 @@
   <img src="docs/images/tour.gif" alt="A tour of Contrack: the Pulse page, the command palette opening a contact, a question answered in Ask Contrack, and the map of the network" width="100%" />
 </p>
 
-Relationships are the most meaningful part of your life — and the easiest thing to lose track of. The people who matter most to you — close friends, family, mentors, and the people you work with — are scattered across half a dozen apps, inboxes, and address books. A birthday slips by. A note from a great conversation gets buried. Months pass before you realize you never followed up. **Contrack brings everyone together.**
+Relationships are the most meaningful part of your life, and the easiest thing to lose track of. Close friends, family, mentors, and the people you work with end up scattered across half a dozen apps, inboxes, and address books. A birthday slips by. A note from a great conversation gets buried. Months pass before you realize you never followed up. **Contrack brings everyone together.**
 
-Keep the personal moments that make a friendship — how you met at a wedding, their kids' names, anniversary dates, and gift ideas — right alongside the context of your work: roles, intros, meeting notes, and next week's follow-up.
+Keep the personal details that make a friendship, like how you met at a wedding, their kids' names, anniversary dates, and gift ideas, right alongside the context of your work: roles, intros, meeting notes, and next week's follow-up.
 
-**Privacy isn't a setting. It's the foundation.** Contrack lives on your own computer or home server. Your relationships aren't training anyone's model, sitting on a rented cloud, or locked behind a monthly subscription. Search happens right on your device. Share one home server with your family or team while keeping everyone's address book completely private to them. And when you want AI to research a contact or turn a quick note into a rich profile, you bring the model you trust — or use none at all.
+**Privacy isn't a setting. It's the foundation.** Contrack lives on your own computer or home server. Your relationships aren't training anyone's model, sitting on a rented cloud, or locked behind a monthly subscription. Search happens right on your device. Share one home server with your family or team while keeping everyone's address book completely private to them. And when you want AI to research a contact or turn a quick note into a rich profile, you bring the model you trust, or use none at all.
 
 ## Import → Dedupe → Enrich → Track
 
@@ -47,14 +47,14 @@ Keep the personal moments that make a friendship — how you met at a wedding, t
 <tr>
 <td width="81%" valign="middle">
   <h3>2. Dedupe</h3>
-  <p><b>One person. One clean story.</b> The same friend from three address books becomes a single profile. Contrack merges the obvious matches automatically and lets you review the rest side by side — with a 90-day undo if you ever change your mind.</p>
+  <p><b>One person. One clean story.</b> The same friend from three address books becomes a single profile. Contrack merges the obvious matches automatically and lets you review the rest side by side, with a 90-day undo if you ever change your mind.</p>
   <img src="docs/images/flow-dedupe.gif" alt="Possible duplicates: a pair with the reason it matched, what the merge keeps, the merge, and Undo" width="100%" />
 </td>
 </tr>
 <tr>
 <td width="81%" valign="middle">
   <h3>3. Enrich</h3>
-  <p><b>All the context you never had time to type.</b> Paste a quick note from either world — <i>"Met at Sarah's wedding — loves natural wine, kids are Leo and Maya, catch up every quarter"</i> or <i>"Partner at Sequoia — follow up next Tuesday on seed round"</i> — and Contrack turns it into a complete profile with dates, tags, and reminders. Or let web research fill in roles and links with cited sources.</p>
+  <p><b>All the context you never had time to type.</b> Paste a quick note like <i>"Met at Sarah's wedding, loves natural wine, kids are Leo and Maya, catch up every quarter"</i> or <i>"Partner at Sequoia, follow up next Tuesday on seed round"</i>, and Contrack turns it into a complete profile with dates, tags, and reminders. Or let web research fill in roles and links with cited sources.</p>
   <img src="docs/images/flow-enrich.gif" alt="Research on a contact: the run, and the Research card filling in with facts and their sources" width="100%" />
 </td>
 </tr>
@@ -79,7 +79,7 @@ Your calm morning briefing. See the follow-ups due today, friends and colleagues
 <td width="50%" valign="top">
 <img src="docs/images/showcase-ask.png" alt="Ask Contrack answering a question with matching people" width="100%" />
 <h3>Ask Contrack</h3>
-Ask in plain words — <i>"Who do I know in Lisbon?"</i> or <i>"Who loves natural wine?"</i> Answers come straight from your own contacts and notes, searched privately on your machine.
+Ask in plain words, like <i>"Who do I know in Lisbon?"</i> or <i>"Who loves natural wine?"</i> Answers come straight from your own contacts and notes, searched privately on your machine.
 </td>
 </tr>
 </table>
@@ -104,7 +104,7 @@ Planning a trip? See everyone you know in a city at a glance. Draw a loop around
 <td width="50%" valign="top">
 <img src="docs/images/showcase-accounts.png" alt="Accounts: multiple family or team profiles with isolated address books" width="100%" />
 <h3>Multiple profiles, one home</h3>
-Run one Contrack for your family or team. Invite someone with a link or create their profile in seconds — every person gets their own private address book, notes, and reminders.
+Run one Contrack for your family or team. Invite someone with a link or create their profile in seconds. Every person gets their own private address book, notes, and reminders.
 </td>
 <td width="50%" valign="top">
 <img src="docs/images/showcase-backups.png" alt="Backups: verified snapshots of your database" width="100%" />
@@ -119,7 +119,7 @@ Your history is irreplaceable. Take a complete, integrity-checked snapshot of yo
 <td width="50%" valign="top">
 <img src="docs/images/showcase-mcp.png" alt="Settings, MCP and API: connecting Claude, Cursor and other clients" width="100%" />
 <h3>Works with your AI assistant</h3>
-Connect Claude, ChatGPT, or Cursor in one click so your favorite assistant can look up context and log notes for you — with read-only access whenever you prefer.
+Connect Claude, ChatGPT, or Cursor in one click so your favorite assistant can look up context and log notes for you, with read-only access whenever you prefer.
 </td>
 <td width="50%" valign="top">
 <img src="docs/images/showcase-phone.png" alt="Contrack on a phone: Pulse and a contact page" width="100%" />
@@ -172,7 +172,7 @@ npm run dev
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/arvarik/contrack?quickstart=1)
 
-Open a live demo in your browser preloaded with 400 fictional people — no installation and no API key needed.
+Open a live demo in your browser preloaded with 400 fictional people, with no installation and no API key needed.
 
 <br/>
 

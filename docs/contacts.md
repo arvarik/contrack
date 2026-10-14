@@ -76,9 +76,9 @@ Press **New**, the plus button above the list.
 
 - **New contact** opens a form. Only **Full name** is required. Press
   **Save contact**. In the list, `N` opens the form too.
-- **Add from text**: paste an email signature, a bio or notes about someone —
-  whether personal (`"Met at Sarah's wedding — loves natural wine, kids are Leo and Maya, catch up every quarter"`)
-  or work (`"Partner at Sequoia — follow up next Tuesday on seed round"`) —
+- **Add from text**: paste an email signature, a bio, or notes about someone,
+  such as `"Met at Sarah's wedding, loves natural wine, kids are Leo and Maya, catch up every quarter"`
+  or `"Partner at Sequoia, follow up next Tuesday on seed round"`,
   and press **Extract contact**. AI fills in the **New contact** form for you
   to check. Below the fields are the tags and the past meetings, calls and
   emails that it found, each with a check box and each interaction with its
