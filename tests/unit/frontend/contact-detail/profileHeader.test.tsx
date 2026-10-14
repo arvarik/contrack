@@ -216,8 +216,10 @@ function mount(ui: React.ReactElement) {
 let fetchMock: ReturnType<typeof vi.fn>;
 
 const weatherRequests = () =>
-  fetchMock.mock.calls.filter(([url]) =>
-    String(url).includes("api.open-meteo.com"),
+  fetchMock.mock.calls.filter(
+    ([url]) =>
+      new URL(String(url), "http://localhost").hostname ===
+      "api.open-meteo.com",
   );
 
 beforeEach(() => {

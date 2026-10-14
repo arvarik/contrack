@@ -41,10 +41,11 @@ describe("the Node version", () => {
     const froms = [...read("Dockerfile").matchAll(/^FROM (\S+)/gm)].map(
       (m) => m[1],
     );
-    expect(froms).toEqual([
-      `node:${MAJOR}-trixie-slim`,
-      `node:${MAJOR}-trixie-slim`,
-    ]);
+    expect(froms).toHaveLength(2);
+    expect(froms[0]).toBe(froms[1]);
+    expect(froms[0]).toMatch(
+      new RegExp(`^node:${MAJOR}-trixie-slim@sha256:[0-9a-f]{64}$`),
+    );
   });
 
   // The pin itself, not a major: the Node images for dev containers trail
@@ -53,7 +54,7 @@ describe("the Node version", () => {
   it("is the exact version the dev container installs", () => {
     const devcontainer = JSON.parse(read(".devcontainer/devcontainer.json"));
     expect(
-      devcontainer.features["ghcr.io/devcontainers/features/node:1"],
+      devcontainer.features["ghcr.io/devcontainers/features/node:2"],
     ).toEqual({ version: PIN });
   });
 

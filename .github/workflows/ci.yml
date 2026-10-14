@@ -67,7 +67,7 @@ jobs:
 
       # .nvmrc is the one pin for CI and for developers' version managers.
       - name: Use the Node.js version in .nvmrc
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: "npm"
@@ -84,6 +84,12 @@ jobs:
 
       - name: Production Build
         run: npm run build
+
+      - name: Dependency Review
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
 
   # ── Unit, integration and eval tests ───────────────────────────────────────
   # `npm run test:coverage`, split across four runners. The tests use every
@@ -105,7 +111,7 @@ jobs:
           persist-credentials: false
 
       - name: Use the Node.js version in .nvmrc
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: "npm"
@@ -125,7 +131,7 @@ jobs:
 
       - name: Upload the blob report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vitest-blob-${{ matrix.shard }}
           path: .vitest/blob/
@@ -148,7 +154,7 @@ jobs:
           persist-credentials: false
 
       - name: Use the Node.js version in .nvmrc
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: "npm"
@@ -157,7 +163,7 @@ jobs:
         run: npm ci
 
       - name: Download the blob reports
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: vitest-blob-*
           path: .vitest/blob/
@@ -193,7 +199,7 @@ jobs:
           persist-credentials: false
 
       - name: Use the Node.js version in .nvmrc
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: "npm"
@@ -233,7 +239,7 @@ jobs:
       # success alike, so a green run can still be inspected. One per shard.
       - name: Upload Playwright report
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-${{ matrix.shard }}
           path: playwright-report/
@@ -302,7 +308,7 @@ jobs:
           touch "/tmp/digests/${digest#sha256:}"
 
       - name: Upload digest
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: digest-${{ strategy.job-index }}
           path: /tmp/digests/*
@@ -324,7 +330,7 @@ jobs:
       digest: ${{ steps.index.outputs.digest }}
     steps:
       - name: Download digests
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: /tmp/digests
           pattern: digest-*
@@ -457,9 +463,10 @@ jobs:
           sarif_file: ${{ steps.scan.outputs.sarif }}
           category: image-scan
 
-  # Version tags (vX.Y.Z) get a GitHub Release. Created only if one doesn't
-  # already exist for the tag — publishing via `gh release create` first (to
-  # attach hand-written notes) makes this a no-op rather than a conflict.
+  # Version tags (vX.Y.Z) get a GitHub Release with a signed source archive and
+  # SLSA build provenance attestation. If the release was created beforehand
+  # (for example with hand-written notes via `gh release create`), the signed
+  # archive, its SHA-256 checksum and its provenance bundle are still attached.
   release:
     needs: [checks, unit-tests, coverage, browser-a11y]
     if: startsWith(github.ref, 'refs/tags/v')
@@ -467,20 +474,42 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Create GitHub release if missing
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build release source archive
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
+          ARCHIVE="contrack-${TAG}.tar.gz"
+          git archive --format=tar.gz --prefix="contrack-${TAG#v}/" -o "$ARCHIVE" HEAD
+          sha256sum "$ARCHIVE" > "${ARCHIVE}.sha256"
+
+      - name: Attest release archive provenance
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: contrack-${{ github.ref_name }}.tar.gz
+          create-storage-record: false
+
+      - name: Create or update GitHub release with signed assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          ARCHIVE="contrack-${TAG}.tar.gz"
+          cp "$BUNDLE_PATH" "${ARCHIVE}.intoto.jsonl"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release $TAG already exists — skipping."
+            echo "Release $TAG already exists — uploading signed assets."
+            gh release upload "$TAG" "$ARCHIVE" "${ARCHIVE}.sha256" "${ARCHIVE}.intoto.jsonl" \
+              --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+            gh release create "$TAG" "$ARCHIVE" "${ARCHIVE}.sha256" "${ARCHIVE}.intoto.jsonl" \
+              --repo "$GITHUB_REPOSITORY" \
               --title "$TAG" --generate-notes
           fi

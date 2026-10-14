@@ -5,11 +5,11 @@
 
 # Node 26 on Debian 13 (trixie), the current Debian stable. Debian 12
 # (bookworm) moved to reduced LTS support in June 2026. The tag names the
-# major line only, so a rebuild takes each 26.x security release; package.json
-# requires 26.10 or later.
+# major line and is pinned by its multi-arch SHA-256 digest (updated weekly
+# by Dependabot); package.json requires 26.10 or later.
 
 # Stage 1: Build the frontend
-FROM node:26-trixie-slim AS builder
+FROM node:26-trixie-slim@sha256:0d1e33586362bb9e608c4e751e7a9e7edb55c9ac11461ed5666af696cc461dd4 AS builder
 
 WORKDIR /app
 
@@ -40,7 +40,7 @@ RUN npm run build
 # Stage 2: Production runtime
 # No apt packages needed: better-sqlite3 bundles its own SQLite, and Node
 # ships with a built-in CA store for outbound TLS.
-FROM node:26-trixie-slim AS runtime
+FROM node:26-trixie-slim@sha256:0d1e33586362bb9e608c4e751e7a9e7edb55c9ac11461ed5666af696cc461dd4 AS runtime
 
 WORKDIR /app
 

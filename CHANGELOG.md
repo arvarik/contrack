@@ -11,308 +11,135 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [2.0.0] - 2026-10-14
 
-Version 2 turns Contrack into a server that several people can share and reach
-from the internet. It also rebuilds search, Pulse, the map, research and the
-contact page.
+Contrack 2.0 reimagines Contrack from the ground up as a fast, multi-user,
+self-hosted personal CRM built around four steps: **Import → Dedupe → Enrich →
+Track**. Every page has been rebuilt—from local-first semantic search and an
+opt-in morning **Pulse** briefing to cited web research, an interactive
+MapLibre network map, live calendar/mailbox connectors, and a built-in MCP
+server.
 
-**Version 2 is a new start.** It does not open or convert a Contrack 1 data
-folder. It stops with a message and changes nothing in it. Start Contrack 2
-with an empty `DATA_DIR`.
+> **Breaking change — clean start required:** Contrack 2.0 does not open or
+> migrate a Contrack 1.x database. If pointed at a 1.x `DATA_DIR`, it exits
+> safely without modifying any files. Start Contrack 2.0 with a fresh
+> `DATA_DIR`.
 
-### Accounts and sign-in
+### Multi-user accounts & sign-in
 
-- Several accounts can share one instance. Each account sees only its own
-  contacts, notes and settings, and every database query enforces this.
-- Sign in with a password, a passkey or a link sent by email. With
-  `AUTH_REQUIRED=true`, the first visit creates the admin account.
-- Admins invite people, give the member or admin role, and read an audit log.
-  The **Instance health** page shows the database, the last backup, the
-  queues, the models and the background jobs.
-- Each account makes its own API tokens, and a token can be read-only. They
-  replace the one instance-wide token of version 1.
-- Each device's session can be signed out on its own. Theme, accent, list
-  density and search history follow the account to every device.
-- Outgoing mail (`SMTP_URL`) sends invitations, password resets and sign-in
-  links. Without mail, `npm run reset-password <email>` resets a password from
-  the command line, and passkeys take their origin from `PUBLIC_URL` behind a
-  reverse proxy.
-- Disable, and removing an AI key or a custom AI server, ask first. **Email
-  a reset link** says when the mail failed, and the unsent link stops working.
-- A reset-link or sign-in-link request answers at the same speed whether or
-  not the address has an account. An invitation link that cannot be used
-  says so before its form opens.
-- Sign-in and setup pages do not open the phone keyboard by themselves. The
-  built-in account is named **Local account**.
-- An admin can download a database snapshot from **Backups**, and the audit
-  log records each download. AI usage, Instance health and the audit log use
-  plain words.
+- **True multi-tenancy:** Multiple accounts share one instance with strict
+  SQL-level isolation across contacts, notes, lists, connectors, and settings.
+- **Flexible sign-in:** Sign in with a password, a WebAuthn passkey, or a
+  magic link sent over SMTP (`SMTP_URL`). With `AUTH_REQUIRED=true`, the first
+  visit walks through creating the initial admin account.
+- **Administration & observability:** Invite members or admins, review the
+  instance audit log, inspect database/queue/model status on **Instance
+  health**, and download verified SQLite snapshots from **Backups**.
+- **Per-account sessions & tokens:** Manage active device sessions individually,
+  create scoped personal API tokens (full or read-only), and sync theme, accent,
+  density, and search history across devices.
 
-### Security
+### Local-first search & Ask Contrack
 
-- Every response carries a Content Security Policy, a `Permissions-Policy`,
-  and `Strict-Transport-Security` over HTTPS.
-- The server trusts no reverse proxy unless `TRUST_PROXY_HOPS` says how many
-  sit in front. The default is 0, so behind a proxy, set it to 1.
-- Mailed links take their address from `PUBLIC_URL` only. Without it, no mail
-  carries a link.
-- The database, backups, uploads and `secret.key` are readable by their owner
-  only. Stored AI keys and connector passwords are encrypted.
-- Link previews, remote images, calendar feeds and research fetch outside
-  pages through one guard. It refuses private and local addresses when it
-  connects, unless `CONNECTORS_ALLOW_PRIVATE_HOSTS` allows them for
-  connectors.
-- Docker Compose publishes the port on `127.0.0.1` only, and the CSV export
-  neutralizes spreadsheet formulas.
-- While sign-in is off, the server answers only local host names, the
-  `PUBLIC_URL` host and `ALLOWED_HOSTS`, so a web page cannot reach it through
-  DNS rebinding. `/api/mcp` refuses a request from another site's page.
-- A signed-in change from another site's page is refused, a sibling
-  subdomain's included. Instance administration needs a signed-in admin, and
-  an API token cannot use it.
-- `npm run dev` listens on this machine only and does not serve the data
-  files. To serve other machines, run the production build.
+- **Offline-capable hybrid search:** Runs entirely on local ONNX embedding and
+  cross-encoder reranker models bundled inside the Docker image—no API key or
+  internet connection required.
+- **Structured facets + natural language:** Combine instant SQL facets
+  (`company:`, `tag:`, `near:`, `contacted:`, `added:<30d`) with natural-language
+  queries across people and interaction notes (**Notes** search returns the
+  matching person, date, and passage).
+- **Evidence & AI synthesis:** Every result highlights the exact fields or note
+  passages that matched. When an AI provider is enabled, Ask Contrack adds a
+  grounded summary on top.
+- **Unified command palette (`⌘K` / `Ctrl+K`):** Jump to contacts, pages, saved
+  filters, or quick interaction logging (`>`) from desktop or mobile.
 
-### Search and Ask Contrack
+### Pulse & opt-in relationship tracking
 
-- Ask Contrack answers locally first. A name, an email or a phone number needs
-  no model, and filters such as `company:`, `tag:`, `near:` and `contacted:`
-  run in SQL.
-- A local reranker orders the answers, and each person shows the fields that
-  made the match. AI writes a short brief on top when it is on.
-- Search works with AI off, and with no network once the two local models are
-  present.
-- **Notes** search answers questions such as "Who discussed hiring last
-  month?" with the person, the date and the passage.
-- Search history is shared with the command palette, and "Try asking" offers
-  questions built from your own contacts.
-- The command palette's arrow keys move the highlight and `Esc` steps back one
-  layer at a time. It asks AI only on `Enter`, finds pages, lists the facets
-  under **Filter**, leads `>` logging a step at a time, says when AI is not
-  set up, and opens from every page on a phone, above the on-screen keyboard.
-- `added:<30d` lists the people added in the last 30 days. Pulse's "new this
-  month" row opens exactly the people it counts.
-- Ask does not open the phone keyboard on arrival, says why a question is too
-  short, offers a next step on an empty network, and its results are one Tab
-  stop.
+- **Opt-in tracking:** Choose exactly who to keep up with and on what cadence;
+  relationship health rings appear only for tracked contacts.
+- **Customizable morning briefing:** **Pulse** brings together **Up next**
+  (**Catch up** & **Milestones** for birthdays/anniversaries), **Keeping up**,
+  **Activity**, **Inbox**, and **Coming up** (next 7–14 days of meetings and
+  dates) in your local time zone, with rearrangeable cards and one-click snooze
+  - undo.
 
-### Pulse and tracking
+### Contacts, timeline & mobile experience
 
-- Tracking is a choice. You decide who to keep up with and how often, and only
-  tracked people get a relationship score.
-- Pulse is one morning page: what is due today, **Up next** with **Catch up**,
-  **Keeping up**, **Activity**, **Inbox** and **Coming up**. You can move and
-  hide its cards. Overdue and Today follow your own time zone, not the
-  server's.
-- The sidebar badge, the palette and **Activity** count days on your own
-  calendar, and **Activity**'s weeks begin on your week start. **Coming up**
-  shows the meetings from now through the seventh day, an all-day event on
-  its own day, and offers a calendar only when none is connected.
-- Pulse keys do nothing while a menu or a dialog is open. Up next is one Tab
-  stop and shows eight rows on a phone, and a snooze and **Reset layout**
-  offer Undo. The Insight card tells a failed provider from a missing model,
-  and **Daily insight** draws on your contacts' roles and locations alongside
-  their industries.
-- **Up next** groups upcoming birthdays, anniversaries and custom dates under
-  **Milestones**, and **Coming up** lists dates 8 to 14 days away.
+- **Unified contact workspace:** Responsive two-pane layout with human-readable
+  slugs (`/contacts/<name>-<id>`), inline field editing, pronoun-aware default
+  avatars, custom milestone dates, and a **Dossier** tab for AI briefings and
+  research history.
+- **One composer for everything:** Log notes, calls, meetings, and emails on
+  today or past dates, attach follow-ups, and upload files via drag-and-drop or
+  clipboard paste.
+- **Add from text:** Paste raw meeting notes or bios to extract structured
+  profile fields, tags, interests, and dated past interactions before saving.
+- **First-class mobile web & PWA:** Bottom-sheet dialogs with drag-to-dismiss,
+  44 px touch targets, one-tap call/text/email/vCard sharing, safe-area inset
+  support, and Home Screen shortcuts.
+- **Safety nets:** 30-day **Trash** with restore, contact archiving, and
+  instant **Undo** toasts on destructive or single-key actions.
 
-### Contacts
+### AI providers & cited web research
 
-- The contact page fits the width of its pane. One composer logs a note, a
-  call, a meeting or an email, with a follow-up, on today or a past day, and
-  accepts files by paperclip button, drag-and-drop or pasting an image from
-  the clipboard.
-- Contacts use human-readable URL slugs (`<name>-<8-char-id>`), **Dates** in
-  **Details** holds birthdays, anniversaries and custom milestones, and
-  **Select** mode places checkboxes on the right so contact rows stay still.
-- Opening **Settings** on a wide screen goes straight to the first page and
-  remembers the last settings page you visited during the session.
-- **Add from text** also reads meeting notes. It finds tags, interests and
-  other facts, and the past meetings, calls and emails, each with a date to
-  check before it saves.
-- The **Dossier** holds the AI briefing and the record of every research run.
-- Default avatars follow a contact's pronouns and name.
-- Deletes go to a trash that keeps them for 30 days by default, and a write
-  made with one key offers **Undo**.
-- Export to vCard, CSV or JSON. A vCard export imports back in.
-- On a phone, a contact's phone and email are one tap from a call, a text or
-  a mail, **Share contact** sends a vCard, and the Network list keeps its
-  place and opens the command palette.
-- On a phone, dialogs are sheets that drag closed, Back on Android closes
-  them, and Save stays above the keyboard while the tab bar steps aside.
-  The app keeps clear of the status bar and a side cutout, and a contact
-  opens without its timeline jumping.
-- On a phone, notes on the timeline and Pulse rows use the full width, the
-  bulk bar is one row with a **More actions** menu, filter pills scroll in
-  one line, and each Settings group is one card.
-- A start with a warm cache shows the contact list about a second sooner on a
-  slow phone connection. The list loads beside the sign-in check, and the
-  theme script stays cached.
-- "Follow up Friday" always means the next Friday, a follow-up alone no
-  longer counts as talking to someone, a birthday with no year keeps none,
-  and email and phone fields refuse text that is not an address or a number.
-- Dialogs open on their first field, keys wait while a dialog or a menu is
-  open, the page scrolls from the keyboard after a click, touch screens keep
-  44 px controls at every width, and an unknown address says "Page not
-  found".
-- **Empty trash** deletes the Trash after one confirmation, and an archived
-  contact shows when it was archived. Trash and Archived rows wrap rather
-  than cut their text.
-- A tag rename that joins two tags asks first, and the tag dialogs count the
-  archived and trashed contacts that a change reaches.
-- The Lists page adds people, moves a list with **Move up** and **Move
-  down**, keeps a typed name, and offers Undo on a removed member. **Remove
-  from list** shows on a tablet.
+- **Bring your own model:** Connect Gemini, OpenAI, Anthropic, or any
+  OpenAI-compatible endpoint (Ollama, vLLM, LM Studio) and route tasks
+  independently per model, with per-provider token and cost tracking.
+- **Cited web research:** Run standard or deep research via your AI provider,
+  a self-hosted SearXNG instance, or both. Every discovered fact links to its
+  source URL and is recorded in the research log.
+- **One-click correction:** **Not this person** reverts facts from a mismatched
+  search (while preserving your manual edits) and excludes those URLs from
+  future runs.
 
-### AI and research
+### Interactive network map
 
-- Connect Gemini, OpenAI, Anthropic or any OpenAI-compatible server, such as
-  Ollama, vLLM or LM Studio. One settings page picks the model for each task.
-- An admin can turn AI off for the instance, and each person can turn it off
-  for their account. Contact management and search keep working.
-- Research has two depths, cites its sources, and records what each run found
-  and cost. It can search with the AI provider, with SearXNG, or with both.
-- Research searches far more often: its first ask is one plain sentence, and
-  it no longer offers the model a way to answer without searching. It keeps
-  only the person's own contact details, skips front pages, mailboxes and job
-  posts, and adds a job or a school worded two ways once.
-- **Not this person** takes back a search that found someone else, and later
-  searches leave out its pages. When research finds little, the Research card
-  asks for a school, a city or a former name and searches again.
-- The usage page shows what each provider costs.
-- **Not this person** keeps a field that you changed after the run, such as
-  an About you added to.
+- **Zero-key vector map:** Built on MapLibre GL and OpenFreeMap tiles (or your
+  own custom basemap URL) with self-hostable Nominatim geocoding and automatic
+  metro-area normalization.
+- **Spatial workflows:** Filter on the map, select contacts with box or lasso
+  tools for bulk actions, save custom map views, place manual pins, and inspect
+  unmapped contacts.
 
-### Map
+### Import, connectors & smart deduplication
 
-- The map runs on MapLibre with OpenFreeMap tiles, and needs no API key. You
-  can point it at your own basemap.
-- Save views, select people with a box or a lasso, act on a selection, and see
-  who is not on the map yet.
-- Place a pin by hand, find a place by name, and open the results of a
-  question on the map.
-- The geocoder strips building and suite noise and normalizes metro-area
-  labels (such as "Greater New York City Area" or "San Francisco Bay Area") to
-  place pins at a representative city center.
-- The map keeps the keyboard's place: **Go to** puts focus in its box, a
-  closed contact or a cluster zoom gives focus to a pin, and Esc in the
-  filter box clears it. On a narrow window, `/` opens **Filters**.
-- On a phone or a tablet, **Open in map** shows the pin and its card, not the
-  contact over the map. The count says "on the map", map moves follow the
-  Motion setting, and the Select menu puts **All in view** first.
+- **Live connectors:** Sync Google Contacts, Gmail, Google Calendar, IMAP
+  mailboxes, and ICS calendar feeds directly onto each contact's timeline with
+  correspondent review queues and per-connector timeouts.
+- **Resilient imports & exports:** Batch-streamed imports from Apple, Google,
+  LinkedIn, Facebook, vCard, CSV, and JSON survive dropped connections without
+  duplicating rows. Full round-trip export to vCard, formula-safe CSV, and JSON.
+- **Confidence-scored deduplication:** Automatically merges high-confidence
+  duplicates during import and queues ambiguous pairs in **Possible duplicates**
+  with plain-English match reasons, side-by-side diffs, and a **90-day undo**
+  window.
 
-### Import, sync and export
+### Built-in MCP server, OAuth & OpenAPI
 
-- Connectors sync a calendar (ICS), a mailbox (IMAP) and Google Contacts,
-  Gmail and Calendar. Meetings and email appear on each person's timeline.
-- An import survives a dropped connection and never imports a row twice.
-  It saves in batches, so the server keeps answering while a large file
-  goes in.
-- A Google, mailbox or calendar call that stops answering times out, so one
-  stuck sync no longer holds up every connector.
-- Import reads Google's current CSV columns and the older ones, counts the
-  entries that have no name, says when its duplicate check did not finish,
-  and reads a file type in any case. Its tabs take the arrow keys and fit a
-  phone.
-- The CSV export holds the birthday, addresses, About and social links.
-- Each Google account keeps its own connector, and a failed Google sign-in
-  comes back to **Connectors** in words. **Add as contact** uses the name a
-  mail or a meeting gave, and asks for one when there was only an address.
-- A calendar keeps its meeting threshold, and an all-day event stays on its
-  day. An IMAP test from the edit form uses the saved password, for the same
-  server only.
-- A mailbox that drops its connection fails the sync, not the server. An
-  email summary reads only the text part. A calendar event that repeats within
-  the hour is skipped. Google Contacts syncs again after a week without a sync.
+- **18-tool MCP server (`/api/mcp`):** Connect Claude Desktop, Claude Code,
+  Cursor, VS Code, Codex, Gemini CLI, or ChatGPT via bearer token or OAuth 2.0
+  with read-only scope support and prompt-injection guards (`<untrusted_data>`).
+- **Shared OpenAPI 3.1 contract:** Every REST endpoint and MCP tool shares a
+  single schema, published in `docs/openapi.json`.
 
-### Duplicates
+### Security, privacy & operations
 
-- One merge policy decides every merge, keeps follow-ups, and can be undone.
-- A pair marked as different people is never merged, and a check runs with AI
-  off, finding exact matches.
-- Possible duplicates is the one review list: each pair says why in plain
-  words, shows its caution and what a merge keeps, and every decision has
-  Undo. An undo of a merge keeps the two apart.
-- The same name at two different companies or cities waits for review, and
-  the import check no longer suggests weak pairs.
-- An undo of a merge is all or nothing, and it gives a moved email or phone
-  back its primary mark.
-- A **Check carefully** pair takes two presses to merge, and the keys work
-  with Caps Lock.
+- **Hardened by default:** Strict CSP, HSTS, and `Permissions-Policy` headers;
+  explicit `TRUST_PROXY_HOPS`; SSRF-guarded outbound fetches (`safeFetch`);
+  encrypted stored credentials; DNS-rebinding and CSRF protections; and PII-free
+  structured logs.
+- **Privacy controls:** **Delete forever** purges merged records and uploaded
+  media, daily sweeps clean orphaned files and geocode caches, favicons proxy
+  through your server, and `docs/privacy.md` documents every outbound call.
+- **Lean native runtime:** Runs directly on Node.js 26.10+ native TypeScript
+  with numbered SQLite migrations, a ~160 MB multi-arch Docker image (`amd64` +
+  `arm64`) with pre-bundled local search models, and signed SLSA build
+  provenance attestations.
 
-### Privacy
+### Removed from 1.x
 
-- **Delete forever** also removes the contacts merged into the contact, their
-  merge records, and their photos, attachments and link-preview images. A
-  daily sweep removes uploaded files that nothing uses.
-- A merge can be undone for 90 days. After that, the merged-away contact and
-  its merge record are deleted.
-- An admin can turn off address lookups for the map, or point them at a
-  self-hosted Nominatim (`GEOCODING_DISABLED`, `NOMINATIM_URL`). Cached
-  addresses that no contact uses are deleted daily.
-- A contact's website icon comes from your server, never from Google. OpenAI
-  calls ask OpenAI not to store the answer. A failed sign-in no longer records
-  the name typed.
-- Signing out removes note drafts and the map's last view from the browser.
-- A new [Privacy](docs/privacy.md) page lists what leaves the server, how long
-  each kind of data stays, and what a delete removes.
-
-### MCP and API
-
-- The built-in MCP server (`POST /api/mcp`) offers 18 tools, two prompts and
-  resources to Claude, Cursor and other clients. A read-only token sees only
-  the 9 read-only tools.
-- **Settings → MCP and API** sets up Claude Code, Claude Desktop, Cursor, VS
-  Code, Codex and Gemini CLI. It makes a token for the client and fills in
-  the command, the config or a one-press install link.
-- Claude on the web, Claude Desktop, the Claude phone app and ChatGPT
-  connect by address and sign in with OAuth, with a consent page that offers
-  read only. Approved apps show in the token list, where one press
-  disconnects them. OAuth needs sign-in on and an https `PUBLIC_URL`.
-- Each tool has a title and hints that say whether it reads, adds, or can
-  overwrite. Results leave out the fields only the server reads, and a
-  refused call answers with its code and what to do next.
-- Text that other people can write, such as notes, email summaries and meeting
-  titles, reaches the assistant inside `<untrusted_data>` tags, and the tools
-  tell the model not to follow instructions in it.
-- The routes for contacts, notes, follow-ups, lists, tags and tokens share
-  one contract with the app and the MCP tools. `docs/openapi.json` describes
-  them in OpenAPI 3.1.
-
-### Install and operations
-
-- The built files under `/assets` are cached for a year, as their names
-  change with their content, so a phone loads the app with far fewer
-  requests. The Home Screen app has shortcuts to Pulse, Ask and the map.
-- Node.js 26.10 or later is required. Node runs the TypeScript itself, so the
-  server has no build step.
-- The Docker image holds the local search models, so a container downloads
-  nothing at start. It is half the size of the first 2.0 builds, about 160 MB
-  to download, because it carries only its own platform's model runtime and
-  none of the browser's packages.
-- The database changes through numbered migrations. `/healthz` reports the
-  last one, and a build refuses to open a database that a newer build changed.
-- Background work runs as jobs that **Instance health** lists, and
-  `JOB_CONCURRENCY` sets how many run at once.
-- The server log holds ids and counts, never names, notes or searches.
-  `LOG_LEVEL` sets how much it writes, and Docker Compose keeps 30 MB of it.
-- Backups are checked against the live database after each snapshot, and
-  responses are compressed.
-- The docs are rewritten as task pages, which also build as a GitHub wiki.
-- A GitHub Codespace opens a running Contrack with 400 fictional people and
-  no sign-in.
-
-### Removed
-
-- `AI_TIER` and the free and paid limits behind it.
-- `npm run db:generate`, `npm run db:push` and drizzle-kit. Use
-  `npm run db:new <name>`.
-- `POST /api/contacts/merge-batch`, `POST /api/dev/seed-duplicates`, and the
-  dedupe scan modes `deterministic`, `ai` and `both`.
-- The single-pass research strategy, the old enrichment dossier and the
-  component page at `/dev`.
-- The move of 1.x settings out of browser storage, and the redirects from 1.x
-  paths.
-- `GET` and `PUT /api/auth/session-policy`. Use `/api/admin/settings`.
+- `AI_TIER` quotas, `drizzle-kit` push commands (replaced by `npm run db:new`),
+  legacy `/dev` and 1.x migration/redirect shims, `POST /api/contacts/merge-batch`,
+  and `GET`/`PUT /api/auth/session-policy` (moved to `/api/admin/settings`).
 
 ## [1.5.5] - 2026-08-09
 

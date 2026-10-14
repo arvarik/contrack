@@ -14,6 +14,7 @@ import {
 import { seal, open } from "../utils/secretBox.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
+import { trimTrailingSlashes } from "../utils/urlPath.ts";
 
 export type IntegrationSource = "setting" | "env" | "none";
 
@@ -65,7 +66,7 @@ function redact(secret: string | null | undefined): string | null {
 export function getSearxngStatus(): SearxngIntegrationStatus {
   if (isSearxngEnvSet()) {
     return {
-      url: process.env.SEARXNG_URL!.trim().replace(/\/+$/, ""),
+      url: trimTrailingSlashes(process.env.SEARXNG_URL!.trim()),
       source: "env",
     };
   }
@@ -73,7 +74,7 @@ export function getSearxngStatus(): SearxngIntegrationStatus {
     SETTING_KEYS.aiSearxng,
   )?.url?.trim();
   if (settingUrl) {
-    return { url: settingUrl.replace(/\/+$/, ""), source: "setting" };
+    return { url: trimTrailingSlashes(settingUrl), source: "setting" };
   }
   return { url: null, source: "none" };
 }
@@ -169,5 +170,5 @@ export function setSearxngUrl(rawUrl: string): void {
     deleteSetting(SETTING_KEYS.aiSearxng);
     return;
   }
-  setSetting(SETTING_KEYS.aiSearxng, { url: trimmed.replace(/\/+$/, "") });
+  setSetting(SETTING_KEYS.aiSearxng, { url: trimTrailingSlashes(trimmed) });
 }

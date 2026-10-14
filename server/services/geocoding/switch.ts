@@ -12,6 +12,7 @@
 
 import { getSetting, setSetting } from "../settingsService.ts";
 import { log } from "../../utils/logger.ts";
+import { trimTrailingSlashes } from "../../utils/urlPath.ts";
 
 /** boolean: an admin turned address lookups off for every account. */
 export const GEOCODING_OFF_SETTING = "geocoding.off";
@@ -47,7 +48,7 @@ export function nominatimBaseUrl(): string | null {
   try {
     const url = new URL(raw);
     if (url.protocol === "http:" || url.protocol === "https:") {
-      return url.toString().replace(/\/+$/, "");
+      return trimTrailingSlashes(url.toString());
     }
   } catch {
     // Reported below.

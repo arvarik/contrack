@@ -1,7 +1,11 @@
 import { assertOwnedContact } from "./contactGuard.ts";
 import crypto from "crypto";
 import fs from "fs";
-import { ownerUploadUrl, resolveUploadPath } from "../utils/paths.ts";
+import {
+  ownerUploadUrl,
+  resolveOwnUploadPath,
+  resolveUploadPath,
+} from "../utils/paths.ts";
 import { emailText } from "../utils/emailText.ts";
 import { ownerUploadUrls, removeUploads } from "./uploadCleanup.ts";
 import { db, sqlite } from "../db.ts";
@@ -340,13 +344,23 @@ export const interactionService = {
       for (const row of linked) insertLinked.run(id, row.id);
 
       if (content) {
-        // Tolerate any attributes between data-type and data-id — TipTap does
-        // not guarantee adjacency. (A previous version used `\\s`, which in a
-        // regex literal matches a literal backslash + "s" and never matched.)
-        const mentionRegex = /data-type="mention"[^>]*?data-id="([^"]+)"/g;
-        const explicitMentionIds = [...content.matchAll(mentionRegex)].map(
-          (m) => m[1],
-        );
+        // Tolerate any attributes and any attribute order on a mention tag:
+        // scan each <...> tag once without regular-expression backtracking.
+        const explicitMentionIds: string[] = [];
+        for (const chunk of content.split("<")) {
+          const tagEnd = chunk.indexOf(">");
+          if (tagEnd === -1) continue;
+          const tag = chunk.slice(0, tagEnd);
+          if (!tag.includes('data-type="mention"')) continue;
+          const idPrefix = 'data-id="';
+          const idStart = tag.indexOf(idPrefix);
+          if (idStart === -1) continue;
+          const valueStart = idStart + idPrefix.length;
+          const valueEnd = tag.indexOf('"', valueStart);
+          if (valueEnd > valueStart) {
+            explicitMentionIds.push(tag.slice(valueStart, valueEnd));
+          }
+        }
         if (explicitMentionIds.length > 0) {
           // These ids come from the request body. One scoped statement keeps
           // the subset the caller owns, and the rest are dropped in silence:
@@ -530,6 +544,7 @@ export const interactionService = {
     assertOwnedContact(scope, contactId);
     const now = new Date().toISOString();
     let content: string | null = null;
+    const fileUrl = ownerUploadUrl(scope.ownerId, "files", file.filename);
     const isEmail = file.originalname.toLowerCase().endsWith(".eml");
     // The summary sends the email to a provider. With AI off for the account
     // or the instance, or with no provider, the file is saved with no summary.
@@ -538,8 +553,10 @@ export const interactionService = {
       isAnyProviderConfigured() &&
       aiAllowedForUser(scope.ownerId)
     ) {
+      const uploadPath = resolveOwnUploadPath(scope.ownerId, fileUrl, "files");
+      if (!uploadPath) throw new AppError("Invalid attachment path", 400);
       // The bytes, not a UTF-8 string: each MIME part names its charset.
-      const raw = await fs.promises.readFile(file.path);
+      const raw = await fs.promises.readFile(uploadPath);
       content = await summarizeEmlEmail(await emailText(raw));
     }
     // The contact can disappear during email summarization.
@@ -555,7 +572,7 @@ export const interactionService = {
           title: `${isEmail ? "Email" : "File"}: ${file.originalname}`,
           date: now,
           content,
-          fileUrl: ownerUploadUrl(scope.ownerId, "files", file.filename),
+          fileUrl,
           fileName: file.originalname,
           fileType: isEmail ? "message/rfc822" : file.mimetype,
         })

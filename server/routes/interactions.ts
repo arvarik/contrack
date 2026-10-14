@@ -12,7 +12,12 @@ import { interactionRoutes } from "../../shared/contracts/interactions.ts";
 import { AppError, NotFoundError } from "../utils/AppError.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { abortOnDisconnect } from "../utils/stream.ts";
-import { ensureDir, ownerUploadDir } from "../utils/paths.ts";
+import {
+  ensureDir,
+  ownerUploadDir,
+  ownerUploadUrl,
+  resolveOwnUploadPath,
+} from "../utils/paths.ts";
 import { scopeOf } from "../tenancy/scope.ts";
 
 // Attachments go to uploads/u/<ownerId>/files/, which the destination callback
@@ -21,7 +26,7 @@ import { scopeOf } from "../tenancy/scope.ts";
 // Accepted attachment extensions. Script-capable types (.html, .svg, .xhtml,
 // .js, …) are left out: uploads are served from the app origin, so a stored
 // HTML file would run as same-origin script.
-const ALLOWED_ATTACHMENT_EXTENSIONS = new Set([
+const ALLOWED_ATTACHMENT_EXTENSIONS = [
   ".eml",
   ".txt",
   ".md",
@@ -32,7 +37,7 @@ const ALLOWED_ATTACHMENT_EXTENSIONS = new Set([
   ".jpeg",
   ".gif",
   ".webp",
-]);
+] as const;
 
 const storage = multer.diskStorage({
   // See the note on the avatar storage in routes/contacts.ts: the owner is
@@ -46,8 +51,9 @@ const storage = multer.diskStorage({
   },
   filename: (_req, file, cb) => {
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, file.fieldname + "-" + uniqueSuffix + ext);
+    const rawExt = path.extname(file.originalname).toLowerCase();
+    const ext = ALLOWED_ATTACHMENT_EXTENSIONS.find((e) => e === rawExt) ?? "";
+    cb(null, `attachment-${uniqueSuffix}${ext}`);
   },
 });
 const upload = multer({
@@ -55,7 +61,8 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname).toLowerCase();
-    if (ALLOWED_ATTACHMENT_EXTENSIONS.has(ext)) return cb(null, true);
+    if (ALLOWED_ATTACHMENT_EXTENSIONS.some((e) => e === ext))
+      return cb(null, true);
     cb(
       new AppError(`File type "${ext || "unknown"}" is not allowed`, 400, {
         code: "UNSUPPORTED_FILE_TYPE",
@@ -148,17 +155,25 @@ router.post(
     const rid = req.requestId;
     if (!req.file) throw new AppError("No file", 400);
 
+    const scope = scopeOf(req);
     const result = await interactionService
-      .handleAttachment(scopeOf(req), String(req.params.id), req.file)
+      .handleAttachment(scope, String(req.params.id), req.file)
       .catch(async (error) => {
-        await fs.promises
-          .unlink(req.file!.path)
-          .catch((cleanupError) =>
-            log.warn(
-              "API",
-              `Upload cleanup failed: ${getErrorMessage(cleanupError)}`,
-            ),
-          );
+        const uploadPath = resolveOwnUploadPath(
+          scope.ownerId,
+          ownerUploadUrl(scope.ownerId, "files", req.file!.filename),
+          "files",
+        );
+        if (uploadPath) {
+          await fs.promises
+            .unlink(uploadPath)
+            .catch((cleanupError) =>
+              log.warn(
+                "API",
+                `Upload cleanup failed: ${getErrorMessage(cleanupError)}`,
+              ),
+            );
+        }
         throw error;
       });
     log.info(

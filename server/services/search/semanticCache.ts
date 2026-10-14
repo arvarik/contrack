@@ -139,10 +139,13 @@ const fold = (value: string) =>
 export function entityKey(question: string): string {
   const entities = new Set<string>();
   const rest = question
-    .replace(/[^\s@"“”]+@[^\s@"“”]+\.[^\s@"“”]+/g, (email) => {
-      entities.add(fold(email));
-      return " ";
-    })
+    .replace(
+      /(?<![^\s"“”])[^\s@"“”]+@[^\s@."“”]+(?:\.[^\s@."“”]+)+/g,
+      (email) => {
+        entities.add(fold(email));
+        return " ";
+      },
+    )
     .replace(
       /"([^"]+)"|“([^”]+)”/g,
       (_quote, plain?: string, curly?: string) => {

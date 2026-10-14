@@ -556,12 +556,15 @@ export const contactService = {
     onProgress?: (processed: number, total: number, phase: string) => void,
     options: { importId?: string; rowIndexes?: number[] } = {},
   ): Promise<{ count: number; createdIds: string[]; failed: number }> {
+    if (!Array.isArray(validContacts)) {
+      return { count: 0, createdIds: [], failed: 0 };
+    }
     const total = validContacts.length;
     const { importId, rowIndexes } = options;
 
     // Phase 1: Process base64 data-URI avatars (from VCF imports) into optimized files
     // This runs before the SQLite transaction since sharp is async
-    for (let i = 0; i < validContacts.length; i++) {
+    for (let i = 0; i < total; i++) {
       const c = validContacts[i];
       if (isBase64DataUri(c.avatarUrl)) {
         const fileUrl = await processBase64Avatar(scope, c.avatarUrl);

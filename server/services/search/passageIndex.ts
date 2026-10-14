@@ -4,12 +4,13 @@ import type Database from "better-sqlite3";
 export const PASSAGE_VERSION = 1;
 
 export function passageVectorDdl(dimension: number): string {
-  if (!Number.isInteger(dimension) || dimension < 1)
+  const dim = Math.trunc(Number(dimension));
+  if (!Number.isInteger(dim) || dim < 1)
     throw new Error("Invalid passage vector dimension");
   return `CREATE VIRTUAL TABLE IF NOT EXISTS search_passage_vectors USING vec0(
     passageId TEXT PRIMARY KEY, ownerId TEXT PARTITION KEY,
     isGhost INTEGER, isArchived INTEGER, active INTEGER,
-    embedding INT8[${dimension}]
+    embedding INT8[${dim}]
   )`;
 }
 
