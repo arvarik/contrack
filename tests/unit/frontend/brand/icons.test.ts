@@ -25,13 +25,16 @@ import {
   FLOW_ROOM,
   FLOW_STEPS,
   FLOW_VIEW,
-  PERCHES,
+  TREE_BRANCHES,
+  TREE_LEG_FRAMES,
+  TREE_VIEW,
   flowFrames,
   flowPerches,
   inkBox,
   renderFlowSvg,
-  renderPerchSvg,
-  type PerchName,
+  renderTreeSvg,
+  treeFrames,
+  treePerches,
   type SceneFrame,
 } from "../../../../scripts/brand/readmeScenes";
 import {
@@ -378,7 +381,6 @@ describe("the living lockup", () => {
 });
 
 describe("the README's scenes", () => {
-  const PERCH_NAMES = Object.keys(PERCHES) as PerchName[];
   const scenes = async () => [
     ...(await Promise.all(
       [false, true].map(async (dark) => ({
@@ -386,12 +388,12 @@ describe("the README's scenes", () => {
         svg: await renderFlowSvg(dark),
       })),
     )),
-    ...PERCH_NAMES.flatMap((which) =>
-      [false, true].map((dark) => ({
-        name: `readme-perch-${which}${dark ? "-dark" : ""}`,
-        svg: renderPerchSvg(which, dark),
+    ...(await Promise.all(
+      [false, true].map(async (dark) => ({
+        name: `readme-tree${dark ? "-dark" : ""}`,
+        svg: await renderTreeSvg(dark),
       })),
-    ),
+    )),
   ];
 
   it("commits every scene the script draws, byte for byte", async () => {
@@ -444,31 +446,68 @@ describe("the README's scenes", () => {
     ]);
   });
 
-  it("keeps the bird between the picture's top and bottom, and hides it across the jump back", () => {
+  it("keeps the bird between the vertical strip's left and right, and hides it across the jump back", () => {
     const frames = flowFrames();
     for (const frame of frames) {
       const pen = (CORVID_OPTICAL.large.stroke / 2) * (frame.size / 100);
       const ink = inkBox(frame);
-      expect(ink.top - pen).toBeGreaterThanOrEqual(FLOW_VIEW.top);
-      expect(ink.bottom + pen).toBeLessThanOrEqual(
-        FLOW_VIEW.top + FLOW_VIEW.height,
+      expect(ink.left - pen).toBeGreaterThanOrEqual(FLOW_VIEW.left);
+      expect(ink.right + pen).toBeLessThanOrEqual(
+        FLOW_VIEW.left + FLOW_VIEW.width,
       );
-      expect(ink.left).toBeGreaterThanOrEqual(0);
-      expect(ink.right).toBeLessThanOrEqual(FLOW_ROOM.width);
+      expect(ink.top).toBeGreaterThanOrEqual(0);
+      expect(ink.bottom).toBeLessThanOrEqual(FLOW_ROOM.height);
     }
-    // It leaves on the right and comes back on the left. The two frames
+    // It leaves off the bottom and comes back in at the top. The two frames
     // either side of the jump are hidden, and both are out of the picture.
     const hidden = frames.flatMap((frame, i) => (frame.hidden ? [i] : []));
     expect(hidden).toHaveLength(2);
     const [out, back] = hidden as [number, number];
     expect(back).toBe(out + 1);
-    expect(inkBox(frames[out]!).left).toBeGreaterThan(
-      FLOW_VIEW.left + FLOW_VIEW.width,
+    expect(inkBox(frames[out]!).top).toBeGreaterThan(
+      FLOW_VIEW.top + FLOW_VIEW.height,
     );
-    expect(inkBox(frames[back]!).right).toBeLessThan(FLOW_VIEW.left);
+    expect(inkBox(frames[back]!).bottom).toBeLessThan(FLOW_VIEW.top);
   });
 
-  it("holds the logo still in the first ring, and in each perch, for reduced motion", async () => {
+  it("flies the bird in a triangle across the three tree nests, 9 seconds a leg", () => {
+    const perches = treePerches();
+    const frames = treeFrames();
+    expect(frames).toHaveLength(TREE_BRANCHES.length * TREE_LEG_FRAMES);
+    const home = bodyCenter(HOME_POSE);
+    const nestOf = (frame: SceneFrame) =>
+      perches.findIndex(
+        (perch) =>
+          frame.rotate === 0 &&
+          frame.size === perch.size &&
+          Math.abs(frame.x - (perch.left + (home[0] / 100) * perch.size)) <
+            0.01 &&
+          Math.abs(frame.y - (perch.top + (home[1] / 100) * perch.size)) < 0.01,
+      );
+    const visits: number[] = [];
+    for (const frame of frames) {
+      const nest = nestOf(frame);
+      if (nest >= 0 && visits.at(-1) !== nest) visits.push(nest);
+      const pen = (CORVID_OPTICAL.large.stroke / 2) * (frame.size / 100);
+      const ink = inkBox(frame);
+      expect(ink.left - pen).toBeGreaterThanOrEqual(TREE_VIEW.left);
+      expect(ink.right + pen).toBeLessThanOrEqual(
+        TREE_VIEW.left + TREE_VIEW.width,
+      );
+      expect(ink.top - pen).toBeGreaterThanOrEqual(TREE_VIEW.top);
+      expect(ink.bottom + pen).toBeLessThanOrEqual(
+        TREE_VIEW.top + TREE_VIEW.height,
+      );
+    }
+    expect(visits).toEqual([0, 1, 2, 0]);
+    expect(TREE_BRANCHES.map((b) => b.title)).toEqual([
+      "Get help",
+      "Contribute",
+      "License",
+    ]);
+  });
+
+  it("holds the logo still in the first ring, and in the first nest, for reduced motion", async () => {
     for (const { name, svg } of await scenes()) {
       expect(svg, name).toContain(REDUCED_MOTION_STYLE.join("\n  "));
       const still = svg.slice(
@@ -485,14 +524,12 @@ describe("the README's scenes", () => {
     }
   });
 
-  it("keeps the flow scene under 600 KB and each perch under 100 KB", () => {
+  it("keeps the flow scene under 750 KB and the tree scene under 600 KB", () => {
     for (const dark of ["", "-dark"]) {
       const flow = fs.statSync(file(`docs/brand/readme-flow${dark}.svg`)).size;
-      expect(flow).toBeLessThan(600_000);
-      for (const which of PERCH_NAMES) {
-        const name = `docs/brand/readme-perch-${which}${dark}.svg`;
-        expect(fs.statSync(file(name)).size, name).toBeLessThan(100_000);
-      }
+      const tree = fs.statSync(file(`docs/brand/readme-tree${dark}.svg`)).size;
+      expect(flow).toBeLessThan(750_000);
+      expect(tree).toBeLessThan(600_000);
     }
   });
 });

@@ -157,16 +157,16 @@ animated lockup's rules: the app's own motion, the logo at rest, SMIL inside
 an `<img>`, and the still bird for reduced motion.
 
 - **The four steps.** `readme-flow.svg` shows Import, Dedupe, Enrich and
-  Track as four rings. The bird sits in each ring, plays an act, and flies to
-  the next one. From Track it flies out of the picture on the right and comes
-  back in on the left, so it never crosses a ring. Each flight is a route from
-  `planFlight` in `src/lib/corvidFlight.ts`. The bird takes off as it does
-  from the perch in the app, and it is called home to the next ring as a
-  second press calls it home. The loop is about 22 seconds. The file is about
-  550 KB, because a wingbeat needs a keyframe in almost every frame.
-- **The cards at the foot.** `readme-perch-help.svg`,
-  `readme-perch-contribute.svg` and `readme-perch-license.svg` are the mark
-  in its ring, each with acts of its own.
+  Track as four rings stacked vertically beside their GIFs. The bird sits in
+  each ring for the time it takes to watch the step, plays two acts, and flies
+  down to the next ring. From Track it flies off the bottom and comes back in
+  at the top to land in Import, so it never crosses a ring. Each flight is a
+  route from `planFlight` in `src/lib/corvidFlight.ts`.
+- **The tree at the foot.** `readme-tree.svg` is a mono-line tree whose three
+  main boughs hold Get help, Contribute and License, with sub-branches, leaves
+  and labels growing from each bough. Each bough cradles a nest ring, and one
+  corvid flies in a triangle from nest to nest every 9 seconds, playing perched
+  acts while in each nest.
 
 `scripts/brand/readmeScenes.ts` writes them. A flying bird is placed as the
 app places it: its body's middle on the route, turned and scaled about that
@@ -237,8 +237,8 @@ The kit, in this folder:
 | `corvid-app-icon-1024.png`      | App stores and press kits                             |
 | `contrack-lockup*.svg`, `.png`  | The mark and the name                                 |
 | `contrack-lockup-animated*.svg` | The lockup with the bird alive, for the README        |
-| `readme-flow*.svg`              | The four steps, with the bird flying between them     |
-| `readme-perch-*.svg`            | The birds on the cards at the foot of the README      |
+| `readme-flow*.svg`              | The four steps, stacked vertically beside their GIFs  |
+| `readme-tree*.svg`              | The branched tree at the foot of the README           |
 | `social-preview.png`            | The repository's card, 1280 × 640                     |
 | `corvid-optical-sizes.png`      | The four masters, for this guide                      |
 | `corvid-mark-variants.png`      | The four versions on their grounds, for this guide    |
