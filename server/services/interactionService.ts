@@ -345,12 +345,21 @@ export const interactionService = {
 
       if (content) {
         // Tolerate any attributes and any attribute order on a mention tag:
-        // scan each <...> tag once without backtracking across tags.
+        // scan each <...> tag once without regular-expression backtracking.
         const explicitMentionIds: string[] = [];
-        for (const [tag] of content.matchAll(/<[^>]+>/g)) {
+        for (const chunk of content.split("<")) {
+          const tagEnd = chunk.indexOf(">");
+          if (tagEnd === -1) continue;
+          const tag = chunk.slice(0, tagEnd);
           if (!tag.includes('data-type="mention"')) continue;
-          const idMatch = /data-id="([^"]+)"/.exec(tag);
-          if (idMatch) explicitMentionIds.push(idMatch[1]);
+          const idPrefix = 'data-id="';
+          const idStart = tag.indexOf(idPrefix);
+          if (idStart === -1) continue;
+          const valueStart = idStart + idPrefix.length;
+          const valueEnd = tag.indexOf('"', valueStart);
+          if (valueEnd > valueStart) {
+            explicitMentionIds.push(tag.slice(valueStart, valueEnd));
+          }
         }
         if (explicitMentionIds.length > 0) {
           // These ids come from the request body. One scoped statement keeps
