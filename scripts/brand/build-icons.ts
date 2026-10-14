@@ -50,7 +50,12 @@ import {
 } from "../../src/assets/corvidPaths.ts";
 import { REDUCED_MOTION_STYLE, livingBird } from "./animatedLockup.ts";
 import { renderPoseSheet } from "./poseSheet.ts";
-import { renderFlowSvg, renderTreeSvg } from "./readmeScenes.ts";
+import {
+  TREE_TILES,
+  renderFlowSvg,
+  renderTreeSvg,
+  renderTreeTileSvg,
+} from "./readmeScenes.ts";
 import { face, outline, textPath, wrap, type FaceName } from "./type.ts";
 
 const ROOT = path.resolve(
@@ -59,6 +64,7 @@ const ROOT = path.resolve(
 );
 const PUBLIC = path.join(ROOT, "public");
 const BRAND_DIR = path.join(ROOT, "docs", "brand");
+const TREE_DIR = path.join(BRAND_DIR, "tree");
 
 const { tiny, small, medium, large } = CORVID_OPTICAL;
 
@@ -647,6 +653,7 @@ async function variantSheet(): Promise<Buffer> {
 
 export async function build(): Promise<string[]> {
   await mkdir(BRAND_DIR, { recursive: true });
+  await mkdir(TREE_DIR, { recursive: true });
 
   const favicon16 = await favicon(tiny, 16);
   const favicon32 = await favicon(small, 32);
@@ -734,6 +741,14 @@ export async function build(): Promise<string[]> {
         path.join(BRAND_DIR, `readme-tree${dark ? "-dark" : ""}.svg`),
         await renderTreeSvg(dark),
       ]),
+    )),
+    ...(await Promise.all(
+      TREE_TILES.flatMap((tile) =>
+        [false, true].map(async (dark): Promise<[string, string]> => [
+          path.join(TREE_DIR, `${tile.id}${dark ? "-dark" : ""}.svg`),
+          await renderTreeTileSvg(tile, dark),
+        ]),
+      ),
     )),
     [
       path.join(BRAND_DIR, "social-preview.png"),

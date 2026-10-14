@@ -176,9 +176,14 @@ Open a live demo in your browser preloaded with 400 fictional people, with no in
 
 <br/>
 
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/readme-tree-dark.svg" />
-    <img src="docs/brand/readme-tree.svg" alt="The Contrack tree: Get help, Contribute, and License branches with the corvid flying from nest to nest" width="100%" />
-  </picture>
-</p>
+<!-- prettier-ignore-start -->
+<div align="center">
+  <div><a href="CONTRIBUTING.md"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/tree/r1-l-dark.svg" /><img src="docs/brand/tree/r1-l.svg" alt="Contribute: Send a change" width="50%" align="top" /></picture></a><a href="CODE_OF_CONDUCT.md"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/tree/r1-r-dark.svg" /><img src="docs/brand/tree/r1-r.svg" alt="Contribute: Code of Conduct" width="50%" align="top" /></picture></a></div>
+  <div><a href="AGENTS.md"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/tree/r2-l-dark.svg" /><img src="docs/brand/tree/r2-l.svg" alt="Contribute: Agent instructions" width="50%" align="top" /></picture></a><a href="CHANGELOG.md"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/tree/r2-r-dark.svg" /><img src="docs/brand/tree/r2-r.svg" alt="Contribute: What changed" width="50%" align="top" /></picture></a></div>
+  <div><a href="docs/README.md"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/tree/r3-l-dark.svg" /><img src="docs/brand/tree/r3-l.svg" alt="Get help: Read the docs" width="50%" align="top" /></picture></a><a href="LICENSE"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/tree/r3-r-dark.svg" /><img src="docs/brand/tree/r3-r.svg" alt="License: GNU AGPL v3" width="50%" align="top" /></picture></a></div>
+  <div><a href="https://github.com/arvarik/contrack/discussions/categories/q-a"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/tree/r4-l-dark.svg" /><img src="docs/brand/tree/r4-l.svg" alt="Get help: Ask a question" width="25%" align="top" /></picture></a><picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/tree/r4-c-dark.svg" /><img src="docs/brand/tree/r4-c.svg" alt="The Contrack tree: Get help, Contribute, and License nests with the corvid flying from nest to nest" width="50%" align="top" /></picture><a href="LICENSE"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/tree/r4-r-dark.svg" /><img src="docs/brand/tree/r4-r.svg" alt="License: Free to use and change" width="25%" align="top" /></picture></a></div>
+  <div><a href="https://github.com/arvarik/contrack/issues/new/choose"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/tree/r5-l-dark.svg" /><img src="docs/brand/tree/r5-l.svg" alt="Get help: Report a bug or idea" width="50%" align="top" /></picture></a><a href="LICENSE"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/tree/r5-r-dark.svg" /><img src="docs/brand/tree/r5-r.svg" alt="License: Share your changes" width="50%" align="top" /></picture></a></div>
+  <div><a href="SECURITY.md"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/tree/r6-dark.svg" /><img src="docs/brand/tree/r6.svg" alt="Get help: Security policy" width="100%" align="top" /></picture></a></div>
+  <div><a href="mailto:arvind.arikatla@gmail.com"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/brand/tree/r7-dark.svg" /><img src="docs/brand/tree/r7.svg" alt="Get help: Email the maintainer" width="100%" align="top" /></picture></a></div>
+</div>
+<!-- prettier-ignore-end -->

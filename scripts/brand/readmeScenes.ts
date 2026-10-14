@@ -539,52 +539,52 @@ export const TREE_BRANCHES: readonly TreeBranch[] = [
   {
     id: "help",
     title: "Get help",
-    titlePos: [264, 315],
-    perch: { left: 235, top: 224, size: 58 },
+    titlePos: [294, 338],
+    perch: { left: 266, top: 250, size: 56 },
     acts: ["cock", "caw"],
     twigs: [
       {
         text: "Read the docs",
         href: `${REPO_URL}/blob/main/docs/README.md`,
-        from: [224, 282],
-        ctrl: [208, 200],
-        anchor: [192, 194],
+        from: [256, 154],
+        ctrl: [228, 155],
+        anchor: [196, 148],
         align: "left",
         leafAngle: -165,
       },
       {
         text: "Ask a question",
         href: `${REPO_URL}/discussions/categories/q-a`,
-        from: [216, 294],
-        ctrl: [202, 254],
-        anchor: [188, 248],
+        from: [246, 314],
+        ctrl: [216, 255],
+        anchor: [186, 248],
         align: "left",
         leafAngle: 175,
       },
       {
         text: "Report a bug or idea",
         href: `${REPO_URL}/issues/new/choose`,
-        from: [222, 328],
-        ctrl: [206, 356],
-        anchor: [192, 354],
+        from: [254, 344],
+        ctrl: [224, 391],
+        anchor: [192, 384],
         align: "left",
         leafAngle: 168,
       },
       {
         text: "Security policy",
         href: `${REPO_URL}/blob/main/SECURITY.md`,
-        from: [272, 338],
-        ctrl: [248, 398],
-        anchor: [216, 400],
+        from: [292, 354],
+        ctrl: [258, 441],
+        anchor: [216, 434],
         align: "left",
         leafAngle: 162,
       },
       {
         text: "Email the maintainer",
         href: "mailto:arvind.arikatla@gmail.com",
-        from: [298, 335],
-        ctrl: [276, 444],
-        anchor: [244, 446],
+        from: [322, 348],
+        ctrl: [288, 487],
+        anchor: [244, 480],
         align: "left",
         leafAngle: 158,
       },
@@ -593,43 +593,43 @@ export const TREE_BRANCHES: readonly TreeBranch[] = [
   {
     id: "contribute",
     title: "Contribute",
-    titlePos: [480, 148],
-    perch: { left: 451, top: 54, size: 58 },
+    titlePos: [480, 264],
+    perch: { left: 452, top: 174, size: 56 },
     acts: ["preen", "glance"],
     twigs: [
       {
         text: "Send a change",
         href: `${REPO_URL}/blob/main/CONTRIBUTING.md`,
-        from: [449, 99],
-        ctrl: [420, 64],
-        anchor: [388, 66],
+        from: [402, 52],
+        ctrl: [390, 55],
+        anchor: [376, 48],
         align: "left",
         leafAngle: -168,
       },
       {
         text: "Agent instructions",
         href: `${REPO_URL}/blob/main/AGENTS.md`,
-        from: [414, 134],
-        ctrl: [396, 122],
-        anchor: [378, 120],
+        from: [412, 108],
+        ctrl: [392, 105],
+        anchor: [368, 98],
         align: "left",
         leafAngle: 172,
       },
       {
         text: "Code of Conduct",
         href: `${REPO_URL}/blob/main/CODE_OF_CONDUCT.md`,
-        from: [511, 99],
-        ctrl: [540, 64],
-        anchor: [572, 66],
+        from: [558, 52],
+        ctrl: [570, 55],
+        anchor: [584, 48],
         align: "right",
         leafAngle: -12,
       },
       {
         text: "What changed",
         href: `${REPO_URL}/blob/main/CHANGELOG.md`,
-        from: [546, 134],
-        ctrl: [564, 122],
-        anchor: [582, 120],
+        from: [548, 108],
+        ctrl: [568, 105],
+        anchor: [592, 98],
         align: "right",
         leafAngle: 8,
       },
@@ -638,32 +638,32 @@ export const TREE_BRANCHES: readonly TreeBranch[] = [
   {
     id: "license",
     title: "License",
-    titlePos: [696, 315],
-    perch: { left: 667, top: 224, size: 58 },
+    titlePos: [666, 338],
+    perch: { left: 638, top: 250, size: 56 },
     acts: ["lookBack", "ruffle"],
     twigs: [
       {
         text: "GNU AGPL v3",
         href: `${REPO_URL}/blob/main/LICENSE`,
-        from: [736, 282],
-        ctrl: [752, 200],
-        anchor: [768, 194],
+        from: [704, 154],
+        ctrl: [732, 155],
+        anchor: [764, 148],
         align: "right",
         leafAngle: -15,
       },
       {
         text: "Free to use & change",
-        from: [744, 292],
-        ctrl: [758, 254],
-        anchor: [772, 248],
+        from: [714, 314],
+        ctrl: [744, 255],
+        anchor: [774, 248],
         align: "right",
         leafAngle: 5,
       },
       {
         text: "Share your changes",
-        from: [738, 328],
-        ctrl: [754, 356],
-        anchor: [768, 354],
+        from: [706, 344],
+        ctrl: [736, 391],
+        anchor: [768, 384],
         align: "right",
         leafAngle: 14,
       },
@@ -671,7 +671,7 @@ export const TREE_BRANCHES: readonly TreeBranch[] = [
   },
 ];
 
-const TREE_SEED = 31;
+const TREE_SEED = 30;
 export const TREE_ROOM = { width: 960, height: 540 } as const;
 export const TREE_VIEW = {
   left: 0,
@@ -679,6 +679,139 @@ export const TREE_VIEW = {
   width: 960,
   height: 516,
 } as const;
+
+/**
+ * The central canopy tile (`r4-c`) that holds all three nests and the entire
+ * triangle flight so the animated bird never crosses a tile boundary.
+ */
+export const TREE_CANOPY_VIEW = {
+  left: 240,
+  top: 164,
+  width: 480,
+  height: 192,
+} as const;
+
+export interface TreeTile {
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  alt: string;
+  animated?: boolean;
+}
+
+/**
+ * The 13 seamless tiles that compose the README tree so every branch label can
+ * be wrapped in its own HTML `<a href="...">` tag on GitHub.
+ */
+export const TREE_TILES: readonly TreeTile[] = [
+  {
+    id: "r1-l",
+    x: 0,
+    y: 12,
+    width: 480,
+    height: 56,
+    alt: "Contribute: Send a change",
+  },
+  {
+    id: "r1-r",
+    x: 480,
+    y: 12,
+    width: 480,
+    height: 56,
+    alt: "Contribute: Code of Conduct",
+  },
+  {
+    id: "r2-l",
+    x: 0,
+    y: 68,
+    width: 480,
+    height: 52,
+    alt: "Contribute: Agent instructions",
+  },
+  {
+    id: "r2-r",
+    x: 480,
+    y: 68,
+    width: 480,
+    height: 52,
+    alt: "Contribute: What changed",
+  },
+  {
+    id: "r3-l",
+    x: 0,
+    y: 120,
+    width: 480,
+    height: 44,
+    alt: "Get help: Read the docs",
+  },
+  {
+    id: "r3-r",
+    x: 480,
+    y: 120,
+    width: 480,
+    height: 44,
+    alt: "License: GNU AGPL v3",
+  },
+  {
+    id: "r4-l",
+    x: 0,
+    y: 164,
+    width: 240,
+    height: 192,
+    alt: "Get help: Ask a question",
+  },
+  {
+    id: "r4-c",
+    x: 240,
+    y: 164,
+    width: 480,
+    height: 192,
+    alt: "The Contrack tree: Get help, Contribute, and License nests with the corvid flying from nest to nest",
+    animated: true,
+  },
+  {
+    id: "r4-r",
+    x: 720,
+    y: 164,
+    width: 240,
+    height: 192,
+    alt: "License: Free to use and change",
+  },
+  {
+    id: "r5-l",
+    x: 0,
+    y: 356,
+    width: 480,
+    height: 50,
+    alt: "Get help: Report a bug or idea",
+  },
+  {
+    id: "r5-r",
+    x: 480,
+    y: 356,
+    width: 480,
+    height: 50,
+    alt: "License: Share your changes",
+  },
+  {
+    id: "r6",
+    x: 0,
+    y: 406,
+    width: 960,
+    height: 48,
+    alt: "Get help: Security policy",
+  },
+  {
+    id: "r7",
+    x: 0,
+    y: 454,
+    width: 960,
+    height: 74,
+    alt: "Get help: Email the maintainer",
+  },
+];
 
 /** Exact frames per leg of the triangle: 9.0 seconds at 60 fps. */
 export const TREE_LEG_FRAMES = 9 * FRAME_RATE;
@@ -692,9 +825,20 @@ export function treePerches(): FlightPerch[] {
  * Every frame of the tree scene: for each of the three nests in the triangle,
  * the bird stays in the nest playing its perched acts and then flies to the
  * next nest, taking exactly 9 seconds (`TREE_LEG_FRAMES`) per branch.
+ * Flights are planned within `TREE_CANOPY_VIEW` so the bird stays inside the
+ * center canopy tile (`r4-c`).
  */
 export function treeFrames(seed: number = TREE_SEED): SceneFrame[] {
   const perches = treePerches();
+  const localRoom = {
+    width: TREE_CANOPY_VIEW.width,
+    height: TREE_CANOPY_VIEW.height,
+  };
+  const toLocal = (p: FlightPerch): FlightPerch => ({
+    left: p.left - TREE_CANOPY_VIEW.left,
+    top: p.top - TREE_CANOPY_VIEW.top,
+    size: p.size,
+  });
   const rng = createRng(seed);
   const frames: SceneFrame[] = [];
 
@@ -702,7 +846,17 @@ export function treeFrames(seed: number = TREE_SEED): SceneFrame[] {
     const from = perches[i]!;
     const to = perches[(i + 1) % perches.length]!;
     const staySeed = Math.floor(rng() * 1e9);
-    const flight = flightBetween(rng, TREE_ROOM, "sortie", from, to);
+    const flight = flightBetween(
+      rng,
+      localRoom,
+      "sortie",
+      toLocal(from),
+      toLocal(to),
+    ).map((f) => ({
+      ...f,
+      x: f.x + TREE_CANOPY_VIEW.left,
+      y: f.y + TREE_CANOPY_VIEW.top,
+    }));
     const stayCount = TREE_LEG_FRAMES - flight.length;
     if (stayCount < FRAME_RATE * 2) {
       throw new Error(`Flight ${i} left too few frames to rest in the nest`);
@@ -762,51 +916,49 @@ function treeStructurePaths(): {
   // Primary trunk, roots, and the three main boughs leading to each nest fork.
   const heavy = [
     // Left root -> left trunk -> left main bough into Get help nest fork
-    "M388 512 C432 510 458 492 465 446 C470 408 468 372 456 352 C416 318 352 296 290 278",
+    "M388 512 C432 510 458 492 465 446 C470 412 468 380 456 360 C422 332 374 312 320 298",
     // Right root -> right trunk -> right main bough into License nest fork
-    "M572 512 C528 510 502 492 495 446 C490 408 492 372 504 352 C544 318 608 296 670 278",
+    "M572 512 C528 510 502 492 495 446 C490 412 492 380 504 360 C538 332 586 312 640 298",
     // Center heartwood -> rises from trunk base and forks into a chalice around "Contribute"
-    "M480 514 C479 448 478 388 475 322 C472 258 470 212 458 184 C432 168 414 152 414 134 C414 116 430 106 452 106",
-    "M487 486 C485 420 484 360 486 296 C488 248 490 208 502 184 C528 168 546 152 546 134 C546 116 530 106 508 106",
+    "M480 514 C479 452 478 396 475 342 C472 308 468 292 456 284 C430 274 414 262 414 246 C414 230 430 220 452 220",
+    "M487 486 C485 426 484 374 486 328 C488 302 492 290 504 284 C530 274 546 262 546 246 C546 230 530 220 508 220",
     // Supporting under-boughs for left and right nests, parting around "Get help" and "License"
-    "M462 376 C414 342 362 318 326 308 C312 330 286 340 254 340 C228 340 214 326 214 308 C214 290 226 278 242 274",
-    "M498 376 C546 342 598 318 634 308 C648 330 674 340 706 340 C732 340 746 326 746 308 C746 290 734 278 718 274",
+    "M462 384 C418 354 374 334 344 326 C332 346 312 354 286 354 C258 354 244 342 244 326 C244 310 256 298 272 294",
+    "M498 384 C542 354 586 334 616 326 C628 346 648 354 674 354 C702 354 716 342 716 326 C716 310 704 298 688 294",
   ];
 
-  // Secondary structural limbs, root flares, and nest cradles.
+  // Secondary structural limbs, root flares, crown limbs, and nest cradles.
   const medium = [
     // Root flares at the base of the trunk
     "M356 515 Q422 516 468 498",
     "M604 515 Q538 516 492 498",
     "M422 520 Q462 516 480 502",
     "M538 520 Q498 516 480 502",
-    // Canopy limbs arching above and beside the three nests
-    "M356 306 C330 258 298 218 262 192",
-    "M604 306 C630 258 662 218 698 192",
-    "M472 238 C438 198 408 172 374 156",
-    "M488 238 C522 198 552 172 586 156",
+    // Upper crown limbs rising from the Contribute chalice to hold the 4 Contribute twigs
+    "M432 224 C422 178 412 114 402 52",
+    "M528 224 C538 178 548 114 558 52",
+    // Outer canopy limbs arching above the left and right nests
+    "M366 320 C338 264 302 204 256 154",
+    "M594 320 C622 264 658 204 704 154",
     ...TREE_BRANCHES.flatMap((b) => nestCradlePaths(b.perch)),
   ];
 
   // Decorative canopy leaves along the trunk forks and boughs.
   const leaves: Array<[number, number, number, number, number]> = [
-    [358, 302, -125, 17, 4.8],
-    [402, 326, -135, 16, 4.5],
-    [602, 302, -55, 17, 4.8],
-    [558, 326, -45, 16, 4.5],
-    [262, 192, -145, 18, 5.0],
-    [276, 198, -75, 15, 4.4],
-    [698, 192, -35, 18, 5.0],
-    [684, 198, -105, 15, 4.4],
-    [374, 156, -155, 18, 5.0],
-    [390, 162, -105, 15, 4.2],
-    [586, 156, -25, 18, 5.0],
-    [570, 162, -75, 15, 4.2],
-    [468, 206, -140, 16, 4.5],
-    [492, 206, -40, 16, 4.5],
-    [480, 44, -90, 17, 4.8],
-    [454, 52, -135, 15, 4.4],
-    [506, 52, -45, 15, 4.4],
+    [366, 316, -125, 17, 4.8],
+    [408, 336, -135, 16, 4.5],
+    [594, 316, -55, 17, 4.8],
+    [552, 336, -45, 16, 4.5],
+    [306, 212, -145, 17, 4.8],
+    [320, 220, -75, 15, 4.4],
+    [654, 212, -35, 17, 4.8],
+    [640, 220, -105, 15, 4.4],
+    [420, 152, -150, 17, 4.6],
+    [540, 152, -30, 17, 4.6],
+    [468, 314, -140, 16, 4.5],
+    [492, 314, -40, 16, 4.5],
+    [402, 52, -110, 16, 4.5],
+    [558, 52, -70, 16, 4.5],
     [356, 515, -165, 15, 4.2],
     [604, 515, -15, 15, 4.2],
   ];
@@ -815,14 +967,15 @@ function treeStructurePaths(): {
   return { heavy, medium, fine };
 }
 
-/**
- * The branched tree at the foot of the README: three main boughs ("Get help",
- * "Contribute" and "License") with sub-branches, leaves and text growing from
- * them, a nest ring in each bough, and one corvid flying in a triangle from
- * nest to nest every 9 seconds.
- */
-export async function renderTreeSvg(dark: boolean): Promise<string> {
-  const { left, top, width, height } = TREE_VIEW;
+/** Shared static layers of the tree scene. */
+async function renderTreeStaticLines(
+  dark: boolean,
+  linkWrap: boolean,
+): Promise<{
+  colors: ReturnType<typeof paint>;
+  perches: FlightPerch[];
+  staticLines: string[];
+}> {
   const colors = paint(dark);
   const perches = treePerches();
   const nameFace = await face("name");
@@ -842,8 +995,6 @@ export async function renderTreeSvg(dark: boolean): Promise<string> {
       const line = outline(bodyFace, twig.text, 15);
       const textW = line.ink.right - line.ink.left;
       const stemY = twig.anchor[1] + 7;
-      // Leave 8px between the stem's node leaf and the first/last letter so
-      // the leaf points back toward the trunk without touching the glyphs.
       const padIn = 8;
       const padOut = 10;
       const textX =
@@ -858,7 +1009,6 @@ export async function renderTreeSvg(dark: boolean): Promise<string> {
       twigStemPaths.push(
         `M${fixed(twig.from[0], 1)} ${fixed(twig.from[1], 1)} Q${fixed(twig.ctrl[0], 1)} ${fixed(twig.ctrl[1], 1)} ${fixed(twig.anchor[0], 1)} ${fixed(stemY, 1)} L${fixed(stemEnd, 1)} ${fixed(stemY, 1)}`,
       );
-      // Node leaf angles back toward the trunk (-45° on left twigs, -135° on right twigs).
       const nodeLeafAngle = twig.align === "left" ? -42 : -138;
       twigLeafPaths.push(
         leafPath(twig.anchor[0], stemY, nodeLeafAngle, 12, 3.6),
@@ -870,26 +1020,20 @@ export async function renderTreeSvg(dark: boolean): Promise<string> {
         twig.anchor[1],
         twig.href ? colors.ink : colors.text,
       );
-      const hitLeft = fixed(textX + line.ink.left - 4, 1);
-      const hitTop = fixed(twig.anchor[1] - 16, 1);
-      const hitW = fixed(textW + 8, 1);
-      textPaths.push(
-        twig.href
-          ? `<a href="${twig.href}" target="_top"><rect x="${hitLeft}" y="${hitTop}" width="${hitW}" height="24" fill="transparent" />${glyph}</a>`
-          : glyph,
-      );
+      if (linkWrap && twig.href) {
+        const hitLeft = fixed(textX + line.ink.left - 4, 1);
+        const hitTop = fixed(twig.anchor[1] - 16, 1);
+        const hitW = fixed(textW + 8, 1);
+        textPaths.push(
+          `<a href="${twig.href}" target="_top"><rect x="${hitLeft}" y="${hitTop}" width="${hitW}" height="24" fill="transparent" />${glyph}</a>`,
+        );
+      } else {
+        textPaths.push(glyph);
+      }
     }
   }
 
-  const alt =
-    "The Contrack tree: Get help, Contribute and License branches, with the corvid flying from nest to nest.";
-  const birdStroke = `fill="none" stroke="${colors.ink}" stroke-width="${CORVID_OPTICAL.large.stroke}" stroke-linecap="round" stroke-linejoin="round"`;
-
-  return [
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${left} ${top} ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="${alt}">`,
-    `  <title>${alt}</title>`,
-    `  <!-- Generated by scripts/brand/build-icons.ts from scripts/brand/readmeScenes.ts. Do not edit. -->`,
-    ...REDUCED_MOTION_STYLE.map((line) => `  ${line}`),
+  const staticLines = [
     `  <g fill="none" stroke="${colors.ink}" stroke-linecap="round" stroke-linejoin="round">`,
     `    <g stroke-width="2.2">`,
     ...heavy.map((d) => `      <path d="${d}" />`),
@@ -904,6 +1048,33 @@ export async function renderTreeSvg(dark: boolean): Promise<string> {
     `    </g>`,
     `  </g>`,
     ...textPaths.map((line) => `  ${line}`),
+  ];
+
+  return { colors, perches, staticLines };
+}
+
+/**
+ * The branched tree at the foot of the README: three main boughs ("Get help",
+ * "Contribute" and "License") with sub-branches, leaves and text growing from
+ * them, a nest ring in each bough, and one corvid flying in a triangle from
+ * nest to nest every 9 seconds.
+ */
+export async function renderTreeSvg(dark: boolean): Promise<string> {
+  const { left, top, width, height } = TREE_VIEW;
+  const { colors, perches, staticLines } = await renderTreeStaticLines(
+    dark,
+    true,
+  );
+  const alt =
+    "The Contrack tree: Get help, Contribute and License branches, with the corvid flying from nest to nest.";
+  const birdStroke = `fill="none" stroke="${colors.ink}" stroke-width="${CORVID_OPTICAL.large.stroke}" stroke-linecap="round" stroke-linejoin="round"`;
+
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${left} ${top} ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="${alt}">`,
+    `  <title>${alt}</title>`,
+    `  <!-- Generated by scripts/brand/build-icons.ts from scripts/brand/readmeScenes.ts. Do not edit. -->`,
+    ...REDUCED_MOTION_STYLE.map((line) => `  ${line}`),
+    ...staticLines,
     `  <g ${birdStroke}>`,
     ...perches.map((perch) => ringLine(perch, "    ")),
     ...stillBird(colors.eye, "    ", perches[0]!),
@@ -911,6 +1082,44 @@ export async function renderTreeSvg(dark: boolean): Promise<string> {
     ...sceneBird(treeFrames(), colors.eye, "      "),
     `    </g>`,
     `  </g>`,
+    `</svg>`,
+    ``,
+  ].join("\n");
+}
+
+/**
+ * Renders one tile of `TREE_TILES` (`docs/brand/tree/<id>.svg`). Static tiles
+ * omit the animated bird so they stay tiny (~3 KB), while the center canopy
+ * tile (`r4-c`) includes the nest rings and the animated corvid.
+ */
+export async function renderTreeTileSvg(
+  tile: TreeTile,
+  dark: boolean,
+): Promise<string> {
+  const { colors, perches, staticLines } = await renderTreeStaticLines(
+    dark,
+    false,
+  );
+  const birdStroke = `fill="none" stroke="${colors.ink}" stroke-width="${CORVID_OPTICAL.large.stroke}" stroke-linecap="round" stroke-linejoin="round"`;
+  const animatedLines = tile.animated
+    ? [
+        ...REDUCED_MOTION_STYLE.map((line) => `  ${line}`),
+        ...staticLines,
+        `  <g ${birdStroke}>`,
+        ...perches.map((perch) => ringLine(perch, "    ")),
+        ...stillBird(colors.eye, "    ", perches[0]!),
+        `    <g class="alive">`,
+        ...sceneBird(treeFrames(), colors.eye, "      "),
+        `    </g>`,
+        `  </g>`,
+      ]
+    : staticLines;
+
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${tile.x} ${tile.y} ${tile.width} ${tile.height}" width="${tile.width}" height="${tile.height}" role="img" aria-label="${tile.alt}">`,
+    `  <title>${tile.alt}</title>`,
+    `  <!-- Generated by scripts/brand/build-icons.ts from scripts/brand/readmeScenes.ts. Do not edit. -->`,
+    ...animatedLines,
     `</svg>`,
     ``,
   ].join("\n");

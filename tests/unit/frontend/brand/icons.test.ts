@@ -26,13 +26,16 @@ import {
   FLOW_STEPS,
   FLOW_VIEW,
   TREE_BRANCHES,
+  TREE_CANOPY_VIEW,
   TREE_LEG_FRAMES,
+  TREE_TILES,
   TREE_VIEW,
   flowFrames,
   flowPerches,
   inkBox,
   renderFlowSvg,
   renderTreeSvg,
+  renderTreeTileSvg,
   treeFrames,
   treePerches,
   type SceneFrame,
@@ -400,6 +403,12 @@ describe("the README's scenes", () => {
     for (const { name, svg } of await scenes()) {
       expect(read(`docs/brand/${name}.svg`), name).toBe(svg);
     }
+    for (const tile of TREE_TILES) {
+      for (const dark of [false, true]) {
+        const name = `docs/brand/tree/${tile.id}${dark ? "-dark" : ""}.svg`;
+        expect(read(name), name).toBe(await renderTreeTileSvg(tile, dark));
+      }
+    }
   });
 
   it("ends every animation where it starts, so each loop has no seam", async () => {
@@ -490,13 +499,17 @@ describe("the README's scenes", () => {
       if (nest >= 0 && visits.at(-1) !== nest) visits.push(nest);
       const pen = (CORVID_OPTICAL.large.stroke / 2) * (frame.size / 100);
       const ink = inkBox(frame);
+      expect(ink.left - pen).toBeGreaterThanOrEqual(TREE_CANOPY_VIEW.left);
+      expect(ink.right + pen).toBeLessThanOrEqual(
+        TREE_CANOPY_VIEW.left + TREE_CANOPY_VIEW.width,
+      );
+      expect(ink.top - pen).toBeGreaterThanOrEqual(TREE_CANOPY_VIEW.top);
+      expect(ink.bottom + pen).toBeLessThanOrEqual(
+        TREE_CANOPY_VIEW.top + TREE_CANOPY_VIEW.height,
+      );
       expect(ink.left - pen).toBeGreaterThanOrEqual(TREE_VIEW.left);
       expect(ink.right + pen).toBeLessThanOrEqual(
         TREE_VIEW.left + TREE_VIEW.width,
-      );
-      expect(ink.top - pen).toBeGreaterThanOrEqual(TREE_VIEW.top);
-      expect(ink.bottom + pen).toBeLessThanOrEqual(
-        TREE_VIEW.top + TREE_VIEW.height,
       );
     }
     expect(visits).toEqual([0, 1, 2, 0]);
