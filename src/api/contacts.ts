@@ -37,7 +37,7 @@ import { errorText } from "../lib/utils";
  * The one fetcher for the `['contacts']` query. Every reader shares its cache
  * slot and projects its own shape with `select`.
  */
-export const fetchContactsSlim = async (context?: {
+const fetchContactsSlim = async (context?: {
   signal?: AbortSignal;
 }): Promise<Contact[]> =>
   // The slim view sends `SlimContact` rows, with bare emails and phones and

@@ -149,7 +149,26 @@ Then open [http://localhost:3210](http://localhost:3210). There is no cloud acco
 
 <br/>
 
-**Docker Compose** builds the image from this repository:
+**Docker Compose** with the published image:
+
+```yaml
+services:
+  contrack:
+    image: ghcr.io/arvarik/contrack:latest
+    container_name: contrack
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3210:3210"
+    volumes:
+      - contrack-data:/app/data
+    environment:
+      - AUTH_REQUIRED=false # Set to true before exposing beyond localhost
+
+volumes:
+  contrack-data:
+```
+
+Or build the image from this repository:
 
 ```bash
 git clone https://github.com/arvarik/contrack.git && cd contrack

@@ -49,7 +49,28 @@ shows the log, and `docker stop contrack` shuts Contrack down cleanly.
 
 ### Docker Compose
 
-Compose builds the image from the source code:
+To run the published image with Compose, save this as `docker-compose.yml` and
+run `docker compose up -d`:
+
+```yaml
+services:
+  contrack:
+    image: ghcr.io/arvarik/contrack:latest
+    container_name: contrack
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3210:3210"
+    volumes:
+      - contrack-data:/app/data
+    environment:
+      - AUTH_REQUIRED=false # Set to true before exposing beyond localhost
+
+volumes:
+  contrack-data:
+```
+
+To build the image from the source code instead, use the `docker-compose.yml` in
+this repository:
 
 ```bash
 git clone https://github.com/arvarik/contrack.git
