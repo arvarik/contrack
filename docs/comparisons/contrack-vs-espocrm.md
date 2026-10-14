@@ -32,12 +32,12 @@ ground up for **personal and professional relationship management**.
 The biggest difference between Contrack and a traditional business CRM is how it
 feels to open it every morning:
 
-- **EspoCRM** presents a navigation bar of business entities — Accounts,
+- **EspoCRM** presents a navigation bar of business entities: Accounts,
   Contacts, Leads, Opportunities, Emails, Calendar, Calls, Tasks, Cases and
   Reports. Adding a note or checking who you have not spoken to in three months
   means navigating entity lists, sub-panels and form modals.
-- **Contrack** is built around four focused workspaces — **Pulse**, **Network**,
-  **Ask Contrack** and **Map** — and a command palette (`⌘K` / `Ctrl+K`) that
+- **Contrack** is built around four focused workspaces (**Pulse**, **Network**,
+  **Ask Contrack** and **Map**) and a command palette (`⌘K` / `Ctrl+K`) that
   reaches every action from the keyboard:
   - Open **Pulse** in the morning to see your overdue follow-ups, today's tasks,
     tracked contacts due for a catch-up, and upcoming birthdays, anniversaries

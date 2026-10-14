@@ -8,7 +8,7 @@ search across your network.
 
 Contrack brings that same focus on thoughtful design, effortless capture, semantic
 search and relationship cadences to an open-source, self-hosted server that runs on
-a single SQLite file — so your personal and professional relationships, notes,
+a single SQLite file, so your personal and professional relationships, notes,
 emails and calendar history never leave hardware you control.
 
 ## At a glance
@@ -23,7 +23,7 @@ emails and calendar history never leave hardware you control.
 | **Getting data in**        | Google Contacts, Gmail, Google Calendar, IMAP, ICS, vCard/CSV/JSON import, and **Add from text**       | Google/Microsoft email & calendar, iMessage, LinkedIn, CSV/vCard     |
 | **Keeping up**             | Opt-in tracking per person, custom cadence, **Pulse** morning page, overdue and upcoming milestones    | Reconnect cadences, home feed and reminders                          |
 | **Search**                 | Local hybrid search (FTS5 + `sqlite-vec` embeddings + local cross-encoder reranker) and **Notes** mode | Cloud-hosted semantic and keyword search (Nexus)                     |
-| **Map**                    | Built-in MapLibre world map with clustering, box/lasso selection, saved views and custom pin placement | Location search and list filtering; no interactivelasso world map    |
+| **Map**                    | Built-in MapLibre world map with clustering, box/lasso selection, saved views and custom pin placement | Location search and list filtering; no interactive lasso world map   |
 | **AI and web enrichment**  | Optional BYO-key or local Ollama + SearXNG web research with cited sources and **Not this person**     | Built-in cloud AI (Nexus) and commercial profile enrichment          |
 | **MCP server**             | Built in at `/api/mcp` (18 tools, personal tokens and OAuth 2.1 on your own server)                    | Hosted MCP integration tied to a Clay account                        |
 | **Multi-user / household** | Multiple isolated accounts on one server, included for free                                            | Paid per-user plans and team workspaces                              |
@@ -59,8 +59,8 @@ afterthought, but they run that search very differently:
   - You can search people (`"Who do I know in Tokyo?"`, `"fintech founders"`) or
     switch to **Notes** mode to search across every note and interaction passage
     (`"Who mentioned natural wine?"`, `"seed round"`).
-  - If you turn on AI features — such as **Ask Contrack**, **Add from text**,
-    pre-meeting briefs or web enrichment — you choose the model provider
+  - If you turn on AI features such as **Ask Contrack**, **Add from text**,
+    pre-meeting briefs, or web enrichment, you choose the model provider
     (OpenAI, Anthropic, Google Gemini, OpenRouter, or a local Ollama model) and
     web search engine (provider-native, Brave, Tavily, Serper or self-hosted
     SearXNG). See [Search and Ask Contrack](../search.md) and
@@ -79,8 +79,8 @@ When you connect email and address books, thousands of people flow in at once.
   - Only the people you explicitly mark as **Tracked** appear in your overdue
     check-ins on [Pulse](../pulse.md) and factor into your network health score.
   - **Add from text** (Smart Paste) lets you drop in a quick note after a wedding
-    or a coffee meeting — whether `"Met at Sarah's wedding — loves natural wine, kids are Leo and Maya, catch up every quarter"`
-    or `"Partner at Sequoia — follow up next Tuesday on seed round"` — and turns
+    or a coffee meeting, like `"Met at Sarah's wedding, loves natural wine, kids are Leo and Maya, catch up every quarter"`
+    or `"Partner at Sequoia, follow up next Tuesday on seed round"`, and turns
     it into a structured contact, tags, custom facts and dated timeline entries
     in seconds.
 
@@ -93,7 +93,7 @@ When you connect email and address books, thousands of people flow in at once.
   saves named map views.
 - **MCP server on your terms.** Contrack ships a built-in Model Context Protocol
   server at `/api/mcp` with 18 tools, scoped read-only or read-write personal
-  tokens, and OAuth 2.1 — so Claude Desktop, ChatGPT or Cursor can work with
+  tokens, and OAuth 2.1, so Claude Desktop, ChatGPT, or Cursor can work with
   your CRM directly against your own server (see [MCP server](../mcp.md)).
 
 ## When Clay might still fit better

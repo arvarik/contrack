@@ -52,12 +52,12 @@ for years or breaks on the next server upgrade.
 - **Contrack** is built from the ground up around **people and memory**:
   - **Personal and professional in one timeline.** Keep friends and family right
     alongside founders, collaborators and mentors. **Add from text** (Smart
-    Paste) turns `"Met at Sarah's wedding — loves natural wine, kids are Leo and Maya, catch up every quarter"`
-    or `"Partner at Sequoia — follow up next Tuesday on seed round"` into a
+    Paste) turns `"Met at Sarah's wedding, loves natural wine, kids are Leo and Maya, catch up every quarter"`
+    or `"Partner at Sequoia, follow up next Tuesday on seed round"` into a
     structured contact with tags, custom facts and dated past interactions.
   - **Proactive cadences on [Pulse](../pulse.md).** Opt in to tracking specific
     people on a weekly, monthly, quarterly or custom schedule. Contrack computes
-    a live relationship health score (`0–100`), highlights who is overdue, and
+    a live relationship health score from 0 to 100, highlights who is overdue, and
     shows upcoming birthdays, anniversaries and custom dates 7 to 14 days ahead.
   - **Web enrichment with citations.** Enrich a contact from the web (Standard or
     Deep) to fill in work history, education, location and social links, with
@@ -71,7 +71,7 @@ for years or breaks on the next server upgrade.
 
 Because Contrack embeds `bge-small-en-v1.5` and `ms-marco-MiniLM-L-6-v2` locally,
 you get semantic and keyword search across every person and note immediately
-after starting the container — without provisioning or tuning an Elasticsearch
+after starting the container, without provisioning or tuning an Elasticsearch
 cluster (see [Search and Ask Contrack](../search.md)). And with the built-in
 [MCP server](../mcp.md) at `/api/mcp`, external AI tools like Claude Desktop,
 ChatGPT and Cursor can query your network or log notes directly.

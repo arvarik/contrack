@@ -7,8 +7,8 @@ open-source personal CRMs. It pioneered self-hosted relationship management for
 friends and family, with fields for birthdays, gift ideas, family members and
 journal entries.
 
-Contrack covers that same personal ground — friends, family, birthdays,
-anniversaries, gift ideas, how you met and shared household servers — while
+Contrack covers that same personal ground, including friends, family, birthdays,
+anniversaries, gift ideas, how you met, and shared household servers, while
 extending to your wider personal and professional network with a single-file
 SQLite deployment, automatic connectors, local hybrid search, a world map and a
 built-in MCP server.
@@ -58,9 +58,9 @@ weekend.
     mailbox and any ICS calendar feed in the background, placing emails and
     meetings straight onto the matching contact's timeline (see
     [Import, sync and export](../import-and-sync.md)).
-  - **Add from text** (Smart Paste) takes a pasted note, email signature or
-    bio — whether `"Met at Sarah's wedding — loves natural wine, kids are Leo and Maya, catch up every quarter"`
-    or `"Partner at Sequoia — follow up next Tuesday on seed round"` — and
+  - **Add from text** (Smart Paste) takes a pasted note, email signature, or
+    bio, such as `"Met at Sarah's wedding, loves natural wine, kids are Leo and Maya, catch up every quarter"`
+    or `"Partner at Sequoia, follow up next Tuesday on seed round"`, and
     extracts the person's fields, tags, custom facts and dated past interactions
     in one step.
   - **Contact enrichment** searches the web for a person, fills in missing
