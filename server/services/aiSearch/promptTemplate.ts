@@ -35,6 +35,7 @@
 import { z } from "zod";
 import type { HydratedContact } from "../../repositories/types.ts";
 import { wrapUntrusted, UNTRUSTED_DATA_RULE } from "../../ai/promptSafety.ts";
+import { trimTrailingSlashes } from "../../utils/urlPath.ts";
 import type { JsonSchemaNode } from "../../ai/types.ts";
 import {
   siteOf,
@@ -996,7 +997,7 @@ const LIST_ITEMS = {
         return false;
       }
       const host = url.hostname.replace(/^www\./, "");
-      if (host.endsWith("linkedin.com"))
+      if (host === "linkedin.com" || host.endsWith(".linkedin.com"))
         return /^\/in\/[^/]+\/?$/.test(url.pathname);
       if (host === "x.com" || host === "twitter.com")
         return !url.pathname.includes("/status/");
@@ -1299,7 +1300,7 @@ const PLATFORMS = new Set([
 /** The address without a path: a site's front page. */
 function isFrontPage(url: string): boolean {
   try {
-    return new URL(url).pathname.replace(/\/+$/, "") === "";
+    return trimTrailingSlashes(new URL(url).pathname) === "";
   } catch {
     return false;
   }

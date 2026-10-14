@@ -31,6 +31,11 @@ updates:
       production-dependencies:
         dependency-type: production
         update-types: [minor, patch]
+    ignore:
+      # @dicebear/avataaars, bottts and lorelei are on 9.x and require
+      # @dicebear/core ^9.0.0 as a peer dependency.
+      - dependency-name: "@dicebear/core"
+        update-types: ["version-update:semver-major"]
 
   # Each action is pinned to a commit. Dependabot moves the pin and the
   # version comment beside it together.

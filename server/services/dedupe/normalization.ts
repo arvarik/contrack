@@ -12,6 +12,7 @@ import {
   generationOf,
   tokenizeName,
 } from "../../utils/nlp/index.ts";
+import { trimTrailingSlashes } from "../../utils/urlPath.ts";
 
 // Types
 
@@ -395,10 +396,9 @@ export function normalizeProfileUrl(url: string): string {
   const facebookId =
     /^(?:www\.|m\.)?facebook\.com\/profile\.php\?(?:[^#]*&)?id=(\d+)/.exec(raw);
   if (facebookId) return `facebook.com/profile.php?id=${facebookId[1]}`;
-  const bare = raw
-    .replace(/[?#].*$/, "")
-    .replace(/^(www|m|mobile)\./, "")
-    .replace(/\/+$/, "");
+  const bare = trimTrailingSlashes(
+    raw.replace(/[?#].*$/, "").replace(/^(www|m|mobile)\./, ""),
+  );
   const linkedIn = /^(?:[a-z]{2}\.)?linkedin\.com\/in\/([^/]+)/.exec(bare);
   if (!linkedIn) return bare;
   let handle = linkedIn[1];

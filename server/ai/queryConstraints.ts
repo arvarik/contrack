@@ -251,7 +251,7 @@ function combinedMatchers(
 /** Employer phrases do not provide evidence about where a contact lives. */
 function maskEmployerClauses(query: string): string {
   return query.replace(
-    /\b(?:works? at|working at|at|works? for|working for|employed by)\s+[^,?]+?(?=\s+(?:in|who|that|with|and|or)\b|[?,]|$)/gi,
+    /\b(?:works? at|working at|at|works? for|working for|employed by)\s+\S[^,?]*?(?=\s+(?:in|who|that|with|and|or)\b|[?,]|$)/gi,
     (phrase) => " ".repeat(phrase.length),
   );
 }

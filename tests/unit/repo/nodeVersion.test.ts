@@ -53,7 +53,7 @@ describe("the Node version", () => {
   it("is the exact version the dev container installs", () => {
     const devcontainer = JSON.parse(read(".devcontainer/devcontainer.json"));
     expect(
-      devcontainer.features["ghcr.io/devcontainers/features/node:1"],
+      devcontainer.features["ghcr.io/devcontainers/features/node:2"],
     ).toEqual({ version: PIN });
   });
 

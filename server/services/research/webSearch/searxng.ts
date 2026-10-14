@@ -26,15 +26,20 @@ async function searxngSearch(
   query: string,
   signal?: AbortSignal,
 ): Promise<SearxngResult[]> {
-  const url = new URL(`${baseUrl}/search`);
-  url.searchParams.set("q", query);
-  url.searchParams.set("format", "json");
-  url.searchParams.set("safesearch", "0");
-  const response = await fetch(url, {
-    signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(SEARCH_TIMEOUT_MS)])
-      : AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+  const endpoint = new URL(`${baseUrl}/search`);
+  const params = new URLSearchParams({
+    q: query,
+    format: "json",
+    safesearch: "0",
   });
+  const response = await fetch(
+    `${endpoint.origin}${endpoint.pathname}?${params}`,
+    {
+      signal: signal
+        ? AbortSignal.any([signal, AbortSignal.timeout(SEARCH_TIMEOUT_MS)])
+        : AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+    },
+  );
   if (!response.ok) {
     throw new AppError(
       `SearXNG returned ${response.status} ${response.statusText}`,

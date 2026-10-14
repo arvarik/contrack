@@ -264,6 +264,9 @@ router.post(
     // anyone's.
     const scope = scopeOf(req);
     const wantsStream = req.headers.accept?.includes("text/event-stream");
+    if (!Array.isArray(req.body)) {
+      throw new ValidationError("Expected an array of contacts");
+    }
     const contacts = req.body as NewContactPayload[];
     const importId = importIdOf(req);
 

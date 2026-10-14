@@ -135,13 +135,20 @@ export function vecTableDdl(
   dimension: number,
   element: VecElement = "float",
 ): string {
+  if (!/^[a-z_][a-z0-9_]*$/i.test(table)) {
+    throw new Error("Invalid vector table name");
+  }
+  const dim = Math.trunc(Number(dimension));
+  if (!Number.isInteger(dim) || dim < 1) {
+    throw new Error("Invalid vector dimension");
+  }
   return `CREATE VIRTUAL TABLE ${table} USING vec0(
     contactId TEXT PRIMARY KEY,
     ownerId TEXT PARTITION KEY,
     isGhost INTEGER,
     isArchived INTEGER,
     active INTEGER,
-    embedding ${element === "int8" ? "INT8" : "FLOAT"}[${dimension}]
+    embedding ${element === "int8" ? "INT8" : "FLOAT"}[${dim}]
   )`;
 }
 

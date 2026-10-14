@@ -18,6 +18,7 @@ import type {
 import { log } from "../../utils/logger.ts";
 import { AppError } from "../../utils/AppError.ts";
 import { getErrorMessage } from "../../utils/helpers.ts";
+import { trimTrailingSlashes } from "../../utils/urlPath.ts";
 import {
   withTimeout,
   withRetry,
@@ -80,7 +81,7 @@ export class OpenAICompatibleAdapter implements AIProvider {
 
   constructor(options: OpenAICompatibleOptions) {
     this.name = options.label || "OpenAI-Compatible";
-    this.baseUrl = options.baseUrl.replace(/\/+$/, "");
+    this.baseUrl = trimTrailingSlashes(options.baseUrl);
     // Local servers (Ollama, LM Studio) ignore the key but the SDK requires
     // a non-empty string.
     this.apiKey = options.apiKey || "not-needed";

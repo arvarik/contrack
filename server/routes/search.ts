@@ -48,9 +48,10 @@ router.get(
     const rid = req.requestId;
     const scope = scopeOf(req);
     const q = req.query.q;
-    if (q !== undefined && typeof q !== "string")
-      throw new AppError("q must be a string", 400);
-
+    if (typeof q !== "string") {
+      if (q !== undefined) throw new AppError("q must be a string", 400);
+      return res.json([]);
+    }
     if (!q) return res.json([]);
     if (q.length > 500) throw new AppError("q must be ≤ 500 characters", 400);
 

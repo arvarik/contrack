@@ -144,12 +144,12 @@ export const listService = {
       "UPDATE lists SET sortOrder = ? WHERE id = ? AND ownerId = ?",
     );
     const txn = sqlite.transaction(() => {
-      for (let i = 0; i < orderedIds.length; i++) {
+      for (let i = 0; i < allIds.length; i++) {
         updateStmt.run(i, orderedIds[i], scope.ownerId);
       }
     });
     txn();
-    return orderedIds.length;
+    return allIds.length;
   },
 
   /**
