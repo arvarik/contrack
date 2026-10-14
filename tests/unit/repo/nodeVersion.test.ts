@@ -41,10 +41,11 @@ describe("the Node version", () => {
     const froms = [...read("Dockerfile").matchAll(/^FROM (\S+)/gm)].map(
       (m) => m[1],
     );
-    expect(froms).toEqual([
-      `node:${MAJOR}-trixie-slim`,
-      `node:${MAJOR}-trixie-slim`,
-    ]);
+    expect(froms).toHaveLength(2);
+    expect(froms[0]).toBe(froms[1]);
+    expect(froms[0]).toMatch(
+      new RegExp(`^node:${MAJOR}-trixie-slim@sha256:[0-9a-f]{64}$`),
+    );
   });
 
   // The pin itself, not a major: the Node images for dev containers trail

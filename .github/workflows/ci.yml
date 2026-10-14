@@ -85,6 +85,12 @@ jobs:
       - name: Production Build
         run: npm run build
 
+      - name: Dependency Review
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
+
   # ── Unit, integration and eval tests ───────────────────────────────────────
   # `npm run test:coverage`, split across four runners. The tests use every
   # core of a runner, so four runners finish in about a quarter of the time
@@ -457,9 +463,10 @@ jobs:
           sarif_file: ${{ steps.scan.outputs.sarif }}
           category: image-scan
 
-  # Version tags (vX.Y.Z) get a GitHub Release. Created only if one doesn't
-  # already exist for the tag — publishing via `gh release create` first (to
-  # attach hand-written notes) makes this a no-op rather than a conflict.
+  # Version tags (vX.Y.Z) get a GitHub Release with a signed source archive and
+  # SLSA build provenance attestation. If the release was created beforehand
+  # (for example with hand-written notes via `gh release create`), the signed
+  # archive, its SHA-256 checksum and its provenance bundle are still attached.
   release:
     needs: [checks, unit-tests, coverage, browser-a11y]
     if: startsWith(github.ref, 'refs/tags/v')
@@ -467,20 +474,42 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Create GitHub release if missing
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build release source archive
         run: |
           TAG="${GITHUB_REF#refs/tags/}"
+          ARCHIVE="contrack-${TAG}.tar.gz"
+          git archive --format=tar.gz --prefix="contrack-${TAG#v}/" -o "$ARCHIVE" HEAD
+          sha256sum "$ARCHIVE" > "${ARCHIVE}.sha256"
+
+      - name: Attest release archive provenance
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: contrack-${{ github.ref_name }}.tar.gz
+          create-storage-record: false
+
+      - name: Create or update GitHub release with signed assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUNDLE_PATH: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          ARCHIVE="contrack-${TAG}.tar.gz"
+          cp "$BUNDLE_PATH" "${ARCHIVE}.intoto.jsonl"
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "Release $TAG already exists — skipping."
+            echo "Release $TAG already exists — uploading signed assets."
+            gh release upload "$TAG" "$ARCHIVE" "${ARCHIVE}.sha256" "${ARCHIVE}.intoto.jsonl" \
+              --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+            gh release create "$TAG" "$ARCHIVE" "${ARCHIVE}.sha256" "${ARCHIVE}.intoto.jsonl" \
+              --repo "$GITHUB_REPOSITORY" \
               --title "$TAG" --generate-notes
           fi

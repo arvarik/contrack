@@ -56,9 +56,11 @@ Out of scope:
 
 ## Verify the Docker image
 
-CI signs a build provenance record for each published image. To check that an
-image came from this repository's CI, run:
+CI signs a build provenance record for each published image and each release
+archive. To check that an image or release archive came from this repository's
+CI, run:
 
 ```bash
 gh attestation verify oci://ghcr.io/arvarik/contrack:latest --owner arvarik
+gh attestation verify contrack-v2.0.0.tar.gz --owner arvarik
 ```

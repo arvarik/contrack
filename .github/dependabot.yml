@@ -8,8 +8,8 @@
 # A security update ignores the cooldown and the schedule. Those come from the
 # "Dependabot security updates" setting, not from this file.
 #
-# The Docker base image is not listed. Its tag, node:26-trixie, names the Node
-# major only, so each image build already takes the latest 26.x. A new major
+# The Docker base image is pinned by its multi-arch SHA-256 digest on
+# node:26-trixie-slim, and Dependabot updates the digest weekly. A new major
 # moves with .nvmrc, and tests/unit/repo/nodeVersion.test.ts holds them
 # together.
 version: 2
@@ -49,6 +49,15 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+
+  # The base image in Dockerfile, pinned to a SHA-256 digest.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 7
 
   # The features in .devcontainer/devcontainer.json.
   - package-ecosystem: devcontainers
