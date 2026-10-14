@@ -121,9 +121,17 @@ export function getRpIdFromOrigin(origin: string): string {
 
 /**
  * Get both rpID and origin for passkey ceremonies from the request.
+ *
+ * WebAuthn allows `http:` only on `localhost`. On any other domain the browser
+ * ceremony is `https:`, even when a reverse proxy or Tailscale Serve reaches
+ * this server over HTTP without `PUBLIC_URL` or `TRUST_PROXY_HOPS`.
  */
 export function getPasskeyRp(req: Request): { rpID: string; origin: string } {
-  const origin = publicOrigin(req);
-  const rpID = getRpIdFromOrigin(origin);
+  const rawOrigin = publicOrigin(req);
+  const rpID = getRpIdFromOrigin(rawOrigin);
+  const origin =
+    rpID !== "localhost" && rawOrigin.startsWith("http://")
+      ? `https://${rawOrigin.slice("http://".length)}`
+      : rawOrigin;
   return { rpID, origin };
 }

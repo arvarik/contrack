@@ -16,11 +16,14 @@ import {
 
 export const SetupWizard = ({
   onCreated,
+  onCancel,
   deviceContacts = 0,
   localOwnerPresent = false,
   mailConfigured = false,
 }: {
   onCreated: () => void;
+  /** Shown when securing an open instance from Settings, so the user can go back. */
+  onCancel?: () => void;
   /** Contacts already in this database, waiting to be claimed. */
   deviceContacts?: number;
   /** True when this instance has been running with sign-in switched off. */
@@ -91,19 +94,31 @@ export const SetupWizard = ({
         {formError && <AuthError>{formError}</AuthError>}
       </div>
 
-      <AuthSubmit busy={busy}>
-        {busy ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Creating account…
-          </>
-        ) : (
-          <>
-            <UserPlus className="w-4 h-4" />
-            {localOwnerPresent ? "Secure this instance" : "Create account"}
-          </>
+      <div className="space-y-2">
+        <AuthSubmit busy={busy}>
+          {busy ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Creating account…
+            </>
+          ) : (
+            <>
+              <UserPlus className="w-4 h-4" />
+              {localOwnerPresent ? "Secure this instance" : "Create account"}
+            </>
+          )}
+        </AuthSubmit>
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="btn-secondary w-full"
+          >
+            Not now
+          </button>
         )}
-      </AuthSubmit>
+      </div>
     </AuthShell>
   );
 };

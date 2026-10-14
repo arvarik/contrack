@@ -93,6 +93,8 @@ interface AuthContextValue {
   isResolved: boolean;
   /** Re-read /status — call after anything that changes the account. */
   refresh: () => Promise<void>;
+  /** Open the first-run setup screen to secure an un-gated instance. */
+  beginSetup: () => void;
   /** End the session and show the sign-in screen. */
   signOut: () => Promise<void>;
 }
@@ -107,6 +109,7 @@ const AuthContext = createContext<AuthContextValue>({
   mapStyles: null,
   isResolved: false,
   refresh: async () => {},
+  beginSetup: () => {},
   signOut: async () => {},
 });
 
@@ -402,6 +405,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     mapStyles,
     isResolved: state !== "checking" && state !== "unreachable",
     refresh: check,
+    beginSetup: () => setState("setup"),
     signOut: handleSignOut,
   };
 
@@ -415,6 +419,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
         return (
           <SetupWizard
             onCreated={handleAccountCreated}
+            onCancel={!authRequired ? () => setState("open") : undefined}
             deviceContacts={deviceContacts}
             localOwnerPresent={localOwnerPresent}
             mailConfigured={mailConfigured}

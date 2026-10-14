@@ -65,8 +65,8 @@ export const ForgotPassword = ({
       >
         <div className="space-y-3 text-sm text-on-surface-variant text-pretty">
           <p>
-            Ask an admin to reset your password in Settings → Accounts. You get
-            a temporary password to sign in with
+            Ask an admin to reset your password in Settings → Administration →
+            Accounts. You get a temporary password to sign in with
           </p>
           {/* Closed, so a visitor does not get a server command first. */}
           {/* A chevron says it opens: `flex` on a summary takes the

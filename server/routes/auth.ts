@@ -228,7 +228,7 @@ router.get("/status", (req, res) => {
   // How many contacts are here, for the setup screen only: "secure this
   // instance" reads differently when 431 contacts are about to belong to the
   // account being made.
-  const deviceContacts = setupRequired ? countDeviceContacts() : 0;
+  const deviceContacts = passwordAccounts === 0 ? countDeviceContacts() : 0;
 
   res.json({
     authRequired,

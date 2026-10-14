@@ -54,6 +54,27 @@ describe("publicOrigin and passkey RP derivation", () => {
     expect(rpID).toBe("public.example.org");
   });
 
+  it("uses https for non-localhost passkey origins behind an HTTP proxy hop", () => {
+    const localReq = mockRequest({
+      protocol: "http",
+      headers: { host: "localhost:3210" },
+    });
+    expect(getPasskeyRp(localReq)).toEqual({
+      rpID: "localhost",
+      origin: "http://localhost:3210",
+    });
+
+    const tailnetReq = mockRequest({
+      protocol: "http",
+      headers: { host: "nas.tailnet.ts.net" },
+    });
+    expect(publicOrigin(tailnetReq)).toBe("http://nas.tailnet.ts.net");
+    expect(getPasskeyRp(tailnetReq)).toEqual({
+      rpID: "nas.tailnet.ts.net",
+      origin: "https://nas.tailnet.ts.net",
+    });
+  });
+
   it.each(["127.0.0.1:3210", "192.168.1.100:3210", "[::1]:3210"])(
     "throws PASSKEY_UNSUPPORTED_ORIGIN for the IP host %s",
     (host) => {

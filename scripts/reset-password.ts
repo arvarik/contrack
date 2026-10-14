@@ -12,6 +12,16 @@ export interface ResetPasswordResult {
   temporaryPassword: string;
 }
 
+function knownUsernames(): string[] {
+  return (
+    sqlite
+      .prepare(
+        "SELECT username FROM users WHERE credentialState != 'none' ORDER BY createdAt ASC",
+      )
+      .all() as { username: string }[]
+  ).map((r) => r.username);
+}
+
 /**
  * Reset an account's password from the CLI.
  *
@@ -37,7 +47,10 @@ export async function resetPasswordCli(
     | undefined;
 
   if (!user) {
-    throw new Error(`Account "${identifier}" not found`);
+    const known = knownUsernames();
+    const suffix =
+      known.length > 0 ? `. Existing accounts: ${known.join(", ")}` : "";
+    throw new Error(`Account "${identifier}" not found${suffix}`);
   }
 
   if (user.credentialState === "none") {
@@ -87,7 +100,11 @@ export async function resetPasswordCli(
 async function main() {
   const identifier = process.argv[2];
   if (!identifier) {
+    const known = knownUsernames();
     console.error("Usage: npm run reset-password <username-or-email>");
+    if (known.length > 0) {
+      console.error(`Accounts on this instance: ${known.join(", ")}`);
+    }
     process.exit(1);
   }
 

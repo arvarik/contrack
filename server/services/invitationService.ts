@@ -78,6 +78,7 @@ function statusOf(row: {
 import { mailService } from "./mailService.ts";
 import { renderInvitationEmail } from "../mail/templates.ts";
 import { getInstanceName } from "./authService.ts";
+import { assertInstanceSecured } from "./adminService.ts";
 import { mailLinkOrigin } from "../utils/publicOrigin.ts";
 
 /**
@@ -96,6 +97,7 @@ export async function createInvitation(
   },
   origin: string,
 ): Promise<{ id: string; link: string; expiresAt: string; sent: boolean }> {
+  assertInstanceSecured(ctx.actor);
   const days = Math.min(
     MAX_INVITATION_DAYS,
     Math.max(

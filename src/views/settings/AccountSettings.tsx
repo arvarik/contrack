@@ -903,7 +903,7 @@ const ApiTokensCard = () => {
 // Page
 
 export const AccountSettings = () => {
-  const { user, authRequired, isAdmin, signOut } = useAuth();
+  const { user, authRequired, isAdmin, beginSetup, signOut } = useAuth();
 
   if (!authRequired || !user) {
     return (
@@ -915,10 +915,15 @@ export const AccountSettings = () => {
           body={
             <>
               This Contrack does not ask anyone to sign in, so there is no
-              account to manage. Set <code>AUTH_REQUIRED=true</code> on the
-              server to ask for one. The first account then keeps every contact
-              already here
+              account to manage. Secure it here or set{" "}
+              <code>AUTH_REQUIRED=true</code> on the server, and the first
+              account keeps every contact already here
             </>
+          }
+          action={
+            user
+              ? { label: "Secure this instance", onClick: beginSetup }
+              : undefined
           }
         />
       </div>
@@ -961,7 +966,7 @@ export const AccountSettings = () => {
           >
             <p className="text-sm text-on-surface-variant text-pretty">
               How long a sign-in lasts applies to every account, so it is set in
-              Settings → General
+              Settings → Administration → General
             </p>
             <Link
               to="/settings/admin/general#session-length"

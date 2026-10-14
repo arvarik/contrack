@@ -504,7 +504,7 @@ const DeleteUserDialog = ({
 
 export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
   const navigate = useNavigate();
-  const { user: me } = useAuth();
+  const { user: me, authRequired, beginSetup } = useAuth();
   const { data: users, isLoading, isError, refetch } = useAdminUsers();
   const setEnabled = useSetUserEnabled();
   const reset = useResetPassword();
@@ -571,21 +571,30 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
   return (
     <AdminPage
       actions={
-        <>
+        !authRequired ? (
           <AdminButton
-            tone="secondary"
-            icon={<MailPlus className="w-4 h-4" />}
-            onClick={() => navigate("/settings/admin/invitations")}
+            icon={<ShieldCheck className="w-4 h-4" />}
+            onClick={beginSetup}
           >
-            Invite
+            Secure this instance
           </AdminButton>
-          <AdminButton
-            icon={<UserPlus className="w-4 h-4" />}
-            onClick={() => navigate("/settings/admin/users/new")}
-          >
-            Create account
-          </AdminButton>
-        </>
+        ) : (
+          <>
+            <AdminButton
+              tone="secondary"
+              icon={<MailPlus className="w-4 h-4" />}
+              onClick={() => navigate("/settings/admin/invitations")}
+            >
+              Invite
+            </AdminButton>
+            <AdminButton
+              icon={<UserPlus className="w-4 h-4" />}
+              onClick={() => navigate("/settings/admin/users/new")}
+            >
+              Create account
+            </AdminButton>
+          </>
+        )
       }
     >
       <AdminList

@@ -64,8 +64,6 @@
 - **Archive and Trash.** A delete marks the contact archived as well, and a
   restore clears both, so a contact archived before it was deleted comes back
   unarchived.
-- **Google sign-in.** A session that ends between the start and the callback
-  still meets the API's 401 JSON at the callback.
 - **Map selection.** A keyboard user can select with **All in view** only. Box
   and lasso still need a pointer.
 - **Test-only seams.** The ones PR #147 listed are gone. A few exports still
