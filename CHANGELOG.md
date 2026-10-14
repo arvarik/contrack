@@ -9,7 +9,7 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [2.0.0] - 2026-10-07
+## [2.0.0] - 2026-10-13
 
 Version 2 turns Contrack into a server that several people can share and reach
 from the internet. It also rebuilds search, Pulse, the map, research and the
@@ -33,7 +33,9 @@ with an empty `DATA_DIR`.
 - Each device's session can be signed out on its own. Theme, accent, list
   density and search history follow the account to every device.
 - Outgoing mail (`SMTP_URL`) sends invitations, password resets and sign-in
-  links.
+  links. Without mail, `npm run reset-password <email>` resets a password from
+  the command line, and passkeys take their origin from `PUBLIC_URL` behind a
+  reverse proxy.
 - Disable, and removing an AI key or a custom AI server, ask first. **Email
   a reset link** says when the mail failed, and the unsent link stops working.
 - A reset-link or sign-in-link request answers at the same speed whether or

@@ -23,10 +23,10 @@ import {
 } from "../../../lib/birthday";
 import { birthdayValue, parseBirthday } from "../../../../shared/birthday";
 
-export const DATE_PRESET_LABELS = ["birthday", "anniversary", "other"] as const;
+const DATE_PRESET_LABELS = ["birthday", "anniversary", "other"] as const;
 const CUSTOM_OPTION = "custom…";
 
-export interface DateEntry {
+interface DateEntry {
   id: string;
   value: string;
   label: string;

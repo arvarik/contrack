@@ -122,7 +122,7 @@ export function isDefaultValue<K extends keyof Preferences>(
   return value === fallback;
 }
 
-export const fetchPreferences = (): Promise<PreferencesResponse> =>
+const fetchPreferences = (): Promise<PreferencesResponse> =>
   apiJson<PreferencesResponse>("/auth/preferences");
 
 /**
