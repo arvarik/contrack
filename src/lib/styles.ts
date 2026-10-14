@@ -272,7 +272,7 @@ export const STATUS_BADGE_SUCCESS =
  * `sm`. Its focus ring is the app's one ring, drawn on its edge (index.css).
  */
 export const SEARCH_INPUT =
-  "w-full bg-surface-container-low rounded-xl pl-9 pr-4 py-3 sm:py-2.5 text-sm transition-colors";
+  "w-full bg-surface-container-low rounded-xl pl-9 pr-4 py-3 sm:pointer-fine:py-2.5 text-sm transition-colors";
 
 /** Inline editable field input — appears on click-to-edit */
 export const EDITABLE_INPUT =
@@ -346,7 +346,7 @@ export const COMPOSER = "card focus-frame p-4 z-20";
 
 /** The floating panel. It scrolls past about ten rows and never runs wider than the window. */
 export const MENU_PANEL =
-  "menu-panel menu-enter p-1 min-w-[13rem] max-w-[min(20rem,calc(100vw-2rem))] max-h-[min(24rem,calc(100vh-4rem))] overflow-y-auto";
+  "menu-panel menu-enter p-1 min-w-[13rem] max-w-[min(20rem,calc(100vw-2rem))] max-h-[min(24rem,calc(100dvh-var(--keyboard-inset,0px)-var(--viewport-offset,0px)-4rem))] overflow-y-auto";
 
 /**
  * One row: 44 px tall on a touch screen and 36 px for a mouse. The keyboard

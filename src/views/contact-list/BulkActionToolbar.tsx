@@ -104,7 +104,10 @@ export const BulkActionToolbar = ({
   const { mode } = usePreferences();
   // Every action is disabled until a row is picked.
   const nothingSelected = selectedCount === 0;
-  const [showBulkColorPicker, setShowBulkColorPicker] = React.useState(false);
+  const [colorAnchor, setColorAnchor] = React.useState<"color" | "more" | null>(
+    null,
+  );
+  const showBulkColorPicker = colorAnchor !== null;
   // The picker's two homes: Color, and More on a phone. A press anywhere
   // else, another bar button too, closes it.
   const colorHomeRef = useRef<HTMLDivElement>(null);
@@ -112,14 +115,23 @@ export const BulkActionToolbar = ({
 
   React.useEffect(() => {
     if (!showBulkColorPicker) return;
-    const handler = (e: MouseEvent) => {
+    const handler = (e: MouseEvent | PointerEvent) => {
       const inside = [colorHomeRef, moreHomeRef].some((home) =>
         home.current?.contains(e.target as Node),
       );
-      if (!inside) setShowBulkColorPicker(false);
+      if (!inside) setColorAnchor(null);
     };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setColorAnchor(null);
+    };
+    document.addEventListener("pointerdown", handler);
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handler);
+      document.removeEventListener("mousedown", handler);
+      document.removeEventListener("keydown", onKeyDown);
+    };
   }, [showBulkColorPicker]);
 
   const colorPicker = (
@@ -133,11 +145,12 @@ export const BulkActionToolbar = ({
         >
           {VIBES.map((vibe) => (
             <button
+              type="button"
               aria-label={`Set color to ${vibe.label}`}
               key={vibe.id}
               onClick={() => {
                 onColorChange(vibe.id);
-                setShowBulkColorPicker(false);
+                setColorAnchor(null);
               }}
               disabled={isPending || nothingSelected}
               style={{
@@ -159,7 +172,7 @@ export const BulkActionToolbar = ({
       animate={{ y: 0, opacity: 1 }}
       exit={{ y: 80, opacity: 1 }}
       transition={{ type: "spring", damping: 22, stiffness: 300 }}
-      className="absolute bottom-24 md:bottom-0 left-0 right-0 z-40 px-3 pb-2 md:pb-4"
+      className="absolute bottom-[calc(var(--tabbar-space)+0.75rem)] md:bottom-0 left-0 right-0 z-40 px-3 pb-2 md:pb-4"
     >
       {/* Nearly opaque, not glass: the list under it would fight the labels
           for contrast. The buttons wrap in a narrow pane, so none sit past
@@ -206,7 +219,9 @@ export const BulkActionToolbar = ({
         >
           <button
             type="button"
-            onClick={() => setShowBulkColorPicker((v) => !v)}
+            onClick={() =>
+              setColorAnchor((v) => (v === "color" ? null : "color"))
+            }
             disabled={nothingSelected}
             title="Change color"
             aria-expanded={showBulkColorPicker}
@@ -219,7 +234,7 @@ export const BulkActionToolbar = ({
             <Palette className="w-4 h-4" />
             <span className={BAR_LABEL}>Color</span>
           </button>
-          {colorPicker}
+          {colorAnchor !== "more" && colorPicker}
         </div>
 
         {/* It copies CSV text, and downloads no file. */}
@@ -247,7 +262,7 @@ export const BulkActionToolbar = ({
           <ActionMenu
             label="More actions"
             // The menu opens over the picker: one panel at a time.
-            onOpenChange={(open) => open && setShowBulkColorPicker(false)}
+            onOpenChange={(open) => open && setColorAnchor(null)}
             icon={MoreHorizontal}
             iconClassName="w-4 h-4"
             triggerClassName="min-w-11 min-h-11"
@@ -263,7 +278,7 @@ export const BulkActionToolbar = ({
                 id: "color",
                 label: "Change color",
                 icon: Palette,
-                onSelect: () => setShowBulkColorPicker(true),
+                onSelect: () => setColorAnchor("more"),
               },
               {
                 id: "csv",
@@ -273,7 +288,7 @@ export const BulkActionToolbar = ({
               },
             ]}
           />
-          {colorPicker}
+          {colorAnchor === "more" && colorPicker}
         </div>
       </div>
     </motion.div>

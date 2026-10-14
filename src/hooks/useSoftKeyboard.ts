@@ -49,11 +49,6 @@ export function useSoftKeyboard(): void {
     const tallest = new Map<number, number>();
 
     const measure = () => {
-      const full = Math.max(
-        tallest.get(window.innerWidth) ?? 0,
-        window.innerHeight,
-      );
-      tallest.set(window.innerWidth, full);
       // iOS keeps the page and lays the keyboard over it. A pinch zoom also
       // makes the visible part smaller and pans it, and that is no keyboard.
       const visible = viewport && viewport.scale <= 1.01 ? viewport : null;
@@ -63,13 +58,19 @@ export function useSoftKeyboard(): void {
             Math.round(window.innerHeight - visible.height - visible.offsetTop),
           )
         : 0;
+      const activeOpensKeyboard = opensKeyboard(document.activeElement);
+      const full =
+        !activeOpensKeyboard && covered === 0
+          ? window.innerHeight
+          : Math.max(tallest.get(window.innerWidth) ?? 0, window.innerHeight);
+      tallest.set(window.innerWidth, full);
       const shrunk = full - window.innerHeight >= KEYBOARD_MIN;
       // Typing needs the keyboard up as well as a field in focus: Back on
       // Android, or the iPad's hide key, puts the keyboard away and leaves
       // the field focused, and the tab bar must come back then.
       const typing =
         touchFirst() &&
-        opensKeyboard(document.activeElement) &&
+        activeOpensKeyboard &&
         (covered >= KEYBOARD_MIN || shrunk);
       root.toggleAttribute("data-typing", typing);
       root.style.setProperty(

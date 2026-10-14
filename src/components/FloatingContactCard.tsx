@@ -83,7 +83,7 @@ export const FloatingContactCard: React.FC<FloatingContactCardProps> = ({
             transition={{ duration: DURATION.fast, ease: EASE }}
             onClick={onClose}
             aria-hidden="true"
-            className="fixed inset-0 z-[100] bg-black/40 backdrop-blur-sm"
+            className="fixed inset-0 z-[90] bg-black/40 backdrop-blur-sm"
           />
 
           <motion.div
@@ -101,7 +101,8 @@ export const FloatingContactCard: React.FC<FloatingContactCardProps> = ({
               stiffness: 380,
               mass: 0.8,
             }}
-            className="fixed inset-4 md:inset-8 lg:inset-12 xl:inset-x-[10%] xl:inset-y-8 z-[101] flex flex-col overflow-hidden rounded-3xl bg-surface shadow-2xl ring-1 ring-surface-container-highest/50 outline-none"
+            style={{ "--tabbar-space": "0px" } as React.CSSProperties}
+            className="fixed inset-x-4 top-[max(1rem,env(safe-area-inset-top))] bottom-[max(1rem,calc(env(safe-area-inset-bottom)+var(--keyboard-inset,0px)))] md:inset-8 lg:inset-12 xl:inset-x-[10%] xl:inset-y-8 z-[91] flex flex-col overflow-hidden rounded-3xl bg-surface shadow-2xl ring-1 ring-surface-container-highest/50 outline-none"
           >
             <button
               type="button"

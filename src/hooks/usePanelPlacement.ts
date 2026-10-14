@@ -124,22 +124,38 @@ export function usePanelPlacement({
     anchorRef.current = anchor;
     if (matchWidth) node.style.minWidth = `${Math.round(anchor.width)}px`;
     const box = node.getBoundingClientRect();
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+    const viewport = window.visualViewport;
+    const visible = viewport && viewport.scale <= 1.01 ? viewport : null;
+    const minLeft = (visible ? visible.offsetLeft : 0) + MARGIN;
+    const maxRight =
+      (visible ? visible.offsetLeft + visible.width : window.innerWidth) -
+      MARGIN;
+    const minTop = (visible ? visible.offsetTop : 0) + MARGIN;
+    const tabbarHeight =
+      window.innerWidth < 768 &&
+      !document.documentElement.hasAttribute("data-typing")
+        ? (document
+            .querySelector<HTMLElement>(".mobile-tabbar")
+            ?.getBoundingClientRect().height ?? 0)
+        : 0;
+    const maxBottom =
+      (visible ? visible.offsetTop + visible.height : window.innerHeight) -
+      tabbarHeight -
+      MARGIN;
 
     let up = false;
     let top = anchor.bottom + GAP;
     if (
-      top + box.height > height - MARGIN &&
-      anchor.top - GAP - box.height >= MARGIN
+      top + box.height > maxBottom &&
+      anchor.top - GAP - box.height >= minTop
     ) {
       up = true;
       top = anchor.top - GAP - box.height;
     }
-    top = Math.max(MARGIN, Math.min(top, height - box.height - MARGIN));
+    top = Math.max(minTop, Math.min(top, maxBottom - box.height));
 
     const fits = (left: number) =>
-      left >= MARGIN && left + box.width <= width - MARGIN;
+      left >= minLeft && left + box.width <= maxRight;
     const startLeft = anchor.left;
     const endLeft = anchor.right - box.width;
     let side = align;
@@ -147,7 +163,7 @@ export function usePanelPlacement({
     else if (side === "end" && !fits(endLeft) && fits(startLeft))
       side = "start";
     let left = side === "end" ? endLeft : startLeft;
-    left = Math.max(MARGIN, Math.min(left, width - box.width - MARGIN));
+    left = Math.max(minLeft, Math.min(left, maxRight - box.width));
 
     setDropUp(up);
     setEdge(side);
@@ -188,10 +204,12 @@ export function usePanelPlacement({
     const viewport = window.visualViewport;
     window.addEventListener("resize", onResize);
     viewport?.addEventListener("resize", onResize);
+    viewport?.addEventListener("scroll", onResize);
     return () => {
       cancelAnimationFrame(frame);
       window.removeEventListener("resize", onResize);
       viewport?.removeEventListener("resize", onResize);
+      viewport?.removeEventListener("scroll", onResize);
     };
   }, [open, place]);
 

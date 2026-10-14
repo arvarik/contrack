@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, type RefObject } from "react";
 import { motion } from "motion/react";
 import {
   Star,
@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { Modal } from "../../components/ui/Modal";
 import {
+  DIALOG_ACTIONS,
   FORM_INPUT,
   FORM_LABEL,
   LABEL,
@@ -82,11 +83,13 @@ export const CreateListModal = ({
   onClose,
   onCreate,
   isPending,
+  returnFocusRef,
 }: {
   isOpen: boolean;
   onClose: () => void;
   onCreate: (name: string, icon: string) => void;
   isPending: boolean;
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }) => {
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("star");
@@ -100,7 +103,12 @@ export const CreateListModal = ({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Create list">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="Create list"
+      returnFocusRef={returnFocusRef}
+    >
       <form onSubmit={handleSubmit} className="space-y-6 pt-2">
         <div>
           <span id="new-list-icon-label" className={cn(LABEL, "block mb-3")}>
@@ -109,7 +117,7 @@ export const CreateListModal = ({
           <div
             role="group"
             aria-labelledby="new-list-icon-label"
-            className="grid grid-cols-7 gap-2"
+            className="grid grid-cols-5 sm:grid-cols-7 gap-2"
           >
             {ICON_OPTIONS.map((key) => {
               const active = icon === key;
@@ -141,9 +149,6 @@ export const CreateListModal = ({
           </label>
           <input
             id="new-list-name"
-            // Dialog the user opened to name a new list.
-            // eslint-disable-next-line jsx-a11y/no-autofocus
-            autoFocus
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -151,7 +156,9 @@ export const CreateListModal = ({
             className={FORM_INPUT}
           />
         </div>
-        <div className="flex items-center justify-between pt-2">
+        <div
+          className={cn(DIALOG_ACTIONS, "sm:items-center sm:justify-between")}
+        >
           {name.trim() && (
             <motion.div
               initial={{ opacity: 0, x: -8 }}
@@ -165,7 +172,7 @@ export const CreateListModal = ({
           <button
             type="submit"
             disabled={!name.trim() || isPending}
-            className="btn-primary ml-auto"
+            className="btn-primary sm:ml-auto"
           >
             {isPending ? "Creating…" : "Create list"}
           </button>

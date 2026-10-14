@@ -8,7 +8,13 @@
  * (`useLongPress`). It is hover-only, so every icon it labels carries an
  * `aria-label` with the same words.
  */
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { AnimatePresence, motion } from "motion/react";
 import { DURATION, EASE } from "../../lib/motion";
 import { cn } from "../../lib/utils";
@@ -16,6 +22,8 @@ import { useLongPress } from "../../hooks/useLongPress";
 
 /** How long a long press keeps the label on screen. */
 const TOUCH_SHOW_MS = 1500;
+/** Minimum distance from the horizontal viewport edge for bottom tooltips. */
+const VIEWPORT_MARGIN = 8;
 
 /** Where the label opens, and the caret's place on it, by side. */
 const SIDES = {
@@ -68,7 +76,10 @@ export const RailTooltip = ({
   className?: string;
 }) => {
   const [visible, setVisible] = useState(false);
+  const [shiftX, setShiftX] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const tipRef = useRef<HTMLDivElement>(null);
 
   const show = useCallback(() => {
     if (disabled) return;
@@ -100,13 +111,40 @@ export const RailTooltip = ({
     [],
   );
 
+  useLayoutEffect(() => {
+    if (!visible || disabled || side !== "bottom") {
+      setShiftX(0);
+      return;
+    }
+    const anchor = wrapperRef.current?.getBoundingClientRect();
+    const tip = tipRef.current?.getBoundingClientRect();
+    if (!anchor || !tip || tip.width === 0) {
+      setShiftX(0);
+      return;
+    }
+    const centerLeft = anchor.left + anchor.width / 2 - tip.width / 2;
+    const centerRight = centerLeft + tip.width;
+    if (centerLeft < VIEWPORT_MARGIN) {
+      setShiftX(Math.round(VIEWPORT_MARGIN - centerLeft));
+    } else if (centerRight > window.innerWidth - VIEWPORT_MARGIN) {
+      setShiftX(Math.round(window.innerWidth - VIEWPORT_MARGIN - centerRight));
+    } else {
+      setShiftX(0);
+    }
+  }, [visible, disabled, side, label, shortcut]);
+
   const { box, caret, from } = SIDES[side];
   // Centered under the control: Motion owns the transform, so the half-width
-  // shift is its `x`, not a class.
-  const center = side === "bottom" ? { x: "-50%" } : {};
+  // shift is its `x`, not a class. When a centered tooltip would overflow the
+  // left or right screen edge, shift it back inside the viewport margin.
+  const center =
+    side === "bottom"
+      ? { x: shiftX ? `calc(-50% + ${shiftX}px)` : "-50%" }
+      : {};
 
   return (
     <div
+      ref={wrapperRef}
       className={cn(
         "relative flex items-center [-webkit-touch-callout:none]",
         className,
@@ -120,6 +158,7 @@ export const RailTooltip = ({
       <AnimatePresence>
         {visible && !disabled && (
           <motion.div
+            ref={tipRef}
             initial={{ opacity: 0, scale: 0.95, ...from, ...center }}
             animate={{ opacity: 1, x: 0, y: 0, scale: 1, ...center }}
             exit={{ opacity: 0, scale: 0.95, ...from, ...center }}

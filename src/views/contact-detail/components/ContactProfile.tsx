@@ -504,7 +504,9 @@ export const ContactProfile = ({
                   ref={setDetails}
                   className={cn(
                     "min-w-0 space-y-6",
-                    wide ? "pb-8" : "pb-32",
+                    wide
+                      ? "pb-8"
+                      : "pb-[calc(var(--tabbar-space)+2rem)] md:pb-8",
                     // Sticky only while it fits the view, so the last field
                     // of a taller column stays in reach.
                     wide &&
@@ -534,7 +536,7 @@ export const ContactProfile = ({
 
               {/* Timeline or Dossier */}
               {(wide || activeTab !== "details") && (
-                <div className="min-w-0 relative min-h-[300px] flex flex-col gap-6 pb-32">
+                <div className="min-w-0 relative min-h-[300px] flex flex-col gap-6 pb-[calc(var(--tabbar-space)+2rem)] md:pb-8">
                   {wide && (
                     <Segmented
                       options={WIDE_TABS}

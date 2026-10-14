@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { cn, errorText } from "../lib/utils";
 import {
   BTN_QUIET,
+  DIALOG_ACTIONS,
   DROPZONE_INPUT,
   SWATCH_SELECTED,
   TAB_CONTAINER,
@@ -229,7 +230,7 @@ export const AvatarPickerModal = ({
 
               {/* Avatar grid. The padding leaves room for the chosen avatar's
                   ring, which the scrolling box would cut at its edges. */}
-              <div className="grid grid-cols-6 gap-2 max-h-[280px] overflow-y-auto scrollbar-hide p-1">
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-[280px] overflow-y-auto scrollbar-hide p-1">
                 {SEEDS.map((seed) => {
                   const url = avatarUrl(style, seed);
                   const isSelected = selectedUrl === url;
@@ -241,7 +242,7 @@ export const AvatarPickerModal = ({
                       onClick={() => setSelectedUrl(url)}
                       aria-pressed={isSelected}
                       className={cn(
-                        "relative aspect-square rounded-2xl overflow-hidden transition-transform",
+                        "hit-area relative aspect-square rounded-2xl overflow-hidden transition-transform",
                         isSelected ? SWATCH_SELECTED : "hover:scale-105",
                       )}
                       title={seed}
@@ -350,7 +351,7 @@ export const AvatarPickerModal = ({
         </AnimatePresence>
 
         {/* Apply button */}
-        <div className="flex gap-3 pt-1">
+        <div className={DIALOG_ACTIONS}>
           <button onClick={handleClose} className="btn-secondary flex-1">
             Cancel
           </button>

@@ -985,10 +985,10 @@ export const ContactList = () => {
         id: "new-list",
         label: "New list",
         icon: ListPlus,
-        onSelect: () => setIsCreateListOpen(true),
+        onSelect: () => openCreate(setIsCreateListOpen),
       },
     ],
-    [openNewContact, openSmartPaste],
+    [openNewContact, openSmartPaste, openCreate],
   );
 
   // Cmd/Ctrl+A selects the filtered contacts, only in select mode and outside

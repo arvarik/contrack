@@ -893,6 +893,11 @@ export const CommandPalette = () => {
       askAi(question, aiFilters);
     },
     onOpenContact: handleSelectContact,
+    onActions: (person: {
+      id: string;
+      name: string;
+      avatarUrl?: string | null;
+    }) => openSubMenu(person, `ai_${person.id}_${person.name}`),
     onNavigate: handleNavigate,
   };
   const logModeProps = {
@@ -976,7 +981,7 @@ export const CommandPalette = () => {
                 // A touch screen pins the panel near the top, clear of the
                 // notch, so the on-screen keyboard leaves room for the list.
                 // A short window, a phone on its side, does the same.
-                className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4 pointer-coarse:pt-[max(0.5rem,env(safe-area-inset-top))] pointer-coarse:px-[max(0.75rem,env(safe-area-inset-left),env(safe-area-inset-right))] [@media(max-height:560px)]:pt-2 backdrop-blur-md bg-surface/40"
+                className="fixed inset-0 z-[100] flex items-start justify-center pt-[15vh] px-4 pointer-coarse:pt-[calc(var(--viewport-offset,0px)+max(0.5rem,env(safe-area-inset-top)))] pointer-coarse:px-[max(0.75rem,env(safe-area-inset-left),env(safe-area-inset-right))] [@media(max-height:560px)]:pt-[calc(var(--viewport-offset,0px)+0.5rem)] backdrop-blur-md bg-surface/40"
               >
                 <motion.div
                   initial={{ opacity: 0, scale: 0.95, y: -20 }}
@@ -1084,7 +1089,7 @@ export const CommandPalette = () => {
                     id={modeChipsId}
                     role="group"
                     aria-label="Mode"
-                    className="flex items-center gap-1 px-3 py-1.5 bg-surface-container-low/50 text-[11px] border-t border-surface-container"
+                    className="flex flex-wrap items-center gap-2 px-3 py-2 pointer-fine:gap-1 pointer-fine:py-1.5 bg-surface-container-low/50 text-[11px] border-t border-surface-container"
                   >
                     {MODE_CHIPS.map(({ id, label, icon: Icon, active }) => (
                       <button

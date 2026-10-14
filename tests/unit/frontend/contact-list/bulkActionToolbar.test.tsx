@@ -77,16 +77,27 @@ describe("BulkActionToolbar", () => {
     );
   });
 
-  // The picker has two homes (Color, and More on a phone). A press on
-  // another bar button, such as Delete, is outside both and closes it.
-  it("closes the color picker when another bar button is pressed", async () => {
+  // The picker has two homes (Color, and More on a phone). Only the active
+  // home mounts it, and a press outside or Escape closes it.
+  it("closes the color picker when another bar button is pressed or Escape is hit", async () => {
     renderBar(2);
     fireEvent.click(screen.getByRole("button", { name: "Color" }));
     expect(
-      screen.getAllByRole("button", { name: "Set color to Blue" }).length,
-    ).toBeGreaterThan(0);
+      screen.getAllByRole("button", { name: "Set color to Blue" }),
+    ).toHaveLength(1);
     fireEvent.mouseDown(screen.getByRole("button", { name: "Delete" }));
     // It leaves through its exit animation.
+    await waitFor(() =>
+      expect(
+        screen.queryAllByRole("button", { name: "Set color to Blue" }),
+      ).toEqual([]),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Color" }));
+    expect(
+      screen.getAllByRole("button", { name: "Set color to Blue" }),
+    ).toHaveLength(1);
+    fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() =>
       expect(
         screen.queryAllByRole("button", { name: "Set color to Blue" }),

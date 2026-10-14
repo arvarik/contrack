@@ -6,7 +6,7 @@ import { useState, type RefObject } from "react";
 import { Pencil } from "lucide-react";
 import { Modal } from "./ui/Modal";
 import { Select } from "./ui/Select";
-import { FORM_INPUT, FORM_LABEL } from "../lib/styles";
+import { DIALOG_ACTIONS, FORM_INPUT, FORM_LABEL } from "../lib/styles";
 
 interface Field {
   key: string;
@@ -125,9 +125,6 @@ export const BulkEditFieldModal = ({
           <input
             id="bulk-edit-value"
             key={selectedField.key}
-            // Dialog the user opened to type a value.
-            // eslint-disable-next-line jsx-a11y/no-autofocus
-            autoFocus
             type={selectedField.type}
             inputMode={selectedField.type === "number" ? "numeric" : "text"}
             min={selectedField.type === "number" ? 1 : undefined}
@@ -159,7 +156,7 @@ export const BulkEditFieldModal = ({
         )}
 
         {/* Actions — stack on mobile, side-by-side on tablet+. */}
-        <div className="flex flex-col-reverse sm:flex-row gap-3 pt-1">
+        <div className={DIALOG_ACTIONS}>
           <button onClick={handleClose} className="btn-secondary flex-1">
             Cancel
           </button>

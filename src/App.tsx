@@ -425,6 +425,7 @@ const AppToaster = () => {
   // A phone's dialog is a sheet from the bottom, with Save at its foot.
   const dialogOpen = useDialogOpen();
   const centeredDialogs = useMediaQuery("(min-width: 640px)");
+  const hasMobileNav = useMediaQuery("(max-width: 767px)");
   const sheetOpen = dialogOpen && !centeredDialogs;
   return (
     <Toaster
@@ -432,6 +433,16 @@ const AppToaster = () => {
       // on a light-theme toast.
       theme={mode}
       position={sheetOpen ? "top-center" : "bottom-right"}
+      // Sonner switches from `mobileOffset` to `offset` at 600 px, while the
+      // mobile tab bar stays visible up to 767 px.
+      offset={
+        hasMobileNav
+          ? {
+              bottom:
+                "calc(var(--tabbar-space) + var(--keyboard-inset) + 12px)",
+            }
+          : undefined
+      }
       // Clear of the mobile tab bar at the bottom of the viewport.
       mobileOffset={{
         top: "calc(env(safe-area-inset-top) + 12px)",

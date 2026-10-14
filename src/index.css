@@ -508,7 +508,7 @@
       color var(--dur-base) var(--ease);
     cursor: pointer;
   }
-  @media (width >= 40rem) {
+  @media (width >= 40rem) and (pointer: fine) {
     .btn-primary,
     .btn-secondary,
     .btn-danger {
@@ -587,7 +587,7 @@
     padding: 0;
     min-width: 44px;
   }
-  @media (width >= 40rem) {
+  @media (width >= 40rem) and (pointer: fine) {
     .btn-icon {
       min-width: 40px;
     }

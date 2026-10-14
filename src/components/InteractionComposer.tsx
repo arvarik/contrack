@@ -60,6 +60,7 @@ import type { Interaction } from "../types";
 import { COMPOSER, KBD_SM, TAG_PILL } from "../lib/styles";
 import { cn } from "../lib/utils";
 import { MOD_KEY, touchFirst } from "../lib/platform";
+import { useElementWidthAtLeast } from "../hooks/useElementWidth";
 import { useAuth } from "./auth/AuthGate";
 import {
   draftKey,
@@ -297,7 +298,13 @@ const Composer = ({
    */
   const [opened, setOpened] = useState(() => !!draft && !isEmptyDraft(draft));
   const expanded = !collapsible || opened;
-  const rootRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null);
+  const setRootNode = useCallback((node: HTMLDivElement | null) => {
+    rootRef.current = node;
+    setRootEl(node);
+  }, []);
+  const wideComposer = useElementWidthAtLeast(rootEl, 560) ?? true;
   /** `type`, for the placeholder and the submit path, which run outside render. */
   const typeRef = useRef<InteractionKind>(type);
   const { data: allContacts = [] } = useContactNames();
@@ -618,7 +625,7 @@ const Composer = ({
    * composer's bar has room for it beside the type. The narrow one and the
    * dialog give it a row of its own, so their bar stays one row in view.
    */
-  const inlineDay = !compact && !collapsible;
+  const inlineDay = !compact && !collapsible && wideComposer;
   const dayField = (
     <input
       type="date"
@@ -626,6 +633,7 @@ const Composer = ({
       max={today}
       value={day || today}
       onMouseDown={(e) => {
+        if (touchFirst()) return;
         datePickerWasOpenRef.current = datePickerOpenRef.current;
         if (datePickerWasOpenRef.current) {
           e.preventDefault();
@@ -634,6 +642,7 @@ const Composer = ({
         }
       }}
       onClick={(e) => {
+        if (touchFirst()) return;
         if (datePickerWasOpenRef.current) {
           e.preventDefault();
           datePickerWasOpenRef.current = false;
@@ -676,7 +685,7 @@ const Composer = ({
     // from the fields and buttons inside it.
     // eslint-disable-next-line jsx-a11y/no-static-element-interactions
     <div
-      ref={rootRef}
+      ref={setRootNode}
       onKeyDown={onKeyDown}
       onFocus={collapsible ? () => setOpened(true) : undefined}
       onBlur={onBlur}
@@ -833,7 +842,7 @@ const Composer = ({
       {/* Action bar */}
       <div
         className={cn(
-          "flex items-center justify-between gap-3",
+          "flex flex-wrap items-center justify-between gap-2 sm:gap-3",
           compact
             ? "px-5 py-3.5 mt-4 bg-surface-container-low sticky bottom-0 sm:static"
             : "bg-surface-container-low/40 px-5 py-3",
