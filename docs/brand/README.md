@@ -239,6 +239,7 @@ The kit, in this folder:
 | `contrack-lockup-animated*.svg` | The lockup with the bird alive, for the README        |
 | `readme-flow*.svg`              | The four steps, stacked vertically beside their GIFs  |
 | `readme-tree*.svg`              | The branched tree at the foot of the README           |
+| `tree/*.svg`                    | The clickable tiles of the README tree                |
 | `social-preview.png`            | The repository's card, 1280 × 640                     |
 | `corvid-optical-sizes.png`      | The four masters, for this guide                      |
 | `corvid-mark-variants.png`      | The four versions on their grounds, for this guide    |
