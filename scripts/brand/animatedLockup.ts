@@ -167,7 +167,7 @@ export function loopPose(loop: PerchLoop, t: number): CorvidPose {
 }
 
 /** How many frames the loop is. Frame 0 and this frame are both at rest. */
-export const loopFrames = (loop: PerchLoop): number =>
+const loopFrames = (loop: PerchLoop): number =>
   Math.round((loop.duration * FRAME_RATE) / 1000);
 
 // Tracks: what each attribute is in every frame

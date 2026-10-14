@@ -16,6 +16,7 @@ import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import {
   BLINK_EVERY,
+  FRAME_RATE,
   REDUCED_MOTION_STYLE,
   livingBird,
   loopPose,
@@ -425,9 +426,13 @@ describe("the README's scenes", () => {
     }
   });
 
-  it("flies the bird from each step's ring to the next, and home to the first", () => {
+  it("flies the bird from each step's ring to the next on a 14-9-10-8 second rhythm, and home to the first", () => {
     const perches = flowPerches();
     const frames = flowFrames();
+    expect(FLOW_STEPS.map((step) => step.seconds)).toEqual([14, 9, 10, 8]);
+    expect(frames).toHaveLength(
+      FLOW_STEPS.reduce((sum, step) => sum + step.seconds * FRAME_RATE, 0),
+    );
     const home = bodyCenter(HOME_POSE);
     const ringOf = (frame: SceneFrame) =>
       perches.findIndex(
@@ -438,15 +443,22 @@ describe("the README's scenes", () => {
             0.01 &&
           Math.abs(frame.y - (perch.top + (home[1] / 100) * perch.size)) < 0.01,
       );
+    let offset = 0;
+    FLOW_STEPS.forEach((step, i) => {
+      expect(ringOf(frames[offset]!)).toBe(i);
+      for (const key of POSE_KEYS) {
+        expect(frames[offset]!.pose[key], `${step.label} ${key}`).toBe(
+          HOME_POSE[key],
+        );
+      }
+      offset += step.seconds * FRAME_RATE;
+    });
     const visits: number[] = [];
     for (const frame of frames) {
       const ring = ringOf(frame);
       if (ring >= 0 && visits.at(-1) !== ring) visits.push(ring);
     }
     expect(visits).toEqual([0, 1, 2, 3, 0]);
-    for (const key of POSE_KEYS) {
-      expect(frames[0]!.pose[key], key).toBe(HOME_POSE[key]);
-    }
     expect(FLOW_STEPS.map((step) => step.label)).toEqual([
       "Import",
       "Dedupe",
