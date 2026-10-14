@@ -377,6 +377,10 @@ export function requireAuth(
  */
 
 /**
+/** The methods that read. A read-only token may send these and no others. */
+const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/**
  * What an account with a temporary password still needs: to see the
  * instance's state, sign in, read its own account, set a password of its own,
  * and sign out. Nothing else, under `/api/auth` or anywhere else.
@@ -386,7 +390,6 @@ const PASSWORD_CHANGE_EXEMPT = new Set([
   "/api/auth/setup",
   "/api/auth/login",
   "/api/auth/logout",
-  "/api/auth/me",
   "/api/auth/change-password",
 ]);
 export function requirePasswordCurrent(
@@ -398,7 +401,12 @@ export function requirePasswordCurrent(
   if (!user || user.mustChangePassword !== 1) return next();
 
   const pathOnly = req.originalUrl.split("?")[0];
-  if (PASSWORD_CHANGE_EXEMPT.has(pathOnly)) return next();
+  if (
+    PASSWORD_CHANGE_EXEMPT.has(pathOnly) ||
+    (pathOnly === "/api/auth/me" && READ_METHODS.has(req.method))
+  ) {
+    return next();
+  }
 
   next(
     new AppError(
@@ -408,9 +416,6 @@ export function requirePasswordCurrent(
     ),
   );
 }
-
-/** The methods that read. A read-only token may send these and no others. */
-const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
 /**
  * Gate for a read-only token: it reads, and it talks to the MCP server.
@@ -433,7 +438,9 @@ export function guardReadOnlyToken(
 
   const path = trimTrailingSlashes(req.originalUrl.split("?")[0].toLowerCase());
   const reads =
-    READ_METHODS.has(req.method) && !path.startsWith("/api/connectors/google/");
+    READ_METHODS.has(req.method) &&
+    !path.startsWith("/api/connectors/google/") &&
+    path !== "/api/link-preview/unfurl";
   if (reads || (req.method === "POST" && path === "/api/mcp")) return next();
 
   next(
@@ -521,11 +528,13 @@ export function requireAdmin(
 const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 /**
- * Refuse a write that the session cookie signs when another site's page sent
- * it. `SameSite=Strict` does not cover a sibling subdomain
+ * Refuse a write that ambient authority (the session cookie or the implicit
+ * local-owner principal when `AUTH_REQUIRED=false`) signs when another site's
+ * page sent it. `SameSite=Strict` does not cover a sibling subdomain
  * (`other-app.example.com` beside `crm.example.com`), where a form can send a
- * `text/plain` POST with the cookie. So a cookie write must come from this
- * server's own origin:
+ * `text/plain` POST with the cookie, and an ungated loopback instance is
+ * reachable from any page in the same browser unless cross-site writes are
+ * refused. So an ambient write must come from this server's own origin:
  * - `Origin` present: it names this host or `PUBLIC_URL` (`isOwnOrigin`).
  * - `Origin` absent: `Sec-Fetch-Site` is `same-origin` or `none`, or absent. A
  *   client that sends neither header is not a browser.
@@ -539,11 +548,10 @@ export function refuseCrossSiteWrites(
   _res: Response,
   next: NextFunction,
 ): void {
-  if (
-    req.principal?.via !== "session" ||
-    !readCookie(req, COOKIE_NAME) ||
-    !WRITE_METHODS.has(req.method)
-  ) {
+  const ambient =
+    req.principal?.via === "implicit" ||
+    (req.principal?.via === "session" && Boolean(readCookie(req, COOKIE_NAME)));
+  if (!ambient || !WRITE_METHODS.has(req.method)) {
     return next();
   }
   const origin = req.headers.origin;

@@ -304,5 +304,14 @@ export function dispatchEvents(): void {
   } finally {
     dispatching = false;
     again = false;
+    if (stopped.size > 0 && process.env.DISABLE_BACKGROUND_JOBS !== "true") {
+      setTimeout(() => {
+        try {
+          dispatchEvents();
+        } catch {
+          /* logged inside dispatchEvents */
+        }
+      }, 1_000).unref();
+    }
   }
 }

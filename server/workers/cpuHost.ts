@@ -146,8 +146,22 @@ function ensureWorker(): Promise<Worker> {
     });
 
     spawned.on("exit", (code) => {
+      const wasActive = worker === spawned;
       worker = null;
       ready = null;
+      if (modelSpent && wasActive) {
+        disabled = true;
+      }
+      if (!settled) {
+        settled = true;
+        clearTimeout(timer);
+        reject(
+          new Error(
+            `The CPU worker exited during startup with code ${String(code)}`,
+          ),
+        );
+        return;
+      }
       if (pending.size > 0) {
         failAll(new Error(`The CPU worker exited with code ${String(code)}`));
       }

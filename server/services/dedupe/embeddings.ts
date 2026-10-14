@@ -16,6 +16,7 @@ import {
   VEC_ACTIVE_MATCH,
   VEC_METADATA_SQL,
 } from "../../db.ts";
+import { vecTableWidth } from "../../db/vec.ts";
 import { log } from "../../utils/logger.ts";
 import { scopeForOwnerId, type Scope } from "../../tenancy/scope.ts";
 import { runWithContext } from "../../tenancy/requestContext.ts";
@@ -56,6 +57,7 @@ export function isEmbeddingAvailable(): boolean {
 export function rebuildDedupeEmbeddingTable(dimension: number): void {
   sqlite.exec(`DROP TABLE IF EXISTS contact_embeddings`);
   sqlite.exec(vecTableDdl("contact_embeddings", dimension));
+  Object.assign(_stmts, prepareDedupeStmts());
   log.info(
     "DedupeEmbeddings",
     `Rebuilt contact_embeddings at ${dimension} dimensions (re-embed required)`,
@@ -84,7 +86,10 @@ export async function ensureDedupeEmbeddingStore(): Promise<number> {
 
   const state = getEmbeddingsState("dedupe");
   const changed =
-    !state || state.signature !== embedder.id || state.dimension !== dimension;
+    !state ||
+    state.signature !== embedder.id ||
+    state.dimension !== dimension ||
+    Number(vecTableWidth(sqlite, "contact_embeddings")) !== dimension;
   if (!changed) return 0;
 
   if (state) {
@@ -188,62 +193,85 @@ export async function generateSingleEmbedding(
 
 // sqlite-vec storage
 
+function prepareDedupeStmts() {
+  return {
+    // DELETE then INSERT, never INSERT OR REPLACE: on a partitioned vec0 table
+    // sqlite-vec 0.1.9 answers INSERT OR REPLACE with "UNIQUE constraint failed
+    // on contact_embeddings primary key" whether or not the partition changes.
+    //
+    // The owner comes from `contacts` in the same statement, not from the caller:
+    // an INSERT that omits a partition key stores NULL silently, and a NULL
+    // partition is invisible to every scoped KNN.
+    insert: sqlite.prepare(
+      `INSERT INTO contact_embeddings (contactId, ownerId, isGhost, isArchived, active, embedding)
+       SELECT c.id, c.ownerId, ${VEC_METADATA_SQL}, ?
+         FROM contacts c WHERE c.id = ? AND c.ownerId IS NOT NULL`,
+    ),
+    delete: sqlite.prepare(
+      // tenant-lint: allow owner-checked by caller
+      "DELETE FROM contact_embeddings WHERE contactId = ?",
+    ),
+    // `ownerId` is the partition key, so this counts one owner's chunks. The
+    // answer decides whether a scan pays a provider to backfill.
+    count: sqlite.prepare(
+      "SELECT COUNT(*) AS cnt FROM contact_embeddings WHERE ownerId = ?",
+    ),
+    exists: sqlite.prepare(
+      // tenant-lint: allow owner-checked by caller
+      "SELECT 1 FROM contact_embeddings WHERE contactId = ?",
+    ),
+    get: sqlite.prepare(
+      // tenant-lint: allow owner-checked by caller
+      "SELECT embedding FROM contact_embeddings WHERE contactId = ?",
+    ),
+    // `ownerId` is the vec0 partition key, so sqlite-vec reads one owner's chunks
+    // and neighbors never come from another account. A partition column takes no
+    // `IN (...)`, so it is one owner per statement.
+    knn: sqlite.prepare(`
+      SELECT contactId, distance
+      FROM contact_embeddings
+      WHERE embedding MATCH ?
+        AND ownerId = ?
+        AND ${VEC_ACTIVE_MATCH}
+        AND k = ?
+      ORDER BY distance
+    `),
+    // Embedding metadata for staleness tracking
+    upsertMeta: sqlite.prepare(
+      "INSERT OR REPLACE INTO dedupe_embedding_meta (contactId, embeddedAt) VALUES (?, ?)",
+    ),
+    clearOwner: sqlite.prepare(
+      "DELETE FROM contact_embeddings WHERE ownerId = ?",
+    ),
+    clearOwnerMeta: sqlite.prepare(
+      `DELETE FROM dedupe_embedding_meta
+        WHERE contactId IN (SELECT id FROM contacts WHERE ownerId = ?)`,
+    ),
+    deleteMeta: sqlite.prepare(
+      "DELETE FROM dedupe_embedding_meta WHERE contactId = ?",
+    ),
+  };
+}
+
 // Pre-compiled statements for performance
-const _stmts = {
-  // DELETE then INSERT, never INSERT OR REPLACE: on a partitioned vec0 table
-  // sqlite-vec 0.1.9 answers INSERT OR REPLACE with "UNIQUE constraint failed
-  // on contact_embeddings primary key" whether or not the partition changes.
-  //
-  // The owner comes from `contacts` in the same statement, not from the caller:
-  // an INSERT that omits a partition key stores NULL silently, and a NULL
-  // partition is invisible to every scoped KNN.
-  insert: sqlite.prepare(
-    `INSERT INTO contact_embeddings (contactId, ownerId, isGhost, isArchived, active, embedding)
-     SELECT c.id, c.ownerId, ${VEC_METADATA_SQL}, ?
-       FROM contacts c WHERE c.id = ? AND c.ownerId IS NOT NULL`,
-  ),
-  // tenant-lint: allow owner-checked by caller
-  delete: sqlite.prepare("DELETE FROM contact_embeddings WHERE contactId = ?"),
-  // `ownerId` is the partition key, so this counts one owner's chunks. The
-  // answer decides whether a scan pays a provider to backfill.
-  count: sqlite.prepare(
-    "SELECT COUNT(*) AS cnt FROM contact_embeddings WHERE ownerId = ?",
-  ),
-  exists: sqlite.prepare(
-    // tenant-lint: allow owner-checked by caller
-    "SELECT 1 FROM contact_embeddings WHERE contactId = ?",
-  ),
-  get: sqlite.prepare(
-    // tenant-lint: allow owner-checked by caller
-    "SELECT embedding FROM contact_embeddings WHERE contactId = ?",
-  ),
-  // `ownerId` is the vec0 partition key, so sqlite-vec reads one owner's chunks
-  // and neighbors never come from another account. A partition column takes no
-  // `IN (...)`, so it is one owner per statement.
-  knn: sqlite.prepare(`
-    SELECT contactId, distance
-    FROM contact_embeddings
-    WHERE embedding MATCH ?
-      AND ownerId = ?
-      AND ${VEC_ACTIVE_MATCH}
-      AND k = ?
-    ORDER BY distance
-  `),
-  // Embedding metadata for staleness tracking
-  upsertMeta: sqlite.prepare(
-    "INSERT OR REPLACE INTO dedupe_embedding_meta (contactId, embeddedAt) VALUES (?, ?)",
-  ),
-  clearOwner: sqlite.prepare(
-    "DELETE FROM contact_embeddings WHERE ownerId = ?",
-  ),
-  clearOwnerMeta: sqlite.prepare(
-    `DELETE FROM dedupe_embedding_meta
-      WHERE contactId IN (SELECT id FROM contacts WHERE ownerId = ?)`,
-  ),
-  deleteMeta: sqlite.prepare(
-    "DELETE FROM dedupe_embedding_meta WHERE contactId = ?",
-  ),
-};
+const _stmts = prepareDedupeStmts();
+
+/**
+ * Ensure `contact_embeddings` matches `dimension` on first boot before
+ * `ensureDedupeEmbeddingStore` has run (db/vec.ts creates it at 768 dims).
+ */
+function ensureDedupeTableWidth(dimension: number): void {
+  if (
+    !getEmbeddingsState("dedupe") &&
+    Number(vecTableWidth(sqlite, "contact_embeddings")) !== dimension
+  ) {
+    rebuildDedupeEmbeddingTable(dimension);
+    setEmbeddingsState(
+      { signature: currentEmbedder().id, dimension },
+      "dedupe",
+    );
+  }
+}
 
 /** Replace one contact's vector. Wrapped so a KNN never sees the gap. */
 const _upsertTxn = sqlite.transaction(
@@ -259,6 +287,7 @@ export function storeEmbedding(
   contactId: string,
   embedding: Float32Array,
 ): void {
+  ensureDedupeTableWidth(embedding.length);
   _upsertTxn(
     contactId,
     Buffer.from(embedding.buffer),
@@ -270,6 +299,8 @@ export function storeEmbedding(
 export function storeEmbeddings(
   entries: { contactId: string; embedding: Float32Array }[],
 ): void {
+  if (entries.length === 0) return;
+  ensureDedupeTableWidth(entries[0].embedding.length);
   const now = new Date().toISOString();
   const txn = sqlite.transaction(() => {
     for (const { contactId, embedding } of entries) {

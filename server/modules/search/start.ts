@@ -42,7 +42,9 @@ export function startSearch(): void {
       );
       // Reconcile the vector store with the configured embeddings capability
       // (rebuilds + re-embeds when the model changed), then fill any gaps.
-      return ensureEmbeddingStore().then(() => backfillSearchEmbeddings());
+      return ensureEmbeddingStore().then((count) =>
+        count > 0 ? count : backfillSearchEmbeddings(),
+      );
     })
     .then((count) => {
       if (count > 0)
@@ -54,7 +56,9 @@ export function startSearch(): void {
       // Dedupe shares the embeddings capability, so it runs once a backend is
       // ready: reconcile the store (rebuilding if the model changed), then fill
       // any gaps, so a partial index repairs itself.
-      return ensureDedupeEmbeddingStore().then(() => backfillEmbeddings());
+      return ensureDedupeEmbeddingStore().then((count) =>
+        count > 0 ? count : backfillEmbeddings(),
+      );
     })
     .then((count) => {
       if (count > 0)

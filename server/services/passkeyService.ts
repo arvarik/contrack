@@ -126,17 +126,30 @@ export async function createRegistrationOptions(
   return { ceremonyId, options };
 }
 
+const PASSKEY_NAME_MAX = 100;
+
 export async function verifyRegistration(
   req: Request,
   user: User,
   ceremonyId: string,
   response: RegistrationResponseJSON,
-  name?: string,
+  name?: unknown,
 ): Promise<{ passkey: PasskeySummary }> {
   if (!ceremonyId || !response) {
     throw new AppError("Invalid registration payload.", 400, {
       code: "VALIDATION_ERROR",
     });
+  }
+  if (
+    name !== undefined &&
+    name !== null &&
+    (typeof name !== "string" || name.trim().length > PASSKEY_NAME_MAX)
+  ) {
+    throw new AppError(
+      `Passkey name must be at most ${PASSKEY_NAME_MAX} characters.`,
+      400,
+      { code: "VALIDATION_ERROR" },
+    );
   }
 
   const challengeRow = sqlite
@@ -188,7 +201,8 @@ export async function verifyRegistration(
     verification.registrationInfo;
 
   const passkeyName =
-    name?.trim() || describeDevice(req.headers["user-agent"] ?? null);
+    (typeof name === "string" ? name.trim() : "") ||
+    describeDevice(req.headers["user-agent"] ?? null);
 
   const rawTransports =
     response.response.transports ?? credential.transports ?? null;
@@ -250,11 +264,18 @@ export function renamePasskey(
   id: string,
   name: string,
 ): { passkey: PasskeySummary } {
-  const trimmed = name?.trim();
+  const trimmed = typeof name === "string" ? name.trim() : "";
   if (!trimmed) {
     throw new AppError("Passkey name is required.", 400, {
       code: "VALIDATION_ERROR",
     });
+  }
+  if (trimmed.length > PASSKEY_NAME_MAX) {
+    throw new AppError(
+      `Passkey name must be at most ${PASSKEY_NAME_MAX} characters.`,
+      400,
+      { code: "VALIDATION_ERROR" },
+    );
   }
 
   const existing = sqlite

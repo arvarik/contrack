@@ -36,6 +36,7 @@ export async function evaluateBatchWithAI(
     score: number;
   }[],
   rid: string,
+  signal?: AbortSignal,
 ): Promise<
   { idx: number; isDuplicate: boolean; confidence: number; reasoning: string }[]
 > {
@@ -72,6 +73,7 @@ export async function evaluateBatchWithAI(
   try {
     const result = await generateFor("deep", {
       priority: "background",
+      signal,
       systemPrompt: AI_SYSTEM_PROMPT,
       prompt: `For each pair below, determine if they represent the SAME real-world person.
 

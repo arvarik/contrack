@@ -377,7 +377,7 @@ export async function embedQuery(
         )
       : await embedText(text, signal, embedder);
   } catch (err: unknown) {
-    signal?.throwIfAborted();
+    if (signal?.aborted) return null;
     log.warn(
       "HybridRetrieval",
       `Query embedding failed: ${getErrorMessage(err)}`,

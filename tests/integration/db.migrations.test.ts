@@ -64,6 +64,28 @@ const ADDED_SINCE_FIXTURE = [
   "contacts_archive_stamp_upd",
   // 0008_correspondent_names: connector_links gains a column
   "connector_links",
+  // ftsIndex remakes child FTS triggers to support deferred batch writes
+  "fts_tags_ai",
+  "fts_tags_ad",
+  "fts_tags_au",
+  "fts_interests_ai",
+  "fts_interests_ad",
+  "fts_interests_au",
+  "fts_emails_ai",
+  "fts_emails_ad",
+  "fts_emails_au",
+  "fts_phones_ai",
+  "fts_phones_ad",
+  "fts_phones_au",
+  "fts_addresses_ai",
+  "fts_addresses_ad",
+  "fts_addresses_au",
+  "fts_experience_ai",
+  "fts_experience_ad",
+  "fts_experience_au",
+  "fts_education_ai",
+  "fts_education_ad",
+  "fts_education_au",
 ];
 
 interface MasterRow {

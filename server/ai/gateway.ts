@@ -132,7 +132,7 @@ function runQueued(
       ? Math.min(requestedMs, 150_000)
       : 60_000;
   return withTimeout(
-    (signal) =>
+    (queueSignal) =>
       generations.run(
         () => {
           // Asked again when the slot comes up: a job can wait a while, and an
@@ -141,23 +141,28 @@ function runQueued(
           // sees.
           beforeSend?.();
           if (isAiOffForInstance()) throw aiOffError();
-          return call(resolved, {
-            ...rest,
-            signal,
+          return withTimeout(
+            (signal) =>
+              call(resolved, {
+                ...rest,
+                signal,
+                timeoutMs,
+                maxOutputTokens: options.maxOutputTokens ?? 4_096,
+                model: options.model ?? resolved.model,
+                routing: { prefer: resolved.modelClass },
+              }),
             timeoutMs,
-            maxOutputTokens: options.maxOutputTokens ?? 4_096,
-            model: options.model ?? resolved.model,
-            routing: { prefer: resolved.modelClass },
-          });
+            queueSignal,
+          );
         },
         {
-          signal,
+          signal: queueSignal,
           accountId: options.accountId,
           priority: options.priority,
           lane: options.lane,
         },
       ),
-    timeoutMs,
+    timeoutMs * 2,
     options.signal,
   );
 }

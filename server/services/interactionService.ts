@@ -746,7 +746,7 @@ export const interactionService = {
         )
       ) shared
       JOIN contacts c ON shared.relatedContactId = c.id
-      WHERE c.id != ? AND c.ownerId = ?
+      WHERE c.id != ? AND c.ownerId = ? AND c.deletedAt IS NULL AND c.canonicalId IS NULL
       GROUP BY c.id
       ORDER BY sharedInteractions DESC
       LIMIT ?

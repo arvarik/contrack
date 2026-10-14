@@ -734,7 +734,9 @@ export function mergeSearchResult(
     );
 
   // 4. TRANSACTION: Apply all mutations atomically
+  const changed = [...new Set(added.map((a) => a.field))];
   const txn = sqlite.transaction(() => {
+    const pinBefore = pinState(scope.ownerId, contactId);
     // Apply scalar updates via direct UPDATE (skip hydration overhead)
     if (Object.keys(scalarUpdate).length > 0) {
       // Validate field names against allowlist before interpolating into SQL
@@ -772,8 +774,26 @@ export function mergeSearchResult(
         "UPDATE contacts SET aiHydratedAt = ? WHERE id = ? AND ownerId = ?",
       )
       .run(new Date().toISOString(), contactId, scope.ownerId);
+
+    const pinAfter = pinState(scope.ownerId, contactId);
+    if (pinAfter.shown !== pinBefore.shown) {
+      sqlite
+        .prepare(
+          `UPDATE contacts SET geoSource = NULL WHERE id = ? AND ownerId = ?`,
+        )
+        .run(contactId, scope.ownerId);
+    }
+    if (changed.length > 0) {
+      recordEvent(scope, "contact.updated", contactId, {
+        changed,
+        bulk: false,
+      });
+    }
   });
   txn();
+  if (changed.length > 0) {
+    dispatchEvents();
+  }
 
   refreshAfterResearch(scope, contactId);
 

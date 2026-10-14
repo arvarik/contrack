@@ -29,7 +29,10 @@ import {
   newContactId,
 } from "../utils/helpers.ts";
 import { defaultAvatarUrl, isDefaultAvatarFor } from "./avatarService.ts";
-import { removeFromIndexQueue } from "./search/indexQueue.ts";
+import {
+  removeFromIndexQueue,
+  scheduleSearchIndexBatch,
+} from "./search/indexQueue.ts";
 import { doubleMetaphone } from "../utils/nlp/index.ts";
 import { log } from "../utils/logger.ts";
 import { importService } from "./importService.ts";
@@ -651,6 +654,9 @@ export const contactService = {
           start = end;
         } while (start < total);
       }
+      if (createdIds.length > 0) {
+        scheduleSearchIndexBatch(createdIds);
+      }
     } finally {
       dispatchAsBatch();
     }
@@ -707,6 +713,8 @@ export const contactService = {
       const changed = changedFields(update, data);
       if (typeof data.name === "string")
         update.phoneticHash = doubleMetaphone(data.name).primary;
+      const touchesAddress =
+        data.location !== undefined || Array.isArray(data.addresses);
       // buildContactUpdate returns only keys from a fixed allow list
       // (utils/helpers.ts), so only column names reach the SET clause.
       const updateFn = sqlite.transaction(() => {
@@ -719,20 +727,28 @@ export const contactService = {
           `UPDATE contacts SET ${setClauses}
             WHERE id = ? AND ownerId = ? AND deletedAt IS NULL AND canonicalId IS NULL`,
         );
+        const deleteAddrStmt = Array.isArray(data.addresses)
+          ? sqlite.prepare("DELETE FROM contact_addresses WHERE contactId = ?")
+          : null;
         for (const id of owned) {
-          const pinBefore = pinState(scope.ownerId, id);
+          const pinBefore = touchesAddress
+            ? pinState(scope.ownerId, id)
+            : undefined;
           if (stmt.run(...values, id, scope.ownerId).changes) {
             if (Array.isArray(data.addresses)) {
-              sqlite
-                .prepare("DELETE FROM contact_addresses WHERE contactId = ?")
-                .run(id);
-              contactRepo.insertChildRecords(id, {
-                addresses: data.addresses,
-              } as ChildRecordsPayload);
+              contactRepo.withDeferredChildFts(id, () => {
+                deleteAddrStmt!.run(id);
+                contactRepo._insertChildRecordsUnsafe(id, {
+                  addresses: data.addresses,
+                } as ChildRecordsPayload);
+              });
             } else if (data.location !== undefined) {
               syncLocationToAddresses(id, data.location);
             }
-            const released = releaseMovedPin(scope, id, pinBefore);
+            const released =
+              pinBefore !== undefined
+                ? releaseMovedPin(scope, id, pinBefore)
+                : false;
             changedIds.push(id);
             if (changed.length > 0) {
               recordEvent(scope, "contact.updated", id, {
@@ -764,9 +780,16 @@ export const contactService = {
     }
     redrawDefaultAvatar(scope, id, body, updateData);
     const changed = changedFields(updateData, body as Record<string, unknown>);
+    const touchesAddress =
+      body.location !== undefined || Array.isArray(body.addresses);
+    const childKeys = (
+      Object.keys(RELATION_REGISTRY) as (keyof typeof RELATION_REGISTRY)[]
+    ).filter((key) => body[key] !== undefined && Array.isArray(body[key]));
 
     const txn = sqlite.transaction(() => {
-      const pinBefore = pinState(scope.ownerId, id);
+      const pinBefore = touchesAddress
+        ? pinState(scope.ownerId, id)
+        : undefined;
       applyTrackingRules(scope, [id], body as Record<string, unknown>);
       db.update(schema.contacts)
         .set(updateData)
@@ -778,23 +801,26 @@ export const contactService = {
         )
         .run();
 
-      for (const [bodyKey, config] of Object.entries(RELATION_REGISTRY)) {
-        const key = bodyKey as keyof typeof RELATION_REGISTRY;
-        if (body[key] !== undefined && Array.isArray(body[key])) {
-          sqlite
-            .prepare(`DELETE FROM ${config.dbName} WHERE contactId = ?`)
-            .run(id);
-          contactRepo.insertChildRecords(id, {
-            [key]: body[key],
-          } as ChildRecordsPayload);
-        }
+      if (childKeys.length > 0) {
+        contactRepo.withDeferredChildFts(id, () => {
+          const childPayload: ChildRecordsPayload = {};
+          for (const key of childKeys) {
+            const config = RELATION_REGISTRY[key];
+            sqlite
+              .prepare(`DELETE FROM ${config.dbName} WHERE contactId = ?`)
+              .run(id);
+            (childPayload as Record<string, unknown>)[key] = body[key];
+          }
+          contactRepo._insertChildRecordsUnsafe(id, childPayload);
+        });
       }
       if (!Array.isArray(body.addresses) && body.location !== undefined) {
         syncLocationToAddresses(id, body.location);
       }
 
       followUpTo(scope, [id], body.nextFollowUpAt);
-      const released = releaseMovedPin(scope, id, pinBefore);
+      const released =
+        pinBefore !== undefined ? releaseMovedPin(scope, id, pinBefore) : false;
       if (changed.length > 0) {
         recordEvent(scope, "contact.updated", id, {
           changed: released ? [...changed, "geoSource"] : changed,
@@ -828,8 +854,12 @@ export const contactService = {
     // field it can move. It records the same event as a PUT that sets the
     // same fields, and so gets the same reactions.
     const changed = changedFields(update);
+    const touchesAddress =
+      body.location !== undefined || Array.isArray(body.addresses);
     const write = sqlite.transaction(() => {
-      const pinBefore = pinState(scope.ownerId, id);
+      const pinBefore = touchesAddress
+        ? pinState(scope.ownerId, id)
+        : undefined;
       applyTrackingRules(scope, [id], body);
       db.update(schema.contacts)
         .set(update)
@@ -844,7 +874,8 @@ export const contactService = {
         syncLocationToAddresses(id, body.location);
       }
       followUpTo(scope, [id], body.nextFollowUpAt);
-      const released = releaseMovedPin(scope, id, pinBefore);
+      const released =
+        pinBefore !== undefined ? releaseMovedPin(scope, id, pinBefore) : false;
       if (changed.length > 0) {
         recordEvent(scope, "contact.updated", id, {
           changed: released ? [...changed, "geoSource"] : changed,
@@ -1174,7 +1205,7 @@ export const contactService = {
     const all = sqlite
       .prepare(
         `SELECT * FROM contacts
-          WHERE ownerId = ? AND isArchived = 1 AND deletedAt IS NULL
+          WHERE ownerId = ? AND isArchived = 1 AND deletedAt IS NULL AND canonicalId IS NULL AND isGhost = 0
           ORDER BY COALESCE(archivedAt, updatedAt) DESC`,
       )
       .all(scope.ownerId);

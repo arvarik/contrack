@@ -122,5 +122,10 @@ export interface AIProvider {
    * models embed by task reads it (Gemini's task types), others ignore it, and
    * a call without one gets the model's default.
    */
-  embed?(texts: string[], model: string, use?: EmbedUse): Promise<number[][]>;
+  embed?(
+    texts: string[],
+    model: string,
+    use?: EmbedUse,
+    signal?: AbortSignal,
+  ): Promise<number[][]>;
 }

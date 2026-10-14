@@ -261,6 +261,9 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
 
     let totalFetched = 0;
     let summaryCount = 0;
+    let stagesSucceeded = 0;
+    let stagesFailed = 0;
+    let firstStageError: unknown = null;
 
     // 1. Contacts (People API)
     if (config.syncContacts !== false) {
@@ -369,12 +372,16 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
         if (nextSyncToken) {
           contactsSyncToken = nextSyncToken;
         }
+        stagesSucceeded++;
       } catch (err: unknown) {
+        signal.throwIfAborted();
         if (isAuthError(err)) {
           throw new ConnectorAuthError(
             `Google authentication failed during contacts sync: ${(err as Error).message}`,
           );
         }
+        stagesFailed++;
+        firstStageError ??= err;
         ctx.log(`Error syncing Google contacts: ${(err as Error).message}`);
       }
     }
@@ -391,6 +398,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
         if (gmailHistoryId) {
           try {
             let pageToken: string | undefined;
+            let lastPageHistoryId: string | undefined;
             do {
               signal.throwIfAborted();
               const res = await gmail.users.history.list(
@@ -405,14 +413,19 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
 
               const histories = res.data.history || [];
               for (const h of histories) {
+                if (h.id) lastPageHistoryId = h.id;
                 if (h.messagesAdded) {
                   for (const ma of h.messagesAdded) {
                     if (ma.message?.id) messageIds.push(ma.message.id);
                   }
                 }
               }
-              if (res.data.historyId) newHistoryId = res.data.historyId;
               pageToken = res.data.nextPageToken || undefined;
+              if (!pageToken && res.data.historyId) {
+                newHistoryId = res.data.historyId;
+              } else if (pageToken && messageIds.length >= maxMessages) {
+                newHistoryId = lastPageHistoryId ?? gmailHistoryId;
+              }
             } while (pageToken && messageIds.length < maxMessages);
           } catch (err: unknown) {
             const code =
@@ -589,12 +602,16 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
         if (newHistoryId) {
           gmailHistoryId = newHistoryId;
         }
+        stagesSucceeded++;
       } catch (err: unknown) {
+        signal.throwIfAborted();
         if (isAuthError(err)) {
           throw new ConnectorAuthError(
             `Google authentication failed during Gmail sync: ${(err as Error).message}`,
           );
         }
+        stagesFailed++;
+        firstStageError ??= err;
         ctx.log(`Error syncing Gmail: ${(err as Error).message}`);
       }
     }
@@ -641,7 +658,14 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
           const now = new Date();
 
           for (const event of items) {
-            if (!event.id || event.status === "cancelled") continue;
+            if (!event.id) continue;
+            if (event.status === "cancelled") {
+              yield {
+                kind: "upcoming_cancelled",
+                externalId: `google:calendar:${event.id}`,
+              };
+              continue;
+            }
 
             const startStr = event.start?.dateTime || event.start?.date;
             const endStr = event.end?.dateTime || event.end?.date;
@@ -719,21 +743,30 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
         if (nextSyncToken) {
           calendarSyncToken = nextSyncToken;
         }
+        stagesSucceeded++;
       } catch (err: unknown) {
+        signal.throwIfAborted();
         if (isAuthError(err)) {
           throw new ConnectorAuthError(
             `Google authentication failed during Calendar sync: ${(err as Error).message}`,
           );
         }
+        stagesFailed++;
+        firstStageError ??= err;
         ctx.log(`Error syncing Google Calendar: ${(err as Error).message}`);
       }
+    }
+
+    if (stagesFailed > 0 && stagesSucceeded === 0 && firstStageError) {
+      throw firstStageError;
     }
 
     return {
       contactsSyncToken,
       calendarSyncToken,
       gmailHistoryId,
-      lastSyncAt: new Date().toISOString(),
+      lastSyncAt:
+        stagesFailed === 0 ? new Date().toISOString() : cursor.lastSyncAt,
     };
   },
 };

@@ -335,6 +335,25 @@ export async function updateConnector(
 
   if (updates.config !== undefined) {
     const parsedConfig = adapter.configSchema.parse(updates.config);
+    if (
+      existing.secret &&
+      (updates.secret === undefined || updates.secret === null)
+    ) {
+      let saved: Record<string, unknown> = {};
+      try {
+        saved = JSON.parse(existing.config || "{}");
+      } catch {
+        // An unreadable config matches nothing below.
+      }
+      const next = parsedConfig as Record<string, unknown>;
+      if (DESTINATION_KEYS.some((key) => saved[key] !== next[key])) {
+        throw new AppError(
+          "Type the password again to save a changed server or username",
+          400,
+          { code: "SECRET_NEEDS_REENTRY" },
+        );
+      }
+    }
     nextConfig = JSON.stringify(parsedConfig);
   }
 
