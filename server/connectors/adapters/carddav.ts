@@ -64,24 +64,6 @@ const DAV_TIMEOUT_MS = 15_000;
 const DAV_DEADLINE_MS = 60_000;
 export const MULTIGET_BATCH_SIZE = 10;
 const MAX_SYNC_PAGES = 50;
-const MAX_CACHED_VCARDS = 500;
-
-/**
- * Small bounded in-memory cache of recently pulled raw vCard bodies keyed by
- * normalized href. Push always attempts a live `GET` first; this cache serves
- * as a fallback when a server or test mock does not answer `GET` on card URLs.
- */
-const recentPulledVCards = new Map<string, string>();
-
-function cachePulledVCard(href: string, vcard: string): void {
-  if (recentPulledVCards.has(href)) {
-    recentPulledVCards.delete(href);
-  } else if (recentPulledVCards.size >= MAX_CACHED_VCARDS) {
-    const oldest = recentPulledVCards.keys().next().value;
-    if (oldest !== undefined) recentPulledVCards.delete(oldest);
-  }
-  recentPulledVCards.set(href, vcard);
-}
 
 class DavResponseTooLargeError extends ConnectorConfigError {
   constructor(maxBytes: number) {
@@ -920,7 +902,6 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
             deletedHrefs.add(normHref);
             toFetchHrefs.delete(normHref);
             delete nextEtags[normHref];
-            recentPulledVCards.delete(normHref);
             continue;
           }
 
@@ -1001,7 +982,6 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
         if (!seenHrefs.has(oldHref)) {
           deletedHrefs.add(oldHref);
           delete nextEtags[oldHref];
-          recentPulledVCards.delete(oldHref);
         }
       }
     }
@@ -1092,7 +1072,6 @@ ${hrefElements}
           if (item.status !== null && /\s(404|410)(\s|$)/.test(item.status)) {
             deletedHrefs.add(normHref);
             delete nextEtags[normHref];
-            recentPulledVCards.delete(normHref);
             continue;
           }
           if (!item.addressData) continue;
@@ -1120,7 +1099,6 @@ ${hrefElements}
             if (getRes.status === 404 || getRes.status === 410) {
               deletedHrefs.add(href);
               delete nextEtags[href];
-              recentPulledVCards.delete(href);
               continue;
             }
             if (getRes.status >= 200 && getRes.status < 300 && getRes.body) {
@@ -1149,7 +1127,6 @@ ${hrefElements}
         if (entry.etag) {
           nextEtags[entry.href] = entry.etag;
         }
-        cachePulledVCard(entry.href, entry.vcard);
 
         const { contacts } = extractVCardContacts(entry.vcard);
         for (const parsedContact of contacts) {
@@ -1193,7 +1170,6 @@ ${hrefElements}
 
     for (const removedHref of removedExternalIds) {
       delete etags[removedHref];
-      recentPulledVCards.delete(removedHref);
     }
 
     // Keep pushedHashes pruned to only active contacts in ctx.contacts
@@ -1354,9 +1330,8 @@ ${hrefElements}
           if (err instanceof ConnectorAuthError) throw err;
         }
 
-        const baseCard = existingVCard ?? recentPulledVCards.get(targetHref);
-        if (baseCard) {
-          vcardBody = patchVCard(baseCard, contact.vcardInput);
+        if (existingVCard) {
+          vcardBody = patchVCard(existingVCard, contact.vcardInput);
         } else {
           vcardBody = serializeVCard(contact.vcardInput);
         }
@@ -1404,7 +1379,6 @@ ${hrefElements}
       if (putRes.status >= 200 && putRes.status < 300) {
         pushed++;
         pushedHashes[contact.id] = currentHash;
-        cachePulledVCard(targetHref, vcardBody);
         const responseEtag = cleanEtag(putRes.headers.get("etag"));
         if (responseEtag) {
           etags[targetHref] = responseEtag;
