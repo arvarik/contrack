@@ -58,7 +58,9 @@ WORKDIR /app
 #   it, but its Node build loads onnxruntime-node and never imports it.
 # - Unreachable transitive packages, non-Node/non-SQLite bundles, C/C++ and
 #   TypeScript sources, type declarations, source maps and markdown docs in
-#   node_modules are never loaded at runtime.
+#   node_modules are never loaded at runtime. parse5 is one: only cheerio's
+#   full entry loads it, and the server imports cheerio/slim
+#   (tests/unit/server/imageImports.test.ts keeps it that way).
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts \
     && ort=node_modules/onnxruntime-node/bin/napi-v6 \
