@@ -8,7 +8,7 @@ import { useDeferredValue, useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useAddToList, useContacts } from "../../api";
 import { MENU_ITEM, MENU_ITEM_SELECTED, MENU_PANEL } from "../../lib/styles";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { SearchField } from "../../components/ui/SearchField";
 
 /** The most people the suggestions show. A longer name narrows them. */
@@ -51,7 +51,9 @@ export const AddPeople = ({ list, memberIds }: AddPeopleProps) => {
     add
       .mutateAsync({ listId: list.id, contactId: person.id })
       .then(() => toast.success(`${person.name} added to ${list.name}`))
-      .catch(() => toast.error(`Could not add ${person.name}`));
+      .catch((err: unknown) =>
+        toast.error(`Could not add ${person.name}: ${errorText(err)}`),
+      );
   };
 
   return (
@@ -67,6 +69,10 @@ export const AddPeople = ({ list, memberIds }: AddPeopleProps) => {
       value={query}
       onChange={(e) => {
         setQuery(e.target.value);
+        setActive(0);
+      }}
+      onClear={() => {
+        setQuery("");
         setActive(0);
       }}
       onKeyDown={(e) => {

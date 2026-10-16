@@ -18,7 +18,7 @@ import {
 import { type ContactList } from "../../types";
 import type { ListMember } from "../../../shared/contracts/lists";
 import { ICON_OPTIONS, ListIcon } from "../contact-list/CreateListModal";
-import { cn } from "../../lib/utils";
+import { cn, errorText, plural } from "../../lib/utils";
 import { withUndo } from "../../lib/undoToast";
 import {
   ICON_BTN,
@@ -29,6 +29,7 @@ import {
 import { AddPeople } from "./AddPeople";
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { RailTooltip } from "../../components/ui/RailTooltip";
+import { NO_AUTOCORRECT } from "../../components/ui/SearchField";
 
 interface ListDetailPanelProps {
   list: ContactList;
@@ -69,19 +70,25 @@ export const ListDetailPanel = ({
     updateList
       .mutateAsync({ id: list.id, data })
       .then(() => true)
-      .catch(() => {
-        toast.error("Could not save the list");
+      .catch((err: unknown) => {
+        toast.error(`Could not save the list: ${errorText(err)}`);
         return false;
       });
 
   const saveName = () => {
     const next = name.trim();
-    if (!next) return setName(savedName.current);
+    if (!next) {
+      setName(savedName.current);
+      return;
+    }
+    setName(next);
     if (next === savedName.current) return;
     const before = savedName.current;
     savedName.current = next;
     void save({ name: next }).then((ok) => {
-      if (!ok) savedName.current = before;
+      if (!ok && savedName.current === next) {
+        savedName.current = before;
+      }
     });
   };
 
@@ -98,8 +105,8 @@ export const ListDetailPanel = ({
       await deleteList.mutateAsync(list.id);
       toast.success(`Deleted "${list.name}"`);
       onDeleted();
-    } catch {
-      toast.error("Could not delete the list");
+    } catch (err: unknown) {
+      toast.error(`Could not delete the list: ${errorText(err)}`);
     }
   };
 
@@ -116,11 +123,15 @@ export const ListDetailPanel = ({
         withUndo(() =>
           addToList
             .mutateAsync({ listId: list.id, contactId: member.id })
-            .catch(() => toast.error(`Could not add ${member.name} back`)),
+            .catch((err: unknown) =>
+              toast.error(
+                `Could not add ${member.name} back: ${errorText(err)}`,
+              ),
+            ),
         ),
       );
-    } catch {
-      toast.error(`Could not remove ${member.name}`);
+    } catch (err: unknown) {
+      toast.error(`Could not remove ${member.name}: ${errorText(err)}`);
     } finally {
       setRemovingId(null);
     }
@@ -147,7 +158,7 @@ export const ListDetailPanel = ({
               {list.name}
             </h3>
             <p className="text-xs text-on-surface-variant mt-0.5 whitespace-nowrap">
-              {members.length} {members.length === 1 ? "contact" : "contacts"}
+              {plural(members.length, "contact", "contacts")}
             </p>
           </div>
           <button
@@ -170,7 +181,7 @@ export const ListDetailPanel = ({
               {list.name}
             </h3>
             <p className="text-xs text-on-surface-variant">
-              {members.length} {members.length === 1 ? "contact" : "contacts"}
+              {plural(members.length, "contact", "contacts")}
             </p>
           </div>
           <button
@@ -242,6 +253,7 @@ export const ListDetailPanel = ({
             }}
             className="w-full min-h-[44px] sm:pointer-fine:min-h-0 bg-surface-container-low rounded-xl px-4 py-2.5 text-base sm:text-sm font-bold"
             placeholder="List name"
+            {...NO_AUTOCORRECT}
           />
         </section>
 

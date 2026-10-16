@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ArchiveRestore, Loader2, Trash2 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { toast } from "sonner";
@@ -12,6 +12,8 @@ import { ConfirmDialog } from "../components/ui/ConfirmDialog";
 import { RailTooltip } from "../components/ui/RailTooltip";
 import { CARD, ICON_BTN, SECTION_HEADING } from "../lib/styles";
 import { EmptyState } from "../components/ui/EmptyState";
+import { LoadFailed } from "../components/ui/LoadFailed";
+import { SearchField } from "../components/ui/SearchField";
 import { CorvidMark } from "../components/brand/CorvidMark";
 import { cn, errorText, plural } from "../lib/utils";
 import { fallbackAvatarUrl } from "../lib/avatar";
@@ -31,14 +33,23 @@ function daysUntilPurge(deletedAt: string, retentionDays = 30): number {
 const days = (count: number) => plural(count, "day", "days");
 
 export const TrashView = () => {
-  const { data, isLoading } = useTrash();
-  const items = data?.items ?? [];
+  const { data, isLoading, isError = false, refetch } = useTrash();
+  const items = useMemo(() => data?.items ?? [], [data?.items]);
   const retentionDays = data?.retentionDays ?? 30;
   const restore = useRestoreContact();
   const purge = usePurgeTrashedContact();
   const empty = useEmptyTrash();
+  const [searchQuery, setSearchQuery] = useState("");
   const [purgeTarget, setPurgeTarget] = useState<TrashedContact | null>(null);
   const [confirmEmpty, setConfirmEmpty] = useState(false);
+
+  const filteredItems = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return items;
+    return items.filter((item) =>
+      [item.name, item.company].some((v) => v?.toLowerCase().includes(q)),
+    );
+  }, [items, searchQuery]);
 
   const handleRestore = (item: TrashedContact) => {
     restore.mutate(item.id, {
@@ -85,19 +96,39 @@ export const TrashView = () => {
     );
   }
 
+  if (isError && items.length === 0) {
+    return (
+      <div className={SETTINGS_PAGE}>
+        <LoadFailed what="the Trash" onRetry={() => void refetch?.()} />
+      </div>
+    );
+  }
+
   if (items.length === 0) {
     return (
       <div className={SETTINGS_PAGE}>
         <EmptyState
           illustration={<CorvidMark size={64} className="text-primary/60" />}
           title="Trash is empty"
+          body={`Deleted contacts wait here for ${days(retentionDays)} before they are removed for good`}
         />
       </div>
     );
   }
 
   return (
-    <div className={SETTINGS_PAGE}>
+    <div className={cn(SETTINGS_PAGE, "space-y-4")}>
+      <SearchField
+        className="max-w-sm"
+        type="search"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder="Filter Trash"
+        aria-label="Filter Trash"
+        onClear={() => setSearchQuery("")}
+        clearLabel="Clear filter text"
+      />
+
       <div className={cn(CARD, "p-0")}>
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 sm:px-6 py-3 bg-surface-container-low rounded-t-2xl">
           <p className={SECTION_HEADING}>
@@ -115,67 +146,75 @@ export const TrashView = () => {
           </button>
         </div>
         <div className="py-2">
-          <AnimatePresence initial={false}>
-            {items.map((item) => {
-              const daysLeft = daysUntilPurge(item.deletedAt, retentionDays);
-              return (
-                <motion.div
-                  key={item.id}
-                  layout
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, x: -24 }}
-                  className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-2.5"
-                >
-                  <img
-                    src={item.avatarUrl || fallbackAvatarUrl(item.name)}
-                    alt=""
-                    className="w-10 h-10 rounded-full object-cover bg-surface-container-high grayscale opacity-70 shrink-0"
-                  />
-                  {/* The words wrap rather than cut: on a phone the row
-                      is narrow, and the days left are the point of it. */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-on-surface break-words">
-                      {item.name}
-                    </p>
-                    <p className="text-xs text-on-surface-variant">
-                      {item.company ? `${item.company} · ` : ""}
-                      Deleted {formatRelative(item.deletedAt, "")} · gone for
-                      good in {days(daysLeft)}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => handleRestore(item)}
-                    disabled={restore.isPending}
-                    className="btn-secondary btn-sm shrink-0"
-                    aria-label={`Restore ${item.name}`}
+          {filteredItems.length === 0 ? (
+            <p className="px-4 sm:px-6 py-4 text-sm text-on-surface-variant">
+              No contact in the Trash matches &ldquo;{searchQuery.trim()}&rdquo;
+            </p>
+          ) : (
+            <AnimatePresence initial={false}>
+              {filteredItems.map((item) => {
+                const daysLeft = daysUntilPurge(item.deletedAt, retentionDays);
+                return (
+                  <motion.div
+                    key={item.id}
+                    layout
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, x: -24 }}
+                    className="flex items-center gap-3 sm:gap-4 px-4 sm:px-6 py-2.5"
                   >
-                    <ArchiveRestore
-                      aria-hidden="true"
-                      className="w-3.5 h-3.5"
+                    <img
+                      src={item.avatarUrl || fallbackAvatarUrl(item.name)}
+                      alt=""
+                      className="w-10 h-10 rounded-full object-cover bg-surface-container-high grayscale opacity-70 shrink-0"
                     />
-                    Restore
-                  </button>
-                  <RailTooltip
-                    label="Delete forever"
-                    side="left"
-                    className="shrink-0"
-                  >
+                    {/* The words wrap rather than cut: on a phone the row
+                        is narrow, and the days left are the point of it. */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-on-surface break-words">
+                        {item.name}
+                      </p>
+                      <p className="text-xs text-on-surface-variant">
+                        {item.company ? `${item.company} · ` : ""}
+                        Deleted {formatRelative(item.deletedAt, "")} ·{" "}
+                        {daysLeft === 0
+                          ? "gone for good today"
+                          : `gone for good in ${days(daysLeft)}`}
+                      </p>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => setPurgeTarget(item)}
-                      disabled={purge.isPending}
-                      className={cn(ICON_BTN, "hover:text-error")}
-                      aria-label={`Delete ${item.name} forever`}
+                      onClick={() => handleRestore(item)}
+                      disabled={restore.isPending || purge.isPending}
+                      className="btn-secondary btn-sm shrink-0"
+                      aria-label={`Restore ${item.name}`}
                     >
-                      <Trash2 aria-hidden="true" className="w-4 h-4" />
+                      <ArchiveRestore
+                        aria-hidden="true"
+                        className="w-3.5 h-3.5"
+                      />
+                      Restore
                     </button>
-                  </RailTooltip>
-                </motion.div>
-              );
-            })}
-          </AnimatePresence>
+                    <RailTooltip
+                      label="Delete forever"
+                      side="left"
+                      className="shrink-0"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setPurgeTarget(item)}
+                        disabled={purge.isPending || restore.isPending}
+                        className={cn(ICON_BTN, "hover:text-error")}
+                        aria-label={`Delete ${item.name} forever`}
+                      >
+                        <Trash2 aria-hidden="true" className="w-4 h-4" />
+                      </button>
+                    </RailTooltip>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          )}
         </div>
       </div>
 

@@ -22,29 +22,28 @@ const FORMATS: {
     icon: Contact,
     title: "vCard (.vcf)",
     description:
-      "Opens in Apple Contacts, Google Contacts, Outlook, and any phone. Import it back here at any time",
+      "For Apple Contacts, Google Contacts, Outlook and phones. Re-imports losslessly",
   },
   {
     href: "/api/export/csv",
     icon: FileSpreadsheet,
     title: "Spreadsheet (.csv)",
     description:
-      "One row per contact, for a spreadsheet. Emails, phones and tags are joined into single cells",
+      "One row per contact for Excel or Sheets, with emails, phones and tags in single cells",
   },
   {
     href: "/api/export/json",
     icon: FileJson,
     title: "Everything (.json)",
     description:
-      "Every contact, interaction, list, follow-up and merge. The complete copy",
+      "Full backup of your contacts, interactions, lists, follow-ups and merges",
   },
 ];
 
 export const ExportCard = () => (
   <div className={cn(SETTINGS_CARD, "space-y-4")}>
     <p className="text-sm text-on-surface-variant text-pretty">
-      Your data is yours. Each file holds your own contacts only, never anyone
-      else&rsquo;s on this instance
+      Your data is yours. Each export holds your own contacts and activity only
     </p>
 
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
