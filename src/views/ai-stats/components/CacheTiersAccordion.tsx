@@ -28,18 +28,18 @@ const TIER_LABELS: Record<string, string> = {
  */
 const TIER_DESCRIPTIONS: Record<string, string> = {
   briefing:
-    "Catch me up summaries written for a single contact. Reused means the summary was reused instead of asking the model for it again",
+    "Catch me up summaries for a contact, reused until the contact changes",
   rerank:
-    "AI reordering of search results by relevance. Reused means this query was ranked before, so no model call was needed",
+    "AI relevance ranking for search results, reused when you repeat a query",
   synthesis:
-    "The written answer to an Ask Contrack question. Reused means the same question had already been answered",
+    "Written answers in Ask Contrack, reused when you ask the same question",
   mentions:
-    "Finding the people named inside a note you wrote. Reused means that exact note text was already parsed",
+    "People detected inside a note, reused when the note text is unchanged",
   dailyInsight:
-    "The daily observation shown on the Pulse page. Reused means today's insight was already generated",
+    "The daily observation on Pulse, reused for the rest of the day",
   queryParse:
-    "The filters pulled out of an Ask Contrack question, such as a city, a company or a job title. Reused means this question was read before",
-  hyde: "An expanded version of your question, used to search by meaning instead of by keyword. Reused means the same question was expanded before",
+    "Filters extracted from an Ask Contrack question, reused for identical questions",
+  hyde: "Expanded search queries for meaning search, reused for identical questions",
 };
 
 function formatTTL(ms: number): string {
@@ -64,6 +64,7 @@ export const CacheTiersAccordion = ({
   return (
     <div className={CARD}>
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
         className="hit-area w-full flex items-center gap-2 group"

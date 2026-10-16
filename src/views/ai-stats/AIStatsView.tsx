@@ -204,6 +204,7 @@ export const AIStatsView = () => {
               {hasNextPage && (
                 <div className="pt-3 flex justify-center">
                   <button
+                    type="button"
                     onClick={() => void fetchNextPage()}
                     disabled={isFetchingNextPage}
                     className="btn-secondary"

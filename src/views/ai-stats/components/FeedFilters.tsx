@@ -38,6 +38,7 @@ export const FeedFilters = ({
       />
 
       <button
+        type="button"
         onClick={() => onSortChange(sort === "newest" ? "oldest" : "newest")}
         className={cn(
           "hit-area ml-auto flex items-center gap-1.5 px-3 h-9 rounded-lg text-xs font-bold",

@@ -105,7 +105,11 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     keywords: [
       "account",
       "profile",
+      "photo",
+      "avatar",
       "password",
+      "passkey",
+      "passkeys",
       "sign out",
       "logout",
       "devices",
@@ -116,19 +120,25 @@ export const SETTINGS_PAGES: SettingsPage[] = [
     ],
     rows: [
       {
-        id: "session",
-        label: "Session",
-        keywords: ["session", "logout", "sign out"],
-      },
-      {
         id: "profile",
         label: "Profile",
-        keywords: ["profile", "name", "email", "username"],
+        keywords: ["profile", "name", "email", "username", "photo", "avatar"],
       },
       {
         id: "password",
-        label: "Password",
-        keywords: ["password", "security"],
+        label: "Sign-in methods",
+        keywords: [
+          "password",
+          "passkey",
+          "passkeys",
+          "security",
+          "sign-in methods",
+        ],
+      },
+      {
+        id: "devices",
+        label: "Devices",
+        keywords: ["devices", "signed in"],
       },
       {
         id: "tokens",
@@ -136,9 +146,9 @@ export const SETTINGS_PAGES: SettingsPage[] = [
         keywords: ["tokens", "api key", "developer"],
       },
       {
-        id: "devices",
-        label: "Devices",
-        keywords: ["devices", "signed in"],
+        id: "session",
+        label: "Session",
+        keywords: ["session", "logout", "sign out"],
       },
     ],
     load: () =>
