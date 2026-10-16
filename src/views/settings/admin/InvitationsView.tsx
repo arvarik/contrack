@@ -27,7 +27,7 @@ import {
   type SegmentedOption,
 } from "../../../components/ui/Segmented";
 import { DIALOG_ACTIONS } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import { Switch } from "../../../components/ui/Switch";
 import { SETTINGS_INPUT, SETTINGS_LABEL } from "../layout";
 import {
@@ -58,6 +58,8 @@ const EXPIRY_PRESETS: readonly SegmentedOption<number>[] = [
   { value: 30, label: "30 days" },
 ];
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+$/;
+
 const NewInvitationModal = ({
   isOpen,
   onClose,
@@ -80,9 +82,9 @@ const NewInvitationModal = ({
     sendAttempted: boolean;
   } | null>(null);
 
-  const close = () => {
-    onClose();
-    window.setTimeout(() => {
+  React.useEffect(() => {
+    if (isOpen) return;
+    const timer = window.setTimeout(() => {
       setEmail("");
       setRole("member");
       setExpiresInDays(7);
@@ -90,7 +92,13 @@ const NewInvitationModal = ({
       setCreatedResult(null);
       create.reset();
     }, 200);
-  };
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  const close = () => onClose();
+  const trimmedEmail = email.trim();
+  const emailValid = !trimmedEmail || EMAIL_PATTERN.test(trimmedEmail);
 
   return (
     <Modal
@@ -124,7 +132,10 @@ const NewInvitationModal = ({
         <form
           onSubmit={(event) => {
             event.preventDefault();
-            const trimmedEmail = email.trim();
+            if (!emailValid) {
+              toast.error("Enter a valid email address");
+              return;
+            }
             const shouldSend =
               mailConfigured && Boolean(trimmedEmail) && sendByEmail;
             create.mutate(
@@ -142,7 +153,10 @@ const NewInvitationModal = ({
                     email: trimmedEmail || null,
                     sendAttempted: shouldSend,
                   }),
-                onError: (error: Error) => toast.error(error.message),
+                onError: (error: Error) =>
+                  toast.error(
+                    `Could not create invitation: ${errorText(error)}`,
+                  ),
               },
             );
           }}
@@ -168,12 +182,12 @@ const NewInvitationModal = ({
               id="invite-email-hint"
               className="text-xs text-on-surface-variant"
             >
-              Optional, and only a reminder of who this was for. Whoever opens
-              the link picks their own email
+              Optional reminder of who this is for. Whoever opens the link picks
+              their own email
             </p>
           </div>
 
-          {mailConfigured && email.trim().length > 0 && (
+          {mailConfigured && trimmedEmail.length > 0 && (
             <div className="flex items-center justify-between p-3 rounded-xl bg-surface-container-highest">
               <label
                 htmlFor="invite-send-email"
@@ -208,7 +222,7 @@ const NewInvitationModal = ({
               type="submit"
               busy={create.isPending}
               icon={<Send className="w-4 h-4" />}
-              disabled={create.isPending}
+              disabled={!emailValid || create.isPending}
             >
               Create invitation
             </AdminButton>
@@ -332,8 +346,8 @@ export const InvitationsView = () => {
         confirmLabel="Revoke invitation"
         description={
           <p>
-            The link stops working immediately. Anyone who still has it sees
-            that it is no longer valid, and nothing tells them why
+            The link stops working immediately. Anyone who opens it sees that it
+            is no longer valid
           </p>
         }
         onConfirm={() =>
@@ -343,7 +357,8 @@ export const InvitationsView = () => {
               setRevoking(null);
               toast.success("Invitation revoked");
             },
-            onError: (error: Error) => toast.error(error.message),
+            onError: (error: Error) =>
+              toast.error(`Could not revoke invitation: ${errorText(error)}`),
           })
         }
       />

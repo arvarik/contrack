@@ -311,8 +311,8 @@ const BackupCard = ({ health }: { health: InstanceHealth }) => {
       note={
         !backup ? (
           <p className="text-xs text-on-surface-variant text-pretty">
-            No snapshot has been taken. Check that scheduled backups are
-            switched on, or take one from the Backups page
+            No snapshot taken yet. Enable scheduled backups in General or take
+            one on Backups
           </p>
         ) : verification?.problem ? (
           <p className="text-xs text-error text-pretty">

@@ -51,7 +51,7 @@ import { SecretReveal } from "../../../components/ui/SecretReveal";
 import { formatRelative, formatWhen } from "../../../lib/datetime";
 import { ChoiceGroup } from "../../../components/ui/ChoiceGroup";
 import { DIALOG_ACTIONS } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import { SETTINGS_INPUT, SETTINGS_LABEL } from "../layout";
 import {
   AdminButton,
@@ -231,7 +231,8 @@ const CreateUserModal = ({
       },
       {
         onSuccess: setCreated,
-        onError: (error: Error) => toast.error(error.message),
+        onError: (error: Error) =>
+          toast.error(`Could not create account: ${errorText(error)}`),
       },
     );
   };
@@ -250,8 +251,7 @@ const CreateUserModal = ({
             <strong className="text-on-surface">
               {created.user.displayName || created.user.username}
             </strong>
-            . They will have to replace it before they can use anything, and
-            nothing else works for them until they do
+            . They must replace it when they sign in
           </p>
           <SecretReveal
             value={created.temporaryPassword}
@@ -332,7 +332,7 @@ const EditUserModal = ({
   }, [user]);
 
   if (!user) return null;
-  const nameChanged = displayName !== (user.displayName ?? "");
+  const nameChanged = displayName.trim() !== (user.displayName ?? "").trim();
   const roleChanged = role !== user.role;
   const dirty = nameChanged || roleChanged;
 
@@ -358,7 +358,8 @@ const EditUserModal = ({
                 toast.success("Account updated");
                 onClose();
               },
-              onError: (error: Error) => toast.error(error.message),
+              onError: (error: Error) =>
+                toast.error(`Could not update account: ${errorText(error)}`),
             },
           );
         }}
@@ -437,7 +438,8 @@ const DeleteUserDialog = ({
               toast.success(`Deleted ${user.username}`);
               onClose();
             },
-            onError: (error: Error) => toast.error(error.message),
+            onError: (error: Error) =>
+              toast.error(`Could not delete account: ${errorText(error)}`),
           },
         )
       }
@@ -479,7 +481,9 @@ const DeleteUserDialog = ({
             setExporting(true);
             exportAccount(user)
               .then(() => toast.success("Export downloaded"))
-              .catch((error: Error) => toast.error(error.message))
+              .catch((error: Error) =>
+                toast.error(`Could not export data: ${errorText(error)}`),
+              )
               .finally(() => setExporting(false));
           }}
         >
@@ -541,7 +545,8 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
               : `${next.username} can sign in again`,
           );
         },
-        onError: (error: Error) => toast.error(error.message),
+        onError: (error: Error) =>
+          toast.error(`Could not update account: ${errorText(error)}`),
       },
     );
 
@@ -558,7 +563,7 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
           if (counts) setDeleting({ user, counts });
           // LAST_ADMIN, CANNOT_TARGET_SELF and LOCAL_OWNER_PROTECTED land
           // here, with the server's own sentence.
-          else toast.error(error.message);
+          else toast.error(`Could not delete account: ${errorText(error)}`);
         },
         onSuccess: () => {
           // Unreachable: the server refuses every delete without a decision.
@@ -675,7 +680,9 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
                 onExport: () =>
                   exportAccount(user)
                     .then(() => toast.success("Export downloaded"))
-                    .catch((error: Error) => toast.error(error.message)),
+                    .catch((error: Error) =>
+                      toast.error(`Could not export data: ${errorText(error)}`),
+                    ),
                 // Enable acts at once. Disable signs the person out
                 // everywhere, so it asks first.
                 onToggleEnabled: () =>
@@ -731,9 +738,8 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
           confirmLabel="Reset password"
           description={
             <p>
-              They are signed out everywhere now, and every API token and MCP
-              app they connected stops working. You get a temporary password to
-              hand over, and they must replace it before anything works for them
+              Signs them out everywhere, revokes their API tokens and MCP apps,
+              and gives you a temporary password they must replace on sign-in
             </p>
           }
           onConfirm={() =>
@@ -743,7 +749,8 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
                 setResetting(null);
                 setTemporaryPassword(password);
               },
-              onError: (error: Error) => toast.error(error.message),
+              onError: (error: Error) =>
+                toast.error(`Could not reset password: ${errorText(error)}`),
             })
           }
         />
@@ -799,7 +806,10 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
                           `Sent to ${res.sentTo}. The link works for 24 hours`,
                         );
                       },
-                      onError: (error: Error) => toast.error(error.message),
+                      onError: (error: Error) =>
+                        toast.error(
+                          `Could not send reset link: ${errorText(error)}`,
+                        ),
                     });
                   } else {
                     reset.mutate(resetting.id, {
@@ -807,7 +817,10 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
                         setResetting(null);
                         setTemporaryPassword(password);
                       },
-                      onError: (error: Error) => toast.error(error.message),
+                      onError: (error: Error) =>
+                        toast.error(
+                          `Could not reset password: ${errorText(error)}`,
+                        ),
                     });
                   }
                 }}

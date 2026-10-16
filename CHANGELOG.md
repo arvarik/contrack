@@ -31,6 +31,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   hosts strip `imaps://`, CardDAV and IMAP preserve spaces in passwords, and
   Correspondents adds a search filter and prompts for a name when adding an
   address-only person.
+- Administration: AI settings and Audit log keep cached data on screen when a
+  background refetch or page load fails, SMTP port checks reject non-decimal
+  strings, and invitation links validate email format when an address is typed.
 - Connectors: a failed sync is retried after its backoff, a Google contact that
   matched one of yours is merged instead of written over, Gmail no longer loses
   mail past the per-run cap, one mail in two IMAP folders counts once, and

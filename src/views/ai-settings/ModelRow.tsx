@@ -18,7 +18,7 @@ import {
 } from "../../api/aiSettings";
 import { Select, type SelectOption } from "../../components/ui/Select";
 import { useHashTarget } from "../settings/SettingRow";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 
 interface ModelRowProps {
   /** The row's anchor: settings search and the feature list link to it. */
@@ -111,7 +111,9 @@ export function ModelRow({
         setDraft(null);
         toast.success(`${title} saved`);
       })
-      .catch((err) => toast.error(String(err?.message ?? err)));
+      .catch((err) =>
+        toast.error(`Could not save ${title.toLowerCase()}: ${errorText(err)}`),
+      );
   };
 
   return (

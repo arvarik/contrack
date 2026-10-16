@@ -26,6 +26,7 @@ import {
 import { ConfirmDialog } from "../../components/ui/ConfirmDialog";
 import { Modal } from "../../components/ui/Modal";
 import { RailTooltip } from "../../components/ui/RailTooltip";
+import { NO_AUTOCORRECT } from "../../components/ui/SearchField";
 import { useHashTarget } from "../settings/SettingRow";
 import { DIALOG_ACTIONS, ICON_BTN, LABEL } from "../../lib/styles";
 import { cn, errorText } from "../../lib/utils";
@@ -201,7 +202,11 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
                         refreshModels
                           .mutateAsync(provider.id)
                           .then((r) => toast.success(`${r.modelCount} models`))
-                          .catch((e) => toast.error(String(e.message ?? e)))
+                          .catch((e) =>
+                            toast.error(
+                              `Could not refresh models: ${errorText(e)}`,
+                            ),
+                          )
                       }
                       disabled={refreshModels.isPending}
                       className={ICON_BTN}
@@ -305,7 +310,11 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
                         refreshModels
                           .mutateAsync(`custom:${endpoint.id}`)
                           .then((r) => toast.success(`${r.modelCount} models`))
-                          .catch((e) => toast.error(String(e.message ?? e)))
+                          .catch((e) =>
+                            toast.error(
+                              `Could not refresh models: ${errorText(e)}`,
+                            ),
+                          )
                       }
                       disabled={refreshModels.isPending}
                       className={ICON_BTN}
@@ -364,6 +373,8 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
             value={keyInput}
             onChange={(e) => setKeyInput(e.target.value)}
             placeholder="API key"
+            autoComplete="off"
+            {...NO_AUTOCORRECT}
             className="w-full px-4 py-3 rounded-xl bg-surface-container-highest text-base sm:text-sm font-mono"
           />
           <div className={DIALOG_ACTIONS}>
@@ -449,6 +460,7 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
               </span>
               <input
                 id={`endpoint-${field.key}`}
+                type={field.key === "apiKey" ? "password" : "text"}
                 aria-label={field.label}
                 value={endpointForm[field.key]}
                 onChange={(e) =>
@@ -458,6 +470,8 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
                   }))
                 }
                 placeholder={field.placeholder}
+                autoComplete="off"
+                {...NO_AUTOCORRECT}
                 className="w-full mt-1 min-h-[44px] sm:pointer-fine:min-h-0 px-3 py-2 rounded-xl bg-surface-container-highest text-base sm:text-sm font-mono"
               />
             </label>

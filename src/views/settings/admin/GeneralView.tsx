@@ -66,7 +66,8 @@ function useSaveInstance() {
   ) =>
     save.mutate(patch, {
       onSuccess: (settings) => toast.success(message(settings)),
-      onError: (error: Error) => toast.error(error.message),
+      onError: (error: Error) =>
+        toast.error(`Could not save setting: ${errorText(error)}`),
     });
   return { run, pending: save.isPending };
 }
@@ -164,6 +165,10 @@ const InstanceName = ({ data }: { data: InstanceSettings | undefined }) => {
   const value = draft ?? stored;
   const dirty = value.trim() !== stored;
 
+  useEffect(() => {
+    setDraft(null);
+  }, [stored]);
+
   return (
     <SettingRow
       id="name"
@@ -187,7 +192,10 @@ const InstanceName = ({ data }: { data: InstanceSettings | undefined }) => {
                     : "The instance name was cleared",
                 );
               },
-              onError: (error: Error) => toast.error(error.message),
+              onError: (error: Error) =>
+                toast.error(
+                  `Could not save instance name: ${errorText(error)}`,
+                ),
             },
           );
         }}
@@ -203,6 +211,7 @@ const InstanceName = ({ data }: { data: InstanceSettings | undefined }) => {
           placeholder="Contrack"
           autoComplete="off"
           className={cn(SETTINGS_INPUT, "flex-1 min-w-0")}
+          {...NO_AUTOCORRECT}
         />
         <button
           type="submit"
@@ -247,13 +256,13 @@ const SignIn = ({ data }: { data: InstanceSettings | undefined }) => {
         title="Anyone can create an account"
         description={
           <>
-            Adds a “Create one” link to the sign-in screen. A new account is a
-            member and starts empty
+            Adds a “Create one” link to the sign-in screen. New accounts start
+            empty as members
             {open && (
               <span className={cn(NOTE, "mt-2 bg-warning/10 text-on-surface")}>
                 <TriangleAlert className="w-4 h-4 text-warning shrink-0" />
-                Anyone who can reach this instance can make an account on it. On
-                a server open to the internet, send invitations instead
+                Anyone who can reach this instance can create an account. On a
+                public server, send invitations instead
               </span>
             )}
           </>
@@ -279,8 +288,7 @@ const SignIn = ({ data }: { data: InstanceSettings | undefined }) => {
         title="Sign in by emailed link"
         description={
           <>
-            Members can sign in with a link, sent to their email, that works
-            once
+            Members can sign in with a one-time link sent to their email
             {data && !mailReady && (
               <span className={cn(NOTE, "mt-2")}>
                 <span>
@@ -323,7 +331,7 @@ const SignIn = ({ data }: { data: InstanceSettings | undefined }) => {
       <ChoiceRow
         id="session-length"
         title="Session length"
-        description="How long a sign-in lasts before Contrack asks for the password again, on every account"
+        description="How long a sign-in lasts before Contrack asks for a password again"
         value={data?.sessionTtlDays}
         options={TTL_PRESETS}
         pending={!data || pending}
@@ -333,7 +341,7 @@ const SignIn = ({ data }: { data: InstanceSettings | undefined }) => {
             (settings) => `New sign-ins last ${days(settings.sessionTtlDays)}`,
           )
         }
-        footnote="A change applies to new sign-ins. To end a session now, disable the account or reset its password"
+        footnote="Applies to new sign-ins. To end an active session now, disable the account or reset its password"
         format={days}
       />
     </>
@@ -389,13 +397,13 @@ const Data = ({ data }: { data: InstanceSettings | undefined }) => {
               `Trash keeps a contact for ${days(settings.trashRetentionDays ?? next)}`,
           )
         }
-        footnote="A shorter time deletes the older contacts in Trash at the next daily cleanup"
+        footnote="A shorter time deletes older contacts in Trash at the next daily cleanup"
         format={days}
       />
       <ChoiceRow
         id="backups"
         title="Backups"
-        description="How often Contrack takes a snapshot of the whole database"
+        description="How often Contrack takes a snapshot of the database"
         value={data?.backupIntervalHours}
         options={BACKUP_INTERVAL_PRESETS}
         columns="sm:grid-cols-3"
@@ -417,7 +425,7 @@ const Data = ({ data }: { data: InstanceSettings | undefined }) => {
       <ChoiceRow
         id="backup-keep"
         title="Snapshots to keep"
-        description="Past this many, Contrack deletes the oldest"
+        description="Past this limit, Contrack deletes the oldest snapshot"
         value={data?.backupKeep}
         options={BACKUP_KEEP_PRESETS}
         columns="sm:grid-cols-2 xl:grid-cols-4"
@@ -460,8 +468,7 @@ const AddressLookups = () => {
         <>
           Sends each contact&apos;s address to{" "}
           {data?.host ?? "OpenStreetMap's Nominatim"} to place its pin. Off, no
-          address leaves the server, and a pin comes from an earlier lookup or
-          by hand
+          address leaves the server
           {data?.lockedByEnv && (
             <span className={cn(NOTE, "mt-2")}>
               Set by GEOCODING_DISABLED in the environment
@@ -483,7 +490,10 @@ const AddressLookups = () => {
                   ? "Address lookups are off. No address leaves the server"
                   : "Address lookups are on",
               ),
-            onError: (error: Error) => toast.error(error.message),
+            onError: (error: Error) =>
+              toast.error(
+                `Could not update address lookups: ${errorText(error)}`,
+              ),
           })
         }
       />
@@ -568,11 +578,11 @@ export const GoogleRow = () => {
       <li>
         Open the{" "}
         <ConsoleLink href={CONSOLE.home}>Google Cloud Console</ConsoleLink> and
-        create a project, or pick one you have
+        create or pick a project
       </li>
       <li>
         In the <ConsoleLink href={CONSOLE.library}>API Library</ConsoleLink>,
-        turn on the People API, the Gmail API and the Google Calendar API
+        turn on People API, Gmail API and Google Calendar API
       </li>
       <li className="space-y-1">
         <p>
@@ -580,22 +590,21 @@ export const GoogleRow = () => {
           <ConsoleLink href={CONSOLE.audience}>
             Google Auth platform
           </ConsoleLink>
-          , set the audience. For a Google Workspace domain choose Internal:
-          Google asks for no review. For personal Gmail choose External, then
-          Publish app, or every sign-in stops after a week
+          , set the audience. For Google Workspace choose Internal. For personal
+          Gmail choose External, then Publish app, or sign-ins expire after 7
+          days
         </p>
         <p>
-          At sign-in Google warns that the app is unverified. That is normal for
-          your own server: choose Continue. An unverified app takes up to 100
-          people
+          At sign-in Google warns that the app is unverified. Choose Continue
+          (up to 100 accounts)
         </p>
       </li>
       <li className="space-y-1.5">
         <p>
           Under{" "}
           <ConsoleLink href={CONSOLE.credentials}>Credentials</ConsoleLink>,
-          create an OAuth client ID of type Web application, and paste this
-          address under Authorized redirect URIs
+          create a Web application OAuth client ID and add this Authorized
+          redirect URI
         </p>
         <div className="flex items-center gap-2 p-2.5 rounded-xl bg-surface-container-highest font-mono text-xs text-on-surface break-all select-all">
           <span className="flex-1 min-w-0">{redirectUri}</span>
@@ -623,11 +632,10 @@ export const GoogleRow = () => {
           </button>
         </div>
         <p>
-          Google accepts localhost, or a domain name over https, and no LAN
-          address.{" "}
+          Google accepts localhost or an https domain, not a LAN IP.{" "}
           {publicUrl
-            ? "This one comes from PUBLIC_URL"
-            : "This one is the address the server sees. When others reach Contrack another way, put a reverse proxy with a certificate in front and set PUBLIC_URL"}
+            ? "This address comes from PUBLIC_URL"
+            : "Set PUBLIC_URL when people reach Contrack through a reverse proxy"}
         </p>
         {mismatch && (
           <p role="note" className={NOTE}>
@@ -646,7 +654,7 @@ export const GoogleRow = () => {
       <li>
         {fromEnv
           ? "Put the client ID and the client secret Google shows in GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET, where this server reads them"
-          : "Copy the client ID and the client secret Google shows into Client ID and Client secret below, then save"}
+          : "Paste the Client ID and Client secret below, then save"}
       </li>
     </ol>
   );
@@ -656,7 +664,7 @@ export const GoogleRow = () => {
       <SettingRow
         id="google-oauth"
         title="Google OAuth client"
-        description="Members connect their Google accounts through it, to sync contacts, mail and calendar. One admin creates it once in Google Cloud, in about ten minutes"
+        description="Lets members connect Google accounts to sync contacts, mail and calendar. Created once in Google Cloud"
         below
       >
         <div className="space-y-3">
@@ -819,7 +827,9 @@ export const GoogleRow = () => {
                           toast.success("Google OAuth client saved");
                         },
                         onError: (error: Error) =>
-                          toast.error(errorText(error)),
+                          toast.error(
+                            `Could not save Google OAuth client: ${errorText(error)}`,
+                          ),
                       },
                     )
                   }
@@ -848,7 +858,10 @@ export const GoogleRow = () => {
                 setClientSecret("");
                 toast.success("Google OAuth client removed");
               },
-              onError: (error: Error) => toast.error(errorText(error)),
+              onError: (error: Error) =>
+                toast.error(
+                  `Could not remove Google OAuth client: ${errorText(error)}`,
+                ),
             },
           )
         }

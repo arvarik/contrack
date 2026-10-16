@@ -14,8 +14,9 @@ import {
 import { useAuth } from "../../../components/auth/AuthGate";
 import { Badge, type BadgeTone } from "../../../components/ui/Badge";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
+import { NO_AUTOCORRECT } from "../../../components/ui/SearchField";
 import { Switch } from "../../../components/ui/Switch";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import {
   SETTINGS_CARD,
   SETTINGS_INPUT,
@@ -39,7 +40,7 @@ const Field = ({
     <label htmlFor={id} className={SETTINGS_LABEL}>
       {label}
     </label>
-    <input id={id} className={SETTINGS_INPUT} {...props} />
+    <input id={id} className={SETTINGS_INPUT} {...NO_AUTOCORRECT} {...props} />
   </div>
 );
 
@@ -71,7 +72,7 @@ export const MailView = () => {
     }
   }, [data]);
 
-  if (isError) {
+  if (isError && !data) {
     return (
       <div className={SETTINGS_PAGE}>
         <LoadFailed what="the mail settings" onRetry={() => void refetch()} />
@@ -88,20 +89,28 @@ export const MailView = () => {
     e.preventDefault();
     if (isEnv) return;
 
-    const parsedPort = parseInt(port, 10);
-    if (isNaN(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
+    const trimmedHost = host.trim();
+    const trimmedFrom = fromAddress.trim();
+    if (!trimmedHost || !trimmedFrom) {
+      toast.error("Enter a host and from address");
+      return;
+    }
+
+    const trimmedPort = port.trim();
+    const parsedPort = /^\d+$/.test(trimmedPort) ? Number(trimmedPort) : NaN;
+    if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65535) {
       toast.error("Enter a port between 1 and 65535");
       return;
     }
 
     updateMail.mutate(
       {
-        host: host.trim(),
+        host: trimmedHost,
         port: parsedPort,
         secure,
         user: username.trim(),
         password: password || undefined,
-        from: fromAddress.trim(),
+        from: trimmedFrom,
         replyTo: replyTo.trim(),
       },
       {
@@ -110,18 +119,22 @@ export const MailView = () => {
           setPassword("");
         },
         onError: (err: Error) => {
-          toast.error(err.message || "Could not save the mail settings");
+          toast.error(`Could not save mail settings: ${errorText(err)}`);
         },
       },
     );
   };
 
   const handleSendTest = () => {
-    sendTest.mutate(adminEmail ? { to: adminEmail } : {}, {
-      onSuccess: (res) => toast.success(`Test message sent to ${res.sentTo}`),
-      onError: (err: Error) =>
-        toast.error(err.message || "Could not send the test message"),
-    });
+    if (!adminEmail) return;
+    sendTest.mutate(
+      { to: adminEmail },
+      {
+        onSuccess: (res) => toast.success(`Test message sent to ${res.sentTo}`),
+        onError: (err: Error) =>
+          toast.error(`Could not send test email: ${errorText(err)}`),
+      },
+    );
   };
 
   const handleClear = () => {
@@ -138,7 +151,7 @@ export const MailView = () => {
         setReplyTo("");
       },
       onError: (err: Error) => {
-        toast.error(err.message || "Could not clear the mail settings");
+        toast.error(`Could not clear mail settings: ${errorText(err)}`);
       },
     });
   };
@@ -181,9 +194,8 @@ export const MailView = () => {
                 className="w-4 h-4 mt-0.5 shrink-0 text-error"
               />
               <span>
-                Mail sends no sign-in, reset or invitation links until
-                PUBLIC_URL is set on the server. A link built from a
-                request&apos;s address could point anywhere
+                No sign-in, reset or invitation links are sent until PUBLIC_URL
+                is set on the server
               </span>
             </p>
           )}
@@ -217,8 +229,8 @@ export const MailView = () => {
             <div className="min-w-0">
               <p className="text-sm font-bold text-on-surface">Use TLS</p>
               <p className="text-xs sm:text-sm text-on-surface-variant text-pretty">
-                Connects over TLS from the start. Port 465 usually needs it.
-                Port 587 usually does not
+                Implicit TLS from the start (usually port 465). Leave off for
+                STARTTLS on port 587
               </p>
             </div>
             <Switch
@@ -302,12 +314,17 @@ export const MailView = () => {
               ) : (
                 <Send className="w-4 h-4" />
               )}
-              {adminEmail ? `Send a test to ${adminEmail}` : "Send a test"}
+              Send a test to {adminEmail}
             </button>
             {!isEnv && (
               <button
                 type="submit"
-                disabled={isLoading || updateMail.isPending}
+                disabled={
+                  isLoading ||
+                  updateMail.isPending ||
+                  !host.trim() ||
+                  !fromAddress.trim()
+                }
                 className="btn-primary"
               >
                 {updateMail.isPending && (
@@ -325,7 +342,7 @@ export const MailView = () => {
         onClose={() => setShowClearConfirm(false)}
         onConfirm={handleClear}
         title="Clear the mail settings?"
-        description="Contrack stops sending mail until someone sets it up again. Invitations and password resets are then not sent by email"
+        description="Invitations, magic links and password resets will not be sent by email until mail is set up again"
         confirmLabel="Clear settings"
         tone="danger"
         busy={deleteMail.isPending}
