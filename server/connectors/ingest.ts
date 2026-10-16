@@ -29,6 +29,7 @@ import { dispatchEvents, recordEvent } from "../events/index.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage, newContactId } from "../utils/helpers.ts";
 import { ownerUploadDir, ownerUploadUrl } from "../utils/paths.ts";
+import { isDefaultAvatarFor } from "../utils/avatarUrl.ts";
 import {
   isBase64DataUri,
   processBase64Avatar,
@@ -117,10 +118,14 @@ export function fillFromRemote(
     if (value == null || value === "") continue;
     if (Array.isArray(value) && value.length === 0) continue;
     const current = (local as unknown as Record<string, unknown>)[key];
+    // Every contact gets a drawn avatar when it is made, so for the photo
+    // that default counts as empty.
     const empty =
       current == null ||
       current === "" ||
-      (Array.isArray(current) && current.length === 0);
+      (Array.isArray(current) && current.length === 0) ||
+      (key === "avatarUrl" &&
+        isDefaultAvatarFor(current as string, local.name));
     if (empty) out[key] = value;
   }
   const emails = new Set(local.emails.map((e) => e.email.toLowerCase()));
@@ -312,16 +317,35 @@ export async function ingestStream(
   let hasUpcomingEvents = false;
 
   /**
-   * Whether the sync made this contact for this external id: its source row
-   * names the connector's kind and the id. Then the source owns its details.
+   * Whether this source owns the contact's details for this external id: its
+   * source row names the connector's kind and the id, the pull or the push
+   * made it. Not when the contact took in another one by a merge, which moves
+   * the duplicate's source row to it, and not when another link also feeds
+   * it. Then the contact is the owner's, and the source only fills it in.
    */
   function madeBySync(contactId: string, externalId: string): boolean {
     return Boolean(
       sqlite
         .prepare(
-          `SELECT 1 FROM contact_sources WHERE contactId = ? AND platform = ? AND externalId = ?`,
+          `SELECT 1 FROM contact_sources s
+           WHERE s.contactId = ? AND s.platform = ? AND s.externalId = ?
+             AND NOT EXISTS (
+               SELECT 1 FROM dedupe_merge_log m
+               WHERE m.ownerId = ? AND m.primaryId = s.contactId AND m.undoneAt IS NULL)
+             AND NOT EXISTS (
+               SELECT 1 FROM connector_links l
+               WHERE l.ownerId = ? AND l.kind = 'contact' AND l.localId = s.contactId
+                 AND NOT (l.connectorId = ? AND l.externalId = ?))`,
         )
-        .get(contactId, connector.kind, externalId),
+        .get(
+          contactId,
+          connector.kind,
+          externalId,
+          scope.ownerId,
+          scope.ownerId,
+          connector.id,
+          externalId,
+        ),
     );
   }
 
@@ -930,7 +954,11 @@ export async function ingestStream(
         }
 
         let contactId = matchedContactId;
-        if (!contactId) {
+        // A first match fills in at once: a source sends an unchanged person
+        // only once, so a fill left for a later sync never came.
+        if (contactId) {
+          syncLinkedContact(contactId, cPayload, event.externalId);
+        } else {
           cPayload.name ||= cEmails[0] || cPhones[0] || "Unknown";
           cPayload.sources = [
             {

@@ -15,7 +15,13 @@ vi.unmock("../../../../server/db.ts");
 import crypto from "node:crypto";
 import { sqlite } from "../../../../server/db.ts";
 import { buildContactMatcher } from "../../../../server/connectors/matching.ts";
-import { ingestStream } from "../../../../server/connectors/ingest.ts";
+import {
+  fillFromRemote,
+  ingestStream,
+} from "../../../../server/connectors/ingest.ts";
+import { mergeContacts } from "../../../../server/services/dedupe/merging.ts";
+import { defaultAvatarUrl } from "../../../../server/utils/avatarUrl.ts";
+import type { HydratedContact } from "../../../../server/repositories/types.ts";
 import { listCorrespondents } from "../../../../server/connectors/service.ts";
 import type { SyncEvent } from "../../../../server/connectors/types.ts";
 import {
@@ -82,6 +88,9 @@ describe("connectors ingestStream", () => {
     // What the writes recorded and queued. Both name the owner, and both
     // keys restrict the delete of the account.
     sqlite.prepare("DELETE FROM events WHERE ownerId = ?").run(ownerId);
+    sqlite
+      .prepare("DELETE FROM dedupe_merge_log WHERE ownerId = ?")
+      .run(ownerId);
     sqlite.prepare("DELETE FROM jobs WHERE ownerId = ?").run(ownerId);
     sqlite.prepare("DELETE FROM users WHERE id = ?").run(ownerId);
   });
@@ -582,26 +591,71 @@ describe("connectors ingestStream", () => {
       role: "Engineer",
       phones: [{ phone: "+14155550199", type: "mobile", isPrimary: true }],
     });
-    await ingest([dad]);
-    await ingest([dad]);
+    // The first sync fills in too: Google sends an unchanged card only once,
+    // so a fill left for the second sync never happened.
+    for (let sync = 0; sync < 2; sync++) {
+      await ingest([dad]);
+      expect(
+        sqlite
+          .prepare("SELECT name, company, role FROM contacts WHERE id = ?")
+          .get(momId),
+      ).toEqual({ name: "Mom", company: "Home", role: "Engineer" });
+      expect(
+        column(
+          "SELECT email FROM contact_emails WHERE contactId = ? ORDER BY email",
+          momId,
+        ),
+      ).toEqual(["mom@family.example", "shared@family.example"]);
+      expect(
+        column(
+          "SELECT phone FROM contact_phones WHERE contactId = ? ORDER BY phone",
+          momId,
+        ),
+      ).toEqual(["+14155550100", "+14155550199"]);
+    }
+  });
 
+  it("only fills in a contact that survived a merge with one the sync created", async () => {
+    // The merge moves the duplicate's source row to the survivor. Taken as
+    // "made by the sync", the duplicate's card then wrote over the survivor.
+    await ingest([card("people/dup", "Sam Dup", "sam@dup.example")]);
+    const [dupId] = column(
+      "SELECT localId FROM connector_links WHERE connectorId = ? AND kind = 'contact' AND externalId = 'people/dup'",
+      connectorId,
+    );
+    const mainId = crypto.randomUUID();
+    sqlite
+      .prepare(
+        `INSERT INTO contacts (id, ownerId, name, addedAt, updatedAt)
+         VALUES (?, ?, 'Samantha', datetime('now'), datetime('now'))`,
+      )
+      .run(mainId, ownerId);
+    mergeContacts(scope, mainId, dupId as string, "test-merge");
+
+    await ingest([card("people/dup", "Sam Renamed", "sam@dup.example")]);
+
+    expect(column("SELECT name FROM contacts WHERE id = ?", mainId)).toEqual([
+      "Samantha",
+    ]);
+  });
+
+  it("fills a photo over the drawn default avatar, and keeps a real one", () => {
+    const photo = "/uploads/u/x/avatars/remote-abc.jpg";
+    const local = (avatarUrl: string) =>
+      ({
+        name: "Ada",
+        avatarUrl,
+        emails: [],
+        phones: [],
+      }) as unknown as HydratedContact;
     expect(
-      sqlite
-        .prepare("SELECT name, company, role FROM contacts WHERE id = ?")
-        .get(momId),
-    ).toEqual({ name: "Mom", company: "Home", role: "Engineer" });
+      fillFromRemote(local(defaultAvatarUrl("Ada")), { avatarUrl: photo }),
+    ).toEqual({ avatarUrl: photo });
     expect(
-      column(
-        "SELECT email FROM contact_emails WHERE contactId = ? ORDER BY email",
-        momId,
-      ),
-    ).toEqual(["mom@family.example", "shared@family.example"]);
-    expect(
-      column(
-        "SELECT phone FROM contact_phones WHERE contactId = ? ORDER BY phone",
-        momId,
-      ),
-    ).toEqual(["+14155550100", "+14155550199"]);
+      fillFromRemote(local("/uploads/u/x/avatars/mine.jpg"), {
+        avatarUrl: photo,
+      }),
+    ).toBeNull();
   });
 
   it("keeps writing Google's details over a contact the sync itself created", async () => {

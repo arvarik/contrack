@@ -248,7 +248,8 @@ sends a synced person again, such as after a change in Google, the sync
 writes Google's details over a contact it created, its emails and phones
 included. Change those details in Google, not in Contrack. A contact that
 existed before and was linked keeps its name and its details: the sync only
-fills in what is empty and adds the addresses it learns. When you delete a
+fills in what is empty and adds the addresses it learns. So does a
+contact you merged, and one that two connectors link. When you delete a
 contact in Google, a contact the sync created moves to the Trash, and a
 linked one stays. A new contact from Google gets the same duplicate check as
 a contact you add, when **Check new contacts automatically** is on.

@@ -494,8 +494,10 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
               (err as { code?: number; status?: number })?.code ??
               (err as { code?: number; status?: number })?.status;
             if (code === 404 || code === 410) {
-              // History ID expired: fall back to messages.list
+              // History ID expired: fall back to messages.list, which lists
+              // the window again, so the pages read so far are dropped.
               gmailHistoryId = undefined;
+              messageIds.length = 0;
             } else {
               throw err;
             }
@@ -563,6 +565,10 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
               callOptions(signal),
             );
           } catch (msgErr) {
+            // A refused token fails every message: stop the run, so the
+            // history id does not move past the whole mailbox.
+            signal.throwIfAborted();
+            if (isAuthError(msgErr)) throw msgErr;
             ctx.log(
               `Could not fetch metadata for Google message ${msgId}: ${(msgErr as Error).message}`,
             );
@@ -657,9 +663,15 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
         }
 
         if (nextBackfill && oldestMs < Infinity) {
+          // The second after the oldest mail fetched, but always before the
+          // bound this run started from: a cap filled by mail from a single
+          // second would give that bound back, and list the same mail forever.
+          const after = Math.floor(oldestMs / 1000) + 1;
+          const previous = nextBackfill.before;
           nextBackfill = {
             ...nextBackfill,
-            before: Math.floor(oldestMs / 1000) + 1,
+            before:
+              previous === undefined ? after : Math.min(after, previous - 1),
           };
         }
         gmailBackfill = nextBackfill;

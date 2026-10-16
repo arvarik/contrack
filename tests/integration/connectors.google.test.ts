@@ -1001,6 +1001,89 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       }
     });
 
+    it("moves a first sync's date bound back even when the cap is filled by mail from one second", async () => {
+      // Two mails in the same second fill a cap of 2. The bound was that
+      // second plus one, the bound the run started from, so the next run
+      // listed the same two mails again, run after run.
+      const second = 1771160400;
+      const get = mockGmail({
+        messages: {
+          list: vi.fn().mockResolvedValue({
+            data: {
+              messages: [{ id: "m1" }, { id: "m2" }],
+              nextPageToken: "p2",
+            },
+          }),
+        },
+      });
+      get.mockImplementation(({ id }: { id: string }) =>
+        Promise.resolve(meta(id, { internalDate: String(second * 1000) })),
+      );
+      const { cursor } = await run(
+        { syncEmail: true, maxMessagesPerRun: 2 },
+        {
+          gmailBackfill: {
+            since: 1769904000,
+            before: second + 1,
+            historyId: "H0",
+          },
+        },
+      );
+      expect(cursor.gmailBackfill).toMatchObject({ before: second });
+    });
+
+    it("drops the ids of history pages read before the history id turned out to be gone", async () => {
+      const list = vi.fn().mockResolvedValue({
+        data: { messages: [{ id: "m9" }] },
+      });
+      mockGmail({
+        history: {
+          list: vi
+            .fn()
+            .mockResolvedValueOnce({
+              data: {
+                history: [
+                  { id: "h1", messagesAdded: [{ message: { id: "m1" } }] },
+                ],
+                nextPageToken: "p2",
+              },
+            })
+            .mockRejectedValueOnce(
+              Object.assign(new Error("gone"), { code: 404 }),
+            ),
+        },
+        messages: { list },
+      });
+      const { events } = await run(
+        { syncEmail: true },
+        { gmailHistoryId: "H1" },
+      );
+      expect(emailIds(events)).toEqual(["m9@example.com"]);
+    });
+
+    it("stops the sync when Google refuses the token while it reads a message", async () => {
+      // Each failed message was logged and skipped, so an expired token
+      // skipped the whole mailbox and moved the history id past it.
+      const get = mockGmail({
+        history: {
+          list: vi.fn().mockResolvedValue({
+            data: {
+              historyId: "H2",
+              history: [
+                { id: "h1", messagesAdded: [{ message: { id: "m1" } }] },
+              ],
+            },
+          }),
+        },
+      });
+      get.mockRejectedValue(
+        Object.assign(new Error("invalid_grant"), { code: 400 }),
+      );
+      await expect(
+        run({ syncEmail: true }, { gmailHistoryId: "H1" }),
+      ).rejects.toBeInstanceOf(ConnectorAuthError);
+    });
+
     it("reports a person Google deleted, and keeps a person who has an address but no name", async () => {
       vi.spyOn(google, "people").mockReturnValue({
         people: {

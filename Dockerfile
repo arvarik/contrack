@@ -60,7 +60,7 @@ WORKDIR /app
 #   TypeScript sources, type declarations, source maps and markdown docs in
 #   node_modules are never loaded at runtime. parse5 is one: only cheerio's
 #   full entry loads it, and the server imports cheerio/slim
-#   (tests/unit/server/imageImports.test.ts keeps it that way).
+#   (tests/unit/repo/dockerRuntime.test.ts keeps it that way).
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts \
     && ort=node_modules/onnxruntime-node/bin/napi-v6 \

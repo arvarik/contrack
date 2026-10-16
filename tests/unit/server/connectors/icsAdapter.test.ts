@@ -376,4 +376,35 @@ END:VEVENT`),
       icsAdapter.test({ url: "data:text/calendar,BEGIN%3AVCALENDAR" }, null),
     ).rejects.toThrow(/http/i);
   });
+
+  it("leaves out an override's attendees who all declined, and reads PARTSTAT and CUTYPE in any case", async () => {
+    // An override that lists only people who declined fell back to the
+    // series' attendees. RFC 5545 parameter values are case-insensitive.
+    const events = await syncFeed(
+      feed(`BEGIN:VEVENT
+UID:sync
+DTSTART:20260209T150000Z
+DTEND:20260209T160000Z
+RRULE:FREQ=WEEKLY;COUNT=2
+SUMMARY:Sync
+ATTENDEE:mailto:bob@example.com
+ATTENDEE;PARTSTAT=declined:mailto:dan@example.com
+ATTENDEE;CUTYPE=room:mailto:room6@example.com
+END:VEVENT
+BEGIN:VEVENT
+UID:sync
+RECURRENCE-ID:20260216T150000Z
+DTSTART:20260216T150000Z
+DTEND:20260216T160000Z
+SUMMARY:Sync
+ATTENDEE;PARTSTAT=DECLINED:mailto:bob@example.com
+END:VEVENT`),
+    );
+    const people = (id: string) =>
+      events.find((e) => e.externalId === id)?.participants;
+    expect(people("sync_2026-02-09T15:00:00.000Z")).toEqual([
+      { email: "bob@example.com", name: undefined },
+    ]);
+    expect(people("sync_2026-02-16T15:00:00.000Z")).toEqual([]);
+  });
 });

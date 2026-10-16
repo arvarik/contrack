@@ -340,6 +340,10 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
       let foldersSucceeded = 0;
       let foldersFailed = 0;
       let firstFolderError: Error | null = null;
+      // A mail in two folders, such as one sent to oneself, is yielded once a
+      // run: a second copy would count its strangers twice and summarize it
+      // twice before ingest saw that the id was known.
+      const seenMessageIds = new Set<string>();
 
       for (const folder of targetFolders) {
         signal.throwIfAborted();
@@ -465,6 +469,10 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
               },
               { selfEmails, includeBody: false },
             );
+            if (norm.messageId) {
+              if (seenMessageIds.has(norm.messageId)) continue;
+              seenMessageIds.add(norm.messageId);
+            }
 
             // Determine whether any counterparty matches a known contact
             let matchesContact = false;
@@ -518,7 +526,11 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
               externalId: norm.messageId
                 ? `imap:${norm.messageId}`
                 : `imap:${folder}:${uid}`,
-              legacyExternalIds: [`imap:${folder}:${norm.externalId}`],
+              // Earlier versions keyed it by folder: list every synced folder's
+              // id, so the link from whichever folder held it first is found.
+              legacyExternalIds: norm.messageId
+                ? targetFolders.map((f) => `imap:${f}:${norm.externalId}`)
+                : [`imap:${folder}:${norm.externalId}`],
               type: "email",
               title: norm.title,
               content: summaryContent,

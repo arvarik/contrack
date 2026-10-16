@@ -563,17 +563,17 @@ describe("IMAP Adapter Integration", () => {
     };
   }
 
-  it("keys a message by its Message-ID alone, so one mail in two folders is one interaction, and names its old folder ids", async () => {
+  it("yields a mail that sits in two folders once, keyed by its Message-ID, with each folder's old id", async () => {
     // The fake server serves the same message from every folder, as a mail
     // sent to oneself sits in both INBOX and Sent. Keyed by folder, it was two
-    // interactions, and the day's roll-up said "2 emails" for one.
+    // interactions. Yielded twice in one run, a stranger on it was counted
+    // twice, and a summary was written twice.
     const { mails } = await syncMail({ folders: ["INBOX", "Sent"] });
     expect(mails.map((m) => m.externalId)).toEqual([
       "imap:msg-001@example.com",
-      "imap:msg-001@example.com",
     ]);
-    // The old id kept the Message-ID as the server gave it.
-    expect(mails.map((m) => m.legacyExternalIds?.join())).toEqual([
+    // The old ids kept the Message-ID as the server gave it.
+    expect(mails[0].legacyExternalIds).toEqual([
       expect.stringMatching(/^imap:INBOX:<?msg-001@example\.com>?$/),
       expect.stringMatching(/^imap:Sent:<?msg-001@example\.com>?$/),
     ]);

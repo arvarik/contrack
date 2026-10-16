@@ -244,10 +244,13 @@ function parseParticipants(event: VEvent): Participant[] {
           ? (att.params as Record<string, string> | undefined)
           : undefined;
       // A room is no person, and someone who declined was not there.
+      // Parameter values are case-insensitive (RFC 5545 3.2).
+      const partstat = String(params?.PARTSTAT ?? "").toUpperCase();
+      const cutype = String(params?.CUTYPE ?? "").toUpperCase();
       if (
-        params?.PARTSTAT === "DECLINED" ||
-        params?.CUTYPE === "RESOURCE" ||
-        params?.CUTYPE === "ROOM"
+        partstat === "DECLINED" ||
+        cutype === "RESOURCE" ||
+        cutype === "ROOM"
       ) {
         continue;
       }
@@ -455,8 +458,10 @@ export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
           const instanceContent = includeDescription
             ? (textOf(own?.description) ?? content)
             : undefined;
+          // An override that lists people uses its own list, even when
+          // everyone on it declined.
           const instancePeople =
-            ownPeople.length > 0 ? ownPeople : participants;
+            own && (own.attendee || own.organizer) ? ownPeople : participants;
           const startsAt = stamp(instance.start, instance.isFullDay);
           const endsAt = instance.end
             ? stamp(instance.end, instance.isFullDay)
