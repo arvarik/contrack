@@ -22,15 +22,16 @@ import { useLists, useReorderLists, useCreateList } from "../../api";
 
 import { ListIcon, CreateListModal } from "../contact-list/CreateListModal";
 import { ListDetailPanel } from "./ListDetailPanel";
-import { cn } from "../../lib/utils";
+import { cn, errorText, plural } from "../../lib/utils";
 import { CARD, SELECTED_ROW } from "../../lib/styles";
 import { SETTINGS_BOX } from "../settings/layout";
 import { toast } from "sonner";
 import { EmptyState } from "../../components/ui/EmptyState";
+import { LoadFailed } from "../../components/ui/LoadFailed";
 import { ActionMenu } from "../../components/ui/ActionMenu";
 
 export const ListManagerView = () => {
-  const { data: lists = [], isLoading } = useLists();
+  const { data: lists = [], isLoading, isError = false, refetch } = useLists();
   const reorderLists = useReorderLists();
   const createList = useCreateList();
   const navigate = useNavigate();
@@ -57,7 +58,13 @@ export const ListManagerView = () => {
     const newOrder = [...lists];
     const [moved] = newOrder.splice(from, 1);
     newOrder.splice(to, 0, moved);
-    reorderLists.mutate(newOrder.map((l) => l.id));
+    reorderLists.mutate(
+      newOrder.map((l) => l.id),
+      {
+        onError: (err) =>
+          toast.error(`Could not reorder the lists: ${errorText(err)}`),
+      },
+    );
   };
   const handleDrop = (e: React.DragEvent, idx: number) => {
     e.preventDefault();
@@ -72,12 +79,14 @@ export const ListManagerView = () => {
 
   const handleCreate = useCallback(
     async (name: string, icon: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
       try {
-        await createList.mutateAsync({ name, icon });
+        await createList.mutateAsync({ name: trimmed, icon });
         setIsCreateOpen(false);
-        toast.success(`List "${name}" created`);
-      } catch {
-        toast.error("Could not create the list");
+        toast.success(`List "${trimmed}" created`);
+      } catch (err) {
+        toast.error(`Could not create the list: ${errorText(err)}`);
       }
     },
     [createList],
@@ -135,7 +144,7 @@ export const ListManagerView = () => {
           <p className="flex-1 min-w-0 text-xs text-on-surface-variant">
             {!isLoading && (
               <>
-                {lists.length} {lists.length === 1 ? "list" : "lists"}
+                {plural(lists.length, "list", "lists")}
                 {/* Not beside an open list, where the column is narrow and
                     the grips say it. A finger uses the menu. */}
                 {lists.length > 1 && !selectedListId && (
@@ -169,10 +178,13 @@ export const ListManagerView = () => {
               />
             ))}
           </div>
+        ) : isError && lists.length === 0 ? (
+          <LoadFailed what="your lists" onRetry={() => void refetch?.()} />
         ) : lists.length === 0 ? (
           <EmptyState
             icon={List}
             title="No lists yet"
+            body="Group contacts for a project, an event or a circle"
             action={{
               label: "New list",
               icon: Plus,
@@ -240,8 +252,7 @@ export const ListManagerView = () => {
                       </span>
                       <span className="text-xs text-on-surface-variant flex items-center gap-1 mt-0.5">
                         <Users className="w-3 h-3" aria-hidden="true" />
-                        {list.memberCount ?? 0}{" "}
-                        {list.memberCount === 1 ? "contact" : "contacts"}
+                        {plural(list.memberCount ?? 0, "contact", "contacts")}
                       </span>
                     </span>
 

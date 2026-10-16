@@ -40,6 +40,7 @@ import { scoreView } from "../../shared/scoreBand";
 import { useContacts } from "../api";
 import { ActionMenu } from "../components/ui/ActionMenu";
 import { EmptyState } from "../components/ui/EmptyState";
+import { LoadFailed } from "../components/ui/LoadFailed";
 import { FilterRow, type FilterPill } from "../components/ui/FilterRow";
 import { RailTooltip } from "../components/ui/RailTooltip";
 import { Segmented } from "../components/ui/Segmented";
@@ -442,7 +443,12 @@ const SPOKE_PILLS: readonly FilterPill<SpokeFilter>[] = [
 
 export const TrackedContactsView = () => {
   const location = useLocation();
-  const { data: contacts = [], isLoading } = useContacts();
+  const {
+    data: contacts = [],
+    isLoading,
+    isError = false,
+    refetch,
+  } = useContacts();
 
   const [query, setQuery] = useState("");
   const wide = useMediaQuery("(min-width: 640px)");
@@ -510,13 +516,35 @@ export const TrackedContactsView = () => {
       contacts.filter((c) => c.isTracked && !c.isArchived && !c.isGhost).length,
     [contacts],
   );
-  const nobodyTracked = !isLoading && trackedCount === 0;
+  const nobodyTracked = !isLoading && !isError && trackedCount === 0;
 
   const { toggle: flip, isPending: flipPending } = useTrackToggle();
 
   // Select mode
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  // Drop selected ids that are no longer visible (for example when a search
+  // narrows the list or a contact is archived).
+  const visibleIds = useMemo(
+    () =>
+      new Set(visible.filter((c) => matchesQuery(c, query)).map((c) => c.id)),
+    [visible, query],
+  );
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      for (const id of prev) {
+        if (!visibleIds.has(id)) {
+          const next = new Set<string>();
+          for (const item of prev) {
+            if (visibleIds.has(item)) next.add(item);
+          }
+          return next;
+        }
+      }
+      return prev;
+    });
+  }, [visibleIds]);
   const exitSelectMode = useCallback(() => {
     setSelectMode(false);
     setSelectedIds(new Set());
@@ -782,6 +810,13 @@ export const TrackedContactsView = () => {
           </div>
         )}
 
+        {!isLoading && isError && contacts.length === 0 && (
+          <LoadFailed
+            what="your tracked contacts"
+            onRetry={() => void refetch?.()}
+          />
+        )}
+
         {/* No one tracked: the way in is the Not tracked group under it.
             With Tracked chosen that group is filtered out, so the button
             brings it back. */}
@@ -802,6 +837,7 @@ export const TrackedContactsView = () => {
         )}
 
         {!isLoading &&
+          (!isError || contacts.length > 0) &&
           visible.length === 0 &&
           (query || filtered) &&
           !(nobodyTracked && tracking === "tracked" && !query) && (
@@ -825,7 +861,7 @@ export const TrackedContactsView = () => {
             />
           )}
 
-        {!isLoading && !virtual && (
+        {!isLoading && (!isError || contacts.length > 0) && !virtual && (
           <div className="space-y-5">
             {groups.map((group) => (
               <section

@@ -24,6 +24,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   rejected upfront, switching import tabs clears stale errors, duplicate check
   and merge actions lock while running, and clearing a contact enrichment search
   no longer flashes an empty state.
+- Tags, Lists, Archived contacts and Trash: Archived contacts and Trash add
+  filter bars, restoring an archived contact offers Undo, filtering prunes
+  hidden selections, and failed background refetches keep cached rows on screen.
 - Connectors: a failed sync is retried after its backoff, a Google contact that
   matched one of yours is merged instead of written over, Gmail no longer loses
   mail past the per-run cap, one mail in two IMAP folders counts once, and

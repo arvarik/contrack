@@ -76,7 +76,9 @@ describe("ListDetailPanel icon", () => {
     expect(chosen("heart")).toBe("true");
 
     await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith("Could not save the list"),
+      expect(toast.error).toHaveBeenCalledWith(
+        "Could not save the list: offline",
+      ),
     );
     expect(chosen("star")).toBe("true");
     expect(chosen("heart")).toBe("false");
@@ -95,10 +97,35 @@ describe("ListDetailPanel icon", () => {
     expect(chosen("crown")).toBe("false");
   });
 
+  it("keeps typed list name in the input when a save fails so the user can retry", async () => {
+    api.update
+      .mockRejectedValueOnce(new Error("offline"))
+      .mockResolvedValueOnce({});
+    mount();
+
+    const input = screen.getByRole("textbox", {
+      name: "List name",
+    }) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "  Renamed  " } });
+    fireEvent.blur(input);
+
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        "Could not save the list: offline",
+      ),
+    );
+    expect(input.value).toBe("Renamed");
+
+    // Blurring again retries because savedName.current was restored
+    fireEvent.blur(input);
+    await waitFor(() => expect(api.update).toHaveBeenCalledTimes(2));
+  });
+
   it("uses a 4-column mobile icon grid and 16px list name input", () => {
     mount();
     const input = screen.getByRole("textbox", { name: "List name" });
     expect(input.className).toContain("text-base");
+    expect(input.getAttribute("spellcheck")).toBe("false");
     const heartBtn = screen.getByRole("button", { name: "heart" });
     expect(heartBtn.className).toContain("min-h-[44px]");
   });

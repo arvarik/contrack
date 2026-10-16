@@ -26,13 +26,20 @@ import { EmptyState } from "../../../components/ui/EmptyState";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
 import { Modal } from "../../../components/ui/Modal";
 import { RailTooltip } from "../../../components/ui/RailTooltip";
-import { CARD, FORM_INPUT, FORM_LABEL } from "../../../lib/styles";
+import {
+  CARD,
+  FORM_INPUT,
+  FORM_LABEL,
+  SECTION_HEADING,
+} from "../../../lib/styles";
 import { cn, errorText, plural } from "../../../lib/utils";
 import { tagFilterPath } from "../../contact-list/hooks/useContactListFilters";
 import { SETTINGS_INPUT, SETTINGS_PAGE } from "../layout";
 import { LoadFailed } from "../../../components/ui/LoadFailed";
-import { SearchField } from "../../../components/ui/SearchField";
-import { NO_AUTOCORRECT } from "../../../components/ui/SearchField";
+import {
+  SearchField,
+  NO_AUTOCORRECT,
+} from "../../../components/ui/SearchField";
 
 /** A tag row's icon buttons: flat, with the one hover layer. */
 const ROW_ACTION =
@@ -125,7 +132,7 @@ export const TagsPage = () => {
       cancelEditing();
       focusTag.current = trimmed;
     } catch (err: unknown) {
-      toast(errorText(err, "Could not rename the tag"));
+      toast.error(`Could not rename the tag: ${errorText(err)}`);
     }
   };
 
@@ -136,32 +143,45 @@ export const TagsPage = () => {
       toast("Select or type a different tag to merge into");
       return;
     }
+    const existing = tags.find(
+      (t) =>
+        t.tag !== mergeSource.tag &&
+        t.tag.toLowerCase() === trimmed.toLowerCase(),
+    );
+    const target = existing ? existing.tag : trimmed;
     try {
       const result = await renameMutation.mutateAsync({
         from: mergeSource.tag,
-        to: trimmed,
+        to: target,
       });
       toast(
-        `Merged "${mergeSource.tag}" into "${trimmed}" (${contacts(result.affected)} updated)`,
+        `Merged "${mergeSource.tag}" into "${target}" (${contacts(result.affected)} updated)`,
       );
-      focusTag.current = trimmed;
+      focusTag.current = target;
       setMergeSource(null);
       setMergeTarget("");
     } catch (err: unknown) {
-      toast(errorText(err, "Could not merge the tags"));
+      toast.error(`Could not merge the tags: ${errorText(err)}`);
     }
   };
 
   const handleConfirmDelete = async () => {
     if (!tagToDelete) return;
+    const deleted = tagToDelete.tag;
     try {
-      const result = await deleteMutation.mutateAsync(tagToDelete.tag);
-      toast(
-        `Deleted tag "${tagToDelete.tag}" from ${contacts(result.affected)}`,
-      );
+      const result = await deleteMutation.mutateAsync(deleted);
+      toast(`Deleted tag "${deleted}" from ${contacts(result.affected)}`);
+      if (editingTag === deleted) {
+        setEditingTag(null);
+        setEditValue("");
+      }
+      if (mergeSource?.tag === deleted) {
+        setMergeSource(null);
+        setMergeTarget("");
+      }
       setTagToDelete(null);
     } catch (err: unknown) {
-      toast(errorText(err, "Could not delete the tag"));
+      toast.error(`Could not delete the tag: ${errorText(err)}`);
     }
   };
 
@@ -171,156 +191,174 @@ export const TagsPage = () => {
         <div className="flex justify-center p-12">
           <Loader2 className="w-6 h-6 animate-spin text-primary" />
         </div>
-      ) : isError ? (
+      ) : isError && tags.length === 0 ? (
         <LoadFailed what="your tags" onRetry={() => void refetch()} />
       ) : tags.length === 0 ? (
-        <EmptyState icon={Tag} title="No tags yet" />
+        <EmptyState
+          icon={Tag}
+          title="No tags yet"
+          body="Add a tag on any contact's page to see it here"
+        />
       ) : (
         <div className="space-y-4">
-          {tags.length > 5 && (
-            <SearchField
-              className="max-w-sm"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Filter tags"
-              aria-label="Filter tags"
-              onClear={() => setSearchQuery("")}
-              clearLabel="Clear filter text"
-            />
-          )}
+          <SearchField
+            className="max-w-sm"
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Filter tags"
+            aria-label="Filter tags"
+            onClear={() => setSearchQuery("")}
+            clearLabel="Clear filter text"
+          />
 
           {/* One card, a row for each tag, spaced apart with no line. */}
-          <div className={cn(CARD, "p-0 py-2")}>
-            {filteredTags.length === 0 && (
-              <p className="px-4 sm:px-6 py-4 text-sm text-on-surface-variant">
-                No tag matches &ldquo;{searchQuery.trim()}&rdquo;
+          <div className={cn(CARD, "p-0")}>
+            <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 bg-surface-container-low rounded-t-2xl">
+              <p className={SECTION_HEADING}>
+                {plural(tags.length, "tag", "tags")}
               </p>
-            )}
-            {filteredTags.map((item) => {
-              const isEditing = editingTag === item.tag;
+            </div>
+            <div className="py-2">
+              {filteredTags.length === 0 && (
+                <p className="px-4 sm:px-6 py-4 text-sm text-on-surface-variant">
+                  No tag matches &ldquo;{searchQuery.trim()}&rdquo;
+                </p>
+              )}
+              {filteredTags.map((item) => {
+                const isEditing = editingTag === item.tag;
 
-              return (
-                <div
-                  key={item.tag}
-                  className="flex items-center justify-between gap-3 px-4 sm:px-6 py-2.5"
-                >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    {/* The mark steps aside on a phone, where the three
-                        buttons leave the name little room. */}
-                    <span className="hidden sm:block p-2 rounded-lg bg-surface-container text-on-surface-variant shrink-0">
-                      <Hash className="w-4 h-4" />
-                    </span>
+                return (
+                  <div
+                    key={item.tag}
+                    className="flex items-center justify-between gap-3 px-4 sm:px-6 py-2.5"
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      {/* The mark steps aside on a phone, where the three
+                          buttons leave the name little room. */}
+                      <span className="hidden sm:block p-2 rounded-lg bg-surface-container text-on-surface-variant shrink-0">
+                        <Hash className="w-4 h-4" />
+                      </span>
 
-                    {isEditing ? (
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          void handleRenameSubmit(item);
-                        }}
-                        className="flex items-center gap-2 flex-1 max-w-md"
-                      >
-                        <input
-                          type="text"
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Escape") cancelEditing();
+                      {isEditing ? (
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            void handleRenameSubmit(item);
                           }}
-                          className={cn(SETTINGS_INPUT, "flex-1 min-w-0")}
-                          aria-label={`Rename tag ${item.tag}`}
-                          // The Rename button that opened the field is gone,
-                          // so the field takes the focus it had.
-                          // eslint-disable-next-line jsx-a11y/no-autofocus
-                          autoFocus
-                        />
-                        <button
-                          type="submit"
-                          disabled={renameMutation.isPending}
-                          className="btn-primary btn-sm btn-icon"
-                          aria-label="Save tag name"
+                          className="flex items-center gap-2 flex-1 max-w-md"
                         >
-                          <Check className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={cancelEditing}
-                          className="btn-secondary btn-sm btn-icon"
-                          aria-label="Cancel rename"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </form>
-                    ) : (
-                      // The name and its count are one link, to the
-                      // Network list showing the contacts with the tag.
-                      <RailTooltip
-                        label="See who has this tag"
-                        side="bottom"
-                        className="min-w-0"
-                      >
-                        <Link
-                          to={tagFilterPath(item.tag)}
-                          aria-label={`${item.tag}, ${contacts(item.count)}`}
-                          className="hit-area group/tag flex items-center gap-3 min-w-0 rounded-md"
-                        >
-                          <span className="font-semibold text-sm text-on-surface break-words min-w-0 underline-offset-2 group-hover/tag:underline">
-                            {item.tag}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-primary/10 text-on-primary-wash shrink-0">
-                            {item.count}
-                          </span>
-                          <ChevronRight
-                            aria-hidden="true"
-                            className="w-4 h-4 text-on-surface-variant shrink-0"
+                          <input
+                            type="text"
+                            value={editValue}
+                            maxLength={100}
+                            onChange={(e) => setEditValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Escape") {
+                                e.preventDefault();
+                                cancelEditing();
+                              }
+                            }}
+                            className={cn(SETTINGS_INPUT, "flex-1 min-w-0")}
+                            aria-label={`Rename tag ${item.tag}`}
+                            {...NO_AUTOCORRECT}
+                            // The Rename button that opened the field is gone,
+                            // so the field takes the focus it had.
+                            // eslint-disable-next-line jsx-a11y/no-autofocus
+                            autoFocus
                           />
-                        </Link>
-                      </RailTooltip>
+                          <button
+                            type="submit"
+                            disabled={
+                              !editValue.trim() || renameMutation.isPending
+                            }
+                            className="btn-primary btn-sm btn-icon"
+                            aria-label="Save tag name"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelEditing}
+                            disabled={renameMutation.isPending}
+                            className="btn-secondary btn-sm btn-icon"
+                            aria-label="Cancel rename"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </form>
+                      ) : (
+                        // The name and its count are one link, to the
+                        // Network list showing the contacts with the tag.
+                        <RailTooltip
+                          label="See who has this tag"
+                          side="bottom"
+                          className="min-w-0"
+                        >
+                          <Link
+                            to={tagFilterPath(item.tag)}
+                            aria-label={`${item.tag}, ${contacts(item.count)}`}
+                            className="hit-area group/tag flex items-center gap-3 min-w-0 rounded-md"
+                          >
+                            <span className="font-semibold text-sm text-on-surface break-words min-w-0 underline-offset-2 group-hover/tag:underline">
+                              {item.tag}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-primary/10 text-on-primary-wash shrink-0">
+                              {item.count}
+                            </span>
+                            <ChevronRight
+                              aria-hidden="true"
+                              className="w-4 h-4 text-on-surface-variant shrink-0"
+                            />
+                          </Link>
+                        </RailTooltip>
+                      )}
+                    </div>
+
+                    {!isEditing && (
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <RailTooltip label="Rename" side="bottom">
+                          <button
+                            type="button"
+                            onClick={() => startEditing(item)}
+                            data-rename-tag={item.tag}
+                            className={cn(ROW_ACTION, "hover:text-on-surface")}
+                            aria-label={`Rename ${item.tag}`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                        </RailTooltip>
+
+                        <RailTooltip label="Merge into…" side="bottom">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMergeSource(item);
+                              setMergeTarget("");
+                            }}
+                            className={cn(ROW_ACTION, "hover:text-on-surface")}
+                            aria-label={`Merge ${item.tag} into another tag`}
+                          >
+                            <Merge className="w-4 h-4" />
+                          </button>
+                        </RailTooltip>
+
+                        <RailTooltip label="Delete" side="bottom-end">
+                          <button
+                            type="button"
+                            onClick={() => setTagToDelete(item)}
+                            className={cn(ROW_ACTION, "hover:text-error")}
+                            aria-label={`Delete tag ${item.tag}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </RailTooltip>
+                      </div>
                     )}
                   </div>
-
-                  {!isEditing && (
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <RailTooltip label="Rename" side="bottom">
-                        <button
-                          type="button"
-                          onClick={() => startEditing(item)}
-                          data-rename-tag={item.tag}
-                          className={cn(ROW_ACTION, "hover:text-on-surface")}
-                          aria-label={`Rename ${item.tag}`}
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                      </RailTooltip>
-
-                      <RailTooltip label="Merge into…" side="bottom">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMergeSource(item);
-                            setMergeTarget("");
-                          }}
-                          className={cn(ROW_ACTION, "hover:text-on-surface")}
-                          aria-label={`Merge ${item.tag} into another tag`}
-                        >
-                          <Merge className="w-4 h-4" />
-                        </button>
-                      </RailTooltip>
-
-                      <RailTooltip label="Delete" side="bottom-end">
-                        <button
-                          type="button"
-                          onClick={() => setTagToDelete(item)}
-                          className={cn(ROW_ACTION, "hover:text-error")}
-                          aria-label={`Delete tag ${item.tag}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </RailTooltip>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
@@ -353,6 +391,7 @@ export const TagsPage = () => {
                 id="merge-target-input"
                 type="text"
                 list="existing-tags"
+                maxLength={100}
                 value={mergeTarget}
                 onChange={(e) => setMergeTarget(e.target.value)}
                 placeholder="Choose or enter tag name…"

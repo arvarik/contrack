@@ -7,6 +7,7 @@ import { ExportCard } from "../ExportCard";
 import { SETTINGS_PAGE } from "../layout";
 import { useHashTarget } from "../SettingRow";
 import { useAuth } from "../../../components/auth/AuthGate";
+import { TEXT_LINK } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 
 export const ExportPage = () => {
@@ -29,12 +30,8 @@ export const ExportPage = () => {
 
       {isAdmin && (
         <p className="text-xs sm:text-sm text-on-surface-variant px-1 text-pretty">
-          For a copy of the whole database, every account included, take a
-          snapshot on the{" "}
-          <Link
-            to="/settings/admin/backups"
-            className="font-semibold text-primary underline underline-offset-2"
-          >
+          For a full instance snapshot across all accounts, open the{" "}
+          <Link to="/settings/admin/backups" className={TEXT_LINK}>
             Backups page
           </Link>
         </p>
