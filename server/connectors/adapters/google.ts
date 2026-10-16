@@ -19,7 +19,7 @@ import {
 } from "../googleApis.ts";
 import { z } from "zod";
 import { ConnectorAuthError, ConnectorConfigError } from "../errors.ts";
-import { normalizeEmail } from "../email/normalize.ts";
+import { mailDate, normalizeEmail } from "../email/normalize.ts";
 import {
   summarizeEmail,
   summariesAllowed,
@@ -57,12 +57,33 @@ export const googleSecretSchema = z.object({
 
 export type GoogleSecret = z.infer<typeof googleSecretSchema>;
 
+/**
+ * A first Gmail listing that reached the cap: where it started, where it got
+ * to, and the mailbox's history id from before it began. The next run lists
+ * older mail, and takes that history id when the window is done.
+ */
+export interface GmailBackfill {
+  /** The start of the window, in seconds (Gmail's `after:`). */
+  since: number;
+  /** The second after the oldest mail fetched so far (Gmail's `before:`). */
+  before?: number;
+  historyId?: string;
+}
+
 export interface GoogleCursor {
   contactsSyncToken?: string;
   calendarSyncToken?: string;
   gmailHistoryId?: string;
+  gmailBackfill?: GmailBackfill;
   lastSyncAt?: string;
 }
+
+/**
+ * Mail that is not a conversation: Gmail's spam, its trash and the owner's own
+ * drafts. messages.list leaves the first two out by itself, history.list does
+ * not, so a sender of spam became a correspondent, and a ghost at three mails.
+ */
+const SKIPPED_GMAIL_LABELS = new Set(["SPAM", "TRASH", "DRAFT"]);
 
 export function isAuthError(err: unknown): boolean {
   if (err instanceof ConnectorAuthError) return true;
@@ -313,10 +334,17 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
           const connections = res.data.connections || [];
           for (const person of connections) {
             if (!person.resourceName) continue;
+            // A delta names a person Google deleted with the flag alone.
+            if (person.metadata?.deleted) {
+              yield {
+                kind: "contact_deleted",
+                externalId: person.resourceName,
+              };
+              continue;
+            }
             const primaryName =
               person.names?.find((n) => n.metadata?.primary)?.displayName ||
               person.names?.[0]?.displayName;
-            if (!primaryName) continue;
 
             const emails = (person.emailAddresses || [])
               .map((e) => ({
@@ -340,12 +368,17 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
             const photoUrl =
               person.photos?.find((p) => p.metadata?.primary)?.url ||
               person.photos?.[0]?.url;
+            // A card with an address and no name is still a person: ingest
+            // names it by the address, or keeps the linked contact's name.
+            if (!primaryName && emails.length === 0 && phones.length === 0) {
+              continue;
+            }
 
             yield {
               kind: "contact",
               externalId: person.resourceName,
               contact: {
-                name: primaryName,
+                ...(primaryName ? { name: primaryName } : {}),
                 emails,
                 phones,
                 company: org?.name || undefined,
@@ -387,18 +420,41 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
     }
 
     // 2. Email (Gmail API)
+    let gmailBackfill = cursor.gmailBackfill;
     if (config.syncEmail !== false) {
       const gmail = google.gmail({ version: "v1", auth });
       const maxMessages = config.maxMessagesPerRun ?? 5000;
 
+      /** The mailbox's history id now, or undefined when the call fails. */
+      const profileHistoryId = async (): Promise<string | undefined> => {
+        try {
+          const profile = await gmail.users.getProfile(
+            { userId: "me" },
+            callOptions(signal),
+          );
+          return profile.data.historyId || undefined;
+        } catch (profileErr) {
+          ctx.log(
+            `Could not get Gmail profile historyId: ${(profileErr as Error).message}`,
+          );
+          return undefined;
+        }
+      };
+
       try {
-        let messageIds: string[] = [];
+        const messageIds: string[] = [];
         let newHistoryId: string | undefined;
+        let nextBackfill: GmailBackfill | undefined;
 
         if (gmailHistoryId) {
           try {
+            // Whole records, up to the cap. The cursor moves to the last
+            // record taken, so a run that stops at the cap leaves nothing
+            // behind: the next one starts right after it. Taking a record's
+            // ids and then dropping the ones past the cap lost them for good.
             let pageToken: string | undefined;
-            let lastPageHistoryId: string | undefined;
+            let lastTakenId: string | undefined;
+            let left = false;
             do {
               signal.throwIfAborted();
               const res = await gmail.users.history.list(
@@ -412,28 +468,36 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
               );
 
               const histories = res.data.history || [];
-              for (const h of histories) {
-                if (h.id) lastPageHistoryId = h.id;
-                if (h.messagesAdded) {
-                  for (const ma of h.messagesAdded) {
-                    if (ma.message?.id) messageIds.push(ma.message.id);
-                  }
+              let taken = 0;
+              for (
+                ;
+                taken < histories.length && messageIds.length < maxMessages;
+                taken++
+              ) {
+                const h = histories[taken];
+                for (const ma of h.messagesAdded || []) {
+                  if (ma.message?.id) messageIds.push(ma.message.id);
                 }
+                if (h.id) lastTakenId = h.id;
               }
               pageToken = res.data.nextPageToken || undefined;
-              if (!pageToken && res.data.historyId) {
-                newHistoryId = res.data.historyId;
-              } else if (pageToken && messageIds.length >= maxMessages) {
-                newHistoryId = lastPageHistoryId ?? gmailHistoryId;
+              left =
+                taken < histories.length ||
+                (Boolean(pageToken) && messageIds.length >= maxMessages);
+              if (!left && !pageToken) {
+                newHistoryId = res.data.historyId || lastTakenId;
               }
             } while (pageToken && messageIds.length < maxMessages);
+            if (left) newHistoryId = lastTakenId ?? gmailHistoryId;
           } catch (err: unknown) {
             const code =
               (err as { code?: number; status?: number })?.code ??
               (err as { code?: number; status?: number })?.status;
-            if (code === 404) {
-              // History ID expired: fall back to messages.list
+            if (code === 404 || code === 410) {
+              // History ID expired: fall back to messages.list, which lists
+              // the window again, so the pages read so far are dropped.
               gmailHistoryId = undefined;
+              messageIds.length = 0;
             } else {
               throw err;
             }
@@ -441,14 +505,24 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
         }
 
         if (!gmailHistoryId) {
-          const sinceSeconds = Math.floor(new Date(ctx.since).getTime() / 1000);
+          // A first sync, or one after the history id expired, lists the
+          // window newest first. The mailbox's history id is taken before the
+          // listing, so a change during it reaches the next run. A run that
+          // stops at the cap keeps its place, and the next one lists the mail
+          // before the oldest it fetched, until the window is done. Jumping
+          // to the history id at once lost the older mail for good.
+          const start: GmailBackfill = gmailBackfill ?? {
+            since: Math.floor(new Date(ctx.since).getTime() / 1000),
+            historyId: await profileHistoryId(),
+          };
           let pageToken: string | undefined;
+          let done = false;
           do {
             signal.throwIfAborted();
             const res = await gmail.users.messages.list(
               {
                 userId: "me",
-                q: `after:${sinceSeconds}`,
+                q: `after:${start.since}${start.before ? ` before:${start.before}` : ""}`,
                 maxResults: Math.min(100, maxMessages - messageIds.length),
                 pageToken,
               },
@@ -460,30 +534,15 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
               if (m.id) messageIds.push(m.id);
             }
             pageToken = res.data.nextPageToken || undefined;
+            done = !pageToken;
           } while (pageToken && messageIds.length < maxMessages);
 
-          try {
-            const profile = await gmail.users.getProfile(
-              { userId: "me" },
-              callOptions(signal),
-            );
-            if (profile.data.historyId) {
-              newHistoryId = profile.data.historyId;
-            }
-          } catch (profileErr) {
-            ctx.log(
-              `Could not get Gmail profile historyId: ${(profileErr as Error).message}`,
-            );
-          }
+          if (done) newHistoryId = start.historyId;
+          else nextBackfill = start;
         }
 
-        // Deduplicate message IDs
-        messageIds = [...new Set(messageIds)];
-        if (messageIds.length > maxMessages) {
-          messageIds = messageIds.slice(0, maxMessages);
-        }
-
-        for (const msgId of messageIds) {
+        let oldestMs = Infinity;
+        for (const msgId of [...new Set(messageIds)]) {
           signal.throwIfAborted();
 
           let meta;
@@ -506,6 +565,10 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
               callOptions(signal),
             );
           } catch (msgErr) {
+            // A refused token fails every message: stop the run, so the
+            // history id does not move past the whole mailbox.
+            signal.throwIfAborted();
+            if (isAuthError(msgErr)) throw msgErr;
             ctx.log(
               `Could not fetch metadata for Google message ${msgId}: ${(msgErr as Error).message}`,
             );
@@ -513,24 +576,24 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
           }
 
           if (!meta.data) continue;
+          if (meta.data.internalDate) {
+            oldestMs = Math.min(oldestMs, Number(meta.data.internalDate));
+          }
+          if (meta.data.labelIds?.some((l) => SKIPPED_GMAIL_LABELS.has(l))) {
+            continue;
+          }
 
           const headers = meta.data.payload?.headers || [];
           const getHeader = (name: string) =>
             headers.find((h) => h.name?.toLowerCase() === name.toLowerCase())
               ?.value;
 
-          const dateStr =
-            getHeader("Date") ||
-            (meta.data.internalDate
-              ? new Date(Number(meta.data.internalDate)).toISOString()
-              : new Date().toISOString());
-
           const norm = normalizeEmail(
             {
               externalId: getHeader("Message-ID") || msgId,
               messageId: getHeader("Message-ID") || undefined,
               inReplyTo: getHeader("In-Reply-To") || undefined,
-              date: dateStr,
+              date: mailDate(getHeader("Date"), meta.data.internalDate),
               subject: getHeader("Subject") || "",
               from: getHeader("From") || "",
               to: getHeader("To") || "",
@@ -599,6 +662,19 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
           }
         }
 
+        if (nextBackfill && oldestMs < Infinity) {
+          // The second after the oldest mail fetched, but always before the
+          // bound this run started from: a cap filled by mail from a single
+          // second would give that bound back, and list the same mail forever.
+          const after = Math.floor(oldestMs / 1000) + 1;
+          const previous = nextBackfill.before;
+          nextBackfill = {
+            ...nextBackfill,
+            before:
+              previous === undefined ? after : Math.min(after, previous - 1),
+          };
+        }
+        gmailBackfill = nextBackfill;
         if (newHistoryId) {
           gmailHistoryId = newHistoryId;
         }
@@ -685,7 +761,21 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
                 ? event.end.date
                 : endDate.toISOString();
 
+            // The owner declined: a future one leaves Pulse, a past one was
+            // no meeting. A room is no person, and someone who declined was
+            // not there.
+            const self = event.attendees?.find((a) => a.self);
+            if (self?.responseStatus === "declined") {
+              if (endDate >= now) {
+                yield {
+                  kind: "upcoming_cancelled",
+                  externalId: `google:calendar:${event.id}`,
+                };
+              }
+              continue;
+            }
             const attendees: Participant[] = (event.attendees || [])
+              .filter((a) => !a.resource && a.responseStatus !== "declined")
               .map((a) => ({
                 email: a.email || undefined,
                 name: a.displayName || undefined,
@@ -765,6 +855,7 @@ export const googleAdapter: ConnectorAdapter<GoogleConfig, GoogleSecret> = {
       contactsSyncToken,
       calendarSyncToken,
       gmailHistoryId,
+      gmailBackfill,
       lastSyncAt:
         stagesFailed === 0 ? new Date().toISOString() : cursor.lastSyncAt,
     };

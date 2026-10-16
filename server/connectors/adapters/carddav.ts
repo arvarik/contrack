@@ -10,7 +10,9 @@
  */
 
 import crypto from "node:crypto";
-import * as cheerio from "cheerio";
+// The slim entry parses with htmlparser2 alone, which xmlMode below uses.
+// The full entry loads parse5, which the Docker image removes.
+import * as cheerio from "cheerio/slim";
 import type { AnyNode, Element } from "domhandler";
 import { z } from "zod";
 import {

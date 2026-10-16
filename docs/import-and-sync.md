@@ -185,6 +185,10 @@ with a contact becomes an email on that contact's timeline.
 Common hosts are `imap.gmail.com`, `imap.mail.me.com` (iCloud), and
 `imap.fastmail.com`, each on port 993.
 
+A message that sits in two of the folders, such as a mail you sent to
+yourself, counts once. A folder you add later is read back over the same
+**First sync goes back** window as the first one.
+
 ### Google Workspace
 
 The Google connector syncs your Google Contacts, Gmail, and Google Calendar.
@@ -241,10 +245,14 @@ Google Contacts become untracked contacts, with their photos copied to your
 server. A Google contact that shares an email address or a phone number with
 one of your contacts is linked to that contact, not added again. When Google
 sends a synced person again, such as after a change in Google, the sync
-writes Google's details over the linked contact, its emails and phones
-included. Change those details in Google, not in Contrack. A new contact from
-Google gets the same duplicate check as a contact you add, when **Check new
-contacts automatically** is on.
+writes Google's details over a contact it created, its emails and phones
+included. Change those details in Google, not in Contrack. A contact that
+existed before and was linked keeps its name and its details: the sync only
+fills in what is empty and adds the addresses it learns. So does a
+contact you merged, and one that two connectors link. When you delete a
+contact in Google, a contact the sync created moves to the Trash, and a
+linked one stays. A new contact from Google gets the same duplicate check as
+a contact you add, when **Check new contacts automatically** is on.
 
 ### CardDAV
 
@@ -286,6 +294,10 @@ CardDAV server.
 | **Roll up emails per contact per day**: one timeline entry a day for each person | Mailbox, Google           | On           |
 | **Suggest a new person after** a number of meetings or messages, from 1 to 10    | Calendar, Mailbox, Google | 3            |
 | **Generate AI summaries** (Google: **AI message summaries**)                     | Mailbox, Google           | Off          |
+
+A sender such as `no-reply@` or `notifications@` is never suggested, and
+neither is anyone on a message or a meeting with more than 25 people you do
+not know. Gmail's spam, trash and drafts are skipped.
 
 An AI summary is one or two sentences about a message with one of your
 contacts. The [Fast model](ai.md#models) writes it into the message's timeline

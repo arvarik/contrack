@@ -145,6 +145,37 @@ export function determineDirection(
   return "in";
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * When a mail was sent: its Date header, unless that is more than a day from
+ * the time the mailbox received it, or missing or unreadable. The header is
+ * what the sender wrote, and spam dated 2099 would top a timeline for years.
+ *
+ * @param header - The Date header, as a Date or a string.
+ * @param received - The mailbox's own time: IMAP INTERNALDATE as a Date, or
+ *   Gmail's internalDate as milliseconds in a string.
+ */
+export function mailDate(
+  header: Date | string | null | undefined,
+  received: Date | string | number | null | undefined,
+): Date | undefined {
+  const sent = header ? new Date(header) : null;
+  const got =
+    received == null
+      ? null
+      : new Date(
+          typeof received === "string" && /^\d+$/.test(received)
+            ? Number(received)
+            : received,
+        );
+  const sentOk = sent && !isNaN(sent.getTime());
+  const gotOk = got && !isNaN(got.getTime());
+  if (!sentOk) return gotOk ? got : undefined;
+  if (gotOk && Math.abs(sent.getTime() - got.getTime()) > DAY_MS) return got;
+  return sent;
+}
+
 /**
  * Normalizes raw email headers into a NormalizedEmail structure.
  */

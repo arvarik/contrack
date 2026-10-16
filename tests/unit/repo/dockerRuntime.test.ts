@@ -156,6 +156,17 @@ describe("the runtime image", () => {
     expect(unused).toEqual([]);
   });
 
+  it("loads cheerio through cheerio/slim, since the image removes parse5", () => {
+    // Only cheerio's full entry loads parse5, which the runtime stage
+    // deletes. An import of it boots on a laptop and fails in the image, and
+    // pull requests build no image.
+    const full = [path.join(ROOT, "server"), path.join(ROOT, "shared")]
+      .flatMap(tsFiles)
+      .filter((file) => runtimeSpecifiers(file).includes("cheerio"))
+      .map((file) => path.relative(ROOT, file));
+    expect(full).toEqual([]);
+  });
+
   it("starts the server with Node alone, with no TypeScript loader", () => {
     const dockerfile = readFileSync(path.join(ROOT, "Dockerfile"), "utf8");
     expect(dockerfile).toMatch(/^CMD \["node", "server\.ts"\]$/m);

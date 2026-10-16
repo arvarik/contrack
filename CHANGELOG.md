@@ -9,6 +9,13 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Connectors: a failed sync is retried after its backoff, a Google contact that
+  matched one of yours is merged instead of written over, Gmail no longer loses
+  mail past the per-run cap, one mail in two IMAP folders counts once, and
+  all-day repeating meetings keep their ids when the server's time zone changes.
+
 ## [2.0.0] - 2026-10-14
 
 Contrack 2.0 reimagines Contrack from the ground up as a fast, multi-user,

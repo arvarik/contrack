@@ -22,8 +22,18 @@ export type SyncEvent =
       photoUrl?: string;
     }
   | {
+      kind: "contact_deleted";
+      externalId: string;
+    }
+  | {
       kind: "interaction";
       externalId: string;
+      /**
+       * The ids an earlier version of the adapter gave this interaction. Ingest
+       * recognizes a link under one of them and moves it to `externalId`, so a
+       * change of id form re-imports nothing.
+       */
+      legacyExternalIds?: string[];
       type: "email" | "meeting" | "message";
       title: string;
       content?: string;

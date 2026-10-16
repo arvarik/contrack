@@ -252,6 +252,18 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       expect(googleConn?.config).toMatchObject({ summaries: true });
     });
 
+    it("sends a first consent that brought no refresh token back to Connectors with a reason", async () => {
+      // Without a refresh token the connector cannot sync. Before, the secret
+      // schema refused it inside createConnector, and the browser landed on
+      // a JSON 400 instead of the Connectors page.
+      const res = await signInWithGoogle("carol@example.com", undefined);
+      expect(res.status).toBe(302);
+      expect(res.headers.location).toBe("/settings/connectors?error=failed");
+      expect(
+        listConnectors(memberActor.scope).map((c) => c.name),
+      ).not.toContain("Google (carol@example.com)");
+    });
+
     // A second account wrote its tokens over the first one's connector.
     it("keeps a second Google account on its own connector, and a returning one on its own", async () => {
       await signInWithGoogle("alice@example.com", "alice-refresh");
@@ -728,6 +740,441 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       // Verify hidden in listCorrespondents
       const afterList = listCorrespondents(memberActor.scope);
       expect(afterList.some((c) => c.email === targetEmail)).toBe(false);
+    });
+  });
+
+  describe("Gmail cursor and filters, People deletions, Calendar attendees", () => {
+    type GmailUsers = {
+      history?: { list: Mock };
+      messages?: { list?: Mock; get?: Mock };
+      getProfile?: Mock;
+    };
+
+    /** A metadata answer for one message: a mail from `id`@example.com. */
+    function meta(
+      id: string,
+      extra: { labelIds?: string[]; date?: string; internalDate?: string } = {},
+    ) {
+      return {
+        data: {
+          id,
+          threadId: "t",
+          labelIds: extra.labelIds ?? ["INBOX"],
+          internalDate: extra.internalDate ?? "1771164000000",
+          payload: {
+            headers: [
+              { name: "From", value: `Sender ${id} <${id}@example.com>` },
+              { name: "To", value: "me@example.com" },
+              { name: "Subject", value: `Subject ${id}` },
+              {
+                name: "Date",
+                value: extra.date ?? "Sun, 15 Feb 2026 14:00:00 +0000",
+              },
+              { name: "Message-ID", value: `<${id}@example.com>` },
+            ],
+          },
+        },
+      };
+    }
+
+    function mockGmail(users: GmailUsers) {
+      const get = vi.fn(({ id }: { id: string }) => Promise.resolve(meta(id)));
+      vi.spyOn(google, "gmail").mockReturnValue({
+        users: {
+          history: users.history ?? { list: vi.fn() },
+          messages: { list: vi.fn(), get, ...users.messages },
+          getProfile:
+            users.getProfile ??
+            vi.fn().mockResolvedValue({ data: { historyId: "H-now" } }),
+        },
+      } as unknown as ReturnType<typeof google.gmail>);
+      return get;
+    }
+
+    /** One sync of the stage(s) in `config`, from `cursor`. */
+    async function run(
+      config: Partial<Parameters<typeof googleAdapter.sync>[0]["config"]>,
+      cursor: unknown = null,
+    ) {
+      const events: SyncEvent[] = [];
+      const gen = googleAdapter.sync({
+        config: {
+          syncContacts: false,
+          syncEmail: false,
+          syncCalendar: false,
+          summaries: false,
+          lookbackDays: 90,
+          rollup: true,
+          ghostThreshold: 3,
+          maxMessagesPerRun: 5000,
+          aliases: [],
+          ...config,
+        },
+        secret: { refreshToken: "good-token", email: "me@example.com" },
+        cursor,
+        since: "2026-02-01T00:00:00.000Z",
+        selfAddresses: { emails: ["me@example.com"], phones: [] },
+        signal: new AbortController().signal,
+        log: () => {},
+      });
+      let step = await gen.next();
+      while (!step.done) {
+        events.push(step.value);
+        step = await gen.next();
+      }
+      return {
+        events: events.filter((e) => e.kind !== "progress"),
+        cursor: step.value as Record<string, unknown>,
+      };
+    }
+
+    const emailIds = (events: SyncEvent[]) =>
+      events.flatMap((e) =>
+        e.kind === "interaction"
+          ? [e.externalId.replace("google:gmail:", "").replace(/^<|>$/g, "")]
+          : [],
+      );
+
+    it("stops the history walk at the cap, after whole records, and keeps the cursor at the last record taken", async () => {
+      // With the cap at 2, the second record is not taken, and the cursor
+      // stays at the first, so the next run starts with m3. Before, the
+      // ids past the cap were dropped and the cursor moved past them.
+      mockGmail({
+        history: {
+          list: vi.fn().mockResolvedValue({
+            data: {
+              historyId: "H2",
+              history: [
+                {
+                  id: "h1",
+                  messagesAdded: [
+                    { message: { id: "m1" } },
+                    { message: { id: "m2" } },
+                  ],
+                },
+                { id: "h2", messagesAdded: [{ message: { id: "m3" } }] },
+              ],
+            },
+          }),
+        },
+      });
+      const { events, cursor } = await run(
+        { syncEmail: true, maxMessagesPerRun: 2 },
+        { gmailHistoryId: "H1" },
+      );
+      expect(emailIds(events)).toEqual(["m1@example.com", "m2@example.com"]);
+      expect(cursor.gmailHistoryId).toBe("h1");
+    });
+
+    it("takes a record larger than the cap whole, and the mailbox's history id when nothing is left", async () => {
+      mockGmail({
+        history: {
+          list: vi.fn().mockResolvedValue({
+            data: {
+              historyId: "H2",
+              history: [
+                {
+                  id: "h1",
+                  messagesAdded: [
+                    { message: { id: "m1" } },
+                    { message: { id: "m2" } },
+                    { message: { id: "m3" } },
+                  ],
+                },
+              ],
+            },
+          }),
+        },
+      });
+      const { events, cursor } = await run(
+        { syncEmail: true, maxMessagesPerRun: 2 },
+        { gmailHistoryId: "H1" },
+      );
+      expect(emailIds(events)).toHaveLength(3);
+      expect(cursor.gmailHistoryId).toBe("H2");
+    });
+
+    it("pages a first sync across runs by date, and switches to history from the id it took at the start", async () => {
+      // Run 1 takes the two newest mails and reaches the cap. It keeps where
+      // it got to, and the mailbox's history id from before it listed. Run 2
+      // lists older mails before that point. Before, run 1 jumped to the
+      // profile's history id and the older mails were never fetched.
+      const list1 = vi.fn().mockResolvedValue({
+        data: { messages: [{ id: "m1" }, { id: "m2" }], nextPageToken: "p2" },
+      });
+      const get1 = mockGmail({ messages: { list: list1 } });
+      get1.mockImplementation(({ id }: { id: string }) =>
+        Promise.resolve(
+          meta(id, {
+            internalDate: id === "m1" ? "1771164000000" : "1771160400000",
+          }),
+        ),
+      );
+      const first = await run({ syncEmail: true, maxMessagesPerRun: 2 });
+      expect(emailIds(first.events)).toEqual([
+        "m1@example.com",
+        "m2@example.com",
+      ]);
+      expect(first.cursor.gmailHistoryId).toBeUndefined();
+      expect(list1.mock.calls[0][0]).toMatchObject({ q: "after:1769904000" });
+
+      const list2 = vi.fn().mockResolvedValue({
+        data: { messages: [{ id: "m3" }] },
+      });
+      mockGmail({
+        messages: { list: list2 },
+        getProfile: vi
+          .fn()
+          .mockResolvedValue({ data: { historyId: "H-later" } }),
+      });
+      const second = await run(
+        { syncEmail: true, maxMessagesPerRun: 2 },
+        first.cursor,
+      );
+      expect(emailIds(second.events)).toEqual(["m3@example.com"]);
+      // Older than m2 (1771160400 s), same second included, from the same start.
+      expect(list2.mock.calls[0][0]).toMatchObject({
+        q: "after:1769904000 before:1771160401",
+      });
+      expect(second.cursor.gmailHistoryId).toBe("H-now");
+      expect(second.cursor.gmailBackfill).toBeUndefined();
+    });
+
+    it("skips spam, trash and drafts, and dates a mail by the mailbox when its Date header is far off", async () => {
+      const get = mockGmail({
+        history: {
+          list: vi.fn().mockResolvedValue({
+            data: {
+              historyId: "H2",
+              history: [
+                {
+                  id: "h1",
+                  messagesAdded: [
+                    { message: { id: "spam" } },
+                    { message: { id: "trash" } },
+                    { message: { id: "draft" } },
+                    { message: { id: "ok" } },
+                  ],
+                },
+              ],
+            },
+          }),
+        },
+      });
+      get.mockImplementation(({ id }: { id: string }) =>
+        Promise.resolve(
+          meta(id, {
+            labelIds: id === "ok" ? ["INBOX"] : [id.toUpperCase(), "UNREAD"],
+            date: "Fri, 01 Jan 2099 00:00:00 +0000",
+          }),
+        ),
+      );
+      const { events } = await run(
+        { syncEmail: true },
+        { gmailHistoryId: "H1" },
+      );
+      expect(emailIds(events)).toEqual(["ok@example.com"]);
+      expect((events[0] as { date: string }).date).toBe(
+        "2026-02-15T14:00:00.000Z",
+      );
+    });
+
+    it("lists messages again when the history id is gone (404 or 410)", async () => {
+      for (const code of [404, 410]) {
+        const list = vi
+          .fn()
+          .mockResolvedValue({ data: { messages: [{ id: "m1" }] } });
+        mockGmail({
+          history: {
+            list: vi
+              .fn()
+              .mockRejectedValue(Object.assign(new Error("gone"), { code })),
+          },
+          messages: { list },
+        });
+        const { events, cursor } = await run(
+          { syncEmail: true },
+          { gmailHistoryId: "old" },
+        );
+        expect(emailIds(events)).toEqual(["m1@example.com"]);
+        expect(cursor.gmailHistoryId).toBe("H-now");
+      }
+    });
+
+    it("moves a first sync's date bound back even when the cap is filled by mail from one second", async () => {
+      // Two mails in the same second fill a cap of 2. The bound was that
+      // second plus one, the bound the run started from, so the next run
+      // listed the same two mails again, run after run.
+      const second = 1771160400;
+      const get = mockGmail({
+        messages: {
+          list: vi.fn().mockResolvedValue({
+            data: {
+              messages: [{ id: "m1" }, { id: "m2" }],
+              nextPageToken: "p2",
+            },
+          }),
+        },
+      });
+      get.mockImplementation(({ id }: { id: string }) =>
+        Promise.resolve(meta(id, { internalDate: String(second * 1000) })),
+      );
+      const { cursor } = await run(
+        { syncEmail: true, maxMessagesPerRun: 2 },
+        {
+          gmailBackfill: {
+            since: 1769904000,
+            before: second + 1,
+            historyId: "H0",
+          },
+        },
+      );
+      expect(cursor.gmailBackfill).toMatchObject({ before: second });
+    });
+
+    it("drops the ids of history pages read before the history id turned out to be gone", async () => {
+      const list = vi.fn().mockResolvedValue({
+        data: { messages: [{ id: "m9" }] },
+      });
+      mockGmail({
+        history: {
+          list: vi
+            .fn()
+            .mockResolvedValueOnce({
+              data: {
+                history: [
+                  { id: "h1", messagesAdded: [{ message: { id: "m1" } }] },
+                ],
+                nextPageToken: "p2",
+              },
+            })
+            .mockRejectedValueOnce(
+              Object.assign(new Error("gone"), { code: 404 }),
+            ),
+        },
+        messages: { list },
+      });
+      const { events } = await run(
+        { syncEmail: true },
+        { gmailHistoryId: "H1" },
+      );
+      expect(emailIds(events)).toEqual(["m9@example.com"]);
+    });
+
+    it("stops the sync when Google refuses the token while it reads a message", async () => {
+      // Each failed message was logged and skipped, so an expired token
+      // skipped the whole mailbox and moved the history id past it.
+      const get = mockGmail({
+        history: {
+          list: vi.fn().mockResolvedValue({
+            data: {
+              historyId: "H2",
+              history: [
+                { id: "h1", messagesAdded: [{ message: { id: "m1" } }] },
+              ],
+            },
+          }),
+        },
+      });
+      get.mockRejectedValue(
+        Object.assign(new Error("invalid_grant"), { code: 400 }),
+      );
+      await expect(
+        run({ syncEmail: true }, { gmailHistoryId: "H1" }),
+      ).rejects.toBeInstanceOf(ConnectorAuthError);
+    });
+
+    it("reports a person Google deleted, and keeps a person who has an address but no name", async () => {
+      vi.spyOn(google, "people").mockReturnValue({
+        people: {
+          connections: {
+            list: vi.fn().mockResolvedValue({
+              data: {
+                connections: [
+                  { resourceName: "people/gone", metadata: { deleted: true } },
+                  {
+                    resourceName: "people/nameless",
+                    emailAddresses: [{ value: "nameless@example.com" }],
+                  },
+                ],
+                nextSyncToken: "t2",
+              },
+            }),
+          },
+        },
+      } as unknown as ReturnType<typeof google.people>);
+      const { events } = await run(
+        { syncContacts: true },
+        { contactsSyncToken: "t1" },
+      );
+      expect(events).toEqual([
+        { kind: "contact_deleted", externalId: "people/gone" },
+        expect.objectContaining({
+          kind: "contact",
+          externalId: "people/nameless",
+          contact: expect.objectContaining({
+            emails: [
+              {
+                email: "nameless@example.com",
+                type: "other",
+                isPrimary: false,
+              },
+            ],
+          }),
+        }),
+      ]);
+    });
+
+    it("drops rooms and attendees who declined, and treats a meeting the owner declined as cancelled", async () => {
+      const hour = 3600_000;
+      const at = (offsetMs: number) =>
+        new Date(Date.now() + offsetMs).toISOString();
+      const event = (id: string, start: number, selfStatus: string) => ({
+        id,
+        summary: id,
+        start: { dateTime: at(start) },
+        end: { dateTime: at(start + hour) },
+        attendees: [
+          { email: "me@example.com", self: true, responseStatus: selfStatus },
+          { email: "bob@example.com", responseStatus: "accepted" },
+          {
+            email: "room-4@resource.calendar.google.com",
+            resource: true,
+            displayName: "Room 4",
+          },
+          { email: "carol@example.com", responseStatus: "declined" },
+        ],
+      });
+      vi.spyOn(google, "calendar").mockReturnValue({
+        events: {
+          list: vi.fn().mockResolvedValue({
+            data: {
+              items: [
+                event("past-ok", -3 * hour, "accepted"),
+                event("past-declined", -5 * hour, "declined"),
+                event("future-declined", 24 * hour, "declined"),
+              ],
+              nextSyncToken: "c2",
+            },
+          }),
+        },
+      } as unknown as ReturnType<typeof google.calendar>);
+
+      const { events } = await run({ syncCalendar: true });
+      expect(events).toEqual([
+        expect.objectContaining({
+          kind: "interaction",
+          externalId: "google:calendar:past-ok",
+          participants: [
+            { email: "me@example.com", name: undefined },
+            { email: "bob@example.com", name: undefined },
+          ],
+        }),
+        {
+          kind: "upcoming_cancelled",
+          externalId: "google:calendar:future-declined",
+        },
+      ]);
     });
   });
 });

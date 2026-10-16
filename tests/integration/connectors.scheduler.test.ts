@@ -268,4 +268,22 @@ describe("Connectors Scheduler", () => {
     _slowSyncResolver?.();
     await first;
   });
+
+  it("retries a connector in error status once its backoff has elapsed, and leaves one that needs reauth", async () => {
+    // A failed run sets status 'error' and a backoff nextRunAt. The tick read
+    // only 'active' rows, so one network blip stopped a connector until
+    // somebody clicked Retry now, although the docs promise the next try.
+    const failedId = connector({}, { status: "error" });
+    const reauthId = connector({}, { owner: owner2, status: "needs_reauth" });
+
+    await tickScheduler();
+    await vi.waitFor(() => expect(getSchedulerState().activeRunsCount).toBe(0));
+
+    expect(executedConnectorIds).toContain(failedId);
+    expect(executedConnectorIds).not.toContain(reauthId);
+    const row = sqlite
+      .prepare("SELECT status FROM connectors WHERE id = ?")
+      .get(failedId) as { status: string };
+    expect(row.status).toBe("active");
+  });
 });
