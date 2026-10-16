@@ -15,7 +15,7 @@ import { isPrivateAddress } from "../../utils/urlSafety.ts";
 import { log } from "../../utils/logger.ts";
 import { pageText } from "../../services/research/pages.ts";
 import { ConnectorAuthError, ConnectorConfigError } from "../errors.ts";
-import { normalizeEmail } from "../email/normalize.ts";
+import { mailDate, normalizeEmail } from "../email/normalize.ts";
 import {
   summarizeEmail,
   summariesAllowed,
@@ -340,6 +340,10 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
       let foldersSucceeded = 0;
       let foldersFailed = 0;
       let firstFolderError: Error | null = null;
+      // A mail in two folders, such as one sent to oneself, is yielded once a
+      // run: a second copy would count its strangers twice and summarize it
+      // twice before ingest saw that the id was known.
+      const seenMessageIds = new Set<string>();
 
       for (const folder of targetFolders) {
         signal.throwIfAborted();
@@ -389,8 +393,12 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
               uids = foundUids.filter((u) => u > lastUid);
             }
           } else {
-            // Initial sync: fetch since lookback date
-            const sinceDate = new Date(ctx.since);
+            // A folder with no cursor, on the first run or added later, reads
+            // the whole lookback window. (`ctx.since` is the last sync once
+            // there was one, which gave a folder added later a day of mail.)
+            const sinceDate = new Date(
+              Date.now() - (config.lookbackDays ?? 90) * 24 * 60 * 60 * 1000,
+            );
             const foundUids = await client.search(
               { since: sinceDate },
               { uid: true },
@@ -448,13 +456,12 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
               address: c.address || undefined,
             }));
 
-            const dateValue = message.envelope.date ?? message.internalDate;
             const norm = normalizeEmail(
               {
                 externalId: message.envelope.messageId || `${folder}:${uid}`,
                 messageId: message.envelope.messageId,
                 inReplyTo: message.envelope.inReplyTo,
-                date: dateValue,
+                date: mailDate(message.envelope.date, message.internalDate),
                 subject: message.envelope.subject,
                 from: rawFrom,
                 to: rawTo,
@@ -462,6 +469,10 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
               },
               { selfEmails, includeBody: false },
             );
+            if (norm.messageId) {
+              if (seenMessageIds.has(norm.messageId)) continue;
+              seenMessageIds.add(norm.messageId);
+            }
 
             // Determine whether any counterparty matches a known contact
             let matchesContact = false;
@@ -506,9 +517,20 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
               }
             }
 
+            // One interaction per message, whatever folders hold it: keyed by
+            // its Message-ID, else by folder and UID. The id with the folder
+            // in it, which earlier versions gave, made a mail in INBOX and
+            // Sent two interactions.
             yield {
               kind: "interaction",
-              externalId: `imap:${folder}:${norm.externalId}`,
+              externalId: norm.messageId
+                ? `imap:${norm.messageId}`
+                : `imap:${folder}:${uid}`,
+              // Earlier versions keyed it by folder: list every synced folder's
+              // id, so the link from whichever folder held it first is found.
+              legacyExternalIds: norm.messageId
+                ? targetFolders.map((f) => `imap:${f}:${norm.externalId}`)
+                : [`imap:${folder}:${norm.externalId}`],
               type: "email",
               title: norm.title,
               content: summaryContent,

@@ -2,7 +2,8 @@
  * The connector sync scheduler. One tick, which the recurring job
  * `connectors.tick` runs every 60 seconds with background jobs on
  * (server/jobs/connectors.ts):
- * - selects due active connectors (nextRunAt <= now)
+ * - selects due connectors (nextRunAt <= now): active ones, and failed ones
+ *   whose backoff has passed. Paused ones and ones that need reauth wait.
  * - runs at most CONNECTOR_SYNC_CONCURRENCY (default 2)
  * - runs at most one connector per owner per tick
  * - runs each sync inside runWithContext with the owner's scope
@@ -135,7 +136,7 @@ export async function tickScheduler(): Promise<void> {
     .prepare(
       `SELECT id, ownerId, kind, name
        FROM connectors
-       WHERE status = 'active'
+       WHERE status IN ('active', 'error')
          AND (nextRunAt IS NULL OR nextRunAt <= ?)
        ORDER BY nextRunAt ASC`,
     )

@@ -7,6 +7,7 @@
  * @module server/connectors/adapters/ics
  */
 
+import crypto from "node:crypto";
 import { z } from "zod";
 import ical, {
   type CalendarResponse,
@@ -114,6 +115,19 @@ export async function fetchIcsContent(
   urlStr: string,
   sync?: AbortSignal,
 ): Promise<string> {
+  // The private-hosts branch below uses the global fetch, which reads a
+  // `data:` address as a feed. Only a web address is one.
+  let protocol = "";
+  try {
+    protocol = new URL(urlStr).protocol;
+  } catch {
+    // Refused below.
+  }
+  if (protocol !== "http:" && protocol !== "https:") {
+    throw new ConnectorConfigError(
+      "The calendar address must start with http:// or https://",
+    );
+  }
   const deadline = AbortSignal.timeout(ICS_FETCH_DEADLINE_MS);
   const signal = sync ? AbortSignal.any([sync, deadline]) : deadline;
   const allowPrivate = process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS === "true";
@@ -170,6 +184,27 @@ function stamp(date: Date, allDay: boolean): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
+/** The text of a property node-ical gives as a string or as `{ val }`. */
+function textOf(value: unknown): string | undefined {
+  if (typeof value === "string") return value;
+  if (value && typeof value === "object" && "val" in value) {
+    return String((value as { val: unknown }).val);
+  }
+  return undefined;
+}
+
+/**
+ * An id for an event the feed gave no UID. Before, every such event was
+ * "undefined", so only the first one was kept.
+ */
+function noUidKey(title: string, start: Date): string {
+  const digest = crypto
+    .createHash("sha1")
+    .update(`${title}|${start.toISOString()}`)
+    .digest("hex");
+  return `nouid-${digest.slice(0, 16)}`;
+}
+
 function parseParticipants(event: VEvent): Participant[] {
   const participants: Participant[] = [];
   const seenEmails = new Set<string>();
@@ -204,6 +239,21 @@ function parseParticipants(event: VEvent): Participant[] {
       : [event.attendee];
 
     for (const att of attendees) {
+      const params =
+        typeof att === "object"
+          ? (att.params as Record<string, string> | undefined)
+          : undefined;
+      // A room is no person, and someone who declined was not there.
+      // Parameter values are case-insensitive (RFC 5545 3.2).
+      const partstat = String(params?.PARTSTAT ?? "").toUpperCase();
+      const cutype = String(params?.CUTYPE ?? "").toUpperCase();
+      if (
+        partstat === "DECLINED" ||
+        cutype === "RESOURCE" ||
+        cutype === "ROOM"
+      ) {
+        continue;
+      }
       const rawVal = typeof att === "string" ? att : att.val;
       const email = rawVal
         ?.replace(/^mailto:/i, "")
@@ -332,20 +382,13 @@ export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
       }
 
       const participants = parseParticipants(event);
-      const title =
-        typeof event.summary === "string"
-          ? event.summary
-          : event.summary && "val" in event.summary
-            ? String(event.summary.val)
-            : "Untitled Event";
-      const content =
-        includeDescription && event.description
-          ? typeof event.description === "string"
-            ? event.description
-            : "val" in event.description
-              ? String(event.description.val)
-              : undefined
-          : undefined;
+      const title = textOf(event.summary) ?? "Untitled Event";
+      const content = includeDescription
+        ? textOf(event.description)
+        : undefined;
+      const baseId = event.uid
+        ? String(event.uid)
+        : noUidKey(title, event.start ? new Date(event.start) : new Date(0));
 
       // Handle recurring events
       if (event.rrule) {
@@ -386,13 +429,39 @@ export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
             continue;
           }
 
-          const recId = instance.event?.recurrenceid
-            ? instance.event.recurrenceid instanceof Date
-              ? instance.event.recurrenceid.toISOString()
-              : String(instance.event.recurrenceid)
-            : instance.start.toISOString();
+          // An all-day instance is keyed by its day. node-ical builds it at
+          // the server's local midnight, so as an instant it moved with the
+          // server's zone and with DST, and a move to a UTC container imported
+          // every past instance again. That instant is kept as the legacy id.
+          const rid = instance.event?.recurrenceid;
+          let recId: string;
+          let legacyId: string | undefined;
+          if (rid instanceof Date) {
+            const dateOnly = (rid as { dateOnly?: boolean }).dateOnly === true;
+            recId = dateOnly ? stamp(rid, true) : rid.toISOString();
+            if (dateOnly) legacyId = rid.toISOString();
+          } else if (rid) {
+            recId = String(rid);
+          } else {
+            recId = stamp(instance.start, instance.isFullDay);
+            if (instance.isFullDay) legacyId = instance.start.toISOString();
+          }
+          const externalId = `${baseId}_${recId}`;
+          const legacyExternalIds = legacyId
+            ? [`${baseId}_${legacyId}`]
+            : undefined;
 
-          const externalId = `${event.uid}_${recId}`;
+          // A moved or renamed instance carries its own details.
+          const own = instance.isOverride ? instance.event : undefined;
+          const ownPeople = own ? parseParticipants(own) : [];
+          const instanceTitle = textOf(own?.summary) ?? title;
+          const instanceContent = includeDescription
+            ? (textOf(own?.description) ?? content)
+            : undefined;
+          // An override that lists people uses its own list, even when
+          // everyone on it declined.
+          const instancePeople =
+            own && (own.attendee || own.organizer) ? ownPeople : participants;
           const startsAt = stamp(instance.start, instance.isFullDay);
           const endsAt = instance.end
             ? stamp(instance.end, instance.isFullDay)
@@ -402,22 +471,23 @@ export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
             yield {
               kind: "interaction",
               externalId,
+              ...(legacyExternalIds ? { legacyExternalIds } : {}),
               type: "meeting",
-              title,
-              content,
+              title: instanceTitle,
+              content: instanceContent,
               date: startsAt,
               endsAt,
-              participants,
+              participants: instancePeople,
               raw: { uid: event.uid, recId },
             };
           } else {
             yield {
               kind: "upcoming",
               externalId,
-              title,
+              title: instanceTitle,
               startsAt,
               endsAt,
-              participants,
+              participants: instancePeople,
             };
           }
         }
@@ -432,7 +502,7 @@ export const icsAdapter: ConnectorAdapter<IcsConfig, null> = {
           continue;
         }
 
-        const externalId = String(event.uid);
+        const externalId = baseId;
         const allDay =
           (event.start as { dateOnly?: boolean }).dateOnly === true;
         const startsAt = stamp(startDate, allDay);
