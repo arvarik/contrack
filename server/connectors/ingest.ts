@@ -13,6 +13,7 @@
  * @module server/connectors/ingest
  */
 import crypto from "node:crypto";
+import fs from "node:fs";
 import path from "node:path";
 import { sqlite } from "../db.ts";
 import type { Scope } from "../tenancy/scope.ts";
@@ -710,19 +711,73 @@ export async function ingestStream(
       }
 
       if (existingLink && existingLink.localId) {
+        let targetLocalId = existingLink.localId;
+        for (let depth = 0; depth < 10; depth++) {
+          const canonRow = sqlite
+            .prepare(
+              `SELECT canonicalId FROM contacts WHERE id = ? AND ownerId = ?`,
+            )
+            .get(targetLocalId, scope.ownerId) as
+            { canonicalId: string | null } | undefined;
+          if (!canonRow?.canonicalId || canonRow.canonicalId === targetLocalId)
+            break;
+          targetLocalId = canonRow.canonicalId;
+        }
+
+        const prevAvatarRow = cPayload.avatarUrl
+          ? (sqlite
+              .prepare(
+                `SELECT avatarUrl FROM contacts WHERE id = ? AND ownerId = ?`,
+              )
+              .get(targetLocalId, scope.ownerId) as
+              { avatarUrl: string | null } | undefined)
+          : undefined;
+        const prevAvatarUrl = prevAvatarRow?.avatarUrl ?? null;
+
         try {
-          contactService.updateContact(scope, existingLink.localId, cPayload);
+          contactService.updateContact(scope, targetLocalId, cPayload);
         } catch {
           // ignore if contact was removed or update failed
         }
-        ingestedContactIds.add(existingLink.localId);
+
+        if (
+          prevAvatarUrl &&
+          cPayload.avatarUrl &&
+          prevAvatarUrl !== cPayload.avatarUrl &&
+          prevAvatarUrl.startsWith(`/uploads/u/${scope.ownerId}/avatars/`)
+        ) {
+          const stillUsed = sqlite
+            .prepare(
+              `SELECT 1 FROM contacts WHERE ownerId = ? AND avatarUrl = ? LIMIT 1`,
+            )
+            .get(scope.ownerId, prevAvatarUrl);
+          if (!stillUsed) {
+            const oldFile = path.join(
+              ownerUploadDir(scope.ownerId, "avatars"),
+              path.basename(prevAvatarUrl),
+            );
+            try {
+              if (fs.existsSync(oldFile)) fs.unlinkSync(oldFile);
+            } catch {
+              // ignore unlink error
+            }
+          }
+        }
+
+        ingestedContactIds.add(targetLocalId);
         sqlite
           .prepare(
             `UPDATE connector_links
-             SET seenCount = seenCount + 1, lastSeenAt = ?
+             SET localId = ?, seenCount = seenCount + 1, lastSeenAt = ?
              WHERE connectorId = ? AND ownerId = ? AND kind = 'contact' AND externalId = ?`,
           )
-          .run(nowIso, connector.id, scope.ownerId, event.externalId);
+          .run(
+            targetLocalId,
+            nowIso,
+            connector.id,
+            scope.ownerId,
+            event.externalId,
+          );
       } else {
         let matchedContactId: string | null = null;
         for (const em of cEmails) {

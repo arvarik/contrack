@@ -151,7 +151,15 @@ export async function testConnector(
   config: unknown,
   secret?: unknown,
   connectorId?: string,
-): Promise<{ ok: true; detail: string }> {
+): Promise<{
+  ok: true;
+  detail: string;
+  addressBooks?: Array<{
+    url: string;
+    displayName: string;
+    readOnly?: boolean;
+  }>;
+}> {
   const adapter = getAdapter(kind as ConnectorKind);
   if (!adapter) {
     throw new AppError(`Unsupported connector kind: ${kind}`, 400);
@@ -708,13 +716,26 @@ export async function runNow(
       },
     );
 
+    // Save the pull cursor before push starts so a push failure never loses the
+    // sync token or ETags for the contacts already committed above.
+    if (nextCursor !== null && nextCursor !== undefined) {
+      const pullCursorIso = new Date().toISOString();
+      sqlite
+        .prepare(
+          `UPDATE connectors SET cursor = ?, updatedAt = ? WHERE id = ? AND ownerId = ?`,
+        )
+        .run(JSON.stringify(nextCursor), pullCursorIso, id, scope.ownerId);
+    }
+
     if (adapter.push) {
       const localContacts = exportableContacts(scope).map((c) => ({
         id: c.id,
+        addedAt: c.addedAt ?? "",
         updatedAt: c.updatedAt ?? "",
+        isArchived: Boolean(c.isArchived),
         vcardInput: toVCardInput(c),
       }));
-      const existingLinks = sqlite
+      const rawLinks = sqlite
         .prepare(
           `SELECT externalId, localId FROM connector_links
            WHERE connectorId = ? AND ownerId = ? AND kind = 'contact' AND localId IS NOT NULL`,
@@ -723,11 +744,38 @@ export async function runNow(
         externalId: string;
         localId: string;
       }>;
+      const canonicalStmt = sqlite.prepare(
+        `SELECT canonicalId FROM contacts WHERE id = ? AND ownerId = ?`,
+      );
+      const resolveCanonicalId = (contactId: string): string => {
+        let current = contactId;
+        for (let depth = 0; depth < 10; depth++) {
+          const row = canonicalStmt.get(current, scope.ownerId) as
+            { canonicalId: string | null } | undefined;
+          if (!row?.canonicalId || row.canonicalId === current) return current;
+          current = row.canonicalId;
+        }
+        return current;
+      };
+      const existingLinks = rawLinks.map((link) => {
+        const canonicalId = resolveCanonicalId(link.localId);
+        if (canonicalId !== link.localId) {
+          sqlite
+            .prepare(
+              `UPDATE connector_links
+               SET localId = ?
+               WHERE connectorId = ? AND ownerId = ? AND kind = 'contact' AND externalId = ?`,
+            )
+            .run(canonicalId, connector.id, scope.ownerId, link.externalId);
+        }
+        return { externalId: link.externalId, localId: canonicalId };
+      });
 
       const pushResult = await adapter.push({
         config,
         secret,
         cursor: nextCursor ?? cursor,
+        connectorCreatedAt: connector.createdAt,
         signal,
         log: ctx.log,
         contacts: localContacts,

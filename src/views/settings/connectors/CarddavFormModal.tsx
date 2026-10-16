@@ -52,6 +52,10 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [syncDirection, setSyncDirection] = useState<SyncDirection>("two_way");
+  const [addressBookUrl, setAddressBookUrl] = useState<string>("");
+  const [addressBooks, setAddressBooks] = useState<
+    Array<{ url: string; displayName: string; readOnly?: boolean }>
+  >([]);
   const [intervalMinutes, setIntervalMinutes] = useState<number>(30);
 
   const [testResult, setTestResult] = useState<{
@@ -76,6 +80,9 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
       setSyncDirection(
         cfg.syncDirection === "pull_only" ? "pull_only" : "two_way",
       );
+      setAddressBookUrl(
+        typeof cfg.addressBookUrl === "string" ? cfg.addressBookUrl : "",
+      );
     } else {
       setName("Personal Contacts");
       setUrl("");
@@ -83,8 +90,10 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
       setPassword("");
       setShowPassword(false);
       setSyncDirection("two_way");
+      setAddressBookUrl("");
       setIntervalMinutes(30);
     }
+    setAddressBooks([]);
     setTestResult(null);
     setFormError(null);
   }, [connector, isOpen]);
@@ -93,6 +102,7 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
     url: url.trim(),
     username: username.trim(),
     syncDirection,
+    ...(addressBookUrl.trim() ? { addressBookUrl: addressBookUrl.trim() } : {}),
   });
 
   const handleTest = async () => {
@@ -117,6 +127,12 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
         secret: password ? { password } : undefined,
         connectorId: !password && isEditing ? connector?.id : undefined,
       });
+      if (Array.isArray(res.addressBooks) && res.addressBooks.length > 0) {
+        setAddressBooks(res.addressBooks);
+        if (!addressBookUrl && res.addressBooks[0]?.url) {
+          setAddressBookUrl(res.addressBooks[0].url);
+        }
+      }
       setTestResult({ ok: true, message: res.detail });
       toast.success(res.detail);
     } catch (err) {
@@ -286,6 +302,27 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
           </p>
         </div>
 
+        {addressBooks.length > 1 && (
+          <div>
+            <label htmlFor="carddav-addressbook" className={FIELD_HEADING}>
+              Address book
+            </label>
+            <select
+              id="carddav-addressbook"
+              value={addressBookUrl}
+              onChange={(e) => setAddressBookUrl(e.target.value)}
+              className={FORM_INPUT}
+            >
+              {addressBooks.map((book) => (
+                <option key={book.url} value={book.url}>
+                  {book.displayName}
+                  {book.readOnly ? " (read-only)" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div>
           <span className={FIELD_HEADING}>Sync direction</span>
           <Segmented<SyncDirection>
@@ -297,7 +334,7 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
           />
           <p className="text-xs text-on-surface-variant mt-1">
             {syncDirection === "two_way"
-              ? "Imports remote cards and writes local contact changes back to the server"
+              ? "Imports remote cards and writes contacts you add or edit back to the server"
               : "Imports remote cards into Contrack without writing back to the server"}
           </p>
         </div>

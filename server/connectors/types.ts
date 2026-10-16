@@ -67,9 +67,12 @@ export interface PushContext<C = unknown, S = unknown> {
   config: C;
   secret: S | null;
   cursor: unknown | null;
+  connectorCreatedAt?: string;
   contacts: Array<{
     id: string;
+    addedAt?: string;
     updatedAt: string;
+    isArchived?: boolean;
     vcardInput: VCardInput;
   }>;
   links: Array<{ externalId: string; localId: string | null }>;
@@ -96,7 +99,18 @@ export interface ConnectorAdapter<C = unknown, S = unknown> {
   };
   configSchema: z.ZodType<C>;
   secretSchema: z.ZodType<S> | null;
-  test(config: C, secret: S | null): Promise<{ ok: true; detail: string }>;
+  test(
+    config: C,
+    secret: S | null,
+  ): Promise<{
+    ok: true;
+    detail: string;
+    addressBooks?: Array<{
+      url: string;
+      displayName: string;
+      readOnly?: boolean;
+    }>;
+  }>;
   sync(ctx: SyncContext<C, S>): AsyncGenerator<SyncEvent, unknown | null>;
   push?(ctx: PushContext<C, S>): Promise<PushResult>;
 }

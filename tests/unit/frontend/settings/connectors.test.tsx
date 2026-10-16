@@ -1015,10 +1015,23 @@ describe("Frontend Connectors Components", () => {
       },
     );
 
-    it("tests and creates a CardDAV connector from ConnectorsView", async () => {
-      const testMock = vi
-        .fn()
-        .mockResolvedValue({ ok: true, detail: "Connected to Contacts" });
+    it("tests and creates a CardDAV connector from ConnectorsView, including picking among multiple discovered address books", async () => {
+      const testMock = vi.fn().mockResolvedValue({
+        ok: true,
+        detail: "Connected to Personal Contacts (2 address books found)",
+        addressBooks: [
+          {
+            url: "https://cloud.example.com/dav/books/personal/",
+            name: "Personal Contacts",
+            writable: true,
+          },
+          {
+            url: "https://cloud.example.com/dav/books/recent/",
+            name: "Recently contacted",
+            writable: false,
+          },
+        ],
+      });
       const createMock = vi.fn().mockResolvedValue({ id: "carddav-1" });
 
       vi.mocked(connectorsApi.useTestConnector).mockReturnValue({
@@ -1061,6 +1074,14 @@ describe("Frontend Connectors Components", () => {
         });
       });
 
+      // Multi-book selector renders and defaults to the first writable book
+      const bookSelect = screen.getByLabelText(
+        "Address book",
+      ) as HTMLSelectElement;
+      expect(bookSelect.value).toBe(
+        "https://cloud.example.com/dav/books/personal/",
+      );
+
       fireEvent.click(screen.getByRole("button", { name: "Connect" }));
       await waitFor(() => {
         expect(createMock).toHaveBeenCalledWith({
@@ -1070,6 +1091,7 @@ describe("Frontend Connectors Components", () => {
             url: "https://cloud.example.com",
             username: "alice@example.com",
             syncDirection: "two_way",
+            addressBookUrl: "https://cloud.example.com/dav/books/personal/",
           },
           secret: { password: "secret-app-pwd" },
           intervalMinutes: 30,

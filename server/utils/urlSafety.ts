@@ -257,18 +257,6 @@ export function guardedLookup(
  */
 const pinnedAgent = new Agent({ connect: { lookup: guardedLookup } });
 
-function sameTrustDomain(hostA: string, hostB: string): boolean {
-  const a = hostA.toLowerCase();
-  const b = hostB.toLowerCase();
-  if (a === b) return true;
-  const partsA = a.split(".");
-  const partsB = b.split(".");
-  if (partsA.length >= 2 && partsB.length >= 2) {
-    return partsA.slice(-2).join(".") === partsB.slice(-2).join(".");
-  }
-  return false;
-}
-
 function assertHttpUrl(targetUrl: string): URL {
   let url: URL;
   try {
@@ -331,10 +319,7 @@ export async function safeFetch(
         currentUrl = nextUrlObj.toString();
         if (allowPrivate) assertHttpUrl(currentUrl);
         else await assertPublicHttpUrl(currentUrl);
-        if (
-          currentHeaders &&
-          !sameTrustDomain(initialUrl.hostname, nextUrlObj.hostname)
-        ) {
+        if (currentHeaders && initialUrl.origin !== nextUrlObj.origin) {
           delete currentHeaders.Authorization;
           delete currentHeaders.authorization;
         }

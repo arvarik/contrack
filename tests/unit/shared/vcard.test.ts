@@ -18,6 +18,7 @@ import {
   foldLine,
   splitDisplayName,
   parseVCards,
+  patchVCard,
   serializeVCard,
   serializeVCards,
   splitComponents,
@@ -569,5 +570,74 @@ describe("extractVCardContacts", () => {
       { email: "margaret@home.example", label: "home", isPrimary: true },
       { email: "margaret@mit.edu", label: "work", isPrimary: true },
     ]);
+  });
+});
+
+describe("patchVCard", () => {
+  it("preserves PHOTO, NICKNAME, structured ADR, Apple X-ABLabel, X-* properties, and server UID when updating owned fields", () => {
+    const existing = [
+      "BEGIN:VCARD",
+      "VERSION:3.0",
+      "PRODID:-//Apple Inc.//macOS 15.0//EN",
+      "UID:server-uid-original-777",
+      "N:Lovelace;Ada;Augusta;Countess;",
+      "FN:Ada Lovelace",
+      "NICKNAME:Enchantress of Numbers",
+      "ORG:Analytical Engine Ltd;Research Division",
+      "TITLE:Mathematician",
+      "PHOTO;ENCODING=b;TYPE=JPEG:/9j/4AAQSkZJRgABAQAAAQABAAD/",
+      "item1.TEL;type=pref:+44 20 7946 0921",
+      "item1.X-ABLabel:_$!<Mobile>!$_",
+      "item2.ADR;type=HOME;type=pref:;;10 St James Square;London;Greater London;SW1Y 4LE;UK",
+      "item2.X-ABLabel:_$!<Home>!$_",
+      "item3.X-ABDATE;type=pref:1835-07-08",
+      "item3.X-ABLabel:_$!<Anniversary>!$_",
+      "X-ABUID:550E8400-E29B-41D4-A716-446655440000:ABPerson",
+      "X-PHONETIC-FIRST-NAME:Ey-dah",
+      "END:VCARD",
+    ].join("\r\n");
+
+    const patched = patchVCard(existing, {
+      uid: "wrong-fallback-contact-id",
+      name: "Ada Lovelace",
+      firstName: "Ada",
+      lastName: "Lovelace",
+      company: "Analytical Engine Ltd",
+      role: "Chief Architect",
+      about: "Updated note from Contrack",
+      phones: [{ phone: "+44 20 7946 0921", label: "mobile", isPrimary: true }],
+      addresses: [
+        {
+          address: "10 St James Square, London, Greater London SW1Y 4LE, UK",
+          label: "home",
+          isPrimary: true,
+        },
+      ],
+    });
+
+    const unfolded = patched.replace(/\r\n[ \t]/g, "");
+
+    expect(unfolded).toContain("UID:server-uid-original-777");
+    expect(unfolded).not.toContain("wrong-fallback-contact-id");
+    expect(unfolded).toContain("N:Lovelace;Ada;Augusta;Countess;");
+    expect(unfolded).toContain("ORG:Analytical Engine Ltd;Research Division");
+    expect(unfolded).toContain("TITLE:Chief Architect");
+    expect(unfolded).toContain("NOTE:Updated note from Contrack");
+    expect(unfolded).toContain("NICKNAME:Enchantress of Numbers");
+    expect(unfolded).toContain(
+      "PHOTO;ENCODING=b;TYPE=JPEG:/9j/4AAQSkZJRgABAQAAAQABAAD/",
+    );
+    expect(unfolded).toContain("item1.TEL;type=pref:+44 20 7946 0921");
+    expect(unfolded).toContain("item1.X-ABLabel:_$!<Mobile>!$_");
+    expect(unfolded).toContain(
+      "item2.ADR;type=HOME;type=pref:;;10 St James Square;London;Greater London;SW1Y 4LE;UK",
+    );
+    expect(unfolded).toContain("item2.X-ABLabel:_$!<Home>!$_");
+    expect(unfolded).toContain("item3.X-ABDATE;type=pref:1835-07-08");
+    expect(unfolded).toContain("item3.X-ABLabel:_$!<Anniversary>!$_");
+    expect(unfolded).toContain(
+      "X-ABUID:550E8400-E29B-41D4-A716-446655440000:ABPerson",
+    );
+    expect(unfolded).toContain("X-PHONETIC-FIRST-NAME:Ey-dah");
   });
 });

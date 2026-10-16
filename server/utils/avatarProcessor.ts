@@ -55,17 +55,23 @@ export async function processBase64Avatar(
     const avatarDir = ownerUploadDir(scope.ownerId, "avatars");
     ensureDir(avatarDir);
 
-    // Generate a unique filename
+    // Content-addressed filename so re-importing or re-syncing the same photo
+    // reuses the file on disk rather than writing a new file every run.
     const hash = crypto
-      .createHash("md5")
+      .createHash("sha256")
       .update(inputBuffer)
       .digest("hex")
-      .slice(0, 12);
-    const filename = `import-${hash}-${Date.now()}.jpg`;
+      .slice(0, 16);
+    const filename = `import-${hash}.jpg`;
     const outputPath = path.join(avatarDir, filename);
+
+    if (fs.existsSync(outputPath)) {
+      return ownerUploadUrl(scope.ownerId, "avatars", filename);
+    }
 
     // Resize + convert to JPEG
     const info = await sharp(inputBuffer)
+      .rotate()
       .resize(AVATAR_SIZE, AVATAR_SIZE, {
         fit: "cover",
         position: "center",
