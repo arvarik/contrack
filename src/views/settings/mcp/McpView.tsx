@@ -30,7 +30,7 @@ import { createApiToken } from "../../../api/auth";
 import { MCP_TOOLS } from "../../../../shared/mcpTools";
 import { radioKeys, radioTabIndex } from "../../../lib/a11y";
 import { filterPill, SECTION_HEADING } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import { useHashTarget } from "../SettingRow";
 import {
   SETTINGS_CARD,
@@ -229,7 +229,8 @@ const TokenStep = ({
       });
       void queryClient.invalidateQueries({ queryKey: ["auth", "tokens"] });
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (err: unknown) =>
+      toast.error(`Could not create token: ${errorText(err)}`),
   });
 
   const reset = () => onDraft(NO_TOKEN);
@@ -285,6 +286,12 @@ const TokenStep = ({
                 token: TOKEN_SHAPE.test(value) ? value : "",
               });
             }}
+            onKeyDown={(e) => {
+              if (e.key === "Escape") {
+                e.preventDefault();
+                reset();
+              }
+            }}
             placeholder="ctk_…"
             aria-describedby="mcp-token-hint"
             aria-invalid={pastedWrong || undefined}
@@ -305,8 +312,8 @@ const TokenStep = ({
           )}
         >
           {pastedWrong
-            ? "A Contrack token is ctk_ and then at least 20 letters, digits, dashes or underscores, with no spaces"
-            : "It stays on this page and goes only into the setup below"}
+            ? "A Contrack token starts with ctk_ followed by at least 20 letters, digits, dashes or underscores"
+            : "Stays on this page and fills the setup snippet below"}
         </p>
       </div>
     );
@@ -381,7 +388,10 @@ export const McpView: React.FC = () => {
   const origin =
     publicUrl ?? (typeof window !== "undefined" ? window.location.origin : "");
   const endpointUrl = `${origin}/api/mcp`;
-  const onlyHere = !publicUrl && isLoopbackHost(new URL(origin).hostname);
+  const onlyHere =
+    !publicUrl &&
+    typeof window !== "undefined" &&
+    isLoopbackHost(window.location.hostname);
 
   const client = MCP_CLIENTS.find((c) => c.id === clientId) ?? MCP_CLIENTS[0];
   // How this client signs in here. An app that connects from its vendor's

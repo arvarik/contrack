@@ -7,6 +7,7 @@ import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Modal } from "../../../components/ui/Modal";
+import { NO_AUTOCORRECT } from "../../../components/ui/SearchField";
 import { Switch } from "../../../components/ui/Switch";
 import {
   useCreateConnector,
@@ -25,6 +26,20 @@ import {
   LookbackField,
   SyncScheduleField,
 } from "./ConnectorFormFields";
+
+/** Normalizes `webcal://` and `webcals://` calendar links to `https://`. */
+function normalizeIcsUrl(raw: string): string {
+  return raw.trim().replace(/^webcals?:\/\//i, "https://");
+}
+
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
 
 interface CalendarFormModalProps {
   isOpen: boolean;
@@ -90,15 +105,23 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
 
   const handleTest = async () => {
     setFormError(null);
-    if (!url.trim()) {
+    const normalizedUrl = normalizeIcsUrl(url);
+    if (!normalizedUrl) {
       setFormError("Enter an ICS calendar URL before testing");
       return;
+    }
+    if (!isValidHttpUrl(normalizedUrl)) {
+      setFormError("Enter a valid https://, http:// or webcal:// calendar URL");
+      return;
+    }
+    if (normalizedUrl !== url) {
+      setUrl(normalizedUrl);
     }
     try {
       const res = await testConnector.mutateAsync({
         kind: "ics",
         config: {
-          url: url.trim(),
+          url: normalizedUrl,
           lookbackDays,
           maxAttendees,
           includeDescription,
@@ -109,7 +132,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
     } catch (err) {
       const msg = errorText(err) || "Could not test the connection";
       setTestResult({ ok: false, message: msg });
-      toast.error(msg);
+      toast.error(`Could not test connection: ${errorText(err)}`);
     }
   };
 
@@ -118,19 +141,23 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
     setFormError(null);
 
     const trimmedName = name.trim();
-    const trimmedUrl = url.trim();
+    const normalizedUrl = normalizeIcsUrl(url);
 
     if (!trimmedName) {
       setFormError("Enter a name for this connector");
       return;
     }
-    if (!trimmedUrl) {
+    if (!normalizedUrl) {
       setFormError("Enter a private ICS calendar URL");
+      return;
+    }
+    if (!isValidHttpUrl(normalizedUrl)) {
+      setFormError("Enter a valid https://, http:// or webcal:// calendar URL");
       return;
     }
 
     const config = {
-      url: trimmedUrl,
+      url: normalizedUrl,
       lookbackDays,
       maxAttendees,
       includeDescription,
@@ -159,7 +186,7 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
     } catch (err) {
       const msg = errorText(err) || "Could not save the connector";
       setFormError(msg);
-      toast.error(msg);
+      toast.error(`Could not save connector: ${errorText(err)}`);
     }
   };
 
@@ -172,12 +199,12 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
       title={isEditing ? `Edit ${connector?.name}` : "Connect calendar"}
       size="md"
     >
-      <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4 pt-2">
         <div className="rounded-lg bg-surface-container p-3 text-xs text-on-surface-variant leading-relaxed">
           <p>
-            <strong>Privacy:</strong> Only event times, titles, and participant
-            email addresses are imported. Event notes and descriptions are not,
-            unless you turn them on below
+            <strong>Privacy:</strong> Only event times, titles and attendee
+            emails are imported. Event descriptions are skipped unless turned on
+            below
           </p>
         </div>
 
@@ -192,7 +219,10 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
             type="text"
             required
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              setFormError(null);
+            }}
             placeholder="e.g. Work calendar, Personal iCloud"
             className={FORM_INPUT}
           />
@@ -207,8 +237,14 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
               id="connector-ics-url"
               type={showUrl ? "text" : "password"}
               required
+              autoComplete="off"
+              {...NO_AUTOCORRECT}
               value={url}
-              onChange={(e) => setUrl(e.target.value)}
+              onChange={(e) => {
+                setUrl(e.target.value);
+                setTestResult(null);
+                setFormError(null);
+              }}
               placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"
               className={cn(FORM_INPUT, "pr-11 font-mono")}
             />
@@ -226,8 +262,8 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
             </button>
           </div>
           <p className="mt-1 text-xs text-on-surface-variant">
-            From Google, Apple iCloud, Fastmail, or Outlook. Look for
-            &quot;Secret address in iCal format&quot; in your calendar settings
+            Supports https:// and webcal:// links from Google, iCloud, Fastmail
+            or Outlook (&quot;Secret address in iCal format&quot;)
           </p>
         </div>
 
@@ -341,7 +377,11 @@ export const CalendarFormModal: React.FC<CalendarFormModalProps> = ({
             <button type="button" onClick={onClose} className="btn-secondary">
               Cancel
             </button>
-            <button type="submit" disabled={isSaving} className="btn-primary">
+            <button
+              type="submit"
+              disabled={isSaving || testConnector.isPending}
+              className="btn-primary"
+            >
               {isSaving ? (
                 <>
                   <Loader2

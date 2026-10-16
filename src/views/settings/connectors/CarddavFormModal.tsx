@@ -39,6 +39,15 @@ const SYNC_DIRECTIONS: SegmentedOption<SyncDirection>[] = [
   { value: "pull_only", label: "Pull only" },
 ];
 
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
 export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
   isOpen,
   onClose,
@@ -107,15 +116,23 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
 
   const handleTest = async () => {
     setFormError(null);
-    if (!url.trim()) {
+    const trimmedUrl = url.trim();
+    const trimmedUsername = username.trim();
+    const hasPassword = password.trim().length > 0;
+
+    if (!trimmedUrl) {
       setFormError("Enter a CardDAV server URL before testing");
       return;
     }
-    if (!username.trim()) {
+    if (!isValidHttpUrl(trimmedUrl)) {
+      setFormError("Enter a valid https:// or http:// server URL");
+      return;
+    }
+    if (!trimmedUsername) {
       setFormError("Enter your username or email address before testing");
       return;
     }
-    if (!isEditing && !password) {
+    if (!isEditing && !hasPassword) {
       setFormError("Enter your app password before testing");
       return;
     }
@@ -124,8 +141,8 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
       const res = await testConnector.mutateAsync({
         kind: "carddav",
         config: formConfig(),
-        secret: password ? { password } : undefined,
-        connectorId: !password && isEditing ? connector?.id : undefined,
+        secret: hasPassword ? { password } : undefined,
+        connectorId: !hasPassword && isEditing ? connector?.id : undefined,
       });
       if (Array.isArray(res.addressBooks) && res.addressBooks.length > 0) {
         setAddressBooks(res.addressBooks);
@@ -138,7 +155,7 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
     } catch (err) {
       const msg = errorText(err) || "Could not test the connection";
       setTestResult({ ok: false, message: msg });
-      toast.error(msg);
+      toast.error(`Could not test connection: ${errorText(err)}`);
     }
   };
 
@@ -149,6 +166,7 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
     const trimmedName = name.trim();
     const trimmedUrl = url.trim();
     const trimmedUsername = username.trim();
+    const hasPassword = password.trim().length > 0;
 
     if (!trimmedName) {
       setFormError("Enter a name for this connector");
@@ -158,11 +176,15 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
       setFormError("Enter the CardDAV server or address book URL");
       return;
     }
+    if (!isValidHttpUrl(trimmedUrl)) {
+      setFormError("Enter a valid https:// or http:// server URL");
+      return;
+    }
     if (!trimmedUsername) {
       setFormError("Enter your CardDAV username or email");
       return;
     }
-    if (!isEditing && !password) {
+    if (!isEditing && !hasPassword) {
       setFormError("Enter your app password");
       return;
     }
@@ -175,7 +197,7 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
           id: connector.id,
           name: trimmedName,
           config,
-          secret: password ? { password } : undefined,
+          secret: hasPassword ? { password } : undefined,
           intervalMinutes,
         });
         toast.success(`Updated ${trimmedName}`);
@@ -193,7 +215,7 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
     } catch (err) {
       const msg = errorText(err) || "Could not save the connector";
       setFormError(msg);
-      toast.error(msg);
+      toast.error(`Could not save connector: ${errorText(err)}`);
     }
   };
 
@@ -209,9 +231,8 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
       <form onSubmit={handleSubmit} className="space-y-4 pt-2">
         <div className="rounded-lg bg-surface-container p-3 text-xs text-on-surface-variant leading-relaxed">
           <p>
-            <strong>Safe sync:</strong> Contrack discovers your address book
-            automatically and never deletes contacts on your CardDAV server when
-            you move a contact to the Trash
+            <strong>Safe sync:</strong> Auto-discovers your address book and
+            never deletes contacts on your server when you move someone to Trash
           </p>
         </div>
 
@@ -225,7 +246,10 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
             id="carddav-connector-name"
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              setFormError(null);
+            }}
             placeholder="e.g. Nextcloud contacts, iCloud, Fastmail"
             className={FORM_INPUT}
           />
@@ -240,13 +264,17 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
             type="url"
             {...NO_AUTOCORRECT}
             value={url}
-            onChange={(e) => setUrl(e.target.value)}
+            onChange={(e) => {
+              setUrl(e.target.value);
+              setTestResult(null);
+              setFormError(null);
+            }}
             placeholder="https://cloud.example.com or https://contacts.icloud.com"
             className={cn(FORM_INPUT, "font-mono")}
           />
           <p className="text-xs text-on-surface-variant mt-1">
-            Paste your server root or a direct address book URL from Nextcloud,
-            iCloud, Fastmail, Radicale or Baïkal
+            Server root or direct address book URL (Nextcloud, iCloud, Fastmail,
+            Radicale or Baïkal)
           </p>
         </div>
 
@@ -259,7 +287,11 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
             type="text"
             {...NO_AUTOCORRECT}
             value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            onChange={(e) => {
+              setUsername(e.target.value);
+              setTestResult(null);
+              setFormError(null);
+            }}
             placeholder="you@example.com"
             className={FORM_INPUT}
           />
@@ -275,30 +307,36 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
             <input
               id="carddav-password"
               type={showPassword ? "text" : "password"}
+              autoComplete="off"
+              {...NO_AUTOCORRECT}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setTestResult(null);
+                setFormError(null);
+              }}
               placeholder={
                 isEditing ? "••••••••••••••••" : "Paste your app password"
               }
-              className={cn(FORM_INPUT, "pr-10 font-mono")}
+              className={cn(FORM_INPUT, "pr-11 font-mono")}
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="state-layer absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md text-on-surface-variant hover:text-on-surface p-1 transition-colors"
+              className="hit-area state-layer absolute right-1 top-1/2 -translate-y-1/2 p-2 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors"
               title={showPassword ? "Hide password" : "Show password"}
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
               {showPassword ? (
-                <EyeOff className="w-4 h-4" />
+                <EyeOff className="w-4 h-4" aria-hidden="true" />
               ) : (
-                <Eye className="w-4 h-4" />
+                <Eye className="w-4 h-4" aria-hidden="true" />
               )}
             </button>
           </div>
           <p className="text-xs text-on-surface-variant mt-1">
-            Generate an app-specific password in Nextcloud, Apple ID, Fastmail
-            or your server settings
+            If your account uses 2FA, generate an app-specific password in your
+            provider&apos;s security settings
           </p>
         </div>
 
@@ -373,7 +411,11 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
             <button type="button" onClick={onClose} className="btn-secondary">
               Cancel
             </button>
-            <button type="submit" disabled={isSaving} className="btn-primary">
+            <button
+              type="submit"
+              disabled={isSaving || testConnector.isPending}
+              className="btn-primary"
+            >
               {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               <span>{isEditing ? "Save changes" : "Connect"}</span>
             </button>
