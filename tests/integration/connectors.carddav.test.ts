@@ -312,7 +312,7 @@ ${booksXml}
               : "";
             // Return one href as a full URL to verify absolute/encoded href normalization
             const wireHref = href.includes("Descartes")
-              ? `${baseUrl}${href.replace("%C3%A9", "%c3%a9")}`
+              ? `${baseUrl}${href.replaceAll("%C3%A9", "%c3%a9")}`
               : href;
             itemResponses.push(`  <d:response>
     <d:href>${wireHref}</d:href>
