@@ -27,6 +27,10 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Tags, Lists, Archived contacts and Trash: Archived contacts and Trash add
   filter bars, restoring an archived contact offers Undo, filtering prunes
   hidden selections, and failed background refetches keep cached rows on screen.
+- Connectors, Correspondents and MCP: calendar links accept `webcal://`, IMAP
+  hosts strip `imaps://`, CardDAV and IMAP preserve spaces in passwords, and
+  Correspondents adds a search filter and prompts for a name when adding an
+  address-only person.
 - Connectors: a failed sync is retried after its backoff, a Google contact that
   matched one of yours is merged instead of written over, Gmail no longer loses
   mail past the per-run cap, one mail in two IMAP folders counts once, and

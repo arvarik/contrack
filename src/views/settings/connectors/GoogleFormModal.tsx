@@ -132,7 +132,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
     } catch (err) {
       const msg = errorText(err) || "Could not save the connector";
       setFormError(msg);
-      toast.error(msg);
+      toast.error(`Could not save connector: ${errorText(err)}`);
     }
   };
 
@@ -150,9 +150,9 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
       <div className="space-y-4 pt-2">
         <div className="rounded-lg bg-surface-container p-3 text-xs text-on-surface-variant leading-relaxed">
           <p>
-            <strong>Privacy:</strong> Contrack talks to Google from your own
-            server and reads contacts, mail headers and calendar events. Nothing
-            goes to any other service unless you turn on AI summaries
+            <strong>Privacy:</strong> Connects directly from your server to sync
+            contacts, mail headers and calendar events. Nothing goes to any
+            other service unless AI summaries are on
           </p>
         </div>
 
@@ -173,7 +173,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
                   </p>
                   <p className="text-xs text-on-surface-variant">
                     {isAdmin
-                      ? "Create a Google OAuth client and save its ID and secret under Settings → Administration → General → Integrations. The page lists the five steps"
+                      ? "Create a Google OAuth client and save its ID and secret under Settings → Administration → General → Integrations"
                       : "Ask an administrator to set up the Google OAuth client under Settings → Administration → General → Integrations"}
                   </p>
                 </div>
@@ -254,7 +254,10 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
                 id="google-conn-name"
                 type="text"
                 value={name}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setFormError(null);
+                }}
                 className={FORM_INPUT}
               />
             </div>

@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Modal } from "../../../components/ui/Modal";
+import { NO_AUTOCORRECT } from "../../../components/ui/SearchField";
 import {
   useCreateConnector,
   useTestConnector,
@@ -23,6 +24,18 @@ import {
   SwitchTile,
   SyncScheduleField,
 } from "./ConnectorFormFields";
+
+/** Strips accidental `imap://` or `imaps://` scheme and trailing slashes. */
+function normalizeImapHost(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^imaps?:\/\//i, "")
+    .replace(/\/+$/, "");
+}
+
+function isValidPort(port: number): boolean {
+  return Number.isInteger(port) && port >= 1 && port <= 65535;
+}
 
 interface ImapFormModalProps {
   isOpen: boolean;
@@ -122,7 +135,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
    * that keeps the saved password must name the saved server and username.
    */
   const formConfig = () => ({
-    host: host.trim(),
+    host: normalizeImapHost(host),
     port,
     secure: port === 993,
     username: username.trim(),
@@ -136,15 +149,23 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
 
   const handleTest = async () => {
     setFormError(null);
-    if (!host.trim()) {
+    const cleanHost = normalizeImapHost(host);
+    const trimmedUsername = username.trim();
+    const hasPassword = password.trim().length > 0;
+
+    if (!cleanHost) {
       setFormError("Enter an IMAP server host before testing");
       return;
     }
-    if (!username.trim()) {
+    if (!isValidPort(port)) {
+      setFormError("Enter a valid port between 1 and 65535");
+      return;
+    }
+    if (!trimmedUsername) {
       setFormError("Enter your username or email address before testing");
       return;
     }
-    if (!isEditing && !password) {
+    if (!isEditing && !hasPassword) {
       setFormError("Enter your app password before testing");
       return;
     }
@@ -155,15 +176,15 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
         config: formConfig(),
         // Editing with the field empty keeps the saved password, so the
         // test uses the saved one too.
-        secret: password ? { password } : undefined,
-        connectorId: !password && isEditing ? connector?.id : undefined,
+        secret: hasPassword ? { password } : undefined,
+        connectorId: !hasPassword && isEditing ? connector?.id : undefined,
       });
       setTestResult({ ok: true, message: res.detail });
       toast.success(res.detail);
     } catch (err) {
       const msg = errorText(err) || "Could not test the connection";
       setTestResult({ ok: false, message: msg });
-      toast.error(msg);
+      toast.error(`Could not test connection: ${errorText(err)}`);
     }
   };
 
@@ -172,22 +193,27 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
     setFormError(null);
 
     const trimmedName = name.trim();
-    const trimmedHost = host.trim();
+    const cleanHost = normalizeImapHost(host);
     const trimmedUsername = username.trim();
+    const hasPassword = password.trim().length > 0;
 
     if (!trimmedName) {
       setFormError("Enter a name for this connector");
       return;
     }
-    if (!trimmedHost) {
+    if (!cleanHost) {
       setFormError("Enter the IMAP server's host");
+      return;
+    }
+    if (!isValidPort(port)) {
+      setFormError("Enter a valid port between 1 and 65535");
       return;
     }
     if (!trimmedUsername) {
       setFormError("Enter your IMAP username or email");
       return;
     }
-    if (!isEditing && !password) {
+    if (!isEditing && !hasPassword) {
       setFormError("Enter your app password");
       return;
     }
@@ -200,7 +226,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
           id: connector.id,
           name: trimmedName,
           config,
-          secret: password ? { password } : undefined,
+          secret: hasPassword ? { password } : undefined,
           intervalMinutes,
         });
         toast.success(`Updated ${trimmedName}`);
@@ -218,7 +244,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
     } catch (err) {
       const msg = errorText(err) || "Could not save the connector";
       setFormError(msg);
-      toast.error(msg);
+      toast.error(`Could not save connector: ${errorText(err)}`);
     }
   };
 
@@ -231,12 +257,12 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
       title={isEditing ? `Edit ${connector?.name}` : "Connect mailbox (IMAP)"}
       size="md"
     >
-      <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+      <form onSubmit={handleSubmit} noValidate className="space-y-4 pt-2">
         <div className="rounded-lg bg-surface-container p-3 text-xs text-on-surface-variant leading-relaxed">
           <p>
-            <strong>Privacy:</strong> Headers only by default (From, To, Cc,
-            Date, Subject). Bodies are read only to generate summaries for
-            messages that match a contact
+            <strong>Privacy:</strong> Syncs message headers only (From, To, Cc,
+            Date, Subject). Message bodies are read only when AI summaries are
+            on
           </p>
         </div>
 
@@ -250,7 +276,10 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
             id="imap-connector-name"
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => {
+              setName(e.target.value);
+              setFormError(null);
+            }}
             placeholder="e.g. Fastmail personal, Gmail archive"
             className={FORM_INPUT}
           />
@@ -264,8 +293,13 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
             <input
               id="imap-host"
               type="text"
+              {...NO_AUTOCORRECT}
               value={host}
-              onChange={(e) => setHost(e.target.value)}
+              onChange={(e) => {
+                setHost(e.target.value);
+                setTestResult(null);
+                setFormError(null);
+              }}
               placeholder="imap.fastmail.com"
               className={cn(FORM_INPUT, "font-mono")}
             />
@@ -277,8 +311,14 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
             <input
               id="imap-port"
               type="number"
+              min={1}
+              max={65535}
               value={port}
-              onChange={(e) => setPort(Number(e.target.value) || 993)}
+              onChange={(e) => {
+                setPort(Number(e.target.value) || 0);
+                setTestResult(null);
+                setFormError(null);
+              }}
               className={cn(FORM_INPUT, "font-mono")}
             />
           </div>
@@ -291,8 +331,13 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
           <input
             id="imap-username"
             type="text"
+            {...NO_AUTOCORRECT}
             value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            onChange={(e) => {
+              setUsername(e.target.value);
+              setTestResult(null);
+              setFormError(null);
+            }}
             placeholder="you@example.com"
             className={FORM_INPUT}
           />
@@ -308,30 +353,36 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
             <input
               id="imap-password"
               type={showPassword ? "text" : "password"}
+              autoComplete="off"
+              {...NO_AUTOCORRECT}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setTestResult(null);
+                setFormError(null);
+              }}
               placeholder={
                 isEditing ? "••••••••••••••••" : "Paste your app password"
               }
-              className={cn(FORM_INPUT, "pr-10 font-mono")}
+              className={cn(FORM_INPUT, "pr-11 font-mono")}
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="state-layer absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md text-on-surface-variant hover:text-on-surface p-1 transition-colors"
+              className="hit-area state-layer absolute right-1 top-1/2 -translate-y-1/2 p-2 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors"
               title={showPassword ? "Hide password" : "Show password"}
               aria-label={showPassword ? "Hide password" : "Show password"}
             >
               {showPassword ? (
-                <EyeOff className="w-4 h-4" />
+                <EyeOff className="w-4 h-4" aria-hidden="true" />
               ) : (
-                <Eye className="w-4 h-4" />
+                <Eye className="w-4 h-4" aria-hidden="true" />
               )}
             </button>
           </div>
           <p className="text-xs text-on-surface-variant mt-1">
-            Generate an app-specific password in your mail provider settings
-            (Gmail, iCloud, Fastmail, etc.)
+            Most mail providers require an app-specific password instead of your
+            main account password
           </p>
         </div>
 
@@ -342,13 +393,14 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
           <input
             id="imap-folders"
             type="text"
+            {...NO_AUTOCORRECT}
             value={folders}
             onChange={(e) => setFolders(e.target.value)}
             placeholder="INBOX, Sent"
             className={FORM_INPUT}
           />
           <p className="text-xs text-on-surface-variant mt-1">
-            Comma-separated list of mailboxes to scan (e.g. INBOX, Sent)
+            Comma-separated mailbox names, such as INBOX, Sent
           </p>
         </div>
 
@@ -359,13 +411,14 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
           <input
             id="imap-aliases"
             type="text"
+            {...NO_AUTOCORRECT}
             value={aliases}
             onChange={(e) => setAliases(e.target.value)}
             placeholder="alias@company.com, old@example.org"
             className={FORM_INPUT}
           />
           <p className="text-xs text-on-surface-variant mt-1">
-            Outgoing mail from these aliases will be counted as sent by you
+            Mail sent from these addresses counts as sent by you
           </p>
         </div>
 
@@ -398,6 +451,7 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
 
         {testResult && (
           <div
+            role="status"
             className={cn(
               "rounded-xl p-3 text-xs",
               TONE_WASH[testResult.ok ? "success" : "error"],
@@ -424,7 +478,11 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
             <button type="button" onClick={onClose} className="btn-secondary">
               Cancel
             </button>
-            <button type="submit" disabled={isSaving} className="btn-primary">
+            <button
+              type="submit"
+              disabled={isSaving || testConnector.isPending}
+              className="btn-primary"
+            >
               {isSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
               <span>{isEditing ? "Save changes" : "Connect"}</span>
             </button>

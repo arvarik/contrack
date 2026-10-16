@@ -76,7 +76,7 @@ export const MCP_CLIENTS: readonly McpClient[] = [
     signIn: "oauth",
     setup: (url) => ({
       steps:
-        "In Claude, open Customize, then Connectors, and select Add custom connector. Paste this address and select Add. Claude then asks you to sign in to Contrack. It works on claude.ai, in Claude Desktop and in the Claude app on your phone. On a Team or Enterprise plan, an Owner adds it for the organization",
+        "In Claude, open Customize → Connectors → Add custom connector, paste this address, and sign in when prompted. Works across claude.ai, desktop and mobile (on Team or Enterprise, an Owner adds it)",
       codeKind: "address",
       code: url,
       install: {
@@ -91,7 +91,7 @@ export const MCP_CLIENTS: readonly McpClient[] = [
     signIn: "oauth",
     setup: (url) => ({
       steps:
-        "In ChatGPT, turn on developer mode in the settings, then add a connector with this address and OAuth sign-in. ChatGPT then asks you to sign in to Contrack",
+        "In ChatGPT, turn on developer mode in settings, add a connector with this address and OAuth sign-in, then sign in when prompted",
       codeKind: "address",
       code: url,
     }),
@@ -104,7 +104,7 @@ export const MCP_CLIENTS: readonly McpClient[] = [
       "The first time Claude Desktop starts it, mcp-remote opens Contrack in your browser to sign in",
     setup: (url, token) => ({
       steps:
-        "In Claude Desktop, open Settings, then Developer, then Edit Config. In claude_desktop_config.json, add the contrack entry inside mcpServers, then restart Claude. It starts the mcp-remote bridge, which needs Node.js",
+        "In Claude Desktop, open Settings → Developer → Edit Config, add this entry under mcpServers in claude_desktop_config.json, and restart Claude (requires Node.js for mcp-remote)",
       codeKind: "config",
       code: json({
         mcpServers: {
@@ -157,7 +157,7 @@ export const MCP_CLIENTS: readonly McpClient[] = [
       const server = { type: "http", url, headers: headers(token) };
       return {
         steps:
-          "Press Add to VS Code. Or run MCP: Open User Configuration, and add the contrack entry inside servers. Keep the token out of a project's .vscode folder, which is often shared",
+          "Press Add to VS Code, or run MCP: Open User Configuration and add this entry under servers. Keep tokens in user config, not a shared .vscode folder",
         codeKind: "config",
         code: json({ servers: { [NAME]: server } }),
         install: {
