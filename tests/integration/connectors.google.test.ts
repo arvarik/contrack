@@ -110,6 +110,9 @@ describe("Google Workspace Connector & OAuth Integration", () => {
         source: "env",
         clientId: "env-client-id.apps.googleusercontent.com",
         clientSecretPreview: "••••8888",
+        redirectUri: expect.stringMatching(
+          /\/api\/connectors\/google\/callback$/,
+        ),
       });
 
       // Trying to update via PUT throws 409 SET_BY_ENVIRONMENT
@@ -139,6 +142,9 @@ describe("Google Workspace Connector & OAuth Integration", () => {
         source: "none",
         clientId: null,
         clientSecretPreview: null,
+        redirectUri: expect.stringMatching(
+          /\/api\/connectors\/google\/callback$/,
+        ),
       });
 
       expect(getGoogleOAuthCredentials()).toBeNull();

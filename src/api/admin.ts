@@ -16,6 +16,7 @@ import {
 } from "@tanstack/react-query";
 import { apiFetch, apiJson, jsonBody } from "./client";
 import { emitAuthStatusStale } from "../lib/appEvents";
+import { connectorKeys } from "./connectors";
 
 // Shapes. These mirror server/services/adminService exactly.
 
@@ -460,6 +461,8 @@ interface IntegrationsConfig {
     source: "setting" | "env" | "none";
     clientId: string | null;
     clientSecretPreview: string | null;
+    /** Where Google sends the browser back: the address the server sends. */
+    redirectUri: string;
   };
 }
 
@@ -486,6 +489,8 @@ export const useUpdateIntegrations = () => {
     onSuccess: (data) => {
       qc.setQueryData(adminKeys.integrations, data);
       qc.invalidateQueries({ queryKey: adminKeys.audit });
+      // The Connect Google dialog reads whether a client is set from here.
+      qc.invalidateQueries({ queryKey: connectorKeys.kinds });
     },
   });
 };

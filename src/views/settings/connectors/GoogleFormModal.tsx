@@ -159,40 +159,44 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
         <FormError message={formError} />
 
         {/* State 1: Instance OAuth not configured */}
-        {!isLoadingKinds && !isConfiguredOnInstance && !isEditing && (
-          <div className="rounded-xl bg-warning/10 p-4 space-y-3">
-            <div className="flex items-start gap-2.5">
-              <AlertCircle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <p className="text-xs font-semibold text-on-surface">
-                  Google is not set up on this server yet
-                </p>
-                <p className="text-xs text-on-surface-variant">
-                  {isAdmin
-                    ? "Create a Google OAuth client and save its ID and secret under Settings → Administration → General → Integrations. The page lists the five steps"
-                    : "Ask an administrator to set up the Google OAuth client under Settings → Administration → General → Integrations"}
-                </p>
+        {/* Also for a connector that needs a sign-in: with no client on
+            the server, Reconnect could only fail. */}
+        {!isLoadingKinds &&
+          !isConfiguredOnInstance &&
+          (!isEditing || isNeedsReauth) && (
+            <div className="rounded-xl bg-warning/10 p-4 space-y-3">
+              <div className="flex items-start gap-2.5">
+                <AlertCircle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-on-surface">
+                    Google is not set up on this server yet
+                  </p>
+                  <p className="text-xs text-on-surface-variant">
+                    {isAdmin
+                      ? "Create a Google OAuth client and save its ID and secret under Settings → Administration → General → Integrations. The page lists the five steps"
+                      : "Ask an administrator to set up the Google OAuth client under Settings → Administration → General → Integrations"}
+                  </p>
+                </div>
               </div>
-            </div>
 
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  navigate("/settings/admin/general#integrations");
-                }}
-                className="hit-area state-layer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-warning/20 text-on-surface transition-colors"
-              >
-                <span>Set up Google</span>
-                <ArrowRight aria-hidden="true" className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-        )}
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    navigate("/settings/admin/general#google-oauth");
+                  }}
+                  className="hit-area state-layer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-warning/20 text-on-surface transition-colors"
+                >
+                  <span>Set up Google</span>
+                  <ArrowRight aria-hidden="true" className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          )}
 
         {/* State 2: Needs reauth banner */}
-        {isNeedsReauth && (
+        {isNeedsReauth && isConfiguredOnInstance && (
           <div className="rounded-xl bg-error/10 p-4 space-y-2">
             <div className="flex items-start gap-2.5">
               <AlertCircle className="w-5 h-5 text-error shrink-0 mt-0.5" />

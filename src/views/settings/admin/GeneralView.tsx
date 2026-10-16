@@ -7,7 +7,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Check, Copy, Eye, EyeOff, TriangleAlert } from "lucide-react";
+import {
+  Check,
+  ChevronRight,
+  Copy,
+  Eye,
+  EyeOff,
+  TriangleAlert,
+} from "lucide-react";
 import {
   useInstanceSettings,
   useUpdateInstanceSettings,
@@ -16,8 +23,9 @@ import {
   type InstanceSettings,
 } from "../../../api/admin";
 import { useAddressLookups, useSetAddressLookups } from "../../../api/geo";
-import { TONE_WASH } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { TEXT_LINK, TONE_WASH } from "../../../lib/styles";
+import { cn, errorText } from "../../../lib/utils";
+import { NO_AUTOCORRECT } from "../../../components/ui/SearchField";
 import { copyToClipboard, CLIPBOARD_DENIED } from "../../../lib/clipboard";
 import { Switch } from "../../../components/ui/Switch";
 import { ChoiceGroup, type Choice } from "../../../components/ui/ChoiceGroup";
@@ -29,6 +37,7 @@ import {
   SETTINGS_LABEL,
   SETTINGS_PAGE,
   SETTINGS_SECTION_HEADING,
+  TOUCH_LINK,
 } from "../layout";
 import { LoadFailed } from "../../../components/ui/LoadFailed";
 import { useAuth } from "../../../components/auth/AuthGate";
@@ -501,30 +510,18 @@ const ConsoleLink = ({
     href={href}
     target="_blank"
     rel="noreferrer"
-    className="font-medium text-on-surface underline underline-offset-2"
+    className={cn(TEXT_LINK, TOUCH_LINK)}
   >
     {children}
   </a>
 );
-
-/**
- * The address Google sends the browser back to after consent: the one the
- * server itself uses. That is PUBLIC_URL when it is set, else the address
- * this browser opened Contrack at, which is also what the server sees.
- */
-export function googleRedirectUri(
-  publicUrl: string | null | undefined,
-  origin: string,
-): string {
-  return `${publicUrl ?? origin}/api/connectors/google/callback`;
-}
 
 const NOT_SET_UP_CHIP = cn(
   "inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md",
   TONE_WASH.warning,
 );
 
-const GoogleRow = () => {
+export const GoogleRow = () => {
   const { data, isLoading } = useIntegrations();
   const update = useUpdateIntegrations();
   const [clientId, setClientId] = useState("");
@@ -554,7 +551,14 @@ const GoogleRow = () => {
     wasConfigured.current = configured;
   }, [configured]);
 
-  const redirectUri = googleRedirectUri(publicUrl, window.location.origin);
+  // The address the server sends Google, which is PUBLIC_URL, or the host
+  // and scheme it sees. Behind a proxy that hides its https, that can differ
+  // from the browser's, and Google would refuse the sign-in as a mismatch.
+  const browserOrigin = window.location.origin;
+  const redirectUri =
+    google?.redirectUri ?? `${browserOrigin}/api/connectors/google/callback`;
+  const serverOrigin = new URL(redirectUri).origin;
+  const mismatch = serverOrigin !== browserOrigin;
 
   // The five steps an admin follows in Google Cloud, in the order the console
   // presents them. The redirect address sits in the step that uses it. They
@@ -623,8 +627,21 @@ const GoogleRow = () => {
           address.{" "}
           {publicUrl
             ? "This one comes from PUBLIC_URL"
-            : "This one is the address in your browser bar. When others reach Contrack another way, put a reverse proxy with a certificate in front and set PUBLIC_URL"}
+            : "This one is the address the server sees. When others reach Contrack another way, put a reverse proxy with a certificate in front and set PUBLIC_URL"}
         </p>
+        {mismatch && (
+          <p role="note" className={NOTE}>
+            <TriangleAlert
+              className="w-3.5 h-3.5 shrink-0 mt-0.5 text-warning"
+              aria-hidden="true"
+            />
+            <span>
+              {publicUrl
+                ? `Google sends people back to ${serverOrigin}, from PUBLIC_URL. Open Contrack there to connect Google`
+                : `Your browser opened Contrack at ${browserOrigin}, but the server sends Google ${serverOrigin}. Set PUBLIC_URL to the address people open`}
+            </span>
+          </p>
+        )}
       </li>
       <li>
         {fromEnv
@@ -654,7 +671,7 @@ const GoogleRow = () => {
                   Members connect their accounts under{" "}
                   <Link
                     to="/settings/connectors"
-                    className="font-medium text-on-surface underline underline-offset-2"
+                    className={cn(TEXT_LINK, TOUCH_LINK)}
                   >
                     Connectors
                   </Link>
@@ -669,11 +686,15 @@ const GoogleRow = () => {
           </div>
 
           {configured ? (
-            <details className="rounded-xl bg-surface-container-low p-3 text-xs">
-              <summary className="cursor-pointer font-semibold text-on-surface">
+            <details className="group rounded-xl bg-surface-container-low px-3 py-1 text-xs">
+              <summary className="state-layer cursor-pointer list-none rounded-lg -mx-1.5 px-1.5 min-h-11 flex items-center gap-1.5 font-semibold text-on-surface">
+                <ChevronRight
+                  className="w-4 h-4 shrink-0 transition-transform group-open:rotate-90"
+                  aria-hidden="true"
+                />
                 How to create a client in Google Cloud
               </summary>
-              <div className="mt-3">{steps}</div>
+              <div className="mt-1 mb-2">{steps}</div>
             </details>
           ) : (
             <div className="rounded-xl bg-surface-container-low p-3 space-y-3 text-xs">
@@ -727,6 +748,7 @@ const GoogleRow = () => {
                       : "123456789-...apps.googleusercontent.com"
                   }
                   className={KEY_INPUT}
+                  {...NO_AUTOCORRECT}
                 />
               </div>
               <div>
@@ -749,6 +771,7 @@ const GoogleRow = () => {
                         : "GOCSPX-..."
                     }
                     className={cn(KEY_INPUT, "pr-10")}
+                    {...NO_AUTOCORRECT}
                   />
                   <button
                     type="button"
@@ -795,7 +818,8 @@ const GoogleRow = () => {
                           setClientSecret("");
                           toast.success("Google OAuth client saved");
                         },
-                        onError: (error: Error) => toast.error(error.message),
+                        onError: (error: Error) =>
+                          toast.error(errorText(error)),
                       },
                     )
                   }
@@ -824,7 +848,7 @@ const GoogleRow = () => {
                 setClientSecret("");
                 toast.success("Google OAuth client removed");
               },
-              onError: (error: Error) => toast.error(error.message),
+              onError: (error: Error) => toast.error(errorText(error)),
             },
           )
         }

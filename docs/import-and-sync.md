@@ -209,8 +209,8 @@ steps, with the redirect address to copy.
 4. Under Credentials, create an OAuth client ID of type **Web application**,
    and paste the **Authorized redirect URI** from the Contrack row under
    **Authorized redirect URIs**. Google accepts `localhost`, or a domain
-   name over `https`, and no LAN address. The row shows `PUBLIC_URL` when it
-   is set, else the address in your browser bar. When others reach Contrack
+   name over `https`, and no LAN address. The row shows the address the server sends to
+   Google, and warns when your browser reached Contrack at another one. When others reach Contrack
    another way, put a reverse proxy with a certificate in front, see
    [Remote access](self-hosting.md#remote-access), and set `PUBLIC_URL`.
 5. Copy the client ID and the client secret into **Client ID** and **Client

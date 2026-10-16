@@ -60,6 +60,15 @@ export function publicOrigin(req: Request): string {
 }
 
 /**
+ * Where Google sends the browser back after consent: the public origin plus
+ * the callback route. The connect flow sends it, and the admin's Integrations
+ * row shows it, so the address pasted into Google is the one Google gets.
+ */
+export function googleCallbackUrl(req: Request): string {
+  return `${publicOrigin(req)}/api/connectors/google/callback`;
+}
+
+/**
  * True when an `Origin` header names this server: the host the request was sent
  * to, or `PUBLIC_URL`. The host is compared without the scheme, so behind a
  * proxy that does not report HTTPS the page's `https://` origin still matches.
