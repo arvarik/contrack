@@ -488,6 +488,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       "vcard",
       "vcf",
       "csv",
+      "json",
       "google",
       "google contacts",
       "linkedin",
@@ -509,6 +510,8 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       "duplicates",
       "dedupe",
       "merge",
+      "manual merge",
+      "merge history",
       "suggestions",
       "auto-merge sensitivity",
       "threshold",
@@ -565,6 +568,8 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       "hydrate",
       "auto enrich",
       "grounding",
+      "deep",
+      "standard",
     ],
     rows: [
       {

@@ -234,6 +234,7 @@ export function AISearchView({
   );
 
   const handleConfirmStart = () => {
+    if (isStarting) return;
     const ids = Array.from(selectedIds);
     startSearch(ids, { depth });
     setShowConfirm(false);
@@ -260,6 +261,7 @@ export function AISearchView({
       {!isLoading &&
         filteredContacts.length === 0 &&
         !searchQuery &&
+        !deferredQuery &&
         !filtered && (
           <EmptyState
             icon={Sparkles}
@@ -269,7 +271,10 @@ export function AISearchView({
         )}
 
       {!isLoading &&
-        (filteredContacts.length > 0 || searchQuery || filtered) && (
+        (filteredContacts.length > 0 ||
+          searchQuery ||
+          deferredQuery ||
+          filtered) && (
           <>
             {/* Depth comes first, with its price, so a batch's cost is no
                 surprise. */}
@@ -335,8 +340,10 @@ export function AISearchView({
                   {filteredContacts.length !== 1 ? "s" : ""}
                 </span>
                 <button
+                  type="button"
                   onClick={toggleSelectAll}
-                  className="hit-area state-layer text-xs font-bold text-on-primary-wash px-3 py-1 rounded-xl bg-primary/10 transition-colors whitespace-nowrap"
+                  disabled={filteredContacts.length === 0}
+                  className="hit-area state-layer text-xs font-bold text-on-primary-wash px-3 py-1 rounded-xl bg-primary/10 transition-colors whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none"
                 >
                   {selectedIds.size === filteredContacts.length &&
                   filteredContacts.length > 0
@@ -352,18 +359,18 @@ export function AISearchView({
                 {filteredContacts.length === 0 && (searchQuery || filtered) && (
                   <div className="px-6 py-6 text-center text-sm text-on-surface-variant space-y-2">
                     <p>No contacts match the current filter</p>
-                    {filtered && (
-                      <button
-                        type="button"
-                        onClick={() => {
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (filtered)
                           setFilters({ contacts: "all", research: "any" });
-                          setSelectedIds(new Set());
-                        }}
-                        className="hit-area state-layer rounded-lg px-2 py-0.5 text-sm font-semibold text-primary"
-                      >
-                        Clear filters
-                      </button>
-                    )}
+                        if (searchQuery) setSearchQuery("");
+                        setSelectedIds(new Set());
+                      }}
+                      className="hit-area state-layer rounded-lg px-2 py-0.5 text-sm font-semibold text-primary"
+                    >
+                      Clear filters
+                    </button>
                   </div>
                 )}
                 <VirtualRows
@@ -405,6 +412,7 @@ export function AISearchView({
               )}
             >
               <button
+                type="button"
                 onClick={() => {
                   clearLimit();
                   setShowConfirm(true);
@@ -413,9 +421,11 @@ export function AISearchView({
                 className="btn-primary w-full"
               >
                 <Sparkles className="w-4 h-4" />
-                {selectedIds.size > 0
-                  ? `Start enrichment (${selectedIds.size} selected)`
-                  : "Select contacts to search"}
+                {isStarting
+                  ? "Starting…"
+                  : selectedIds.size > 0
+                    ? `Start enrichment (${selectedIds.size} selected)`
+                    : "Select contacts to search"}
               </button>
               {/* The batch estimate, before the press. */}
               {selectedIds.size > 0 && depthFiguresApply && (

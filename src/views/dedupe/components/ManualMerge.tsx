@@ -40,6 +40,10 @@ export const ManualMerge = () => {
   const { preferences } = usePreferences();
   const smooth = !reducedMotion && preferences.motion !== "reduced";
   useEffect(() => {
+    if (stage === "compare" && selected.length < 2) {
+      setStage("select");
+      return;
+    }
     if (shownRef.current === stage) return;
     shownRef.current = stage;
     // jsdom has no scrollIntoView, so the call is optional.
@@ -47,7 +51,7 @@ export const ManualMerge = () => {
       block: "nearest",
       behavior: smooth ? "smooth" : "auto",
     });
-  }, [stage, smooth]);
+  }, [stage, selected.length, smooth]);
 
   // The most complete contact, until a person picks another.
   const keeperId =
@@ -101,13 +105,17 @@ export const ManualMerge = () => {
             {i > 0 && <div className="h-px flex-1 bg-surface-container-high" />}
             <button
               type="button"
+              disabled={
+                (s === "compare" && selected.length < 2) ||
+                mergeCluster.isPending
+              }
               onClick={() => {
                 // Back is always open. Forward needs two contacts.
                 if (s === "select" || selected.length >= 2) setStage(s);
               }}
               aria-current={stage === s ? "step" : undefined}
               className={cn(
-                "hit-area flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap",
+                "hit-area flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors whitespace-nowrap disabled:opacity-50 disabled:pointer-events-none",
                 stage === s
                   ? SELECTED_TINT
                   : "state-layer text-on-surface-variant hover:text-on-surface",

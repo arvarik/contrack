@@ -69,6 +69,7 @@ function Entry({ entry }: { entry: MergeLogEntry }) {
     : null;
 
   const handleUndo = async () => {
+    if (pending || undo.isPending) return;
     setPending(true);
     try {
       const res = await undo.mutateAsync({ mergeLogId: entry.id });

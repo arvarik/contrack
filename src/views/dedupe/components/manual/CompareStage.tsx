@@ -54,14 +54,19 @@ export const CompareStage = ({
         ref={roomAtBottom}
         className="sticky bottom-[var(--tabbar-space)] md:bottom-0 z-10 py-4 bg-surface flex gap-3"
       >
-        <button type="button" onClick={onBack} className="btn-secondary flex-1">
+        <button
+          type="button"
+          onClick={onBack}
+          disabled={isMerging}
+          className="btn-secondary flex-1"
+        >
           <ChevronLeft className="w-4 h-4" aria-hidden="true" />
           Back
         </button>
         <button
           type="button"
           onClick={() => void onMerge()}
-          disabled={isMerging || !primaryId}
+          disabled={isMerging || !primaryId || selected.length < 2}
           className="btn-primary flex-1"
         >
           {isMerging ? (
@@ -69,7 +74,7 @@ export const CompareStage = ({
           ) : (
             <GitMerge className="w-4 h-4" aria-hidden="true" />
           )}
-          {`Merge ${selected.length} contacts`}
+          {isMerging ? "Merging…" : `Merge ${selected.length} contacts`}
         </button>
       </div>
     </motion.div>
