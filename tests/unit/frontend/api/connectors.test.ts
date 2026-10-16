@@ -13,6 +13,7 @@ import {
   useCorrespondents,
 } from "../../../../src/api/connectors";
 import { connectorViaLabel } from "../../../../shared/connectors";
+import { useUpdateIntegrations } from "../../../../src/api/admin";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -239,5 +240,31 @@ describe("src/api/connectors.ts hooks", () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual(mockCorrespondents);
+  });
+});
+
+describe("src/api/admin.ts useUpdateIntegrations", () => {
+  it("refreshes the connector kinds, so the Google dialog sees a saved client at once", async () => {
+    const saved = {
+      googleOAuth: {
+        configured: true,
+        source: "setting",
+        clientId: "1-x",
+        clientSecretPreview: "••••2345",
+        redirectUri: "http://localhost/api/connectors/google/callback",
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(saved)));
+    const { wrapper, queryClient } = createWrapper();
+    const invalidateSpy = vi.spyOn(queryClient, "invalidateQueries");
+    const { result } = renderHook(() => useUpdateIntegrations(), { wrapper });
+
+    await result.current.mutateAsync({
+      googleOAuth: { clientId: "1-x", clientSecret: "secret-2345" },
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: connectorKeys.kinds,
+    });
   });
 });

@@ -18,7 +18,7 @@ import { scopeOf, type Scope } from "../tenancy/scope.ts";
 import { log } from "../utils/logger.ts";
 import { AppError } from "../utils/AppError.ts";
 import * as secretBox from "../utils/secretBox.ts";
-import { publicOrigin } from "../utils/publicOrigin.ts";
+import { googleCallbackUrl } from "../utils/publicOrigin.ts";
 import { isDocker, kindsFor } from "../connectors/registry.ts";
 import { startSync } from "../connectors/scheduler.ts";
 import { getGoogleOAuthCredentials } from "../services/integrationSettings.ts";
@@ -180,7 +180,7 @@ connectorsRouter.get(
       )
       .run(state, req.principal!.user.id, codeVerifier);
 
-    const redirectUri = `${publicOrigin(req)}/api/connectors/google/callback`;
+    const redirectUri = googleCallbackUrl(req);
     const wantSummaries = req.query.summaries === "true";
 
     const scopes = [
@@ -288,7 +288,7 @@ connectorsRouter.get(
     const creds = getGoogleOAuthCredentials();
     if (!creds) return backToConnectors(res, "not-configured");
 
-    const redirectUri = `${publicOrigin(req)}/api/connectors/google/callback`;
+    const redirectUri = googleCallbackUrl(req);
     // The code exchange and the address lookup time out like a sync's calls.
     const oauth2Client = new google.auth.OAuth2({
       clientId: creds.clientId,

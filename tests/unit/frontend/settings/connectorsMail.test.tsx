@@ -9,7 +9,7 @@ import {
   cleanup,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { ImapFormModal } from "../../../../src/views/settings/connectors/ImapFormModal";
 import { GoogleFormModal } from "../../../../src/views/settings/connectors/GoogleFormModal";
 import { CorrespondentsView } from "../../../../src/views/settings/connectors/CorrespondentsView";
@@ -261,12 +261,69 @@ describe("Frontend Mail & Google Connectors Components", () => {
         isLoading: false,
       } as unknown as ReturnType<typeof connectorsApi.useConnectorKinds>);
 
-      renderWithClient(<GoogleFormModal isOpen={true} onClose={vi.fn()} />);
+      const Where = () => {
+        const location = useLocation();
+        return <output>{location.pathname + location.hash}</output>;
+      };
+      renderWithClient(
+        <>
+          <GoogleFormModal isOpen={true} onClose={vi.fn()} />
+          <Where />
+        </>,
+      );
 
       expect(
-        screen.getByText(/Google sign-in is not set up yet/i),
+        screen.getByText(/Google is not set up on this server yet/i),
       ).toBeTruthy();
-      expect(screen.getByText("Open Settings → General")).toBeTruthy();
+      // To the row itself, which scrolls into view and flashes: the section
+      // anchor left the page at its top.
+      fireEvent.click(screen.getByText("Set up Google"));
+      // The open dialog hides the rest of the page from the tree.
+      expect(screen.getByRole("status", { hidden: true }).textContent).toBe(
+        "/settings/admin/general#google-oauth",
+      );
+    });
+
+    it("offers no Google sign-in to a connector that needs it while the server has no client", () => {
+      vi.mocked(connectorsApi.useConnectorKinds).mockReturnValue({
+        data: [
+          {
+            kind: "google",
+            label: "Google Workspace",
+            description: "Sync contacts, mail and calendar with Google",
+            capabilities: { schedule: true, oauth: true },
+            configured: false,
+          },
+        ],
+        isLoading: false,
+      } as unknown as ReturnType<typeof connectorsApi.useConnectorKinds>);
+      const connector = {
+        id: "g1",
+        kind: "google",
+        name: "Google (me@example.com)",
+        status: "needs_reauth",
+        config: {},
+        secretPresent: true,
+        intervalMinutes: 30,
+        nextRunAt: null,
+        lastRunAt: null,
+        lastError: null,
+        createdAt: "2026-10-01T00:00:00.000Z",
+        updatedAt: "2026-10-01T00:00:00.000Z",
+      } as const;
+
+      renderWithClient(
+        <GoogleFormModal
+          isOpen={true}
+          onClose={vi.fn()}
+          connector={connector}
+        />,
+      );
+
+      expect(
+        screen.getByText(/Google is not set up on this server yet/i),
+      ).toBeTruthy();
+      expect(screen.queryByText("Reconnect with Google")).toBeNull();
     });
   });
 

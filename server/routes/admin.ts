@@ -57,7 +57,11 @@ import {
   revokeInvitation,
 } from "../services/invitationService.ts";
 import { AUDIT_ACTIONS, auditService } from "../services/auditService.ts";
-import { mailLinkOrigin, publicOrigin } from "../utils/publicOrigin.ts";
+import {
+  googleCallbackUrl,
+  mailLinkOrigin,
+  publicOrigin,
+} from "../utils/publicOrigin.ts";
 import { mailService } from "../services/mailService.ts";
 import {
   renderPasswordResetEmail,
@@ -473,11 +477,20 @@ router.put(
 
 // Integrations
 
+/** The integrations, with the Google redirect address this server sends. */
+function integrationsFor(req: Request) {
+  const status = getIntegrationsStatus();
+  return {
+    ...status,
+    googleOAuth: { ...status.googleOAuth, redirectUri: googleCallbackUrl(req) },
+  };
+}
+
 router.get(
   "/integrations",
   requireAdmin,
-  asyncHandler(async (_req, res) => {
-    res.json(getIntegrationsStatus());
+  asyncHandler(async (req, res) => {
+    res.json(integrationsFor(req));
   }),
 );
 
@@ -513,7 +526,7 @@ router.put(
       });
     }
 
-    res.json(getIntegrationsStatus());
+    res.json(integrationsFor(req));
   }),
 );
 

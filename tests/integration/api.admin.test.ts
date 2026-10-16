@@ -2051,18 +2051,36 @@ describe("instance lifecycle and integration settings (P4)", () => {
     expect(nextBackupRun()).toBeNull();
   });
 
+  it("gives the Google redirect address on PUBLIC_URL when the server has one", async () => {
+    process.env.PUBLIC_URL = "https://crm.example.com";
+    try {
+      const res = await as(admin)(request(app).get("/api/admin/integrations"));
+      expect(res.body.googleOAuth.redirectUri).toBe(
+        "https://crm.example.com/api/connectors/google/callback",
+      );
+    } finally {
+      delete process.env.PUBLIC_URL;
+    }
+  });
+
   it("manages integrations, seals the Google OAuth client secret, and never returns it in any response", async () => {
     // 1. Initial GET
     const initial = await as(admin)(
       request(app).get("/api/admin/integrations"),
     );
     expect(initial.status).toBe(200);
+    // The redirect address is the one the server sends to Google, which
+    // the admin pastes into the client.
+    const redirectUri = expect.stringMatching(
+      /^http:\/\/[^/]+\/api\/connectors\/google\/callback$/,
+    );
     expect(initial.body).toEqual({
       googleOAuth: {
         configured: false,
         source: "none",
         clientId: null,
         clientSecretPreview: null,
+        redirectUri,
       },
     });
 
@@ -2083,6 +2101,7 @@ describe("instance lifecycle and integration settings (P4)", () => {
         source: "setting",
         clientId: CLIENT_ID,
         clientSecretPreview: "••••2345",
+        redirectUri,
       },
     };
     expect(putRes.body).toEqual(configured);
