@@ -208,8 +208,11 @@ steps, with the redirect address to copy.
    server, and an unverified app takes up to 100 people.
 4. Under Credentials, create an OAuth client ID of type **Web application**,
    and paste the **Authorized redirect URI** from the Contrack row under
-   **Authorized redirect URIs**. It is the address in your browser bar, so
-   everyone must open Contrack at the same one.
+   **Authorized redirect URIs**. Google accepts `localhost`, or a domain
+   name over `https`, and no LAN address. The row shows `PUBLIC_URL` when it
+   is set, else the address in your browser bar. When others reach Contrack
+   another way, put a reverse proxy with a certificate in front, see
+   [Remote access](self-hosting.md#remote-access), and set `PUBLIC_URL`.
 5. Copy the client ID and the client secret into **Client ID** and **Client
    secret** in Contrack, and select **Save**.
 

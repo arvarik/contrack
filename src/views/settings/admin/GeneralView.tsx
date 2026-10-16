@@ -31,6 +31,7 @@ import {
   SETTINGS_SECTION_HEADING,
 } from "../layout";
 import { LoadFailed } from "../../../components/ui/LoadFailed";
+import { useAuth } from "../../../components/auth/AuthGate";
 
 const KEY_INPUT = cn(SETTINGS_INPUT, "font-mono");
 
@@ -506,6 +507,18 @@ const ConsoleLink = ({
   </a>
 );
 
+/**
+ * The address Google sends the browser back to after consent: the one the
+ * server itself uses. That is PUBLIC_URL when it is set, else the address
+ * this browser opened Contrack at, which is also what the server sees.
+ */
+export function googleRedirectUri(
+  publicUrl: string | null | undefined,
+  origin: string,
+): string {
+  return `${publicUrl ?? origin}/api/connectors/google/callback`;
+}
+
 const NOT_SET_UP_CHIP = cn(
   "inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md",
   TONE_WASH.warning,
@@ -521,6 +534,7 @@ const GoogleRow = () => {
   const [confirmRemove, setConfirmRemove] = useState(false);
   const clientIdInput = useRef<HTMLInputElement>(null);
 
+  const { publicUrl } = useAuth();
   const google = data?.googleOAuth;
   const configured = google?.configured === true;
   const fromEnv = google?.source === "env";
@@ -540,7 +554,7 @@ const GoogleRow = () => {
     wasConfigured.current = configured;
   }, [configured]);
 
-  const redirectUri = `${window.location.origin}/api/connectors/google/callback`;
+  const redirectUri = googleRedirectUri(publicUrl, window.location.origin);
 
   // The five steps an admin follows in Google Cloud, in the order the console
   // presents them. The redirect address sits in the step that uses it. They
@@ -605,8 +619,11 @@ const GoogleRow = () => {
           </button>
         </div>
         <p>
-          It is the address in your browser bar, so everyone must open Contrack
-          at the same one. Behind a proxy, set PUBLIC_URL
+          Google accepts localhost, or a domain name over https, and no LAN
+          address.{" "}
+          {publicUrl
+            ? "This one comes from PUBLIC_URL"
+            : "This one is the address in your browser bar. When others reach Contrack another way, put a reverse proxy with a certificate in front and set PUBLIC_URL"}
         </p>
       </li>
       <li>
