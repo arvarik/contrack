@@ -150,9 +150,9 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
       <div className="space-y-4 pt-2">
         <div className="rounded-lg bg-surface-container p-3 text-xs text-on-surface-variant leading-relaxed">
           <p>
-            <strong>Privacy:</strong> Contrack connects directly to Google
-            Workspace to sync contacts, email headers, and calendar events.
-            Nothing leaves the server unless you turn on AI summaries
+            <strong>Privacy:</strong> Contrack talks to Google from your own
+            server and reads contacts, mail headers and calendar events. Nothing
+            goes to any other service unless you turn on AI summaries
           </p>
         </div>
 
@@ -165,12 +165,12 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
               <AlertCircle className="w-5 h-5 text-warning shrink-0 mt-0.5" />
               <div className="space-y-1">
                 <p className="text-xs font-semibold text-on-surface">
-                  Google sign-in is not set up yet
+                  Google is not set up on this server yet
                 </p>
                 <p className="text-xs text-on-surface-variant">
                   {isAdmin
-                    ? "Add a Google OAuth client ID and secret in Settings → General, under Integrations, first"
-                    : "Ask an administrator to add a Google OAuth client in Settings → General, under Integrations"}
+                    ? "Create a Google OAuth client and save its ID and secret under Settings → Administration → General → Integrations. The page lists the five steps"
+                    : "Ask an administrator to set up the Google OAuth client under Settings → Administration → General → Integrations"}
                 </p>
               </div>
             </div>
@@ -184,7 +184,7 @@ export const GoogleFormModal: React.FC<GoogleFormModalProps> = ({
                 }}
                 className="hit-area state-layer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-warning/20 text-on-surface transition-colors"
               >
-                <span>Open Settings → General</span>
+                <span>Set up Google</span>
                 <ArrowRight aria-hidden="true" className="w-3.5 h-3.5" />
               </button>
             )}

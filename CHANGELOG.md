@@ -9,6 +9,12 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- The Google OAuth client row in Settings walks an admin through the five
+  Google Cloud steps, with the redirect address in the step that uses it, and
+  the Connect Google dialog says who sets it up and where.
+
 ## [2.0.0] - 2026-10-14
 
 Contrack 2.0 reimagines Contrack from the ground up as a fast, multi-user,

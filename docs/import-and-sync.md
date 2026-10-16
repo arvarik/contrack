@@ -191,19 +191,25 @@ The Google connector syncs your Google Contacts, Gmail, and Google Calendar.
 An admin sets it up once for the instance. Then each person connects their own
 Google account.
 
-**For an admin: set up the Google OAuth client.**
+**For an admin: set up the Google OAuth client.** Open Contrack at the
+address everyone uses, then **Settings → Administration → General**, and go
+to **Integrations**. The **Google OAuth client** row shows the same five
+steps, with the redirect address to copy.
 
-1. Open Contrack at the address people use, then **Settings →
-   Administration → General**, and go to **Integrations**. Copy the
-   **Authorized redirect URI** from the **Google OAuth client** row.
-2. In the Google Cloud Console, create a project. Turn on the People API, the
-   Gmail API, and the Google Calendar API.
-3. Set up the OAuth consent screen. For a Google Workspace domain, choose an
-   Internal app, which Google does not need to verify. For personal Gmail,
-   choose an External app and set it to In production. It takes up to 100
-   users.
-4. Create an OAuth client of type **Web application**. Paste the redirect URI
-   under **Authorized redirect URIs**.
+1. Open the [Google Cloud Console](https://console.cloud.google.com/) and
+   create a project, or pick one you have.
+2. In the API Library, turn on the People API, the Gmail API, and the Google
+   Calendar API.
+3. Under Google Auth platform (the OAuth consent screen), set the audience.
+   For a Google Workspace domain choose Internal: Google asks for no
+   review. For personal Gmail choose External, then **Publish app**: while
+   the app stays in testing, every sign-in stops after a week. At sign-in,
+   Google warns that the app is unverified, which is normal for your own
+   server, and an unverified app takes up to 100 people.
+4. Under Credentials, create an OAuth client ID of type **Web application**,
+   and paste the **Authorized redirect URI** from the Contrack row under
+   **Authorized redirect URIs**. It is the address in your browser bar, so
+   everyone must open Contrack at the same one.
 5. Copy the client ID and the client secret into **Client ID** and **Client
    secret** in Contrack, and select **Save**.
 

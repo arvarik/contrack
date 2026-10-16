@@ -481,6 +481,36 @@ const AddressLookups = () => {
   );
 };
 
+/** The Google Cloud Console pages the steps name. */
+const CONSOLE = {
+  home: "https://console.cloud.google.com/",
+  library: "https://console.cloud.google.com/apis/library",
+  audience: "https://console.cloud.google.com/auth/audience",
+  credentials: "https://console.cloud.google.com/apis/credentials",
+};
+
+const ConsoleLink = ({
+  href,
+  children,
+}: {
+  href: string;
+  children: React.ReactNode;
+}) => (
+  <a
+    href={href}
+    target="_blank"
+    rel="noreferrer"
+    className="font-medium text-on-surface underline underline-offset-2"
+  >
+    {children}
+  </a>
+);
+
+const NOT_SET_UP_CHIP = cn(
+  "inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md",
+  TONE_WASH.warning,
+);
+
 const GoogleRow = () => {
   const { data, isLoading } = useIntegrations();
   const update = useUpdateIntegrations();
@@ -493,6 +523,7 @@ const GoogleRow = () => {
 
   const google = data?.googleOAuth;
   const configured = google?.configured === true;
+  const fromEnv = google?.source === "env";
 
   // Removing the client takes its Remove button away, and with it the
   // focus the dialog handed back. The keyboard lands on the empty client
@@ -511,56 +542,132 @@ const GoogleRow = () => {
 
   const redirectUri = `${window.location.origin}/api/connectors/google/callback`;
 
+  // The five steps an admin follows in Google Cloud, in the order the console
+  // presents them. The redirect address sits in the step that uses it. They
+  // stay open until a client is saved, and fold away after.
+  const steps = (
+    <ol className="list-decimal pl-5 marker:font-semibold marker:text-on-surface-variant space-y-3 text-xs text-on-surface-variant text-pretty max-w-2xl">
+      <li>
+        Open the{" "}
+        <ConsoleLink href={CONSOLE.home}>Google Cloud Console</ConsoleLink> and
+        create a project, or pick one you have
+      </li>
+      <li>
+        In the <ConsoleLink href={CONSOLE.library}>API Library</ConsoleLink>,
+        turn on the People API, the Gmail API and the Google Calendar API
+      </li>
+      <li className="space-y-1">
+        <p>
+          Under{" "}
+          <ConsoleLink href={CONSOLE.audience}>
+            Google Auth platform
+          </ConsoleLink>
+          , set the audience. For a Google Workspace domain choose Internal:
+          Google asks for no review. For personal Gmail choose External, then
+          Publish app, or every sign-in stops after a week
+        </p>
+        <p>
+          At sign-in Google warns that the app is unverified. That is normal for
+          your own server: choose Continue. An unverified app takes up to 100
+          people
+        </p>
+      </li>
+      <li className="space-y-1.5">
+        <p>
+          Under{" "}
+          <ConsoleLink href={CONSOLE.credentials}>Credentials</ConsoleLink>,
+          create an OAuth client ID of type Web application, and paste this
+          address under Authorized redirect URIs
+        </p>
+        <div className="flex items-center gap-2 p-2.5 rounded-xl bg-surface-container-highest font-mono text-xs text-on-surface break-all select-all">
+          <span className="flex-1 min-w-0">{redirectUri}</span>
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await copyToClipboard(redirectUri);
+                setCopied(true);
+                toast.success("Redirect URI copied");
+                setTimeout(() => setCopied(false), 2000);
+              } catch {
+                toast.error(CLIPBOARD_DENIED);
+              }
+            }}
+            className="hit-area state-layer p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors shrink-0"
+            title="Copy redirect URI"
+            aria-label="Copy redirect URI"
+          >
+            {copied ? (
+              <Check className="w-4 h-4 text-success" />
+            ) : (
+              <Copy className="w-4 h-4" />
+            )}
+          </button>
+        </div>
+        <p>
+          It is the address in your browser bar, so everyone must open Contrack
+          at the same one. Behind a proxy, set PUBLIC_URL
+        </p>
+      </li>
+      <li>
+        {fromEnv
+          ? "Put the client ID and the client secret Google shows in GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET, where this server reads them"
+          : "Copy the client ID and the client secret Google shows into Client ID and Client secret below, then save"}
+      </li>
+    </ol>
+  );
+
   return (
     <>
       <SettingRow
         id="google-oauth"
         title="Google OAuth client"
-        description="Lets members connect a Google account to sync contacts, mail and calendar events"
+        description="Members connect their Google accounts through it, to sync contacts, mail and calendar. One admin creates it once in Google Cloud, in about ten minutes"
         below
       >
         <div className="space-y-3">
-          {configured && (
-            <span className={CONFIGURED_CHIP}>
-              <Check className="w-3.5 h-3.5" aria-hidden="true" />
-              Configured
-            </span>
-          )}
-
-          <div className="space-y-1.5">
-            <span className={SETTINGS_LABEL}>Authorized redirect URI</span>
-            <div className="flex items-center gap-2 p-2.5 rounded-xl bg-surface-container-highest font-mono text-xs text-on-surface break-all select-all">
-              <span className="flex-1 min-w-0">{redirectUri}</span>
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    await copyToClipboard(redirectUri);
-                    setCopied(true);
-                    toast.success("Redirect URI copied");
-                    setTimeout(() => setCopied(false), 2000);
-                  } catch {
-                    toast.error(CLIPBOARD_DENIED);
-                  }
-                }}
-                className="hit-area state-layer p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors shrink-0"
-                title="Copy redirect URI"
-                aria-label="Copy redirect URI"
-              >
-                {copied ? (
-                  <Check className="w-4 h-4 text-success" />
-                ) : (
-                  <Copy className="w-4 h-4" />
-                )}
-              </button>
-            </div>
-            <p className="text-xs text-on-surface-variant text-pretty">
-              Paste it into the client in Google Cloud Console, under Authorized
-              redirect URIs
-            </p>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-on-surface-variant">
+            {configured ? (
+              <>
+                <span className={CONFIGURED_CHIP}>
+                  <Check className="w-3.5 h-3.5" aria-hidden="true" />
+                  Configured
+                </span>
+                <span>
+                  Members connect their accounts under{" "}
+                  <Link
+                    to="/settings/connectors"
+                    className="font-medium text-on-surface underline underline-offset-2"
+                  >
+                    Connectors
+                  </Link>
+                </span>
+              </>
+            ) : (
+              <span className={NOT_SET_UP_CHIP}>
+                <TriangleAlert className="w-3.5 h-3.5" aria-hidden="true" />
+                Not set up
+              </span>
+            )}
           </div>
 
-          {google?.source === "env" ? (
+          {configured ? (
+            <details className="rounded-xl bg-surface-container-low p-3 text-xs">
+              <summary className="cursor-pointer font-semibold text-on-surface">
+                How to create a client in Google Cloud
+              </summary>
+              <div className="mt-3">{steps}</div>
+            </details>
+          ) : (
+            <div className="rounded-xl bg-surface-container-low p-3 space-y-3 text-xs">
+              <p className="font-semibold text-on-surface">
+                Create the client in Google Cloud
+              </p>
+              {steps}
+            </div>
+          )}
+
+          {fromEnv ? (
             <p className={NOTE}>
               Set by GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET in
               the environment
@@ -682,21 +789,6 @@ const GoogleRow = () => {
               </div>
             </div>
           )}
-
-          <div className="rounded-xl bg-surface-container-low p-3 text-xs text-on-surface-variant space-y-1.5 text-pretty">
-            <p className="font-semibold text-on-surface">
-              Which kind of app to create in Google Cloud
-            </p>
-            <p>
-              For a Google Workspace domain, an Internal app. Google does not
-              need to verify it
-            </p>
-            <p>
-              For personal Gmail, an External app set to In production. It takes
-              up to 100 users, and Google warns that the app is unverified at
-              sign-in, which is normal for a self-hosted server
-            </p>
-          </div>
         </div>
       </SettingRow>
 

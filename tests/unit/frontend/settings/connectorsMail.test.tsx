@@ -264,9 +264,9 @@ describe("Frontend Mail & Google Connectors Components", () => {
       renderWithClient(<GoogleFormModal isOpen={true} onClose={vi.fn()} />);
 
       expect(
-        screen.getByText(/Google sign-in is not set up yet/i),
+        screen.getByText(/Google is not set up on this server yet/i),
       ).toBeTruthy();
-      expect(screen.getByText("Open Settings → General")).toBeTruthy();
+      expect(screen.getByText("Set up Google")).toBeTruthy();
     });
   });
 
