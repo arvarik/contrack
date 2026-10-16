@@ -4,10 +4,14 @@
  * 2. Deduplicates by externalId through connector_links.
  * 3. Rolls a day up by contactId:YYYY-MM-DD.
  * 4. Counts unknown participants as correspondents, and promotes them to ghost
- *    contacts past ghostThreshold.
- * 5. Refreshes upcoming_events, replacing stale rows.
- * 6. Commits in transactions of 100 events.
- * 7. Copies each contact photo to the owner's uploads before the event is
+ *    contacts past ghostThreshold. A no-reply sender and a broadcast to many
+ *    strangers count nobody.
+ * 5. Writes a synced person over the contact the sync made for it, and only
+ *    fills in a contact the sync linked by a shared address. Trashes the
+ *    former when its source deletes it, and unlinks the latter.
+ * 6. Refreshes upcoming_events, replacing stale rows.
+ * 7. Commits in transactions of 100 events.
+ * 8. Copies each contact photo to the owner's uploads before the event is
  *    queued, so a contact never stores a third-party image URL.
  *
  * @module server/connectors/ingest
@@ -19,8 +23,9 @@ import { sqlite } from "../db.ts";
 import type { Scope } from "../tenancy/scope.ts";
 import { interactionService } from "../services/interactionService.ts";
 import { contactService } from "../services/contactService.ts";
-import type { NewContactPayload } from "../repositories/types.ts";
-import { normalizePhone } from "../utils/nlp/phone.ts";
+import type { ContactPayload, HydratedContact } from "../repositories/types.ts";
+import { doubleMetaphone, normalizePhone } from "../utils/nlp/index.ts";
+import { dispatchEvents, recordEvent } from "../events/index.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage, newContactId } from "../utils/helpers.ts";
 import { ownerUploadDir, ownerUploadUrl } from "../utils/paths.ts";
@@ -72,6 +77,90 @@ function givenName(p: Participant): string | null {
   const same = (value?: string) =>
     value?.trim().toLowerCase() === name.toLowerCase();
   return same(p.email) || same(p.phone) ? null : name;
+}
+
+/**
+ * Addresses no person reads. A mail from one is a notification, so its sender
+ * is not a correspondent and never a suggested contact.
+ */
+const BULK_SENDER =
+  /^(no-?reply|do-?not-?reply|notifications?|mailer-daemon|postmaster|bounces?)([@+._-]|$)/i;
+/**
+ * A mail or a meeting with more strangers than this is a broadcast, not a
+ * conversation: it counts none of them. The calendar's own attendee cap is 25.
+ */
+const MAX_STRANGERS_PER_EVENT = 25;
+
+/** The address an email or a phone entry of a payload names. */
+function payloadValue(
+  entry: unknown,
+  key: "email" | "phone",
+): string | undefined {
+  if (typeof entry === "string") return entry;
+  const value = (entry as Record<string, unknown> | null)?.[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+/**
+ * What a sync may write to a contact it did not make: a field the contact
+ * leaves empty, and an email or a phone it does not have. Null when there is
+ * nothing to add. The sync never renames the contact or drops its addresses,
+ * so a second Google card that shares one address cannot turn "Mom" into "Dad".
+ */
+export function fillFromRemote(
+  local: HydratedContact,
+  remote: ContactPayload,
+): ContactPayload | null {
+  const out: ContactPayload = {};
+  for (const [key, value] of Object.entries(remote)) {
+    if (key === "emails" || key === "phones" || key === "sources") continue;
+    if (value == null || value === "") continue;
+    if (Array.isArray(value) && value.length === 0) continue;
+    const current = (local as unknown as Record<string, unknown>)[key];
+    const empty =
+      current == null ||
+      current === "" ||
+      (Array.isArray(current) && current.length === 0);
+    if (empty) out[key] = value;
+  }
+  const emails = new Set(local.emails.map((e) => e.email.toLowerCase()));
+  const newEmails = (remote.emails ?? []).filter((e) => {
+    const address = payloadValue(e, "email")?.toLowerCase().trim();
+    return address && !emails.has(address) && emails.add(address);
+  });
+  if (newEmails.length > 0) {
+    out.emails = [
+      ...local.emails.map(({ email, label, isPrimary }) => ({
+        email,
+        label: label ?? undefined,
+        isPrimary,
+      })),
+      ...newEmails.map((e) => ({
+        ...(typeof e === "string" ? { email: e } : e),
+        isPrimary: false,
+      })),
+    ];
+  }
+  const phones = new Set(local.phones.map((p) => normalizePhone(p.phone)));
+  const newPhones = (remote.phones ?? []).filter((p) => {
+    const number = payloadValue(p, "phone");
+    const normalized = number ? normalizePhone(number) : "";
+    return normalized && !phones.has(normalized) && phones.add(normalized);
+  });
+  if (newPhones.length > 0) {
+    out.phones = [
+      ...local.phones.map(({ phone, label, isPrimary }) => ({
+        phone,
+        label: label ?? undefined,
+        isPrimary,
+      })),
+      ...newPhones.map((p) => ({
+        ...(typeof p === "string" ? { phone: p } : p),
+        isPrimary: false,
+      })),
+    ];
+  }
+  return Object.keys(out).length > 0 ? out : null;
 }
 
 /** Contact avatars: 256 px square, the size processBase64Avatar writes. */
@@ -222,10 +311,131 @@ export async function ingestStream(
   const ingestedContactIds = new Set<string>();
   let hasUpcomingEvents = false;
 
+  /**
+   * Whether the sync made this contact for this external id: its source row
+   * names the connector's kind and the id. Then the source owns its details.
+   */
+  function madeBySync(contactId: string, externalId: string): boolean {
+    return Boolean(
+      sqlite
+        .prepare(
+          `SELECT 1 FROM contact_sources WHERE contactId = ? AND platform = ? AND externalId = ?`,
+        )
+        .get(contactId, connector.kind, externalId),
+    );
+  }
+
+  /**
+   * A ghost contact for a stranger seen often enough, with the address the
+   * mail or meeting gave. Recorded like every created contact, so the search
+   * index, the duplicate check and the score see it. Runs inside the batch
+   * transaction, as recordEvent requires.
+   */
+  function createGhost(p: Participant, nowIso: string): string {
+    const ghostName = p.name || p.email || p.phone || "Unknown";
+    const ghostId = newContactId(ghostName);
+    // A vibe id the client draws (`VIBES` in src/lib/theme.ts).
+    const newTheme = ["brand", "teal", "rose", "emerald", "amber"][
+      Math.floor(Math.random() * 5)
+    ];
+    sqlite
+      .prepare(
+        `INSERT INTO contacts (id, ownerId, name, isGhost, themeColor, phoneticHash, addedAt, updatedAt)
+         VALUES (?, ?, ?, 1, ?, ?, ?, ?)`,
+      )
+      .run(
+        ghostId,
+        scope.ownerId,
+        ghostName,
+        newTheme,
+        doubleMetaphone(ghostName).primary,
+        nowIso,
+        nowIso,
+      );
+    if (p.email) {
+      sqlite
+        .prepare(
+          `INSERT INTO contact_emails (id, contactId, email, isPrimary)
+           VALUES (?, ?, ?, 1)`,
+        )
+        .run(crypto.randomUUID(), ghostId, p.email.toLowerCase().trim());
+    }
+    if (p.phone) {
+      sqlite
+        .prepare(
+          `INSERT INTO contact_phones (id, contactId, phone, isPrimary)
+           VALUES (?, ?, ?, 1)`,
+        )
+        .run(crypto.randomUUID(), ghostId, normalizePhone(p.phone));
+    }
+    recordEvent(scope, "contact.created", ghostId, {
+      origin: "connector",
+      autoEnrich: false,
+    });
+    matcher.registerContact(
+      ghostId,
+      p.email ? [p.email] : [],
+      p.phone ? [p.phone] : [],
+    );
+    stats.ghosts = (stats.ghosts ?? 0) + 1;
+    return ghostId;
+  }
+
+  /**
+   * A synced person the connector already links. A contact the sync made is
+   * the source's to write, emails and phones included. One the sync only
+   * linked, because it shared an address, is the owner's: the sync fills what
+   * is empty and adds the addresses it has, and changes nothing else.
+   */
+  function syncLinkedContact(
+    contactId: string,
+    remote: ContactPayload,
+    externalId: string,
+  ): void {
+    try {
+      if (madeBySync(contactId, externalId)) {
+        contactService.updateContact(scope, contactId, remote);
+        return;
+      }
+      const local = contactService.getContactById(scope, contactId);
+      const fill = local ? fillFromRemote(local, remote) : null;
+      if (fill) contactService.updateContact(scope, contactId, fill);
+    } catch {
+      // The contact was removed, or the update failed.
+    }
+  }
+
   function processSingleEvent(raw: SyncEvent, nowIso: string): void {
     const event = capped(raw);
     if (event.kind === "progress") {
       stats.fetched = event.fetched;
+      return;
+    }
+
+    if (event.kind === "contact_deleted") {
+      const link = sqlite
+        .prepare(
+          `SELECT localId FROM connector_links
+           WHERE connectorId = ? AND ownerId = ? AND kind = 'contact' AND externalId = ?`,
+        )
+        .get(connector.id, scope.ownerId, event.externalId) as
+        { localId: string | null } | undefined;
+      if (!link) return;
+      // To the trash, where the owner can bring it back. A contact the sync
+      // only linked stays, and only the link goes.
+      if (link.localId && madeBySync(link.localId, event.externalId)) {
+        try {
+          contactService.deleteContact(scope, link.localId);
+        } catch {
+          // Already gone.
+        }
+      }
+      sqlite
+        .prepare(
+          `DELETE FROM connector_links
+           WHERE connectorId = ? AND ownerId = ? AND kind = 'contact' AND externalId = ?`,
+        )
+        .run(connector.id, scope.ownerId, event.externalId);
       return;
     }
 
@@ -287,17 +497,36 @@ export async function ingestStream(
           )
           .run(connector.id, scope.ownerId, event.externalId);
       }
-      // 1. Check idempotency via connector_links
+      // 1. Check idempotency via connector_links, under the id the event has
+      // now or one an earlier version gave it.
+      const knownIds = [event.externalId, ...(event.legacyExternalIds ?? [])];
       const existingLink = sqlite
         .prepare(
-          `SELECT localId, seenCount
+          `SELECT externalId, localId, seenCount
            FROM connector_links
-           WHERE connectorId = ? AND ownerId = ? AND kind = 'interaction' AND externalId = ?`,
+           WHERE connectorId = ? AND ownerId = ? AND kind = 'interaction'
+             AND externalId IN (${knownIds.map(() => "?").join(", ")})
+           ORDER BY externalId = ? DESC
+           LIMIT 1`,
         )
-        .get(connector.id, scope.ownerId, event.externalId) as
-        { localId: string | null; seenCount: number } | undefined;
+        .get(connector.id, scope.ownerId, ...knownIds, event.externalId) as
+        | { externalId: string; localId: string | null; seenCount: number }
+        | undefined;
 
       if (existingLink) {
+        if (existingLink.externalId !== event.externalId) {
+          sqlite
+            .prepare(
+              `UPDATE connector_links SET externalId = ?
+               WHERE connectorId = ? AND ownerId = ? AND kind = 'interaction' AND externalId = ?`,
+            )
+            .run(
+              event.externalId,
+              connector.id,
+              scope.ownerId,
+              existingLink.externalId,
+            );
+        }
         sqlite
           .prepare(
             `UPDATE connector_links
@@ -483,8 +712,15 @@ export async function ingestStream(
         }
         stats.interactions = (stats.interactions ?? 0) + 1;
       } else {
-        // No contact matched: handle unknown participants
-        for (const p of match.unknownParticipants) {
+        // No contact matched: count the strangers, unless this is a
+        // notification or a broadcast.
+        const strangers =
+          match.unknownParticipants.length > MAX_STRANGERS_PER_EVENT
+            ? []
+            : match.unknownParticipants.filter(
+                (p) => !(p.email && BULK_SENDER.test(p.email)),
+              );
+        for (const p of strangers) {
           const rawId =
             p.email?.toLowerCase().trim() ||
             (p.phone ? normalizePhone(p.phone) : null) ||
@@ -528,49 +764,7 @@ export async function ingestStream(
 
             if (!row.ignoredAt && !row.localId) {
               if (newSeen >= ghostThreshold) {
-                // Promote to ghost contact
-                const ghostName = p.name || p.email || p.phone || "Unknown";
-                const ghostId = newContactId(ghostName);
-                // A vibe id the client draws (`VIBES` in src/lib/theme.ts).
-                const newTheme = ["brand", "teal", "rose", "emerald", "amber"][
-                  Math.floor(Math.random() * 5)
-                ];
-
-                sqlite
-                  .prepare(
-                    `INSERT INTO contacts (id, ownerId, name, isGhost, themeColor, addedAt, updatedAt)
-                     VALUES (?, ?, ?, 1, ?, ?, ?)`,
-                  )
-                  .run(
-                    ghostId,
-                    scope.ownerId,
-                    ghostName,
-                    newTheme,
-                    nowIso,
-                    nowIso,
-                  );
-
-                if (p.email) {
-                  sqlite
-                    .prepare(
-                      `INSERT INTO contact_emails (id, contactId, email, isPrimary)
-                       VALUES (?, ?, ?, 1)`,
-                    )
-                    .run(
-                      crypto.randomUUID(),
-                      ghostId,
-                      p.email.toLowerCase().trim(),
-                    );
-                }
-                if (p.phone) {
-                  sqlite
-                    .prepare(
-                      `INSERT INTO contact_phones (id, contactId, phone, isPrimary)
-                       VALUES (?, ?, ?, 1)`,
-                    )
-                    .run(crypto.randomUUID(), ghostId, normalizePhone(p.phone));
-                }
-
+                const ghostId = createGhost(p, nowIso);
                 sqlite
                   .prepare(
                     `UPDATE connector_links
@@ -578,59 +772,12 @@ export async function ingestStream(
                      WHERE connectorId = ? AND ownerId = ? AND kind = 'correspondent' AND externalId = ?`,
                   )
                   .run(ghostId, connector.id, scope.ownerId, externalId);
-
-                matcher.registerContact(
-                  ghostId,
-                  p.email ? [p.email] : [],
-                  p.phone ? [p.phone] : [],
-                );
-                stats.ghosts = (stats.ghosts ?? 0) + 1;
               }
             }
           } else {
             // First time seen
             if (ghostThreshold <= 1) {
-              const ghostName = p.name || p.email || p.phone || "Unknown";
-              const ghostId = newContactId(ghostName);
-              const newTheme = ["brand", "teal", "rose", "emerald", "amber"][
-                Math.floor(Math.random() * 5)
-              ];
-
-              sqlite
-                .prepare(
-                  `INSERT INTO contacts (id, ownerId, name, isGhost, themeColor, addedAt, updatedAt)
-                   VALUES (?, ?, ?, 1, ?, ?, ?)`,
-                )
-                .run(
-                  ghostId,
-                  scope.ownerId,
-                  ghostName,
-                  newTheme,
-                  nowIso,
-                  nowIso,
-                );
-
-              if (p.email) {
-                sqlite
-                  .prepare(
-                    `INSERT INTO contact_emails (id, contactId, email, isPrimary)
-                     VALUES (?, ?, ?, 1)`,
-                  )
-                  .run(
-                    crypto.randomUUID(),
-                    ghostId,
-                    p.email.toLowerCase().trim(),
-                  );
-              }
-              if (p.phone) {
-                sqlite
-                  .prepare(
-                    `INSERT INTO contact_phones (id, contactId, phone, isPrimary)
-                     VALUES (?, ?, ?, 1)`,
-                  )
-                  .run(crypto.randomUUID(), ghostId, normalizePhone(p.phone));
-              }
-
+              const ghostId = createGhost(p, nowIso);
               sqlite
                 .prepare(
                   `INSERT INTO connector_links (
@@ -645,13 +792,6 @@ export async function ingestStream(
                   nowIso,
                   displayName,
                 );
-
-              matcher.registerContact(
-                ghostId,
-                p.email ? [p.email] : [],
-                p.phone ? [p.phone] : [],
-              );
-              stats.ghosts = (stats.ghosts ?? 0) + 1;
             } else {
               sqlite
                 .prepare(
@@ -684,7 +824,9 @@ export async function ingestStream(
         .get(connector.id, scope.ownerId, event.externalId) as
         { localId: string | null } | undefined;
 
-      const cPayload = { ...(event.contact as unknown as NewContactPayload) };
+      const cPayload = { ...(event.contact as ContactPayload) };
+      // A person with an address and no name keeps the name the contact has.
+      if (!cPayload.name) delete cPayload.name;
       const cEmails: string[] = Array.isArray(cPayload.emails)
         ? cPayload.emails
             .map((e: unknown) =>
@@ -734,11 +876,7 @@ export async function ingestStream(
           : undefined;
         const prevAvatarUrl = prevAvatarRow?.avatarUrl ?? null;
 
-        try {
-          contactService.updateContact(scope, targetLocalId, cPayload);
-        } catch {
-          // ignore if contact was removed or update failed
-        }
+        syncLinkedContact(targetLocalId, cPayload, event.externalId);
 
         if (
           prevAvatarUrl &&
@@ -793,9 +931,7 @@ export async function ingestStream(
 
         let contactId = matchedContactId;
         if (!contactId) {
-          if (!cPayload.name) {
-            cPayload.name = cEmails[0] || cPhones[0] || "Unknown";
-          }
+          cPayload.name ||= cEmails[0] || cPhones[0] || "Unknown";
           cPayload.sources = [
             {
               platform: connector.kind,
@@ -807,7 +943,7 @@ export async function ingestStream(
           // one, so "Enrich new contacts automatically" leaves them alone.
           const created = contactService.createContact(
             scope,
-            cPayload,
+            cPayload as ContactPayload & { name: string },
             connector.kind,
           );
           if (created) {
@@ -891,6 +1027,7 @@ export async function ingestStream(
           processSingleEvent(ev, nowIso);
         }
       })();
+      dispatchEvents();
     }
   }
 
@@ -905,6 +1042,7 @@ export async function ingestStream(
         processSingleEvent(ev, nowIso);
       }
     })();
+    dispatchEvents();
   }
 
   // Refresh upcoming events: remove stale upcoming events for this connector.

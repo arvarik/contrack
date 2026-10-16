@@ -501,4 +501,210 @@ describe("connectors ingestStream", () => {
     expect(link).toBeDefined();
     expect(link.localId).toBe(contactRow.id);
   });
+
+  /** Runs `events` through ingest for the test connector, as a Google sync. */
+  async function ingest(
+    events: SyncEvent[],
+    options: { ghostThreshold?: number } = {},
+  ) {
+    async function* stream() {
+      yield* events;
+    }
+    return ingestStream(
+      scope,
+      { id: connectorId, ownerId, kind: "google", config: {} },
+      stream(),
+      buildContactMatcher(scope),
+      { emails: ["me@example.com"], phones: [] },
+      options,
+    );
+  }
+
+  const card = (
+    externalId: string,
+    name: string,
+    email: string,
+    extra: Record<string, unknown> = {},
+  ): SyncEvent => ({
+    kind: "contact",
+    externalId,
+    contact: {
+      name,
+      emails: [{ email, type: "work", isPrimary: true }],
+      phones: [],
+      ...extra,
+    },
+  });
+
+  const mail = (
+    externalId: string,
+    participants: Array<{ email: string; name?: string }>,
+    extra: Record<string, unknown> = {},
+  ): SyncEvent => ({
+    kind: "interaction",
+    externalId,
+    type: "email",
+    title: "Hello",
+    date: "2026-02-01T10:00:00.000Z",
+    direction: "in",
+    participants,
+    ...extra,
+  });
+
+  const column = (sql: string, ...params: unknown[]) =>
+    (sqlite.prepare(sql).all(...params) as Record<string, unknown>[]).map(
+      (r) => Object.values(r)[0],
+    );
+
+  it("merges a synced person into the contact it was linked to by a shared address", async () => {
+    // The local contact and a Google card share one address, so the card
+    // binds to the contact. A later sync of that card must not rename the
+    // contact, nor drop the emails and phones Google does not know.
+    const momId = crypto.randomUUID();
+    sqlite
+      .prepare(
+        `INSERT INTO contacts (id, ownerId, name, company, addedAt, updatedAt)
+         VALUES (?, ?, 'Mom', 'Home', datetime('now'), datetime('now'))`,
+      )
+      .run(momId, ownerId);
+    const addEmail = sqlite.prepare(
+      "INSERT INTO contact_emails (id, contactId, email, isPrimary) VALUES (?, ?, ?, ?)",
+    );
+    addEmail.run(crypto.randomUUID(), momId, "shared@family.example", 1);
+    addEmail.run(crypto.randomUUID(), momId, "mom@family.example", 0);
+    sqlite
+      .prepare(
+        "INSERT INTO contact_phones (id, contactId, phone, isPrimary) VALUES (?, ?, '+14155550100', 1)",
+      )
+      .run(crypto.randomUUID(), momId);
+
+    const dad = card("people/dad", "Dad", "shared@family.example", {
+      role: "Engineer",
+      phones: [{ phone: "+14155550199", type: "mobile", isPrimary: true }],
+    });
+    await ingest([dad]);
+    await ingest([dad]);
+
+    expect(
+      sqlite
+        .prepare("SELECT name, company, role FROM contacts WHERE id = ?")
+        .get(momId),
+    ).toEqual({ name: "Mom", company: "Home", role: "Engineer" });
+    expect(
+      column(
+        "SELECT email FROM contact_emails WHERE contactId = ? ORDER BY email",
+        momId,
+      ),
+    ).toEqual(["mom@family.example", "shared@family.example"]);
+    expect(
+      column(
+        "SELECT phone FROM contact_phones WHERE contactId = ? ORDER BY phone",
+        momId,
+      ),
+    ).toEqual(["+14155550100", "+14155550199"]);
+  });
+
+  it("keeps writing Google's details over a contact the sync itself created", async () => {
+    await ingest([card("people/bob", "Bob Builder", "bob@builder.example")]);
+    await ingest([
+      card("people/bob", "Robert Builder", "robert@builder.example"),
+    ]);
+
+    const [bobId] = column(
+      "SELECT localId FROM connector_links WHERE connectorId = ? AND kind = 'contact' AND externalId = 'people/bob'",
+      connectorId,
+    );
+    expect(column("SELECT name FROM contacts WHERE id = ?", bobId)).toEqual([
+      "Robert Builder",
+    ]);
+    expect(
+      column("SELECT email FROM contact_emails WHERE contactId = ?", bobId),
+    ).toEqual(["robert@builder.example"]);
+  });
+
+  it("trashes a contact the sync created when Google deletes it, and only unlinks one it matched", async () => {
+    await ingest([
+      card("people/alice", "Alice G", "alice@example.com"),
+      card("people/bob", "Bob Builder", "bob@builder.example"),
+    ]);
+    const [bobId] = column(
+      "SELECT localId FROM connector_links WHERE connectorId = ? AND kind = 'contact' AND externalId = 'people/bob'",
+      connectorId,
+    );
+
+    await ingest([
+      { kind: "contact_deleted", externalId: "people/alice" },
+      { kind: "contact_deleted", externalId: "people/bob" },
+    ]);
+
+    const deletedAt = (id: unknown) =>
+      column("SELECT deletedAt FROM contacts WHERE id = ?", id)[0];
+    expect(deletedAt(contactId)).toBeNull();
+    expect(deletedAt(bobId)).toEqual(expect.any(String));
+    expect(
+      column(
+        "SELECT COUNT(*) FROM connector_links WHERE connectorId = ? AND kind = 'contact'",
+        connectorId,
+      ),
+    ).toEqual([0]);
+  });
+
+  it("records contact.created for a promoted ghost, and gives it a phonetic hash", async () => {
+    const stranger = { email: "sam@stranger.example", name: "Sam Stranger" };
+    await ingest([mail("m-1", [stranger]), mail("m-2", [stranger])], {
+      ghostThreshold: 2,
+    });
+
+    const ghost = sqlite
+      .prepare(
+        "SELECT id, phoneticHash FROM contacts WHERE ownerId = ? AND isGhost = 1",
+      )
+      .get(ownerId) as { id: string; phoneticHash: string | null };
+    expect(ghost.phoneticHash).toBeTruthy();
+    expect(
+      column(
+        "SELECT payload FROM events WHERE ownerId = ? AND type = 'contact.created' AND subjectId = ?",
+        ownerId,
+        ghost.id,
+      ).map((p) => JSON.parse(p as string)),
+    ).toEqual([{ origin: "connector", autoEnrich: false }]);
+  });
+
+  it("counts no correspondent for a no-reply sender or a broadcast to many strangers", async () => {
+    await ingest([
+      mail("m-receipt", [{ email: "no-reply@shop.example", name: "Shop" }]),
+      mail(
+        "m-broadcast",
+        Array.from({ length: 30 }, (_, i) => ({
+          email: `person${i}@list.example`,
+        })),
+      ),
+    ]);
+
+    expect(
+      column(
+        "SELECT COUNT(*) FROM connector_links WHERE connectorId = ? AND kind = 'correspondent'",
+        connectorId,
+      ),
+    ).toEqual([0]);
+  });
+
+  it("recognizes an interaction under the id an earlier version gave it, and moves its link to the new id", async () => {
+    const alice = [{ email: "alice@example.com" }];
+    await ingest([mail("imap:INBOX:mid-1", alice)]);
+    const again = await ingest([
+      mail("imap:mid-1", alice, { legacyExternalIds: ["imap:INBOX:mid-1"] }),
+    ]);
+
+    expect(again.stats.skipped).toBe(1);
+    expect(
+      column("SELECT COUNT(*) FROM interactions WHERE ownerId = ?", ownerId),
+    ).toEqual([1]);
+    expect(
+      column(
+        "SELECT externalId FROM connector_links WHERE connectorId = ? AND kind = 'interaction'",
+        connectorId,
+      ),
+    ).toEqual(["imap:mid-1"]);
+  });
 });

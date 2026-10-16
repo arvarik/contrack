@@ -516,6 +516,32 @@ export async function deleteConnector(
   });
 }
 
+/**
+ * The next run as an ISO timestamp, from the row's own interval times the
+ * bound multiplier (1 after a success, the backoff after a failure), at most
+ * four hours out.
+ */
+const NEXT_RUN_SQL = `strftime('%Y-%m-%dT%H:%M:%fZ', 'now',
+  '+' || min(intervalMinutes * ?, 240) || ' minutes')`;
+
+/**
+ * Close the runs the last process left `running`. Nothing finishes them: the
+ * sync that owned each one died with its process, or ran past its deadline
+ * and never returned. Called once at boot, before the first tick.
+ *
+ * @returns how many runs were closed.
+ */
+export function recoverInterruptedRuns(): number {
+  return sqlite
+    .prepare(
+      // tenant-lint: allow instance sweep
+      `UPDATE connector_runs
+       SET status = 'error', finishedAt = ?, error = 'The server restarted during this sync'
+       WHERE status = 'running'`,
+    )
+    .run(new Date().toISOString()).changes;
+}
+
 export async function runNow(
   scope: Scope,
   id: string,
@@ -831,31 +857,19 @@ export async function runNow(
         ? JSON.stringify(nextCursor)
         : connector.cursor;
 
-    const nextInterval = connector.intervalMinutes;
-    const nextRun = new Date(
-      Date.now() + nextInterval * 60 * 1000,
-    ).toISOString();
-    const newStatus =
-      connector.status === "error" || connector.status === "needs_reauth"
-        ? "active"
-        : connector.status;
-
+    // The status and the interval are read again here, not from the row the
+    // run started with: a pause set during the run stays, and a new interval
+    // sets the next run. A failed connector is active again.
     sqlite
       .prepare(
         `UPDATE connectors
-         SET status = ?, attempts = 0, lastRunAt = ?, nextRunAt = ?,
+         SET status = CASE WHEN status = 'paused' THEN 'paused' ELSE 'active' END,
+             attempts = 0, lastRunAt = ?,
+             nextRunAt = ${NEXT_RUN_SQL},
              lastError = NULL, cursor = ?, updatedAt = ?
          WHERE id = ? AND ownerId = ?`,
       )
-      .run(
-        newStatus,
-        finishIso,
-        nextRun,
-        cursorJson,
-        finishIso,
-        id,
-        scope.ownerId,
-      );
+      .run(finishIso, 1, cursorJson, finishIso, id, scope.ownerId);
 
     sqlite
       .prepare(
@@ -901,16 +915,10 @@ export async function runNow(
         details: { error: errMsg },
       });
     } else {
-      // Exponential backoff: double interval up to 4 hours (240 minutes)
+      // Exponential backoff: double the interval, up to 4 hours. The
+      // scheduler retries a connector in 'error' once nextRunAt passes.
       const attempts = connector.attempts + 1;
       const backoffMultiplier = Math.pow(2, Math.min(attempts, 8));
-      const backoffMinutes = Math.min(
-        connector.intervalMinutes * backoffMultiplier,
-        240,
-      );
-      const nextRun = new Date(
-        Date.now() + backoffMinutes * 60 * 1000,
-      ).toISOString();
 
       if (connector.status !== "error") {
         auditService.record({
@@ -925,13 +933,14 @@ export async function runNow(
       sqlite
         .prepare(
           `UPDATE connectors
-           SET status = 'error', attempts = ?, nextRunAt = ?, lastError = ?,
+           SET status = CASE WHEN status = 'paused' THEN 'paused' ELSE 'error' END,
+               attempts = ?, nextRunAt = ${NEXT_RUN_SQL}, lastError = ?,
                lastRunAt = ?, updatedAt = ?
            WHERE id = ? AND ownerId = ?`,
         )
         .run(
           attempts,
-          nextRun,
+          backoffMultiplier,
           errMsg,
           finishIso,
           finishIso,

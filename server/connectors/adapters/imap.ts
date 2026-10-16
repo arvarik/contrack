@@ -15,7 +15,7 @@ import { isPrivateAddress } from "../../utils/urlSafety.ts";
 import { log } from "../../utils/logger.ts";
 import { pageText } from "../../services/research/pages.ts";
 import { ConnectorAuthError, ConnectorConfigError } from "../errors.ts";
-import { normalizeEmail } from "../email/normalize.ts";
+import { mailDate, normalizeEmail } from "../email/normalize.ts";
 import {
   summarizeEmail,
   summariesAllowed,
@@ -389,8 +389,12 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
               uids = foundUids.filter((u) => u > lastUid);
             }
           } else {
-            // Initial sync: fetch since lookback date
-            const sinceDate = new Date(ctx.since);
+            // A folder with no cursor, on the first run or added later, reads
+            // the whole lookback window. (`ctx.since` is the last sync once
+            // there was one, which gave a folder added later a day of mail.)
+            const sinceDate = new Date(
+              Date.now() - (config.lookbackDays ?? 90) * 24 * 60 * 60 * 1000,
+            );
             const foundUids = await client.search(
               { since: sinceDate },
               { uid: true },
@@ -448,13 +452,12 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
               address: c.address || undefined,
             }));
 
-            const dateValue = message.envelope.date ?? message.internalDate;
             const norm = normalizeEmail(
               {
                 externalId: message.envelope.messageId || `${folder}:${uid}`,
                 messageId: message.envelope.messageId,
                 inReplyTo: message.envelope.inReplyTo,
-                date: dateValue,
+                date: mailDate(message.envelope.date, message.internalDate),
                 subject: message.envelope.subject,
                 from: rawFrom,
                 to: rawTo,
@@ -506,9 +509,16 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
               }
             }
 
+            // One interaction per message, whatever folders hold it: keyed by
+            // its Message-ID, else by folder and UID. The id with the folder
+            // in it, which earlier versions gave, made a mail in INBOX and
+            // Sent two interactions.
             yield {
               kind: "interaction",
-              externalId: `imap:${folder}:${norm.externalId}`,
+              externalId: norm.messageId
+                ? `imap:${norm.messageId}`
+                : `imap:${folder}:${uid}`,
+              legacyExternalIds: [`imap:${folder}:${norm.externalId}`],
               type: "email",
               title: norm.title,
               content: summaryContent,

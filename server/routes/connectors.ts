@@ -358,6 +358,12 @@ connectorsRouter.get(
         req.ip,
       );
     } else {
+      // Without a refresh token the connector could never sync. The secret
+      // schema would refuse it below, as a JSON 400 the browser lands on.
+      if (!tokens.refresh_token) {
+        log.warn("Connectors", "Google consent brought no refresh token");
+        return backToConnectors(res, "failed");
+      }
       await createConnector(
         scope,
         {
@@ -375,7 +381,7 @@ connectorsRouter.get(
             aliases: [],
           },
           secret: {
-            refreshToken: tokens.refresh_token || "",
+            refreshToken: tokens.refresh_token,
             accessToken: tokens.access_token || undefined,
             expiryDate: tokens.expiry_date || undefined,
             email: userEmail,

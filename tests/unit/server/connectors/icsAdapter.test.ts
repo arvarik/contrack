@@ -251,4 +251,129 @@ describe("icsAdapter", () => {
     expect(written).toEqual([]);
     expect(logged.join("\n")).not.toMatch(/5ecret|example\.com/);
   });
+
+  async function syncFeed(ics: string) {
+    mockFetch(ics);
+    const events: SyncEvent[] = [];
+    for await (const ev of icsAdapter.sync({
+      config: { url: "https://example.com/calendar.ics", lookbackDays: 90 },
+      secret: null,
+      cursor: null,
+      since: "2026-01-01T00:00:00.000Z",
+      selfAddresses: { emails: ["me@example.com"], phones: [] },
+      signal: new AbortController().signal,
+      log: () => {},
+    })) {
+      if (ev.kind !== "progress") events.push(ev);
+    }
+    return events as Array<
+      Extract<SyncEvent, { kind: "interaction" | "upcoming" }>
+    >;
+  }
+
+  const feed = (body: string) =>
+    `BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//Contrack Tests//EN\r\n${body.replace(/\n/g, "\r\n")}\r\nEND:VCALENDAR`;
+
+  it("keys an all-day recurring instance by its day, names the old instant id, and takes an override's own title", async () => {
+    // node-ical builds an all-day instance at the server's local midnight, so
+    // its instant depends on the server's zone and on DST: a move to a UTC
+    // container changed every id and imported every past instance again.
+    const events = await syncFeed(
+      feed(`BEGIN:VEVENT
+UID:allday-weekly
+DTSTART;VALUE=DATE:20260216
+DTEND;VALUE=DATE:20260217
+RRULE:FREQ=WEEKLY;COUNT=2
+SUMMARY:Standup day
+ATTENDEE:mailto:bob@example.com
+END:VEVENT
+BEGIN:VEVENT
+UID:weekly
+DTSTART;TZID=America/New_York:20260209T100000
+DTEND;TZID=America/New_York:20260209T110000
+RRULE:FREQ=WEEKLY;COUNT=2
+SUMMARY:Weekly
+ATTENDEE:mailto:bob@example.com
+END:VEVENT
+BEGIN:VEVENT
+UID:weekly
+RECURRENCE-ID;TZID=America/New_York:20260216T100000
+DTSTART;TZID=America/New_York:20260218T140000
+DTEND;TZID=America/New_York:20260218T150000
+SUMMARY:Weekly (moved)
+ATTENDEE:mailto:bob@example.com
+END:VEVENT`),
+    );
+    const localMidnight = (y: number, m: number, d: number) =>
+      new Date(y, m - 1, d).toISOString();
+    expect(
+      events
+        .filter((e) => e.externalId.startsWith("allday-weekly"))
+        .map((e) => [
+          e.externalId,
+          (e as { legacyExternalIds?: string[] }).legacyExternalIds,
+        ]),
+    ).toEqual([
+      [
+        "allday-weekly_2026-02-16",
+        [`allday-weekly_${localMidnight(2026, 2, 16)}`],
+      ],
+      [
+        "allday-weekly_2026-02-23",
+        [`allday-weekly_${localMidnight(2026, 2, 23)}`],
+      ],
+    ]);
+    const moved = events.find(
+      (e) => e.externalId === "weekly_2026-02-16T15:00:00.000Z",
+    );
+    expect(moved).toMatchObject({
+      title: "Weekly (moved)",
+      date: "2026-02-18T19:00:00.000Z",
+    });
+  });
+
+  it("gives an event without a UID its own id, and drops rooms and attendees who declined", async () => {
+    const events = await syncFeed(
+      feed(`BEGIN:VEVENT
+DTSTART:20260220T090000Z
+DTEND:20260220T100000Z
+SUMMARY:No UID one
+ATTENDEE:mailto:bob@example.com
+END:VEVENT
+BEGIN:VEVENT
+DTSTART:20260221T090000Z
+DTEND:20260221T100000Z
+SUMMARY:No UID two
+ATTENDEE:mailto:bob@example.com
+END:VEVENT
+BEGIN:VEVENT
+UID:planning
+DTSTART:20260222T090000Z
+DTEND:20260222T100000Z
+SUMMARY:Planning
+ORGANIZER;CN=Alice:mailto:alice@example.com
+ATTENDEE;PARTSTAT=ACCEPTED:mailto:bob@example.com
+ATTENDEE;CUTYPE=RESOURCE;CN=Room 4:mailto:room4@example.com
+ATTENDEE;CUTYPE=ROOM:mailto:room5@example.com
+ATTENDEE;PARTSTAT=DECLINED:mailto:carol@example.com
+END:VEVENT`),
+    );
+    const ids = events.map((e) => e.externalId);
+    expect(ids).toHaveLength(3);
+    expect(new Set(ids).size).toBe(3);
+    expect(ids).not.toContain("undefined");
+    expect(
+      events.find((e) => e.externalId === "planning")?.participants,
+    ).toEqual([
+      { email: "alice@example.com", name: "Alice" },
+      { email: "bob@example.com", name: undefined },
+    ]);
+  });
+
+  it("refuses a feed address that is not http(s), even with private hosts allowed", async () => {
+    mockFetch("BEGIN:VCALENDAR\r\nEND:VCALENDAR");
+    await expect(
+      icsAdapter.test({ url: "data:text/calendar,BEGIN%3AVCALENDAR" }, null),
+    ).rejects.toThrow(/http/i);
+  });
 });

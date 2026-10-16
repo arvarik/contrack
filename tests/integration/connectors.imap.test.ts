@@ -45,6 +45,10 @@ describe("IMAP Adapter Integration", () => {
   let bodyFetches = 0;
   /** Reset the connection (TCP RST) instead of answering the first FETCH. */
   let resetOnFetch = false;
+  /** Every UID SEARCH the adapter sent, as the server read it. */
+  const searchCommands: string[] = [];
+  /** Serve the message with a Date header decades from its arrival. */
+  let bogusDate = false;
 
   const rawMessageRfc822 = [
     'From: "Alice Wonderland" <alice@example.com>',
@@ -105,8 +109,8 @@ describe("IMAP Adapter Integration", () => {
             );
           } else if (cmd === "UID") {
             const subCmd = (parts[2] || "").toUpperCase();
-            console.log("UID command:", line);
             if (subCmd === "SEARCH") {
+              searchCommands.push(line);
               if (line.includes("102:*") || line.includes("200:*")) {
                 socket.write(`* SEARCH\r\n${tag} OK SEARCH completed\r\n`);
               } else {
@@ -133,7 +137,7 @@ describe("IMAP Adapter Integration", () => {
                 socket.write(`${tag} NO Whole messages are not served\r\n`);
               } else {
                 socket.write(
-                  `* 1 FETCH (UID 101 INTERNALDATE "15-Feb-2026 10:00:00 +0000" ENVELOPE ("Sun, 15 Feb 2026 10:00:00 +0000" "Important Project Discussion" (( "Alice Wonderland" NIL "alice" "example.com")) (( "Alice Wonderland" NIL "alice" "example.com")) (( "Alice Wonderland" NIL "alice" "example.com")) ((NIL NIL "me" "example.com")) NIL NIL NIL "<msg-001@example.com>") BODYSTRUCTURE ("TEXT" "PLAIN" ("CHARSET" "utf-8") NIL NIL "7BIT" ${rawMessageRfc822.length} 9))\r\n${tag} OK FETCH completed\r\n`,
+                  `* 1 FETCH (UID 101 INTERNALDATE "15-Feb-2026 10:00:00 +0000" ENVELOPE ("${bogusDate ? "Fri, 01 Jan 2099 10:00:00 +0000" : "Sun, 15 Feb 2026 10:00:00 +0000"}" "Important Project Discussion" (( "Alice Wonderland" NIL "alice" "example.com")) (( "Alice Wonderland" NIL "alice" "example.com")) (( "Alice Wonderland" NIL "alice" "example.com")) ((NIL NIL "me" "example.com")) NIL NIL NIL "<msg-001@example.com>") BODYSTRUCTURE ("TEXT" "PLAIN" ("CHARSET" "utf-8") NIL NIL "7BIT" ${rawMessageRfc822.length} 9))\r\n${tag} OK FETCH completed\r\n`,
                 );
               }
             } else {
@@ -170,6 +174,8 @@ describe("IMAP Adapter Integration", () => {
   beforeEach(() => {
     authFail = false;
     resetOnFetch = false;
+    bogusDate = false;
+    searchCommands.length = 0;
     folderUidValidity = 12345;
   });
 
@@ -511,5 +517,91 @@ describe("IMAP Adapter Integration", () => {
     sqlite.prepare("DELETE FROM events WHERE ownerId = ?").run(ownerId);
     sqlite.prepare("DELETE FROM jobs WHERE ownerId = ?").run(ownerId);
     sqlite.prepare("DELETE FROM users WHERE id = ?").run(ownerId);
+  });
+
+  /** One sync against the fake server; the interactions and the cursor. */
+  async function syncMail(
+    config: Record<string, unknown>,
+    cursor: unknown = null,
+    since = "2026-01-01T00:00:00.000Z",
+  ) {
+    const events: SyncEvent[] = [];
+    const gen = imapAdapter.sync({
+      config: {
+        host: "127.0.0.1",
+        port: serverPort,
+        secure: false,
+        username: "me@example.com",
+        folders: ["INBOX"],
+        summaries: false,
+        lookbackDays: 90,
+        rollup: true,
+        ghostThreshold: 3,
+        maxMessagesPerFolder: 100,
+        aliases: [],
+        ...config,
+      } as Parameters<typeof imapAdapter.sync>[0]["config"],
+      secret: { password: "password" },
+      cursor,
+      since,
+      selfAddresses: { emails: ["me@example.com"], phones: [] },
+      signal: new AbortController().signal,
+      log: () => {},
+      accountId: ownerId,
+    });
+    let step = await gen.next();
+    while (!step.done) {
+      events.push(step.value);
+      step = await gen.next();
+    }
+    return {
+      mails: events.filter(
+        (e): e is Extract<SyncEvent, { kind: "interaction" }> =>
+          e.kind === "interaction",
+      ),
+      cursor: step.value,
+    };
+  }
+
+  it("keys a message by its Message-ID alone, so one mail in two folders is one interaction, and names its old folder ids", async () => {
+    // The fake server serves the same message from every folder, as a mail
+    // sent to oneself sits in both INBOX and Sent. Keyed by folder, it was two
+    // interactions, and the day's roll-up said "2 emails" for one.
+    const { mails } = await syncMail({ folders: ["INBOX", "Sent"] });
+    expect(mails.map((m) => m.externalId)).toEqual([
+      "imap:msg-001@example.com",
+      "imap:msg-001@example.com",
+    ]);
+    // The old id kept the Message-ID as the server gave it.
+    expect(mails.map((m) => m.legacyExternalIds?.join())).toEqual([
+      expect.stringMatching(/^imap:INBOX:<?msg-001@example\.com>?$/),
+      expect.stringMatching(/^imap:Sent:<?msg-001@example\.com>?$/),
+    ]);
+  });
+
+  it("reads a folder without a cursor from the lookback window, not from the last sync", async () => {
+    // Sent was added to the config after the first run. The run's `since` is
+    // the last sync, so the new folder got one day of mail instead of 90.
+    const yesterday = new Date(Date.now() - 86_400_000).toISOString();
+    await syncMail(
+      { folders: ["INBOX", "Sent"], lookbackDays: 90 },
+      {
+        folders: { INBOX: { uidValidity: 12345, lastUid: 50 } },
+        lastSyncAt: yesterday,
+      },
+      yesterday,
+    );
+    const since = searchCommands.find((line) => line.includes("SINCE"));
+    expect(since).toBeDefined();
+    const day = new Date(since!.match(/SINCE (\S+)/)![1]).getTime();
+    const daysAgo = (Date.now() - day) / 86_400_000;
+    expect(daysAgo).toBeGreaterThan(89);
+    expect(daysAgo).toBeLessThan(91);
+  });
+
+  it("dates a mail by the server when its Date header is far off", async () => {
+    bogusDate = true;
+    const { mails } = await syncMail({});
+    expect(mails[0].date).toBe("2026-02-15T10:00:00.000Z");
   });
 });
