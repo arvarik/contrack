@@ -126,6 +126,7 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
 
   const handleTabChange = useCallback((tab: ImportTab) => {
     setActiveTabState(tab);
+    setError(null);
     persistSource(tab);
   }, []);
   const [error, setError] = useState<string | null>(null);
@@ -201,7 +202,9 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
             return;
           }
           if (record.status === "failed") {
-            setError(record.error ?? "The import did not finish");
+            setError(
+              (record.error ?? "The import did not finish").replace(/\.$/, ""),
+            );
             setPhase("failed");
             setProgress(null);
             return;
@@ -334,6 +337,32 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
   );
 
   const processFile = async (file: File) => {
+    if (
+      phaseRef.current === "importing" ||
+      phaseRef.current === "embedding" ||
+      phaseRef.current === "scanning" ||
+      phaseRef.current === "reconnecting"
+    ) {
+      return;
+    }
+
+    if (file.size > 50 * 1024 * 1024) {
+      setError("File is too large. Choose a file under 50 MB");
+      setPhase("idle");
+      setProgress(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    const ext = file.name.toLowerCase().split(".").pop();
+    if (ext && ["vcf", "csv", "json"].includes(ext) && file.size === 0) {
+      setError("The chosen file is empty");
+      setPhase("idle");
+      setProgress(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
     setError(null);
     setSkipped(0);
     setSummary(null);
@@ -420,7 +449,7 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
       ) {
         await poll(importId);
       } else {
-        setError(errorText(err));
+        setError(`Could not retry failed rows: ${errorText(err)}`);
       }
     } finally {
       setIsRetrying(false);
@@ -439,6 +468,8 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
     setError(null);
     setImportId(null);
     setFileName(null);
+    setIsDragging(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const dismiss = () => {
@@ -708,7 +739,7 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
               </div>
 
               {error && (
-                <div className={ERROR_BANNER}>
+                <div role="alert" className={ERROR_BANNER}>
                   <AlertCircle className="w-5 h-5 shrink-0" />
                   {error}
                 </div>
@@ -759,6 +790,8 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
             <motion.div
               key="processing"
               {...PHASE_MOTION}
+              role="status"
+              aria-live="polite"
               className="bg-surface-container-low rounded-2xl p-8 flex flex-col items-center justify-center text-center"
             >
               <div className="flex items-center gap-2 mb-6">
@@ -808,7 +841,14 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
                       {progress.processed ?? 0}/{progress.total}
                     </span>
                   </div>
-                  <div className="h-1.5 bg-surface-container-high rounded-full overflow-hidden">
+                  <div
+                    role="progressbar"
+                    aria-label="Import progress"
+                    aria-valuemin={0}
+                    aria-valuemax={progress.total}
+                    aria-valuenow={progress.processed ?? 0}
+                    className="h-1.5 bg-surface-container-high rounded-full overflow-hidden"
+                  >
                     <motion.div
                       className="h-full bg-primary rounded-full"
                       animate={{ width: `${progressPct}%` }}
@@ -842,6 +882,8 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
             <motion.div
               key="reconnecting"
               {...PHASE_MOTION}
+              role="status"
+              aria-live="polite"
               className="bg-surface-container-low rounded-2xl p-8 flex flex-col items-center justify-center text-center"
             >
               <div className="relative mb-4">
@@ -877,7 +919,7 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
                   {fileName ? `Nothing from ${fileName} was saved` : ""}
                 </p>
               </div>
-              <div className={ERROR_BANNER}>
+              <div role="alert" className={ERROR_BANNER}>
                 <AlertCircle className="w-5 h-5 shrink-0" />
                 {error ?? "The import did not finish"}
               </div>
@@ -1005,33 +1047,31 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
                 <li>
                   Open the <strong>Contacts</strong> app on your Mac
                 </li>
-                <li>Select the contacts you want to export (or ⌘A for all)</li>
+                <li>Select the contacts to export (or ⌘A for all)</li>
                 <li>
                   Go to <strong>File &gt; Export &gt; Export vCard…</strong>
                 </li>
                 <li>
-                  Save the <strong>.vcf</strong> file and upload it above
+                  Upload the <strong>.vcf</strong> file above
                 </li>
               </ol>
             )}
             {activeTab === "linkedin" && (
               <ol className="list-decimal list-inside space-y-1 ml-1">
                 <li>
-                  Go to LinkedIn <strong>Settings & Privacy</strong>
+                  Go to LinkedIn <strong>Settings & Privacy</strong> &gt;{" "}
+                  <strong>Data privacy</strong>
                 </li>
                 <li>
-                  Select <strong>Data privacy</strong> &gt;{" "}
-                  <strong>Get a copy of your data</strong>
+                  Select <strong>Get a copy of your data</strong> &gt;{" "}
+                  <strong>Connections</strong>
                 </li>
                 <li>
-                  Choose <strong>Connections</strong> and request archive
-                </li>
-                <li>
-                  Download the archive, extract it, and upload the{" "}
+                  Extract the archive and upload the{" "}
                   <strong>Connections.csv</strong> file above
                 </li>
                 <li className="text-xs text-on-surface-variant mt-1">
-                  Fields imported: name, company, position, email, profile URL,
+                  Imports name, company, position, email, profile URL and
                   connection date
                 </li>
               </ol>
@@ -1039,21 +1079,18 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
             {activeTab === "google" && (
               <ol className="list-decimal list-inside space-y-1 ml-1">
                 <li>
-                  Go to <strong>contacts.google.com</strong>
-                </li>
-                <li>
-                  Choose <strong>Export</strong> in the menu
-                </li>
-                <li>
-                  Select <strong>Google CSV</strong> and choose{" "}
+                  Go to <strong>contacts.google.com</strong> and choose{" "}
                   <strong>Export</strong>
+                </li>
+                <li>
+                  Select <strong>Google CSV</strong> and export
                 </li>
                 <li>
                   Upload the downloaded <strong>.csv</strong> file above
                 </li>
                 <li className="text-xs text-on-surface-variant mt-1">
-                  Fields imported: name, emails, phones, company, role,
-                  addresses, birthday, notes, website, labels as tags
+                  Imports name, emails, phones, company, role, addresses,
+                  birthday, notes, website and labels as tags
                 </li>
               </ol>
             )}
@@ -1068,14 +1105,12 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
                   <strong>Your information and permissions</strong>
                 </li>
                 <li>
-                  Select <strong>Download your information</strong>
+                  Select <strong>Download your information</strong> &gt;{" "}
+                  <strong>Friends and Followers</strong> in{" "}
+                  <strong>JSON</strong> format
                 </li>
                 <li>
-                  Choose <strong>JSON</strong> format and select the{" "}
-                  <strong>Friends and Followers</strong> category
-                </li>
-                <li>
-                  Download, extract, and upload the{" "}
+                  Extract the archive and upload the{" "}
                   <strong>friends.json</strong> file above
                 </li>
                 <li className="text-xs text-on-surface-variant mt-1">
@@ -1089,7 +1124,7 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
       )}
 
       {error && phase === "idle" && (
-        <div className={ERROR_BANNER}>
+        <div role="alert" className={ERROR_BANNER}>
           <AlertCircle className="w-5 h-5 shrink-0" />
           {error}
         </div>

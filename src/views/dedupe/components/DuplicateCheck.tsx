@@ -42,6 +42,7 @@ export function useDuplicateCheck() {
     ...dedupe,
     aiOffReason,
     start: () => {
+      if (dedupe.isScanning || dedupe.isStarting || dedupe.isQueued) return;
       dedupe.reset();
       dedupe.startScan(mode);
     },
@@ -108,7 +109,9 @@ function Steps({ scan }: { scan: DedupeScanProgress }) {
 /** The bar, from contacts read. Indeterminate before the total is known. */
 function Bar({ scan }: { scan: DedupeScanProgress }) {
   const share =
-    scan.totalContacts > 0 ? scan.contactsScanned / scan.totalContacts : 0;
+    scan.totalContacts > 0
+      ? Math.min(1, Math.max(0, scan.contactsScanned / scan.totalContacts))
+      : 0;
   return (
     <div
       role="progressbar"
@@ -136,6 +139,7 @@ export const DuplicateCheck = ({ variant = "card" }: DuplicateCheckProps) => {
   const { data: count } = useDedupeCount();
   const toReview = count?.count ?? 0;
   const inline = variant === "inline";
+  const busy = isScanning || isStarting || isQueued;
 
   const status =
     isQueued && !scan
@@ -209,6 +213,7 @@ export const DuplicateCheck = ({ variant = "card" }: DuplicateCheckProps) => {
             <button
               type="button"
               onClick={start}
+              disabled={busy}
               className="btn-secondary btn-sm"
             >
               Try again
@@ -254,6 +259,7 @@ export const DuplicateCheck = ({ variant = "card" }: DuplicateCheckProps) => {
                 <button
                   type="button"
                   onClick={start}
+                  disabled={busy}
                   className="btn-secondary btn-sm"
                 >
                   Check again
@@ -291,6 +297,7 @@ export const DuplicateCheck = ({ variant = "card" }: DuplicateCheckProps) => {
             <button
               type="button"
               onClick={start}
+              disabled={busy}
               className={cn(
                 toReview > 0 ? "btn-secondary" : "btn-primary",
                 "max-sm:w-full shrink-0",

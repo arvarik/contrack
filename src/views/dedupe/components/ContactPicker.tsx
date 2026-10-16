@@ -5,7 +5,7 @@ import type { Contact } from "../../../types";
 import { useContacts } from "../../../api";
 import { ContactMiniCard } from "./shared/ContactMiniCard";
 import { LABEL, SELECTED_TINT } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { cn, plural } from "../../../lib/utils";
 import { fallbackAvatarUrl } from "../../../lib/avatar";
 import { VirtualRows } from "../../../components/ui/VirtualRows";
 import { roomAtTop } from "../utils/stickyRoom";
@@ -101,6 +101,7 @@ export const ContactPicker = ({
                   />
                   <span className="text-xs font-bold">{c.name}</span>
                   <button
+                    type="button"
                     onClick={() => removeContact(c.id)}
                     aria-label={`Remove ${c.name}`}
                     className="hit-area state-layer p-0.5 rounded-full"
@@ -131,7 +132,7 @@ export const ContactPicker = ({
       <div className="flex items-center justify-between mb-3 px-1">
         <span className={cn(LABEL, "flex items-center gap-1.5")}>
           <Users className="w-3.5 h-3.5" />
-          {filteredContacts.length} contacts
+          {plural(filteredContacts.length, "contact", "contacts")}
         </span>
         <span className={cn(LABEL, atMax && "text-warning")}>
           {selected.length} / {maxSelection} selected

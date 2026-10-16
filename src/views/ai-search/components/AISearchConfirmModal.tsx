@@ -61,14 +61,14 @@ export function AISearchConfirmModal({
 
         {previouslySearched > 0 && (
           <p className="text-xs text-on-surface-variant bg-surface-container-low rounded-xl p-3 leading-relaxed">
-            <span className="font-bold">{previouslySearched}</span> of these
-            contact{previouslySearched !== 1 ? "s have" : " has"} been
-            previously searched. New information will be added to their profiles
+            <span className="font-bold">{previouslySearched}</span> already
+            researched. Only new details will be added
           </p>
         )}
 
         <div className={cn(DIALOG_ACTIONS, "pt-1")}>
           <button
+            type="button"
             onClick={onClose}
             disabled={isStarting}
             className="btn-secondary flex-1"
@@ -76,8 +76,9 @@ export function AISearchConfirmModal({
             Cancel
           </button>
           <button
+            type="button"
             onClick={onConfirm}
-            disabled={isStarting}
+            disabled={isStarting || total === 0}
             className="btn-primary flex-1"
           >
             <Sparkles className="w-4 h-4" />

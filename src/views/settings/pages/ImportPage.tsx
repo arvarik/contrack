@@ -80,7 +80,12 @@ export const ImportPage = () => {
               <Loader2 className="w-6 h-6 animate-spin text-primary" />
             </div>
           ) : (
-            <div className={cn(CARD, "p-0 py-2")}>
+            <div
+              className={cn(
+                CARD,
+                "p-0 py-2 divide-y divide-surface-container/60",
+              )}
+            >
               {imports.map((item: ImportRecord) => {
                 const badge =
                   statusBadges[item.status] ?? statusBadges.complete;
@@ -148,7 +153,7 @@ export const ImportPage = () => {
                         <button
                           type="button"
                           onClick={() => handleRetry(item.id)}
-                          disabled={isRetrying}
+                          disabled={retryingId !== null}
                           className="btn-secondary btn-sm"
                         >
                           <RotateCw
