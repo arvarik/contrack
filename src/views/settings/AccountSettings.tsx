@@ -4,7 +4,7 @@
  * password does not discard a name change. Without sign-in, the page says
  * why there is no account instead of going blank.
  */
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   queryOptions,
@@ -59,7 +59,7 @@ import {
   LABEL_PRIMARY,
   TONE_WASH,
 } from "../../lib/styles";
-import { cn } from "../../lib/utils";
+import { cn, errorText } from "../../lib/utils";
 import { describeDevice, describeSessionMethod } from "../../../shared/devices";
 import { PasskeysCard, passkeysQuery } from "./account/PasskeysCard";
 import { passkeysSupported } from "../../api/passkeys";
@@ -156,6 +156,10 @@ const Field = ({
 } & React.InputHTMLAttributes<HTMLInputElement>) => {
   const [revealed, setRevealed] = useState(false);
   const [capsLock, setCapsLock] = useState(false);
+
+  useEffect(() => {
+    if (!props.value) setRevealed(false);
+  }, [props.value]);
 
   const inputType =
     revealable && type === "password" ? (revealed ? "text" : "password") : type;
@@ -294,7 +298,8 @@ const PhotoCard = () => {
         await refresh();
         toast.success("Photo updated");
       },
-      onError: (error: Error) => toast.error(error.message),
+      onError: (error: Error) =>
+        toast.error(`Could not update photo: ${errorText(error)}`),
     });
   };
 
@@ -306,7 +311,8 @@ const PhotoCard = () => {
         await refresh();
         toast.success("Photo removed");
       },
-      onError: (error: Error) => toast.error(error.message),
+      onError: (error: Error) =>
+        toast.error(`Could not remove photo: ${errorText(error)}`),
     });
   };
 
@@ -353,18 +359,39 @@ const ProfileCard = () => {
   const [username, setUsername] = useState(user?.username ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
 
+  useEffect(() => {
+    setDisplayName(user?.displayName ?? "");
+    setUsername(user?.username ?? "");
+    setEmail(user?.email ?? "");
+  }, [user?.displayName, user?.username, user?.email]);
+
+  const trimmedName = displayName.trim();
+  const trimmedUsername = username.trim().toLowerCase();
+  const trimmedEmail = email.trim().toLowerCase();
+  const valid = trimmedUsername.length > 0 && trimmedEmail.length > 0;
+
   const dirty =
-    displayName !== (user?.displayName ?? "") ||
-    username !== (user?.username ?? "") ||
-    email !== (user?.email ?? "");
+    valid &&
+    (trimmedName !== (user?.displayName ?? "") ||
+      trimmedUsername !== (user?.username ?? "").toLowerCase() ||
+      trimmedEmail !== (user?.email ?? "").toLowerCase());
 
   const save = useMutation({
-    mutationFn: () => updateProfile({ displayName, username, email }),
+    mutationFn: () =>
+      updateProfile({
+        displayName: trimmedName,
+        username: trimmedUsername,
+        email: trimmedEmail,
+      }),
     onSuccess: async () => {
+      setDisplayName(trimmedName);
+      setUsername(trimmedUsername);
+      setEmail(trimmedEmail);
       await refresh();
       toast.success("Profile updated");
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) =>
+      toast.error(`Could not update profile: ${errorText(error)}`),
   });
 
   return (
@@ -387,7 +414,7 @@ const ProfileCard = () => {
         label="Username"
         value={username}
         onChange={(e) => setUsername(e.target.value)}
-        hint="You can sign in with this or your email"
+        hint="Sign in with this or your email"
         autoComplete="username"
         {...NO_AUTOCORRECT}
       />
@@ -410,15 +437,24 @@ const ProfileCard = () => {
 };
 
 const PasswordCard = () => {
+  const queryClient = useQueryClient();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
 
-  const mismatch = confirm.length > 0 && next !== confirm;
-  const tooShort = next.length > 0 && next.length < MIN_PASSWORD_LENGTH;
-  const ready =
+  const whitespaceOnly = next.length > 0 && next.trim().length === 0;
+  const tooShort =
+    next.length > 0 && !whitespaceOnly && next.length < MIN_PASSWORD_LENGTH;
+  const sameAsCurrent =
     current.length > 0 &&
     next.length >= MIN_PASSWORD_LENGTH &&
+    next === current;
+  const mismatch = confirm.length > 0 && next !== confirm;
+  const ready =
+    current.length > 0 &&
+    next.trim().length > 0 &&
+    next.length >= MIN_PASSWORD_LENGTH &&
+    next !== current &&
     next === confirm;
 
   const save = useMutation({
@@ -428,10 +464,12 @@ const PasswordCard = () => {
       setCurrent("");
       setNext("");
       setConfirm("");
+      queryClient.invalidateQueries({ queryKey: ["auth", "sessions"] });
       // The server ends every other session on a password change.
       toast.success("Password changed. Your other devices are signed out");
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) =>
+      toast.error(`Could not change password: ${errorText(error)}`),
   });
 
   return (
@@ -442,6 +480,7 @@ const PasswordCard = () => {
       }}
       className={cn(SETTINGS_CARD, "space-y-4")}
     >
+      <h3 className="text-sm font-bold text-on-surface">Password</h3>
       <Field
         id="account-current-password"
         label="Current password"
@@ -451,6 +490,7 @@ const PasswordCard = () => {
         autoComplete="current-password"
         revealable
         capsLockHint
+        {...NO_AUTOCORRECT}
       />
       <Field
         id="account-new-password"
@@ -460,13 +500,18 @@ const PasswordCard = () => {
         onChange={(e) => setNext(e.target.value)}
         hint={`At least ${MIN_PASSWORD_LENGTH} characters`}
         error={
-          tooShort
-            ? `Use at least ${MIN_PASSWORD_LENGTH} characters`
-            : undefined
+          whitespaceOnly
+            ? "Enter a password"
+            : tooShort
+              ? `Use at least ${MIN_PASSWORD_LENGTH} characters`
+              : sameAsCurrent
+                ? "Choose a different password"
+                : undefined
         }
         autoComplete="new-password"
         revealable
         capsLockHint
+        {...NO_AUTOCORRECT}
       />
       <Field
         id="account-confirm-password"
@@ -478,6 +523,7 @@ const PasswordCard = () => {
         autoComplete="new-password"
         revealable
         capsLockHint
+        {...NO_AUTOCORRECT}
       />
       <div className="flex justify-end">
         <SaveButton busy={save.isPending} disabled={!ready}>
@@ -523,7 +569,8 @@ const SessionsCard = () => {
           : `Signed out ${revoked} other ${revoked === 1 ? "device" : "devices"}`,
       );
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) =>
+      toast.error(`Could not sign out other devices: ${errorText(error)}`),
   });
 
   const sessions = data?.sessions ?? [];
@@ -698,7 +745,8 @@ const CreateTokenModal = ({
       setCreated(token);
       queryClient.invalidateQueries({ queryKey: ["auth", "tokens"] });
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) =>
+      toast.error(`Could not create token: ${errorText(error)}`),
   });
 
   const close = () => {
@@ -729,8 +777,8 @@ const CreateTokenModal = ({
             </code>
             .{" "}
             {created.readOnly
-              ? "It acts as your account, reaches only your data, and can only read"
-              : "It acts as your account and reaches only your data"}
+              ? "It reaches only your data and can only read"
+              : "It reaches only your data"}
           </p>
           <SecretReveal value={created.token} label="Token" />
           <div className={DIALOG_ACTIONS}>
@@ -750,7 +798,7 @@ const CreateTokenModal = ({
           <Field
             id="token-name"
             label="What is it for"
-            hint="Shown in this list. Name the machine or the script, not the person"
+            hint="Name the app, script, or device using it"
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={60}
@@ -767,8 +815,7 @@ const CreateTokenModal = ({
             />
             {expiresInDays === 0 && (
               <p className="text-xs text-warning text-pretty">
-                A token that never expires outlives the reason it was made.
-                Prefer a date you will remember to renew
+                A token that never expires works until you revoke it
               </p>
             )}
           </div>
@@ -783,8 +830,8 @@ const CreateTokenModal = ({
             />
             <p className="text-xs text-on-surface-variant text-pretty">
               {access === "read"
-                ? "It can search and read your data, and cannot change anything. An MCP client sees only the read-only tools"
-                : "It can read and change your contacts, notes, lists, and follow-ups"}
+                ? "Can search and read your data, with read-only MCP tools"
+                : "Can read and change your contacts, notes, lists, and follow-ups"}
             </p>
           </div>
           <div className={DIALOG_ACTIONS}>
@@ -813,7 +860,8 @@ const ApiTokensCard = () => {
       setRevoking(null);
       toast.success("Token revoked");
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) =>
+      toast.error(`Could not revoke token: ${errorText(error)}`),
   });
 
   const tokens = data?.tokens ?? [];
@@ -823,9 +871,7 @@ const ApiTokensCard = () => {
       <div className="px-4 sm:px-6 py-4 bg-surface-container-low rounded-t-2xl space-y-3">
         <div className="flex items-start justify-between gap-3">
           <p className="text-sm text-on-surface-variant text-pretty max-w-prose">
-            A token lets a script or an MCP client act as you, and reach only
-            your data. Sign-in cookies cannot be used that way, which is what
-            these are for
+            Let scripts and MCP clients access your data without your password
           </p>
           <button
             type="button"
@@ -882,18 +928,12 @@ const ApiTokensCard = () => {
           revoking?.kind === "oauth" ? "Disconnect app" : "Revoke token"
         }
         description={
-          <>
-            <p>
-              <strong className="text-on-surface">{revoking?.name}</strong>{" "}
-              {revoking?.kind === "oauth"
-                ? "stops working immediately. To use it again, connect it again from the app"
-                : "stops working immediately. A script or an MCP client that uses it fails on its next request"}
-            </p>
-            <p>
-              The entry stays in this list, marked revoked, so you can see what
-              happened later
-            </p>
-          </>
+          <p>
+            <strong className="text-on-surface">{revoking?.name}</strong>{" "}
+            {revoking?.kind === "oauth"
+              ? "stops working immediately. Reconnect from the app to use it again"
+              : "stops working immediately for any script or MCP client using it"}
+          </p>
         }
       />
     </div>
@@ -914,8 +954,7 @@ export const AccountSettings = () => {
           title="No account needed"
           body={
             <>
-              This Contrack does not ask anyone to sign in, so there is no
-              account to manage. Secure it here or set{" "}
+              Sign-in is off on this Contrack. Secure it here or set{" "}
               <code>AUTH_REQUIRED=true</code> on the server, and the first
               account keeps every contact already here
             </>
@@ -965,8 +1004,7 @@ export const AccountSettings = () => {
             )}
           >
             <p className="text-sm text-on-surface-variant text-pretty">
-              How long a sign-in lasts applies to every account, so it is set in
-              Settings → Administration → General
+              Applies to every account in Settings → Administration → General
             </p>
             <Link
               to="/settings/admin/general#session-length"

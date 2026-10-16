@@ -32,8 +32,8 @@ export const AppearancePage = () => {
           prefKey="theme"
           description={
             preferences.theme === "system"
-              ? `Following this device, which is currently ${mode}`
-              : `Always ${preferences.theme}, whatever this device is set to`
+              ? `Matches this device, currently ${mode}`
+              : `Always ${preferences.theme} on this account`
           }
         >
           <Segmented
@@ -52,7 +52,7 @@ export const AppearancePage = () => {
           id="accent"
           title="Accent color"
           prefKey="accent"
-          description="The color of links, buttons, and anything that wants your attention. Each one is adjusted to stay readable in light and dark"
+          description="Color for buttons, links, and highlights, tuned for light and dark"
         >
           <AccentPicker
             value={preferences.accent}
@@ -107,14 +107,12 @@ export const AppearancePage = () => {
           id="mascot-motion"
           title="Corvid motion"
           prefKey="mascotMotion"
-          // The last sentence takes no period, so the one before it takes
-          // one only when the reduced motion sentence follows it.
           description={
             motionIsReduced
-              ? "The bird lives in its ring. It blinks, preens and looks about, and leaves the ring to fly when you press it. Subtle keeps it in the ring. Motion is reduced, so the corvid stays still whatever you choose here"
+              ? "Motion is reduced, so the bird stays still whatever you choose here"
               : preferences.mascotMotion === "off"
-                ? "The bird lives in its ring. It blinks, preens and looks about, and leaves the ring to fly when you press it. Subtle keeps it in the ring"
-                : "The bird lives in its ring. It blinks, preens and looks about, and leaves the ring to fly when you press it. Subtle keeps it in the ring. Press the bird here to try it"
+                ? "Full lets the bird fly when pressed. Subtle keeps it in its ring"
+                : "Full lets the bird fly when pressed. Subtle keeps it in its ring. Press the bird to try it"
           }
         >
           <CorvidPreview />

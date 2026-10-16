@@ -118,7 +118,8 @@ export const PrivacyPage = () => {
                 if (!on) {
                   setInstanceAi.mutate(true, {
                     onSuccess: () => toast.success("AI is off"),
-                    onError: (err) => toast.error(err.message),
+                    onError: (err) =>
+                      toast.error(`Could not turn AI off: ${errorText(err)}`),
                   });
                   return;
                 }
@@ -126,7 +127,8 @@ export const PrivacyPage = () => {
                 if (instanceOff)
                   setInstanceAi.mutate(false, {
                     onSuccess: () => toast.success("AI is on"),
-                    onError: (err) => toast.error(err.message),
+                    onError: (err) =>
+                      toast.error(`Could not turn AI on: ${errorText(err)}`),
                   });
               }}
             />
@@ -161,7 +163,7 @@ export const PrivacyPage = () => {
         <SettingRow
           id="search-history"
           title="Search history"
-          description="What you ask in Ask Contrack and the command palette is kept, so you can ask it again"
+          description="Saved questions from Ask Contrack and the command palette"
         >
           <div className="flex items-center gap-3">
             <span className="text-xs sm:text-sm text-on-surface-variant whitespace-nowrap">
@@ -185,20 +187,18 @@ export const PrivacyPage = () => {
         </h2>
         <div className={cn(SETTINGS_CARD, "space-y-4")}>
           <p className="text-sm text-on-surface-variant text-pretty">
-            Contrack runs on your own server, and keeps your contacts, notes and
-            searches in its own database
+            Contacts, notes, and searches stay in your server's database
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Fact icon={ShieldCheck} title="Search runs here">
-              Full-text search and search by meaning run on the server, with no
-              call to anyone else
+              Keyword and semantic search run locally on the server
             </Fact>
             <Fact
               icon={ShieldCheck}
               title="AI providers hear only what you ask"
             >
-              A provider hears from Contrack only when you use an AI feature.
-              With AI off above, it hears nothing
+              Providers are called only when you use an AI feature, and never
+              when AI is off
             </Fact>
           </div>
         </div>
@@ -221,19 +221,19 @@ export const PrivacyPage = () => {
           <p className="text-sm text-on-surface-variant text-pretty">
             {isAdmin ? (
               <>
-                The models and web search for everyone here.{" "}
+                Models and web search for this instance.{" "}
                 <Link to="/settings/admin/ai" className={TEXT_LINK}>
                   Change them in Settings → Administration → AI
                 </Link>
               </>
             ) : (
-              "An admin sets these up for everyone here"
+              "Configured by an admin for this instance"
             )}
           </p>
           <FeatureMap scope="account" />
           <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
             <p className="text-sm text-on-surface-variant text-pretty">
-              How much AI you used, and what it cost
+              AI calls, tokens, and estimated cost
             </p>
             <Link to={usagePath} className="btn-secondary btn-sm shrink-0">
               View usage
@@ -248,7 +248,7 @@ export const PrivacyPage = () => {
         onClose={() => setClearDialogOpen(false)}
         onConfirm={handleClearHistory}
         title="Clear search history?"
-        description={`This deletes all ${questions} you asked. It cannot be undone`}
+        description={`Deletes all ${questions} you asked. This cannot be undone`}
         confirmLabel="Clear history"
         busy={clearMutation.isPending}
       />

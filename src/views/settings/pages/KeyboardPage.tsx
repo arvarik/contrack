@@ -34,7 +34,7 @@ export const KeyboardPage = () => {
           id="single-key-shortcuts"
           title="Single-key shortcuts"
           prefKey="singleKeyShortcuts"
-          description="Use keys like /, N, V, J and K without holding a modifier. Turn this off if you press them by mistake"
+          description="Press bare keys like /, N, V, J, and K without a modifier"
         />
       </div>
 

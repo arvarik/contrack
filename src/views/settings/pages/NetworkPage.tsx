@@ -109,7 +109,7 @@ export const NetworkPage = () => {
           id="recent-contacts"
           title="Recent contacts"
           prefKey="recentLimit"
-          description="How many recently visited contacts pin to the top of your Network. Set it to 0 to hide the row"
+          description="Recently visited contacts pinned at the top of Network. Set to 0 to hide"
           inline
         >
           <Stepper
@@ -129,7 +129,7 @@ export const NetworkPage = () => {
           id="cadence"
           title="Default cadence"
           prefKey="defaultCadenceDays"
-          description="How often you want to keep up with a contact you track. Each contact can have its own"
+          description="How often to keep up with tracked contacts. Each contact can override this"
         >
           <Select
             label="Default cadence"
@@ -178,7 +178,7 @@ export const NetworkPage = () => {
           id="weather"
           title="Weather"
           prefKey="showWeather"
-          description="Shows the weather beside a contact's local time. Contrack asks Open-Meteo for the weather where the contact is"
+          description="Show weather beside a contact's local time via Open-Meteo"
         />
 
         <SettingRow

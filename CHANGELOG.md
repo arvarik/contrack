@@ -17,6 +17,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Settings: account profile and passkey forms normalize usernames and emails,
+  skip no-op renames, reject blank or unchanged passwords, refresh device
+  sessions after a password change, and show clear error messages on failure.
 - Connectors: a failed sync is retried after its backoff, a Google contact that
   matched one of yours is merged instead of written over, Gmail no longer loses
   mail past the per-run cap, one mail in two IMAP folders counts once, and

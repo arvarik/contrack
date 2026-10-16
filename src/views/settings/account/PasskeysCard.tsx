@@ -32,6 +32,7 @@ import { ICON_BTN, TONE_WASH } from "../../../lib/styles";
 import { cn, errorText } from "../../../lib/utils";
 import { SETTINGS_CARD, SETTINGS_INPUT } from "../layout";
 import { LoadFailed } from "../../../components/ui/LoadFailed";
+import { NO_AUTOCORRECT } from "../../../components/ui/SearchField";
 
 function formatWhen(iso: string): string {
   const date = new Date(iso.includes("T") ? iso : `${iso.replace(" ", "T")}Z`);
@@ -73,7 +74,8 @@ export const PasskeysCard = () => {
       setEditingId(null);
       toast.success("Passkey renamed");
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) =>
+      toast.error(`Could not rename passkey: ${errorText(error)}`),
   });
 
   const removeMutation = useMutation({
@@ -83,7 +85,8 @@ export const PasskeysCard = () => {
       setDeleteTarget(null);
       toast.success("Passkey removed");
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error) =>
+      toast.error(`Could not remove passkey: ${errorText(error)}`),
   });
 
   const handleAddPasskey = async () => {
@@ -107,10 +110,14 @@ export const PasskeysCard = () => {
     setEditingName(passkey.name);
   };
 
-  const submitRename = (id: string) => {
+  const submitRename = (passkey: PasskeySummary) => {
     const trimmed = editingName.trim();
     if (!trimmed) return;
-    renameMutation.mutate({ id, name: trimmed });
+    if (trimmed === passkey.name) {
+      setEditingId(null);
+      return;
+    }
+    renameMutation.mutate({ id: passkey.id, name: trimmed });
   };
 
   if (!isSupported) {
@@ -133,7 +140,7 @@ export const PasskeysCard = () => {
         <div className="min-w-0">
           <h3 className="text-sm font-bold text-on-surface">Passkeys</h3>
           <p className="text-xs sm:text-sm text-on-surface-variant text-pretty">
-            Sign in to this Contrack with Face ID, Touch ID, or a security key
+            Sign in with Face ID, Touch ID, or a security key
           </p>
         </div>
         {passkeys.length > 0 && (
@@ -195,20 +202,30 @@ export const PasskeysCard = () => {
                       <input
                         type="text"
                         value={editingName}
+                        maxLength={60}
                         onChange={(e) => setEditingName(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === "Enter") submitRename(passkey.id);
-                          if (e.key === "Escape") setEditingId(null);
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            submitRename(passkey);
+                          }
+                          if (e.key === "Escape") {
+                            e.preventDefault();
+                            setEditingId(null);
+                          }
                         }}
                         aria-label={`Rename passkey ${passkey.name}`}
                         // eslint-disable-next-line jsx-a11y/no-autofocus
                         autoFocus
                         className={cn(SETTINGS_INPUT, "flex-1 min-w-0")}
+                        {...NO_AUTOCORRECT}
                       />
                       <button
                         type="button"
-                        onClick={() => submitRename(passkey.id)}
-                        disabled={renameMutation.isPending}
+                        onClick={() => submitRename(passkey)}
+                        disabled={
+                          renameMutation.isPending || !editingName.trim()
+                        }
                         className="btn-primary btn-sm btn-icon"
                         aria-label="Save name"
                       >
