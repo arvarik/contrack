@@ -10,6 +10,7 @@
 
 import { z } from "zod";
 import type { ConnectorKind, Participant } from "../../shared/connectors.ts";
+import type { VCardInput } from "../../shared/vcard.ts";
 
 export type { ConnectorKind, Participant };
 
@@ -62,6 +63,28 @@ export interface SyncContext<C = unknown, S = unknown> {
   isContactParticipant?: (p: Participant) => boolean;
 }
 
+export interface PushContext<C = unknown, S = unknown> {
+  config: C;
+  secret: S | null;
+  cursor: unknown | null;
+  contacts: Array<{
+    id: string;
+    updatedAt: string;
+    vcardInput: VCardInput;
+  }>;
+  links: Array<{ externalId: string; localId: string | null }>;
+  ingestedContactIds: ReadonlySet<string>;
+  signal: AbortSignal;
+  log: (msg: string) => void;
+}
+
+export interface PushResult {
+  cursor: unknown | null;
+  pushed: number;
+  newLinks: Array<{ externalId: string; localId: string }>;
+  removedExternalIds?: string[];
+}
+
 export interface ConnectorAdapter<C = unknown, S = unknown> {
   kind: ConnectorKind;
   label: string;
@@ -75,4 +98,5 @@ export interface ConnectorAdapter<C = unknown, S = unknown> {
   secretSchema: z.ZodType<S> | null;
   test(config: C, secret: S | null): Promise<{ ok: true; detail: string }>;
   sync(ctx: SyncContext<C, S>): AsyncGenerator<SyncEvent, unknown | null>;
+  push?(ctx: PushContext<C, S>): Promise<PushResult>;
 }

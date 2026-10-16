@@ -13,6 +13,7 @@
 import { describe, it, expect } from "vitest";
 import {
   escapeValue,
+  extractVCardContacts,
   firstValue,
   foldLine,
   splitDisplayName,
@@ -527,5 +528,46 @@ describe("serializeVCard", () => {
       phones: [{ phone: "+1", label: "at home; really" }],
     });
     expect(card).toContain("TEL;TYPE=ATHOMEREALLY:+1");
+  });
+
+  it("writes UID when provided for CardDAV resources", () => {
+    const card = serializeVCard({
+      uid: "contact-uuid-123",
+      name: "Ada Lovelace",
+    });
+    expect(card).toContain("UID:contact-uuid-123");
+  });
+});
+
+describe("extractVCardContacts", () => {
+  it("skips Apple X-ADDRESSBOOKSERVER-KIND:group and vCard 4.0 KIND:group cards and respects PREF=1", () => {
+    const vcf = [
+      "BEGIN:VCARD",
+      "VERSION:3.0",
+      "FN:VIP List",
+      "X-ADDRESSBOOKSERVER-KIND:group",
+      "END:VCARD",
+      "BEGIN:VCARD",
+      "VERSION:4.0",
+      "FN:Engineering Team",
+      "KIND:group",
+      "END:VCARD",
+      "BEGIN:VCARD",
+      "VERSION:4.0",
+      "FN:Margaret Hamilton",
+      "N:Hamilton;Margaret;;;",
+      "EMAIL;TYPE=home:margaret@home.example",
+      "EMAIL;TYPE=work;PREF=1:margaret@mit.edu",
+      "END:VCARD",
+    ].join("\r\n");
+
+    const { contacts, totalCards } = extractVCardContacts(vcf);
+    expect(totalCards).toBe(3);
+    expect(contacts).toHaveLength(1);
+    expect(contacts[0].name).toBe("Margaret Hamilton");
+    expect(contacts[0].emails).toEqual([
+      { email: "margaret@home.example", label: "home", isPrimary: true },
+      { email: "margaret@mit.edu", label: "work", isPrimary: true },
+    ]);
   });
 });

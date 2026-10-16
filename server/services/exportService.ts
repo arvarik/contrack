@@ -148,7 +148,7 @@ export function csvCell(value: unknown): string {
  * The contacts both files write: active and archived, and not the Trash, ghosts
  * or merged-away rows (see `buildContactsVcf`).
  */
-function exportableContacts(scope: Scope): HydratedContact[] {
+export function exportableContacts(scope: Scope): HydratedContact[] {
   return contactRepo.hydrateMany(
     sqlite
       .prepare(

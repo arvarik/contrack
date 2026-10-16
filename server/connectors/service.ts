@@ -12,6 +12,7 @@ import { AppError } from "../utils/AppError.ts";
 import { log } from "../utils/logger.ts";
 import * as secretBox from "../utils/secretBox.ts";
 import { auditService } from "../services/auditService.ts";
+import { exportableContacts, toVCardInput } from "../services/exportService.ts";
 import type {
   ConnectorDetail,
   ConnectorKind,
@@ -690,7 +691,7 @@ export async function runNow(
       },
     };
 
-    const { stats } = await ingestStream(
+    const { stats, ingestedContactIds } = await ingestStream(
       scope,
       {
         id: connector.id,
@@ -706,6 +707,75 @@ export async function runNow(
         ghostThreshold: Number(config.ghostThreshold ?? 3),
       },
     );
+
+    if (adapter.push) {
+      const localContacts = exportableContacts(scope).map((c) => ({
+        id: c.id,
+        updatedAt: c.updatedAt ?? "",
+        vcardInput: toVCardInput(c),
+      }));
+      const existingLinks = sqlite
+        .prepare(
+          `SELECT externalId, localId FROM connector_links
+           WHERE connectorId = ? AND ownerId = ? AND kind = 'contact' AND localId IS NOT NULL`,
+        )
+        .all(connector.id, scope.ownerId) as Array<{
+        externalId: string;
+        localId: string;
+      }>;
+
+      const pushResult = await adapter.push({
+        config,
+        secret,
+        cursor: nextCursor ?? cursor,
+        signal,
+        log: ctx.log,
+        contacts: localContacts,
+        links: existingLinks,
+        ingestedContactIds,
+      });
+
+      nextCursor = pushResult.cursor;
+      if (pushResult.pushed > 0) {
+        stats.pushed = (stats.pushed ?? 0) + pushResult.pushed;
+      }
+
+      const removedExternalIds = pushResult.removedExternalIds ?? [];
+      if (removedExternalIds.length > 0 || pushResult.newLinks.length > 0) {
+        const linkNowIso = new Date().toISOString();
+        sqlite.transaction(() => {
+          if (removedExternalIds.length > 0) {
+            const delStmt = sqlite.prepare(
+              `DELETE FROM connector_links
+               WHERE connectorId = ? AND ownerId = ? AND kind = 'contact' AND externalId = ?`,
+            );
+            for (const extId of removedExternalIds) {
+              delStmt.run(connector.id, scope.ownerId, extId);
+            }
+          }
+          if (pushResult.newLinks.length > 0) {
+            const upsertStmt = sqlite.prepare(
+              `INSERT INTO connector_links (
+                 connectorId, ownerId, kind, externalId, localId, seenCount, lastSeenAt
+               ) VALUES (?, ?, 'contact', ?, ?, 1, ?)
+               ON CONFLICT(connectorId, kind, externalId) DO UPDATE SET
+                 localId = excluded.localId,
+                 seenCount = seenCount + 1,
+                 lastSeenAt = excluded.lastSeenAt`,
+            );
+            for (const link of pushResult.newLinks) {
+              upsertStmt.run(
+                connector.id,
+                scope.ownerId,
+                link.externalId,
+                link.localId,
+                linkNowIso,
+              );
+            }
+          }
+        })();
+      }
+    }
 
     const finishIso = new Date().toISOString();
     const cursorJson =

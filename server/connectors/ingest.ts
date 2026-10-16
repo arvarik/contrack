@@ -24,6 +24,10 @@ import { log } from "../utils/logger.ts";
 import { getErrorMessage, newContactId } from "../utils/helpers.ts";
 import { ownerUploadDir, ownerUploadUrl } from "../utils/paths.ts";
 import {
+  isBase64DataUri,
+  processBase64Avatar,
+} from "../utils/avatarProcessor.ts";
+import {
   ensureLocalImage,
   imageHost,
   isTransientImageError,
@@ -51,6 +55,7 @@ export interface ConnectorInfo {
 
 export interface IngestResult {
   stats: RunStats;
+  ingestedContactIds: Set<string>;
 }
 
 /** Events committed in one transaction. */
@@ -142,6 +147,9 @@ async function localContactPhoto(
   remoteUrl: string,
   signal?: AbortSignal,
 ): Promise<string | undefined> {
+  if (isBase64DataUri(remoteUrl)) {
+    return (await processBase64Avatar(scope, remoteUrl)) ?? undefined;
+  }
   try {
     return await saveContactPhoto(scope, remoteUrl, signal);
   } catch (err) {
@@ -210,6 +218,7 @@ export async function ingestStream(
   };
 
   const seenUpcomingExternalIds = new Set<string>();
+  const ingestedContactIds = new Set<string>();
   let hasUpcomingEvents = false;
 
   function processSingleEvent(raw: SyncEvent, nowIso: string): void {
@@ -706,6 +715,7 @@ export async function ingestStream(
         } catch {
           // ignore if contact was removed or update failed
         }
+        ingestedContactIds.add(existingLink.localId);
         sqlite
           .prepare(
             `UPDATE connector_links
@@ -751,6 +761,7 @@ export async function ingestStream(
         }
 
         if (contactId) {
+          ingestedContactIds.add(contactId);
           matcher.registerContact(contactId, cEmails, cPhones);
 
           if (existingLink) {
@@ -890,5 +901,5 @@ export async function ingestStream(
     })();
   }
 
-  return { stats };
+  return { stats, ingestedContactIds };
 }

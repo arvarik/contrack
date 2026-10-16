@@ -103,6 +103,9 @@ function formatStats(
       `${stats.interactions} interaction${stats.interactions === 1 ? "" : "s"}`,
     );
   }
+  if (stats.contacts)
+    parts.push(`${stats.contacts} contact${stats.contacts === 1 ? "" : "s"}`);
+  if (stats.pushed) parts.push(`${stats.pushed} pushed`);
   if (stats.ghosts)
     parts.push(
       `${stats.ghosts} new ${stats.ghosts === 1 ? "person" : "people"} seen`,

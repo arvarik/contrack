@@ -340,6 +340,7 @@ export function groupLabel(
 
 /** What a card is built from. Every field is optional except the name. */
 export interface VCardInput {
+  uid?: string | null;
   name: string;
   firstName?: string | null;
   lastName?: string | null;
@@ -455,6 +456,8 @@ export function serializeVCard(contact: VCardInput): string {
   const lines: string[] = ["BEGIN:VCARD", "VERSION:3.0"];
   const push = (line: string) => lines.push(foldLine(line));
 
+  if (contact.uid) push(`UID:${escapeValue(contact.uid)}`);
+
   // N is family;given;additional;prefix;suffix, and required by 3.0.
   const guessed =
     contact.firstName || contact.lastName
@@ -527,4 +530,268 @@ export function serializeVCard(contact: VCardInput): string {
 /** A whole address book. */
 export function serializeVCards(contacts: VCardInput[]): string {
   return contacts.map(serializeVCard).join("");
+}
+
+// Contact extraction from parsed vCards
+
+/** Profile URL templates, for a handle stored without its URL. */
+const SOCIAL_PLATFORM_URLS: Record<string, string> = {
+  linkedin: "https://www.linkedin.com/in/{handle}",
+  twitter: "https://twitter.com/{handle}",
+  github: "https://github.com/{handle}",
+  facebook: "https://www.facebook.com/{handle}",
+  instagram: "https://www.instagram.com/{handle}",
+  youtube: "https://www.youtube.com/@{handle}",
+  tiktok: "https://www.tiktok.com/@{handle}",
+  mastodon: "https://mastodon.social/@{handle}",
+  threads: "https://www.threads.net/@{handle}",
+};
+
+/**
+ * A social profile's URL and handle. Apple Contacts stores a profile as a
+ * full URL, as "x-apple:rowanvale", or as a bare handle.
+ */
+export function resolveSocialProfile(
+  platform: string,
+  rawUrl: string,
+): { url: string; handle: string | null } {
+  const platformKey = platform.toLowerCase();
+  let url = rawUrl.trim();
+  let handle: string | null = null;
+
+  if (url.startsWith("x-apple:")) {
+    url = url.replace("x-apple:", "");
+  }
+
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    try {
+      const parsed = new URL(url);
+      // The last path part: /in/rowanvale is rowanvale.
+      const pathParts = parsed.pathname.split("/").filter(Boolean);
+      handle = pathParts[pathParts.length - 1] || null;
+    } catch {
+      /* not a valid URL, treat as handle */
+    }
+    return { url, handle };
+  }
+
+  handle = url;
+  const template = SOCIAL_PLATFORM_URLS[platformKey];
+  if (template) {
+    url = template.replace("{handle}", handle);
+  } else {
+    // An unknown platform keeps the bare handle.
+    url = handle;
+  }
+
+  return { url, handle };
+}
+
+/** Parameters that describe the transport rather than the label. */
+const NOISE_TYPES = new Set(["internet", "pref", "voice", "other", "x-apple"]);
+
+/**
+ * Names for the same label, folded onto one. Apple writes IPHONE and CELL,
+ * Android CELL and Outlook MOBILE, and the app says "mobile" for all of them.
+ */
+const TYPE_ALIASES: Record<string, string> = {
+  cell: "mobile",
+  iphone: "mobile",
+  main: "work",
+  homepage: "website",
+};
+
+function labelFor(
+  card: ParsedVCard,
+  property: VCardProperty,
+  fallback: string,
+): string {
+  const custom = groupLabel(card, property.group);
+  if (custom && custom.toLowerCase() !== "other") return custom.toLowerCase();
+
+  const types = (property.params.TYPE ?? []).map((t) => t.toLowerCase());
+  const meaningful = types.find((t) => t && !NOISE_TYPES.has(t));
+  if (!meaningful) return fallback;
+  return TYPE_ALIASES[meaningful] ?? meaningful;
+}
+
+/** True when a property carries `TYPE=PREF` (3.0) or `PREF=1` (4.0). */
+function isPreferred(property: VCardProperty): boolean {
+  return (
+    (property.params.TYPE ?? []).some((t) => /^pref$/i.test(t)) ||
+    (property.params.PREF ?? []).includes("1")
+  );
+}
+
+function joinAddress(value: string): string {
+  const [, , street, city, region, postal, country] = splitComponents(value);
+  return [
+    (street ?? "").replace(/\n/g, ", ").trim(),
+    (city ?? "").trim(),
+    [(region ?? "").trim(), (postal ?? "").trim()].filter(Boolean).join(" "),
+    (country ?? "").trim(),
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+export interface ExtractedVCardContact {
+  uid: string | null;
+  name: string;
+  firstName: string | null;
+  lastName: string | null;
+  company: string | null;
+  role: string | null;
+  location: string | null;
+  birthday: string | null;
+  about: string | null;
+  website: string | null;
+  avatarUrl: string | null;
+  emails: { email: string; label?: string; isPrimary?: boolean }[];
+  phones: { phone: string; label?: string; isPrimary?: boolean }[];
+  addresses: { address: string; label?: string; isPrimary?: boolean }[];
+  socialLinks: { platform: string; url: string; handle?: string | null }[];
+  tags: string[];
+}
+
+/**
+ * Extract structured contacts from vCard text (3.0 or 4.0). Skips Apple
+ * iCloud group cards (`X-ADDRESSBOOKSERVER-KIND:group`) and vCard 4.0
+ * non-individual cards (`KIND:group`), as well as cards without a name.
+ */
+export function extractVCardContacts(vcardData: string): {
+  contacts: ExtractedVCardContact[];
+  totalCards: number;
+} {
+  const contacts: ExtractedVCardContact[] = [];
+  const cards = parseVCards(vcardData);
+
+  for (const card of cards) {
+    const kind =
+      firstValue(card, "X-ADDRESSBOOKSERVER-KIND") ?? firstValue(card, "KIND");
+    if (kind && /^group$/i.test(kind.trim())) continue;
+
+    // A card with no name is not a contact anyone can use. FN is required by
+    // the specification; N is the fallback for exporters that skip it.
+    const nComponents = splitComponents(firstRaw(card, "N") ?? "");
+    const lastName = (nComponents[0] ?? "").trim() || null;
+    const firstName = (nComponents[1] ?? "").trim() || null;
+
+    const name =
+      (firstValue(card, "FN") ?? "").trim() ||
+      [firstName, lastName].filter(Boolean).join(" ").trim();
+    if (!name) continue;
+
+    const emails: ExtractedVCardContact["emails"] = [];
+    for (const property of valuesOf(card, "EMAIL")) {
+      const email = unescapeValue(property.value).trim();
+      if (!email) continue;
+      if (emails.some((e) => e.email.toLowerCase() === email.toLowerCase()))
+        continue;
+      emails.push({
+        email,
+        label: labelFor(card, property, "personal"),
+        isPrimary: isPreferred(property) || emails.length === 0,
+      });
+    }
+
+    const phones: ExtractedVCardContact["phones"] = [];
+    for (const property of valuesOf(card, "TEL")) {
+      const phone = unescapeValue(property.value).trim();
+      if (!phone) continue;
+      phones.push({
+        phone,
+        label: labelFor(card, property, "mobile"),
+        isPrimary: isPreferred(property) || phones.length === 0,
+      });
+    }
+
+    const addresses: ExtractedVCardContact["addresses"] = [];
+    for (const property of valuesOf(card, "ADR")) {
+      const address = joinAddress(property.value);
+      if (!address) continue;
+      addresses.push({
+        address,
+        label: labelFor(card, property, "home"),
+        isPrimary: isPreferred(property) || addresses.length === 0,
+      });
+    }
+
+    const socialLinks: ExtractedVCardContact["socialLinks"] = [];
+    for (const property of valuesOf(card, "X-SOCIALPROFILE")) {
+      const raw = unescapeValue(property.value).trim();
+      if (!raw) continue;
+      const platform = (property.params.TYPE?.[0] ?? "other").toLowerCase();
+      const resolved = resolveSocialProfile(platform, raw);
+      socialLinks.push({
+        platform,
+        url: resolved.url,
+        handle: resolved.handle,
+      });
+    }
+
+    for (const property of valuesOf(card, "URL")) {
+      const url = unescapeValue(property.value).trim();
+      if (!url) continue;
+      if (socialLinks.some((s) => s.url.toLowerCase() === url.toLowerCase()))
+        continue;
+      const label = labelFor(card, property, "website");
+      socialLinks.push({
+        platform: label === "homepage" ? "website" : label,
+        url,
+        handle: null,
+      });
+    }
+
+    // Base64 in 3.0 (`PHOTO;ENCODING=b;TYPE=JPEG:`), a data URI or a plain URL
+    // in 4.0. Folding is already undone, so the value is whole either way.
+    let avatarUrl: string | null = null;
+    const photo = valuesOf(card, "PHOTO")[0];
+    if (photo) {
+      const value = photo.value.replace(/\s+/g, "");
+      if (value.startsWith("data:") || /^https?:/i.test(value)) {
+        avatarUrl = value;
+      } else if (value) {
+        const type = (photo.params.TYPE?.[0] ?? "jpeg").toLowerCase();
+        avatarUrl = `data:image/${type};base64,${value}`;
+      }
+    }
+
+    const org = splitComponents(firstRaw(card, "ORG") ?? "");
+    const website =
+      socialLinks.find(
+        (s) => s.platform === "website" || s.platform === "homepage",
+      )?.url ?? null;
+
+    const categories = firstRaw(card, "CATEGORIES");
+    const tags = categories
+      ? splitList(categories)
+          .map((t) => t.trim())
+          .filter(Boolean)
+      : [];
+
+    contacts.push({
+      uid: (firstValue(card, "UID") ?? "").trim() || null,
+      name,
+      firstName,
+      lastName,
+      company: (org[0] ?? "").trim() || null,
+      role: (firstValue(card, "TITLE") ?? "").trim() || null,
+      birthday: (firstValue(card, "BDAY") ?? "").trim() || null,
+      about: (firstValue(card, "NOTE") ?? "").trim() || null,
+      location:
+        addresses.find((a) => a.isPrimary)?.address ??
+        addresses[0]?.address ??
+        null,
+      website,
+      avatarUrl,
+      emails,
+      phones,
+      addresses,
+      socialLinks,
+      tags,
+    });
+  }
+
+  return { contacts, totalCards: cards.length };
 }
