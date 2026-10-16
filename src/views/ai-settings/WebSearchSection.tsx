@@ -4,13 +4,14 @@
  * stops SearXNG too and keeps a pinned model. SEARXNG_URL sets the SearXNG
  * address and locks the field.
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import {
   useSetSearxng,
   useSetWebSearch,
   type AISettings,
 } from "../../api/aiSettings";
+import { NO_AUTOCORRECT } from "../../components/ui/SearchField";
 import { Switch } from "../../components/ui/Switch";
 import { featuresUsing } from "../../lib/aiFeatures";
 import { RowsUnderHeading, SettingRow } from "../settings/SettingRow";
@@ -101,8 +102,13 @@ function SearxngField({
   searxng: AISettings["webSearch"]["searxng"];
 }) {
   const setSearxng = useSetSearxng();
+  const stored = searxng.url ?? "";
   const [input, setInput] = useState<string | null>(null);
-  const value = input ?? searxng.url ?? "";
+  useEffect(() => {
+    setInput(null);
+  }, [stored]);
+  const value = input ?? stored;
+  const dirty = value.trim() !== stored;
 
   if (searxng.source === "env") {
     return (
@@ -133,11 +139,12 @@ function SearxngField({
         disabled={setSearxng.isPending}
         onChange={(event) => setInput(event.target.value)}
         placeholder="http://127.0.0.1:8888"
+        {...NO_AUTOCORRECT}
         className={cn(FIELD, "flex-1 min-w-0")}
       />
       <button
         type="button"
-        disabled={input === null || setSearxng.isPending}
+        disabled={!dirty || setSearxng.isPending}
         onClick={() => save(value.trim(), "SearXNG address saved")}
         className="btn-primary shrink-0"
       >

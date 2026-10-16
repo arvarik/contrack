@@ -1,5 +1,6 @@
 import { toast } from "sonner";
 import { useAISettings, useSetInstanceAi } from "../../api/aiSettings";
+import { LoadFailed } from "../../components/ui/LoadFailed";
 import { Switch } from "../../components/ui/Switch";
 import { SettingRow, useHashTarget } from "../settings/SettingRow";
 import { cn, errorText } from "../../lib/utils";
@@ -18,8 +19,16 @@ import { WebSearchSection } from "./WebSearchSection";
 // other setup.
 
 export const AISettingsView = () => {
-  const { data: settings, isLoading } = useAISettings();
+  const { data: settings, isLoading, isError, refetch } = useAISettings();
   const setInstanceAi = useSetInstanceAi();
+
+  if (isError && !settings) {
+    return (
+      <div className={SETTINGS_PAGE}>
+        <LoadFailed what="the AI settings" onRetry={() => void refetch()} />
+      </div>
+    );
+  }
 
   if (isLoading || !settings) {
     return (

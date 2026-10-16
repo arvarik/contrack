@@ -27,7 +27,7 @@ import { IconButton } from "../../../components/ui/IconButton";
 import { RailTooltip } from "../../../components/ui/RailTooltip";
 import { formatBytes, formatRelative, formatWhen } from "../../../lib/datetime";
 import { SELECTED_ROW, TONE_WASH } from "../../../lib/styles";
-import { cn } from "../../../lib/utils";
+import { cn, errorText } from "../../../lib/utils";
 import {
   AdminButton,
   AdminCell,
@@ -98,6 +98,7 @@ export const BackupsView = () => {
   const { data: connectors } = useConnectors();
   const create = useCreateBackup();
   const [latest, setLatest] = useState<string | null>(null);
+  const [downloading, setDownloading] = useState<string | null>(null);
 
   return (
     <AdminPage
@@ -125,7 +126,8 @@ export const BackupsView = () => {
                   `Snapshot taken and verified (${formatBytes(backup.sizeBytes)})`,
                 );
               },
-              onError: (error: Error) => toast.error(error.message),
+              onError: (error: Error) =>
+                toast.error(`Could not take snapshot: ${errorText(error)}`),
             })
           }
         >
@@ -141,7 +143,7 @@ export const BackupsView = () => {
         empty={{
           icon: Database,
           title: "No snapshots yet",
-          body: "Take one now, or turn on scheduled snapshots in Settings → General",
+          body: "Take one now, or turn on scheduled snapshots in Settings → Administration → General",
         }}
         header={
           <div className={cn("grid gap-4", COLUMNS)}>
@@ -155,11 +157,9 @@ export const BackupsView = () => {
         footer={
           <div className="space-y-2">
             <p className="text-xs text-on-surface-variant text-pretty">
-              A snapshot holds the whole database, every account&rsquo;s
-              contacts included, and the oldest go on a schedule. Verified means
-              it opened, passed SQLite&rsquo;s integrity check, and has rows in
-              every table. A snapshot on the server&rsquo;s own disk is not a
-              backup yet: download it and keep the copy somewhere else
+              Each snapshot holds the full database for all accounts. Verified
+              means it opened, passed SQLite&rsquo;s integrity check and has
+              rows in every table. Download a copy and store it off this server
             </p>
             {connectors && connectors.length > 0 && (
               <p className="text-xs text-on-surface-variant text-pretty">
@@ -222,12 +222,21 @@ export const BackupsView = () => {
               <IconButton
                 aria-label={`Download ${backup.filename}`}
                 tone="subtle"
-                onClick={() =>
+                disabled={downloading === backup.filename}
+                onClick={() => {
+                  if (downloading) return;
+                  setDownloading(backup.filename);
                   downloadFile(
                     `/admin/backups/${encodeURIComponent(backup.filename)}`,
                     backup.filename,
-                  ).catch((error: Error) => toast.error(error.message))
-                }
+                  )
+                    .catch((error: Error) =>
+                      toast.error(
+                        `Could not download snapshot: ${errorText(error)}`,
+                      ),
+                    )
+                    .finally(() => setDownloading(null));
+                }}
               >
                 <Download className="w-4 h-4" />
               </IconButton>

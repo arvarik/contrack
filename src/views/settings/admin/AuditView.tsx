@@ -327,7 +327,7 @@ export const AuditView = () => {
 
       <AdminList
         isLoading={query.isLoading}
-        isError={query.isError}
+        isError={query.isError && entries.length === 0}
         onRetry={() => void query.refetch()}
         isEmpty={!query.isLoading && !query.isError && entries.length === 0}
         empty={{
@@ -336,15 +336,22 @@ export const AuditView = () => {
         }}
         footer={
           query.hasNextPage ? (
-            <AdminButton
-              tone="secondary"
-              busy={query.isFetchingNextPage}
-              disabled={query.isFetchingNextPage}
-              onClick={() => void query.fetchNextPage()}
-              className="w-full"
-            >
-              Load more
-            </AdminButton>
+            <div className="space-y-2">
+              {query.isFetchNextPageError && (
+                <p role="alert" className="text-xs text-error text-center">
+                  Could not load more entries. Try again
+                </p>
+              )}
+              <AdminButton
+                tone="secondary"
+                busy={query.isFetchingNextPage}
+                disabled={query.isFetchingNextPage}
+                onClick={() => void query.fetchNextPage()}
+                className="w-full"
+              >
+                Load more
+              </AdminButton>
+            </div>
           ) : entries.length > 0 ? (
             <p className="text-xs text-on-surface-variant">
               That is the whole log
