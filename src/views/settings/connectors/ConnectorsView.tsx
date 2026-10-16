@@ -17,6 +17,7 @@ import { AddConnectorSheet, KIND_ICONS } from "./AddConnectorSheet";
 import { CalendarFormModal } from "./CalendarFormModal";
 import { ImapFormModal } from "./ImapFormModal";
 import { GoogleFormModal } from "./GoogleFormModal";
+import { CarddavFormModal } from "./CarddavFormModal";
 import { RunHistoryDrawer } from "./RunHistoryDrawer";
 import { SettingsHeaderActions } from "../SettingsHeader";
 import { useHashTarget } from "../SettingRow";
@@ -56,6 +57,7 @@ export const ConnectorsView: React.FC = () => {
   const [calendarModalOpen, setCalendarModalOpen] = useState(false);
   const [imapModalOpen, setImapModalOpen] = useState(false);
   const [googleModalOpen, setGoogleModalOpen] = useState(false);
+  const [carddavModalOpen, setCarddavModalOpen] = useState(false);
   const [editingConnector, setEditingConnector] =
     useState<ConnectorSummary | null>(null);
   const [historyDrawerOpen, setHistoryDrawerOpen] = useState(false);
@@ -99,6 +101,8 @@ export const ConnectorsView: React.FC = () => {
       setImapModalOpen(true);
     } else if (kind === "google") {
       setGoogleModalOpen(true);
+    } else if (kind === "carddav") {
+      setCarddavModalOpen(true);
     }
   };
 
@@ -110,6 +114,8 @@ export const ConnectorsView: React.FC = () => {
       setImapModalOpen(true);
     } else if (c.kind === "google") {
       setGoogleModalOpen(true);
+    } else if (c.kind === "carddav") {
+      setCarddavModalOpen(true);
     }
   };
 
@@ -286,6 +292,17 @@ export const ConnectorsView: React.FC = () => {
         }}
         connector={
           editingConnector?.kind === "google" ? editingConnector : null
+        }
+      />
+
+      <CarddavFormModal
+        isOpen={carddavModalOpen}
+        onClose={() => {
+          setCarddavModalOpen(false);
+          setEditingConnector(null);
+        }}
+        connector={
+          editingConnector?.kind === "carddav" ? editingConnector : null
         }
       />
 

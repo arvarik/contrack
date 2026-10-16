@@ -34,7 +34,7 @@ code rules are in `STYLE.md`, test rules in `TESTING.md`.
 | `server/services/`     | Business logic, including `search/`, `dedupe/`, `research/`, `aiSearch/`, `geocoding/`                                            |
 | `server/repositories/` | Contact hydration and query helpers                                                                                               |
 | `server/ai/`           | Capabilities, gateway, work queue, adapters, prompt safety                                                                        |
-| `server/connectors/`   | ICS, IMAP and Google sync: scheduler, ingest, matching                                                                            |
+| `server/connectors/`   | ICS, IMAP, CardDAV and Google sync: scheduler, ingest, matching                                                                   |
 | `server/mcp/`          | The MCP server: tools, resources, prompts                                                                                         |
 | `server/tenancy/`      | `Scope`, the request context, `ROUTE_MANIFEST`                                                                                    |
 | `server/middleware/`   | Auth, the host guard, rate limits, AI switches, compression, uploads guard, errors, cache headers                                 |

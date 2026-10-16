@@ -1,6 +1,6 @@
 /** Connector types and constants, for the server and the client. */
 
-export type ConnectorKind = "ics" | "imap" | "google";
+export type ConnectorKind = "ics" | "imap" | "google" | "carddav";
 
 export type ConnectorStatus = "active" | "paused" | "error" | "needs_reauth";
 
@@ -18,6 +18,7 @@ export interface RunStats {
   emails?: number;
   upcoming?: number;
   contacts?: number;
+  pushed?: number;
   ghosts?: number;
   correspondents?: number;
   skipped?: number;
@@ -106,6 +107,12 @@ const CONNECTOR_KINDS: Record<
     label: "Google Workspace",
     description: "Sync contacts, mail and calendar with Google.",
     viaLabel: "via Google",
+  },
+  carddav: {
+    label: "Contacts (CardDAV)",
+    description:
+      "Sync contacts with Nextcloud, Radicale, Baïkal, iCloud or Fastmail.",
+    viaLabel: "via CardDAV",
   },
 };
 

@@ -257,6 +257,19 @@ export function guardedLookup(
  */
 const pinnedAgent = new Agent({ connect: { lookup: guardedLookup } });
 
+function assertHttpUrl(targetUrl: string): URL {
+  let url: URL;
+  try {
+    url = new URL(targetUrl);
+  } catch {
+    throw new ValidationError("Invalid URL");
+  }
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    throw new ValidationError("Only http(s) URLs can be unfurled");
+  }
+  return url;
+}
+
 /**
  * Fetch a public http(s) URL with SSRF protection on every redirect hop.
  * Returns the response and the final URL, or throws AppError/ValidationError.
@@ -264,17 +277,24 @@ const pinnedAgent = new Agent({ connect: { lookup: guardedLookup } });
 export async function safeFetch(
   targetUrl: string,
   options: {
+    method?: string;
+    headers?: Record<string, string>;
+    body?: string;
+    allowPrivate?: boolean;
     timeoutMs?: number;
     maxRedirects?: number;
     signal?: AbortSignal;
   } = {},
 ): Promise<{ response: globalThis.Response; finalUrl: string }> {
-  const { timeoutMs = 6000, maxRedirects = 3 } = options;
+  const { timeoutMs = 6000, maxRedirects = 3, allowPrivate = false } = options;
   options.signal?.throwIfAborted();
-  await assertPublicHttpUrl(targetUrl);
+  const initialUrl = allowPrivate
+    ? assertHttpUrl(targetUrl)
+    : await assertPublicHttpUrl(targetUrl);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const currentHeaders = options.headers ? { ...options.headers } : undefined;
   try {
     let currentUrl = targetUrl;
     for (let hop = 0; hop <= maxRedirects; hop++) {
@@ -282,18 +302,27 @@ export async function safeFetch(
       // and the dispatcher holds the rebinding guard. The Response has the same
       // WHATWG shape, so only the nominal type needs the cast.
       const response = (await undiciFetch(currentUrl, {
+        method: options.method,
+        headers: currentHeaders,
+        body: options.body,
         signal: options.signal
           ? AbortSignal.any([controller.signal, options.signal])
           : controller.signal,
         redirect: "manual",
-        dispatcher: pinnedAgent,
+        ...(allowPrivate ? {} : { dispatcher: pinnedAgent }),
       })) as unknown as globalThis.Response;
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get("location");
         if (!location) return { response, finalUrl: currentUrl };
         void response.body?.cancel().catch(() => undefined);
-        currentUrl = new URL(location, currentUrl).toString();
-        await assertPublicHttpUrl(currentUrl);
+        const nextUrlObj = new URL(location, currentUrl);
+        currentUrl = nextUrlObj.toString();
+        if (allowPrivate) assertHttpUrl(currentUrl);
+        else await assertPublicHttpUrl(currentUrl);
+        if (currentHeaders && initialUrl.origin !== nextUrlObj.origin) {
+          delete currentHeaders.Authorization;
+          delete currentHeaders.authorization;
+        }
         continue;
       }
       return { response, finalUrl: currentUrl };

@@ -174,6 +174,18 @@ END:VCALENDAR`;
       await imapDialog.getByRole("button", { name: "Cancel" }).click();
       await expect(imapDialog).toBeHidden();
 
+      // Select CardDAV from gallery to test CardDAV form opening & accessibility
+      await addBtn.click();
+      await expect(galleryDialog).toBeVisible();
+      await galleryDialog.getByRole("button", { name: /CardDAV/i }).click();
+      const carddavDialog = page.getByRole("dialog", {
+        name: /Connect CardDAV/i,
+      });
+      await expect(carddavDialog).toBeVisible();
+      await expectPageAccessible(page, testInfo, "carddav-form");
+      await carddavDialog.getByRole("button", { name: "Cancel" }).click();
+      await expect(carddavDialog).toBeHidden();
+
       // 4b. Test Correspondents page
       await page.goto("/settings/connectors/people");
       await expect(

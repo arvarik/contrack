@@ -37,7 +37,7 @@
 - **Map.** MapLibre on OpenFreeMap tiles, layers and saved views, selection
   and bulk actions, the insights pane, pins placed by hand, and self-hosted
   basemaps.
-- **Connectors.** Calendar (ICS), mailbox (IMAP) and Google, with a
+- **Connectors.** Calendar (ICS), mailbox (IMAP), CardDAV and Google, with a
   correspondents review.
 - **MCP.** A built-in MCP server with 18 tools for Claude, Cursor and scripts.
 - **Settings.** A registry of pages with row search and a two-pane shell.

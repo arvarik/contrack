@@ -12,6 +12,7 @@ import { AppError } from "../utils/AppError.ts";
 import { log } from "../utils/logger.ts";
 import * as secretBox from "../utils/secretBox.ts";
 import { auditService } from "../services/auditService.ts";
+import { exportableContacts, toVCardInput } from "../services/exportService.ts";
 import type {
   ConnectorDetail,
   ConnectorKind,
@@ -150,7 +151,15 @@ export async function testConnector(
   config: unknown,
   secret?: unknown,
   connectorId?: string,
-): Promise<{ ok: true; detail: string }> {
+): Promise<{
+  ok: true;
+  detail: string;
+  addressBooks?: Array<{
+    url: string;
+    displayName: string;
+    readOnly?: boolean;
+  }>;
+}> {
   const adapter = getAdapter(kind as ConnectorKind);
   if (!adapter) {
     throw new AppError(`Unsupported connector kind: ${kind}`, 400);
@@ -690,7 +699,7 @@ export async function runNow(
       },
     };
 
-    const { stats } = await ingestStream(
+    const { stats, ingestedContactIds } = await ingestStream(
       scope,
       {
         id: connector.id,
@@ -706,6 +715,115 @@ export async function runNow(
         ghostThreshold: Number(config.ghostThreshold ?? 3),
       },
     );
+
+    // Save the pull cursor before push starts so a push failure never loses the
+    // sync token or ETags for the contacts already committed above.
+    if (nextCursor !== null && nextCursor !== undefined) {
+      const pullCursorIso = new Date().toISOString();
+      sqlite
+        .prepare(
+          `UPDATE connectors SET cursor = ?, updatedAt = ? WHERE id = ? AND ownerId = ?`,
+        )
+        .run(JSON.stringify(nextCursor), pullCursorIso, id, scope.ownerId);
+    }
+
+    if (adapter.push) {
+      const localContacts = exportableContacts(scope).map((c) => ({
+        id: c.id,
+        addedAt: c.addedAt ?? "",
+        updatedAt: c.updatedAt ?? "",
+        isArchived: Boolean(c.isArchived),
+        vcardInput: toVCardInput(c),
+      }));
+      const rawLinks = sqlite
+        .prepare(
+          `SELECT externalId, localId FROM connector_links
+           WHERE connectorId = ? AND ownerId = ? AND kind = 'contact' AND localId IS NOT NULL`,
+        )
+        .all(connector.id, scope.ownerId) as Array<{
+        externalId: string;
+        localId: string;
+      }>;
+      const canonicalStmt = sqlite.prepare(
+        `SELECT canonicalId FROM contacts WHERE id = ? AND ownerId = ?`,
+      );
+      const resolveCanonicalId = (contactId: string): string => {
+        let current = contactId;
+        for (let depth = 0; depth < 10; depth++) {
+          const row = canonicalStmt.get(current, scope.ownerId) as
+            { canonicalId: string | null } | undefined;
+          if (!row?.canonicalId || row.canonicalId === current) return current;
+          current = row.canonicalId;
+        }
+        return current;
+      };
+      const existingLinks = rawLinks.map((link) => {
+        const canonicalId = resolveCanonicalId(link.localId);
+        if (canonicalId !== link.localId) {
+          sqlite
+            .prepare(
+              `UPDATE connector_links
+               SET localId = ?
+               WHERE connectorId = ? AND ownerId = ? AND kind = 'contact' AND externalId = ?`,
+            )
+            .run(canonicalId, connector.id, scope.ownerId, link.externalId);
+        }
+        return { externalId: link.externalId, localId: canonicalId };
+      });
+
+      const pushResult = await adapter.push({
+        config,
+        secret,
+        cursor: nextCursor ?? cursor,
+        connectorCreatedAt: connector.createdAt,
+        signal,
+        log: ctx.log,
+        contacts: localContacts,
+        links: existingLinks,
+        ingestedContactIds,
+      });
+
+      nextCursor = pushResult.cursor;
+      if (pushResult.pushed > 0) {
+        stats.pushed = (stats.pushed ?? 0) + pushResult.pushed;
+      }
+
+      const removedExternalIds = pushResult.removedExternalIds ?? [];
+      if (removedExternalIds.length > 0 || pushResult.newLinks.length > 0) {
+        const linkNowIso = new Date().toISOString();
+        sqlite.transaction(() => {
+          if (removedExternalIds.length > 0) {
+            const delStmt = sqlite.prepare(
+              `DELETE FROM connector_links
+               WHERE connectorId = ? AND ownerId = ? AND kind = 'contact' AND externalId = ?`,
+            );
+            for (const extId of removedExternalIds) {
+              delStmt.run(connector.id, scope.ownerId, extId);
+            }
+          }
+          if (pushResult.newLinks.length > 0) {
+            const upsertStmt = sqlite.prepare(
+              `INSERT INTO connector_links (
+                 connectorId, ownerId, kind, externalId, localId, seenCount, lastSeenAt
+               ) VALUES (?, ?, 'contact', ?, ?, 1, ?)
+               ON CONFLICT(connectorId, kind, externalId) DO UPDATE SET
+                 localId = excluded.localId,
+                 seenCount = seenCount + 1,
+                 lastSeenAt = excluded.lastSeenAt`,
+            );
+            for (const link of pushResult.newLinks) {
+              upsertStmt.run(
+                connector.id,
+                scope.ownerId,
+                link.externalId,
+                link.localId,
+                linkNowIso,
+              );
+            }
+          }
+        })();
+      }
+    }
 
     const finishIso = new Date().toISOString();
     const cursorJson =

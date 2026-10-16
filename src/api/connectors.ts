@@ -82,7 +82,15 @@ export function useTestConnector() {
       /** Editing: test with this connector's saved secret. */
       connectorId?: string;
     }) =>
-      apiJson<{ ok: true; detail: string }>("/connectors/test", {
+      apiJson<{
+        ok: true;
+        detail: string;
+        addressBooks?: Array<{
+          url: string;
+          displayName: string;
+          readOnly?: boolean;
+        }>;
+      }>("/connectors/test", {
         method: "POST",
         ...jsonBody(data),
       }),

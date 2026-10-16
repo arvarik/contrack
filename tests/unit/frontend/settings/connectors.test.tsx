@@ -61,6 +61,13 @@ describe("Frontend Connectors Components", () => {
       description: "Sync contacts, mail and calendar with Google",
       capabilities: { schedule: true },
     },
+    {
+      kind: "carddav",
+      label: "CardDAV",
+      description:
+        "Sync contacts two-way or one-way with Nextcloud, iCloud, Fastmail, Radicale or Baïkal",
+      capabilities: { schedule: true },
+    },
   ];
 
   const createMockConnector = (
@@ -977,6 +984,7 @@ describe("Frontend Connectors Components", () => {
       ["Calendar", /^Calendar\b/, "Connect calendar"],
       ["Mailbox (IMAP)", /Mailbox \(IMAP\)/i, "Connect mailbox (IMAP)"],
       ["Google Workspace", /Google Workspace/i, "Connect Google Workspace"],
+      ["CardDAV", /^CardDAV\b/i, "Connect CardDAV"],
     ])(
       "selecting %s from AddConnectorSheet opens its form",
       (_kind, tile, heading) => {
@@ -1006,6 +1014,90 @@ describe("Frontend Connectors Components", () => {
         expect(screen.getByRole("heading", { name: heading })).toBeTruthy();
       },
     );
+
+    it("tests and creates a CardDAV connector from ConnectorsView, including picking among multiple discovered address books", async () => {
+      const testMock = vi.fn().mockResolvedValue({
+        ok: true,
+        detail: "Connected to Personal Contacts (2 address books found)",
+        addressBooks: [
+          {
+            url: "https://cloud.example.com/dav/books/personal/",
+            name: "Personal Contacts",
+            writable: true,
+          },
+          {
+            url: "https://cloud.example.com/dav/books/recent/",
+            name: "Recently contacted",
+            writable: false,
+          },
+        ],
+      });
+      const createMock = vi.fn().mockResolvedValue({ id: "carddav-1" });
+
+      vi.mocked(connectorsApi.useTestConnector).mockReturnValue({
+        mutateAsync: testMock,
+        isPending: false,
+      } as unknown as ReturnType<typeof connectorsApi.useTestConnector>);
+      vi.mocked(connectorsApi.useCreateConnector).mockReturnValue({
+        mutateAsync: createMock,
+        isPending: false,
+      } as unknown as ReturnType<typeof connectorsApi.useCreateConnector>);
+
+      renderWithClient(<ConnectorsView />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Connect CardDAV" }));
+      expect(
+        screen.getByRole("heading", { name: "Connect CardDAV" }),
+      ).toBeTruthy();
+
+      fireEvent.change(screen.getByLabelText("Server or address book URL"), {
+        target: { value: "https://cloud.example.com" },
+      });
+      fireEvent.change(screen.getByLabelText("Username / email"), {
+        target: { value: "alice@example.com" },
+      });
+      fireEvent.change(screen.getByLabelText("App password"), {
+        target: { value: "secret-app-pwd" },
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+      await waitFor(() => {
+        expect(testMock).toHaveBeenCalledWith({
+          kind: "carddav",
+          config: {
+            url: "https://cloud.example.com",
+            username: "alice@example.com",
+            syncDirection: "two_way",
+          },
+          secret: { password: "secret-app-pwd" },
+          connectorId: undefined,
+        });
+      });
+
+      // Multi-book selector renders and defaults to the first writable book
+      const bookSelect = screen.getByLabelText(
+        "Address book",
+      ) as HTMLSelectElement;
+      expect(bookSelect.value).toBe(
+        "https://cloud.example.com/dav/books/personal/",
+      );
+
+      fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+      await waitFor(() => {
+        expect(createMock).toHaveBeenCalledWith({
+          kind: "carddav",
+          name: "Personal Contacts",
+          config: {
+            url: "https://cloud.example.com",
+            username: "alice@example.com",
+            syncDirection: "two_way",
+            addressBookUrl: "https://cloud.example.com/dav/books/personal/",
+          },
+          secret: { password: "secret-app-pwd" },
+          intervalMinutes: 30,
+        });
+      });
+    });
 
     it("renders error state and retry button when loading connectors fails", () => {
       const refetchMock = vi.fn();

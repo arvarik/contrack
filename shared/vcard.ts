@@ -340,6 +340,7 @@ export function groupLabel(
 
 /** What a card is built from. Every field is optional except the name. */
 export interface VCardInput {
+  uid?: string | null;
   name: string;
   firstName?: string | null;
   lastName?: string | null;
@@ -455,6 +456,8 @@ export function serializeVCard(contact: VCardInput): string {
   const lines: string[] = ["BEGIN:VCARD", "VERSION:3.0"];
   const push = (line: string) => lines.push(foldLine(line));
 
+  if (contact.uid) push(`UID:${escapeValue(contact.uid)}`);
+
   // N is family;given;additional;prefix;suffix, and required by 3.0.
   const guessed =
     contact.firstName || contact.lastName
@@ -527,4 +530,587 @@ export function serializeVCard(contact: VCardInput): string {
 /** A whole address book. */
 export function serializeVCards(contacts: VCardInput[]): string {
   return contacts.map(serializeVCard).join("");
+}
+
+// Contact extraction from parsed vCards
+
+/** Profile URL templates, for a handle stored without its URL. */
+const SOCIAL_PLATFORM_URLS: Record<string, string> = {
+  linkedin: "https://www.linkedin.com/in/{handle}",
+  twitter: "https://twitter.com/{handle}",
+  github: "https://github.com/{handle}",
+  facebook: "https://www.facebook.com/{handle}",
+  instagram: "https://www.instagram.com/{handle}",
+  youtube: "https://www.youtube.com/@{handle}",
+  tiktok: "https://www.tiktok.com/@{handle}",
+  mastodon: "https://mastodon.social/@{handle}",
+  threads: "https://www.threads.net/@{handle}",
+};
+
+/**
+ * A social profile's URL and handle. Apple Contacts stores a profile as a
+ * full URL, as "x-apple:rowanvale", or as a bare handle.
+ */
+export function resolveSocialProfile(
+  platform: string,
+  rawUrl: string,
+): { url: string; handle: string | null } {
+  const platformKey = platform.toLowerCase();
+  let url = rawUrl.trim();
+  let handle: string | null = null;
+
+  if (url.startsWith("x-apple:")) {
+    url = url.replace("x-apple:", "");
+  }
+
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    try {
+      const parsed = new URL(url);
+      // The last path part: /in/rowanvale is rowanvale.
+      const pathParts = parsed.pathname.split("/").filter(Boolean);
+      handle = pathParts[pathParts.length - 1] || null;
+    } catch {
+      /* not a valid URL, treat as handle */
+    }
+    return { url, handle };
+  }
+
+  handle = url;
+  const template = SOCIAL_PLATFORM_URLS[platformKey];
+  if (template) {
+    url = template.replace("{handle}", handle);
+  } else {
+    // An unknown platform keeps the bare handle.
+    url = handle;
+  }
+
+  return { url, handle };
+}
+
+/** Parameters that describe the transport rather than the label. */
+const NOISE_TYPES = new Set(["internet", "pref", "voice", "other", "x-apple"]);
+
+/**
+ * Names for the same label, folded onto one. Apple writes IPHONE and CELL,
+ * Android CELL and Outlook MOBILE, and the app says "mobile" for all of them.
+ */
+const TYPE_ALIASES: Record<string, string> = {
+  cell: "mobile",
+  iphone: "mobile",
+  main: "work",
+  homepage: "website",
+};
+
+function labelFor(
+  card: ParsedVCard,
+  property: VCardProperty,
+  fallback: string,
+): string {
+  const custom = groupLabel(card, property.group);
+  if (custom && custom.toLowerCase() !== "other") return custom.toLowerCase();
+
+  const types = (property.params.TYPE ?? []).map((t) => t.toLowerCase());
+  const meaningful = types.find((t) => t && !NOISE_TYPES.has(t));
+  if (!meaningful) return fallback;
+  return TYPE_ALIASES[meaningful] ?? meaningful;
+}
+
+/** True when a property carries `TYPE=PREF` (3.0) or `PREF=1` (4.0). */
+function isPreferred(property: VCardProperty): boolean {
+  return (
+    (property.params.TYPE ?? []).some((t) => /^pref$/i.test(t)) ||
+    (property.params.PREF ?? []).includes("1")
+  );
+}
+
+function joinAddress(value: string): string {
+  const [, , street, city, region, postal, country] = splitComponents(value);
+  return [
+    (street ?? "").replace(/\n/g, ", ").trim(),
+    (city ?? "").trim(),
+    [(region ?? "").trim(), (postal ?? "").trim()].filter(Boolean).join(" "),
+    (country ?? "").trim(),
+  ]
+    .filter(Boolean)
+    .join(", ");
+}
+
+const MANAGED_VCARD_NAMES = new Set([
+  "BEGIN",
+  "END",
+  "VERSION",
+  "UID",
+  "N",
+  "FN",
+  "ORG",
+  "TITLE",
+  "BDAY",
+  "NOTE",
+  "EMAIL",
+  "TEL",
+  "ADR",
+  "URL",
+  "X-SOCIALPROFILE",
+  "CATEGORIES",
+  "REV",
+]);
+
+/**
+ * Update an existing vCard with the fields Contrack manages while keeping
+ * properties Contrack does not own (`PHOTO`, `NICKNAME`, structured `ADR`
+ * components, Apple `itemN.X-ABLabel` labels, `UID`, and every `X-*` property).
+ */
+export function patchVCard(existingVCard: string, contact: VCardInput): string {
+  const existingCard = parseVCards(existingVCard)[0];
+  if (!existingCard) return serializeVCard(contact);
+
+  const unfoldedLines: Array<{ rawLine: string; prop: VCardProperty | null }> =
+    [];
+  let inCard = false;
+  for (const line of unfold(existingVCard.replace(/^\uFEFF/, ""))) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (/^BEGIN:VCARD$/i.test(trimmed)) {
+      inCard = true;
+      continue;
+    }
+    if (/^END:VCARD$/i.test(trimmed)) {
+      break;
+    }
+    if (!inCard) continue;
+    unfoldedLines.push({ rawLine: line, prop: parseContentLine(line) });
+  }
+
+  if (unfoldedLines.length === 0) return serializeVCard(contact);
+
+  const groupLabelLines = new Map<string, string>();
+  const managedGroups = new Set<string>();
+  for (const { rawLine, prop } of unfoldedLines) {
+    if (!prop) continue;
+    if (prop.name === "X-ABLABEL" && prop.group) {
+      groupLabelLines.set(prop.group, rawLine);
+    } else if (prop.group && MANAGED_VCARD_NAMES.has(prop.name)) {
+      managedGroups.add(prop.group);
+    }
+  }
+
+  const lines: string[] = ["BEGIN:VCARD", "VERSION:3.0"];
+  const push = (line: string) => lines.push(foldLine(line));
+
+  // Preserve the server card's existing UID if present
+  const existingUidEntry = unfoldedLines.find(
+    (e) => e.prop?.name === "UID" && unescapeValue(e.prop.value).trim(),
+  );
+  if (existingUidEntry) {
+    push(existingUidEntry.rawLine);
+  } else if (contact.uid) {
+    push(`UID:${escapeValue(contact.uid)}`);
+  }
+
+  // N: preserve middle name, prefix, and suffix from the existing card when present
+  const guessed =
+    contact.firstName || contact.lastName
+      ? {
+          given: contact.firstName ?? "",
+          family: contact.lastName ?? "",
+          suffix: "",
+        }
+      : splitDisplayName(contact.name);
+  const existingNRaw = firstRaw(existingCard, "N");
+  const nParts = existingNRaw !== null ? splitComponents(existingNRaw) : [];
+  const additional = nParts[2] ?? "";
+  const prefix = nParts[3] ?? "";
+  const suffix = guessed.suffix || (nParts[4] ?? "");
+  push(
+    `N:${escapeValue(guessed.family)};${escapeValue(guessed.given)};${escapeValue(additional)};${escapeValue(prefix)};${escapeValue(suffix)}`,
+  );
+  push(`FN:${escapeValue(contact.name)}`);
+
+  if (contact.company) {
+    const existingOrgRaw = firstRaw(existingCard, "ORG");
+    const orgParts =
+      existingOrgRaw !== null ? splitComponents(existingOrgRaw) : [];
+    if (
+      existingOrgRaw !== null &&
+      (orgParts[0] ?? "").trim() === contact.company.trim()
+    ) {
+      push(`ORG:${existingOrgRaw}`);
+    } else {
+      push(`ORG:${escapeValue(contact.company)}`);
+    }
+  }
+  if (contact.role) push(`TITLE:${escapeValue(contact.role)}`);
+  const birthday = contact.birthday && vcardBirthdayLine(contact.birthday);
+  if (birthday) push(birthday);
+  if (contact.about) push(`NOTE:${escapeValue(contact.about)}`);
+
+  const usedIndices = new Set<number>();
+  const pushGroupLabel = (group: string | null) => {
+    if (group && groupLabelLines.has(group)) {
+      push(groupLabelLines.get(group)!);
+    }
+  };
+
+  for (const email of contact.emails ?? []) {
+    if (!email.email) continue;
+    const matchIdx = unfoldedLines.findIndex(
+      (e, idx) =>
+        !usedIndices.has(idx) &&
+        e.prop?.name === "EMAIL" &&
+        unescapeValue(e.prop.value).trim().toLowerCase() ===
+          email.email.trim().toLowerCase(),
+    );
+    if (matchIdx >= 0) {
+      usedIndices.add(matchIdx);
+      const entry = unfoldedLines[matchIdx]!;
+      const prop = entry.prop!;
+      const sameLabel =
+        labelFor(existingCard, prop, "personal") ===
+        (email.label || "personal").toLowerCase();
+      const samePref = isPreferred(prop) === Boolean(email.isPrimary);
+      if (sameLabel && samePref) {
+        push(entry.rawLine);
+        pushGroupLabel(prop.group);
+        continue;
+      }
+      if (sameLabel && prop.group && groupLabelLines.has(prop.group)) {
+        push(
+          `${prop.group}.EMAIL;TYPE=INTERNET${prefParam(email.isPrimary)}:${escapeValue(email.email)}`,
+        );
+        pushGroupLabel(prop.group);
+        continue;
+      }
+    }
+    push(
+      `EMAIL;TYPE=INTERNET${typeParam(email.label)}${prefParam(email.isPrimary)}:${escapeValue(email.email)}`,
+    );
+  }
+
+  for (const phone of contact.phones ?? []) {
+    if (!phone.phone) continue;
+    const matchIdx = unfoldedLines.findIndex(
+      (e, idx) =>
+        !usedIndices.has(idx) &&
+        e.prop?.name === "TEL" &&
+        unescapeValue(e.prop.value).trim() === phone.phone.trim(),
+    );
+    if (matchIdx >= 0) {
+      usedIndices.add(matchIdx);
+      const entry = unfoldedLines[matchIdx]!;
+      const prop = entry.prop!;
+      const sameLabel =
+        labelFor(existingCard, prop, "mobile") ===
+        (phone.label || "mobile").toLowerCase();
+      const samePref = isPreferred(prop) === Boolean(phone.isPrimary);
+      if (sameLabel && samePref) {
+        push(entry.rawLine);
+        pushGroupLabel(prop.group);
+        continue;
+      }
+      if (sameLabel && prop.group && groupLabelLines.has(prop.group)) {
+        push(
+          `${prop.group}.TEL;TYPE=VOICE${prefParam(phone.isPrimary)}:${escapeValue(phone.phone)}`,
+        );
+        pushGroupLabel(prop.group);
+        continue;
+      }
+    }
+    push(
+      `TEL${typeParam(phone.label) || ";TYPE=VOICE"}${prefParam(phone.isPrimary)}:${escapeValue(phone.phone)}`,
+    );
+  }
+
+  for (const address of contact.addresses ?? []) {
+    if (!address.address) continue;
+    const matchIdx = unfoldedLines.findIndex(
+      (e, idx) =>
+        !usedIndices.has(idx) &&
+        e.prop?.name === "ADR" &&
+        joinAddress(e.prop.value) === address.address.trim(),
+    );
+    if (matchIdx >= 0) {
+      usedIndices.add(matchIdx);
+      const entry = unfoldedLines[matchIdx]!;
+      const prop = entry.prop!;
+      const sameLabel =
+        labelFor(existingCard, prop, "home") ===
+        (address.label || "home").toLowerCase();
+      const samePref = isPreferred(prop) === Boolean(address.isPrimary);
+      if (sameLabel && samePref) {
+        push(entry.rawLine);
+        pushGroupLabel(prop.group);
+        continue;
+      }
+      if (sameLabel && prop.group && groupLabelLines.has(prop.group)) {
+        push(`${prop.group}.ADR${prefParam(address.isPrimary)}:${prop.value}`);
+        pushGroupLabel(prop.group);
+        continue;
+      }
+      // Keep the structured ADR components even when label or primary changed
+      push(
+        `ADR${typeParam(address.label)}${prefParam(address.isPrimary)}:${prop.value}`,
+      );
+      continue;
+    }
+    push(
+      `ADR${typeParam(address.label)}${prefParam(address.isPrimary)}:;;${escapeValue(address.address)};;;;`,
+    );
+  }
+
+  const emittedWebsite = contact.website?.trim().toLowerCase() ?? null;
+  if (contact.website) {
+    const matchIdx = unfoldedLines.findIndex(
+      (e, idx) =>
+        !usedIndices.has(idx) &&
+        e.prop?.name === "URL" &&
+        unescapeValue(e.prop.value).trim().toLowerCase() === emittedWebsite,
+    );
+    if (matchIdx >= 0) {
+      usedIndices.add(matchIdx);
+      const entry = unfoldedLines[matchIdx]!;
+      push(entry.rawLine);
+      pushGroupLabel(entry.prop!.group);
+    } else {
+      push(`URL:${escapeValue(contact.website)}`);
+    }
+  }
+
+  for (const link of contact.socialLinks ?? []) {
+    if (!link.url) continue;
+    const normUrl = link.url.trim().toLowerCase();
+    const platform = (link.platform || "other").toLowerCase();
+    if (
+      (platform === "website" || platform === "homepage") &&
+      emittedWebsite === normUrl
+    ) {
+      continue;
+    }
+
+    const socialMatchIdx = unfoldedLines.findIndex((e, idx) => {
+      if (usedIndices.has(idx) || e.prop?.name !== "X-SOCIALPROFILE")
+        return false;
+      const existingPlatform = (
+        e.prop.params.TYPE?.[0] ?? "other"
+      ).toLowerCase();
+      const resolved = resolveSocialProfile(
+        existingPlatform,
+        unescapeValue(e.prop.value).trim(),
+      );
+      return (
+        existingPlatform === platform &&
+        resolved.url.trim().toLowerCase() === normUrl
+      );
+    });
+    if (socialMatchIdx >= 0) {
+      usedIndices.add(socialMatchIdx);
+      const entry = unfoldedLines[socialMatchIdx]!;
+      push(entry.rawLine);
+      pushGroupLabel(entry.prop!.group);
+      continue;
+    }
+
+    const urlMatchIdx = unfoldedLines.findIndex(
+      (e, idx) =>
+        !usedIndices.has(idx) &&
+        e.prop?.name === "URL" &&
+        unescapeValue(e.prop.value).trim().toLowerCase() === normUrl,
+    );
+    if (urlMatchIdx >= 0) {
+      usedIndices.add(urlMatchIdx);
+      const entry = unfoldedLines[urlMatchIdx]!;
+      push(entry.rawLine);
+      pushGroupLabel(entry.prop!.group);
+      continue;
+    }
+
+    push(
+      `X-SOCIALPROFILE;TYPE=${escapeValue(link.platform || "other")}:${escapeValue(link.url)}`,
+    );
+  }
+
+  const tags = (contact.tags ?? []).filter(Boolean);
+  if (tags.length > 0) {
+    push(`CATEGORIES:${tags.map(escapeValue).join(",")}`);
+  }
+
+  // Keep every property that Contrack does not manage (PHOTO, NICKNAME, X-*, etc.)
+  for (const { rawLine, prop } of unfoldedLines) {
+    if (!prop) continue;
+    if (MANAGED_VCARD_NAMES.has(prop.name)) continue;
+    if (
+      prop.name === "X-ABLABEL" &&
+      prop.group &&
+      managedGroups.has(prop.group)
+    ) {
+      continue;
+    }
+    push(rawLine);
+  }
+
+  const rev = contact.updatedAt ? isoTimestamp(contact.updatedAt) : null;
+  if (rev) push(`REV:${rev}`);
+
+  lines.push("END:VCARD");
+  return lines.join("\r\n") + "\r\n";
+}
+
+export interface ExtractedVCardContact {
+  uid: string | null;
+  name: string;
+  firstName: string | null;
+  lastName: string | null;
+  company: string | null;
+  role: string | null;
+  location: string | null;
+  birthday: string | null;
+  about: string | null;
+  website: string | null;
+  avatarUrl: string | null;
+  emails: { email: string; label?: string; isPrimary?: boolean }[];
+  phones: { phone: string; label?: string; isPrimary?: boolean }[];
+  addresses: { address: string; label?: string; isPrimary?: boolean }[];
+  socialLinks: { platform: string; url: string; handle?: string | null }[];
+  tags: string[];
+}
+
+/**
+ * Extract structured contacts from vCard text (3.0 or 4.0). Skips Apple
+ * iCloud group cards (`X-ADDRESSBOOKSERVER-KIND:group`) and vCard 4.0
+ * non-individual cards (`KIND:group`), as well as cards without a name.
+ */
+export function extractVCardContacts(vcardData: string): {
+  contacts: ExtractedVCardContact[];
+  totalCards: number;
+} {
+  const contacts: ExtractedVCardContact[] = [];
+  const cards = parseVCards(vcardData);
+
+  for (const card of cards) {
+    const kind =
+      firstValue(card, "X-ADDRESSBOOKSERVER-KIND") ?? firstValue(card, "KIND");
+    if (kind && /^group$/i.test(kind.trim())) continue;
+
+    // A card with no name is not a contact anyone can use. FN is required by
+    // the specification; N is the fallback for exporters that skip it.
+    const nComponents = splitComponents(firstRaw(card, "N") ?? "");
+    const lastName = (nComponents[0] ?? "").trim() || null;
+    const firstName = (nComponents[1] ?? "").trim() || null;
+
+    const name =
+      (firstValue(card, "FN") ?? "").trim() ||
+      [firstName, lastName].filter(Boolean).join(" ").trim();
+    if (!name) continue;
+
+    const emails: ExtractedVCardContact["emails"] = [];
+    for (const property of valuesOf(card, "EMAIL")) {
+      const email = unescapeValue(property.value).trim();
+      if (!email) continue;
+      if (emails.some((e) => e.email.toLowerCase() === email.toLowerCase()))
+        continue;
+      emails.push({
+        email,
+        label: labelFor(card, property, "personal"),
+        isPrimary: isPreferred(property) || emails.length === 0,
+      });
+    }
+
+    const phones: ExtractedVCardContact["phones"] = [];
+    for (const property of valuesOf(card, "TEL")) {
+      const phone = unescapeValue(property.value).trim();
+      if (!phone) continue;
+      phones.push({
+        phone,
+        label: labelFor(card, property, "mobile"),
+        isPrimary: isPreferred(property) || phones.length === 0,
+      });
+    }
+
+    const addresses: ExtractedVCardContact["addresses"] = [];
+    for (const property of valuesOf(card, "ADR")) {
+      const address = joinAddress(property.value);
+      if (!address) continue;
+      addresses.push({
+        address,
+        label: labelFor(card, property, "home"),
+        isPrimary: isPreferred(property) || addresses.length === 0,
+      });
+    }
+
+    const socialLinks: ExtractedVCardContact["socialLinks"] = [];
+    for (const property of valuesOf(card, "X-SOCIALPROFILE")) {
+      const raw = unescapeValue(property.value).trim();
+      if (!raw) continue;
+      const platform = (property.params.TYPE?.[0] ?? "other").toLowerCase();
+      const resolved = resolveSocialProfile(platform, raw);
+      socialLinks.push({
+        platform,
+        url: resolved.url,
+        handle: resolved.handle,
+      });
+    }
+
+    for (const property of valuesOf(card, "URL")) {
+      const url = unescapeValue(property.value).trim();
+      if (!url) continue;
+      if (socialLinks.some((s) => s.url.toLowerCase() === url.toLowerCase()))
+        continue;
+      const label = labelFor(card, property, "website");
+      socialLinks.push({
+        platform: label === "homepage" ? "website" : label,
+        url,
+        handle: null,
+      });
+    }
+
+    // Base64 in 3.0 (`PHOTO;ENCODING=b;TYPE=JPEG:`), a data URI or a plain URL
+    // in 4.0. Folding is already undone, so the value is whole either way.
+    let avatarUrl: string | null = null;
+    const photo = valuesOf(card, "PHOTO")[0];
+    if (photo) {
+      const value = photo.value.replace(/\s+/g, "");
+      if (value.startsWith("data:") || /^https?:/i.test(value)) {
+        avatarUrl = value;
+      } else if (value) {
+        const type = (photo.params.TYPE?.[0] ?? "jpeg").toLowerCase();
+        avatarUrl = `data:image/${type};base64,${value}`;
+      }
+    }
+
+    const org = splitComponents(firstRaw(card, "ORG") ?? "");
+    const website =
+      socialLinks.find(
+        (s) => s.platform === "website" || s.platform === "homepage",
+      )?.url ?? null;
+
+    const categories = firstRaw(card, "CATEGORIES");
+    const tags = categories
+      ? splitList(categories)
+          .map((t) => t.trim())
+          .filter(Boolean)
+      : [];
+
+    contacts.push({
+      uid: (firstValue(card, "UID") ?? "").trim() || null,
+      name,
+      firstName,
+      lastName,
+      company: (org[0] ?? "").trim() || null,
+      role: (firstValue(card, "TITLE") ?? "").trim() || null,
+      birthday: (firstValue(card, "BDAY") ?? "").trim() || null,
+      about: (firstValue(card, "NOTE") ?? "").trim() || null,
+      location:
+        addresses.find((a) => a.isPrimary)?.address ??
+        addresses[0]?.address ??
+        null,
+      website,
+      avatarUrl,
+      emails,
+      phones,
+      addresses,
+      socialLinks,
+      tags,
+    });
+  }
+
+  return { contacts, totalCards: cards.length };
 }

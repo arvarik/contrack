@@ -7,6 +7,7 @@
 
 import React from "react";
 import {
+  BookUser,
   Calendar,
   ChevronRight,
   Globe,
@@ -30,6 +31,7 @@ export const KIND_ICONS: Record<ConnectorKind, LucideIcon> = {
   ics: Calendar,
   imap: Mail,
   google: Globe,
+  carddav: BookUser,
 };
 
 /** One kind of connector: a tile that opens its form. */

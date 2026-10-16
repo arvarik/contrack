@@ -20,6 +20,7 @@ export const REASON = {
 /** An import source by its own name, for a reason a person reads. */
 const SOURCE_NAME: Record<string, string> = {
   apple: "Apple",
+  carddav: "CardDAV",
   csv: "a CSV file",
   facebook: "Facebook",
   google: "Google",

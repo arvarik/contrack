@@ -33,9 +33,9 @@ works on the **Apple** tab. The **Google** tab reads the current Google CSV
 
 - One import holds up to 5,000 contacts, and up to 50 MB with the photos.
   Split a larger file.
-- Contrack skips an entry with no name, and the summary counts these
-  entries. A Google entry with no name takes its nickname or its company as
-  its name.
+- Contrack skips an entry with no name or a group card (`KIND:group`), and
+  the summary counts these entries. A Google entry with no name takes its
+  nickname or its company as its name.
 - A photo inside a vCard is saved on your server. A photo that the vCard
   gives as a web address stays a link to that site, see
   [Privacy](privacy.md#what-leaves-the-server).
@@ -118,28 +118,29 @@ see [Review possible duplicates](duplicates.md#review-possible-duplicates).
 
 ## Connectors
 
-A connector syncs who you talk to. It reads your calendar, a mailbox, or a
-Google account on a schedule, and adds meetings and email to your contacts'
-timelines. Contrack connects from your own server.
+A connector syncs who you talk to and your address book. It reads your
+calendar, a mailbox, a CardDAV server, or a Google account on a schedule, and
+adds contacts, meetings, and email to your network. Contrack connects from your
+own server.
 
 ![Settings, Connectors: Calendar, Mailbox (IMAP), and Google Workspace, each with a Connect button](images/connectors.png)
 
 To add a connector:
 
 1. Open **Settings → Connectors**.
-2. Select **Connect** beside **Calendar**, **Mailbox (IMAP)**, or **Google
-   Workspace**. If you already have a connector, select **Add connector** and
-   choose the kind.
-3. Fill in the form. For a calendar or a mailbox, select **Test connection**
-   to check it.
+2. Select **Connect** beside **Calendar**, **Mailbox (IMAP)**, **Google
+   Workspace**, or **CardDAV**. If you already have a connector, select **Add
+   connector** and choose the kind.
+3. Fill in the form. For a calendar, a mailbox, or CardDAV, select **Test
+   connection** to check it.
 4. Select **Connect**. Google has its own steps, see
    [Google Workspace](#google-workspace).
 
 The first sync starts within about a minute. **Sync now** starts one at once.
 
-The **Calendar** and **Mailbox (IMAP)** connectors refuse an address on a
-private network, such as a server in your home. The server variable
-`CONNECTORS_ALLOW_PRIVATE_HOSTS=true` turns this check off for both, see the
+The **Calendar**, **Mailbox (IMAP)**, and **CardDAV** connectors refuse an
+address on a private network, such as a server in your home. The server
+variable `CONNECTORS_ALLOW_PRIVATE_HOSTS=true` turns this check off, see the
 [Configuration reference](configuration.md#environment-variables).
 
 ### Calendar (ICS)
@@ -245,17 +246,46 @@ included. Change those details in Google, not in Contrack. A new contact from
 Google gets the same duplicate check as a contact you add, when **Check new
 contacts automatically** is on.
 
+### CardDAV
+
+The CardDAV connector syncs contacts with Nextcloud, Apple iCloud, Fastmail,
+Radicale, Baïkal, or any other RFC 6352 CardDAV server over `https://`.
+
+1. In your provider's settings, create an app-specific password.
+2. Enter **Server or address book URL**, **Username / email**, and **App
+   password**. You can paste either your server root (such as
+   `https://cloud.example.com` or `https://contacts.icloud.com`), which
+   Contrack discovers through `/.well-known/carddav`, or a direct address book
+   URL.
+3. Choose **Sync direction**: **Two-way sync** imports remote cards and writes
+   contacts you add or edit after connecting back to the CardDAV server, while
+   **Pull only** imports remote cards without writing back.
+4. Select **Test connection** to verify that Contrack can reach your address
+   book (and choose an **Address book** if your server has more than one), then
+   select **Connect**.
+
+In two-way mode, Contrack only pushes active contacts created or edited after
+you connect the server (existing contacts from earlier imports and archived
+contacts are not uploaded unless you edit them). When updating a linked card,
+Contrack fetches the server's card first and updates only the properties
+Contrack manages, preserving server-side fields such as `PHOTO`, `NICKNAME`,
+structured `ADR` components, Apple labels, and `X-*` properties. If a card
+changed on the CardDAV server since the last sync, the server's version wins,
+and moving a contact to the Trash in Contrack never deletes the contact on your
+CardDAV server.
+
 ### Sync options
 
-| Option                                                                           | Connectors      | Default |
-| -------------------------------------------------------------------------------- | --------------- | ------- |
-| **Sync schedule**: 15 min, 30 min, Hourly, or Daily                              | All             | 30 min  |
-| **First sync goes back**: 30 days, 90 days, or 1 year                            | All             | 90 days |
-| **Skip events with more than** a number of attendees                             | Calendar        | 25      |
-| **Include event descriptions**: copy agenda and notes into the meeting           | Calendar        | Off     |
-| **Roll up emails per contact per day**: one timeline entry a day for each person | Mailbox, Google | On      |
-| **Suggest a new person after** a number of meetings or messages, from 1 to 10    | All             | 3       |
-| **Generate AI summaries** (Google: **AI message summaries**)                     | Mailbox, Google | Off     |
+| Option                                                                           | Connectors                | Default      |
+| -------------------------------------------------------------------------------- | ------------------------- | ------------ |
+| **Sync schedule**: 15 min, 30 min, Hourly, or Daily                              | All                       | 30 min       |
+| **Sync direction**: Two-way sync or Pull only                                    | CardDAV                   | Two-way sync |
+| **First sync goes back**: 30 days, 90 days, or 1 year                            | Calendar, Mailbox, Google | 90 days      |
+| **Skip events with more than** a number of attendees                             | Calendar                  | 25           |
+| **Include event descriptions**: copy agenda and notes into the meeting           | Calendar                  | Off          |
+| **Roll up emails per contact per day**: one timeline entry a day for each person | Mailbox, Google           | On           |
+| **Suggest a new person after** a number of meetings or messages, from 1 to 10    | Calendar, Mailbox, Google | 3            |
+| **Generate AI summaries** (Google: **AI message summaries**)                     | Mailbox, Google           | Off          |
 
 An AI summary is one or two sentences about a message with one of your
 contacts. The [Fast model](ai.md#models) writes it into the message's timeline

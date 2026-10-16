@@ -10,6 +10,7 @@ import type { ConnectorAdapter } from "./types.ts";
 import { icsAdapter } from "./adapters/ics.ts";
 import { imapAdapter } from "./adapters/imap.ts";
 import { googleAdapter } from "./adapters/google.ts";
+import { carddavAdapter } from "./adapters/carddav.ts";
 
 const adapters = new Map<ConnectorKind, ConnectorAdapter<unknown, unknown>>();
 
@@ -23,6 +24,9 @@ export function registerAdapter(
 registerAdapter(icsAdapter as unknown as ConnectorAdapter<unknown, unknown>);
 registerAdapter(imapAdapter as unknown as ConnectorAdapter<unknown, unknown>);
 registerAdapter(googleAdapter as unknown as ConnectorAdapter<unknown, unknown>);
+registerAdapter(
+  carddavAdapter as unknown as ConnectorAdapter<unknown, unknown>,
+);
 
 export function getAdapter(
   kind: ConnectorKind | string,
@@ -74,6 +78,15 @@ export function kindsFor(
         schedule: true,
         oauth: true,
         summaries: true,
+      },
+    },
+    {
+      kind: "carddav",
+      label: "CardDAV",
+      description:
+        "Sync contacts two-way or one-way with Nextcloud, iCloud, Fastmail, Radicale or Baïkal",
+      capabilities: {
+        schedule: true,
       },
     },
   ];
