@@ -257,7 +257,8 @@ describe("Connect settings hardening", () => {
         expect(screen.getByLabelText("Address book")).toBeTruthy();
       });
 
-      // Changing the URL clears the discovered address books so stale URLs are not submitted
+      // Changing the URL to a different host clears the discovered address books
+      // and clears the chosen addressBookUrl so stale URLs are not submitted
       fireEvent.change(urlInput, {
         target: { value: "https://cloud.example.com" },
       });
@@ -281,6 +282,67 @@ describe("Connect settings hardening", () => {
           intervalMinutes: 30,
         });
         expect(onClose).toHaveBeenCalled();
+      });
+    });
+
+    it("preserves pushExistingContacts and same-origin addressBookUrl when editing a connector", async () => {
+      const updateMock = vi.fn().mockResolvedValue({ id: "carddav-edit-1" });
+      vi.mocked(connectorsApi.useUpdateConnector).mockReturnValue({
+        mutateAsync: updateMock,
+        isPending: false,
+      } as unknown as ReturnType<typeof connectorsApi.useUpdateConnector>);
+
+      renderWithProviders(
+        <CarddavFormModal
+          isOpen={true}
+          onClose={vi.fn()}
+          connector={{
+            id: "carddav-edit-1",
+            kind: "carddav",
+            name: "Work CardDAV",
+            status: "active",
+            secretPresent: true,
+            intervalMinutes: 30,
+            lastRunAt: null,
+            nextRunAt: null,
+            lastError: null,
+            createdAt: "2026-10-16T00:00:00Z",
+            updatedAt: "2026-10-16T00:00:00Z",
+            config: {
+              url: "https://contacts.icloud.com",
+              username: "ada@example.com",
+              syncDirection: "two_way",
+              addressBookUrl: "https://contacts.icloud.com/dav/work/",
+              pushExistingContacts: true,
+            },
+          }}
+        />,
+      );
+
+      // Editing username or a same-origin URL keeps the configured addressBookUrl and pushExistingContacts
+      fireEvent.change(screen.getByLabelText("Username / email"), {
+        target: { value: "augusta@example.com" },
+      });
+      fireEvent.change(screen.getByLabelText("Server or address book URL"), {
+        target: { value: "https://contacts.icloud.com/dav" },
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+      await waitFor(() => {
+        expect(updateMock).toHaveBeenCalledWith({
+          id: "carddav-edit-1",
+          name: "Work CardDAV",
+          config: {
+            url: "https://contacts.icloud.com/dav",
+            username: "augusta@example.com",
+            syncDirection: "two_way",
+            addressBookUrl: "https://contacts.icloud.com/dav/work/",
+            pushExistingContacts: true,
+          },
+          secret: undefined,
+          intervalMinutes: 30,
+        });
       });
     });
   });

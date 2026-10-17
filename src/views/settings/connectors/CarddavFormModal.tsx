@@ -48,6 +48,14 @@ function isValidHttpUrl(value: string): boolean {
   }
 }
 
+function hasSameOrigin(urlA: string, urlB: string): boolean {
+  try {
+    return new URL(urlA.trim()).origin === new URL(urlB.trim()).origin;
+  } catch {
+    return false;
+  }
+}
+
 export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
   isOpen,
   onClose,
@@ -107,7 +115,11 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
     setFormError(null);
   }, [connector, isOpen]);
 
+  const existingCfg = (connector?.config ?? {}) as Record<string, unknown>;
   const formConfig = () => ({
+    ...(typeof existingCfg.pushExistingContacts === "boolean"
+      ? { pushExistingContacts: existingCfg.pushExistingContacts }
+      : {}),
     url: url.trim(),
     username: username.trim(),
     syncDirection,
@@ -268,8 +280,15 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
             {...NO_AUTOCORRECT}
             value={url}
             onChange={(e) => {
-              setUrl(e.target.value);
-              setAddressBookUrl("");
+              const nextUrl = e.target.value;
+              if (
+                addressBookUrl &&
+                (!hasSameOrigin(nextUrl, addressBookUrl) ||
+                  url.trim() === addressBookUrl.trim())
+              ) {
+                setAddressBookUrl("");
+              }
+              setUrl(nextUrl);
               setAddressBooks([]);
               setTestResult(null);
               setFormError(null);
@@ -294,7 +313,6 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
             value={username}
             onChange={(e) => {
               setUsername(e.target.value);
-              setAddressBookUrl("");
               setAddressBooks([]);
               setTestResult(null);
               setFormError(null);

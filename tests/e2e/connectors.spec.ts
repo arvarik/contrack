@@ -548,9 +548,17 @@ ${items.join("\n")}
       });
       await expect(bookSelect).toBeVisible();
 
-      // Clicking Test connection again preserves all discovered address books
+      // Selecting another book and clicking Test connection again waits for the
+      // second test response and keeps all discovered address books visible
+      await bookSelect.selectOption({
+        label: "Archive Contacts (read-only)",
+      });
       await testBtn.click();
+      await expect(formDialog.getByRole("status")).toContainText(
+        "Connected to Archive Contacts",
+      );
       await expect(bookSelect).toBeVisible();
+      await bookSelect.selectOption({ label: "Personal Address Book" });
       await expectPageAccessible(page, testInfo, "carddav-form-tested");
 
       // 3. Save CardDAV connector

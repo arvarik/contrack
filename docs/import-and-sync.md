@@ -288,9 +288,9 @@ Contrack fetches the server's card first and updates only the properties
 Contrack manages, preserving server-side fields such as `PHOTO`, `NICKNAME`,
 structured `ADR` components, Apple labels, and `X-*` properties. If a card
 changed on the CardDAV server since the last sync, the server's version wins.
-Deleting a contact on your CardDAV server moves a contact the sync created to
-the Trash and unlinks a matched one, while moving a contact to the Trash in
-Contrack never deletes the contact on your CardDAV server.
+Deleting a contact on your CardDAV server unlinks it in Contrack without moving
+the contact to the Trash, and moving a contact to the Trash in Contrack never
+deletes the contact on your CardDAV server.
 
 ### Sync options
 

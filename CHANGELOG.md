@@ -17,25 +17,32 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - Google OAuth setup in Settings now lists the five Google Cloud steps with the
-  redirect URL inline.
+  redirect address inline, and the Connect Google dialog explains where an
+  admin configures it.
 
 ### Fixed
 
-- Account settings: normalize usernames and emails, reject blank or unchanged
-  passwords, and refresh sessions after a password change.
-- Import, Duplicates and Contact enrichment: validate empty or oversized import
-  files upfront and lock duplicate actions while running.
-- Tags, Lists, Archive and Trash: add search filters to Archived contacts and
-  Trash, add Undo to archive restore, and preserve cached rows on failed
-  refetches.
-- Connectors, Correspondents and MCP: accept `webcal://` calendar URLs and
-  `imaps://` hosts, add Correspondents search and name prompt, and harden
-  CardDAV address book discovery, remote deletion sync and echo-loop prevention.
-- Administration: preserve cached AI settings and Audit log entries on failed
-  refetches, and tighten SMTP port and invitation email validation.
-- Connectors: retry failed syncs after backoff, merge matched Google contacts,
-  keep Gmail messages past the per-run cap, deduplicate cross-folder IMAP mail,
-  and preserve all-day recurring event IDs across time zones.
+- Account and Passkeys: normalize usernames and emails, skip no-op passkey
+  renames, reject blank or unchanged passwords, refresh device sessions after a
+  password change, and show clear error messages on failure.
+- Import, Duplicates and Contact enrichment: reject empty or oversized import
+  files upfront, clear stale errors when switching import tabs, lock duplicate
+  actions while running, and avoid flashing an empty state when clearing a
+  contact enrichment search.
+- Tags, Lists, Archived contacts and Trash: add search filters to Archived
+  contacts and Trash, offer Undo when restoring an archived contact, prune
+  hidden selections when filtering, and keep cached rows on screen when a
+  background refetch fails.
+- Connectors, Correspondents and MCP: accept `webcal://` calendar URLs, strip
+  `imaps://` from IMAP hosts, preserve spaces in CardDAV and IMAP passwords,
+  and add a search filter and name prompt to Correspondents.
+- Administration: keep cached AI settings and Audit log entries on screen when a
+  background refetch fails, reject non-decimal SMTP port strings, and validate
+  invitation email addresses when typed.
+- Connectors: retry failed syncs after backoff, merge matched Google contacts
+  instead of overwriting them, keep Gmail messages past the per-run cap,
+  deduplicate cross-folder IMAP mail, and preserve all-day recurring event IDs
+  across time zones.
 
 ## [2.0.0] - 2026-10-14
 
