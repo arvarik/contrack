@@ -178,7 +178,7 @@ export async function testConnector(
     );
   }
 
-  return adapter.test(parsedConfig, parsedSecret);
+  return adapter.test(parsedConfig, parsedSecret, { allowFallbackBook: true });
 }
 
 /** The config fields that say where a secret goes. */
@@ -833,25 +833,11 @@ export async function runNow(
         const linkNowIso = new Date().toISOString();
         sqlite.transaction(() => {
           if (removedExternalIds.length > 0) {
-            const delSourceStmt = sqlite.prepare(
-              `DELETE FROM contact_sources
-               WHERE contactId IN (
-                 SELECT localId FROM connector_links
-                 WHERE connectorId = ? AND ownerId = ? AND kind = 'contact' AND externalId = ? AND localId IS NOT NULL
-               ) AND platform = ? AND externalId = ?`,
-            );
             const delStmt = sqlite.prepare(
               `DELETE FROM connector_links
                WHERE connectorId = ? AND ownerId = ? AND kind = 'contact' AND externalId = ?`,
             );
             for (const extId of removedExternalIds) {
-              delSourceStmt.run(
-                connector.id,
-                scope.ownerId,
-                extId,
-                connector.kind,
-                extId,
-              );
               delStmt.run(connector.id, scope.ownerId, extId);
             }
           }

@@ -53,7 +53,7 @@ export type CarddavSecret = z.infer<typeof carddavSecretSchema>;
 export interface CarddavCursor {
   addressBookUrl?: string;
   configuredUrl?: string;
-  switchedBook?: boolean;
+  activeBookHrefs?: string[];
   syncToken?: string | null;
   etags?: Record<string, string>;
   cardHashes?: Record<string, string>;
@@ -421,6 +421,7 @@ export function parseMultiStatusXml(xml: string): ParsedMultiStatus {
     // Collect properties from 2xx propstat blocks (or directly under response if no propstat and 2xx).
     const okProps: cheerio.Cheerio<AnyNode>[] = [];
     if (propstats.length > 0) {
+      let fallbackStatus: string | null = null;
       for (const ps of propstats) {
         const $ps = $(ps);
         const psStatus = directChildText($, $ps, "status");
@@ -428,9 +429,16 @@ export function parseMultiStatusXml(xml: string): ParsedMultiStatus {
           for (const propEl of findElements($, $ps, "prop")) {
             okProps.push($(propEl));
           }
-        } else if (!status && psStatus) {
-          status = psStatus;
+        } else if (!fallbackStatus || /\s507(\s|$)/.test(psStatus)) {
+          fallbackStatus = psStatus;
         }
+      }
+      if (
+        !status &&
+        (okProps.length === 0 ||
+          (fallbackStatus && /\s507(\s|$)/.test(fallbackStatus)))
+      ) {
+        status = fallbackStatus;
       }
     } else if (!status || /\s2\d\d(\s|$)/.test(status)) {
       okProps.push($resp);
@@ -573,11 +581,6 @@ function sameAddressBookUrl(urlA: string, urlB: string): boolean {
   }
 }
 
-function isHrefInAddressBook(href: string, abPath: string): boolean {
-  const cleanPrefix = abPath.endsWith("/") ? abPath : `${abPath}/`;
-  return href.startsWith(cleanPrefix) && href.length > cleanPrefix.length;
-}
-
 const DISCOVERY_PROPFIND_BODY = `<?xml version="1.0" encoding="utf-8"?>
 <d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">
   <d:prop>
@@ -639,14 +642,6 @@ export async function discoverAddressBook(
 ): Promise<DiscoveredAddressBook> {
   if (!secret?.password) {
     throw new ConnectorAuthError("CardDAV password is required");
-  }
-  if (
-    config.addressBookUrl &&
-    !canFollowDiscoveryRedirect(config.url, config.addressBookUrl)
-  ) {
-    throw new ConnectorConfigError(
-      "Selected address book URL must be on the configured CardDAV server",
-    );
   }
   const auth = basicAuthHeader(config.username, secret.password);
   const startUrl = config.url;
@@ -742,10 +737,7 @@ export async function discoverAddressBook(
     const resolved = resolveUrl(baseUrl, directAb.href);
     const directMatches =
       !config.addressBookUrl ||
-      samePath(
-        normalizeHrefPath(resolved, resolved),
-        normalizeHrefPath(config.addressBookUrl, config.addressBookUrl),
-      );
+      sameAddressBookUrl(resolved, config.addressBookUrl);
     if (!directMatches && !options?.allowFallbackBook) {
       throw new ConnectorConfigError(
         "Selected address book was not found on the CardDAV server",
@@ -820,12 +812,7 @@ export async function discoverAddressBook(
     (a, b) => rankAddressBook(a) - rankAddressBook(b),
   );
   const matchedBook = config.addressBookUrl
-    ? sortedBooks.find((b) =>
-        samePath(
-          normalizeHrefPath(b.url, b.url),
-          normalizeHrefPath(config.addressBookUrl!, config.addressBookUrl!),
-        ),
-      )
+    ? sortedBooks.find((b) => sameAddressBookUrl(b.url, config.addressBookUrl!))
     : undefined;
   if (config.addressBookUrl && !matchedBook && !options?.allowFallbackBook) {
     throw new ConnectorConfigError(
@@ -856,14 +843,18 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
   async test(
     config: CarddavConfig,
     secret: CarddavSecret | null,
+    options?: { allowFallbackBook?: boolean },
   ): Promise<{
     ok: true;
     detail: string;
     addressBooks?: AddressBookOption[];
   }> {
-    const discovered = await discoverAddressBook(config, secret, undefined, {
-      allowFallbackBook: true,
-    });
+    const discovered = await discoverAddressBook(
+      config,
+      secret,
+      undefined,
+      options,
+    );
     return {
       ok: true,
       detail:
@@ -887,7 +878,8 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
 
     const canReuseCursorBook =
       Boolean(prevCursor.addressBookUrl) &&
-      (!prevCursor.configuredUrl || prevCursor.configuredUrl === config.url) &&
+      (!prevCursor.configuredUrl ||
+        sameAddressBookUrl(prevCursor.configuredUrl, config.url)) &&
       (!config.addressBookUrl ||
         sameAddressBookUrl(prevCursor.addressBookUrl!, config.addressBookUrl));
     const addressBookUrl = canReuseCursorBook
@@ -898,7 +890,7 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
       ? true
       : Boolean(prevCursor.addressBookUrl) &&
         (!prevCursor.configuredUrl ||
-          prevCursor.configuredUrl === config.url) &&
+          sameAddressBookUrl(prevCursor.configuredUrl, config.url)) &&
         sameAddressBookUrl(prevCursor.addressBookUrl, addressBookUrl);
     const switchedBook = Boolean(prevCursor.addressBookUrl) && !sameBook;
 
@@ -918,6 +910,7 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
     const pendingEtags = new Map<string, string>();
     const deletedHrefs = new Set<string>();
     let usedSyncCollection = false;
+    let activeBookHrefs: string[] | undefined;
 
     // 1. Try incremental RFC 6578 sync-collection REPORT if we have a syncToken,
     // following 507 Insufficient Storage truncation pages within the same run.
@@ -998,6 +991,7 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
           const etag = cleanEtag(item.etag);
           if (!prevEtags[normHref] || !etag || prevEtags[normHref] !== etag) {
             toFetchHrefs.add(normHref);
+            delete nextEtags[normHref];
             if (etag) {
               pendingEtags.set(normHref, etag);
             }
@@ -1060,19 +1054,23 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
       }
 
       const seenHrefs = new Set<string>();
-      let hasTruncationOrError = false;
+      let has507Truncation = false;
       for (const item of parsed.items) {
         const normHref = normalizeHrefPath(item.href, addressBookUrl);
-        if (item.status !== null && !/\s2\d\d(\s|$)/.test(item.status)) {
-          hasTruncationOrError = true;
+        if (item.status !== null && /\s507(\s|$)/.test(item.status)) {
+          has507Truncation = true;
         }
         if (samePath(normHref, abPath)) continue;
         if (item.isCollection || item.isAddressBook) continue;
+        if (item.status !== null && !/\s2\d\d(\s|$)/.test(item.status)) {
+          continue;
+        }
 
         seenHrefs.add(normHref);
         const etag = cleanEtag(item.etag);
         if (!prevEtags[normHref] || !etag || prevEtags[normHref] !== etag) {
           toFetchHrefs.add(normHref);
+          delete nextEtags[normHref];
           if (etag) {
             pendingEtags.set(normHref, etag);
           }
@@ -1081,8 +1079,12 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
         }
       }
 
-      // Guard against an empty or truncated PROPFIND response wiping all links
-      if (!hasTruncationOrError && seenHrefs.size > 0) {
+      if (switchedBook && !has507Truncation) {
+        activeBookHrefs = Array.from(seenHrefs);
+      }
+
+      // Guard against an empty or 507-truncated PROPFIND response wiping all links
+      if (!has507Truncation && seenHrefs.size > 0) {
         for (const oldHref of Object.keys(prevEtags)) {
           if (!seenHrefs.has(oldHref)) {
             deletedHrefs.add(oldHref);
@@ -1230,13 +1232,11 @@ ${hrefElements}
     };
 
     const hrefList = Array.from(toFetchHrefs);
-    const fetchedHrefs = new Set<string>();
     for (let i = 0; i < hrefList.length; i += MULTIGET_BATCH_SIZE) {
       const batch = hrefList.slice(i, i + MULTIGET_BATCH_SIZE);
       const vcardPayloads = await fetchMultigetBatch(batch);
 
       for (const entry of vcardPayloads) {
-        fetchedHrefs.add(entry.href);
         const resolvedEtag = entry.etag ?? pendingEtags.get(entry.href);
         if (resolvedEtag) {
           nextEtags[entry.href] = resolvedEtag;
@@ -1261,14 +1261,6 @@ ${hrefElements}
       }
     }
 
-    // Any card in toFetchHrefs that was skipped (e.g. > 5 MB or transient GET
-    // error) must not retain its old ETag, so the next sync retries fetching it.
-    for (const href of hrefList) {
-      if (!fetchedHrefs.has(href) && !deletedHrefs.has(href)) {
-        delete nextEtags[href];
-      }
-    }
-
     for (const deletedHref of deletedHrefs) {
       delete nextCardHashes[deletedHref];
     }
@@ -1276,7 +1268,7 @@ ${hrefElements}
     return {
       addressBookUrl,
       configuredUrl: config.url,
-      switchedBook,
+      activeBookHrefs,
       syncToken: nextSyncToken,
       etags: nextEtags,
       cardHashes: nextCardHashes,
@@ -1310,6 +1302,10 @@ ${hrefElements}
       delete cardHashes[removedHref];
     }
 
+    const activeBookSet = prevCursor.activeBookHrefs
+      ? new Set(prevCursor.activeBookHrefs)
+      : null;
+
     // Keep pushedHashes pruned to only active contacts in ctx.contacts
     for (const contact of ctx.contacts) {
       if (prevHashes[contact.id]) {
@@ -1322,21 +1318,16 @@ ${hrefElements}
 
     const canReuseCursorBook =
       Boolean(prevCursor.addressBookUrl) &&
-      (!prevCursor.configuredUrl || prevCursor.configuredUrl === config.url) &&
+      (!prevCursor.configuredUrl ||
+        sameAddressBookUrl(prevCursor.configuredUrl, config.url)) &&
       (!config.addressBookUrl ||
         sameAddressBookUrl(prevCursor.addressBookUrl!, config.addressBookUrl));
 
     if ((config.syncDirection ?? "two_way") === "pull_only") {
-      const pullBookUrl = prevCursor.addressBookUrl ?? undefined;
-      if (pullBookUrl) {
-        const pullAbPath = normalizeHrefPath(pullBookUrl, pullBookUrl);
-        const pullSwitched = Boolean(prevCursor.switchedBook);
+      if (activeBookSet) {
         for (const link of ctx.links) {
           if (removedSet.has(link.externalId)) continue;
-          if (
-            !isHrefInAddressBook(link.externalId, pullAbPath) ||
-            (pullSwitched && !etags[link.externalId])
-          ) {
+          if (!activeBookSet.has(link.externalId)) {
             removedExternalIds.push(link.externalId);
             removedSet.add(link.externalId);
           }
@@ -1345,7 +1336,7 @@ ${hrefElements}
       return {
         pushed: 0,
         cursor: {
-          addressBookUrl: pullBookUrl,
+          addressBookUrl: prevCursor.addressBookUrl ?? undefined,
           configuredUrl: prevCursor.configuredUrl ?? config.url,
           syncToken: prevCursor.syncToken ?? null,
           etags,
@@ -1367,29 +1358,11 @@ ${hrefElements}
     const addressBookUrl = canReuseCursorBook
       ? prevCursor.addressBookUrl!
       : (await discoverAddressBook(config, secret, signal)).addressBookUrl;
-    const abPath = normalizeHrefPath(addressBookUrl, addressBookUrl);
-    const switchedBook =
-      Boolean(prevCursor.switchedBook) ||
-      Boolean(
-        prevCursor.addressBookUrl &&
-        (!canReuseCursorBook ||
-          !sameAddressBookUrl(prevCursor.addressBookUrl, addressBookUrl)),
-      );
-
-    for (const href of Object.keys(etags)) {
-      if (!isHrefInAddressBook(href, abPath)) {
-        delete etags[href];
-        delete cardHashes[href];
-      }
-    }
 
     const linkByLocalId = new Map<string, string>();
     for (const link of ctx.links) {
       if (removedSet.has(link.externalId)) continue;
-      if (
-        !isHrefInAddressBook(link.externalId, abPath) ||
-        (switchedBook && !etags[link.externalId])
-      ) {
+      if (activeBookSet && !activeBookSet.has(link.externalId)) {
         removedExternalIds.push(link.externalId);
         removedSet.add(link.externalId);
         delete etags[link.externalId];
@@ -1488,6 +1461,7 @@ ${hrefElements}
           }
           if (getRes.status === 404 || getRes.status === 410) {
             getNotFound = true;
+            delete etags[linkedHref];
           } else if (
             getRes.status >= 200 &&
             getRes.status < 300 &&

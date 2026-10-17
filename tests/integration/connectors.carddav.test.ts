@@ -1030,7 +1030,7 @@ ${itemResponses.join("\n")}
         "SELECT 1 FROM contact_sources WHERE contactId = ? AND platform = 'carddav' AND externalId = '/dav/addressbooks/alice/default/noether.vcf'",
       )
       .get(noetherBefore!.id);
-    expect(noetherSourceAfter).toBeUndefined();
+    expect(noetherSourceAfter).toBeDefined();
   });
 
   it("correctly parses SQLite and ISO timestamps, weak ETags, and vCard content hashes", () => {
@@ -1067,8 +1067,11 @@ ${itemResponses.join("\n")}
       flags: {
         rejectSync: boolean;
         emptyListing: boolean;
+        truncate507: boolean;
+        omitEtags: boolean;
         getFails: boolean;
         failPutPrefix: string | null;
+        homeSetOverride: string | null;
       };
       puts: Array<{
         path: string;
@@ -1109,19 +1112,23 @@ ${itemResponses.join("\n")}
       const flags: MiniDav["flags"] = {
         rejectSync: false,
         emptyListing: false,
+        truncate507: false,
+        omitEtags: false,
         getFails: false,
         failPutPrefix: null,
+        homeSetOverride: null,
       };
       const puts: MiniDav["puts"] = [];
       const bookOf = (p: string) =>
-        Object.keys(books).find((b) => p.startsWith(b) && p !== b);
+        Object.keys(books).find(
+          (b) => (p.startsWith(b) && p !== b) || books[b]!.has(p),
+        );
 
       const srv = http.createServer(async (req, res) => {
         const u = new URL(req.url ?? "/", "http://127.0.0.1");
         const p = normalizeHrefPath(u.pathname, "http://127.0.0.1");
         const m = req.method ?? "GET";
-        if (p === "/avatar.png" && m === "GET") {
-          // 1x1 transparent PNG
+        if ((p === "/avatar.png" || p === "/avatar2.png") && m === "GET") {
           const png = Buffer.from(
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
             "base64",
@@ -1156,10 +1163,11 @@ ${itemResponses.join("\n")}
           );
         }
         if (p === "/dav/p/" && m === "PROPFIND") {
+          const homeHref = flags.homeSetOverride ?? "/dav/ab/";
           return sendXml(
             207,
             multiStatusXml(
-              `<d:response><d:href>/dav/p/</d:href><d:propstat><d:prop><c:addressbook-home-set><d:href>/dav/ab/</d:href></c:addressbook-home-set></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`,
+              `<d:response><d:href>/dav/p/</d:href><d:propstat><d:prop><c:addressbook-home-set><d:href>${homeHref}</d:href></c:addressbook-home-set></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`,
             ),
           );
         }
@@ -1178,15 +1186,30 @@ ${itemResponses.join("\n")}
         }
         const book = books[p];
         if (book && m === "PROPFIND") {
+          const asksSyncToken = body.includes("sync-token");
           const self = `<d:response><d:href>${p}</d:href><d:propstat><d:prop><d:resourcetype><d:collection/><c:addressbook/></d:resourcetype><d:displayname>Book ${p}</d:displayname><d:sync-token>${prefix}${rev}</d:sync-token></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`;
           const items =
             req.headers.depth === "1" && !flags.emptyListing
-              ? [...book].map(
-                  ([h, c]) =>
-                    `<d:response><d:href>${h}</d:href><d:propstat><d:prop><d:resourcetype/><d:getetag>${c.etag}</d:getetag></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`,
-                )
+              ? [...book].map(([h, c]) => {
+                  const etagXml = flags.omitEtags
+                    ? ""
+                    : `<d:getetag>${c.etag}</d:getetag>`;
+                  // Emulate Nextcloud/Baïkal returning a 404 propstat for <d:sync-token/> on card items
+                  const missingSyncTokenPropstat = asksSyncToken
+                    ? `<d:propstat><d:prop><d:sync-token/></d:prop><d:status>HTTP/1.1 404 Not Found</d:status></d:propstat>`
+                    : "";
+                  return `<d:response><d:href>${h}</d:href><d:propstat><d:prop><d:resourcetype/>${etagXml}</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>${missingSyncTokenPropstat}</d:response>`;
+                })
               : [];
-          return sendXml(207, multiStatusXml([self, ...items].join("\n")));
+          const trunc = flags.truncate507
+            ? [
+                `<d:response><d:href>${p}</d:href><d:status>HTTP/1.1 507 Insufficient Storage</d:status></d:response>`,
+              ]
+            : [];
+          return sendXml(
+            207,
+            multiStatusXml([self, ...items, ...trunc].join("\n")),
+          );
         }
         if (book && m === "REPORT" && body.includes("sync-collection")) {
           const tok =
@@ -1197,10 +1220,12 @@ ${itemResponses.join("\n")}
               `<?xml version="1.0"?><d:error xmlns:d="DAV:"><d:valid-sync-token/></d:error>`,
             );
           }
-          const live = [...book].map(
-            ([h, c]) =>
-              `<d:response><d:href>${h}</d:href><d:propstat><d:prop><d:getetag>${c.etag}</d:getetag></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`,
-          );
+          const live = [...book].map(([h, c]) => {
+            const etagXml = flags.omitEtags
+              ? ""
+              : `<d:getetag>${c.etag}</d:getetag>`;
+            return `<d:response><d:href>${h}</d:href><d:propstat><d:prop>${etagXml}</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`;
+          });
           const dead = [...tombstones]
             .filter((h) => h.startsWith(p))
             .map(
@@ -1228,9 +1253,13 @@ ${itemResponses.join("\n")}
               hrefs
                 .map((h) => {
                   const c = book.get(h);
-                  return c
-                    ? `<d:response><d:href>${h}</d:href><d:propstat><d:prop><d:getetag>${c.etag}</d:getetag><c:address-data>${xmlEsc(c.vcard)}</c:address-data></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`
-                    : `<d:response><d:href>${h}</d:href><d:status>HTTP/1.1 404 Not Found</d:status></d:response>`;
+                  if (!c) {
+                    return `<d:response><d:href>${h}</d:href><d:status>HTTP/1.1 404 Not Found</d:status></d:response>`;
+                  }
+                  const etagXml = flags.omitEtags
+                    ? ""
+                    : `<d:getetag>${c.etag}</d:getetag>`;
+                  return `<d:response><d:href>${h}</d:href><d:propstat><d:prop>${etagXml}<c:address-data>${xmlEsc(c.vcard)}</c:address-data></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`;
                 })
                 .join("\n"),
             ),
@@ -1249,7 +1278,13 @@ ${itemResponses.join("\n")}
             res.end();
             return;
           }
-          res.writeHead(200, { ETag: c.etag, "Content-Type": "text/vcard" });
+          const headers: Record<string, string> = {
+            "Content-Type": "text/vcard",
+          };
+          if (!flags.omitEtags) {
+            headers.ETag = c.etag;
+          }
+          res.writeHead(200, headers);
           res.end(c.vcard);
           return;
         }
@@ -1275,7 +1310,7 @@ ${itemResponses.join("\n")}
           books[bp]!.set(p, { etag, vcard: body });
           tombstones.delete(p);
           rev++;
-          res.writeHead(ex ? 204 : 201, { ETag: etag });
+          res.writeHead(ex ? 204 : 201, flags.omitEtags ? {} : { ETag: etag });
           res.end();
           return;
         }
@@ -1307,9 +1342,13 @@ ${itemResponses.join("\n")}
       return scopeForOwnerId(id);
     }
 
-    it("unlinks pushed contacts when deleted on the server without moving them to Trash", async () => {
+    it("unlinks contacts on server delete while keeping contact_sources, and re-uploads if edited later", async () => {
       const s = newOwner();
       const dav = await startMiniDav();
+      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/remote.vcf", {
+        etag: '"r1"',
+        vcard: miniVcard("Remote Pulled", ["EMAIL:remote@example.com"]),
+      });
       const preExisting = contactService.createContact(s, {
         name: "Owner PreExisting",
         company: "Acme",
@@ -1338,30 +1377,110 @@ ${itemResponses.join("\n")}
 
       await runNow(s, conn.id, "manual");
       expect(dav.puts).toHaveLength(2);
+
+      // Delete both pushed cards and the pulled card on the server
       for (const put of dav.puts) {
         dav.books["/dav/ab/a/"]!.delete(put.path);
         dav.tombstones.add(put.path);
       }
+      dav.books["/dav/ab/a/"]!.delete("/dav/ab/a/remote.vcf");
+      dav.tombstones.add("/dav/ab/a/remote.vcf");
 
       await runNow(s, conn.id, "manual");
       const rows = sqlite
-        .prepare("SELECT id, deletedAt FROM contacts WHERE ownerId = ?")
-        .all(s.ownerId) as Array<{ id: string; deletedAt: string | null }>;
-      expect(rows).toHaveLength(2);
+        .prepare("SELECT id, name, deletedAt FROM contacts WHERE ownerId = ?")
+        .all(s.ownerId) as Array<{
+        id: string;
+        name: string;
+        deletedAt: string | null;
+      }>;
+      expect(rows).toHaveLength(3);
       expect(rows.every((r) => r.deletedAt === null)).toBe(true);
       const remainingLinks = sqlite
         .prepare("SELECT 1 FROM connector_links WHERE connectorId = ?")
         .all(conn.id);
       expect(remainingLinks).toHaveLength(0);
+
+      // The pulled contact still keeps its CardDAV contact_sources provenance row
+      const remoteRow = rows.find((r) => r.name === "Remote Pulled")!;
+      const sources = sqlite
+        .prepare("SELECT platform FROM contact_sources WHERE contactId = ?")
+        .all(remoteRow.id) as Array<{ platform: string }>;
+      expect(sources.map((src) => src.platform)).toContain("carddav");
+
+      // Editing an unlinked contact in Contrack uploads it again as a new card
+      dav.puts.length = 0;
+      contactService.updateContact(s, preExisting.id, { company: "Acme v2" });
+      await runNow(s, conn.id, "manual");
+      expect(dav.puts).toHaveLength(1);
+      expect(dav.puts[0]!.body).toContain("ORG:Acme v2");
     });
 
-    it("resets sync state and prunes old-book links when switching address books or servers", async () => {
+    it("detects full-scan deletions when server returns 404 propstat for sync-token, and skips deletions on 507 truncation", async () => {
+      const s = newOwner();
+      const dav = await startMiniDav();
+      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/one.vcf", {
+        etag: '"e1"',
+        vcard: miniVcard("Card One"),
+      });
+      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/two.vcf", {
+        etag: '"e2"',
+        vcard: miniVcard("Card Two"),
+      });
+
+      const conn = await createConnector(s, {
+        kind: "carddav",
+        name: "dav",
+        config: {
+          url: dav.url,
+          username: VALID_USER,
+          syncDirection: "two_way",
+          addressBookUrl: `${dav.url}/dav/ab/a/`,
+        },
+        secret: { password: VALID_PASS },
+      });
+      await runNow(s, conn.id, "manual");
+      expect(
+        sqlite
+          .prepare(
+            "SELECT externalId FROM connector_links WHERE connectorId = ?",
+          )
+          .all(conn.id),
+      ).toHaveLength(2);
+
+      // Force full PROPFIND scan (which returns 404 propstat on <d:sync-token/> per card)
+      dav.flags.rejectSync = true;
+      dav.books["/dav/ab/a/"]!.delete("/dav/ab/a/two.vcf");
+
+      // When 507 Insufficient Storage truncation is present, deletions are skipped
+      dav.flags.truncate507 = true;
+      await runNow(s, conn.id, "manual");
+      expect(
+        sqlite
+          .prepare(
+            "SELECT externalId FROM connector_links WHERE connectorId = ?",
+          )
+          .all(conn.id),
+      ).toHaveLength(2);
+
+      // Without 507 truncation, full scan unlinks the deleted card despite 404 sync-token propstat
+      dav.flags.truncate507 = false;
+      await runNow(s, conn.id, "manual");
+      const links = sqlite
+        .prepare("SELECT externalId FROM connector_links WHERE connectorId = ?")
+        .all(conn.id) as Array<{ externalId: string }>;
+      expect(links.map((l) => l.externalId)).toEqual(["/dav/ab/a/one.vcf"]);
+    });
+
+    it("supports non-prefix card hrefs and cleans up old-book links across two_way, pull_only, ETag-less, and server switches", async () => {
       const s = newOwner();
       const davA = await startMiniDav();
       const davB = await startMiniDav();
-      davA.books["/dav/ab/a/"]!.set("/dav/ab/a/pulled.vcf", {
-        etag: '"a1"',
-        vcard: miniVcard("Pulled Person", ["NICKNAME:Pp"]),
+
+      // Server returns a card href outside /dav/ab/a/ (e.g. proxy/alias path /cards/aliased.vcf)
+      davA.books["/dav/ab/a/"]!.set("/cards/aliased.vcf", {
+        etag: '"alias1"',
+        vcard: miniVcard("Aliased Card", ["EMAIL:alias@example.com"]),
       });
       davA.books["/dav/ab/b/"]!.set("/dav/ab/b/other.vcf", {
         etag: '"b1"',
@@ -1384,9 +1503,42 @@ ${itemResponses.join("\n")}
         secret: { password: VALID_PASS },
       });
       await runNow(s, conn.id, "manual");
+      // Second run with non-prefix href must keep the link and not create duplicate contacts
+      await runNow(s, conn.id, "manual");
+      const aliasLinks = sqlite
+        .prepare("SELECT externalId FROM connector_links WHERE connectorId = ?")
+        .all(conn.id) as Array<{ externalId: string }>;
+      expect(aliasLinks.map((l) => l.externalId)).toEqual([
+        "/cards/aliased.vcf",
+      ]);
+      const aliasContacts = sqlite
+        .prepare(
+          "SELECT id FROM contacts WHERE ownerId = ? AND name = 'Aliased Card' AND deletedAt IS NULL",
+        )
+        .all(s.ownerId);
+      expect(aliasContacts).toHaveLength(1);
 
-      // Switch to book B on the same server: must not push Pulled Person back into book A or book B,
-      // and must prune the link to /dav/ab/a/pulled.vcf
+      // Adding a trailing slash to config.url must not trigger a false book switch
+      await updateConnector(s, conn.id, {
+        config: {
+          url: `${davA.url}/`,
+          username: VALID_USER,
+          syncDirection: "two_way",
+          addressBookUrl: `${davA.url}/dav/ab/a/`,
+        },
+        secret: { password: VALID_PASS },
+      });
+      await runNow(s, conn.id, "manual");
+      expect(
+        sqlite
+          .prepare(
+            "SELECT externalId FROM connector_links WHERE connectorId = ?",
+          )
+          .all(conn.id),
+      ).toHaveLength(1);
+
+      // Switch to book B on an ETag-less server: must still unlink book A's card without pushing it back
+      davA.flags.omitEtags = true;
       await updateConnector(s, conn.id, {
         config: {
           url: davA.url,
@@ -1394,6 +1546,7 @@ ${itemResponses.join("\n")}
           syncDirection: "two_way",
           addressBookUrl: `${davA.url}/dav/ab/b/`,
         },
+        secret: { password: VALID_PASS },
       });
       davA.puts.length = 0;
       const runBookB = await runNow(s, conn.id, "manual");
@@ -1405,14 +1558,31 @@ ${itemResponses.join("\n")}
       expect(linksAfterBookB.map((l) => l.externalId)).toEqual([
         "/dav/ab/b/other.vcf",
       ]);
+      davA.flags.omitEtags = false;
 
-      // Switch to Server B with the same path /dav/ab/a/: must reset cursor and prune old links
+      // Switch back to book A in pull_only mode: must unlink book B's card
+      await updateConnector(s, conn.id, {
+        config: {
+          url: davA.url,
+          username: VALID_USER,
+          syncDirection: "pull_only",
+          addressBookUrl: `${davA.url}/dav/ab/a/`,
+        },
+      });
+      await runNow(s, conn.id, "manual");
+      const linksAfterPullSwitch = sqlite
+        .prepare("SELECT externalId FROM connector_links WHERE connectorId = ?")
+        .all(conn.id) as Array<{ externalId: string }>;
+      expect(linksAfterPullSwitch.map((l) => l.externalId)).toEqual([
+        "/cards/aliased.vcf",
+      ]);
+
+      // Switch to Server B using direct discovery (without passing addressBookUrl)
       await updateConnector(s, conn.id, {
         config: {
           url: davB.url,
           username: VALID_USER,
           syncDirection: "two_way",
-          addressBookUrl: `${davB.url}/dav/ab/a/`,
         },
         secret: { password: VALID_PASS },
       });
@@ -1426,14 +1596,14 @@ ${itemResponses.join("\n")}
       ]);
     });
 
-    it("preserves links on an empty full-scan PROPFIND listing and guards local edits on cards with photos", async () => {
+    it("preserves links on an empty full-scan PROPFIND listing and guards local edits on cards with photos when ETag changes", async () => {
       const s = newOwner();
       const dav = await startMiniDav();
       dav.books["/dav/ab/a/"]!.set("/dav/ab/a/photo.vcf", {
         etag: '"p1"',
         vcard: miniVcard("Photo Person", [
           "ORG:OldOrg",
-          "PHOTO;ENCODING=b;TYPE=PNG:iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+          `PHOTO;VALUE=URI:${dav.url}/avatar.png`,
         ]),
       });
 
@@ -1461,9 +1631,16 @@ ${itemResponses.join("\n")}
       };
       expect(photoContact.company).toBe("OldOrg");
 
-      // Edit Photo Person locally, then force a full PROPFIND scan where the server still has OldOrg
+      // Edit Photo Person locally, and bump the server ETag to '"p2"' with identical vCard bytes
+      // so sync re-fetches the card and exercises the remoteCardHash stale-copy guard
       contactService.updateContact(s, photoContact.id, { company: "NewOrg" });
-      dav.flags.rejectSync = true;
+      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/photo.vcf", {
+        etag: '"p2"',
+        vcard: miniVcard("Photo Person", [
+          "ORG:OldOrg",
+          `PHOTO;VALUE=URI:${dav.url}/avatar.png`,
+        ]),
+      });
       dav.puts.length = 0;
       const runStale = await runNow(s, conn.id, "manual");
       expect(runStale.status).toBe("ok");
@@ -1474,7 +1651,19 @@ ${itemResponses.join("\n")}
       expect(dav.puts).toHaveLength(1);
       expect(dav.puts[0]!.body).toContain("ORG:NewOrg");
 
-      // Now simulate an empty PROPFIND listing on a full scan: links must not be wiped
+      // When the server's PHOTO URI actually changes with a new ETag, sync yields the update
+      dav.books["/dav/ab/a/"]!.set("/dav/ab/a/photo.vcf", {
+        etag: '"p3"',
+        vcard: miniVcard("Photo Person", [
+          "ORG:NewOrg",
+          `PHOTO;VALUE=URI:${dav.url}/avatar2.png`,
+        ]),
+      });
+      const runPhotoChanged = await runNow(s, conn.id, "manual");
+      expect(runPhotoChanged.stats.contacts).toBe(1);
+
+      // Simulate an empty PROPFIND listing on a full scan: links must not be wiped
+      dav.flags.rejectSync = true;
       dav.flags.emptyListing = true;
       await runNow(s, conn.id, "manual");
       const linksAfterEmpty = sqlite
@@ -1483,11 +1672,48 @@ ${itemResponses.join("\n")}
       expect(linksAfterEmpty).toHaveLength(1);
     });
 
-    it("handles missing or untrusted addressBookUrl, GET/PUT failures, and >5MB card retries", async () => {
+    it("supports iCloud cross-host addressBookUrl discovery, rejects missing books on save, and handles GET/PUT recovery", async () => {
       const s = newOwner();
       const dav = await startMiniDav();
+      const davPartition = await startMiniDav();
 
-      // 1. testConnector with a missing addressBookUrl falls back and returns the full book list with a warning
+      // 1. iCloud cross-host discovery: entry server on 127.0.0.1 points home-set to partition host on localhost
+      const partitionOrigin = davPartition.url.replace(
+        "127.0.0.1",
+        "localhost",
+      );
+      dav.flags.homeSetOverride = `${partitionOrigin}/dav/ab/`;
+      const partitionBookUrl = `${partitionOrigin}/dav/ab/a/`;
+
+      const icloudTest = await testConnector(
+        s,
+        "carddav",
+        {
+          url: dav.url,
+          username: VALID_USER,
+          syncDirection: "two_way",
+          addressBookUrl: partitionBookUrl,
+        },
+        { password: VALID_PASS },
+      );
+      expect(icloudTest.ok).toBe(true);
+      expect(icloudTest.detail).toBe("Connected to Book /dav/ab/a/");
+
+      const icloudConn = await createConnector(s, {
+        kind: "carddav",
+        name: "icloud",
+        config: {
+          url: dav.url,
+          username: VALID_USER,
+          syncDirection: "two_way",
+          addressBookUrl: partitionBookUrl,
+        },
+        secret: { password: VALID_PASS },
+      });
+      expect(icloudConn.id).toBeDefined();
+      dav.flags.homeSetOverride = null;
+
+      // 2. testConnector with a missing addressBookUrl falls back and returns the full book list with a warning
       const testMissing = await testConnector(
         s,
         "carddav",
@@ -1505,39 +1731,37 @@ ${itemResponses.join("\n")}
       );
       expect(testMissing.addressBooks).toHaveLength(2);
 
-      // 2. testConnector with an untrusted host in addressBookUrl rejects
+      // 3. createConnector with an addressBookUrl not in the server's discovered list rejects immediately
       await expect(
-        testConnector(
-          s,
-          "carddav",
-          {
+        createConnector(s, {
+          kind: "carddav",
+          name: "bad-book",
+          config: {
+            url: dav.url,
+            username: VALID_USER,
+            syncDirection: "two_way",
+            addressBookUrl: `${dav.url}/dav/ab/missing/`,
+          },
+          secret: { password: VALID_PASS },
+        }),
+      ).rejects.toThrow(
+        /Selected address book was not found on the CardDAV server/i,
+      );
+
+      await expect(
+        createConnector(s, {
+          kind: "carddav",
+          name: "wrong-origin-book",
+          config: {
             url: dav.url,
             username: VALID_USER,
             syncDirection: "two_way",
             addressBookUrl: "https://evil.example.com/dav/ab/a/",
           },
-          { password: VALID_PASS },
-        ),
+          secret: { password: VALID_PASS },
+        }),
       ).rejects.toThrow(
-        /Selected address book URL must be on the configured CardDAV server/i,
-      );
-
-      // 3. runNow with a missing addressBookUrl fails instead of silently syncing another book
-      const badBookConn = await createConnector(s, {
-        kind: "carddav",
-        name: "bad-book",
-        config: {
-          url: dav.url,
-          username: VALID_USER,
-          syncDirection: "two_way",
-          addressBookUrl: `${dav.url}/dav/ab/missing/`,
-        },
-        secret: { password: VALID_PASS },
-      });
-      const badBookRun = await runNow(s, badBookConn.id, "manual");
-      expect(badBookRun.status).toBe("error");
-      expect(badBookRun.error).toMatch(
-        /Selected address book was not found on the (CardDAV )?server/i,
+        /Selected address book was not found on the CardDAV server/i,
       );
 
       // 4. GET failure before PUT skips the PUT rather than stripping NICKNAME / X-* fields
@@ -1575,7 +1799,19 @@ ${itemResponses.join("\n")}
       expect(dav.puts[0]!.body).toContain("NICKNAME:Kiki");
       expect(dav.puts[0]!.body).toContain("X-CUSTOM:keep");
 
-      // 5. Partial PUT failure midway preserves links for already-uploaded contacts
+      // When a linked card is missing on GET (404) during push, push re-creates it cleanly
+      dav.books["/dav/ab/a/"]!.delete("/dav/ab/a/k.vcf");
+      // Keep syncToken unchanged so sync-collection doesn't report a tombstone before push
+      dav.puts.length = 0;
+      contactService.updateContact(s, keptContact.id, {
+        company: "ReCreatedCo",
+      });
+      await runNow(s, conn.id, "manual");
+      expect(dav.puts).toHaveLength(1);
+      expect(dav.puts[0]!.body).toContain("ORG:ReCreatedCo");
+      expect(dav.books["/dav/ab/a/"]!.has("/dav/ab/a/k.vcf")).toBe(true);
+
+      // 5. Partial PUT failure midway preserves links for already-uploaded contacts and uploads the rest on retry
       const localA = contactService.createContact(s, { name: "Aaa Local" })!;
       const localB = contactService.createContact(s, { name: "Bbb Local" })!;
       dav.puts.length = 0;
@@ -1587,6 +1823,12 @@ ${itemResponses.join("\n")}
         )
         .get(conn.id, localA.id);
       expect(linkForA).toBeDefined();
+      const linkForBBefore = sqlite
+        .prepare(
+          "SELECT externalId FROM connector_links WHERE connectorId = ? AND localId = ?",
+        )
+        .get(conn.id, localB.id);
+      expect(linkForBBefore).toBeUndefined();
 
       // Next run uploads B without duplicating A
       dav.flags.failPutPrefix = null;
@@ -1597,6 +1839,15 @@ ${itemResponses.join("\n")}
         )
         .all(s.ownerId);
       expect(aRows).toHaveLength(1);
+      const linkForBAfter = sqlite
+        .prepare(
+          "SELECT externalId FROM connector_links WHERE connectorId = ? AND localId = ?",
+        )
+        .get(conn.id, localB.id) as { externalId: string } | undefined;
+      expect(linkForBAfter).toBeDefined();
+      expect(dav.books["/dav/ab/a/"]!.has(linkForBAfter!.externalId)).toBe(
+        true,
+      );
 
       // 6. Oversized > 5 MB card is not recorded in cursor.etags so it retries when shrunk
       const bigPadding = "X".repeat(5 * 1024 * 1024 + 500);
