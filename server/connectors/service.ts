@@ -178,7 +178,7 @@ export async function testConnector(
     );
   }
 
-  return adapter.test(parsedConfig, parsedSecret);
+  return adapter.test(parsedConfig, parsedSecret, { allowFallbackBook: true });
 }
 
 /** The config fields that say where a secret goes. */

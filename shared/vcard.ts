@@ -503,10 +503,19 @@ export function serializeVCard(contact: VCardInput): string {
     );
   }
 
+  const emittedWebsite = contact.website?.trim().toLowerCase() ?? null;
   if (contact.website) push(`URL:${escapeValue(contact.website)}`);
 
   for (const link of contact.socialLinks ?? []) {
     if (!link.url) continue;
+    const normUrl = link.url.trim().toLowerCase();
+    const platform = (link.platform || "other").toLowerCase();
+    if (
+      (platform === "website" || platform === "homepage") &&
+      emittedWebsite === normUrl
+    ) {
+      continue;
+    }
     // Apple's own property, and the one Apple reads back.
     push(
       `X-SOCIALPROFILE;TYPE=${escapeValue(link.platform || "other")}:${escapeValue(link.url)}`,

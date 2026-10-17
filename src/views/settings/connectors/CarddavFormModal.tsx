@@ -48,6 +48,14 @@ function isValidHttpUrl(value: string): boolean {
   }
 }
 
+function hasSameOrigin(urlA: string, urlB: string): boolean {
+  try {
+    return new URL(urlA.trim()).origin === new URL(urlB.trim()).origin;
+  } catch {
+    return false;
+  }
+}
+
 export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
   isOpen,
   onClose,
@@ -107,7 +115,11 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
     setFormError(null);
   }, [connector, isOpen]);
 
+  const existingCfg = (connector?.config ?? {}) as Record<string, unknown>;
   const formConfig = () => ({
+    ...(typeof existingCfg.pushExistingContacts === "boolean"
+      ? { pushExistingContacts: existingCfg.pushExistingContacts }
+      : {}),
     url: url.trim(),
     username: username.trim(),
     syncDirection,
@@ -146,7 +158,10 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
       });
       if (Array.isArray(res.addressBooks) && res.addressBooks.length > 0) {
         setAddressBooks(res.addressBooks);
-        if (!addressBookUrl && res.addressBooks[0]?.url) {
+        const stillValid = res.addressBooks.some(
+          (b) => b.url === addressBookUrl,
+        );
+        if ((!addressBookUrl || !stillValid) && res.addressBooks[0]?.url) {
           setAddressBookUrl(res.addressBooks[0].url);
         }
       }
@@ -265,7 +280,16 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
             {...NO_AUTOCORRECT}
             value={url}
             onChange={(e) => {
-              setUrl(e.target.value);
+              const nextUrl = e.target.value;
+              if (
+                addressBookUrl &&
+                (!hasSameOrigin(nextUrl, addressBookUrl) ||
+                  url.trim() === addressBookUrl.trim())
+              ) {
+                setAddressBookUrl("");
+              }
+              setUrl(nextUrl);
+              setAddressBooks([]);
               setTestResult(null);
               setFormError(null);
             }}
@@ -289,6 +313,7 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
             value={username}
             onChange={(e) => {
               setUsername(e.target.value);
+              setAddressBooks([]);
               setTestResult(null);
               setFormError(null);
             }}

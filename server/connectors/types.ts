@@ -112,6 +112,7 @@ export interface ConnectorAdapter<C = unknown, S = unknown> {
   test(
     config: C,
     secret: S | null,
+    options?: { allowFallbackBook?: boolean },
   ): Promise<{
     ok: true;
     detail: string;

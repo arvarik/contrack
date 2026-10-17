@@ -9,35 +9,42 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-16
+
+### Added
+
+- CardDAV connector for two-way or pull-only contact sync with Nextcloud,
+  iCloud, Fastmail, Radicale and Baïkal.
+
 ### Changed
 
-- The Google OAuth client row in Settings walks an admin through the five
-  Google Cloud steps, with the redirect address in the step that uses it, and
-  the Connect Google dialog says who sets it up and where.
+- Google OAuth setup in Settings now lists the five Google Cloud steps with the
+  redirect address inline, and the Connect Google dialog explains where an
+  admin configures it.
 
 ### Fixed
 
-- Settings: account profile and passkey forms normalize usernames and emails,
-  skip no-op renames, reject blank or unchanged passwords, refresh device
-  sessions after a password change, and show clear error messages on failure.
-- Import, Duplicates and Contact enrichment: empty or oversized import files are
-  rejected upfront, switching import tabs clears stale errors, duplicate check
-  and merge actions lock while running, and clearing a contact enrichment search
-  no longer flashes an empty state.
-- Tags, Lists, Archived contacts and Trash: Archived contacts and Trash add
-  filter bars, restoring an archived contact offers Undo, filtering prunes
-  hidden selections, and failed background refetches keep cached rows on screen.
-- Connectors, Correspondents and MCP: calendar links accept `webcal://`, IMAP
-  hosts strip `imaps://`, CardDAV and IMAP preserve spaces in passwords, and
-  Correspondents adds a search filter and prompts for a name when adding an
-  address-only person.
-- Administration: AI settings and Audit log keep cached data on screen when a
-  background refetch or page load fails, SMTP port checks reject non-decimal
-  strings, and invitation links validate email format when an address is typed.
-- Connectors: a failed sync is retried after its backoff, a Google contact that
-  matched one of yours is merged instead of written over, Gmail no longer loses
-  mail past the per-run cap, one mail in two IMAP folders counts once, and
-  all-day repeating meetings keep their ids when the server's time zone changes.
+- Account and Passkeys: normalize usernames and emails, skip no-op passkey
+  renames, reject blank or unchanged passwords, refresh device sessions after a
+  password change, and show clear error messages on failure.
+- Import, Duplicates and Contact enrichment: reject empty or oversized import
+  files upfront, clear stale errors when switching import tabs, lock duplicate
+  actions while running, and avoid flashing an empty state when clearing a
+  contact enrichment search.
+- Tags, Lists, Archived contacts and Trash: add search filters to Archived
+  contacts and Trash, offer Undo when restoring an archived contact, prune
+  hidden selections when filtering, and keep cached rows on screen when a
+  background refetch fails.
+- Connectors, Correspondents and MCP: accept `webcal://` calendar URLs, strip
+  `imaps://` from IMAP hosts, preserve spaces in CardDAV and IMAP passwords,
+  and add a search filter and name prompt to Correspondents.
+- Administration: keep cached AI settings and Audit log entries on screen when a
+  background refetch fails, reject non-decimal SMTP port strings, and validate
+  invitation email addresses when typed.
+- Connectors: retry failed syncs after backoff, merge matched Google contacts
+  instead of overwriting them, keep Gmail messages past the per-run cap,
+  deduplicate cross-folder IMAP mail, and preserve all-day recurring event IDs
+  across time zones.
 
 ## [2.0.0] - 2026-10-14
 
@@ -261,7 +268,8 @@ server.
 The first release: a local-first personal CRM with contact management,
 semantic search, AI enrichment and duplicate detection.
 
-[unreleased]: https://github.com/arvarik/contrack/compare/v2.0.0...HEAD
+[unreleased]: https://github.com/arvarik/contrack/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/arvarik/contrack/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/arvarik/contrack/compare/v1.5.5...v2.0.0
 [1.5.5]: https://github.com/arvarik/contrack/compare/v1.5.4...v1.5.5
 [1.5.4]: https://github.com/arvarik/contrack/compare/v1.5.3...v1.5.4

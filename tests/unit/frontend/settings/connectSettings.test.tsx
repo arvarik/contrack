@@ -194,6 +194,25 @@ describe("Connect settings hardening", () => {
         isPending: false,
       } as unknown as ReturnType<typeof connectorsApi.useCreateConnector>);
 
+      const testMock = vi.fn().mockResolvedValue({
+        ok: true,
+        detail: "Connected to Personal",
+        addressBooks: [
+          {
+            url: "https://contacts.icloud.com/dav/personal/",
+            displayName: "Personal",
+          },
+          {
+            url: "https://contacts.icloud.com/dav/work/",
+            displayName: "Work",
+          },
+        ],
+      });
+      vi.mocked(connectorsApi.useTestConnector).mockReturnValue({
+        mutateAsync: testMock,
+        isPending: false,
+      } as unknown as ReturnType<typeof connectorsApi.useTestConnector>);
+
       const onClose = vi.fn();
       renderWithProviders(<CarddavFormModal isOpen={true} onClose={onClose} />);
 
@@ -230,6 +249,24 @@ describe("Connect settings hardening", () => {
       fireEvent.change(passInput, {
         target: { value: "abcd-efgh-ijkl-mnop " },
       });
+
+      // Test connection returning 2 address books shows the Address book selector,
+      // and changing the server URL clears the stale addressBookUrl selection
+      fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+      await waitFor(() => {
+        expect(screen.getByLabelText("Address book")).toBeTruthy();
+      });
+
+      // Changing the URL to a different host clears the discovered address books
+      // and clears the chosen addressBookUrl so stale URLs are not submitted
+      fireEvent.change(urlInput, {
+        target: { value: "https://cloud.example.com" },
+      });
+      expect(screen.queryByLabelText("Address book")).toBeNull();
+      fireEvent.change(urlInput, {
+        target: { value: "  https://contacts.icloud.com  " },
+      });
+
       fireEvent.click(screen.getByRole("button", { name: "Connect" }));
 
       await waitFor(() => {
@@ -245,6 +282,67 @@ describe("Connect settings hardening", () => {
           intervalMinutes: 30,
         });
         expect(onClose).toHaveBeenCalled();
+      });
+    });
+
+    it("preserves pushExistingContacts and same-origin addressBookUrl when editing a connector", async () => {
+      const updateMock = vi.fn().mockResolvedValue({ id: "carddav-edit-1" });
+      vi.mocked(connectorsApi.useUpdateConnector).mockReturnValue({
+        mutateAsync: updateMock,
+        isPending: false,
+      } as unknown as ReturnType<typeof connectorsApi.useUpdateConnector>);
+
+      renderWithProviders(
+        <CarddavFormModal
+          isOpen={true}
+          onClose={vi.fn()}
+          connector={{
+            id: "carddav-edit-1",
+            kind: "carddav",
+            name: "Work CardDAV",
+            status: "active",
+            secretPresent: true,
+            intervalMinutes: 30,
+            lastRunAt: null,
+            nextRunAt: null,
+            lastError: null,
+            createdAt: "2026-10-16T00:00:00Z",
+            updatedAt: "2026-10-16T00:00:00Z",
+            config: {
+              url: "https://contacts.icloud.com",
+              username: "ada@example.com",
+              syncDirection: "two_way",
+              addressBookUrl: "https://contacts.icloud.com/dav/work/",
+              pushExistingContacts: true,
+            },
+          }}
+        />,
+      );
+
+      // Editing username or a same-origin URL keeps the configured addressBookUrl and pushExistingContacts
+      fireEvent.change(screen.getByLabelText("Username / email"), {
+        target: { value: "augusta@example.com" },
+      });
+      fireEvent.change(screen.getByLabelText("Server or address book URL"), {
+        target: { value: "https://contacts.icloud.com/dav" },
+      });
+
+      fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+      await waitFor(() => {
+        expect(updateMock).toHaveBeenCalledWith({
+          id: "carddav-edit-1",
+          name: "Work CardDAV",
+          config: {
+            url: "https://contacts.icloud.com/dav",
+            username: "augusta@example.com",
+            syncDirection: "two_way",
+            addressBookUrl: "https://contacts.icloud.com/dav/work/",
+            pushExistingContacts: true,
+          },
+          secret: undefined,
+          intervalMinutes: 30,
+        });
       });
     });
   });

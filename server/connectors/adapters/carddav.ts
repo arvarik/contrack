@@ -1,7 +1,7 @@
 /**
  * The CardDAV connector, for any RFC 6352 CardDAV server (Nextcloud, Radicale,
- * Baïkal, Apple iCloud, Fastmail, Google Contacts, Synology). Discovers the
- * user's address book via `.well-known/carddav`, `current-user-principal` and
+ * Baïkal, Apple iCloud, Fastmail, Synology). Discovers the user's address book
+ * via `.well-known/carddav`, `current-user-principal` and
  * `addressbook-home-set`, pulls changes via `sync-collection` / ETag diffing
  * and `addressbook-multiget`, and optionally pushes local contact creates and
  * edits back via conditional `PUT`.
@@ -53,8 +53,11 @@ export type CarddavSecret = z.infer<typeof carddavSecretSchema>;
 export interface CarddavCursor {
   addressBookUrl?: string;
   configuredUrl?: string;
+  bookSwitchPending?: boolean;
+  activeBookHrefs?: string[];
   syncToken?: string | null;
   etags?: Record<string, string>;
+  cardHashes?: Record<string, string>;
   pushedHashes?: Record<string, string>;
   pushedUpdatedAt?: Record<string, string>;
   deletedHrefs?: string[];
@@ -143,6 +146,20 @@ export function vcardContentHash(input: VCardInput): string {
     .update(canonical)
     .digest("hex")
     .slice(0, 16);
+}
+
+function remoteCardHash(
+  contactFields: VCardInput,
+  avatarUrl?: string | null,
+): string {
+  const base = vcardContentHash(contactFields);
+  if (!avatarUrl?.trim()) return base;
+  const photoDigest = crypto
+    .createHash("sha256")
+    .update(avatarUrl.trim())
+    .digest("hex")
+    .slice(0, 16);
+  return `${base}:${photoDigest}`;
 }
 
 function basicAuthHeader(username: string, password: string): string {
@@ -405,6 +422,7 @@ export function parseMultiStatusXml(xml: string): ParsedMultiStatus {
     // Collect properties from 2xx propstat blocks (or directly under response if no propstat and 2xx).
     const okProps: cheerio.Cheerio<AnyNode>[] = [];
     if (propstats.length > 0) {
+      let fallbackStatus: string | null = null;
       for (const ps of propstats) {
         const $ps = $(ps);
         const psStatus = directChildText($, $ps, "status");
@@ -412,9 +430,16 @@ export function parseMultiStatusXml(xml: string): ParsedMultiStatus {
           for (const propEl of findElements($, $ps, "prop")) {
             okProps.push($(propEl));
           }
-        } else if (!status && psStatus) {
-          status = psStatus;
+        } else if (!fallbackStatus || /\s507(\s|$)/.test(psStatus)) {
+          fallbackStatus = psStatus;
         }
+      }
+      if (
+        !status &&
+        (okProps.length === 0 ||
+          (fallbackStatus && /\s507(\s|$)/.test(fallbackStatus)))
+      ) {
+        status = fallbackStatus;
       }
     } else if (!status || /\s2\d\d(\s|$)/.test(status)) {
       okProps.push($resp);
@@ -543,6 +568,20 @@ function samePath(pathA: string, pathB: string): boolean {
   return clean(pathA) === clean(pathB);
 }
 
+function sameAddressBookUrl(urlA: string, urlB: string): boolean {
+  try {
+    const a = new URL(urlA);
+    const b = new URL(urlB);
+    if (a.origin.toLowerCase() !== b.origin.toLowerCase()) return false;
+    return samePath(
+      normalizeHrefPath(a.pathname, a.origin),
+      normalizeHrefPath(b.pathname, b.origin),
+    );
+  } catch {
+    return false;
+  }
+}
+
 const DISCOVERY_PROPFIND_BODY = `<?xml version="1.0" encoding="utf-8"?>
 <d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">
   <d:prop>
@@ -573,6 +612,7 @@ export interface DiscoveredAddressBook {
   addressBookUrl: string;
   displayName: string;
   addressBooks: AddressBookOption[];
+  selectedBookFound?: boolean;
 }
 
 function rankAddressBook(book: AddressBookOption): number {
@@ -599,12 +639,13 @@ export async function discoverAddressBook(
   config: CarddavConfig,
   secret: CarddavSecret | null,
   signal?: AbortSignal,
+  options?: { allowFallbackBook?: boolean },
 ): Promise<DiscoveredAddressBook> {
   if (!secret?.password) {
     throw new ConnectorAuthError("CardDAV password is required");
   }
   const auth = basicAuthHeader(config.username, secret.password);
-  const startUrl = config.addressBookUrl || config.url;
+  const startUrl = config.url;
 
   async function probeEndpoint(
     targetUrl: string,
@@ -652,7 +693,7 @@ export async function discoverAddressBook(
   }
 
   const wellKnownUrl = new URL("/.well-known/carddav", startUrl).toString();
-  const canTryWellKnown = !config.addressBookUrl && wellKnownUrl !== startUrl;
+  const canTryWellKnown = wellKnownUrl !== startUrl;
 
   let { res: initialRes, parsed } = await probeEndpoint(
     startUrl,
@@ -695,6 +736,14 @@ export async function discoverAddressBook(
   const directAb = parsed.items.find((i) => i.isAddressBook);
   if (directAb) {
     const resolved = resolveUrl(baseUrl, directAb.href);
+    const directMatches =
+      !config.addressBookUrl ||
+      sameAddressBookUrl(resolved, config.addressBookUrl);
+    if (!directMatches && !options?.allowFallbackBook) {
+      throw new ConnectorConfigError(
+        "Selected address book was not found on the CardDAV server",
+      );
+    }
     const displayName = directAb.displayName || "Contacts";
     return {
       addressBookUrl: resolved,
@@ -702,6 +751,7 @@ export async function discoverAddressBook(
       addressBooks: [
         { url: resolved, displayName, readOnly: directAb.readOnly },
       ],
+      selectedBookFound: directMatches,
     };
   }
 
@@ -762,20 +812,21 @@ export async function discoverAddressBook(
   const sortedBooks = [...rawBooks].sort(
     (a, b) => rankAddressBook(a) - rankAddressBook(b),
   );
-  const chosen =
-    (config.addressBookUrl
-      ? sortedBooks.find((b) =>
-          samePath(
-            normalizeHrefPath(b.url, b.url),
-            normalizeHrefPath(config.addressBookUrl!, config.addressBookUrl!),
-          ),
-        )
-      : undefined) ?? sortedBooks[0]!;
+  const matchedBook = config.addressBookUrl
+    ? sortedBooks.find((b) => sameAddressBookUrl(b.url, config.addressBookUrl!))
+    : undefined;
+  if (config.addressBookUrl && !matchedBook && !options?.allowFallbackBook) {
+    throw new ConnectorConfigError(
+      "Selected address book was not found on the CardDAV server",
+    );
+  }
+  const chosen = matchedBook ?? sortedBooks[0]!;
 
   return {
     addressBookUrl: chosen.url,
     displayName: chosen.displayName,
     addressBooks: sortedBooks,
+    selectedBookFound: config.addressBookUrl ? Boolean(matchedBook) : true,
   };
 }
 
@@ -793,15 +844,24 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
   async test(
     config: CarddavConfig,
     secret: CarddavSecret | null,
+    options?: { allowFallbackBook?: boolean },
   ): Promise<{
     ok: true;
     detail: string;
     addressBooks?: AddressBookOption[];
   }> {
-    const discovered = await discoverAddressBook(config, secret);
+    const discovered = await discoverAddressBook(
+      config,
+      secret,
+      undefined,
+      options,
+    );
     return {
       ok: true,
-      detail: `Connected to ${discovered.displayName}`,
+      detail:
+        discovered.selectedBookFound === false
+          ? `Selected address book was not found; switched to ${discovered.displayName}`
+          : `Connected to ${discovered.displayName}`,
       addressBooks: discovered.addressBooks,
     };
   },
@@ -816,27 +876,49 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
 
     const auth = basicAuthHeader(config.username, secret.password);
     const prevCursor = (ctx.cursor as CarddavCursor | null) ?? {};
-    const prevEtags: Record<string, string> = { ...(prevCursor.etags ?? {}) };
-    const nextEtags: Record<string, string> = { ...prevEtags };
 
     const canReuseCursorBook =
       Boolean(prevCursor.addressBookUrl) &&
-      (!prevCursor.configuredUrl || prevCursor.configuredUrl === config.url);
-    const addressBookUrl =
-      config.addressBookUrl ??
-      (canReuseCursorBook ? prevCursor.addressBookUrl! : undefined) ??
-      (await discoverAddressBook(config, secret, signal)).addressBookUrl;
+      (!prevCursor.configuredUrl ||
+        sameAddressBookUrl(prevCursor.configuredUrl, config.url)) &&
+      (!config.addressBookUrl ||
+        sameAddressBookUrl(prevCursor.addressBookUrl!, config.addressBookUrl));
+    const addressBookUrl = canReuseCursorBook
+      ? prevCursor.addressBookUrl!
+      : (await discoverAddressBook(config, secret, signal)).addressBookUrl;
     const abPath = normalizeHrefPath(addressBookUrl, addressBookUrl);
+    const sameBook = !prevCursor.addressBookUrl
+      ? true
+      : Boolean(prevCursor.addressBookUrl) &&
+        (!prevCursor.configuredUrl ||
+          sameAddressBookUrl(prevCursor.configuredUrl, config.url)) &&
+        sameAddressBookUrl(prevCursor.addressBookUrl, addressBookUrl);
+    const switchedBook = Boolean(prevCursor.addressBookUrl) && !sameBook;
+    const needsBookCleanup =
+      switchedBook || Boolean(prevCursor.bookSwitchPending);
 
-    let nextSyncToken: string | null = prevCursor.syncToken ?? null;
+    const prevEtags: Record<string, string> = sameBook
+      ? { ...(prevCursor.etags ?? {}) }
+      : {};
+    const nextEtags: Record<string, string> = { ...prevEtags };
+    const prevCardHashes: Record<string, string> = sameBook
+      ? { ...(prevCursor.cardHashes ?? {}) }
+      : {};
+    const nextCardHashes: Record<string, string> = { ...prevCardHashes };
+
+    let nextSyncToken: string | null = sameBook
+      ? (prevCursor.syncToken ?? null)
+      : null;
     const toFetchHrefs = new Set<string>();
+    const pendingEtags = new Map<string, string>();
     const deletedHrefs = new Set<string>();
     let usedSyncCollection = false;
+    let activeBookHrefs: string[] | undefined;
 
     // 1. Try incremental RFC 6578 sync-collection REPORT if we have a syncToken,
     // following 507 Insufficient Storage truncation pages within the same run.
-    if (prevCursor.syncToken) {
-      let currentToken: string = prevCursor.syncToken;
+    if (nextSyncToken && !needsBookCleanup) {
+      let currentToken: string = nextSyncToken;
       for (let page = 0; page < MAX_SYNC_PAGES; page++) {
         signal.throwIfAborted();
         const syncReportBody = `<?xml version="1.0" encoding="utf-8"?>
@@ -903,15 +985,20 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
           if (isDeleted) {
             deletedHrefs.add(normHref);
             toFetchHrefs.delete(normHref);
+            pendingEtags.delete(normHref);
             delete nextEtags[normHref];
+            delete nextCardHashes[normHref];
             continue;
           }
 
           const etag = cleanEtag(item.etag);
           if (!prevEtags[normHref] || !etag || prevEtags[normHref] !== etag) {
             toFetchHrefs.add(normHref);
-          }
-          if (etag) {
+            delete nextEtags[normHref];
+            if (etag) {
+              pendingEtags.set(normHref, etag);
+            }
+          } else if (etag) {
             nextEtags[normHref] = etag;
           }
         }
@@ -960,30 +1047,53 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
       }
 
       const parsed = parseMultiStatusXml(propRes.body);
+      if (!parsed.isMultiStatus) {
+        throw new ConnectorConfigError(
+          "CardDAV PROPFIND did not return a WebDAV Multi-Status response",
+        );
+      }
       if (parsed.syncToken) {
         nextSyncToken = parsed.syncToken;
       }
 
       const seenHrefs = new Set<string>();
+      let has507Truncation = false;
       for (const item of parsed.items) {
         const normHref = normalizeHrefPath(item.href, addressBookUrl);
+        if (item.status !== null && /\s507(\s|$)/.test(item.status)) {
+          has507Truncation = true;
+        }
         if (samePath(normHref, abPath)) continue;
         if (item.isCollection || item.isAddressBook) continue;
+        if (item.status !== null && !/\s2\d\d(\s|$)/.test(item.status)) {
+          continue;
+        }
 
         seenHrefs.add(normHref);
         const etag = cleanEtag(item.etag);
         if (!prevEtags[normHref] || !etag || prevEtags[normHref] !== etag) {
           toFetchHrefs.add(normHref);
-        }
-        if (etag) {
+          delete nextEtags[normHref];
+          if (etag) {
+            pendingEtags.set(normHref, etag);
+          }
+        } else if (etag) {
           nextEtags[normHref] = etag;
         }
       }
 
-      for (const oldHref of Object.keys(prevEtags)) {
-        if (!seenHrefs.has(oldHref)) {
-          deletedHrefs.add(oldHref);
-          delete nextEtags[oldHref];
+      if (needsBookCleanup && !has507Truncation && seenHrefs.size > 0) {
+        activeBookHrefs = Array.from(seenHrefs);
+      }
+
+      // Guard against an empty or 507-truncated PROPFIND response wiping all links
+      if (!has507Truncation && seenHrefs.size > 0) {
+        for (const oldHref of Object.keys(prevEtags)) {
+          if (!seenHrefs.has(oldHref)) {
+            deletedHrefs.add(oldHref);
+            delete nextEtags[oldHref];
+            delete nextCardHashes[oldHref];
+          }
         }
       }
     }
@@ -1073,7 +1183,9 @@ ${hrefElements}
           const normHref = normalizeHrefPath(item.href, addressBookUrl);
           if (item.status !== null && /\s(404|410)(\s|$)/.test(item.status)) {
             deletedHrefs.add(normHref);
+            pendingEtags.delete(normHref);
             delete nextEtags[normHref];
+            delete nextCardHashes[normHref];
             continue;
           }
           if (!item.addressData) continue;
@@ -1100,7 +1212,9 @@ ${hrefElements}
             }
             if (getRes.status === 404 || getRes.status === 410) {
               deletedHrefs.add(href);
+              pendingEtags.delete(href);
               delete nextEtags[href];
+              delete nextCardHashes[href];
               continue;
             }
             if (getRes.status >= 200 && getRes.status < 300 && getRes.body) {
@@ -1126,13 +1240,20 @@ ${hrefElements}
       const vcardPayloads = await fetchMultigetBatch(batch);
 
       for (const entry of vcardPayloads) {
-        if (entry.etag) {
-          nextEtags[entry.href] = entry.etag;
+        const resolvedEtag = entry.etag ?? pendingEtags.get(entry.href);
+        if (resolvedEtag) {
+          nextEtags[entry.href] = resolvedEtag;
         }
 
         const { contacts } = extractVCardContacts(entry.vcard);
         for (const parsedContact of contacts) {
           const { avatarUrl, ...contactFields } = parsedContact;
+          const remoteHash = remoteCardHash(contactFields, avatarUrl);
+          const prevHash = prevCardHashes[entry.href];
+          nextCardHashes[entry.href] = remoteHash;
+          if (prevHash && prevHash === remoteHash) {
+            continue;
+          }
           yield {
             kind: "contact",
             externalId: entry.href,
@@ -1143,11 +1264,18 @@ ${hrefElements}
       }
     }
 
+    for (const deletedHref of deletedHrefs) {
+      delete nextCardHashes[deletedHref];
+    }
+
     return {
       addressBookUrl,
       configuredUrl: config.url,
+      bookSwitchPending: needsBookCleanup || undefined,
+      activeBookHrefs,
       syncToken: nextSyncToken,
       etags: nextEtags,
+      cardHashes: nextCardHashes,
       pushedHashes: { ...(prevCursor.pushedHashes ?? {}) },
       deletedHrefs: Array.from(deletedHrefs),
       lastSyncAt: new Date().toISOString(),
@@ -1160,6 +1288,9 @@ ${hrefElements}
     const { config, secret, signal, log } = ctx;
     const prevCursor = (ctx.cursor as CarddavCursor | null) ?? {};
     const etags: Record<string, string> = { ...(prevCursor.etags ?? {}) };
+    const cardHashes: Record<string, string> = {
+      ...(prevCursor.cardHashes ?? {}),
+    };
     const prevHashes: Record<string, string> = {
       ...(prevCursor.pushedHashes ?? {}),
     };
@@ -1167,12 +1298,19 @@ ${hrefElements}
       ...(prevCursor.pushedUpdatedAt ?? {}),
     };
     const pushedHashes: Record<string, string> = {};
-    const removedExternalIds = prevCursor.deletedHrefs ?? [];
+    const removedExternalIds = [...(prevCursor.deletedHrefs ?? [])];
     const removedSet = new Set(removedExternalIds);
 
     for (const removedHref of removedExternalIds) {
       delete etags[removedHref];
+      delete cardHashes[removedHref];
     }
+
+    const activeBookSet = prevCursor.activeBookHrefs
+      ? new Set(prevCursor.activeBookHrefs)
+      : null;
+    const deferBookSwitchCleanup =
+      Boolean(prevCursor.bookSwitchPending) && !activeBookSet;
 
     // Keep pushedHashes pruned to only active contacts in ctx.contacts
     for (const contact of ctx.contacts) {
@@ -1184,14 +1322,32 @@ ${hrefElements}
       }
     }
 
+    const canReuseCursorBook =
+      Boolean(prevCursor.addressBookUrl) &&
+      (!prevCursor.configuredUrl ||
+        sameAddressBookUrl(prevCursor.configuredUrl, config.url)) &&
+      (!config.addressBookUrl ||
+        sameAddressBookUrl(prevCursor.addressBookUrl!, config.addressBookUrl));
+
     if ((config.syncDirection ?? "two_way") === "pull_only") {
+      if (activeBookSet) {
+        for (const link of ctx.links) {
+          if (removedSet.has(link.externalId)) continue;
+          if (!activeBookSet.has(link.externalId)) {
+            removedExternalIds.push(link.externalId);
+            removedSet.add(link.externalId);
+          }
+        }
+      }
       return {
         pushed: 0,
         cursor: {
-          addressBookUrl: prevCursor.addressBookUrl,
+          addressBookUrl: prevCursor.addressBookUrl ?? undefined,
           configuredUrl: prevCursor.configuredUrl ?? config.url,
+          bookSwitchPending: deferBookSwitchCleanup || undefined,
           syncToken: prevCursor.syncToken ?? null,
           etags,
+          cardHashes,
           pushedHashes,
           deletedHrefs: [],
           lastSyncAt: prevCursor.lastSyncAt,
@@ -1206,17 +1362,26 @@ ${hrefElements}
     }
 
     const auth = basicAuthHeader(config.username, secret.password);
-    const canReuseCursorBook =
-      Boolean(prevCursor.addressBookUrl) &&
-      (!prevCursor.configuredUrl || prevCursor.configuredUrl === config.url);
-    const addressBookUrl =
-      config.addressBookUrl ??
-      (canReuseCursorBook ? prevCursor.addressBookUrl! : undefined) ??
-      (await discoverAddressBook(config, secret, signal)).addressBookUrl;
+    const addressBookUrl = canReuseCursorBook
+      ? prevCursor.addressBookUrl!
+      : (await discoverAddressBook(config, secret, signal)).addressBookUrl;
 
     const linkByLocalId = new Map<string, string>();
+    const pendingSwitchLocalIds = new Set<string>();
     for (const link of ctx.links) {
-      if (link.localId && !removedSet.has(link.externalId)) {
+      if (removedSet.has(link.externalId)) continue;
+      if (activeBookSet && !activeBookSet.has(link.externalId)) {
+        removedExternalIds.push(link.externalId);
+        removedSet.add(link.externalId);
+        delete etags[link.externalId];
+        delete cardHashes[link.externalId];
+        continue;
+      }
+      if (deferBookSwitchCleanup) {
+        if (link.localId) pendingSwitchLocalIds.add(link.localId);
+        continue;
+      }
+      if (link.localId) {
         linkByLocalId.set(link.localId, link.externalId);
       }
     }
@@ -1234,6 +1399,9 @@ ${hrefElements}
 
     for (const contact of ctx.contacts) {
       signal.throwIfAborted();
+      if (pendingSwitchLocalIds.has(contact.id)) {
+        continue;
+      }
       const currentHash = vcardContentHash(contact.vcardInput);
       if (ctx.ingestedContactIds.has(contact.id)) {
         pushedHashes[contact.id] = currentHash;
@@ -1289,6 +1457,7 @@ ${hrefElements}
       const targetUrl = resolveUrl(addressBookUrl, targetHref);
 
       let vcardBody: string;
+      let getNotFound = false;
       if (linkedHref) {
         // GET the current server card first so we replace only the properties
         // Contrack owns and preserve PHOTO, NICKNAME, structured ADR, Apple
@@ -1305,7 +1474,10 @@ ${hrefElements}
               "CardDAV server rejected the credentials on push (HTTP 401)",
             );
           }
-          if (
+          if (getRes.status === 404 || getRes.status === 410) {
+            getNotFound = true;
+            delete etags[linkedHref];
+          } else if (
             getRes.status >= 200 &&
             getRes.status < 300 &&
             getRes.body.includes("BEGIN:VCARD")
@@ -1324,6 +1496,7 @@ ${hrefElements}
                 );
                 pushedHashes[contact.id] = currentHash;
                 delete etags[targetHref];
+                delete cardHashes[targetHref];
                 continue;
               }
             }
@@ -1334,8 +1507,16 @@ ${hrefElements}
 
         if (existingVCard) {
           vcardBody = patchVCard(existingVCard, contact.vcardInput);
+        } else if (getNotFound) {
+          vcardBody = serializeVCard({
+            ...contact.vcardInput,
+            uid: contact.id,
+          });
         } else {
-          vcardBody = serializeVCard(contact.vcardInput);
+          log(
+            `Skipped pushing contact ${contact.id} (could not fetch existing CardDAV card before update)`,
+          );
+          continue;
         }
       } else {
         vcardBody = serializeVCard({ ...contact.vcardInput, uid: contact.id });
@@ -1344,18 +1525,25 @@ ${hrefElements}
       const headers: Record<string, string> = {};
       if (linkedHref && etags[linkedHref] && !isWeakEtag(etags[linkedHref])) {
         headers["If-Match"] = formatEtagHeader(etags[linkedHref]);
-      } else if (!linkedHref) {
+      } else if (!linkedHref || getNotFound) {
         headers["If-None-Match"] = "*";
       }
 
-      const putRes = await davRequest(targetUrl, {
-        method: "PUT",
-        auth,
-        contentType: "text/vcard; charset=utf-8",
-        headers,
-        body: vcardBody,
-        signal,
-      });
+      let putRes: DavResponse;
+      try {
+        putRes = await davRequest(targetUrl, {
+          method: "PUT",
+          auth,
+          contentType: "text/vcard; charset=utf-8",
+          headers,
+          body: vcardBody,
+          signal,
+        });
+      } catch (err: unknown) {
+        if (err instanceof ConnectorAuthError) throw err;
+        log(`Skipped pushing contact ${contact.id}: ${(err as Error).message}`);
+        continue;
+      }
 
       if (putRes.status === 401) {
         throw new ConnectorAuthError(
@@ -1371,7 +1559,10 @@ ${hrefElements}
         log(
           `Skipped pushing contact ${contact.id} (CardDAV server returned HTTP ${putRes.status})`,
         );
-        pushedHashes[contact.id] = currentHash;
+        if (!getNotFound) {
+          pushedHashes[contact.id] = currentHash;
+          delete cardHashes[targetHref];
+        }
         if (putRes.status === 409 || putRes.status === 412) {
           delete etags[targetHref];
         }
@@ -1381,6 +1572,10 @@ ${hrefElements}
       if (putRes.status >= 200 && putRes.status < 300) {
         pushed++;
         pushedHashes[contact.id] = currentHash;
+        const { contacts: pushedParsed } = extractVCardContacts(vcardBody);
+        cardHashes[targetHref] = pushedParsed[0]
+          ? remoteCardHash(pushedParsed[0], pushedParsed[0].avatarUrl)
+          : currentHash;
         const responseEtag = cleanEtag(putRes.headers.get("etag"));
         if (responseEtag) {
           etags[targetHref] = responseEtag;
@@ -1396,8 +1591,10 @@ ${hrefElements}
       cursor: {
         addressBookUrl,
         configuredUrl: config.url,
+        bookSwitchPending: deferBookSwitchCleanup || undefined,
         syncToken: prevCursor.syncToken ?? null,
         etags,
+        cardHashes,
         pushedHashes,
         deletedHrefs: [],
         lastSyncAt: prevCursor.lastSyncAt,
