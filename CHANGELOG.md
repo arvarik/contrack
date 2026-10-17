@@ -9,35 +9,33 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- CardDAV connector for two-way or pull-only contact sync with Nextcloud,
+  iCloud, Fastmail, Radicale and Baïkal.
+
 ### Changed
 
-- The Google OAuth client row in Settings walks an admin through the five
-  Google Cloud steps, with the redirect address in the step that uses it, and
-  the Connect Google dialog says who sets it up and where.
+- Google OAuth setup in Settings now lists the five Google Cloud steps with the
+  redirect URL inline.
 
 ### Fixed
 
-- Settings: account profile and passkey forms normalize usernames and emails,
-  skip no-op renames, reject blank or unchanged passwords, refresh device
-  sessions after a password change, and show clear error messages on failure.
-- Import, Duplicates and Contact enrichment: empty or oversized import files are
-  rejected upfront, switching import tabs clears stale errors, duplicate check
-  and merge actions lock while running, and clearing a contact enrichment search
-  no longer flashes an empty state.
-- Tags, Lists, Archived contacts and Trash: Archived contacts and Trash add
-  filter bars, restoring an archived contact offers Undo, filtering prunes
-  hidden selections, and failed background refetches keep cached rows on screen.
-- Connectors, Correspondents and MCP: calendar links accept `webcal://`, IMAP
-  hosts strip `imaps://`, CardDAV and IMAP preserve spaces in passwords, and
-  Correspondents adds a search filter and prompts for a name when adding an
-  address-only person.
-- Administration: AI settings and Audit log keep cached data on screen when a
-  background refetch or page load fails, SMTP port checks reject non-decimal
-  strings, and invitation links validate email format when an address is typed.
-- Connectors: a failed sync is retried after its backoff, a Google contact that
-  matched one of yours is merged instead of written over, Gmail no longer loses
-  mail past the per-run cap, one mail in two IMAP folders counts once, and
-  all-day repeating meetings keep their ids when the server's time zone changes.
+- Account settings: normalize usernames and emails, reject blank or unchanged
+  passwords, and refresh sessions after a password change.
+- Import, Duplicates and Contact enrichment: validate empty or oversized import
+  files upfront and lock duplicate actions while running.
+- Tags, Lists, Archive and Trash: add search filters to Archived contacts and
+  Trash, add Undo to archive restore, and preserve cached rows on failed
+  refetches.
+- Connectors, Correspondents and MCP: accept `webcal://` calendar URLs and
+  `imaps://` hosts, add Correspondents search and name prompt, and harden
+  CardDAV address book discovery, remote deletion sync and echo-loop prevention.
+- Administration: preserve cached AI settings and Audit log entries on failed
+  refetches, and tighten SMTP port and invitation email validation.
+- Connectors: retry failed syncs after backoff, merge matched Google contacts,
+  keep Gmail messages past the per-run cap, deduplicate cross-folder IMAP mail,
+  and preserve all-day recurring event IDs across time zones.
 
 ## [2.0.0] - 2026-10-14
 

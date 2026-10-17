@@ -194,6 +194,25 @@ describe("Connect settings hardening", () => {
         isPending: false,
       } as unknown as ReturnType<typeof connectorsApi.useCreateConnector>);
 
+      const testMock = vi.fn().mockResolvedValue({
+        ok: true,
+        detail: "Connected to Personal",
+        addressBooks: [
+          {
+            url: "https://contacts.icloud.com/dav/personal/",
+            displayName: "Personal",
+          },
+          {
+            url: "https://contacts.icloud.com/dav/work/",
+            displayName: "Work",
+          },
+        ],
+      });
+      vi.mocked(connectorsApi.useTestConnector).mockReturnValue({
+        mutateAsync: testMock,
+        isPending: false,
+      } as unknown as ReturnType<typeof connectorsApi.useTestConnector>);
+
       const onClose = vi.fn();
       renderWithProviders(<CarddavFormModal isOpen={true} onClose={onClose} />);
 
@@ -230,6 +249,23 @@ describe("Connect settings hardening", () => {
       fireEvent.change(passInput, {
         target: { value: "abcd-efgh-ijkl-mnop " },
       });
+
+      // Test connection returning 2 address books shows the Address book selector,
+      // and changing the server URL clears the stale addressBookUrl selection
+      fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+      await waitFor(() => {
+        expect(screen.getByLabelText("Address book")).toBeTruthy();
+      });
+
+      // Changing the URL clears the discovered address books so stale URLs are not submitted
+      fireEvent.change(urlInput, {
+        target: { value: "https://cloud.example.com" },
+      });
+      expect(screen.queryByLabelText("Address book")).toBeNull();
+      fireEvent.change(urlInput, {
+        target: { value: "  https://contacts.icloud.com  " },
+      });
+
       fireEvent.click(screen.getByRole("button", { name: "Connect" }));
 
       await waitFor(() => {

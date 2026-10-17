@@ -157,6 +157,7 @@ const IMPORT_NAMES: Record<string, string> = {
   linkedin: "the user's LinkedIn connections",
   facebook: "the user's Facebook friends",
   google: "the user's Google contacts",
+  carddav: "the user's CardDAV contacts",
 };
 
 /**

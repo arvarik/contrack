@@ -635,6 +635,23 @@ ${itemResponses.join("\n")}
     );
     expect(okResult.addressBooks?.[1]?.readOnly).toBe(true);
 
+    // Passing a selected addressBookUrl on a subsequent test preserves the full list of address books
+    const secondBookUrl = okResult.addressBooks?.[1]?.url;
+    const selectedResult = await testConnector(
+      scope,
+      "carddav",
+      {
+        url: baseUrl,
+        username: VALID_USER,
+        addressBookUrl: secondBookUrl,
+        syncDirection: "pull_only",
+      },
+      { password: VALID_PASS },
+    );
+    expect(selectedResult.ok).toBe(true);
+    expect(selectedResult.detail).toBe("Connected to Recently contacted");
+    expect(selectedResult.addressBooks).toHaveLength(2);
+
     await expect(
       testConnector(
         scope,
@@ -978,6 +995,30 @@ ${itemResponses.join("\n")}
     expect(run9.status).toBe("ok");
     expect(run9.stats.pushed).toBeUndefined();
     expect(putRequests).toHaveLength(0);
+
+    // Run 10: Deleting a card on the CardDAV server moves the sync-created contact to trash
+    const noetherBefore = sqlite
+      .prepare(
+        "SELECT id, deletedAt FROM contacts WHERE ownerId = ? AND name = 'Emmy Noether'",
+      )
+      .get(ownerId) as { id: string; deletedAt: string | null } | undefined;
+    expect(noetherBefore).toBeDefined();
+    expect(noetherBefore?.deletedAt).toBeNull();
+
+    cards.set("/dav/addressbooks/alice/default/noether.vcf", {
+      etag: '"etag-noether-deleted"',
+      vcard: "",
+      deleted: true,
+    });
+    currentSyncToken = "http://sabredav.org/ns/sync/5";
+
+    const run10 = await runNow(scope, connector.id, "manual");
+    expect(run10.status).toBe("ok");
+    const noetherAfter = sqlite
+      .prepare("SELECT deletedAt FROM contacts WHERE id = ? AND ownerId = ?")
+      .get(noetherBefore!.id, ownerId) as
+      { deletedAt: string | null } | undefined;
+    expect(noetherAfter?.deletedAt).toBeTruthy();
   });
 
   it("correctly parses SQLite and ISO timestamps, weak ETags, and vCard content hashes", () => {

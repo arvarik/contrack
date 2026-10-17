@@ -146,7 +146,10 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
       });
       if (Array.isArray(res.addressBooks) && res.addressBooks.length > 0) {
         setAddressBooks(res.addressBooks);
-        if (!addressBookUrl && res.addressBooks[0]?.url) {
+        const stillValid = res.addressBooks.some(
+          (b) => b.url === addressBookUrl,
+        );
+        if ((!addressBookUrl || !stillValid) && res.addressBooks[0]?.url) {
           setAddressBookUrl(res.addressBooks[0].url);
         }
       }
@@ -266,6 +269,8 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
             value={url}
             onChange={(e) => {
               setUrl(e.target.value);
+              setAddressBookUrl("");
+              setAddressBooks([]);
               setTestResult(null);
               setFormError(null);
             }}
@@ -289,6 +294,8 @@ export const CarddavFormModal: React.FC<CarddavFormModalProps> = ({
             value={username}
             onChange={(e) => {
               setUsername(e.target.value);
+              setAddressBookUrl("");
+              setAddressBooks([]);
               setTestResult(null);
               setFormError(null);
             }}

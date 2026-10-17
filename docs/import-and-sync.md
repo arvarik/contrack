@@ -287,9 +287,10 @@ contacts are not uploaded unless you edit them). When updating a linked card,
 Contrack fetches the server's card first and updates only the properties
 Contrack manages, preserving server-side fields such as `PHOTO`, `NICKNAME`,
 structured `ADR` components, Apple labels, and `X-*` properties. If a card
-changed on the CardDAV server since the last sync, the server's version wins,
-and moving a contact to the Trash in Contrack never deletes the contact on your
-CardDAV server.
+changed on the CardDAV server since the last sync, the server's version wins.
+Deleting a contact on your CardDAV server moves a contact the sync created to
+the Trash and unlinks a matched one, while moving a contact to the Trash in
+Contrack never deletes the contact on your CardDAV server.
 
 ### Sync options
 
@@ -358,8 +359,8 @@ when each started, how long it took, what it brought in, and any error.
 
 **Remove** stops the connector and keeps what it brought in. To delete that
 too, tick "Also delete the interactions it brought in, and the people it found
-who are not contacts". The contacts that a Google connector brought in from
-Google Contacts stay either way.
+who are not contacts". The contacts that a Google or CardDAV connector brought
+in stay either way.
 
 ### What connectors read and store
 
@@ -369,11 +370,13 @@ Google Contacts stay either way.
   only for an AI summary of a message with one of your contacts.
 - **Google:** contacts with their photos, calendar events, and Gmail headers.
   Message bodies only for AI summaries.
+- **CardDAV:** contacts with their photos. In two-way mode, contacts you add
+  or edit after connecting are also written back to the address book.
 
-Contrack stores the mailbox password and the Google sign-in encrypted with the
-instance's key. The key is the file `secret.key` in the data folder, or the
-`CONTRACK_SECRET_KEY` variable. Backups hold the database but not the key, so
-keep a copy of `secret.key` with them, see
+Contrack stores the mailbox password, the CardDAV password, and the Google
+sign-in encrypted with the instance's key. The key is the file `secret.key` in
+the data folder, or the `CONTRACK_SECRET_KEY` variable. Backups hold the
+database but not the key, so keep a copy of `secret.key` with them, see
 [Backups and restore](self-hosting.md#backups-and-restore). Without the key,
 connectors cannot read their stored credentials, and they show **Signed out**.
 Contrack stores the private calendar address in the database as it is. Treat

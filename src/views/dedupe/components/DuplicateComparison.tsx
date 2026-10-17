@@ -78,7 +78,9 @@ const platformName = (platform: string) =>
     ? "LinkedIn"
     : platform === "github"
       ? "GitHub"
-      : platform.charAt(0).toUpperCase() + platform.slice(1);
+      : platform === "carddav"
+        ? "CardDAV"
+        : platform.charAt(0).toUpperCase() + platform.slice(1);
 
 /** An email or a link that wraps after its "@" and dots, not mid-word. */
 export const breakable = (text: string) =>
