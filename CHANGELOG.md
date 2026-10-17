@@ -9,6 +9,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-16
+
 ### Added
 
 - CardDAV connector for two-way or pull-only contact sync with Nextcloud,
@@ -266,7 +268,8 @@ server.
 The first release: a local-first personal CRM with contact management,
 semantic search, AI enrichment and duplicate detection.
 
-[unreleased]: https://github.com/arvarik/contrack/compare/v2.0.0...HEAD
+[unreleased]: https://github.com/arvarik/contrack/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/arvarik/contrack/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/arvarik/contrack/compare/v1.5.5...v2.0.0
 [1.5.5]: https://github.com/arvarik/contrack/compare/v1.5.4...v1.5.5
 [1.5.4]: https://github.com/arvarik/contrack/compare/v1.5.3...v1.5.4

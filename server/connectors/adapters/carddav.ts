@@ -53,6 +53,7 @@ export type CarddavSecret = z.infer<typeof carddavSecretSchema>;
 export interface CarddavCursor {
   addressBookUrl?: string;
   configuredUrl?: string;
+  bookSwitchPending?: boolean;
   activeBookHrefs?: string[];
   syncToken?: string | null;
   etags?: Record<string, string>;
@@ -893,6 +894,8 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
           sameAddressBookUrl(prevCursor.configuredUrl, config.url)) &&
         sameAddressBookUrl(prevCursor.addressBookUrl, addressBookUrl);
     const switchedBook = Boolean(prevCursor.addressBookUrl) && !sameBook;
+    const needsBookCleanup =
+      switchedBook || Boolean(prevCursor.bookSwitchPending);
 
     const prevEtags: Record<string, string> = sameBook
       ? { ...(prevCursor.etags ?? {}) }
@@ -914,7 +917,7 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
 
     // 1. Try incremental RFC 6578 sync-collection REPORT if we have a syncToken,
     // following 507 Insufficient Storage truncation pages within the same run.
-    if (nextSyncToken) {
+    if (nextSyncToken && !needsBookCleanup) {
       let currentToken: string = nextSyncToken;
       for (let page = 0; page < MAX_SYNC_PAGES; page++) {
         signal.throwIfAborted();
@@ -1079,7 +1082,7 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
         }
       }
 
-      if (switchedBook && !has507Truncation) {
+      if (needsBookCleanup && !has507Truncation && seenHrefs.size > 0) {
         activeBookHrefs = Array.from(seenHrefs);
       }
 
@@ -1268,6 +1271,7 @@ ${hrefElements}
     return {
       addressBookUrl,
       configuredUrl: config.url,
+      bookSwitchPending: needsBookCleanup || undefined,
       activeBookHrefs,
       syncToken: nextSyncToken,
       etags: nextEtags,
@@ -1305,6 +1309,8 @@ ${hrefElements}
     const activeBookSet = prevCursor.activeBookHrefs
       ? new Set(prevCursor.activeBookHrefs)
       : null;
+    const deferBookSwitchCleanup =
+      Boolean(prevCursor.bookSwitchPending) && !activeBookSet;
 
     // Keep pushedHashes pruned to only active contacts in ctx.contacts
     for (const contact of ctx.contacts) {
@@ -1338,6 +1344,7 @@ ${hrefElements}
         cursor: {
           addressBookUrl: prevCursor.addressBookUrl ?? undefined,
           configuredUrl: prevCursor.configuredUrl ?? config.url,
+          bookSwitchPending: deferBookSwitchCleanup || undefined,
           syncToken: prevCursor.syncToken ?? null,
           etags,
           cardHashes,
@@ -1360,6 +1367,7 @@ ${hrefElements}
       : (await discoverAddressBook(config, secret, signal)).addressBookUrl;
 
     const linkByLocalId = new Map<string, string>();
+    const pendingSwitchLocalIds = new Set<string>();
     for (const link of ctx.links) {
       if (removedSet.has(link.externalId)) continue;
       if (activeBookSet && !activeBookSet.has(link.externalId)) {
@@ -1367,6 +1375,10 @@ ${hrefElements}
         removedSet.add(link.externalId);
         delete etags[link.externalId];
         delete cardHashes[link.externalId];
+        continue;
+      }
+      if (deferBookSwitchCleanup) {
+        if (link.localId) pendingSwitchLocalIds.add(link.localId);
         continue;
       }
       if (link.localId) {
@@ -1387,6 +1399,9 @@ ${hrefElements}
 
     for (const contact of ctx.contacts) {
       signal.throwIfAborted();
+      if (pendingSwitchLocalIds.has(contact.id)) {
+        continue;
+      }
       const currentHash = vcardContentHash(contact.vcardInput);
       if (ctx.ingestedContactIds.has(contact.id)) {
         pushedHashes[contact.id] = currentHash;
@@ -1442,12 +1457,12 @@ ${hrefElements}
       const targetUrl = resolveUrl(addressBookUrl, targetHref);
 
       let vcardBody: string;
+      let getNotFound = false;
       if (linkedHref) {
         // GET the current server card first so we replace only the properties
         // Contrack owns and preserve PHOTO, NICKNAME, structured ADR, Apple
         // labels, UID, and every X-* property.
         let existingVCard: string | null = null;
-        let getNotFound = false;
         try {
           const getRes = await davRequest(targetUrl, {
             method: "GET",
@@ -1510,7 +1525,7 @@ ${hrefElements}
       const headers: Record<string, string> = {};
       if (linkedHref && etags[linkedHref] && !isWeakEtag(etags[linkedHref])) {
         headers["If-Match"] = formatEtagHeader(etags[linkedHref]);
-      } else if (!linkedHref) {
+      } else if (!linkedHref || getNotFound) {
         headers["If-None-Match"] = "*";
       }
 
@@ -1544,8 +1559,10 @@ ${hrefElements}
         log(
           `Skipped pushing contact ${contact.id} (CardDAV server returned HTTP ${putRes.status})`,
         );
-        pushedHashes[contact.id] = currentHash;
-        delete cardHashes[targetHref];
+        if (!getNotFound) {
+          pushedHashes[contact.id] = currentHash;
+          delete cardHashes[targetHref];
+        }
         if (putRes.status === 409 || putRes.status === 412) {
           delete etags[targetHref];
         }
@@ -1574,6 +1591,7 @@ ${hrefElements}
       cursor: {
         addressBookUrl,
         configuredUrl: config.url,
+        bookSwitchPending: deferBookSwitchCleanup || undefined,
         syncToken: prevCursor.syncToken ?? null,
         etags,
         cardHashes,
