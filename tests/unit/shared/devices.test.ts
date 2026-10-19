@@ -7,6 +7,7 @@ describe("describeSessionMethod", () => {
     expect(describeSessionMethod("passkey")).toBe("Passkey");
     // The server writes "email-link" for a reset link and a sign-in link.
     expect(describeSessionMethod("email-link")).toBe("Emailed link");
+    expect(describeSessionMethod("oidc")).toBe("Single sign-on");
   });
 
   it("reads a session with no recorded method as a password", () => {

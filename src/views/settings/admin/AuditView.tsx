@@ -86,6 +86,16 @@ const LOOK: Record<
     tone: "neutral",
     label: "Passkey removed",
   },
+  "auth.oidc.linked": {
+    icon: LogIn,
+    tone: "primary",
+    label: "Linked single sign-on",
+  },
+  "auth.oidc.unlinked": {
+    icon: LogIn,
+    tone: "neutral",
+    label: "Unlinked single sign-on",
+  },
   "auth.token.created": {
     icon: Terminal,
     tone: "primary",

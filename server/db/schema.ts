@@ -277,6 +277,25 @@ export const passkeys = sqliteTable("passkeys", {
   lastUsedAt: text("lastUsedAt"),
 });
 
+/** user_identities: an OIDC provider's (issuer, subject) linked to an account. */
+export const userIdentities = sqliteTable(
+  "user_identities",
+  {
+    id: text("id").primaryKey(),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    issuer: text("issuer").notNull(),
+    subject: text("subject").notNull(),
+    email: text("email"),
+    createdAt: text("createdAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+    lastUsedAt: text("lastUsedAt"),
+  },
+  (t) => [unique().on(t.issuer, t.subject), unique().on(t.userId, t.issuer)],
+);
+
 /** auth_challenges: short-lived WebAuthn ceremony challenges. */
 export const authChallenges = sqliteTable("auth_challenges", {
   id: text("id").primaryKey(),

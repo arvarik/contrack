@@ -5,12 +5,13 @@
  * `sessions.method`, and the Devices list names each. A new way to sign in
  * needs a label here, which the compiler asks for.
  */
-export type SessionMethod = "password" | "passkey" | "email-link";
+export type SessionMethod = "password" | "passkey" | "email-link" | "oidc";
 
 const SESSION_METHOD_LABELS: Record<SessionMethod, string> = {
   password: "Password",
   passkey: "Passkey",
   "email-link": "Emailed link",
+  oidc: "Single sign-on",
 };
 
 /**
