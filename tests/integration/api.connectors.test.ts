@@ -295,6 +295,15 @@ describe("Connectors API (/api/connectors)", () => {
       .send({ secret });
     expect(updated.status).toBe(200);
     expect(updated.body).toMatchObject({ status: "error", lastError });
+
+    // Once the server answers again, saving the password clears the error.
+    testShouldThrowUnavailable = false;
+    const recovered = await request(server)
+      .patch(`/api/connectors/${created.body.id}`)
+      .set("Cookie", actorA.cookie)
+      .send({ secret });
+    expect(recovered.status).toBe(200);
+    expect(recovered.body).toMatchObject({ status: "active", lastError: null });
   });
 
   it("POST /test uses the saved secret only for the same destination", async () => {

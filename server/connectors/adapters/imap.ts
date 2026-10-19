@@ -245,12 +245,21 @@ function imapRefusal(err: unknown): "auth" | "temporary" | null {
 
 function imapErrorMessage(err: unknown): string {
   if (!err || typeof err !== "object") return String(err);
-  const error = err as { message?: string; responseText?: string };
+  const error = err as {
+    message?: string;
+    responseText?: string;
+    serverResponseCode?: string;
+    responseCode?: string;
+  };
   if (
     error.responseText &&
     (!error.message || error.message === "Command failed")
   ) {
     return error.responseText;
+  }
+  const code = error.serverResponseCode ?? error.responseCode;
+  if (code && (!error.message || error.message === "Command failed")) {
+    return code;
   }
   return error.message || "Unknown IMAP error";
 }

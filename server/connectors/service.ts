@@ -407,7 +407,10 @@ export async function updateConnector(
         nextAttempts = 0;
         nextError = unavailable.message;
         nextRunAt = oneIntervalFromNow(nextInterval);
-      } else if (!unavailable && nextStatus === "needs_reauth") {
+      } else if (
+        !unavailable &&
+        (nextStatus === "needs_reauth" || nextStatus === "error")
+      ) {
         // Reset error state if reconnected
         nextStatus = "active";
         nextAttempts = 0;

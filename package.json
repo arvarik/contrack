@@ -1,6 +1,6 @@
 {
   "name": "contrack",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Self-hosted contact management, relationship tracking, local semantic search, and optional AI enrichment.",
   "private": true,
   "type": "module",
