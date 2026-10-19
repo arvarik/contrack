@@ -92,6 +92,7 @@ import {
 } from "../services/authLinkService.ts";
 import { snapshotFile, rescheduleBackups } from "../services/backupService.ts";
 import { exportFileSlug } from "../services/exportService.ts";
+import { forgetOidcDiscovery } from "../services/oidcService.ts";
 
 const router = Router();
 
@@ -527,6 +528,7 @@ router.put(
         );
       }
       setOidcConfig(req.body.oidc);
+      forgetOidcDiscovery();
       changed.push("oidc");
     }
 
