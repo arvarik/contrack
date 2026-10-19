@@ -9,6 +9,7 @@
  * - Inline sync when DISABLE_BACKGROUND_JOBS=true
  * - Exponential backoff on transient error
  * - ConnectorAuthError transitions connector to needs_reauth and records audit log
+ * - A busy server still saves the connector, in error, to retry later
  */
 
 import crypto from "node:crypto";
@@ -21,7 +22,10 @@ import { createToken } from "../../server/services/apiTokenService.ts";
 import { getUserById } from "../../server/services/authService.ts";
 import { sqlite } from "../../server/db.ts";
 import { registerAdapter } from "../../server/connectors/registry.ts";
-import { ConnectorAuthError } from "../../server/connectors/errors.ts";
+import {
+  ConnectorAuthError,
+  ConnectorUnavailableError,
+} from "../../server/connectors/errors.ts";
 import type {
   ConnectorAdapter,
   SyncContext,
@@ -37,6 +41,8 @@ describe("Connectors API (/api/connectors)", () => {
 
   // Mock test adapter for controlled errors & sync events
   const mockAdapterKind = "mock-test";
+  let testShouldThrowAuthError = false;
+  let testShouldThrowUnavailable = false;
   let syncShouldThrowAuthError = false;
   let syncShouldThrowGenericError = false;
 
@@ -56,6 +62,16 @@ describe("Connectors API (/api/connectors)", () => {
       secretKey: z.string().optional(),
     }),
     async test(_config, secret) {
+      if (testShouldThrowAuthError) {
+        throw new ConnectorAuthError(
+          "IMAP authentication failed: Invalid credentials",
+        );
+      }
+      if (testShouldThrowUnavailable) {
+        throw new ConnectorUnavailableError(
+          "IMAP server is unavailable for now: Temporary maintenance",
+        );
+      }
       return {
         ok: true,
         detail: secret
@@ -117,6 +133,8 @@ describe("Connectors API (/api/connectors)", () => {
   });
 
   beforeEach(() => {
+    testShouldThrowAuthError = false;
+    testShouldThrowUnavailable = false;
     syncShouldThrowAuthError = false;
     syncShouldThrowGenericError = false;
   });
@@ -203,6 +221,80 @@ describe("Connectors API (/api/connectors)", () => {
       }
     ).c;
     expect(countAfter).toBe(countBefore);
+  });
+
+  it("answers 400 CONNECTOR_AUTH_ERROR (not 401) when remote connector credentials fail", async () => {
+    testShouldThrowAuthError = true;
+
+    for (const [path, body] of [
+      [
+        "/api/connectors/test",
+        {
+          kind: mockAdapterKind,
+          config: { host: "mail.example.com" },
+          secret: { secretKey: "wrong" },
+        },
+      ],
+      [
+        "/api/connectors",
+        {
+          kind: mockAdapterKind,
+          name: "Bad Creds",
+          config: { host: "mail.example.com" },
+          secret: { secretKey: "wrong" },
+        },
+      ],
+    ] as const) {
+      const res = await request(server)
+        .post(path)
+        .set("Cookie", actorA.cookie)
+        .send(body);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatchObject({
+        code: "CONNECTOR_AUTH_ERROR",
+        message: "IMAP authentication failed: Invalid credentials",
+      });
+    }
+  });
+
+  it("saves a connector in error, to retry later, when its server is busy", async () => {
+    testShouldThrowUnavailable = true;
+    const config = { host: "busy.example.com" };
+    const secret = { secretKey: "unproven" };
+    const lastError =
+      "IMAP server is unavailable for now: Temporary maintenance";
+
+    const tested = await request(server)
+      .post("/api/connectors/test")
+      .set("Cookie", actorA.cookie)
+      .send({ kind: mockAdapterKind, config, secret });
+    expect(tested.status).toBe(503);
+    expect(tested.body.error.code).toBe("CONNECTOR_UNAVAILABLE");
+
+    const created = await request(server)
+      .post("/api/connectors")
+      .set("Cookie", actorA.cookie)
+      .send({ kind: mockAdapterKind, name: "Busy", config, secret });
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({
+      status: "error",
+      secretPresent: true,
+      lastError,
+    });
+    expect(Date.parse(created.body.nextRunAt)).toBeGreaterThan(Date.now());
+
+    // A new password for a signed-out connector is saved the same way.
+    sqlite
+      .prepare(
+        "UPDATE connectors SET status = 'needs_reauth', lastError = NULL WHERE id = ?",
+      )
+      .run(created.body.id);
+    const updated = await request(server)
+      .patch(`/api/connectors/${created.body.id}`)
+      .set("Cookie", actorA.cookie)
+      .send({ secret });
+    expect(updated.status).toBe(200);
+    expect(updated.body).toMatchObject({ status: "error", lastError });
   });
 
   it("POST /test uses the saved secret only for the same destination", async () => {

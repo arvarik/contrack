@@ -24,7 +24,7 @@ import type {
   RunStats,
 } from "../../shared/connectors.ts";
 import { getAdapter } from "./registry.ts";
-import { ConnectorAuthError } from "./errors.ts";
+import { ConnectorAuthError, ConnectorUnavailableError } from "./errors.ts";
 import { buildContactMatcher } from "./matching.ts";
 import { ingestStream } from "./ingest.ts";
 import type { SyncContext, SyncEvent } from "./types.ts";
@@ -232,6 +232,28 @@ function savedSecret(
   }
 }
 
+/**
+ * Waits for the adapter's check before a save. A server that is busy or down
+ * for maintenance says nothing about the credentials, so the save goes ahead
+ * and the refusal comes back to be saved as the connector's error.
+ */
+async function testBeforeSave(
+  check: Promise<unknown>,
+): Promise<ConnectorUnavailableError | null> {
+  try {
+    await check;
+    return null;
+  } catch (err) {
+    if (err instanceof ConnectorUnavailableError) return err;
+    throw err;
+  }
+}
+
+/** The run time one interval from now, for a server that said "not now". */
+function oneIntervalFromNow(intervalMinutes: number): string {
+  return new Date(Date.now() + intervalMinutes * 60_000).toISOString();
+}
+
 export async function createConnector(
   scope: Scope,
   input: {
@@ -259,7 +281,9 @@ export async function createConnector(
   }
 
   // Validate credentials before saving
-  await adapter.test(parsedConfig, parsedSecret);
+  const unavailable = await testBeforeSave(
+    adapter.test(parsedConfig, parsedSecret),
+  );
 
   let sealedSecret: string | null = null;
   if (parsedSecret !== null) {
@@ -273,18 +297,20 @@ export async function createConnector(
   sqlite
     .prepare(
       `INSERT INTO connectors (
-        id, ownerId, kind, name, status, config, secret, intervalMinutes, attempts, nextRunAt, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, 'active', ?, ?, ?, 0, ?, ?, ?)`,
+        id, ownerId, kind, name, status, config, secret, intervalMinutes, attempts, nextRunAt, lastError, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
     )
     .run(
       id,
       scope.ownerId,
       input.kind,
       input.name.trim(),
+      unavailable ? "error" : "active",
       JSON.stringify(parsedConfig),
       sealedSecret,
       interval,
-      nowIso,
+      unavailable ? oneIntervalFromNow(interval) : nowIso,
+      unavailable?.message ?? null,
       nowIso,
       nowIso,
     );
@@ -371,11 +397,18 @@ export async function updateConnector(
       const parsedSecret = adapter.secretSchema.parse(updates.secret);
       // Prove new credentials
       const currentConfig = JSON.parse(nextConfig);
-      await adapter.test(currentConfig, parsedSecret);
+      const unavailable = await testBeforeSave(
+        adapter.test(currentConfig, parsedSecret),
+      );
       nextSecret = secretBox.seal(JSON.stringify(parsedSecret));
 
-      // Reset error state if reconnected
-      if (nextStatus === "needs_reauth") {
+      if (unavailable && nextStatus !== "paused") {
+        nextStatus = "error";
+        nextAttempts = 0;
+        nextError = unavailable.message;
+        nextRunAt = oneIntervalFromNow(nextInterval);
+      } else if (!unavailable && nextStatus === "needs_reauth") {
+        // Reset error state if reconnected
         nextStatus = "active";
         nextAttempts = 0;
         nextError = null;

@@ -138,6 +138,11 @@ To add a connector:
 
 The first sync starts within about a minute. **Sync now** starts one at once.
 
+If a mail server answers that it is busy or down for maintenance, Contrack
+saves the mailbox anyway. Its card shows **Error** with the server's message,
+and Contrack tries again after one sync interval. A wrong password is not
+saved.
+
 The **Calendar**, **Mailbox (IMAP)**, and **CardDAV** connectors refuse an
 address on a private network, such as a server in your home. The server
 variable `CONNECTORS_ALLOW_PRIVATE_HOSTS=true` turns this check off, see the

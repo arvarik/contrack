@@ -117,10 +117,11 @@ export function isNetworkError(error: unknown): boolean {
 /** Tells the app about a refusal that changes which screen it shows. */
 function announce(status: number, code: string | undefined): void {
   if (status === 401) {
-    // `INVALID_CREDENTIALS` is a wrong password typed into a form, not an
-    // expiry: the session is fine. On the forced-change screen, treating it
-    // as an expiry loops back to the same form.
-    if (code === "INVALID_CREDENTIALS") return;
+    // Only `UNAUTHORIZED` (or an unlabelled 401) means the browser's own
+    // session expired. A route-specific 401 (`INVALID_CREDENTIALS` on password
+    // change, `CONNECTOR_AUTH_ERROR`, `PASSKEY_VERIFICATION_FAILED`) is a
+    // form-level refusal, not a sign-out.
+    if (code && code !== "UNAUTHORIZED") return;
     emitAuthExpired("expired");
     return;
   }

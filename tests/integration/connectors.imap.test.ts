@@ -25,10 +25,7 @@ import {
   imapAdapter,
   summaryPart,
 } from "../../server/connectors/adapters/imap.ts";
-import {
-  ConnectorAuthError,
-  ConnectorConfigError,
-} from "../../server/connectors/errors.ts";
+import { ConnectorConfigError } from "../../server/connectors/errors.ts";
 import { createConnector, runNow } from "../../server/connectors/service.ts";
 import { sqlite } from "../../server/db.ts";
 import { scopeForOwnerId, type Scope } from "../../server/tenancy/scope.ts";
@@ -40,6 +37,8 @@ describe("IMAP Adapter Integration", () => {
   let server: net.Server;
   let serverPort: number;
   let authFail = false;
+  /** The text after `NO` that the fake server sends to LOGIN, if any. */
+  let loginRefusal: string | null = null;
   let folderUidValidity = 12345;
   /** Message bodies the fake server sent: only a summary needs one. */
   let bodyFetches = 0;
@@ -84,7 +83,9 @@ describe("IMAP Adapter Integration", () => {
           const rest = parts.slice(2).join(" ");
 
           if (cmd === "LOGIN") {
-            if (authFail || rest.includes("badpassword")) {
+            if (loginRefusal) {
+              socket.write(`${tag} NO ${loginRefusal}\r\n`);
+            } else if (authFail || rest.includes("badpassword")) {
               socket.write(
                 `${tag} NO [AUTHENTICATIONFAILED] Invalid credentials\r\n`,
               );
@@ -173,6 +174,7 @@ describe("IMAP Adapter Integration", () => {
 
   beforeEach(() => {
     authFail = false;
+    loginRefusal = null;
     resetOnFetch = false;
     bogusDate = false;
     searchCommands.length = 0;
@@ -200,7 +202,7 @@ describe("IMAP Adapter Integration", () => {
     expect(result.detail).toContain("Connected successfully");
   });
 
-  it("test() throws ConnectorAuthError with invalid credentials", async () => {
+  it("test() throws ConnectorAuthError with the server's responseText on invalid credentials", async () => {
     authFail = true;
     await expect(
       imapAdapter.test(
@@ -218,8 +220,56 @@ describe("IMAP Adapter Integration", () => {
         },
         { password: "badpassword" },
       ),
-    ).rejects.toThrow(ConnectorAuthError);
+    ).rejects.toMatchObject({
+      name: "ConnectorAuthError",
+      statusCode: 400,
+      message: "IMAP authentication failed: Invalid credentials",
+    });
   });
+
+  it.each([
+    [
+      "[UNAVAILABLE] Temporary maintenance",
+      "ConnectorUnavailableError",
+      503,
+      "IMAP server is unavailable for now: Temporary maintenance",
+    ],
+    [
+      // Gmail's connection limit carries no RFC 5530 code.
+      "[ALERT] Too many simultaneous connections. (Failure)",
+      "ConnectorUnavailableError",
+      503,
+      "IMAP server is unavailable for now: Too many simultaneous connections. (Failure)",
+    ],
+    [
+      "[ALERT] Application-specific password required",
+      "ConnectorAuthError",
+      400,
+      "IMAP authentication failed: Application-specific password required",
+    ],
+  ])(
+    "test() reads a LOGIN refusal of %s as %s",
+    async (refusal, name, statusCode, message) => {
+      loginRefusal = refusal;
+      await expect(
+        imapAdapter.test(
+          {
+            host: "127.0.0.1",
+            port: serverPort,
+            secure: false,
+            username: "me@example.com",
+            lookbackDays: 90,
+            rollup: true,
+            ghostThreshold: 3,
+            maxMessagesPerFolder: 5000,
+            aliases: [],
+            summaries: false,
+          },
+          { password: "goodpassword" },
+        ),
+      ).rejects.toMatchObject({ name, statusCode, message });
+    },
+  );
 
   it("asserts safe host when private hosts not allowed", async () => {
     delete process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS;

@@ -14,7 +14,12 @@ import { z } from "zod";
 import { isPrivateAddress } from "../../utils/urlSafety.ts";
 import { log } from "../../utils/logger.ts";
 import { pageText } from "../../services/research/pages.ts";
-import { ConnectorAuthError, ConnectorConfigError } from "../errors.ts";
+import {
+  ConnectorAuthError,
+  ConnectorConfigError,
+  ConnectorUnavailableError,
+  type ConnectorError,
+} from "../errors.ts";
 import { mailDate, normalizeEmail } from "../email/normalize.ts";
 import {
   summarizeEmail,
@@ -191,22 +196,80 @@ async function summaryText(
   return (found.html ? pageText(body) : body.trim()) ?? "";
 }
 
-function isAuthError(err: unknown): boolean {
-  if (!err || typeof err !== "object") return false;
+/** RFC 5530 codes that mean "not now", not "wrong password". */
+const TEMPORARY_IMAP_CODES = new Set([
+  "UNAVAILABLE",
+  "INUSE",
+  "LIMIT",
+  "SERVERBUG",
+  "OVERQUOTA",
+]);
+
+/**
+ * Why the server refused: the credentials, a temporary state, or neither. A
+ * response code decides first. Without one, the words do: Gmail sends its
+ * connection limit as `NO [ALERT] Too many simultaneous connections`, and
+ * imapflow marks every refused LOGIN `authenticationFailed`.
+ */
+function imapRefusal(err: unknown): "auth" | "temporary" | null {
+  if (!err || typeof err !== "object") return null;
   const error = err as {
     authenticationFailed?: boolean;
     responseCode?: string;
+    serverResponseCode?: string;
+    responseText?: string;
     message?: string;
   };
-  if (error.authenticationFailed) return true;
-  if (error.responseCode === "AUTHENTICATIONFAILED") return true;
-  const msg = error.message?.toLowerCase() || "";
-  return (
+  const code = (
+    error.serverResponseCode ??
+    error.responseCode ??
+    ""
+  ).toUpperCase();
+  if (TEMPORARY_IMAP_CODES.has(code)) return "temporary";
+  if (code === "AUTHENTICATIONFAILED" || code === "AUTHORIZATIONFAILED") {
+    return "auth";
+  }
+  const msg =
+    `${error.message ?? ""} ${error.responseText ?? ""}`.toLowerCase();
+  if (
     msg.includes("authentication failed") ||
     msg.includes("invalid credentials") ||
     msg.includes("login failed") ||
     msg.includes("auth error")
-  );
+  ) {
+    return "auth";
+  }
+  if (/too many (simultaneous )?connections/.test(msg)) return "temporary";
+  return error.authenticationFailed ? "auth" : null;
+}
+
+function imapErrorMessage(err: unknown): string {
+  if (!err || typeof err !== "object") return String(err);
+  const error = err as { message?: string; responseText?: string };
+  if (
+    error.responseText &&
+    (!error.message || error.message === "Command failed")
+  ) {
+    return error.responseText;
+  }
+  return error.message || "Unknown IMAP error";
+}
+
+/** The connector error for a failed connect or login. */
+function connectError(err: unknown): ConnectorError {
+  const message = imapErrorMessage(err);
+  switch (imapRefusal(err)) {
+    case "auth":
+      return new ConnectorAuthError(`IMAP authentication failed: ${message}`);
+    case "temporary":
+      return new ConnectorUnavailableError(
+        `IMAP server is unavailable for now: ${message}`,
+      );
+    default:
+      return new ConnectorConfigError(
+        `Failed to connect to IMAP server: ${message}`,
+      );
+  }
 }
 
 export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
@@ -252,14 +315,7 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
         // Ignore logout errors after failure
       }
 
-      if (isAuthError(err)) {
-        throw new ConnectorAuthError(
-          `IMAP authentication failed: ${(err as Error).message}`,
-        );
-      }
-      throw new ConnectorConfigError(
-        `Failed to connect to IMAP server: ${(err as Error).message}`,
-      );
+      throw connectError(err);
     }
   },
 
@@ -284,14 +340,7 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
     try {
       await client.connect();
     } catch (err: unknown) {
-      if (isAuthError(err)) {
-        throw new ConnectorAuthError(
-          `IMAP authentication failed: ${(err as Error).message}`,
-        );
-      }
-      throw new ConnectorConfigError(
-        `Failed to connect to IMAP server: ${(err as Error).message}`,
-      );
+      throw connectError(err);
     }
 
     try {
@@ -353,14 +402,14 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
           lock = await client.getMailboxLock(folder);
         } catch (err) {
           signal.throwIfAborted();
-          if (isAuthError(err)) {
+          if (imapRefusal(err) === "auth") {
             throw new ConnectorAuthError(
-              `IMAP authentication failed on folder ${folder}: ${(err as Error).message}`,
+              `IMAP authentication failed on folder ${folder}: ${imapErrorMessage(err)}`,
             );
           }
           foldersFailed++;
           firstFolderError ??= err as Error;
-          ctx.log(`Could not open folder ${folder}: ${(err as Error).message}`);
+          ctx.log(`Could not open folder ${folder}: ${imapErrorMessage(err)}`);
           continue;
         }
 
@@ -558,7 +607,7 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
 
       if (foldersFailed > 0 && foldersSucceeded === 0 && firstFolderError) {
         throw new ConnectorConfigError(
-          `Could not open any configured IMAP folder: ${firstFolderError.message}`,
+          `Could not open any configured IMAP folder: ${imapErrorMessage(firstFolderError)}`,
         );
       }
 
