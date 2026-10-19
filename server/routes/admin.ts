@@ -36,6 +36,8 @@ import {
   getIntegrationsStatus,
   setGoogleOAuthCredentials,
   isGoogleOAuthEnvSet,
+  setOidcConfig,
+  isOidcEnvSet,
 } from "../services/integrationSettings.ts";
 import { SETTING_KEYS } from "../services/settingsService.ts";
 import {
@@ -60,6 +62,7 @@ import { AUDIT_ACTIONS, auditService } from "../services/auditService.ts";
 import {
   googleCallbackUrl,
   mailLinkOrigin,
+  oidcCallbackUrl,
   publicOrigin,
 } from "../utils/publicOrigin.ts";
 import { mailService } from "../services/mailService.ts";
@@ -477,12 +480,13 @@ router.put(
 
 // Integrations
 
-/** The integrations, with the Google redirect address this server sends. */
+/** The integrations, with the redirect addresses this server sends. */
 function integrationsFor(req: Request) {
   const status = getIntegrationsStatus();
   return {
     ...status,
     googleOAuth: { ...status.googleOAuth, redirectUri: googleCallbackUrl(req) },
+    oidc: { ...status.oidc, redirectUri: oidcCallbackUrl(req) },
   };
 }
 
@@ -512,6 +516,18 @@ router.put(
       }
       setGoogleOAuthCredentials(req.body.googleOAuth);
       changed.push("googleOAuth");
+    }
+
+    if (req.body.oidc !== undefined) {
+      if (isOidcEnvSet()) {
+        throw new AppError(
+          "The OIDC provider is set by environment variables OIDC_ISSUER, OIDC_CLIENT_ID and OIDC_CLIENT_SECRET",
+          409,
+          { code: "SET_BY_ENVIRONMENT" },
+        );
+      }
+      setOidcConfig(req.body.oidc);
+      changed.push("oidc");
     }
 
     const ctx = adminContext(req);

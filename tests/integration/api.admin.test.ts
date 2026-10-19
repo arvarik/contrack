@@ -2082,6 +2082,18 @@ describe("instance lifecycle and integration settings (P4)", () => {
         clientSecretPreview: null,
         redirectUri,
       },
+      oidc: {
+        configured: false,
+        source: "none",
+        issuer: null,
+        clientId: null,
+        clientSecretPreview: null,
+        name: null,
+        matchByEmail: true,
+        redirectUri: expect.stringMatching(
+          /^http:\/\/[^/]+\/api\/auth\/oidc\/callback$/,
+        ),
+      },
     });
 
     // 2. PUT the Google OAuth client
@@ -2103,6 +2115,7 @@ describe("instance lifecycle and integration settings (P4)", () => {
         clientSecretPreview: "••••2345",
         redirectUri,
       },
+      oidc: initial.body.oidc,
     };
     expect(putRes.body).toEqual(configured);
 
@@ -2174,12 +2187,79 @@ describe("instance lifecycle and integration settings (P4)", () => {
       }),
     );
     expect(beside.status).toBe(200);
-    expect(Object.keys(beside.body)).toEqual(["googleOAuth"]);
+    expect(Object.keys(beside.body)).toEqual(["googleOAuth", "oidc"]);
     expect(beside.body.googleOAuth.source).toBe("none");
 
     const stray = sqlite
       .prepare("SELECT 1 FROM app_settings WHERE key = 'geo.mapboxKey'")
       .get();
     expect(stray).toBeUndefined();
+  });
+
+  describe("oidc integration", () => {
+    const OIDC = {
+      issuer: "https://id.example.com",
+      clientId: "contrack",
+      clientSecret: "s3cret-value-1234",
+      name: "Authentik",
+      matchByEmail: true,
+    };
+
+    it("saves the OIDC provider sealed and shows only a preview", async () => {
+      onTestFinished(() => {
+        sqlite
+          .prepare("DELETE FROM app_settings WHERE key = 'auth.oidc'")
+          .run();
+        clearSettingsCache();
+      });
+      const res = await as(admin)(
+        request(app).put("/api/admin/integrations").send({ oidc: OIDC }),
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.oidc).toMatchObject({
+        configured: true,
+        source: "setting",
+        clientSecretPreview: "••••1234",
+      });
+      expect(res.body.oidc.redirectUri).toMatch(/\/api\/auth\/oidc\/callback$/);
+      expect(JSON.stringify(res.body)).not.toContain(OIDC.clientSecret);
+      const row = sqlite
+        .prepare("SELECT value FROM app_settings WHERE key = 'auth.oidc'")
+        .get() as { value: string };
+      expect(JSON.parse(row.value)).toMatch(/^v1:/);
+
+      const cleared = await as(admin)(
+        request(app).put("/api/admin/integrations").send({ oidc: null }),
+      );
+      expect(cleared.body.oidc.configured).toBe(false);
+    });
+
+    it("refuses a plain-http issuer that is not loopback", async () => {
+      const res = await as(admin)(
+        request(app)
+          .put("/api/admin/integrations")
+          .send({ oidc: { ...OIDC, issuer: "http://id.lan" } }),
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    });
+
+    it("refuses to save while OIDC_* is set", async () => {
+      process.env.OIDC_ISSUER = "https://sso.example.org";
+      process.env.OIDC_CLIENT_ID = "env";
+      process.env.OIDC_CLIENT_SECRET = "env";
+      onTestFinished(() => {
+        delete process.env.OIDC_ISSUER;
+        delete process.env.OIDC_CLIENT_ID;
+        delete process.env.OIDC_CLIENT_SECRET;
+      });
+      const got = await as(admin)(request(app).get("/api/admin/integrations"));
+      expect(got.body.oidc.source).toBe("env");
+      const res = await as(admin)(
+        request(app).put("/api/admin/integrations").send({ oidc: OIDC }),
+      );
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe("SET_BY_ENVIRONMENT");
+    });
   });
 });

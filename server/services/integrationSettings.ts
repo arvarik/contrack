@@ -4,6 +4,7 @@
 //   the raw or sealed value.
 // - SEARXNG_URL, GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET override
 //   and lock the settings.
+// - OIDC_ISSUER, OIDC_CLIENT_ID and OIDC_CLIENT_SECRET do the same for the OIDC sign-in provider.
 
 import {
   getSetting,
@@ -36,9 +37,35 @@ export interface GoogleOAuthCredentials {
   source: "setting" | "env";
 }
 
+export interface OidcIntegrationStatus {
+  configured: boolean;
+  source: IntegrationSource;
+  issuer: string | null;
+  clientId: string | null;
+  clientSecretPreview: string | null;
+  name: string | null;
+  matchByEmail: boolean;
+}
+
+export interface OidcConfig {
+  issuer: string;
+  clientId: string;
+  clientSecret: string;
+  /** The words on the sign-in button: "Sign in with <name>". */
+  name: string;
+  /** Sign a verified email in to the account that has it. */
+  matchByEmail: boolean;
+  source: "setting" | "env";
+}
+
+export type OidcConfigInput = Omit<OidcConfig, "source">;
+
+const DEFAULT_OIDC_NAME = "Single sign-on";
+
 /** The General page's integrations. SearXNG is in the AI settings view. */
 export interface IntegrationsStatus {
   googleOAuth: GoogleOAuthIntegrationStatus;
+  oidc: OidcIntegrationStatus;
 }
 
 export function isSearxngEnvSet(): boolean {
@@ -103,7 +130,28 @@ export function getIntegrationsStatus(): IntegrationsStatus {
         clientSecretPreview: null,
       };
 
-  return { googleOAuth: googleOAuthStatus };
+  const oidc = getOidcConfig();
+  const oidcStatus: OidcIntegrationStatus = oidc
+    ? {
+        configured: true,
+        source: oidc.source,
+        issuer: oidc.issuer,
+        clientId: oidc.clientId,
+        clientSecretPreview: redact(oidc.clientSecret),
+        name: oidc.name,
+        matchByEmail: oidc.matchByEmail,
+      }
+    : {
+        configured: false,
+        source: "none",
+        issuer: null,
+        clientId: null,
+        clientSecretPreview: null,
+        name: null,
+        matchByEmail: true,
+      };
+
+  return { googleOAuth: googleOAuthStatus, oidc: oidcStatus };
 }
 
 /**
@@ -171,4 +219,73 @@ export function setSearxngUrl(rawUrl: string): void {
     return;
   }
   setSetting(SETTING_KEYS.aiSearxng, { url: trimTrailingSlashes(trimmed) });
+}
+
+export function isOidcEnvSet(): boolean {
+  return Boolean(
+    process.env.OIDC_ISSUER?.trim() &&
+    process.env.OIDC_CLIENT_ID?.trim() &&
+    process.env.OIDC_CLIENT_SECRET?.trim(),
+  );
+}
+
+/**
+ * The OIDC provider: OIDC_ISSUER, OIDC_CLIENT_ID and OIDC_CLIENT_SECRET when
+ * all are set (OIDC_NAME and OIDC_MATCH_BY_EMAIL are optional), else the
+ * sealed setting.
+ */
+export function getOidcConfig(): OidcConfig | null {
+  if (isOidcEnvSet()) {
+    return {
+      issuer: process.env.OIDC_ISSUER!.trim(),
+      clientId: process.env.OIDC_CLIENT_ID!.trim(),
+      clientSecret: process.env.OIDC_CLIENT_SECRET!.trim(),
+      name: process.env.OIDC_NAME?.trim() || DEFAULT_OIDC_NAME,
+      matchByEmail:
+        process.env.OIDC_MATCH_BY_EMAIL?.trim().toLowerCase() !== "false",
+      source: "env",
+    };
+  }
+  const sealed = getSetting<string>(SETTING_KEYS.oidc);
+  if (typeof sealed === "string" && sealed.startsWith("v1:")) {
+    try {
+      const parsed = JSON.parse(open(sealed)) as Partial<OidcConfigInput>;
+      if (parsed.issuer && parsed.clientId && parsed.clientSecret) {
+        return {
+          issuer: parsed.issuer,
+          clientId: parsed.clientId,
+          clientSecret: parsed.clientSecret,
+          name: parsed.name || DEFAULT_OIDC_NAME,
+          matchByEmail: parsed.matchByEmail !== false,
+          source: "setting",
+        };
+      }
+    } catch (err) {
+      log.warn(
+        "Integrations",
+        `Failed to unseal the OIDC provider: ${getErrorMessage(err)}`,
+      );
+    }
+  }
+  return null;
+}
+
+/** Sets or clears the OIDC provider. Stored sealed using secretBox. */
+export function setOidcConfig(config: OidcConfigInput | null): void {
+  if (!config) {
+    deleteSetting(SETTING_KEYS.oidc);
+    return;
+  }
+  setSetting(
+    SETTING_KEYS.oidc,
+    seal(
+      JSON.stringify({
+        issuer: config.issuer.trim(),
+        clientId: config.clientId.trim(),
+        clientSecret: config.clientSecret.trim(),
+        name: config.name.trim() || DEFAULT_OIDC_NAME,
+        matchByEmail: config.matchByEmail,
+      }),
+    ),
+  );
 }
