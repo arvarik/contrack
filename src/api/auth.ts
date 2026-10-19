@@ -79,7 +79,28 @@ interface AuthStatus {
   mailConfigured?: boolean;
   /** True when magic link sign-in is enabled and mail is configured. */
   magicLinkSignIn?: boolean;
+  /** The single sign-on provider's button name, or null when it is off. */
+  oidc?: { name: string } | null;
 }
+
+export interface LinkedIdentity {
+  id: string;
+  issuer: string;
+  email: string | null;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+export const listIdentities = () =>
+  apiJson<{ identities: LinkedIdentity[] }>("/auth/identities");
+
+export const unlinkIdentity = (id: string) =>
+  apiJson<{ ok: true }>(`/auth/identities/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+
+export const startOidcLink = () =>
+  apiJson<{ url: string }>("/auth/oidc/link", { method: "POST" });
 
 /** One personal API token, as the account's own token list shows it. */
 export type ApiTokenSummary = ApiToken;

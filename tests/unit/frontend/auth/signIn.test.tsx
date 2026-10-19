@@ -128,4 +128,16 @@ describe("SignIn front door", () => {
       ).toHaveLength(shown);
     },
   );
+
+  it("offers the OIDC provider and explains a refusal from the address", () => {
+    history.replaceState(null, "", "/?oidc=disabled");
+    render(<SignIn onSignedIn={vi.fn()} oidc={{ name: "Authentik" }} />);
+    expect(
+      screen.getByRole("link", { name: "Sign in with Authentik" }),
+    ).toHaveProperty("pathname", "/api/auth/oidc/start");
+    expect(screen.getByRole("alert").textContent).toContain(
+      "An administrator has closed this account",
+    );
+    expect(window.location.search).toBe("");
+  });
 });
