@@ -39,3 +39,14 @@ export class ConnectorConfigError extends ConnectorError {
     super(message, 400, { code: "CONNECTOR_CONFIG_ERROR", ...details });
   }
 }
+
+/**
+ * The server answered but refused for now: busy, rate limited or down for
+ * maintenance. This says nothing about the credentials, so a save goes ahead
+ * and the scheduler tries again later.
+ */
+export class ConnectorUnavailableError extends ConnectorError {
+  constructor(message: string) {
+    super(message, 503, { code: "CONNECTOR_UNAVAILABLE" });
+  }
+}

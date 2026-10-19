@@ -231,14 +231,22 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
         });
         toast.success(`Updated ${trimmedName}`);
       } else {
-        await createConnector.mutateAsync({
+        const created = await createConnector.mutateAsync({
           kind: "imap",
           name: trimmedName,
           config,
           secret: { password },
           intervalMinutes,
         });
-        toast.success(`Connected ${trimmedName}`);
+        // The server was busy or down for maintenance: the mailbox is saved,
+        // and the scheduler tries again later.
+        if (created.status === "error") {
+          toast.warning(`Saved ${trimmedName}. Contrack tries again later`, {
+            description: created.lastError,
+          });
+        } else {
+          toast.success(`Connected ${trimmedName}`);
+        }
       }
       onClose();
     } catch (err) {

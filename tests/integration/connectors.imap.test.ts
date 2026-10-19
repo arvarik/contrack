@@ -37,7 +37,8 @@ describe("IMAP Adapter Integration", () => {
   let server: net.Server;
   let serverPort: number;
   let authFail = false;
-  let loginUnavailable = false;
+  /** The text after `NO` that the fake server sends to LOGIN, if any. */
+  let loginRefusal: string | null = null;
   let folderUidValidity = 12345;
   /** Message bodies the fake server sent: only a summary needs one. */
   let bodyFetches = 0;
@@ -82,8 +83,8 @@ describe("IMAP Adapter Integration", () => {
           const rest = parts.slice(2).join(" ");
 
           if (cmd === "LOGIN") {
-            if (loginUnavailable) {
-              socket.write(`${tag} NO [UNAVAILABLE] Temporary maintenance\r\n`);
+            if (loginRefusal) {
+              socket.write(`${tag} NO ${loginRefusal}\r\n`);
             } else if (authFail || rest.includes("badpassword")) {
               socket.write(
                 `${tag} NO [AUTHENTICATIONFAILED] Invalid credentials\r\n`,
@@ -173,7 +174,7 @@ describe("IMAP Adapter Integration", () => {
 
   beforeEach(() => {
     authFail = false;
-    loginUnavailable = false;
+    loginRefusal = null;
     resetOnFetch = false;
     bogusDate = false;
     searchCommands.length = 0;
@@ -226,30 +227,49 @@ describe("IMAP Adapter Integration", () => {
     });
   });
 
-  it("test() treats a LOGIN [UNAVAILABLE] refusal as a transient server error, not an auth failure", async () => {
-    loginUnavailable = true;
-    await expect(
-      imapAdapter.test(
-        {
-          host: "127.0.0.1",
-          port: serverPort,
-          secure: false,
-          username: "me@example.com",
-          lookbackDays: 90,
-          rollup: true,
-          ghostThreshold: 3,
-          maxMessagesPerFolder: 5000,
-          aliases: [],
-          summaries: false,
-        },
-        { password: "goodpassword" },
-      ),
-    ).rejects.toMatchObject({
-      name: "ConnectorConfigError",
-      statusCode: 400,
-      message: "Failed to connect to IMAP server: Temporary maintenance",
-    });
-  });
+  it.each([
+    [
+      "[UNAVAILABLE] Temporary maintenance",
+      "ConnectorUnavailableError",
+      503,
+      "IMAP server is unavailable for now: Temporary maintenance",
+    ],
+    [
+      // Gmail's connection limit carries no RFC 5530 code.
+      "[ALERT] Too many simultaneous connections. (Failure)",
+      "ConnectorUnavailableError",
+      503,
+      "IMAP server is unavailable for now: Too many simultaneous connections. (Failure)",
+    ],
+    [
+      "[ALERT] Application-specific password required",
+      "ConnectorAuthError",
+      400,
+      "IMAP authentication failed: Application-specific password required",
+    ],
+  ])(
+    "test() reads a LOGIN refusal of %s as %s",
+    async (refusal, name, statusCode, message) => {
+      loginRefusal = refusal;
+      await expect(
+        imapAdapter.test(
+          {
+            host: "127.0.0.1",
+            port: serverPort,
+            secure: false,
+            username: "me@example.com",
+            lookbackDays: 90,
+            rollup: true,
+            ghostThreshold: 3,
+            maxMessagesPerFolder: 5000,
+            aliases: [],
+            summaries: false,
+          },
+          { password: "goodpassword" },
+        ),
+      ).rejects.toMatchObject({ name, statusCode, message });
+    },
+  );
 
   it("asserts safe host when private hosts not allowed", async () => {
     delete process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS;

@@ -14,6 +14,9 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Connectors: keep the browser session signed in when a connector's own
   authentication check fails, and show the IMAP server's error message instead
   of `Command failed` (#245).
+- Connectors: save a new mailbox when its IMAP server is busy or down for
+  maintenance, and try it again later. Gmail's connection limit no longer
+  counts as a wrong password (#245).
 
 ## [2.0.1] - 2026-10-16
 
