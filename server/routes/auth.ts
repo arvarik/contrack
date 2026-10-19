@@ -1048,8 +1048,15 @@ router.get(
   "/oidc/start",
   credentialLimiter,
   asyncHandler(async (req, res) => {
-    assertOidcAvailable();
-    res.redirect(await startBoundOidc(req, res, null));
+    // A browser navigates here, so a failure goes back to the sign-in page
+    // instead of showing JSON.
+    try {
+      assertOidcAvailable();
+      res.redirect(await startBoundOidc(req, res, null));
+    } catch (error) {
+      log.warn("Auth", "OIDC sign-in could not start", { error });
+      res.redirect(oidcLanding(false, "failed"));
+    }
   }),
 );
 
@@ -1065,6 +1072,103 @@ router.post(
   }),
 );
 
+/** Everything after the provider answered: link, or find the account and sign in. */
+function completeOidc(
+  req: Request,
+  res: Response,
+  claims: Awaited<ReturnType<typeof finishOidc>>,
+): void {
+  // Linking: only the account that started it may finish it.
+  if (claims.linkUserId) {
+    const me = req.principal?.via === "session" ? req.principal.user : null;
+    if (!me || me.id !== claims.linkUserId) {
+      return void res.redirect(oidcLanding(true, "failed"));
+    }
+    try {
+      linkIdentity(me.id, claims.issuer, claims.subject, claims.email);
+    } catch (err) {
+      if (err instanceof AppError && err.statusCode === 409) {
+        return void res.redirect(oidcLanding(true, "taken"));
+      }
+      throw err;
+    }
+    auditService.record({
+      actorUserId: me.id,
+      action: "auth.oidc.linked",
+      targetType: "user",
+      targetId: me.id,
+      details: { issuer: claims.issuer },
+      ip: ipOf(req),
+    });
+    return void res.redirect(oidcLanding(true, null));
+  }
+
+  // Signing in: a linked identity, else a verified email the admin allows.
+  // The email match links only an account with no identity at this
+  // provider yet, so it never moves an existing link to another account.
+  const linkedId = findUserIdByIdentity(claims.issuer, claims.subject);
+  let user = linkedId ? getUserById(linkedId) : null;
+  let matchedByEmail = false;
+  if (
+    !linkedId &&
+    getOidcConfig()?.matchByEmail &&
+    claims.emailVerified &&
+    claims.email
+  ) {
+    const match = findUserByEmail(claims.email);
+    if (
+      match &&
+      !listIdentities(match.id).some((i) => i.issuer === claims.issuer)
+    ) {
+      user = match;
+      matchedByEmail = true;
+    }
+  }
+  if (!user) {
+    auditService.record({
+      actorUserId: null,
+      action: "auth.login.failed",
+      details: { method: "oidc", matched: false },
+      ip: ipOf(req),
+    });
+    return void res.redirect(oidcLanding(false, "no-account"));
+  }
+  if (user.status === "disabled") {
+    auditService.record({
+      actorUserId: user.id,
+      action: "auth.login.failed",
+      targetType: "user",
+      targetId: user.id,
+      details: { method: "oidc", reason: "disabled" },
+      ip: ipOf(req),
+    });
+    return void res.redirect(oidcLanding(false, "disabled"));
+  }
+
+  if (matchedByEmail) {
+    linkIdentity(user.id, claims.issuer, claims.subject, claims.email);
+    auditService.record({
+      actorUserId: user.id,
+      action: "auth.oidc.linked",
+      targetType: "user",
+      targetId: user.id,
+      details: { issuer: claims.issuer, matchedByEmail: true },
+      ip: ipOf(req),
+    });
+  }
+  touchIdentity(claims.issuer, claims.subject);
+  startSession(req, res, user, "oidc");
+  auditService.record({
+    actorUserId: user.id,
+    action: "auth.login.success",
+    targetType: "user",
+    targetId: user.id,
+    details: { username: user.username, method: "oidc" },
+    ip: ipOf(req),
+  });
+  res.redirect(oidcLanding(false, null));
+}
+
 router.get(
   "/oidc/callback",
   credentialLimiter,
@@ -1079,6 +1183,9 @@ router.get(
       return res.redirect(oidcLanding(false, "failed"));
     }
     if (typeof req.query.error === "string") {
+      log.info("Auth", "OIDC provider returned an error", {
+        error: req.query.error,
+      });
       return res.redirect(oidcLanding(false, "denied"));
     }
 
@@ -1092,96 +1199,14 @@ router.get(
       const expired = err instanceof AppError && err.statusCode === 410;
       return res.redirect(oidcLanding(false, expired ? "expired" : "failed"));
     }
-
-    // Linking: only the account that started it may finish it.
-    if (claims.linkUserId) {
-      const me = req.principal?.via === "session" ? req.principal.user : null;
-      if (!me || me.id !== claims.linkUserId) {
-        return res.redirect(oidcLanding(true, "failed"));
-      }
-      try {
-        linkIdentity(me.id, claims.issuer, claims.subject, claims.email);
-      } catch (err) {
-        if (err instanceof AppError && err.statusCode === 409) {
-          return res.redirect(oidcLanding(true, "taken"));
-        }
-        throw err;
-      }
-      auditService.record({
-        actorUserId: me.id,
-        action: "auth.oidc.linked",
-        targetType: "user",
-        targetId: me.id,
-        details: { issuer: claims.issuer },
-        ip: ipOf(req),
+    try {
+      completeOidc(req, res, claims);
+    } catch (error) {
+      log.warn("Auth", "OIDC sign-in failed after the provider answered", {
+        error,
       });
-      return res.redirect(oidcLanding(true, null));
+      res.redirect(oidcLanding(Boolean(claims.linkUserId), "failed"));
     }
-
-    // Signing in: a linked identity, else a verified email the admin allows.
-    // The email match links only an account with no identity at this
-    // provider yet, so it never moves an existing link to another account.
-    const linkedId = findUserIdByIdentity(claims.issuer, claims.subject);
-    let user = linkedId ? getUserById(linkedId) : null;
-    let matchedByEmail = false;
-    if (
-      !linkedId &&
-      getOidcConfig()?.matchByEmail &&
-      claims.emailVerified &&
-      claims.email
-    ) {
-      const match = findUserByEmail(claims.email);
-      if (
-        match &&
-        !listIdentities(match.id).some((i) => i.issuer === claims.issuer)
-      ) {
-        user = match;
-        matchedByEmail = true;
-      }
-    }
-    if (!user) {
-      auditService.record({
-        actorUserId: null,
-        action: "auth.login.failed",
-        details: { method: "oidc", matched: false },
-        ip: ipOf(req),
-      });
-      return res.redirect(oidcLanding(false, "no-account"));
-    }
-    if (user.status === "disabled") {
-      auditService.record({
-        actorUserId: user.id,
-        action: "auth.login.failed",
-        targetType: "user",
-        targetId: user.id,
-        details: { method: "oidc", reason: "disabled" },
-        ip: ipOf(req),
-      });
-      return res.redirect(oidcLanding(false, "disabled"));
-    }
-
-    if (matchedByEmail) {
-      linkIdentity(user.id, claims.issuer, claims.subject, claims.email);
-      auditService.record({
-        actorUserId: user.id,
-        action: "auth.oidc.linked",
-        targetType: "user",
-        targetId: user.id,
-        details: { issuer: claims.issuer, matchedByEmail: true },
-        ip: ipOf(req),
-      });
-    }
-    touchIdentity(claims.issuer, claims.subject);
-    startSession(req, res, user, "oidc");
-    auditService.record({
-      actorUserId: user.id,
-      action: "auth.login.success",
-      targetType: "user",
-      targetId: user.id,
-      details: { username: user.username, method: "oidc" },
-      ip: ipOf(req),
-    });
-    res.redirect(oidcLanding(false, null));
   }),
 );
 

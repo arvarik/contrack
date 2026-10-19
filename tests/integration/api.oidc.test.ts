@@ -4,7 +4,15 @@
 // `contrack_oidc` cookie, so each callback here carries the cookie the start
 // or link response set.
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  beforeEach,
+  vi,
+} from "vitest";
 import request from "supertest";
 import { makeTestApp } from "./helpers.ts";
 import { sqlite } from "../../server/db.ts";
@@ -15,7 +23,8 @@ import { clearSettingsCache } from "../../server/services/settingsService.ts";
 import { setOidcConfig } from "../../server/services/integrationSettings.ts";
 import { forgetOidcDiscovery } from "../../server/services/oidcService.ts";
 import { createUser } from "../../server/services/authService.ts";
-import { linkIdentity } from "../../server/services/identityService.ts";
+import * as identityService from "../../server/services/identityService.ts";
+const { linkIdentity } = identityService;
 import { startFakeProvider, type FakeLogin } from "./oidcProvider.ts";
 
 const app = makeTestApp();
@@ -368,5 +377,50 @@ describe("API: linking OIDC from settings", () => {
         .prepare("SELECT userId FROM user_identities WHERE subject = 'sub-x'")
         .get(),
     ).toEqual({ userId: adminId });
+  });
+});
+
+describe("API: OIDC failures on browser routes", () => {
+  beforeEach(() => setup());
+
+  it("sends a start that cannot reach the provider back to sign-in", async () => {
+    setOidcConfig({
+      issuer: "http://127.0.0.1:9",
+      clientId: "contrack",
+      clientSecret: "secret",
+      name: "Test IdP",
+      matchByEmail: true,
+    });
+    forgetOidcDiscovery();
+    const res = await request(app).get("/api/auth/oidc/start");
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe("/?oidc=failed");
+    expect(cookieFrom(res).some((c) => /^contrack_oidc=[^;]/.test(c))).toBe(
+      false,
+    );
+  });
+
+  it("sends a start with no provider back to sign-in", async () => {
+    setOidcConfig(null);
+    const res = await request(app).get("/api/auth/oidc/start");
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe("/?oidc=failed");
+  });
+
+  it("sends a callback that throws after the provider answered back to sign-in", async () => {
+    const { ada } = await setup();
+    linkIdentity(ada.id, idp.issuer, "sub-ada", null);
+    const spy = vi
+      .spyOn(identityService, "touchIdentity")
+      .mockImplementationOnce(() => {
+        throw new Error("boom");
+      });
+    try {
+      const res = await signIn({ sub: "sub-ada" });
+      expect(res.status).toBe(302);
+      expect(res.headers.location).toBe("/?oidc=failed");
+    } finally {
+      spy.mockRestore();
+    }
   });
 });

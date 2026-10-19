@@ -890,7 +890,7 @@ const OidcRow = () => {
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [name, setName] = useState(oidc?.name ?? "");
-  const [matchByEmail, setMatchByEmail] = useState(oidc?.matchByEmail ?? false);
+  const [matchByEmail, setMatchByEmail] = useState(oidc?.matchByEmail ?? true);
   const [showSecret, setShowSecret] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const issuerInput = useRef<HTMLInputElement>(null);
@@ -1109,7 +1109,8 @@ const OidcRow = () => {
                   Accounts with the same verified email can sign in
                   <span className="block text-xs text-on-surface-variant">
                     Off: members link the provider under Account → Sign-in
-                    methods first
+                    methods first. Leave it on only if the provider verifies
+                    addresses and people cannot choose their own
                   </span>
                 </label>
                 <Switch
@@ -1187,7 +1188,7 @@ const OidcRow = () => {
                 setClientId("");
                 setClientSecret("");
                 setName("");
-                setMatchByEmail(false);
+                setMatchByEmail(true);
                 toast.success("OpenID Connect provider removed");
               },
               onError: (error: Error) =>

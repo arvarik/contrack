@@ -143,13 +143,17 @@ and the card is locked, see [Configuration](configuration.md#environment-variabl
 Single sign-on never creates an account. It signs in to an existing one:
 
 - **A linked account.** Under **Settings → Account → Sign-in methods**, select
-  **Link** on the **Single sign-on** card and sign in with the provider.
+  **Link** followed by the provider name (such as **Link Authentik**) on the
+  **Single sign-on** card and sign in with the provider.
   **Unlink** asks first.
 - **The same email.** When **Accounts with the same verified email can sign
   in** is on (the default), a provider account whose email the provider calls
   verified signs in to the Contrack account with that email, and stays linked
   to it. An account that already has a link from this provider is never moved
-  by email. Turn the switch off to require a link first.
+  by email. Turn the switch off to require a link first. This trusts the
+  provider's `email_verified`: leave it on only if the provider verifies
+  addresses and people cannot choose their own, otherwise turn it off and have
+  members link first.
 
 Unlinking keeps your password and passkeys, so you can always still sign in.
 The **Devices** list shows a session from the provider as **Single sign-on**.
