@@ -222,14 +222,20 @@ export const ImapFormModal: React.FC<ImapFormModalProps> = ({
 
     try {
       if (isEditing && connector) {
-        await updateConnector.mutateAsync({
+        const updated = await updateConnector.mutateAsync({
           id: connector.id,
           name: trimmedName,
           config,
           secret: hasPassword ? { password } : undefined,
           intervalMinutes,
         });
-        toast.success(`Updated ${trimmedName}`);
+        if (hasPassword && updated.status === "error") {
+          toast.warning(`Saved ${trimmedName}. Contrack tries again later`, {
+            description: updated.lastError,
+          });
+        } else {
+          toast.success(`Updated ${trimmedName}`);
+        }
       } else {
         const created = await createConnector.mutateAsync({
           kind: "imap",
