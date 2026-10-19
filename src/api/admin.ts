@@ -464,10 +464,27 @@ interface IntegrationsConfig {
     /** Where Google sends the browser back: the address the server sends. */
     redirectUri: string;
   };
+  oidc: {
+    configured: boolean;
+    source: "setting" | "env" | "none";
+    issuer: string | null;
+    clientId: string | null;
+    clientSecretPreview: string | null;
+    name: string | null;
+    matchByEmail: boolean;
+    redirectUri: string;
+  };
 }
 
 interface UpdateIntegrationsInput {
   googleOAuth?: { clientId: string; clientSecret: string } | null;
+  oidc?: {
+    issuer: string;
+    clientId: string;
+    clientSecret: string;
+    name: string;
+    matchByEmail: boolean;
+  } | null;
 }
 
 export const useIntegrations = () =>

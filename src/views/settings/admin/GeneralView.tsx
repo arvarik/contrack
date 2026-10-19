@@ -531,13 +531,44 @@ const NOT_SET_UP_CHIP = cn(
   TONE_WASH.warning,
 );
 
+/** A redirect URI the admin pastes into the provider, with a copy button. */
+const RedirectUriBox = ({ uri }: { uri: string }) => {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="flex items-center gap-2 p-2.5 rounded-xl bg-surface-container-highest font-mono text-xs text-on-surface break-all select-all">
+      <span className="flex-1 min-w-0">{uri}</span>
+      <button
+        type="button"
+        onClick={async () => {
+          try {
+            await copyToClipboard(uri);
+            setCopied(true);
+            toast.success("Redirect URI copied");
+            setTimeout(() => setCopied(false), 2000);
+          } catch {
+            toast.error(CLIPBOARD_DENIED);
+          }
+        }}
+        className="hit-area state-layer p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors shrink-0"
+        title="Copy redirect URI"
+        aria-label="Copy redirect URI"
+      >
+        {copied ? (
+          <Check className="w-4 h-4 text-success" />
+        ) : (
+          <Copy className="w-4 h-4" />
+        )}
+      </button>
+    </div>
+  );
+};
+
 export const GoogleRow = () => {
   const { data, isLoading } = useIntegrations();
   const update = useUpdateIntegrations();
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [showSecret, setShowSecret] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const clientIdInput = useRef<HTMLInputElement>(null);
 
@@ -606,31 +637,7 @@ export const GoogleRow = () => {
           create a Web application OAuth client ID and add this Authorized
           redirect URI
         </p>
-        <div className="flex items-center gap-2 p-2.5 rounded-xl bg-surface-container-highest font-mono text-xs text-on-surface break-all select-all">
-          <span className="flex-1 min-w-0">{redirectUri}</span>
-          <button
-            type="button"
-            onClick={async () => {
-              try {
-                await copyToClipboard(redirectUri);
-                setCopied(true);
-                toast.success("Redirect URI copied");
-                setTimeout(() => setCopied(false), 2000);
-              } catch {
-                toast.error(CLIPBOARD_DENIED);
-              }
-            }}
-            className="hit-area state-layer p-1.5 rounded-lg text-on-surface-variant hover:text-on-surface transition-colors shrink-0"
-            title="Copy redirect URI"
-            aria-label="Copy redirect URI"
-          >
-            {copied ? (
-              <Check className="w-4 h-4 text-success" />
-            ) : (
-              <Copy className="w-4 h-4" />
-            )}
-          </button>
-        </div>
+        <RedirectUriBox uri={redirectUri} />
         <p>
           Google accepts localhost or an https domain, not a LAN IP.{" "}
           {publicUrl
@@ -875,6 +882,344 @@ export const GoogleRow = () => {
   );
 };
 
+const OidcRow = () => {
+  const { data, isLoading } = useIntegrations();
+  const update = useUpdateIntegrations();
+  const oidc = data?.oidc;
+  const [issuer, setIssuer] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [name, setName] = useState(oidc?.name ?? "");
+  const [matchByEmail, setMatchByEmail] = useState(oidc?.matchByEmail ?? false);
+  const [showSecret, setShowSecret] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const issuerInput = useRef<HTMLInputElement>(null);
+  const configured = oidc?.configured === true;
+  const fromEnv = oidc?.source === "env";
+  const busy = isLoading || update.isPending;
+
+  // The saved values arrive after the first render. Fill the two fields that
+  // stay visible once, when they do.
+  const loaded = useRef(false);
+  useEffect(() => {
+    if (oidc && !loaded.current) {
+      loaded.current = true;
+      setName(oidc.name ?? "");
+      setMatchByEmail(oidc.matchByEmail);
+    }
+  }, [oidc]);
+
+  // As in GoogleRow: Remove takes the focus with it, so hand it to the first
+  // field.
+  const wasConfigured = useRef(configured);
+  useEffect(() => {
+    if (
+      wasConfigured.current &&
+      !configured &&
+      document.activeElement === document.body
+    ) {
+      issuerInput.current?.focus();
+    }
+    wasConfigured.current = configured;
+  }, [configured]);
+
+  const steps = (
+    <ol className="list-decimal pl-5 marker:font-semibold marker:text-on-surface-variant space-y-3 text-xs text-on-surface-variant text-pretty max-w-2xl">
+      <li>
+        In your identity provider (Authentik, Keycloak, Pocket ID, Authelia…),
+        create an OpenID Connect client of the confidential type
+      </li>
+      <li className="space-y-1.5">
+        <p>Add this redirect URI</p>
+        <RedirectUriBox uri={oidc?.redirectUri ?? ""} />
+      </li>
+      <li>
+        {fromEnv
+          ? "Put the issuer, client ID and secret in OIDC_ISSUER, OIDC_CLIENT_ID and OIDC_CLIENT_SECRET"
+          : "Paste the issuer URL, client ID and secret below, then save"}
+      </li>
+    </ol>
+  );
+
+  const field = (
+    id: string,
+    label: string,
+    value: string,
+    set: (value: string) => void,
+    placeholder: string,
+    mono = true,
+    ref?: React.Ref<HTMLInputElement>,
+  ) => (
+    <div>
+      <label htmlFor={id} className={cn(SETTINGS_LABEL, "mb-1.5")}>
+        {label}
+      </label>
+      <input
+        ref={ref}
+        id={id}
+        type="text"
+        value={value}
+        disabled={busy}
+        onChange={(event) => set(event.target.value)}
+        placeholder={placeholder}
+        className={mono ? KEY_INPUT : SETTINGS_INPUT}
+        {...NO_AUTOCORRECT}
+      />
+    </div>
+  );
+
+  return (
+    <>
+      <SettingRow
+        id="oidc"
+        title="OpenID Connect (single sign-on)"
+        description="Lets members sign in with your identity provider"
+        below
+      >
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-on-surface-variant">
+            {configured ? (
+              <span className={CONFIGURED_CHIP}>
+                <Check className="w-3.5 h-3.5" aria-hidden="true" />
+                Configured
+              </span>
+            ) : (
+              <span className={NOT_SET_UP_CHIP}>
+                <TriangleAlert className="w-3.5 h-3.5" aria-hidden="true" />
+                Not set up
+              </span>
+            )}
+          </div>
+
+          {configured ? (
+            <details className="group rounded-xl bg-surface-container-low px-3 py-1 text-xs">
+              <summary className="state-layer cursor-pointer list-none rounded-lg -mx-1.5 px-1.5 min-h-11 flex items-center gap-1.5 font-semibold text-on-surface">
+                <ChevronRight
+                  className="w-4 h-4 shrink-0 transition-transform group-open:rotate-90"
+                  aria-hidden="true"
+                />
+                How to add the provider
+              </summary>
+              <div className="mt-1 mb-2">{steps}</div>
+            </details>
+          ) : (
+            <div className="rounded-xl bg-surface-container-low p-3 space-y-3 text-xs">
+              <p className="font-semibold text-on-surface">
+                Add the client in your identity provider
+              </p>
+              {steps}
+            </div>
+          )}
+
+          {fromEnv ? (
+            <p className={NOTE}>
+              Set by OIDC_ISSUER, OIDC_CLIENT_ID and OIDC_CLIENT_SECRET in the
+              environment
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {configured && (
+                <div className="text-xs text-on-surface-variant bg-surface-container-low p-3 rounded-xl space-y-1">
+                  <p>
+                    Issuer{" "}
+                    <span className="font-mono text-on-surface break-all">
+                      {oidc?.issuer}
+                    </span>
+                  </p>
+                  <p>
+                    Client ID{" "}
+                    <span className="font-mono text-on-surface">
+                      {oidc?.clientId}
+                    </span>
+                  </p>
+                  <p>
+                    Client secret{" "}
+                    <span className="font-mono text-on-surface">
+                      {oidc?.clientSecretPreview}
+                    </span>
+                  </p>
+                </div>
+              )}
+              {field(
+                "oidc-issuer",
+                "Issuer",
+                issuer,
+                setIssuer,
+                configured
+                  ? "A new issuer replaces the current one"
+                  : "https://id.example.com",
+                true,
+                issuerInput,
+              )}
+              {field(
+                "oidc-client-id",
+                "Client ID",
+                clientId,
+                setClientId,
+                configured ? "A new client ID replaces the current one" : "",
+              )}
+              <div>
+                <label
+                  htmlFor="oidc-client-secret"
+                  className={cn(SETTINGS_LABEL, "mb-1.5")}
+                >
+                  Client secret
+                </label>
+                <div className="relative">
+                  <input
+                    id="oidc-client-secret"
+                    type={showSecret ? "text" : "password"}
+                    value={clientSecret}
+                    disabled={busy}
+                    onChange={(event) => setClientSecret(event.target.value)}
+                    placeholder={
+                      configured ? "A new secret replaces the current one" : ""
+                    }
+                    className={cn(KEY_INPUT, "pr-10")}
+                    {...NO_AUTOCORRECT}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSecret(!showSecret)}
+                    className="hit-area state-layer absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md text-on-surface-variant hover:text-on-surface p-1 transition-colors"
+                    title={showSecret ? "Hide secret" : "Show secret"}
+                    aria-label={showSecret ? "Hide secret" : "Show secret"}
+                  >
+                    {showSecret ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+              {field(
+                "oidc-name",
+                "Button name",
+                name,
+                setName,
+                "Single sign-on",
+                false,
+              )}
+              <div className="flex items-start justify-between gap-3 min-h-11">
+                <label
+                  htmlFor="oidc-match-by-email"
+                  className="text-sm text-on-surface"
+                >
+                  Accounts with the same verified email can sign in
+                  <span className="block text-xs text-on-surface-variant">
+                    Off: members link the provider under Account → Sign-in
+                    methods first
+                  </span>
+                </label>
+                <Switch
+                  id="oidc-match-by-email"
+                  checked={matchByEmail}
+                  onChange={setMatchByEmail}
+                  label="Accounts with the same verified email can sign in"
+                  disabled={busy}
+                />
+              </div>
+              <div className="flex flex-wrap justify-end gap-2 pt-1">
+                {configured && (
+                  <button
+                    type="button"
+                    disabled={update.isPending}
+                    onClick={() => setConfirmRemove(true)}
+                    className="btn-secondary shrink-0 text-error mr-auto"
+                  >
+                    Remove
+                  </button>
+                )}
+                <button
+                  type="button"
+                  disabled={
+                    !issuer.trim() ||
+                    !clientId.trim() ||
+                    !clientSecret.trim() ||
+                    update.isPending
+                  }
+                  onClick={() =>
+                    update.mutate(
+                      {
+                        oidc: {
+                          issuer: issuer.trim(),
+                          clientId: clientId.trim(),
+                          clientSecret: clientSecret.trim(),
+                          name: name.trim() || "Single sign-on",
+                          matchByEmail,
+                        },
+                      },
+                      {
+                        onSuccess: () => {
+                          setIssuer("");
+                          setClientId("");
+                          setClientSecret("");
+                          toast.success("OpenID Connect provider saved");
+                        },
+                        onError: (error: Error) =>
+                          toast.error(
+                            `Could not save the provider: ${errorText(error)}`,
+                          ),
+                      },
+                    )
+                  }
+                  className="btn-primary shrink-0"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </SettingRow>
+
+      <ConfirmDialog
+        isOpen={confirmRemove}
+        onClose={() => setConfirmRemove(false)}
+        onConfirm={() =>
+          update.mutate(
+            { oidc: null },
+            {
+              onSuccess: () => {
+                setConfirmRemove(false);
+                setIssuer("");
+                setClientId("");
+                setClientSecret("");
+                setName("");
+                setMatchByEmail(false);
+                toast.success("OpenID Connect provider removed");
+              },
+              onError: (error: Error) =>
+                toast.error(
+                  `Could not remove the provider: ${errorText(error)}`,
+                ),
+            },
+          )
+        }
+        title="Remove the OpenID Connect provider?"
+        description="Members can no longer sign in with it. Their linked sign-ins stay and work again when a provider with the same issuer is added"
+        confirmLabel="Remove provider"
+        tone="danger"
+        busy={update.isPending}
+      />
+    </>
+  );
+};
+
+const OidcIntegration = () => {
+  const { isError, refetch } = useIntegrations();
+  if (isError)
+    return (
+      <LoadFailed
+        what="these settings"
+        onRetry={() => void refetch()}
+        level={3}
+      />
+    );
+  return <OidcRow />;
+};
+
 const Integrations = () => {
   const { isError, refetch } = useIntegrations();
   if (isError)
@@ -903,6 +1248,7 @@ export const GeneralView = () => {
           </Section>
           <Section title="Sign-in">
             <SignIn data={data} />
+            <OidcIntegration />
           </Section>
           <Section title="Data">
             <Data data={data} />
