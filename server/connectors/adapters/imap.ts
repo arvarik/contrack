@@ -191,22 +191,53 @@ async function summaryText(
   return (found.html ? pageText(body) : body.trim()) ?? "";
 }
 
+const TRANSIENT_IMAP_CODES = new Set([
+  "UNAVAILABLE",
+  "INUSE",
+  "LIMIT",
+  "SERVERBUG",
+  "OVERQUOTA",
+]);
+
 function isAuthError(err: unknown): boolean {
   if (!err || typeof err !== "object") return false;
   const error = err as {
     authenticationFailed?: boolean;
     responseCode?: string;
+    serverResponseCode?: string;
+    responseText?: string;
     message?: string;
   };
+  const code = (
+    error.serverResponseCode ??
+    error.responseCode ??
+    ""
+  ).toUpperCase();
+  if (TRANSIENT_IMAP_CODES.has(code)) return false;
+  if (code === "AUTHENTICATIONFAILED" || code === "AUTHORIZATIONFAILED") {
+    return true;
+  }
   if (error.authenticationFailed) return true;
-  if (error.responseCode === "AUTHENTICATIONFAILED") return true;
-  const msg = error.message?.toLowerCase() || "";
+  const msg =
+    `${error.message ?? ""} ${error.responseText ?? ""}`.toLowerCase();
   return (
     msg.includes("authentication failed") ||
     msg.includes("invalid credentials") ||
     msg.includes("login failed") ||
     msg.includes("auth error")
   );
+}
+
+function imapErrorMessage(err: unknown): string {
+  if (!err || typeof err !== "object") return String(err);
+  const error = err as { message?: string; responseText?: string };
+  if (
+    error.responseText &&
+    (!error.message || error.message === "Command failed")
+  ) {
+    return error.responseText;
+  }
+  return error.message || "Unknown IMAP error";
 }
 
 export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
@@ -254,11 +285,11 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
 
       if (isAuthError(err)) {
         throw new ConnectorAuthError(
-          `IMAP authentication failed: ${(err as Error).message}`,
+          `IMAP authentication failed: ${imapErrorMessage(err)}`,
         );
       }
       throw new ConnectorConfigError(
-        `Failed to connect to IMAP server: ${(err as Error).message}`,
+        `Failed to connect to IMAP server: ${imapErrorMessage(err)}`,
       );
     }
   },
@@ -286,11 +317,11 @@ export const imapAdapter: ConnectorAdapter<ImapConfig, ImapSecret> = {
     } catch (err: unknown) {
       if (isAuthError(err)) {
         throw new ConnectorAuthError(
-          `IMAP authentication failed: ${(err as Error).message}`,
+          `IMAP authentication failed: ${imapErrorMessage(err)}`,
         );
       }
       throw new ConnectorConfigError(
-        `Failed to connect to IMAP server: ${(err as Error).message}`,
+        `Failed to connect to IMAP server: ${imapErrorMessage(err)}`,
       );
     }
 

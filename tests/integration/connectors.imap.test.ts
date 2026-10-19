@@ -25,10 +25,7 @@ import {
   imapAdapter,
   summaryPart,
 } from "../../server/connectors/adapters/imap.ts";
-import {
-  ConnectorAuthError,
-  ConnectorConfigError,
-} from "../../server/connectors/errors.ts";
+import { ConnectorConfigError } from "../../server/connectors/errors.ts";
 import { createConnector, runNow } from "../../server/connectors/service.ts";
 import { sqlite } from "../../server/db.ts";
 import { scopeForOwnerId, type Scope } from "../../server/tenancy/scope.ts";
@@ -40,6 +37,7 @@ describe("IMAP Adapter Integration", () => {
   let server: net.Server;
   let serverPort: number;
   let authFail = false;
+  let loginUnavailable = false;
   let folderUidValidity = 12345;
   /** Message bodies the fake server sent: only a summary needs one. */
   let bodyFetches = 0;
@@ -84,7 +82,9 @@ describe("IMAP Adapter Integration", () => {
           const rest = parts.slice(2).join(" ");
 
           if (cmd === "LOGIN") {
-            if (authFail || rest.includes("badpassword")) {
+            if (loginUnavailable) {
+              socket.write(`${tag} NO [UNAVAILABLE] Temporary maintenance\r\n`);
+            } else if (authFail || rest.includes("badpassword")) {
               socket.write(
                 `${tag} NO [AUTHENTICATIONFAILED] Invalid credentials\r\n`,
               );
@@ -173,6 +173,7 @@ describe("IMAP Adapter Integration", () => {
 
   beforeEach(() => {
     authFail = false;
+    loginUnavailable = false;
     resetOnFetch = false;
     bogusDate = false;
     searchCommands.length = 0;
@@ -200,7 +201,7 @@ describe("IMAP Adapter Integration", () => {
     expect(result.detail).toContain("Connected successfully");
   });
 
-  it("test() throws ConnectorAuthError with invalid credentials", async () => {
+  it("test() throws ConnectorAuthError with the server's responseText on invalid credentials", async () => {
     authFail = true;
     await expect(
       imapAdapter.test(
@@ -218,7 +219,36 @@ describe("IMAP Adapter Integration", () => {
         },
         { password: "badpassword" },
       ),
-    ).rejects.toThrow(ConnectorAuthError);
+    ).rejects.toMatchObject({
+      name: "ConnectorAuthError",
+      statusCode: 400,
+      message: "IMAP authentication failed: Invalid credentials",
+    });
+  });
+
+  it("test() treats a LOGIN [UNAVAILABLE] refusal as a transient server error, not an auth failure", async () => {
+    loginUnavailable = true;
+    await expect(
+      imapAdapter.test(
+        {
+          host: "127.0.0.1",
+          port: serverPort,
+          secure: false,
+          username: "me@example.com",
+          lookbackDays: 90,
+          rollup: true,
+          ghostThreshold: 3,
+          maxMessagesPerFolder: 5000,
+          aliases: [],
+          summaries: false,
+        },
+        { password: "goodpassword" },
+      ),
+    ).rejects.toMatchObject({
+      name: "ConnectorConfigError",
+      statusCode: 400,
+      message: "Failed to connect to IMAP server: Temporary maintenance",
+    });
   });
 
   it("asserts safe host when private hosts not allowed", async () => {

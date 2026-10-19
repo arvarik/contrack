@@ -262,29 +262,39 @@ describe("refusals that change which screen the app is", () => {
     expired.stop();
   });
 
-  it("does not treat a wrong typed password as an expired session", async () => {
-    // The one 401 that is not about the browser's own credential:
-    // `POST /api/auth/change-password` answers 401 INVALID_CREDENTIALS when the
-    // *current* password is wrong, and the cookie is untouched. Read as an
-    // expiry, a typo would replace the forced-password-change screen.
-    const expired = listen(AUTH_EXPIRED_EVENT);
-    respondWith(
-      {
-        error: {
-          message: "That is not your current password.",
-          code: "INVALID_CREDENTIALS",
-        },
-      },
-      { status: 401 },
-    );
-    await expect(apiFetch("/auth/change-password")).rejects.toMatchObject({
-      status: 401,
-      code: "INVALID_CREDENTIALS",
-      message: "That is not your current password.",
-    });
-    expect(expired.spy).not.toHaveBeenCalled();
-    expired.stop();
-  });
+  it.each([
+    [
+      "/auth/change-password",
+      "INVALID_CREDENTIALS",
+      "That is not your current password.",
+    ],
+    [
+      "/connectors",
+      "CONNECTOR_AUTH_ERROR",
+      "IMAP authentication failed: Invalid credentials",
+    ],
+    [
+      "/auth/passkeys/register/verify",
+      "PASSKEY_VERIFICATION_FAILED",
+      "Passkey verification failed.",
+    ],
+  ])(
+    "does not treat a route-specific 401 (%s → %s) as an expired session",
+    async (path, code, message) => {
+      // Only `UNAUTHORIZED` (or an unlabelled 401) is about the browser's own
+      // credential. Route-specific 401 codes report a form or upstream refusal
+      // while the Contrack session cookie is still valid.
+      const expired = listen(AUTH_EXPIRED_EVENT);
+      respondWith({ error: { message, code } }, { status: 401 });
+      await expect(apiFetch(path)).rejects.toMatchObject({
+        status: 401,
+        code,
+        message,
+      });
+      expect(expired.spy).not.toHaveBeenCalled();
+      expired.stop();
+    },
+  );
 
   it("does not announce ADMIN_REQUIRED at all", async () => {
     // No toast on purpose. `useGroundingCapacity` polls an admin-only route

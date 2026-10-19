@@ -9,6 +9,12 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Connectors: keep the browser session signed in when a connector's own
+  authentication check fails, and show the IMAP server's error message instead
+  of `Command failed` (#245).
+
 ## [2.0.1] - 2026-10-16
 
 ### Added

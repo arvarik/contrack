@@ -37,6 +37,7 @@ describe("Connectors API (/api/connectors)", () => {
 
   // Mock test adapter for controlled errors & sync events
   const mockAdapterKind = "mock-test";
+  let testShouldThrowAuthError = false;
   let syncShouldThrowAuthError = false;
   let syncShouldThrowGenericError = false;
 
@@ -56,6 +57,11 @@ describe("Connectors API (/api/connectors)", () => {
       secretKey: z.string().optional(),
     }),
     async test(_config, secret) {
+      if (testShouldThrowAuthError) {
+        throw new ConnectorAuthError(
+          "IMAP authentication failed: Invalid credentials",
+        );
+      }
       return {
         ok: true,
         detail: secret
@@ -117,6 +123,7 @@ describe("Connectors API (/api/connectors)", () => {
   });
 
   beforeEach(() => {
+    testShouldThrowAuthError = false;
     syncShouldThrowAuthError = false;
     syncShouldThrowGenericError = false;
   });
@@ -203,6 +210,40 @@ describe("Connectors API (/api/connectors)", () => {
       }
     ).c;
     expect(countAfter).toBe(countBefore);
+  });
+
+  it("answers 400 CONNECTOR_AUTH_ERROR (not 401) when remote connector credentials fail", async () => {
+    testShouldThrowAuthError = true;
+
+    for (const [path, body] of [
+      [
+        "/api/connectors/test",
+        {
+          kind: mockAdapterKind,
+          config: { host: "mail.example.com" },
+          secret: { secretKey: "wrong" },
+        },
+      ],
+      [
+        "/api/connectors",
+        {
+          kind: mockAdapterKind,
+          name: "Bad Creds",
+          config: { host: "mail.example.com" },
+          secret: { secretKey: "wrong" },
+        },
+      ],
+    ] as const) {
+      const res = await request(server)
+        .post(path)
+        .set("Cookie", actorA.cookie)
+        .send(body);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatchObject({
+        code: "CONNECTOR_AUTH_ERROR",
+        message: "IMAP authentication failed: Invalid credentials",
+      });
+    }
   });
 
   it("POST /test uses the saved secret only for the same destination", async () => {

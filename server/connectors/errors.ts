@@ -26,7 +26,7 @@ export class ConnectorAuthError extends ConnectorError {
     message = "Connector authentication failed or credentials expired",
     details?: Record<string, unknown>,
   ) {
-    super(message, 401, { code: "CONNECTOR_AUTH_ERROR", ...details });
+    super(message, 400, { code: "CONNECTOR_AUTH_ERROR", ...details });
   }
 }
 
