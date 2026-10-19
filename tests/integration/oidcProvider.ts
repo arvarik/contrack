@@ -21,6 +21,12 @@ export async function startFakeProvider() {
   let issuer = "";
   let clientId = "contrack";
   let lastNonce = "";
+  let tokenRedirect: string | null = null;
+  const requests: string[] = [];
+  idp.use((req, _res, proceed) => {
+    requests.push(req.path);
+    proceed();
+  });
 
   idp.get("/.well-known/openid-configuration", (_req, res) => {
     res.json({
@@ -39,6 +45,11 @@ export async function startFakeProvider() {
     res.json({ keys: [jwk] });
   });
   idp.post("/token", async (_req, res) => {
+    if (tokenRedirect) {
+      res.redirect(307, tokenRedirect);
+      tokenRedirect = null;
+      return;
+    }
     if (!next) {
       res.status(400).json({ error: "invalid_grant" });
       return;
@@ -81,6 +92,12 @@ export async function startFakeProvider() {
     nextLogin(login: FakeLogin) {
       next = login;
     },
+    /** Answer the next token request with a 307 to `location`. */
+    redirectNextToken(location: string) {
+      tokenRedirect = location;
+    },
+    /** Paths the provider was asked for, in order. */
+    requests,
     /** Read state and nonce from an authorize URL Contrack produced. */
     remember(authorizeUrl: string) {
       const url = new URL(authorizeUrl);

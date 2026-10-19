@@ -47,6 +47,9 @@ const viaSafeFetch: client.CustomFetch = async (url, options) => {
     headers: options.headers,
     body: body == null ? undefined : String(body),
     signal: options.signal,
+    // openid-client always asks for "manual": a redirect must reach it, not be
+    // followed with the code and verifier.
+    redirect: options.redirect,
     allowPrivate: true,
     timeoutMs: 10_000,
   });

@@ -112,6 +112,23 @@ describe("oidcService", () => {
     });
   });
 
+  it("does not follow a redirect from the token endpoint", async () => {
+    const { state } = idp.remember(
+      await startOidc({ redirectUri: REDIRECT, linkUserId: null }),
+    );
+    idp.nextLogin({ sub: "sub-1" });
+    const stolen = `${idp.issuer}/stolen-token`;
+    idp.redirectNextToken(stolen);
+    await expect(
+      finishOidc(`${REDIRECT}?code=abc&state=${state}`),
+    ).rejects.toBeInstanceOf(Error);
+    expect(idp.requests).toContain("/token");
+    expect(idp.requests).not.toContain("/stolen-token");
+    expect(vi.mocked(safeFetch).mock.calls.map(([u]) => u)).not.toContain(
+      stolen,
+    );
+  });
+
   it("is 404 without a provider", async () => {
     setOidcConfig(null);
     await expect(
