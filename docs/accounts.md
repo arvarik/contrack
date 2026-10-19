@@ -117,6 +117,46 @@ Passkeys need HTTPS or `localhost`. They do not work on an IP address, such as
 reverse proxy, set `PUBLIC_URL` to the address in the browser's address bar,
 see [Remote access](self-hosting.md#remote-access).
 
+## Single sign-on
+
+An admin can let people sign in with an OpenID Connect provider, such as
+Authentik, Keycloak, Pocket ID, Authelia or Google. Single sign-on works only
+while sign-in is on.
+
+### Set up the provider
+
+1. In your provider, create an OpenID Connect client of the confidential type.
+2. Open **Settings → Administration → General**. Under **Sign-in**, copy the
+   redirect URI from **OpenID Connect (single sign-on)** into the client. It is
+   your public address plus `/api/auth/oidc/callback`.
+3. Enter **Issuer**, **Client ID**, **Client secret** and **Button name**, then
+   select **Save**. Saving does not contact the provider. **Remove** asks
+   first.
+
+The issuer must use `https://`. `localhost`, `127.0.0.1` and `[::1]` may use
+`http://`. The sign-in screen then shows **Sign in with** and the button name.
+If `OIDC_ISSUER`, `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET` are set, they win
+and the card is locked, see [Configuration](configuration.md#environment-variables).
+
+### Which account signs in
+
+Single sign-on never creates an account. It signs in to an existing one:
+
+- **A linked account.** Under **Settings → Account → Sign-in methods**, select
+  **Link** on the **Single sign-on** card and sign in with the provider.
+  **Unlink** asks first.
+- **The same email.** When **Accounts with the same verified email can sign
+  in** is on (the default), a provider account whose email the provider calls
+  verified signs in to the Contrack account with that email, and stays linked
+  to it. An account that already has a link from this provider is never moved
+  by email. Turn the switch off to require a link first.
+
+Unlinking keeps your password and passkeys, so you can always still sign in.
+The **Devices** list shows a session from the provider as **Single sign-on**.
+
+The server never follows a redirect when it talks to the provider, and a
+sign-in works only in the browser that started it.
+
 ## Your account
 
 ![Settings, Account: the profile, sign-in methods with passkeys, devices, and API tokens](images/account-settings.png)
