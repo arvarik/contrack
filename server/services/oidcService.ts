@@ -164,8 +164,13 @@ export async function finishOidc(callbackUrl: string): Promise<OidcClaims> {
   }
   let email = typeof claims.email === "string" ? claims.email : null;
   let emailVerified = claims.email_verified === true;
-  // Some providers put the address only in userinfo.
-  if (!email && tokens.access_token) {
+  // Some providers put the address only in userinfo. One without a userinfo
+  // endpoint simply has no address to give.
+  if (
+    !email &&
+    tokens.access_token &&
+    config.serverMetadata().userinfo_endpoint
+  ) {
     const info = await client.fetchUserInfo(
       config,
       tokens.access_token,

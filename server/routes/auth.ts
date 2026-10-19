@@ -5,6 +5,7 @@
 // itself (`requireSession`). On a gated instance with no accounts nobody can
 // sign in, so /setup is open until an account exists, then answers 409.
 
+import crypto from "crypto";
 import { Router, type Request, type Response } from "express";
 import { AppError, ValidationError } from "../utils/AppError.ts";
 import { log } from "../utils/logger.ts";
@@ -61,6 +62,9 @@ import {
   presentedSessionSecret,
   setSessionCookie,
   clearSessionCookie,
+  setOidcStateCookie,
+  clearOidcStateCookie,
+  presentedOidcState,
 } from "../middleware/auth.ts";
 import {
   accountIdForIdentifier,
@@ -93,7 +97,20 @@ import {
   processProfilePhoto,
   AVATAR_MIME_EXTENSIONS,
 } from "../utils/avatarProcessor.ts";
-import { mailLinkOrigin } from "../utils/publicOrigin.ts";
+import {
+  mailLinkOrigin,
+  oidcCallbackUrl,
+  publicOrigin,
+} from "../utils/publicOrigin.ts";
+import { getOidcConfig } from "../services/integrationSettings.ts";
+import { startOidc, finishOidc } from "../services/oidcService.ts";
+import {
+  findUserIdByIdentity,
+  linkIdentity,
+  listIdentities,
+  touchIdentity,
+  unlinkIdentity,
+} from "../services/identityService.ts";
 import { oauthIssuer } from "../services/oauthService.ts";
 import type { SessionMethod } from "../../shared/devices.ts";
 import {
@@ -253,6 +270,11 @@ router.get("/status", (req, res) => {
     // Whether an MCP client can sign in with OAuth here (oauthService.ts):
     // sign-in is on, and PUBLIC_URL is https or a loopback http address.
     mcpOAuth: authRequired && oauthIssuer() !== null,
+    // The OIDC provider's button name, while sign-in is on and one is set up.
+    oidc: (() => {
+      const config = authRequired ? getOidcConfig() : null;
+      return config ? { name: config.name } : null;
+    })(),
     // What this instance calls itself, or "". Unauthenticated on purpose: the
     // sign-in and join screens need it before anybody has a credential. An
     // operator who names an instance chooses to show the name to anybody who
@@ -978,6 +1000,211 @@ router.post(
     dismissPasskeyNudge(user.id);
     res.json({ ok: true });
   }),
+);
+
+// Single sign-on (OIDC)
+
+/** OIDC is offered only while sign-in is on. */
+function assertOidcAvailable(): void {
+  if (!isAuthRequired() || !getOidcConfig()) {
+    throw new AppError("Single sign-on is off", 404, { code: "OIDC_OFF" });
+  }
+}
+
+/** Where a finished or failed OIDC flow lands, with the outcome for the page. */
+function oidcLanding(link: boolean, outcome: string | null): string {
+  if (link) return `/settings/account?oidc=${outcome ?? "linked"}#password`;
+  return outcome ? `/?oidc=${outcome}` : "/";
+}
+
+/**
+ * Start a flow and bind it to this browser: the flow cookie holds its state,
+ * and the callback refuses a state the cookie does not hold.
+ */
+async function startBoundOidc(
+  req: Request,
+  res: Response,
+  linkUserId: string | null,
+): Promise<string> {
+  const url = await startOidc({
+    redirectUri: oidcCallbackUrl(req),
+    linkUserId,
+  });
+  setOidcStateCookie(req, res, new URL(url).searchParams.get("state") ?? "");
+  return url;
+}
+
+/** True when the flow cookie holds this callback's state. Constant time. */
+function stateMatchesCookie(req: Request): boolean {
+  const state = req.query.state;
+  const held = presentedOidcState(req);
+  if (typeof state !== "string" || !state || !held) return false;
+  const digest = (value: string) =>
+    crypto.createHash("sha256").update(value).digest();
+  return crypto.timingSafeEqual(digest(state), digest(held));
+}
+
+router.get(
+  "/oidc/start",
+  credentialLimiter,
+  asyncHandler(async (req, res) => {
+    assertOidcAvailable();
+    res.redirect(await startBoundOidc(req, res, null));
+  }),
+);
+
+/** Start linking the signed-in account. A POST, so a cross-site page cannot start it. */
+router.post(
+  "/oidc/link",
+  credentialLimiter,
+  requireSession,
+  requirePasswordCurrent,
+  asyncHandler(async (req, res) => {
+    assertOidcAvailable();
+    res.json({ url: await startBoundOidc(req, res, req.principal!.user.id) });
+  }),
+);
+
+router.get(
+  "/oidc/callback",
+  credentialLimiter,
+  asyncHandler(async (req, res) => {
+    // The flow ends here, whatever the outcome.
+    clearOidcStateCookie(req, res);
+    if (!isAuthRequired()) return res.redirect("/");
+    // Checked before finishOidc, so a callback from another browser's flow
+    // cannot consume that flow's state.
+    if (!stateMatchesCookie(req)) {
+      log.warn("Auth", "OIDC callback without this browser's flow cookie");
+      return res.redirect(oidcLanding(false, "failed"));
+    }
+    if (typeof req.query.error === "string") {
+      return res.redirect(oidcLanding(false, "denied"));
+    }
+
+    let claims;
+    try {
+      claims = await finishOidc(
+        new URL(req.originalUrl, publicOrigin(req)).toString(),
+      );
+    } catch (err) {
+      log.warn("Auth", "OIDC sign-in did not finish", { error: err });
+      const expired = err instanceof AppError && err.statusCode === 410;
+      return res.redirect(oidcLanding(false, expired ? "expired" : "failed"));
+    }
+
+    // Linking: only the account that started it may finish it.
+    if (claims.linkUserId) {
+      const me = req.principal?.via === "session" ? req.principal.user : null;
+      if (!me || me.id !== claims.linkUserId) {
+        return res.redirect(oidcLanding(true, "failed"));
+      }
+      try {
+        linkIdentity(me.id, claims.issuer, claims.subject, claims.email);
+      } catch (err) {
+        if (err instanceof AppError && err.statusCode === 409) {
+          return res.redirect(oidcLanding(true, "taken"));
+        }
+        throw err;
+      }
+      auditService.record({
+        actorUserId: me.id,
+        action: "auth.oidc.linked",
+        targetType: "user",
+        targetId: me.id,
+        details: { issuer: claims.issuer },
+        ip: ipOf(req),
+      });
+      return res.redirect(oidcLanding(true, null));
+    }
+
+    // Signing in: a linked identity, else a verified email the admin allows.
+    // The email match links only an account with no identity at this
+    // provider yet, so it never moves an existing link to another account.
+    const linkedId = findUserIdByIdentity(claims.issuer, claims.subject);
+    let user = linkedId ? getUserById(linkedId) : null;
+    let matchedByEmail = false;
+    if (
+      !linkedId &&
+      getOidcConfig()?.matchByEmail &&
+      claims.emailVerified &&
+      claims.email
+    ) {
+      const match = findUserByEmail(claims.email);
+      if (
+        match &&
+        !listIdentities(match.id).some((i) => i.issuer === claims.issuer)
+      ) {
+        user = match;
+        matchedByEmail = true;
+      }
+    }
+    if (!user) {
+      auditService.record({
+        actorUserId: null,
+        action: "auth.login.failed",
+        details: { method: "oidc", matched: false },
+        ip: ipOf(req),
+      });
+      return res.redirect(oidcLanding(false, "no-account"));
+    }
+    if (user.status === "disabled") {
+      auditService.record({
+        actorUserId: user.id,
+        action: "auth.login.failed",
+        targetType: "user",
+        targetId: user.id,
+        details: { method: "oidc", reason: "disabled" },
+        ip: ipOf(req),
+      });
+      return res.redirect(oidcLanding(false, "disabled"));
+    }
+
+    if (matchedByEmail) {
+      linkIdentity(user.id, claims.issuer, claims.subject, claims.email);
+      auditService.record({
+        actorUserId: user.id,
+        action: "auth.oidc.linked",
+        targetType: "user",
+        targetId: user.id,
+        details: { issuer: claims.issuer, matchedByEmail: true },
+        ip: ipOf(req),
+      });
+    }
+    touchIdentity(claims.issuer, claims.subject);
+    startSession(req, res, user, "oidc");
+    auditService.record({
+      actorUserId: user.id,
+      action: "auth.login.success",
+      targetType: "user",
+      targetId: user.id,
+      details: { username: user.username, method: "oidc" },
+      ip: ipOf(req),
+    });
+    res.redirect(oidcLanding(false, null));
+  }),
+);
+
+router.get("/identities", requireSession, (req, res) => {
+  res.json({ identities: listIdentities(req.principal!.user.id) });
+});
+
+router.delete(
+  "/identities/:id",
+  requireSession,
+  requirePasswordCurrent,
+  (req, res) => {
+    const user = req.principal!.user;
+    unlinkIdentity(user.id, String(req.params.id));
+    auditService.record({
+      actorUserId: user.id,
+      action: "auth.oidc.unlinked",
+      targetType: "user",
+      targetId: user.id,
+      ip: ipOf(req),
+    });
+    res.json({ ok: true });
+  },
 );
 
 export const authRouter = router;
