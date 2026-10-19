@@ -78,7 +78,7 @@
     "eval:answer:live": "node scripts/record-answer-eval.ts --live"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.132.0",
+    "@anthropic-ai/sdk": "^0.133.0",
     "@dicebear/avataaars": "^9.4.2",
     "@dicebear/bottts": "^9.4.2",
     "@dicebear/core": "^9.4.3",
