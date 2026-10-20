@@ -103,14 +103,16 @@ import {
   publicOrigin,
 } from "../utils/publicOrigin.ts";
 import { getOidcConfig } from "../services/integrationSettings.ts";
-import { startOidc, finishOidc } from "../services/oidcService.ts";
 import {
-  findUserIdByIdentity,
-  linkIdentity,
-  listIdentities,
-  touchIdentity,
-  unlinkIdentity,
-} from "../services/identityService.ts";
+  startOidc,
+  finishOidc,
+  type OidcClaims,
+} from "../services/oidcService.ts";
+import {
+  completeOidcLink,
+  completeOidcSignIn,
+} from "../services/oidcSignInService.ts";
+import { listIdentities, unlinkIdentity } from "../services/identityService.ts";
 import { oauthIssuer } from "../services/oauthService.ts";
 import type { SessionMethod } from "../../shared/devices.ts";
 import {
@@ -1072,100 +1074,22 @@ router.post(
   }),
 );
 
-/** Everything after the provider answered: link, or find the account and sign in. */
-function completeOidc(
-  req: Request,
-  res: Response,
-  claims: Awaited<ReturnType<typeof finishOidc>>,
-): void {
-  // Linking: only the account that started it may finish it.
+/** Everything after the provider answered: link, or sign in. */
+function completeOidc(req: Request, res: Response, claims: OidcClaims): void {
+  const info = { ip: ipOf(req), userAgent: req.headers["user-agent"] ?? null };
   if (claims.linkUserId) {
-    const me = req.principal?.via === "session" ? req.principal.user : null;
-    if (!me || me.id !== claims.linkUserId) {
-      return void res.redirect(oidcLanding(true, "failed"));
-    }
-    try {
-      linkIdentity(me.id, claims.issuer, claims.subject, claims.email);
-    } catch (err) {
-      if (err instanceof AppError && err.statusCode === 409) {
-        return void res.redirect(oidcLanding(true, "taken"));
-      }
-      throw err;
-    }
-    auditService.record({
-      actorUserId: me.id,
-      action: "auth.oidc.linked",
-      targetType: "user",
-      targetId: me.id,
-      details: { issuer: claims.issuer },
-      ip: ipOf(req),
-    });
-    return void res.redirect(oidcLanding(true, null));
+    const sessionUserId =
+      req.principal?.via === "session" ? req.principal.user.id : null;
+    const outcome = completeOidcLink(claims, sessionUserId, info);
+    return void res.redirect(
+      oidcLanding(true, outcome === "linked" ? null : outcome),
+    );
   }
-
-  // Signing in: a linked identity, else a verified email the admin allows.
-  // The email match links only an account with no identity at this
-  // provider yet, so it never moves an existing link to another account.
-  const linkedId = findUserIdByIdentity(claims.issuer, claims.subject);
-  let user = linkedId ? getUserById(linkedId) : null;
-  let matchedByEmail = false;
-  if (
-    !linkedId &&
-    getOidcConfig()?.matchByEmail &&
-    claims.emailVerified &&
-    claims.email
-  ) {
-    const match = findUserByEmail(claims.email);
-    if (
-      match &&
-      !listIdentities(match.id).some((i) => i.issuer === claims.issuer)
-    ) {
-      user = match;
-      matchedByEmail = true;
-    }
+  const result = completeOidcSignIn(claims, info);
+  if (result.outcome !== "signed-in") {
+    return void res.redirect(oidcLanding(false, result.outcome));
   }
-  if (!user) {
-    auditService.record({
-      actorUserId: null,
-      action: "auth.login.failed",
-      details: { method: "oidc", matched: false },
-      ip: ipOf(req),
-    });
-    return void res.redirect(oidcLanding(false, "no-account"));
-  }
-  if (user.status === "disabled") {
-    auditService.record({
-      actorUserId: user.id,
-      action: "auth.login.failed",
-      targetType: "user",
-      targetId: user.id,
-      details: { method: "oidc", reason: "disabled" },
-      ip: ipOf(req),
-    });
-    return void res.redirect(oidcLanding(false, "disabled"));
-  }
-
-  if (matchedByEmail) {
-    linkIdentity(user.id, claims.issuer, claims.subject, claims.email);
-    auditService.record({
-      actorUserId: user.id,
-      action: "auth.oidc.linked",
-      targetType: "user",
-      targetId: user.id,
-      details: { issuer: claims.issuer, matchedByEmail: true },
-      ip: ipOf(req),
-    });
-  }
-  touchIdentity(claims.issuer, claims.subject);
-  startSession(req, res, user, "oidc");
-  auditService.record({
-    actorUserId: user.id,
-    action: "auth.login.success",
-    targetType: "user",
-    targetId: user.id,
-    details: { username: user.username, method: "oidc" },
-    ip: ipOf(req),
-  });
+  setSessionCookie(req, res, result.session.secret, result.session.expiresAt);
   res.redirect(oidcLanding(false, null));
 }
 

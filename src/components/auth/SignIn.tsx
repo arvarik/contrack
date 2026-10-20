@@ -42,7 +42,7 @@ const HEADINGS: Record<
 };
 
 /** The server sends a failed OIDC sign-in back as /?oidc=<outcome>. */
-export const OIDC_ERRORS: Record<string, string> = {
+const OIDC_ERRORS: Record<string, string> = {
   "no-account":
     "No Contrack account uses that sign-in. Sign in with your password, then link it under Account settings",
   disabled:

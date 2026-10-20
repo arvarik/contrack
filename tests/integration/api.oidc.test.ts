@@ -419,6 +419,40 @@ describe("API: OIDC failures on browser routes", () => {
       const res = await signIn({ sub: "sub-ada" });
       expect(res.status).toBe(302);
       expect(res.headers.location).toBe("/?oidc=failed");
+      expect(
+        sqlite
+          .prepare("SELECT COUNT(*) AS n FROM sessions WHERE userId = ?")
+          .get(ada.id),
+      ).toEqual({ n: 0 });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("leaves no link and no session when an email sign-in fails part way", async () => {
+    const { ada } = await setup();
+    const spy = vi
+      .spyOn(identityService, "touchIdentity")
+      .mockImplementationOnce(() => {
+        throw new Error("boom");
+      });
+    try {
+      const res = await signIn({
+        sub: "sub-new",
+        email: "ada@example.com",
+        email_verified: true,
+      });
+      expect(res.headers.location).toBe("/?oidc=failed");
+      expect(
+        sqlite
+          .prepare("SELECT COUNT(*) AS n FROM user_identities WHERE userId = ?")
+          .get(ada.id),
+      ).toEqual({ n: 0 });
+      expect(
+        sqlite
+          .prepare("SELECT COUNT(*) AS n FROM sessions WHERE userId = ?")
+          .get(ada.id),
+      ).toEqual({ n: 0 });
     } finally {
       spy.mockRestore();
     }

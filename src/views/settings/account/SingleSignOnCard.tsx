@@ -22,23 +22,21 @@ import {
   type LinkedIdentity,
 } from "../../../api/auth";
 
-export const identitiesQuery = queryOptions({
+const identitiesQuery = queryOptions({
   queryKey: ["auth", "identities"],
   queryFn: listIdentities,
   staleTime: 30_000,
 });
 
 /** The toast for the address's ?oidc=<outcome> after a link attempt. */
-export const OUTCOMES: Record<
-  string,
-  [ok: boolean, text: (name: string) => string]
-> = {
-  linked: [true, (name) => `${name} linked`],
-  taken: [false, () => "That sign-in is already linked to another account"],
-  expired: [false, () => "That took too long. Try linking again"],
-  denied: [false, () => "Linking was cancelled"],
-  failed: [false, () => "Linking did not finish. Try again"],
-};
+const OUTCOMES: Record<string, [ok: boolean, text: (name: string) => string]> =
+  {
+    linked: [true, (name) => `${name} linked`],
+    taken: [false, () => "That sign-in is already linked to another account"],
+    expired: [false, () => "That took too long. Try linking again"],
+    denied: [false, () => "Linking was cancelled"],
+    failed: [false, () => "Linking did not finish. Try again"],
+  };
 
 /** A SQLite timestamp as a local date. */
 function formatDay(iso: string): string {
