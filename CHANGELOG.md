@@ -11,8 +11,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- Sign in with an OpenID Connect provider, linked from account settings or
-  matched by verified email.
+- Sign in with an OpenID Connect provider, linked from account settings or,
+  when an admin turns it on, matched by verified email.
 
 ## [2.0.2] - 2026-10-18
 
