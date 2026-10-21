@@ -11,8 +11,8 @@
 // - A disabled account, or one that must change its password first, is
 //   refused before anything is written.
 // - A sign-in's writes (the email link, lastUsedAt, lastLoginAt, the session,
-//   the audit row) run in one transaction: a failure leaves no half-made
-//   sign-in.
+//   the audit row) run in one transaction, as do a link and its audit row: a
+//   failure leaves nothing half made.
 
 import { ResponseBodyError } from "openid-client";
 import { sqlite } from "../db.ts";
@@ -67,19 +67,21 @@ export function completeOidcLink(
 ): OidcLinkOutcome {
   if (sessionUserId !== linkUserId) return "failed";
   try {
-    linkIdentity(sessionUserId, claims.issuer, claims.subject, claims.email);
+    sqlite.transaction(() => {
+      linkIdentity(sessionUserId, claims.issuer, claims.subject, claims.email);
+      auditService.record({
+        actorUserId: sessionUserId,
+        action: "auth.oidc.linked",
+        targetType: "user",
+        targetId: sessionUserId,
+        details: { issuer: claims.issuer },
+        ip: info.ip,
+      });
+    })();
   } catch (err) {
     if (err instanceof AppError && err.statusCode === 409) return "taken";
     throw err;
   }
-  auditService.record({
-    actorUserId: sessionUserId,
-    action: "auth.oidc.linked",
-    targetType: "user",
-    targetId: sessionUserId,
-    details: { issuer: claims.issuer },
-    ip: info.ip,
-  });
   return "linked";
 }
 

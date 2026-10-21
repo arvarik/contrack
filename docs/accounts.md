@@ -132,8 +132,10 @@ while sign-in is on.
    redirect URI from **OpenID Connect (single sign-on)** into the client. It is
    your public address plus `/api/auth/oidc/callback`.
 3. Enter **Issuer**, **Client ID**, **Client secret** and **Button name**, then
-   select **Save**. Saving asks the provider for its settings and refuses the
-   change, with the reason, when it cannot reach them. Leave **Client secret**
+   select **Save**. Saving new credentials asks the provider for its settings
+   and refuses the change, with the reason, when the provider does not answer
+   or answers with an error. A change to only the button name or the switch
+   saves without asking, so it works while the provider is down. Leave **Client secret**
    empty to keep the saved one, as long as the issuer and client ID stay the
    same. **Remove** asks first.
 
@@ -151,6 +153,8 @@ Single sign-on never creates an account. It signs in to an existing one:
   **Link** followed by the provider name (such as **Link SSO**) on the
   **Single sign-on** card and sign in with the provider. You come back to
   **Account** settings, which says whether the link worked and, if not, why.
+  If the browser lost the flow's cookie on the way, such as when the provider
+  opened in another browser, you land on the start page instead; link again.
   **Unlink** asks first.
 - **The same email.** When **Accounts with the same verified email can sign
   in** is on, a provider account whose email the provider calls verified signs

@@ -2253,6 +2253,23 @@ describe("instance lifecycle and integration settings (P4)", () => {
       expect(getOidcConfig()?.issuer).toBe(OIDC.issuer);
     });
 
+    it("saves the switch and the name while the provider is down, but not new credentials", async () => {
+      const down = { ...OIDC, issuer: "http://127.0.0.1:9" };
+      setOidcConfig(down);
+      const { clientSecret: _secret, ...rest } = down;
+      const res = await save({ ...rest, name: "Renamed", matchByEmail: false });
+      expect(res.status).toBe(200);
+      expect(getOidcConfig()).toMatchObject({
+        name: "Renamed",
+        matchByEmail: false,
+      });
+
+      const secret = await save({ ...down, clientSecret: "new-secret-5678" });
+      expect(secret.status).toBe(400);
+      expect(secret.body.error.code).toBe("OIDC_DISCOVERY_FAILED");
+      expect(getOidcConfig()?.clientSecret).toBe(OIDC.clientSecret);
+    });
+
     it("keeps the saved secret when the issuer and client ID stay", async () => {
       setOidcConfig(OIDC);
       const { clientSecret: _secret, ...rest } = OIDC;

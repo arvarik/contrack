@@ -134,8 +134,9 @@ async function discover(
 /**
  * Save the provider an admin entered, or clear it with null. A save without a
  * client secret keeps the saved one, but only for the same issuer and client
- * ID. The provider must answer discovery first; when it does not, nothing is
- * stored.
+ * ID. New credentials must answer discovery first; when they do not, nothing
+ * is stored. A save that keeps them (the switch or the name alone) skips
+ * discovery, so it works while the provider is down.
  */
 export async function saveOidcProvider(
   input:
@@ -154,6 +155,14 @@ export async function saveOidcProvider(
       : "");
   if (!clientSecret) throw new ValidationError("Client secret is required");
   const config = { ...input, clientSecret };
+  const unchanged =
+    saved?.issuer === config.issuer &&
+    saved.clientId === config.clientId &&
+    saved.clientSecret === config.clientSecret;
+  if (unchanged) {
+    setOidcConfig(config);
+    return;
+  }
   try {
     await discover(config);
   } catch (err) {

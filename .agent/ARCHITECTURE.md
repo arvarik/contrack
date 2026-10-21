@@ -115,10 +115,11 @@ SQL, and tests prove it.
   refused, an admin's included. A cookie write from another site's page is
   refused (`refuseCrossSiteWrites`).
 - OIDC sign-in (`server/services/oidcService.ts`) uses `openid-client`
-  through `safeFetch`. The provider is a sealed `auth.oidc` setting or
+  through `safeFetch`, and `oidcSignInService.ts` decides what a callback
+  links or signs in to. The provider is a sealed `auth.oidc` setting or
   `OIDC_*`. A flow waits in `auth_challenges` (`kind = 'oidc'`), and
-  `user_identities` maps (issuer, subject) to an account. Email matching
-  needs `email_verified` and never creates an account.
+  `user_identities` maps (issuer, subject) to an account. Email matching is
+  opt-in, needs `email_verified` and never creates an account.
 - While sign-in is off, and until the first account exists, `hostGuard`
   answers only local names, the `PUBLIC_URL` host and `ALLOWED_HOSTS`, so DNS
   rebinding cannot reach the owner's data.

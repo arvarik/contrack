@@ -88,12 +88,15 @@ export const SingleSignOnCard = () => {
     onError: (error: Error) =>
       toast.error(`Could not start linking: ${errorText(error)}`),
   });
+  // An identity from a provider that is no longer set up goes by its host.
+  const nameOf = (identity: LinkedIdentity) =>
+    identity.current ? (oidc?.name ?? "") : issuerHost(identity.issuer);
   const unlink = useMutation({
-    mutationFn: (id: string) => unlinkIdentity(id),
-    onSuccess: () => {
+    mutationFn: (identity: LinkedIdentity) => unlinkIdentity(identity.id),
+    onSuccess: (_data, identity) => {
       setTarget(null);
       queryClient.invalidateQueries({ queryKey: ["auth", "identities"] });
-      toast.success(`${oidc?.name} unlinked`);
+      toast.success(`${nameOf(identity)} unlinked`);
     },
     onError: (error: Error) =>
       toast.error(`Could not unlink: ${errorText(error)}`),
@@ -173,8 +176,7 @@ export const SingleSignOnCard = () => {
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-on-surface truncate">
-                    {identity.email ??
-                      `${identity.current ? oidc.name : issuerHost(identity.issuer)} account`}
+                    {identity.email ?? `${nameOf(identity)} account`}
                   </p>
                   <p className="text-xs text-on-surface-variant">
                     Linked {formatDay(identity.createdAt)}
@@ -187,7 +189,7 @@ export const SingleSignOnCard = () => {
                   type="button"
                   onClick={() => setTarget(identity)}
                   className={cn(ICON_BTN, "hover:text-error")}
-                  aria-label={`Unlink ${identity.email ?? oidc.name}`}
+                  aria-label={`Unlink ${identity.email ?? nameOf(identity)}`}
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>
@@ -200,10 +202,10 @@ export const SingleSignOnCard = () => {
       <ConfirmDialog
         isOpen={target !== null}
         onClose={() => setTarget(null)}
-        onConfirm={() => target && unlink.mutate(target.id)}
-        title={`Unlink ${oidc.name}`}
-        description={`You can still sign in with ${others}${data?.matchByEmail ? `. Email matching is on, so your next ${oidc.name} sign-in links this account again` : ""}`}
-        confirmLabel={`Unlink ${oidc.name}`}
+        onConfirm={() => target && unlink.mutate(target)}
+        title={`Unlink ${target ? nameOf(target) : oidc.name}`}
+        description={`You can still sign in with ${others}${data?.matchByEmail && target?.current ? `. Email matching is on, so your next ${oidc.name} sign-in links this account again` : ""}`}
+        confirmLabel={`Unlink ${target ? nameOf(target) : oidc.name}`}
         tone="danger"
         busy={unlink.isPending}
       />

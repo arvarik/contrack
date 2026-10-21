@@ -1,7 +1,7 @@
 // A minimal OpenID provider for tests: discovery, an authorize endpoint that
 // sends a browser straight back, JWKS, a token endpoint that signs an ID token
-// for whatever the test queued with `nextLogin`, and a userinfo endpoint. The token endpoint takes only the method it advertises,
-// client_secret_basic.
+// for whatever the test queued with `nextLogin`, and a userinfo endpoint. The
+// token endpoint takes only the method it advertises, client_secret_basic.
 
 import http from "node:http";
 import express from "express";

@@ -130,6 +130,18 @@ describe("SingleSignOnCard", () => {
     );
   });
 
+  it("names an old provider's identity by its host when unlinking, without the matching warning", async () => {
+    api.identities = [
+      identity({ issuer: "https://old.example.org", current: false }),
+    ];
+    api.matchByEmail = true;
+    show();
+    fireEvent.click(await screen.findByLabelText("Unlink a@b.c"));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent).toContain("Unlink old.example.org");
+    expect(dialog.textContent).not.toContain("links this account again");
+  });
+
   it("does not claim the account has no passkeys when passkeys cannot be checked", async () => {
     api.identities = [identity()];
     api.passkeysSupported = false;

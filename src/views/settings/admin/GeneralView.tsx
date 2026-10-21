@@ -1185,7 +1185,8 @@ export const OidcRow = () => {
                     Off: members link the provider under Account → Sign-in
                     methods first. Contrack does not verify the email on an
                     account, and members can change their own. Turn this on only
-                    when every account&apos;s email is trusted
+                    when every account&apos;s email is trusted, and the provider
+                    verifies addresses that people cannot choose themselves
                   </span>
                 </label>
                 <Switch
