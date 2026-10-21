@@ -208,16 +208,16 @@ export async function finishOidcCallback(
   const land = (outcome: string | null) => ({
     landing: oidcLanding(flow, outcome),
   });
+  if (!flow) {
+    log.warn("Auth", "OIDC callback for a flow that does not exist");
+    return land("failed");
+  }
   const providerError = callbackUrl.searchParams.get("error");
   if (providerError !== null) {
     log.info("Auth", "OIDC provider returned an error", {
       error: providerError,
     });
     return land("denied");
-  }
-  if (!flow) {
-    log.warn("Auth", "OIDC callback for a flow that does not exist");
-    return land("failed");
   }
   if (flow.expired) return land("expired");
 

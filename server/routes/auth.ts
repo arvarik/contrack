@@ -1047,9 +1047,11 @@ router.get(
   // A browser navigates here, so a refusal goes back to the sign-in page
   // instead of showing JSON.
   (req, res, next) =>
-    oidcLimiter(req, res, (err?: unknown) =>
-      err ? res.redirect("/?oidc=failed") : next(),
-    ),
+    oidcLimiter(req, res, (err?: unknown) => {
+      if (!err) return next();
+      log.warn("Auth", "OIDC sign-in start refused by the rate limit");
+      res.redirect("/?oidc=failed");
+    }),
   asyncHandler(async (req, res) => {
     try {
       assertOidcAvailable();

@@ -221,6 +221,8 @@ export function takeOidcFlow(state: string): OidcFlow | null {
   const data = JSON.parse(row.challenge) as FlowData;
   return {
     ...data,
+    // A flow written before `remember` existed keeps the default.
+    remember: data.remember !== false,
     userId: row.userId,
     expired: new Date(row.expiresAt).getTime() <= Date.now(),
   };

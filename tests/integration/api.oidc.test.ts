@@ -301,6 +301,15 @@ describe("API: OIDC sign-in", () => {
     ).toEqual({ n: 0 });
   });
 
+  it("answers failed for a used state, even with a provider error", async () => {
+    const { state, cookie } = await startSignIn();
+    sqlite.prepare("DELETE FROM auth_challenges WHERE id = ?").run(state);
+    const res = await request(app)
+      .get(`/api/auth/oidc/callback?error=access_denied&state=${state}`)
+      .set("Cookie", cookie);
+    expect(res.headers.location).toBe("/?oidc=failed");
+  });
+
   it("sends the token request the redirect URI the start sent", async () => {
     const { ada } = await setup();
     linkIdentity(ada.id, idp.issuer, "sub-ada", null);

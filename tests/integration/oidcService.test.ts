@@ -130,6 +130,18 @@ describe("oidcService", () => {
     });
   });
 
+  it("remembers a flow written without the remember field", async () => {
+    const { state } = idp.remember(
+      await startOidc({ redirectUri: REDIRECT, linkUserId: null }),
+    );
+    sqlite
+      .prepare(
+        "UPDATE auth_challenges SET challenge = json_remove(challenge, '$.remember') WHERE id = ?",
+      )
+      .run(state);
+    expect(takeOidcFlow(state)?.remember).toBe(true);
+  });
+
   it("marks a flow past its ten minutes expired", async () => {
     const { state } = idp.remember(
       await startOidc({ redirectUri: REDIRECT, linkUserId: null }),
