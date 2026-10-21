@@ -9,6 +9,7 @@ import crypto from "crypto";
 import { Router, type Request, type Response } from "express";
 import { AppError, ValidationError } from "../utils/AppError.ts";
 import { log } from "../utils/logger.ts";
+import { ResponseBodyError } from "openid-client";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { validatePassword } from "../services/passwords.ts";
 import { createRateLimiter } from "../middleware/rateLimit.ts";
@@ -1119,7 +1120,15 @@ router.get(
         new URL(req.originalUrl, publicOrigin(req)).toString(),
       );
     } catch (err) {
-      log.warn("Auth", "OIDC sign-in did not finish", { error: err });
+      // A refused token request carries the OAuth error, such as
+      // invalid_client, which tells the operator why.
+      log.warn("Auth", "OIDC sign-in did not finish", {
+        error: err,
+        ...(err instanceof ResponseBodyError && {
+          oauthError: err.error,
+          oauthErrorDescription: err.error_description,
+        }),
+      });
       const expired = err instanceof AppError && err.statusCode === 410;
       return res.redirect(oidcLanding(false, expired ? "expired" : "failed"));
     }

@@ -36,7 +36,6 @@ import {
   getIntegrationsStatus,
   setGoogleOAuthCredentials,
   isGoogleOAuthEnvSet,
-  setOidcConfig,
   isOidcEnvSet,
 } from "../services/integrationSettings.ts";
 import { SETTING_KEYS } from "../services/settingsService.ts";
@@ -92,7 +91,7 @@ import {
 } from "../services/authLinkService.ts";
 import { snapshotFile, rescheduleBackups } from "../services/backupService.ts";
 import { exportFileSlug } from "../services/exportService.ts";
-import { forgetOidcDiscovery } from "../services/oidcService.ts";
+import { saveOidcProvider } from "../services/oidcService.ts";
 
 const router = Router();
 
@@ -505,31 +504,32 @@ router.put(
   requirePasswordCurrent,
   validateBody(adminIntegrationsSchema),
   asyncHandler(async (req, res) => {
-    const changed: string[] = [];
-
-    if (req.body.googleOAuth !== undefined) {
-      if (isGoogleOAuthEnvSet()) {
-        throw new AppError(
-          "Google OAuth credentials are set by environment variables GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET",
-          409,
-          { code: "SET_BY_ENVIRONMENT" },
-        );
-      }
-      setGoogleOAuthCredentials(req.body.googleOAuth);
-      changed.push("googleOAuth");
+    // Both locks are checked before anything is written.
+    if (req.body.googleOAuth !== undefined && isGoogleOAuthEnvSet()) {
+      throw new AppError(
+        "Google OAuth credentials are set by environment variables GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET",
+        409,
+        { code: "SET_BY_ENVIRONMENT" },
+      );
+    }
+    if (req.body.oidc !== undefined && isOidcEnvSet()) {
+      throw new AppError(
+        "The OIDC provider is set by environment variables OIDC_ISSUER, OIDC_CLIENT_ID and OIDC_CLIENT_SECRET",
+        409,
+        { code: "SET_BY_ENVIRONMENT" },
+      );
     }
 
+    const changed: string[] = [];
+    // The provider goes first: it can still fail discovery, and then nothing
+    // is stored.
     if (req.body.oidc !== undefined) {
-      if (isOidcEnvSet()) {
-        throw new AppError(
-          "The OIDC provider is set by environment variables OIDC_ISSUER, OIDC_CLIENT_ID and OIDC_CLIENT_SECRET",
-          409,
-          { code: "SET_BY_ENVIRONMENT" },
-        );
-      }
-      setOidcConfig(req.body.oidc);
-      forgetOidcDiscovery();
+      await saveOidcProvider(req.body.oidc);
       changed.push("oidc");
+    }
+    if (req.body.googleOAuth !== undefined) {
+      setGoogleOAuthCredentials(req.body.googleOAuth);
+      changed.push("googleOAuth");
     }
 
     const ctx = adminContext(req);

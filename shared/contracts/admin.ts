@@ -104,7 +104,9 @@ export const adminIntegrationsSchema = z
             message: "Issuer must use https:// (http only for localhost)",
           }),
         clientId: z.string().trim().min(1, "Client ID is required"),
-        clientSecret: z.string().trim().min(1, "Client Secret is required"),
+        // Left out or empty keeps the saved secret, for the same issuer and
+        // client ID only (oidcService.saveOidcProvider).
+        clientSecret: z.string().trim().optional(),
         name: z.string().trim().min(1).max(40),
         matchByEmail: z.boolean(),
       })

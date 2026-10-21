@@ -1,5 +1,6 @@
 // A minimal OpenID provider for tests: discovery, JWKS, and a token endpoint
-// that signs an ID token for whatever the test queued with `nextLogin`.
+// that signs an ID token for whatever the test queued with `nextLogin`. The
+// token endpoint takes only the method it advertises, client_secret_basic.
 
 import http from "node:http";
 import express from "express";
@@ -15,6 +16,9 @@ export interface FakeLogin {
 export async function startFakeProvider() {
   const { privateKey, publicKey } = await generateKeyPair("RS256");
   const jwk = { ...(await exportJWK(publicKey)), kid: "k1", alg: "RS256" };
+  // Never published: an ID token signed with it must be refused.
+  const rogue = await generateKeyPair("RS256");
+  let signWithRogueKey = false;
   const idp = express.Router();
   idp.use(express.urlencoded({ extended: false }));
   let next: FakeLogin | null = null;
@@ -44,7 +48,15 @@ export async function startFakeProvider() {
   idp.get("/jwks", (_req, res) => {
     res.json({ keys: [jwk] });
   });
-  idp.post("/token", async (_req, res) => {
+  idp.post("/token", async (req, res) => {
+    const basic = req.headers.authorization?.startsWith("Basic ");
+    if (!basic || req.body?.client_secret !== undefined) {
+      res.status(401).json({
+        error: "invalid_client",
+        error_description: "Only client_secret_basic is supported",
+      });
+      return;
+    }
     if (tokenRedirect) {
       res.redirect(307, tokenRedirect);
       tokenRedirect = null;
@@ -67,7 +79,8 @@ export async function startFakeProvider() {
       .setSubject(login.sub)
       .setIssuedAt()
       .setExpirationTime("5m")
-      .sign(privateKey);
+      .sign(signWithRogueKey ? rogue.privateKey : privateKey);
+    signWithRogueKey = false;
     res.json({
       access_token: "at",
       token_type: "Bearer",
@@ -91,6 +104,10 @@ export async function startFakeProvider() {
     /** Queue the account the next code exchange signs in. */
     nextLogin(login: FakeLogin) {
       next = login;
+    },
+    /** Sign the next ID token with a key the JWKS does not publish. */
+    signNextWithUnpublishedKey() {
+      signWithRogueKey = true;
     },
     /** Answer the next token request with a 307 to `location`. */
     redirectNextToken(location: string) {

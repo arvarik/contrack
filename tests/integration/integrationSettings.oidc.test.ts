@@ -1,5 +1,11 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { makeTestApp } from "./helpers.ts";
+import { log } from "../../server/utils/logger.ts";
+import { seal } from "../../server/utils/secretBox.ts";
+import {
+  setSetting,
+  SETTING_KEYS,
+} from "../../server/services/settingsService.ts";
 import {
   getOidcConfig,
   setOidcConfig,
@@ -59,9 +65,44 @@ describe("OIDC integration settings", () => {
       issuer: "https://sso.example.org",
       clientId: "env-id",
       clientSecret: "env-secret",
-      name: "Single sign-on",
+      name: "SSO",
       matchByEmail: false,
       source: "env",
     });
+  });
+
+  it("matches by email only when asked to", () => {
+    process.env.OIDC_ISSUER = "https://sso.example.org";
+    process.env.OIDC_CLIENT_ID = "env-id";
+    process.env.OIDC_CLIENT_SECRET = "env-secret";
+    expect(getOidcConfig()?.matchByEmail).toBe(false);
+    process.env.OIDC_MATCH_BY_EMAIL = "yes";
+    expect(getOidcConfig()?.matchByEmail).toBe(false);
+    process.env.OIDC_MATCH_BY_EMAIL = "true";
+    expect(getOidcConfig()?.matchByEmail).toBe(true);
+
+    delete process.env.OIDC_ISSUER;
+    // A saved provider without the field, and the status with no provider.
+    setSetting(
+      SETTING_KEYS.oidc,
+      seal(JSON.stringify({ ...INPUT, matchByEmail: undefined })),
+    );
+    expect(getOidcConfig()?.matchByEmail).toBe(false);
+    setOidcConfig(null);
+    expect(getIntegrationsStatus().oidc.matchByEmail).toBe(false);
+  });
+
+  it("leaves sign-in off for an OIDC_ISSUER that is not https, and warns once", () => {
+    const warn = vi.spyOn(log, "warn");
+    process.env.OIDC_ISSUER = "http://idp.lan";
+    process.env.OIDC_CLIENT_ID = "env-id";
+    process.env.OIDC_CLIENT_SECRET = "env-secret";
+    expect(getOidcConfig()).toBeNull();
+    expect(getOidcConfig()).toBeNull();
+    const warnings = warn.mock.calls.filter(([, msg]) =>
+      String(msg).includes("OIDC_ISSUER"),
+    );
+    expect(warnings).toHaveLength(1);
+    warn.mockRestore();
   });
 });

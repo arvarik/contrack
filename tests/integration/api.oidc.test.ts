@@ -20,6 +20,7 @@ import { cookieFrom, resetAccounts } from "./tenancy/helpers.ts";
 import { __resetAuthRateLimits } from "../../server/routes/auth.ts";
 import { __resetAuthWarnings } from "../../server/middleware/auth.ts";
 import { clearSettingsCache } from "../../server/services/settingsService.ts";
+import { log } from "../../server/utils/logger.ts";
 import { setOidcConfig } from "../../server/services/integrationSettings.ts";
 import { forgetOidcDiscovery } from "../../server/services/oidcService.ts";
 import { createUser } from "../../server/services/authService.ts";
@@ -398,6 +399,25 @@ describe("API: OIDC failures on browser routes", () => {
     expect(cookieFrom(res).some((c) => /^contrack_oidc=[^;]/.test(c))).toBe(
       false,
     );
+  });
+
+  it("logs the OAuth error when the token endpoint refuses the code", async () => {
+    const warn = vi.spyOn(log, "warn");
+    try {
+      const { state, cookie } = await startSignIn();
+      // Nothing queued: the provider answers 400 invalid_grant.
+      const res = await request(app)
+        .get(`/api/auth/oidc/callback?code=c&state=${state}`)
+        .set("Cookie", cookie);
+      expect(res.headers.location).toBe("/?oidc=failed");
+      expect(warn).toHaveBeenCalledWith(
+        "Auth",
+        "OIDC sign-in did not finish",
+        expect.objectContaining({ oauthError: "invalid_grant" }),
+      );
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("sends a start with no provider back to sign-in", async () => {

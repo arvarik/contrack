@@ -90,10 +90,15 @@ describe("oidcService", () => {
       emailVerified: true,
       linkUserId: null,
     });
-    // The token exchange went through safeFetch.
-    expect(vi.mocked(safeFetch).mock.calls.map(([u]) => u)).toContain(
-      `${idp.issuer}/token`,
+    // The token exchange went through safeFetch, with the secret in HTTP
+    // Basic (client_secret_basic), not in the body.
+    const [, token] = vi
+      .mocked(safeFetch)
+      .mock.calls.find(([u]) => u === `${idp.issuer}/token`)!;
+    expect(token?.headers?.authorization).toBe(
+      `Basic ${Buffer.from("contrack:secret").toString("base64")}`,
     );
+    expect(token?.body).not.toContain("client_secret");
     await expect(finishOidc(callback)).rejects.toMatchObject({
       statusCode: 410,
       code: "OIDC_EXPIRED",
@@ -127,6 +132,33 @@ describe("oidcService", () => {
     expect(vi.mocked(safeFetch).mock.calls.map(([u]) => u)).not.toContain(
       stolen,
     );
+  });
+
+  it("refuses an ID token signed with a key the provider does not publish", async () => {
+    const { state } = idp.remember(
+      await startOidc({ redirectUri: REDIRECT, linkUserId: null }),
+    );
+    idp.nextLogin({ sub: "sub-1" });
+    idp.signNextWithUnpublishedKey();
+    vi.mocked(safeFetch).mockClear();
+    await expect(
+      finishOidc(`${REDIRECT}?code=abc&state=${state}`),
+    ).rejects.toBeInstanceOf(Error);
+    // The keys came through safeFetch, which followed no redirect.
+    expect(vi.mocked(safeFetch)).toHaveBeenCalledWith(
+      `${idp.issuer}/jwks`,
+      expect.objectContaining({ redirect: "manual", allowPrivate: true }),
+    );
+  });
+
+  it("stores an email of only spaces as no email", async () => {
+    const { state } = idp.remember(
+      await startOidc({ redirectUri: REDIRECT, linkUserId: null }),
+    );
+    idp.nextLogin({ sub: "sub-1", email: "   ", email_verified: true });
+    await expect(
+      finishOidc(`${REDIRECT}?code=abc&state=${state}`),
+    ).resolves.toMatchObject({ email: null });
   });
 
   it("is 404 without a provider", async () => {

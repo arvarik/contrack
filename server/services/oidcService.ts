@@ -1,14 +1,23 @@
 // OIDC sign-in against the one provider an admin configured
-// (integrationSettings.ts). openid-client does discovery, PKCE and ID-token
-// validation; every request it makes goes through safeFetch. A flow's state,
-// PKCE verifier, nonce and link target wait in auth_challenges (kind 'oidc')
-// for at most ten minutes, and the callback consumes them once.
+// (integrationSettings.ts). openid-client does discovery and PKCE, sends the
+// client secret with HTTP Basic (client_secret_basic), and checks the ID
+// token's issuer, audience, expiry, nonce and its signature against the
+// provider's published JWKS. Every request it makes, the JWKS included, goes
+// through safeFetch and follows no redirect. A flow's state, PKCE verifier,
+// nonce and link target wait in auth_challenges (kind 'oidc') for at most ten
+// minutes, and the callback consumes them once.
 
 import * as client from "openid-client";
 import { sqlite } from "../db.ts";
-import { AppError } from "../utils/AppError.ts";
+import { AppError, ValidationError } from "../utils/AppError.ts";
 import { safeFetch } from "../utils/urlSafety.ts";
-import { getOidcConfig, type OidcConfig } from "./integrationSettings.ts";
+import { getErrorMessage } from "../utils/helpers.ts";
+import {
+  getOidcConfig,
+  setOidcConfig,
+  type OidcConfig,
+  type OidcConfigInput,
+} from "./integrationSettings.ts";
 import { isAllowedIssuer } from "../../shared/contracts/admin.ts";
 
 const FLOW_TTL_MS = 10 * 60 * 1000;
@@ -73,7 +82,9 @@ function requireConfig(): OidcConfig {
   return config;
 }
 
-async function discover(config: OidcConfig): Promise<client.Configuration> {
+async function discover(
+  config: OidcConfigInput,
+): Promise<client.Configuration> {
   const key = `${config.issuer}\n${config.clientId}\n${config.clientSecret}`;
   if (cached?.key === key) return cached.config;
   if (!isAllowedIssuer(config.issuer)) {
@@ -86,15 +97,51 @@ async function discover(config: OidcConfig): Promise<client.Configuration> {
   const discovered = await client.discovery(
     new URL(config.issuer),
     config.clientId,
-    config.clientSecret,
     undefined,
+    client.ClientSecretBasic(config.clientSecret),
     {
       [client.customFetch]: viaSafeFetch,
       ...(insecure ? { execute: [client.allowInsecureRequests] } : {}),
     },
   );
+  client.enableNonRepudiationChecks(discovered);
   cached = { key, config: discovered };
   return discovered;
+}
+
+/**
+ * Save the provider an admin entered, or clear it with null. A save without a
+ * client secret keeps the saved one, but only for the same issuer and client
+ * ID. The provider must answer discovery first; when it does not, nothing is
+ * stored.
+ */
+export async function saveOidcProvider(
+  input:
+    (Omit<OidcConfigInput, "clientSecret"> & { clientSecret?: string }) | null,
+): Promise<void> {
+  forgetOidcDiscovery();
+  if (!input) {
+    setOidcConfig(null);
+    return;
+  }
+  const saved = getOidcConfig();
+  const clientSecret =
+    input.clientSecret ||
+    (saved?.issuer === input.issuer && saved.clientId === input.clientId
+      ? saved.clientSecret
+      : "");
+  if (!clientSecret) throw new ValidationError("Client secret is required");
+  const config = { ...input, clientSecret };
+  try {
+    await discover(config);
+  } catch (err) {
+    throw new AppError(
+      `The provider did not answer discovery: ${getErrorMessage(err)}`,
+      400,
+      { code: "OIDC_DISCOVERY_FAILED", cause: err },
+    );
+  }
+  setOidcConfig(config);
 }
 
 /** The provider's sign-in address for a new flow. */
@@ -182,7 +229,7 @@ export async function finishOidc(callbackUrl: string): Promise<OidcClaims> {
   return {
     issuer: config.serverMetadata().issuer,
     subject: claims.sub,
-    email: email ? email.trim().toLowerCase() : null,
+    email: email?.trim().toLowerCase() || null,
     emailVerified,
     linkUserId: row.userId,
   };

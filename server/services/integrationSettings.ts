@@ -16,6 +16,7 @@ import { seal, open } from "../utils/secretBox.ts";
 import { log } from "../utils/logger.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
 import { trimTrailingSlashes } from "../utils/urlPath.ts";
+import { isAllowedIssuer } from "../../shared/contracts/admin.ts";
 
 export type IntegrationSource = "setting" | "env" | "none";
 
@@ -60,7 +61,7 @@ export interface OidcConfig {
 
 export type OidcConfigInput = Omit<OidcConfig, "source">;
 
-const DEFAULT_OIDC_NAME = "Single sign-on";
+const DEFAULT_OIDC_NAME = "SSO";
 
 /** The General page's integrations. SearXNG is in the AI settings view. */
 export interface IntegrationsStatus {
@@ -148,7 +149,7 @@ export function getIntegrationsStatus(): IntegrationsStatus {
         clientId: null,
         clientSecretPreview: null,
         name: null,
-        matchByEmail: true,
+        matchByEmail: false,
       };
 
   return { googleOAuth: googleOAuthStatus, oidc: oidcStatus };
@@ -229,20 +230,35 @@ export function isOidcEnvSet(): boolean {
   );
 }
 
+/** The OIDC_ISSUER value already warned about, so the log says it once. */
+let warnedIssuer: string | null = null;
+
 /**
  * The OIDC provider: OIDC_ISSUER, OIDC_CLIENT_ID and OIDC_CLIENT_SECRET when
  * all are set (OIDC_NAME and OIDC_MATCH_BY_EMAIL are optional), else the
- * sealed setting.
+ * sealed setting. An OIDC_ISSUER that is not https (or http on loopback)
+ * leaves sign-in off, with one warning in the log. Email matching is on only
+ * when OIDC_MATCH_BY_EMAIL is "true".
  */
 export function getOidcConfig(): OidcConfig | null {
   if (isOidcEnvSet()) {
+    const issuer = process.env.OIDC_ISSUER!.trim();
+    if (!isAllowedIssuer(issuer)) {
+      if (warnedIssuer !== issuer) {
+        warnedIssuer = issuer;
+        log.warn(
+          "Integrations",
+          `OIDC_ISSUER must use https:// (http only for localhost). Single sign-on stays off: ${issuer}`,
+        );
+      }
+      return null;
+    }
     return {
-      issuer: process.env.OIDC_ISSUER!.trim(),
+      issuer,
       clientId: process.env.OIDC_CLIENT_ID!.trim(),
       clientSecret: process.env.OIDC_CLIENT_SECRET!.trim(),
       name: process.env.OIDC_NAME?.trim() || DEFAULT_OIDC_NAME,
-      matchByEmail:
-        process.env.OIDC_MATCH_BY_EMAIL?.trim().toLowerCase() !== "false",
+      matchByEmail: process.env.OIDC_MATCH_BY_EMAIL?.trim() === "true",
       source: "env",
     };
   }
@@ -256,7 +272,7 @@ export function getOidcConfig(): OidcConfig | null {
           clientId: parsed.clientId,
           clientSecret: parsed.clientSecret,
           name: parsed.name || DEFAULT_OIDC_NAME,
-          matchByEmail: parsed.matchByEmail !== false,
+          matchByEmail: parsed.matchByEmail === true,
           source: "setting",
         };
       }
