@@ -2,45 +2,22 @@
  * The admin card for the OpenID Connect provider (Settings → Administration →
  * General): save with a secret preview, then remove behind a confirm dialog.
  */
-import http from "node:http";
-import type { AddressInfo } from "node:net";
 import { test, gatedTest, expect } from "./fixtures/test";
 import { ContrackInstance } from "./fixtures/instance";
 import { completeSetup } from "./fixtures/accounts";
 import { expectPageAccessible } from "./fixtures/a11y";
+import { startFakeProvider } from "../integration/oidcProvider";
 
-// Saving a provider runs discovery, so the specs need something that answers
-// it. This one serves the document and nothing else; the full sign-in
-// journey against a fake provider lives in its own spec.
-let provider: http.Server;
+// Saving a provider runs discovery, so the specs need a provider that
+// answers it. The sign-in journey against it is oidc-journey.spec.ts.
+let provider: Awaited<ReturnType<typeof startFakeProvider>>;
 let ISSUER = "";
 test.beforeAll(async () => {
-  provider = http.createServer((req, res) => {
-    if (req.url !== "/.well-known/openid-configuration") {
-      res.writeHead(404).end();
-      return;
-    }
-    res.setHeader("Content-Type", "application/json");
-    res.end(
-      JSON.stringify({
-        issuer: ISSUER,
-        authorization_endpoint: `${ISSUER}/authorize`,
-        token_endpoint: `${ISSUER}/token`,
-        jwks_uri: `${ISSUER}/jwks`,
-        response_types_supported: ["code"],
-        subject_types_supported: ["public"],
-        id_token_signing_alg_values_supported: ["RS256"],
-        token_endpoint_auth_methods_supported: ["client_secret_basic"],
-      }),
-    );
-  });
-  await new Promise<void>((resolve) =>
-    provider.listen(0, "127.0.0.1", resolve),
-  );
-  ISSUER = `http://127.0.0.1:${(provider.address() as AddressInfo).port}`;
+  provider = await startFakeProvider();
+  ISSUER = provider.issuer;
 });
 test.afterAll(async () => {
-  await new Promise<void>((resolve) => provider.close(() => resolve()));
+  await provider.close();
 });
 
 test("an admin saves and removes the OIDC provider", async ({

@@ -1,6 +1,6 @@
-// A minimal OpenID provider for tests: discovery, JWKS, a token endpoint that
-// signs an ID token for whatever the test queued with `nextLogin`, and a
-// userinfo endpoint. The token endpoint takes only the method it advertises,
+// A minimal OpenID provider for tests: discovery, an authorize endpoint that
+// sends a browser straight back, JWKS, a token endpoint that signs an ID token
+// for whatever the test queued with `nextLogin`, and a userinfo endpoint. The token endpoint takes only the method it advertises,
 // client_secret_basic.
 
 import http from "node:http";
@@ -32,6 +32,7 @@ export async function startFakeProvider() {
   let tokenRedirect: string | null = null;
   const requests: string[] = [];
   let tokenRedirectUri: string | null = null;
+  let denyNext = false;
   idp.use((req, _res, proceed) => {
     requests.push(req.path);
     proceed();
@@ -50,6 +51,19 @@ export async function startFakeProvider() {
       code_challenge_methods_supported: ["S256"],
       token_endpoint_auth_methods_supported: ["client_secret_basic"],
     });
+  });
+  // Signs nobody in by itself: it returns a code at once, or the refusal
+  // `denyNextAuthorize` queued.
+  idp.get("/authorize", (req, res) => {
+    const back = new URL(String(req.query.redirect_uri));
+    back.searchParams.set("state", String(req.query.state ?? ""));
+    back.searchParams.set(
+      denyNext ? "error" : "code",
+      denyNext ? "access_denied" : "code",
+    );
+    lastNonce = String(req.query.nonce ?? "");
+    denyNext = false;
+    res.redirect(back.href);
   });
   idp.get("/jwks", (_req, res) => {
     res.json({ keys: [jwk] });
@@ -117,6 +131,10 @@ export async function startFakeProvider() {
     /** Queue the account the next code exchange signs in. */
     nextLogin(login: FakeLogin) {
       next = login;
+    },
+    /** Answer the next authorize request with error=access_denied. */
+    denyNextAuthorize() {
+      denyNext = true;
     },
     /** Sign the next ID token with a key the JWKS does not publish. */
     signNextWithUnpublishedKey() {

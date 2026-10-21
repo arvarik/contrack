@@ -14,6 +14,8 @@ const api = vi.hoisted(() => ({
   passkeys: [] as unknown[],
   matchByEmail: false,
   passkeysSupported: true,
+  // Never settles, so the link stays pending.
+  startOidcLink: vi.fn(() => new Promise(() => {})),
 }));
 vi.mock("../../../../src/api/auth", () => ({
   listIdentities: () =>
@@ -22,7 +24,7 @@ vi.mock("../../../../src/api/auth", () => ({
       matchByEmail: api.matchByEmail,
     }),
   unlinkIdentity: vi.fn(),
-  startOidcLink: vi.fn(),
+  startOidcLink: api.startOidcLink,
 }));
 vi.mock("../../../../src/api/passkeys", () => ({
   listPasskeys: () => Promise.resolve({ passkeys: api.passkeys }),
@@ -62,6 +64,7 @@ beforeEach(() => {
   api.passkeys = [];
   api.matchByEmail = false;
   api.passkeysSupported = true;
+  api.startOidcLink.mockClear();
   toast.success.mockReset();
   toast.error.mockReset();
   history.replaceState(null, "", "/settings/account");
@@ -73,6 +76,19 @@ describe("SingleSignOnCard", () => {
     show();
     expect(await screen.findByText("Not linked")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Link Authentik" })).toBeTruthy();
+  });
+
+  it("starts one link however often the empty state's Link is clicked", async () => {
+    show();
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Link Authentik" }),
+    );
+    const pending = await screen.findByRole("button", { name: "Opening…" });
+    fireEvent.click(pending);
+    fireEvent.click(pending);
+    // A mutation reaches its function a few ticks after mutate.
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(api.startOidcLink).toHaveBeenCalledTimes(1);
   });
 
   it("hides Link while an identity is at the current provider", async () => {

@@ -158,6 +158,35 @@ describe("OidcRow", () => {
     );
   });
 
+  it("shows the saved button name after saving an empty one", async () => {
+    show();
+    fireEvent.change(screen.getByLabelText("Button name"), {
+      target: { value: "" },
+    });
+    fireEvent.click(save());
+    expect(mutate.mock.calls[0][0].oidc.name).toBe("SSO");
+    mutate.mock.calls[0][1].onSuccess({ oidc: { ...SAVED, name: "SSO" } });
+    await waitFor(() =>
+      expect(
+        (screen.getByLabelText("Button name") as HTMLInputElement).value,
+      ).toBe("SSO"),
+    );
+  });
+
+  it("clears the refusal when the secret is typed again", async () => {
+    show();
+    fireEvent.click(
+      screen.getByRole("switch", { name: /same verified email/i }),
+    );
+    fireEvent.click(save());
+    mutate.mock.calls[0][1].onError(new Error("Discovery failed"));
+    await screen.findByRole("alert");
+    fireEvent.change(screen.getByLabelText("Client secret"), {
+      target: { value: "s" },
+    });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
   it("explains that Contrack does not verify account emails", () => {
     show();
     expect(
