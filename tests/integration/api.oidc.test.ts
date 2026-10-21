@@ -441,6 +441,7 @@ describe("API: linking OIDC from settings", () => {
       .get("/api/auth/identities")
       .set("Cookie", cookie);
     expect(list.body.identities).toHaveLength(1);
+    expect(typeof list.body.matchByEmail).toBe("boolean");
     expect(list.body.identities[0].email).toBe("ada@idp.example");
     const del = await request(app)
       .delete(`/api/auth/identities/${list.body.identities[0].id}`)

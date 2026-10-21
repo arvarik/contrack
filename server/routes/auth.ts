@@ -102,7 +102,7 @@ import { getOidcConfig } from "../services/integrationSettings.ts";
 import { startOidc } from "../services/oidcService.ts";
 import { finishOidcCallback } from "../services/oidcSignInService.ts";
 import {
-  listAccountIdentities,
+  accountIdentities,
   unlinkIdentity,
 } from "../services/identityService.ts";
 import { oauthIssuer } from "../services/oauthService.ts";
@@ -1117,7 +1117,7 @@ router.get(
 );
 
 router.get("/identities", requireSession, (req, res) => {
-  res.json({ identities: listAccountIdentities(req.principal!.user.id) });
+  res.json(accountIdentities(req.principal!.user.id));
 });
 
 router.delete(

@@ -67,6 +67,11 @@ export const authRoutes = {
             .describe("True when it is at the provider set up now"),
         }),
       ),
+      matchByEmail: z
+        .boolean()
+        .describe(
+          "True when a sign-in links to an account by its email, so an unlinked account links again",
+        ),
     }),
   }),
   unlinkIdentity: route({

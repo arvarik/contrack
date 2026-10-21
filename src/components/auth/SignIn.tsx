@@ -389,8 +389,10 @@ export const SignIn = ({
         {oidc && (
           <a
             href={oidcStartHref(remember)}
-            aria-disabled={busy || undefined}
-            onClick={(event) => busy && event.preventDefault()}
+            aria-disabled={busy || passkeyBusy || undefined}
+            onClick={(event) => {
+              if (busy || passkeyBusy) event.preventDefault();
+            }}
             className="btn-secondary w-full"
           >
             Sign in with {oidc.name}

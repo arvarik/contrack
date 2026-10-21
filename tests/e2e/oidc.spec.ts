@@ -46,6 +46,8 @@ test.afterAll(async () => {
 test("an admin saves and removes the OIDC provider", async ({
   page,
 }, testInfo) => {
+  // The instance is shared with the other specs in this file.
+  await page.request.put("/api/admin/integrations", { data: { oidc: null } });
   await page.goto("/settings/admin/general#oidc");
   const card = page.locator("#oidc");
   await expect(card.getByText("Not set up")).toBeVisible();
@@ -66,42 +68,46 @@ test("an admin saves and removes the OIDC provider", async ({
 test("the OIDC form fills from the saved provider and saves the switch alone", async ({
   page,
 }) => {
-  const put = await page.request.put("/api/admin/integrations", {
-    data: {
-      oidc: {
-        issuer: ISSUER,
-        clientId: "contrack",
-        clientSecret: "s3cret-value-5678",
-        name: "Authentik",
-        matchByEmail: false,
+  try {
+    const put = await page.request.put("/api/admin/integrations", {
+      data: {
+        oidc: {
+          issuer: ISSUER,
+          clientId: "contrack",
+          clientSecret: "s3cret-value-5678",
+          name: "Authentik",
+          matchByEmail: false,
+        },
       },
-    },
-  });
-  expect(put.ok()).toBe(true);
+    });
+    expect(put.ok()).toBe(true);
 
-  await page.goto("/settings/admin/general#oidc");
-  const card = page.locator("#oidc");
-  await expect(card.getByLabel("Issuer")).toHaveValue(ISSUER);
-  await expect(card.getByLabel("Client ID")).toHaveValue("contrack");
-  const save = card.getByRole("button", { name: "Save" });
-  await expect(save).toBeDisabled();
+    await page.goto("/settings/admin/general#oidc");
+    const card = page.locator("#oidc");
+    await expect(card.getByLabel("Issuer")).toHaveValue(ISSUER);
+    await expect(card.getByLabel("Client ID")).toHaveValue("contrack");
+    const save = card.getByRole("button", { name: "Save" });
+    await expect(save).toBeDisabled();
 
-  const matching = card.getByRole("switch", {
-    name: /same verified email can sign in/i,
-  });
-  await expect(matching).not.toBeChecked();
-  await matching.click();
-  await save.click();
-  await expect(page.getByText("OpenID Connect provider saved")).toBeVisible();
+    const matching = card.getByRole("switch", {
+      name: /same verified email can sign in/i,
+    });
+    await expect(matching).not.toBeChecked();
+    await matching.click();
+    await save.click();
+    await expect(page.getByText("OpenID Connect provider saved")).toBeVisible();
 
-  await page.reload();
-  await expect(
-    page
-      .locator("#oidc")
-      .getByRole("switch", { name: /same verified email can sign in/i }),
-  ).toBeChecked();
-  // The secret stayed: nothing asked for it again.
-  await expect(page.locator("#oidc").getByText("••••5678")).toBeVisible();
+    await page.reload();
+    await expect(
+      page
+        .locator("#oidc")
+        .getByRole("switch", { name: /same verified email can sign in/i }),
+    ).toBeChecked();
+    // The secret stayed: nothing asked for it again.
+    await expect(page.locator("#oidc").getByText("••••5678")).toBeVisible();
+  } finally {
+    await page.request.put("/api/admin/integrations", { data: { oidc: null } });
+  }
 });
 
 test("the OIDC form shows why a provider was refused", async ({ page }) => {

@@ -539,14 +539,14 @@
      leave the button raised until the next tap somewhere else. */
   @media (hover: hover) {
     .btn-primary:hover:not(:disabled),
-    .btn-secondary:hover:not(:disabled),
+    .btn-secondary:hover:not(:disabled, [aria-disabled="true"]),
     .btn-danger:hover:not(:disabled) {
       transform: translateY(-1px);
       box-shadow: 0 calc(var(--btn-lift) + 1px) 0 0 var(--btn-edge);
     }
   }
   .btn-primary:active:not(:disabled),
-  .btn-secondary:active:not(:disabled),
+  .btn-secondary:active:not(:disabled, [aria-disabled="true"]),
   .btn-danger:active:not(:disabled) {
     transform: translateY(calc(var(--btn-lift) - 1px));
     box-shadow: 0 1px 0 0 var(--btn-edge);

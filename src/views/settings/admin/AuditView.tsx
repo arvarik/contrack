@@ -217,7 +217,7 @@ const LOOK: Record<
 function actorLine(entry: AuditEntry): string {
   if (entry.actor) return `by ${entry.actor.username}`;
   if (entry.action === "auth.login.failed") {
-    if (entry.details?.method === "oidc")
+    if (entry.details?.method === "oidc" && !entry.details.reason)
       return "for an SSO sign-in with no account";
     return entry.details?.matched
       ? "for an existing account"
@@ -225,6 +225,12 @@ function actorLine(entry: AuditEntry): string {
   }
   return "by a deleted account";
 }
+
+/** Why a matched account was refused an SSO sign-in. */
+const SSO_REASONS: Record<string, string> = {
+  disabled: "account disabled",
+  "must-change-password": "must change password",
+};
 
 const FALLBACK = { icon: ScrollText, tone: "neutral" as BadgeTone, label: "" };
 
@@ -249,7 +255,9 @@ const EntryRow = ({ entry }: { entry: AuditEntry }) => {
   const detail =
     entry.action === "auth.login.failed"
       ? entry.details?.method === "oidc"
-        ? "SSO"
+        ? ["SSO", SSO_REASONS[String(entry.details.reason)]]
+            .filter(Boolean)
+            .join(" · ")
         : ""
       : describeDetails(entry.details) ||
         (entry.targetId

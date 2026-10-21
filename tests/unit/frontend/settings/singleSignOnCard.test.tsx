@@ -12,15 +12,21 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 const api = vi.hoisted(() => ({
   identities: [] as unknown[],
   passkeys: [] as unknown[],
+  matchByEmail: false,
+  passkeysSupported: true,
 }));
 vi.mock("../../../../src/api/auth", () => ({
-  listIdentities: () => Promise.resolve({ identities: api.identities }),
+  listIdentities: () =>
+    Promise.resolve({
+      identities: api.identities,
+      matchByEmail: api.matchByEmail,
+    }),
   unlinkIdentity: vi.fn(),
   startOidcLink: vi.fn(),
 }));
 vi.mock("../../../../src/api/passkeys", () => ({
   listPasskeys: () => Promise.resolve({ passkeys: api.passkeys }),
-  passkeysSupported: () => true,
+  passkeysSupported: () => api.passkeysSupported,
 }));
 vi.mock("../../../../src/components/auth/AuthGate", () => ({
   useAuth: () => ({ oidc: { name: "Authentik" } }),
@@ -54,6 +60,8 @@ function show() {
 beforeEach(() => {
   api.identities = [];
   api.passkeys = [];
+  api.matchByEmail = false;
+  api.passkeysSupported = true;
   toast.success.mockReset();
   toast.error.mockReset();
   history.replaceState(null, "", "/settings/account");
@@ -92,8 +100,26 @@ describe("SingleSignOnCard", () => {
     show();
     fireEvent.click(await screen.findByLabelText("Unlink a@b.c"));
     const text = (await screen.findByRole("dialog")).textContent ?? "";
-    expect(text).toContain("If email matching is on");
     expect(text).not.toContain("passkeys");
+    expect(text).not.toContain("links this account again");
+  });
+
+  it("warns that SSO links the account again only while email matching is on", async () => {
+    api.identities = [identity()];
+    api.matchByEmail = true;
+    show();
+    fireEvent.click(await screen.findByLabelText("Unlink a@b.c"));
+    await screen.findByText(
+      /Email matching is on, so your next Authentik sign-in links this account again/,
+    );
+  });
+
+  it("does not claim the account has no passkeys when passkeys cannot be checked", async () => {
+    api.identities = [identity()];
+    api.passkeysSupported = false;
+    show();
+    fireEvent.click(await screen.findByLabelText("Unlink a@b.c"));
+    await screen.findByText(/any other sign-in methods/);
   });
 
   it("mentions passkeys when the account has one", async () => {

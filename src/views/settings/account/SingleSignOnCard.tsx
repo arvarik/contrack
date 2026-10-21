@@ -63,7 +63,12 @@ export const SingleSignOnCard = () => {
     ...passkeysQuery,
     enabled: Boolean(oidc) && passkeysSupported(),
   });
-  const hasPasskeys = (passkeyData?.passkeys.length ?? 0) > 0;
+  // Without passkey support the query never runs, so the card cannot know.
+  const others = !passkeysSupported()
+    ? "your password and any other sign-in methods"
+    : (passkeyData?.passkeys.length ?? 0) > 0
+      ? "your password and passkeys"
+      : "your password";
 
   // The callback lands here as ?oidc=<outcome>#password.
   useEffect(() => {
@@ -142,9 +147,11 @@ export const SingleSignOnCard = () => {
           title="Not linked"
           body="Link it to sign in without your password"
           action={{
-            label: `Link ${oidc.name}`,
-            onClick: () => link.mutate(),
-            icon: link.isPending ? Loader2 : Link2,
+            label: link.isPending ? "Opening…" : `Link ${oidc.name}`,
+            onClick: () => {
+              if (!link.isPending) link.mutate();
+            },
+            icon: Link2,
           }}
           level={3}
         />
@@ -195,7 +202,7 @@ export const SingleSignOnCard = () => {
         onClose={() => setTarget(null)}
         onConfirm={() => target && unlink.mutate(target.id)}
         title={`Unlink ${oidc.name}`}
-        description={`You can still sign in with your password${hasPasskeys ? " and passkeys" : ""}. If email matching is on, your next ${oidc.name} sign-in links this account again`}
+        description={`You can still sign in with ${others}${data?.matchByEmail ? `. Email matching is on, so your next ${oidc.name} sign-in links this account again` : ""}`}
         confirmLabel={`Unlink ${oidc.name}`}
         tone="danger"
         busy={unlink.isPending}

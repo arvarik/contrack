@@ -1140,7 +1140,10 @@ export const OidcRow = () => {
                     type={showSecret ? "text" : "password"}
                     value={clientSecret}
                     disabled={busy}
-                    onChange={(event) => setClientSecret(event.target.value)}
+                    onChange={(event) => {
+                      setSaveError(null);
+                      setClientSecret(event.target.value);
+                    }}
                     placeholder={
                       configured ? "Leave empty to keep the current secret" : ""
                     }
@@ -1230,8 +1233,9 @@ export const OidcRow = () => {
                         },
                       },
                       {
-                        onSuccess: () => {
+                        onSuccess: (saved) => {
                           setClientSecret("");
+                          setName(saved.oidc.name ?? "");
                           toast.success("OpenID Connect provider saved");
                         },
                         onError: (error: Error) =>

@@ -452,9 +452,13 @@
                         ],
                         "additionalProperties": false
                       }
+                    },
+                    "matchByEmail": {
+                      "type": "boolean",
+                      "description": "True when a sign-in links to an account by its email, so an unlinked account links again"
                     }
                   },
-                  "required": ["identities"],
+                  "required": ["identities", "matchByEmail"],
                   "additionalProperties": false
                 }
               }

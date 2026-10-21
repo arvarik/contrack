@@ -89,7 +89,7 @@ function issuerKey(issuer: string): string {
  * The account's identities, each marked `current` when it is at the provider
  * set up now, so the account page can offer a link to that one.
  */
-export function listAccountIdentities(
+function listAccountIdentities(
   userId: string,
 ): (IdentitySummary & { current: boolean })[] {
   const issuer = getOidcConfig()?.issuer;
@@ -97,6 +97,14 @@ export function listAccountIdentities(
     ...identity,
     current: issuer != null && issuerKey(identity.issuer) === issuerKey(issuer),
   }));
+}
+
+/** The identities, and whether the next sign-in would link the account again. */
+export function accountIdentities(userId: string) {
+  return {
+    identities: listAccountIdentities(userId),
+    matchByEmail: getOidcConfig()?.matchByEmail === true,
+  };
 }
 
 export function unlinkIdentity(userId: string, id: string): void {
