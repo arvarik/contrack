@@ -882,7 +882,7 @@ export const GoogleRow = () => {
   );
 };
 
-const OidcRow = () => {
+export const OidcRow = () => {
   const { data, isLoading } = useIntegrations();
   const update = useUpdateIntegrations();
   const oidc = data?.oidc;
@@ -890,7 +890,8 @@ const OidcRow = () => {
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [name, setName] = useState(oidc?.name ?? "");
-  const [matchByEmail, setMatchByEmail] = useState(oidc?.matchByEmail ?? true);
+  const [matchByEmail, setMatchByEmail] = useState(oidc?.matchByEmail ?? false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [showSecret, setShowSecret] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const issuerInput = useRef<HTMLInputElement>(null);
@@ -898,16 +899,41 @@ const OidcRow = () => {
   const fromEnv = oidc?.source === "env";
   const busy = isLoading || update.isPending;
 
-  // The saved values arrive after the first render. Fill the two fields that
-  // stay visible once, when they do.
+  // The saved values arrive after the first render. Fill the fields from
+  // them once, when they do, as the mail row does for SMTP.
   const loaded = useRef(false);
   useEffect(() => {
     if (oidc && !loaded.current) {
       loaded.current = true;
+      setIssuer(oidc.issuer ?? "");
+      setClientId(oidc.clientId ?? "");
       setName(oidc.name ?? "");
       setMatchByEmail(oidc.matchByEmail);
     }
   }, [oidc]);
+
+  // Save is on for any change from what is saved. A first setup needs all
+  // three credentials; later, an empty secret keeps the saved one.
+  const changed =
+    issuer.trim() !== (oidc?.issuer ?? "") ||
+    clientId.trim() !== (oidc?.clientId ?? "") ||
+    clientSecret.trim() !== "" ||
+    name.trim() !== (oidc?.name ?? "") ||
+    matchByEmail !== (oidc?.matchByEmail ?? false);
+  const canSave =
+    changed &&
+    issuer.trim() !== "" &&
+    clientId.trim() !== "" &&
+    (configured || clientSecret.trim() !== "");
+
+  // The provider sends the browser back to the address the server sends it,
+  // and the flow cookie belongs to the host that started the flow.
+  const { publicUrl } = useAuth();
+  const browserOrigin = window.location.origin;
+  const serverOrigin = oidc?.redirectUri
+    ? new URL(oidc.redirectUri).origin
+    : browserOrigin;
+  const mismatch = serverOrigin !== browserOrigin;
 
   // As in GoogleRow: Remove takes the focus with it, so hand it to the first
   // field.
@@ -932,6 +958,19 @@ const OidcRow = () => {
       <li className="space-y-1.5">
         <p>Add this redirect URI</p>
         <RedirectUriBox uri={oidc?.redirectUri ?? ""} />
+        {mismatch && (
+          <p role="note" className={NOTE}>
+            <TriangleAlert
+              className="w-3.5 h-3.5 shrink-0 mt-0.5 text-warning"
+              aria-hidden="true"
+            />
+            <span>
+              {publicUrl
+                ? `The provider sends people back to ${serverOrigin}, from PUBLIC_URL. Signing in from another address fails. Open Contrack there`
+                : `Your browser opened Contrack at ${browserOrigin}, but the server sends the provider ${serverOrigin}. Set PUBLIC_URL to the address people open`}
+            </span>
+          </p>
+        )}
       </li>
       <li>
         {fromEnv
@@ -949,6 +988,7 @@ const OidcRow = () => {
     placeholder: string,
     mono = true,
     ref?: React.Ref<HTMLInputElement>,
+    maxLength?: number,
   ) => (
     <div>
       <label htmlFor={id} className={cn(SETTINGS_LABEL, "mb-1.5")}>
@@ -960,7 +1000,11 @@ const OidcRow = () => {
         type="text"
         value={value}
         disabled={busy}
-        onChange={(event) => set(event.target.value)}
+        maxLength={maxLength}
+        onChange={(event) => {
+          setSaveError(null);
+          set(event.target.value);
+        }}
         placeholder={placeholder}
         className={mono ? KEY_INPUT : SETTINGS_INPUT}
         {...NO_AUTOCORRECT}
@@ -1012,13 +1056,19 @@ const OidcRow = () => {
           )}
 
           {fromEnv ? (
-            <p className={NOTE}>
-              Set by OIDC_ISSUER, OIDC_CLIENT_ID and OIDC_CLIENT_SECRET in the
-              environment
-            </p>
-          ) : (
             <div className="space-y-2">
-              {configured && (
+              {oidc?.envIssuerInvalid ? (
+                <p role="note" className={NOTE}>
+                  <TriangleAlert
+                    className="w-3.5 h-3.5 shrink-0 mt-0.5 text-warning"
+                    aria-hidden="true"
+                  />
+                  <span>
+                    OIDC_ISSUER must start with https:// (http only for
+                    localhost), so single sign-on is off
+                  </span>
+                </p>
+              ) : (
                 <div className="text-xs text-on-surface-variant bg-surface-container-low p-3 rounded-xl space-y-1">
                   <p>
                     Issuer{" "}
@@ -1038,6 +1088,33 @@ const OidcRow = () => {
                       {oidc?.clientSecretPreview}
                     </span>
                   </p>
+                  <p>
+                    Button name{" "}
+                    <span className="text-on-surface">{oidc?.name}</span>
+                  </p>
+                  <p>
+                    Email matching{" "}
+                    <span className="text-on-surface">
+                      {oidc?.matchByEmail ? "On" : "Off"}
+                    </span>
+                  </p>
+                </div>
+              )}
+              <p className={NOTE}>
+                Set by OIDC_ISSUER, OIDC_CLIENT_ID, OIDC_CLIENT_SECRET,
+                OIDC_NAME and OIDC_MATCH_BY_EMAIL in the environment
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {configured && (
+                <div className="text-xs text-on-surface-variant bg-surface-container-low p-3 rounded-xl">
+                  <p>
+                    Client secret{" "}
+                    <span className="font-mono text-on-surface">
+                      {oidc?.clientSecretPreview}
+                    </span>
+                  </p>
                 </div>
               )}
               {field(
@@ -1045,19 +1122,11 @@ const OidcRow = () => {
                 "Issuer",
                 issuer,
                 setIssuer,
-                configured
-                  ? "A new issuer replaces the current one"
-                  : "https://id.example.com",
+                "https://id.example.com",
                 true,
                 issuerInput,
               )}
-              {field(
-                "oidc-client-id",
-                "Client ID",
-                clientId,
-                setClientId,
-                configured ? "A new client ID replaces the current one" : "",
-              )}
+              {field("oidc-client-id", "Client ID", clientId, setClientId, "")}
               <div>
                 <label
                   htmlFor="oidc-client-secret"
@@ -1073,7 +1142,7 @@ const OidcRow = () => {
                     disabled={busy}
                     onChange={(event) => setClientSecret(event.target.value)}
                     placeholder={
-                      configured ? "A new secret replaces the current one" : ""
+                      configured ? "Leave empty to keep the current secret" : ""
                     }
                     className={cn(KEY_INPUT, "pr-10")}
                     {...NO_AUTOCORRECT}
@@ -1098,8 +1167,10 @@ const OidcRow = () => {
                 "Button name",
                 name,
                 setName,
-                "Single sign-on",
+                "SSO",
                 false,
+                undefined,
+                40,
               )}
               <div className="flex items-start justify-between gap-3 min-h-11">
                 <label
@@ -1109,18 +1180,27 @@ const OidcRow = () => {
                   Accounts with the same verified email can sign in
                   <span className="block text-xs text-on-surface-variant">
                     Off: members link the provider under Account → Sign-in
-                    methods first. Leave it on only if the provider verifies
-                    addresses and people cannot choose their own
+                    methods first. Contrack does not verify the email on an
+                    account, and members can change their own. Turn this on only
+                    when every account&apos;s email is trusted
                   </span>
                 </label>
                 <Switch
                   id="oidc-match-by-email"
                   checked={matchByEmail}
-                  onChange={setMatchByEmail}
+                  onChange={(value) => {
+                    setSaveError(null);
+                    setMatchByEmail(value);
+                  }}
                   label="Accounts with the same verified email can sign in"
                   disabled={busy}
                 />
               </div>
+              {saveError && (
+                <p role="alert" className="text-xs text-error text-pretty">
+                  {saveError}
+                </p>
+              )}
               <div className="flex flex-wrap justify-end gap-2 pt-1">
                 {configured && (
                   <button
@@ -1134,37 +1214,31 @@ const OidcRow = () => {
                 )}
                 <button
                   type="button"
-                  disabled={
-                    !issuer.trim() ||
-                    !clientId.trim() ||
-                    !clientSecret.trim() ||
-                    update.isPending
-                  }
-                  onClick={() =>
+                  disabled={!canSave || update.isPending}
+                  onClick={() => {
+                    setSaveError(null);
                     update.mutate(
                       {
                         oidc: {
                           issuer: issuer.trim(),
                           clientId: clientId.trim(),
-                          clientSecret: clientSecret.trim(),
-                          name: name.trim() || "Single sign-on",
+                          ...(clientSecret.trim() && {
+                            clientSecret: clientSecret.trim(),
+                          }),
+                          name: name.trim() || "SSO",
                           matchByEmail,
                         },
                       },
                       {
                         onSuccess: () => {
-                          setIssuer("");
-                          setClientId("");
                           setClientSecret("");
                           toast.success("OpenID Connect provider saved");
                         },
                         onError: (error: Error) =>
-                          toast.error(
-                            `Could not save the provider: ${errorText(error)}`,
-                          ),
+                          setSaveError(errorText(error)),
                       },
-                    )
-                  }
+                    );
+                  }}
                   className="btn-primary shrink-0"
                 >
                   Save
@@ -1188,7 +1262,7 @@ const OidcRow = () => {
                 setClientId("");
                 setClientSecret("");
                 setName("");
-                setMatchByEmail(true);
+                setMatchByEmail(false);
                 toast.success("OpenID Connect provider removed");
               },
               onError: (error: Error) =>

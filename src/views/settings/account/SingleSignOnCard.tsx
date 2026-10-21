@@ -7,14 +7,18 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Fingerprint, Link2, Loader2, Trash2 } from "lucide-react";
+import { Link2, Loader2, LogIn, Trash2 } from "lucide-react";
 import { useAuth } from "../../../components/auth/AuthGate";
 import { ConfirmDialog } from "../../../components/ui/ConfirmDialog";
+import { EmptyState } from "../../../components/ui/EmptyState";
 import { LoadFailed } from "../../../components/ui/LoadFailed";
 import { RailTooltip } from "../../../components/ui/RailTooltip";
 import { ICON_BTN, TONE_WASH } from "../../../lib/styles";
+import { formatDay } from "../../../lib/datetime";
 import { cn, errorText } from "../../../lib/utils";
 import { SETTINGS_CARD } from "../layout";
+import { passkeysQuery } from "./PasskeysCard";
+import { passkeysSupported } from "../../../api/passkeys";
 import {
   listIdentities,
   startOidcLink,
@@ -38,12 +42,13 @@ const OUTCOMES: Record<string, [ok: boolean, text: (name: string) => string]> =
     failed: [false, () => "Linking did not finish. Try again"],
   };
 
-/** A SQLite timestamp as a local date. */
-function formatDay(iso: string): string {
-  const date = new Date(iso.includes("T") ? iso : `${iso.replace(" ", "T")}Z`);
-  return Number.isNaN(date.getTime())
-    ? "Unknown"
-    : date.toLocaleDateString(undefined, { dateStyle: "medium" });
+/** The host of an issuer address, for a provider that is no longer set up. */
+function issuerHost(issuer: string): string {
+  try {
+    return new URL(issuer).host;
+  } catch {
+    return issuer;
+  }
 }
 
 export const SingleSignOnCard = () => {
@@ -54,6 +59,11 @@ export const SingleSignOnCard = () => {
     ...identitiesQuery,
     enabled: Boolean(oidc),
   });
+  const { data: passkeyData } = useQuery({
+    ...passkeysQuery,
+    enabled: Boolean(oidc) && passkeysSupported(),
+  });
+  const hasPasskeys = (passkeyData?.passkeys.length ?? 0) > 0;
 
   // The callback lands here as ?oidc=<outcome>#password.
   useEffect(() => {
@@ -64,7 +74,7 @@ export const SingleSignOnCard = () => {
     const [ok, text] = OUTCOMES[outcome] ?? OUTCOMES.failed;
     (ok ? toast.success : toast.error)(text(oidc.name));
     url.searchParams.delete("oidc");
-    history.replaceState(null, "", url);
+    history.replaceState(history.state, "", url);
   }, [oidc]);
 
   const link = useMutation({
@@ -86,31 +96,36 @@ export const SingleSignOnCard = () => {
 
   if (!oidc) return null;
   const identities = data?.identities ?? [];
+  const canLink =
+    !isLoading && !isError && !identities.some((identity) => identity.current);
+  const linkButton = (
+    <button
+      type="button"
+      onClick={() => link.mutate()}
+      disabled={link.isPending}
+      className="btn-secondary btn-sm"
+    >
+      {link.isPending ? (
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+      ) : (
+        <Link2 className="w-3.5 h-3.5" />
+      )}
+      Link {oidc.name}
+    </button>
+  );
 
   return (
     <div className={cn(SETTINGS_CARD, "space-y-4")}>
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="text-sm font-bold text-on-surface">Single sign-on</h3>
-          <p className="text-xs sm:text-sm text-on-surface-variant text-pretty">
+          <h3 className="text-sm font-bold text-on-surface break-words">
+            Single sign-on
+          </h3>
+          <p className="text-xs sm:text-sm text-on-surface-variant text-pretty break-words">
             Sign in with {oidc.name}
           </p>
         </div>
-        {!isLoading && !isError && identities.length === 0 && (
-          <button
-            type="button"
-            onClick={() => link.mutate()}
-            disabled={link.isPending}
-            className="btn-secondary btn-sm shrink-0"
-          >
-            {link.isPending ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Link2 className="w-3.5 h-3.5" />
-            )}
-            Link {oidc.name}
-          </button>
-        )}
+        {canLink && identities.length > 0 && linkButton}
       </div>
 
       {isLoading ? (
@@ -122,9 +137,17 @@ export const SingleSignOnCard = () => {
           level={3}
         />
       ) : identities.length === 0 ? (
-        <p className="text-sm text-on-surface-variant text-pretty">
-          Not linked. Link it to sign in without your password
-        </p>
+        <EmptyState
+          icon={LogIn}
+          title="Not linked"
+          body="Link it to sign in without your password"
+          action={{
+            label: `Link ${oidc.name}`,
+            onClick: () => link.mutate(),
+            icon: link.isPending ? Loader2 : Link2,
+          }}
+          level={3}
+        />
       ) : (
         <ul className="space-y-4">
           {identities.map((identity) => (
@@ -139,14 +162,16 @@ export const SingleSignOnCard = () => {
                     TONE_WASH.primary,
                   )}
                 >
-                  <Fingerprint className="w-[18px] h-[18px]" />
+                  <LogIn className="w-[18px] h-[18px]" />
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-on-surface truncate">
-                    {identity.email ?? `${oidc.name} account`}
+                    {identity.email ??
+                      `${identity.current ? oidc.name : issuerHost(identity.issuer)} account`}
                   </p>
                   <p className="text-xs text-on-surface-variant">
                     Linked {formatDay(identity.createdAt)}
+                    {!identity.current && ` · ${issuerHost(identity.issuer)}`}
                   </p>
                 </div>
               </div>
@@ -170,7 +195,7 @@ export const SingleSignOnCard = () => {
         onClose={() => setTarget(null)}
         onConfirm={() => target && unlink.mutate(target.id)}
         title={`Unlink ${oidc.name}`}
-        description="You can still sign in with your password and passkeys"
+        description={`You can still sign in with your password${hasPasskeys ? " and passkeys" : ""}. If email matching is on, your next ${oidc.name} sign-in links this account again`}
         confirmLabel={`Unlink ${oidc.name}`}
         tone="danger"
         busy={unlink.isPending}

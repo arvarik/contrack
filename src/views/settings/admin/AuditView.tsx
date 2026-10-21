@@ -217,6 +217,8 @@ const LOOK: Record<
 function actorLine(entry: AuditEntry): string {
   if (entry.actor) return `by ${entry.actor.username}`;
   if (entry.action === "auth.login.failed") {
+    if (entry.details?.method === "oidc")
+      return "for an SSO sign-in with no account";
     return entry.details?.matched
       ? "for an existing account"
       : "for a name with no account";
@@ -243,10 +245,12 @@ const EntryRow = ({ entry }: { entry: AuditEntry }) => {
   const Icon = look.icon;
   // A settings change has null `details`, because the service never records
   // the value. The changed key is in `targetId`, so the row falls back to it.
-  // A failed sign-in says all it has in `actorLine`.
+  // A failed sign-in says all it has in `actorLine`, and that it was SSO.
   const detail =
     entry.action === "auth.login.failed"
-      ? ""
+      ? entry.details?.method === "oidc"
+        ? "SSO"
+        : ""
       : describeDetails(entry.details) ||
         (entry.targetId
           ? `${entry.targetType ?? "target"}: ${entry.targetId}`

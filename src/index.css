@@ -557,6 +557,7 @@
      transparent, so nothing moves. The ink is `!important` because a
      destructive secondary is `btn-secondary text-error`, and that utility's
      later layer would keep a disabled "Remove" red. */
+  .btn-secondary[aria-disabled="true"],
   .btn-primary:disabled,
   .btn-secondary:disabled,
   .btn-danger:disabled {

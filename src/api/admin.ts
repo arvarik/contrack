@@ -472,6 +472,8 @@ interface IntegrationsConfig {
     clientSecretPreview: string | null;
     name: string | null;
     matchByEmail: boolean;
+    /** OIDC_* is set but OIDC_ISSUER is refused (https only). */
+    envIssuerInvalid: boolean;
     redirectUri: string;
   };
 }
@@ -481,7 +483,8 @@ interface UpdateIntegrationsInput {
   oidc?: {
     issuer: string;
     clientId: string;
-    clientSecret: string;
+    /** Left out: keep the saved secret. */
+    clientSecret?: string;
     name: string;
     matchByEmail: boolean;
   } | null;
@@ -508,6 +511,8 @@ export const useUpdateIntegrations = () => {
       qc.invalidateQueries({ queryKey: adminKeys.audit });
       // The Connect Google dialog reads whether a client is set from here.
       qc.invalidateQueries({ queryKey: connectorKeys.kinds });
+      // The gate holds the provider's name from `/api/auth/status`.
+      emitAuthStatusStale();
     },
   });
 };
@@ -577,6 +582,11 @@ export const AUDIT_GROUPS = [
       "auth.password.changed",
       "auth.password.reset",
       "auth.magic_link.used",
+      "auth.passkey.added",
+      "auth.passkey.renamed",
+      "auth.passkey.removed",
+      "auth.oidc.linked",
+      "auth.oidc.unlinked",
     ],
   },
   {

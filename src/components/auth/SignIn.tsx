@@ -47,6 +47,8 @@ const OIDC_ERRORS: Record<string, string> = {
     "No Contrack account uses that sign-in. Sign in with your password, then link it under Account settings",
   disabled:
     "An administrator has closed this account. Ask them to enable it, or sign in with a different one",
+  "must-change-password":
+    "This account needs a new password first. Sign in with the temporary password, then set your own",
   expired: "That sign-in took too long. Try again",
   denied: "The sign-in was cancelled",
   failed: "The sign-in did not finish. Try again, or use your password",
@@ -56,6 +58,22 @@ const OIDC_ERRORS: Record<string, string> = {
 function oidcErrorFromUrl(): string | null {
   const outcome = new URLSearchParams(window.location.search).get("oidc");
   return outcome ? (OIDC_ERRORS[outcome] ?? OIDC_ERRORS.failed) : null;
+}
+
+/**
+ * The start link carries "Keep me signed in" and the page to come back to, so
+ * the server can honour both after the provider's round trip.
+ */
+function oidcStartHref(remember: boolean): string {
+  const query = new URLSearchParams();
+  if (!remember) query.set("remember", "0");
+  // The ?oidc= outcome of an earlier try is not a page to come back to.
+  const url = new URL(window.location.href);
+  url.searchParams.delete("oidc");
+  const here = url.pathname + url.search;
+  if (here !== "/") query.set("returnTo", here);
+  const text = query.toString();
+  return `/api/auth/oidc/start${text ? `?${text}` : ""}`;
 }
 
 export const LAST_IDENTIFIER_KEY = "contrack.lastIdentifier";
@@ -92,13 +110,12 @@ export const SignIn = ({
   const [identifier, setIdentifier] = useState(savedIdentifier);
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [oidcError] = useState(oidcErrorFromUrl);
+  const [error, setError] = useState<string | null>(oidcErrorFromUrl);
   useEffect(() => {
     const url = new URL(window.location.href);
     if (!url.searchParams.has("oidc")) return;
     url.searchParams.delete("oidc");
-    history.replaceState(null, "", url);
+    history.replaceState(history.state, "", url);
   }, []);
   const [busy, setBusy] = useState(false);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
@@ -331,7 +348,7 @@ export const SignIn = ({
           />
           Keep me signed in on this device
         </label>
-        {(error ?? oidcError) && <AuthError>{error ?? oidcError}</AuthError>}
+        {error && <AuthError>{error}</AuthError>}
       </div>
 
       <div className="space-y-3">
@@ -370,7 +387,12 @@ export const SignIn = ({
           />
         )}
         {oidc && (
-          <a href="/api/auth/oidc/start" className="btn-secondary w-full">
+          <a
+            href={oidcStartHref(remember)}
+            aria-disabled={busy || undefined}
+            onClick={(event) => busy && event.preventDefault()}
+            className="btn-secondary w-full"
+          >
             Sign in with {oidc.name}
           </a>
         )}

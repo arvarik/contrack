@@ -13,6 +13,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { SessionMethod } from "../../shared/devices";
 import type { MapStyleUrls } from "../../shared/geo";
+import { authRoutes } from "../../shared/contracts/auth";
+import type { ResponseOf } from "../../shared/contracts/route";
 import {
   tokenRoutes,
   type ApiToken,
@@ -83,24 +85,21 @@ interface AuthStatus {
   oidc?: { name: string } | null;
 }
 
-export interface LinkedIdentity {
-  id: string;
-  issuer: string;
-  email: string | null;
-  createdAt: string;
-  lastUsedAt: string | null;
-}
+export type LinkedIdentity = ResponseOf<
+  typeof authRoutes.identities
+>["identities"][number];
 
 export const listIdentities = () =>
-  apiJson<{ identities: LinkedIdentity[] }>("/auth/identities");
+  apiJson(authRoutes.identities, "/auth/identities");
 
 export const unlinkIdentity = (id: string) =>
-  apiJson<{ ok: true }>(`/auth/identities/${encodeURIComponent(id)}`, {
-    method: "DELETE",
-  });
+  apiJson(
+    authRoutes.unlinkIdentity,
+    `/auth/identities/${encodeURIComponent(id)}`,
+  );
 
 export const startOidcLink = () =>
-  apiJson<{ url: string }>("/auth/oidc/link", { method: "POST" });
+  apiJson(authRoutes.oidcLink, "/auth/oidc/link");
 
 /** One personal API token, as the account's own token list shows it. */
 export type ApiTokenSummary = ApiToken;
