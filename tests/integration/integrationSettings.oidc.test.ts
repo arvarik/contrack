@@ -104,5 +104,20 @@ describe("OIDC integration settings", () => {
     );
     expect(warnings).toHaveLength(1);
     warn.mockRestore();
+    // The environment still owns the setting, so the admin card stays locked.
+    expect(getIntegrationsStatus().oidc).toMatchObject({
+      configured: false,
+      source: "env",
+      envIssuerInvalid: true,
+    });
+  });
+
+  it("reports envIssuerInvalid false otherwise", () => {
+    expect(getIntegrationsStatus().oidc).toMatchObject({
+      source: "none",
+      envIssuerInvalid: false,
+    });
+    setOidcConfig(INPUT);
+    expect(getIntegrationsStatus().oidc.envIssuerInvalid).toBe(false);
   });
 });

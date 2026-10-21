@@ -22,6 +22,8 @@ import {
   startOidc,
   finishOidc,
   forgetOidcDiscovery,
+  takeOidcFlow,
+  safeReturnTo,
 } from "../../server/services/oidcService.ts";
 import { startFakeProvider } from "./oidcProvider.ts";
 
@@ -45,6 +47,13 @@ beforeEach(() => {
     matchByEmail: true,
   });
 });
+
+/** Consume the flow `state` names and finish it, as the callback does. */
+function finish(state: string) {
+  const flow = takeOidcFlow(state);
+  expect(flow).not.toBeNull();
+  return finishOidc(new URL(`${REDIRECT}?code=abc&state=${state}`), flow!);
+}
 
 describe("oidcService", () => {
   it("builds a PKCE authorization URL and stores the flow", async () => {
@@ -81,14 +90,12 @@ describe("oidcService", () => {
       email: "Ada@Example.com",
       email_verified: true,
     });
-    const callback = `${REDIRECT}?code=abc&state=${state}`;
     vi.mocked(safeFetch).mockClear();
-    await expect(finishOidc(callback)).resolves.toEqual({
+    await expect(finish(state)).resolves.toEqual({
       issuer: idp.issuer,
       subject: "sub-1",
       email: "ada@example.com",
       emailVerified: true,
-      linkUserId: null,
     });
     // The token exchange went through safeFetch, with the secret in HTTP
     // Basic (client_secret_basic), not in the body.
@@ -99,10 +106,57 @@ describe("oidcService", () => {
       `Basic ${Buffer.from("contrack:secret").toString("base64")}`,
     );
     expect(token?.body).not.toContain("client_secret");
-    await expect(finishOidc(callback)).rejects.toMatchObject({
-      statusCode: 410,
-      code: "OIDC_EXPIRED",
+    expect(takeOidcFlow(state)).toBeNull();
+  });
+
+  it("keeps the remember choice and only a same-origin return path in the flow", async () => {
+    const take = async (input: { remember?: boolean; returnTo?: string }) => {
+      const { state } = idp.remember(
+        await startOidc({ redirectUri: REDIRECT, linkUserId: null, ...input }),
+      );
+      return takeOidcFlow(state);
+    };
+    expect(await take({})).toMatchObject({
+      remember: true,
+      returnTo: null,
+      userId: null,
+      expired: false,
     });
+    expect(
+      await take({ remember: false, returnTo: "/contacts/abc?x=1" }),
+    ).toMatchObject({ remember: false, returnTo: "/contacts/abc?x=1" });
+    expect(await take({ returnTo: "//evil.com" })).toMatchObject({
+      returnTo: null,
+    });
+  });
+
+  it("marks a flow past its ten minutes expired", async () => {
+    const { state } = idp.remember(
+      await startOidc({ redirectUri: REDIRECT, linkUserId: null }),
+    );
+    sqlite
+      .prepare("UPDATE auth_challenges SET expiresAt = ? WHERE id = ?")
+      .run(new Date(Date.now() - 1000).toISOString(), state);
+    expect(takeOidcFlow(state)?.expired).toBe(true);
+  });
+
+  it("accepts only a path on this origin as the return path", () => {
+    expect(safeReturnTo("/contacts/abc?x=1")).toBe("/contacts/abc?x=1");
+    expect(safeReturnTo("/")).toBe("/");
+    for (const bad of [
+      "//evil.com",
+      "/\\evil.com",
+      "https://evil.com",
+      "/contacts\nLocation: x",
+      "/a\u0000b",
+      "contacts",
+      "",
+      `/${"a".repeat(2048)}`,
+      42,
+      null,
+    ]) {
+      expect(safeReturnTo(bad), String(bad)).toBeNull();
+    }
   });
 
   it("refuses a token with the wrong nonce", async () => {
@@ -110,9 +164,7 @@ describe("oidcService", () => {
       await startOidc({ redirectUri: REDIRECT, linkUserId: null }),
     );
     idp.nextLogin({ sub: "sub-1", nonce: "not-the-one" });
-    await expect(
-      finishOidc(`${REDIRECT}?code=abc&state=${state}`),
-    ).rejects.toMatchObject({
+    await expect(finish(state)).rejects.toMatchObject({
       cause: { message: expect.stringContaining('"nonce"') },
     });
   });
@@ -124,9 +176,7 @@ describe("oidcService", () => {
     idp.nextLogin({ sub: "sub-1" });
     const stolen = `${idp.issuer}/stolen-token`;
     idp.redirectNextToken(stolen);
-    await expect(
-      finishOidc(`${REDIRECT}?code=abc&state=${state}`),
-    ).rejects.toBeInstanceOf(Error);
+    await expect(finish(state)).rejects.toBeInstanceOf(Error);
     expect(idp.requests).toContain("/token");
     expect(idp.requests).not.toContain("/stolen-token");
     expect(vi.mocked(safeFetch).mock.calls.map(([u]) => u)).not.toContain(
@@ -141,9 +191,9 @@ describe("oidcService", () => {
     idp.nextLogin({ sub: "sub-1" });
     idp.signNextWithUnpublishedKey();
     vi.mocked(safeFetch).mockClear();
-    await expect(
-      finishOidc(`${REDIRECT}?code=abc&state=${state}`),
-    ).rejects.toBeInstanceOf(Error);
+    await expect(finish(state)).rejects.toMatchObject({
+      cause: { message: "JWT signature verification failed" },
+    });
     // The keys came through safeFetch, which followed no redirect.
     expect(vi.mocked(safeFetch)).toHaveBeenCalledWith(
       `${idp.issuer}/jwks`,
@@ -156,9 +206,26 @@ describe("oidcService", () => {
       await startOidc({ redirectUri: REDIRECT, linkUserId: null }),
     );
     idp.nextLogin({ sub: "sub-1", email: "   ", email_verified: true });
-    await expect(
-      finishOidc(`${REDIRECT}?code=abc&state=${state}`),
-    ).resolves.toMatchObject({ email: null });
+    await expect(finish(state)).resolves.toMatchObject({ email: null });
+  });
+
+  it("reads the email from userinfo when the ID token has none", async () => {
+    const { state } = idp.remember(
+      await startOidc({ redirectUri: REDIRECT, linkUserId: null }),
+    );
+    idp.nextLogin({
+      sub: "sub-1",
+      userinfo: { email: "Ada@Example.com", email_verified: true },
+    });
+    vi.mocked(safeFetch).mockClear();
+    await expect(finish(state)).resolves.toMatchObject({
+      email: "ada@example.com",
+      emailVerified: true,
+    });
+    expect(vi.mocked(safeFetch)).toHaveBeenCalledWith(
+      `${idp.issuer}/userinfo`,
+      expect.objectContaining({ allowPrivate: true }),
+    );
   });
 
   it("is 404 without a provider", async () => {

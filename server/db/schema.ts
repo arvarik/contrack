@@ -251,7 +251,7 @@ export const sessions = sqliteTable("sessions", {
     .default(sql`(CURRENT_TIMESTAMP)`),
   /** Truncated User-Agent, so the sessions list can say which device. */
   userAgent: text("userAgent"),
-  /** Method used to establish the session: 'password' | 'passkey' | 'email-link' | null. */
+  /** Method used to establish the session: 'password' | 'passkey' | 'email-link' | 'oidc' | null. */
   method: text("method"),
 });
 
@@ -296,10 +296,13 @@ export const userIdentities = sqliteTable(
   (t) => [unique().on(t.issuer, t.subject), unique().on(t.userId, t.issuer)],
 );
 
-/** auth_challenges: short-lived WebAuthn ceremony challenges. */
+/**
+ * auth_challenges: short-lived WebAuthn ceremony challenges, and OIDC flows
+ * (the state is the id, and `challenge` holds the flow's JSON).
+ */
 export const authChallenges = sqliteTable("auth_challenges", {
   id: text("id").primaryKey(),
-  /** 'register' | 'login'. */
+  /** 'register' | 'login' | 'oidc'. */
   kind: text("kind").notNull(),
   userId: text("userId").references(() => users.id, { onDelete: "cascade" }),
   challenge: text("challenge").notNull(),

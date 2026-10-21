@@ -3,7 +3,8 @@
 
 import crypto from "crypto";
 import { sqlite } from "../db.ts";
-import { AppError } from "../utils/AppError.ts";
+import { AppError, ConflictError, NotFoundError } from "../utils/AppError.ts";
+import { getOidcConfig } from "./integrationSettings.ts";
 
 export interface IdentitySummary {
   id: string;
@@ -27,8 +28,8 @@ export function findUserIdByIdentity(
 
 /**
  * Link (issuer, subject) to `userId`. A second link from the same account to
- * the same provider replaces the first. One that another account holds is
- * refused.
+ * the same provider replaces the first, as a new link. One that another
+ * account holds is refused.
  */
 export function linkIdentity(
   userId: string,
@@ -38,10 +39,8 @@ export function linkIdentity(
 ): IdentitySummary {
   const holder = findUserIdByIdentity(issuer, subject);
   if (holder && holder !== userId) {
-    throw new AppError(
+    throw new ConflictError(
       "This sign-in is already linked to another account",
-      409,
-      { code: "IDENTITY_TAKEN" },
     );
   }
   const id = crypto.randomUUID();
@@ -50,7 +49,8 @@ export function linkIdentity(
       `INSERT INTO user_identities (id, userId, issuer, subject, email)
        VALUES (?, ?, ?, ?, ?)
        ON CONFLICT (userId, issuer) DO UPDATE
-         SET subject = excluded.subject, email = excluded.email`,
+         SET subject = excluded.subject, email = excluded.email,
+             createdAt = CURRENT_TIMESTAMP, lastUsedAt = NULL`,
     )
     .run(id, userId, issuer, subject, email);
   const row = listIdentities(userId).find((r) => r.issuer === issuer);
@@ -76,13 +76,34 @@ export function listIdentities(userId: string): IdentitySummary[] {
     .all(userId) as IdentitySummary[];
 }
 
+/** An issuer as written, compared by its URL with one trailing slash off. */
+function issuerKey(issuer: string): string {
+  try {
+    return new URL(issuer).href.replace(/\/$/, "");
+  } catch {
+    return issuer;
+  }
+}
+
+/**
+ * The account's identities, each marked `current` when it is at the provider
+ * set up now, so the account page can offer a link to that one.
+ */
+export function listAccountIdentities(
+  userId: string,
+): (IdentitySummary & { current: boolean })[] {
+  const issuer = getOidcConfig()?.issuer;
+  return listIdentities(userId).map((identity) => ({
+    ...identity,
+    current: issuer != null && issuerKey(identity.issuer) === issuerKey(issuer),
+  }));
+}
+
 export function unlinkIdentity(userId: string, id: string): void {
   const result = sqlite
     .prepare("DELETE FROM user_identities WHERE id = ? AND userId = ?")
     .run(id, userId);
   if (result.changes === 0) {
-    throw new AppError("Linked sign-in not found", 404, {
-      code: "NOT_FOUND",
-    });
+    throw new NotFoundError("Linked sign-in");
   }
 }

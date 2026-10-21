@@ -9,11 +9,10 @@ import crypto from "crypto";
 import { Router, type Request, type Response } from "express";
 import { AppError, ValidationError } from "../utils/AppError.ts";
 import { log } from "../utils/logger.ts";
-import { ResponseBodyError } from "openid-client";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { validatePassword } from "../services/passwords.ts";
 import { createRateLimiter } from "../middleware/rateLimit.ts";
-import { validateBody } from "../utils/validators.ts";
+import { parseQuery, validateBody } from "../utils/validators.ts";
 import {
   acceptInvitationSchema,
   authRoutes,
@@ -98,22 +97,14 @@ import {
   processProfilePhoto,
   AVATAR_MIME_EXTENSIONS,
 } from "../utils/avatarProcessor.ts";
-import {
-  mailLinkOrigin,
-  oidcCallbackUrl,
-  publicOrigin,
-} from "../utils/publicOrigin.ts";
+import { mailLinkOrigin, oidcCallbackUrl } from "../utils/publicOrigin.ts";
 import { getOidcConfig } from "../services/integrationSettings.ts";
+import { startOidc } from "../services/oidcService.ts";
+import { finishOidcCallback } from "../services/oidcSignInService.ts";
 import {
-  startOidc,
-  finishOidc,
-  type OidcClaims,
-} from "../services/oidcService.ts";
-import {
-  completeOidcLink,
-  completeOidcSignIn,
-} from "../services/oidcSignInService.ts";
-import { listIdentities, unlinkIdentity } from "../services/identityService.ts";
+  listAccountIdentities,
+  unlinkIdentity,
+} from "../services/identityService.ts";
 import { oauthIssuer } from "../services/oauthService.ts";
 import type { SessionMethod } from "../../shared/devices.ts";
 import {
@@ -185,8 +176,21 @@ const linkLimiter = createRateLimiter({
   name: "auth links",
 });
 
+/**
+ * Twenty single sign-on starts a minute per IP, apart from the password
+ * budget, so an office signing in with SSO does not lock out password
+ * sign-in. The callback has none: the flow cookie, the random state and the
+ * single-use flow leave nothing to guess.
+ */
+const oidcLimiter = createRateLimiter({
+  windowMs: 60_000,
+  max: 20,
+  name: "single sign-on",
+});
+
 /** Clear every credential window in this module. Test seam. */
 export function __resetAuthRateLimits(): void {
+  oidcLimiter.reset();
   credentialLimiter.reset();
   setupLimiter.reset();
   tokenLimiter.reset();
@@ -1014,12 +1018,6 @@ function assertOidcAvailable(): void {
   }
 }
 
-/** Where a finished or failed OIDC flow lands, with the outcome for the page. */
-function oidcLanding(link: boolean, outcome: string | null): string {
-  if (link) return `/settings/account?oidc=${outcome ?? "linked"}#password`;
-  return outcome ? `/?oidc=${outcome}` : "/";
-}
-
 /**
  * Start a flow and bind it to this browser: the flow cookie holds its state,
  * and the callback refuses a state the cookie does not hold.
@@ -1027,12 +1025,9 @@ function oidcLanding(link: boolean, outcome: string | null): string {
 async function startBoundOidc(
   req: Request,
   res: Response,
-  linkUserId: string | null,
+  flow: { linkUserId: string | null; remember?: boolean; returnTo?: string },
 ): Promise<string> {
-  const url = await startOidc({
-    redirectUri: oidcCallbackUrl(req),
-    linkUserId,
-  });
+  const url = await startOidc({ redirectUri: oidcCallbackUrl(req), ...flow });
   setOidcStateCookie(req, res, new URL(url).searchParams.get("state") ?? "");
   return url;
 }
@@ -1049,16 +1044,26 @@ function stateMatchesCookie(req: Request): boolean {
 
 router.get(
   "/oidc/start",
-  credentialLimiter,
+  // A browser navigates here, so a refusal goes back to the sign-in page
+  // instead of showing JSON.
+  (req, res, next) =>
+    oidcLimiter(req, res, (err?: unknown) =>
+      err ? res.redirect("/?oidc=failed") : next(),
+    ),
   asyncHandler(async (req, res) => {
-    // A browser navigates here, so a failure goes back to the sign-in page
-    // instead of showing JSON.
     try {
       assertOidcAvailable();
-      res.redirect(await startBoundOidc(req, res, null));
+      const query = parseQuery(authRoutes.oidcStart.query, req.query);
+      res.redirect(
+        await startBoundOidc(req, res, {
+          linkUserId: null,
+          remember: query.remember !== "0",
+          returnTo: query.returnTo,
+        }),
+      );
     } catch (error) {
       log.warn("Auth", "OIDC sign-in could not start", { error });
-      res.redirect(oidcLanding(false, "failed"));
+      res.redirect("/?oidc=failed");
     }
   }),
 );
@@ -1066,85 +1071,51 @@ router.get(
 /** Start linking the signed-in account. A POST, so a cross-site page cannot start it. */
 router.post(
   "/oidc/link",
-  credentialLimiter,
+  oidcLimiter,
   requireSession,
   requirePasswordCurrent,
   asyncHandler(async (req, res) => {
     assertOidcAvailable();
-    res.json({ url: await startBoundOidc(req, res, req.principal!.user.id) });
+    res.json({
+      url: await startBoundOidc(req, res, {
+        linkUserId: req.principal!.user.id,
+      }),
+    });
   }),
 );
 
-/** Everything after the provider answered: link, or sign in. */
-function completeOidc(req: Request, res: Response, claims: OidcClaims): void {
-  const info = { ip: ipOf(req), userAgent: req.headers["user-agent"] ?? null };
-  if (claims.linkUserId) {
-    const sessionUserId =
-      req.principal?.via === "session" ? req.principal.user.id : null;
-    const outcome = completeOidcLink(claims, sessionUserId, info);
-    return void res.redirect(
-      oidcLanding(true, outcome === "linked" ? null : outcome),
-    );
-  }
-  const result = completeOidcSignIn(claims, info);
-  if (result.outcome !== "signed-in") {
-    return void res.redirect(oidcLanding(false, result.outcome));
-  }
-  setSessionCookie(req, res, result.session.secret, result.session.expiresAt);
-  res.redirect(oidcLanding(false, null));
-}
-
 router.get(
   "/oidc/callback",
-  credentialLimiter,
   asyncHandler(async (req, res) => {
     // The flow ends here, whatever the outcome.
     clearOidcStateCookie(req, res);
     if (!isAuthRequired()) return res.redirect("/");
-    // Checked before finishOidc, so a callback from another browser's flow
-    // cannot consume that flow's state.
+    // Checked before the flow is consumed, so a callback from another
+    // browser's flow cannot use up that flow's state.
     if (!stateMatchesCookie(req)) {
       log.warn("Auth", "OIDC callback without this browser's flow cookie");
-      return res.redirect(oidcLanding(false, "failed"));
+      return res.redirect("/?oidc=failed");
     }
-    if (typeof req.query.error === "string") {
-      log.info("Auth", "OIDC provider returned an error", {
-        error: req.query.error,
-      });
-      return res.redirect(oidcLanding(false, "denied"));
+    // The address the provider was given at the start, with this query.
+    const query = req.originalUrl.indexOf("?");
+    const result = await finishOidcCallback(
+      new URL(
+        oidcCallbackUrl(req) +
+          (query === -1 ? "" : req.originalUrl.slice(query)),
+      ),
+      req.principal?.via === "session" ? req.principal.user.id : null,
+      { ip: ipOf(req), userAgent: req.headers["user-agent"] ?? null },
+    );
+    if (result.session) {
+      const { secret, expiresAt, remember } = result.session;
+      setSessionCookie(req, res, secret, expiresAt, { sessionOnly: !remember });
     }
-
-    let claims;
-    try {
-      claims = await finishOidc(
-        new URL(req.originalUrl, publicOrigin(req)).toString(),
-      );
-    } catch (err) {
-      // A refused token request carries the OAuth error, such as
-      // invalid_client, which tells the operator why.
-      log.warn("Auth", "OIDC sign-in did not finish", {
-        error: err,
-        ...(err instanceof ResponseBodyError && {
-          oauthError: err.error,
-          oauthErrorDescription: err.error_description,
-        }),
-      });
-      const expired = err instanceof AppError && err.statusCode === 410;
-      return res.redirect(oidcLanding(false, expired ? "expired" : "failed"));
-    }
-    try {
-      completeOidc(req, res, claims);
-    } catch (error) {
-      log.warn("Auth", "OIDC sign-in failed after the provider answered", {
-        error,
-      });
-      res.redirect(oidcLanding(Boolean(claims.linkUserId), "failed"));
-    }
+    res.redirect(result.landing);
   }),
 );
 
 router.get("/identities", requireSession, (req, res) => {
-  res.json({ identities: listIdentities(req.principal!.user.id) });
+  res.json({ identities: listAccountIdentities(req.principal!.user.id) });
 });
 
 router.delete(

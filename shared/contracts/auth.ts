@@ -5,6 +5,7 @@
 // theirs in `tokens.ts`. Also the single sign-on (OIDC) routes.
 
 import { z } from "zod";
+import { queryText } from "./common.ts";
 import { route } from "./route.ts";
 
 export const authRoutes = {
@@ -21,7 +22,16 @@ export const authRoutes = {
   oidcStart: route({
     method: "GET",
     path: "/api/auth/oidc/start",
-    summary: "Start a single sign-on. Answers 302 to the provider",
+    summary:
+      "Start a single sign-on. Answers 302 to the provider, or to `/?oidc=failed` when it cannot start",
+    query: z.object({
+      remember: queryText.describe(
+        '"0" for a session that ends when the browser closes',
+      ),
+      returnTo: queryText.describe(
+        "A path on this site to land on after signing in. Anything else lands on `/`",
+      ),
+    }),
     status: 302,
     response: z.null(),
   }),
@@ -36,7 +46,7 @@ export const authRoutes = {
     method: "GET",
     path: "/api/auth/oidc/callback",
     summary:
-      "Where the provider sends the browser back. Answers 302 to the app, with `?oidc=` naming a failure",
+      "Where the provider sends the browser back. Answers 302: a sign-in to its `returnTo` (or `/`), a link to `/settings/account?oidc=linked#password`. A failure adds `?oidc=` with denied, expired, failed, no-account, disabled or must-change-password to `/`, or denied, expired, failed or taken to the Account settings address for a link",
     status: 302,
     response: z.null(),
   }),
@@ -52,6 +62,9 @@ export const authRoutes = {
           email: z.string().nullable(),
           createdAt: z.string(),
           lastUsedAt: z.string().nullable(),
+          current: z
+            .boolean()
+            .describe("True when it is at the provider set up now"),
         }),
       ),
     }),

@@ -4,8 +4,9 @@
 // token's issuer, audience, expiry, nonce and its signature against the
 // provider's published JWKS. Every request it makes, the JWKS included, goes
 // through safeFetch and follows no redirect. A flow's state, PKCE verifier,
-// nonce and link target wait in auth_challenges (kind 'oidc') for at most ten
-// minutes, and the callback consumes them once.
+// nonce, link target, "keep me signed in" choice and return path wait in
+// auth_challenges (kind 'oidc') for at most ten minutes, and the callback
+// consumes them once.
 
 import * as client from "openid-client";
 import { sqlite } from "../db.ts";
@@ -28,13 +29,34 @@ export interface OidcClaims {
   subject: string;
   email: string | null;
   emailVerified: boolean;
-  /** The account a link flow started from, or null for a sign-in. */
-  linkUserId: string | null;
 }
 
-interface FlowSecrets {
+/** What a flow's row holds, as JSON in `challenge`. */
+interface FlowData {
   codeVerifier: string;
   nonce: string;
+  /** False for a session that ends with the browser. */
+  remember: boolean;
+  /** Where a sign-in lands: a path on this origin, or null for `/`. */
+  returnTo: string | null;
+}
+
+/** A flow the callback consumed. */
+export interface OidcFlow extends FlowData {
+  /** The account a link flow started from, or null for a sign-in. */
+  userId: string | null;
+  expired: boolean;
+}
+
+/**
+ * `value` when it is a path on this origin, else null, so a sign-in cannot be
+ * sent elsewhere (open redirect). One leading slash, never `//host` or
+ * `/\host`, no backslash or control character anywhere, at most 2048
+ * characters. A path cannot carry a scheme, so `https://…` fails too.
+ */
+export function safeReturnTo(value: unknown): string | null {
+  if (typeof value !== "string" || value.length > 2048) return null;
+  return /^\/(?![/\\])[^\\\p{Cc}]*$/u.test(value) ? value : null;
 }
 
 /**
@@ -148,6 +170,8 @@ export async function saveOidcProvider(
 export async function startOidc(input: {
   redirectUri: string;
   linkUserId: string | null;
+  remember?: boolean;
+  returnTo?: string | null;
 }): Promise<string> {
   const config = await discover(requireConfig());
   const codeVerifier = client.randomPKCECodeVerifier();
@@ -161,7 +185,12 @@ export async function startOidc(input: {
     .run(
       state,
       input.linkUserId,
-      JSON.stringify({ codeVerifier, nonce } satisfies FlowSecrets),
+      JSON.stringify({
+        codeVerifier,
+        nonce,
+        remember: input.remember !== false,
+        returnTo: safeReturnTo(input.returnTo),
+      } satisfies FlowData),
       new Date(Date.now() + FLOW_TTL_MS).toISOString(),
     );
   return client
@@ -177,12 +206,10 @@ export async function startOidc(input: {
 }
 
 /**
- * Finish a flow from the URL the provider sent the browser to: consume its
- * state, exchange the code, validate the ID token, and return who signed in.
+ * Consume the flow a callback's state names. Null for a state with no flow,
+ * such as one already used.
  */
-export async function finishOidc(callbackUrl: string): Promise<OidcClaims> {
-  const url = new URL(callbackUrl);
-  const state = url.searchParams.get("state") ?? "";
+export function takeOidcFlow(state: string): OidcFlow | null {
   const row = sqlite
     .prepare(
       `DELETE FROM auth_challenges WHERE id = ? AND kind = 'oidc'
@@ -190,17 +217,28 @@ export async function finishOidc(callbackUrl: string): Promise<OidcClaims> {
     )
     .get(state) as
     { userId: string | null; challenge: string; expiresAt: string } | undefined;
-  if (!row || new Date(row.expiresAt).getTime() <= Date.now()) {
-    throw new AppError("This sign-in took too long. Try again", 410, {
-      code: "OIDC_EXPIRED",
-    });
-  }
-  const secrets = JSON.parse(row.challenge) as FlowSecrets;
+  if (!row) return null;
+  const data = JSON.parse(row.challenge) as FlowData;
+  return {
+    ...data,
+    userId: row.userId,
+    expired: new Date(row.expiresAt).getTime() <= Date.now(),
+  };
+}
+
+/**
+ * Finish a consumed flow from the URL the provider sent the browser to:
+ * exchange the code, validate the ID token, and return who signed in.
+ */
+export async function finishOidc(
+  callbackUrl: URL,
+  flow: OidcFlow,
+): Promise<OidcClaims> {
   const config = await discover(requireConfig());
-  const tokens = await client.authorizationCodeGrant(config, url, {
-    pkceCodeVerifier: secrets.codeVerifier,
-    expectedState: state,
-    expectedNonce: secrets.nonce,
+  const tokens = await client.authorizationCodeGrant(config, callbackUrl, {
+    pkceCodeVerifier: flow.codeVerifier,
+    expectedState: callbackUrl.searchParams.get("state") ?? "",
+    expectedNonce: flow.nonce,
     idTokenExpected: true,
   });
   const claims = tokens.claims();
@@ -231,6 +269,5 @@ export async function finishOidc(callbackUrl: string): Promise<OidcClaims> {
     subject: claims.sub,
     email: email?.trim().toLowerCase() || null,
     emailVerified,
-    linkUserId: row.userId,
   };
 }

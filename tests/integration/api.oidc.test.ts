@@ -93,16 +93,16 @@ const oidcSessions = () =>
   ).n;
 
 /** Start a sign-in as a browser would: the state and the flow cookie. */
-async function startSignIn() {
-  const start = await request(app).get("/api/auth/oidc/start");
+async function startSignIn(query = "") {
+  const start = await request(app).get(`/api/auth/oidc/start${query}`);
   expect(start.status).toBe(302);
   const { state } = idp.remember(start.headers.location);
   return { state, cookie: flowCookie(start) };
 }
 
 /** Run the browser's part: start, let the IdP "sign in", hit the callback. */
-async function signIn(login: FakeLogin) {
-  const { state, cookie } = await startSignIn();
+async function signIn(login: FakeLogin, query = "") {
+  const { state, cookie } = await startSignIn(query);
   idp.nextLogin(login);
   return request(app)
     .get(`/api/auth/oidc/callback?code=c&state=${state}`)
@@ -268,7 +268,7 @@ describe("API: OIDC sign-in", () => {
     );
   });
 
-  it("answers expired for a state used once already", async () => {
+  it("answers failed for a state used once already", async () => {
     const { ada } = await setup();
     linkIdentity(ada.id, idp.issuer, "sub-ada", null);
     const { state, cookie } = await startSignIn();
@@ -276,7 +276,134 @@ describe("API: OIDC sign-in", () => {
     const url = `/api/auth/oidc/callback?code=c&state=${state}`;
     await request(app).get(url).set("Cookie", cookie);
     const replay = await request(app).get(url).set("Cookie", cookie);
-    expect(replay.headers.location).toBe("/?oidc=expired");
+    expect(replay.headers.location).toBe("/?oidc=failed");
+  });
+
+  it("answers expired for a flow past its ten minutes", async () => {
+    const { state, cookie } = await startSignIn();
+    sqlite
+      .prepare("UPDATE auth_challenges SET expiresAt = ? WHERE id = ?")
+      .run(new Date(Date.now() - 1000).toISOString(), state);
+    const res = await request(app)
+      .get(`/api/auth/oidc/callback?code=c&state=${state}`)
+      .set("Cookie", cookie);
+    expect(res.headers.location).toBe("/?oidc=expired");
+  });
+
+  it("answers denied when the provider refused, and uses up the flow", async () => {
+    const { state, cookie } = await startSignIn();
+    const res = await request(app)
+      .get(`/api/auth/oidc/callback?error=access_denied&state=${state}`)
+      .set("Cookie", cookie);
+    expect(res.headers.location).toBe("/?oidc=denied");
+    expect(
+      sqlite.prepare("SELECT COUNT(*) AS n FROM auth_challenges").get(),
+    ).toEqual({ n: 0 });
+  });
+
+  it("sends the token request the redirect URI the start sent", async () => {
+    const { ada } = await setup();
+    linkIdentity(ada.id, idp.issuer, "sub-ada", null);
+    await signIn({ sub: "sub-ada" });
+    expect(idp.tokenRedirectUri()).toBe(`${ORIGIN}/api/auth/oidc/callback`);
+  });
+
+  it("records lastLoginAt", async () => {
+    const { ada } = await setup();
+    linkIdentity(ada.id, idp.issuer, "sub-ada", null);
+    await signIn({ sub: "sub-ada" });
+    const row = sqlite
+      .prepare("SELECT lastLoginAt FROM users WHERE id = ?")
+      .get(ada.id) as { lastLoginAt: string | null };
+    expect(row.lastLoginAt).not.toBeNull();
+  });
+
+  it("keeps the session to this browser when keep me signed in is off", async () => {
+    const { ada } = await setup();
+    linkIdentity(ada.id, idp.issuer, "sub-ada", null);
+    const session = (res: request.Response) =>
+      cookieFrom(res).find((c) => c.startsWith("contrack_session="))!;
+    const remembered = await signIn({ sub: "sub-ada" });
+    expect(session(remembered)).toMatch(/Max-Age=\d+/);
+    const once = await signIn({ sub: "sub-ada" }, "?remember=0");
+    expect(session(once)).toBeDefined();
+    expect(session(once)).not.toMatch(/Max-Age/);
+    const expiries = sqlite
+      .prepare(
+        "SELECT expiresAt FROM sessions WHERE userId = ? ORDER BY expiresAt",
+      )
+      .all(ada.id) as { expiresAt: string }[];
+    expect(
+      new Date(expiries[0].expiresAt).getTime() - Date.now(),
+    ).toBeLessThanOrEqual(24 * 60 * 60 * 1000);
+  });
+
+  it("lands a sign-in on the path it started from, and only on this site", async () => {
+    const { ada } = await setup();
+    linkIdentity(ada.id, idp.issuer, "sub-ada", null);
+    const landing = async (returnTo: string) =>
+      (
+        await signIn(
+          { sub: "sub-ada" },
+          `?returnTo=${encodeURIComponent(returnTo)}`,
+        )
+      ).headers.location;
+    expect(await landing("/contacts/abc?x=1")).toBe("/contacts/abc?x=1");
+    for (const bad of [
+      "//evil.com",
+      "/\\evil.com",
+      "https://evil.com",
+      "/contacts\r\nSet-Cookie: x=1",
+    ]) {
+      expect(await landing(bad), bad).toBe("/");
+    }
+    // A failure still lands on the sign-in page.
+    const failed = await signIn({ sub: "sub-nobody" }, "?returnTo=%2Fcontacts");
+    expect(failed.headers.location).toBe("/?oidc=no-account");
+  });
+
+  it("refuses an account that must change its password, before any write", async () => {
+    const { ada } = await setup();
+    sqlite
+      .prepare("UPDATE users SET mustChangePassword = 1 WHERE id = ?")
+      .run(ada.id);
+    const res = await signIn({
+      sub: "sub-new",
+      email: "ada@example.com",
+      email_verified: true,
+    });
+    expect(res.headers.location).toBe("/?oidc=must-change-password");
+    expect(sessionsOf(ada.id)).toBe(0);
+    expect(
+      sqlite.prepare("SELECT COUNT(*) AS n FROM user_identities").get(),
+    ).toEqual({ n: 0 });
+    const audit = sqlite
+      .prepare(
+        "SELECT details FROM audit_log WHERE action = 'auth.login.failed' AND actorUserId = ?",
+      )
+      .get(ada.id) as { details: string };
+    expect(JSON.parse(audit.details)).toMatchObject({
+      method: "oidc",
+      reason: "must-change-password",
+    });
+  });
+
+  it("limits starts on their own, and leaves the callback and password sign-in alone", async () => {
+    for (let i = 0; i < 20; i++) {
+      const ok = await request(app).get("/api/auth/oidc/start");
+      expect(ok.headers.location).toMatch(/\/authorize\?/);
+    }
+    const refused = await request(app).get("/api/auth/oidc/start");
+    expect(refused.status).toBe(302);
+    expect(refused.headers.location).toBe("/?oidc=failed");
+    // Callbacks are not counted against anything.
+    for (let i = 0; i < 12; i++) {
+      const cb = await request(app).get(
+        "/api/auth/oidc/callback?code=c&state=x",
+      );
+      expect(cb.headers.location).toBe("/?oidc=failed");
+    }
+    await passwordLogin("ada");
   });
 });
 
@@ -381,6 +508,70 @@ describe("API: linking OIDC from settings", () => {
   });
 });
 
+describe("API: OIDC link flow landings", () => {
+  async function startLink() {
+    await setup();
+    const cookie = await passwordLogin("ada");
+    const link = await request(app)
+      .post("/api/auth/oidc/link")
+      .set("Cookie", cookie)
+      .set("Origin", ORIGIN);
+    expect(link.status).toBe(200);
+    const { state } = idp.remember(link.body.url);
+    return { state, cookie: [...cookie, flowCookie(link)] };
+  }
+
+  it("lands a denied link on Account settings", async () => {
+    const { state, cookie } = await startLink();
+    const res = await request(app)
+      .get(`/api/auth/oidc/callback?error=access_denied&state=${state}`)
+      .set("Cookie", cookie);
+    expect(res.headers.location).toBe("/settings/account?oidc=denied#password");
+  });
+
+  it("lands an expired link on Account settings", async () => {
+    const { state, cookie } = await startLink();
+    sqlite
+      .prepare("UPDATE auth_challenges SET expiresAt = ? WHERE id = ?")
+      .run(new Date(Date.now() - 1000).toISOString(), state);
+    const res = await request(app)
+      .get(`/api/auth/oidc/callback?code=c&state=${state}`)
+      .set("Cookie", cookie);
+    expect(res.headers.location).toBe(
+      "/settings/account?oidc=expired#password",
+    );
+  });
+
+  it("lands a link whose code exchange fails on Account settings", async () => {
+    const { state, cookie } = await startLink();
+    // Nothing queued: the provider answers 400 invalid_grant.
+    const res = await request(app)
+      .get(`/api/auth/oidc/callback?code=c&state=${state}`)
+      .set("Cookie", cookie);
+    expect(res.headers.location).toBe("/settings/account?oidc=failed#password");
+  });
+
+  it("marks the identity at the current provider", async () => {
+    const { ada } = await setup();
+    linkIdentity(ada.id, `${idp.issuer}/`, "sub-ada", null);
+    linkIdentity(ada.id, "https://old.example.com", "sub-old", null);
+    const cookie = await passwordLogin("ada");
+    const list = await request(app)
+      .get("/api/auth/identities")
+      .set("Cookie", cookie);
+    const byIssuer = Object.fromEntries(
+      list.body.identities.map((i: { issuer: string; current: boolean }) => [
+        i.issuer,
+        i.current,
+      ]),
+    );
+    expect(byIssuer).toEqual({
+      [`${idp.issuer}/`]: true,
+      "https://old.example.com": false,
+    });
+  });
+});
+
 describe("API: OIDC failures on browser routes", () => {
   beforeEach(() => setup());
 
@@ -451,6 +642,9 @@ describe("API: OIDC failures on browser routes", () => {
 
   it("leaves no link and no session when an email sign-in fails part way", async () => {
     const { ada } = await setup();
+    const auditRows = () =>
+      sqlite.prepare("SELECT COUNT(*) AS n FROM audit_log").get();
+    const auditBefore = auditRows();
     const spy = vi
       .spyOn(identityService, "touchIdentity")
       .mockImplementationOnce(() => {
@@ -473,6 +667,8 @@ describe("API: OIDC failures on browser routes", () => {
           .prepare("SELECT COUNT(*) AS n FROM sessions WHERE userId = ?")
           .get(ada.id),
       ).toEqual({ n: 0 });
+      // The auth.oidc.linked row rolled back with the link.
+      expect(auditRows()).toEqual(auditBefore);
     } finally {
       spy.mockRestore();
     }

@@ -46,6 +46,8 @@ export interface OidcIntegrationStatus {
   clientSecretPreview: string | null;
   name: string | null;
   matchByEmail: boolean;
+  /** True when OIDC_* is set but OIDC_ISSUER is refused, so sign-in is off. */
+  envIssuerInvalid: boolean;
 }
 
 export interface OidcConfig {
@@ -141,15 +143,19 @@ export function getIntegrationsStatus(): IntegrationsStatus {
         clientSecretPreview: redact(oidc.clientSecret),
         name: oidc.name,
         matchByEmail: oidc.matchByEmail,
+        envIssuerInvalid: false,
       }
     : {
         configured: false,
-        source: "none",
+        // getOidcConfig is null under OIDC_* only for a refused issuer. The
+        // environment still owns the setting, so saving stays locked.
+        source: isOidcEnvSet() ? "env" : "none",
         issuer: null,
         clientId: null,
         clientSecretPreview: null,
         name: null,
         matchByEmail: false,
+        envIssuerInvalid: isOidcEnvSet(),
       };
 
   return { googleOAuth: googleOAuthStatus, oidc: oidcStatus };

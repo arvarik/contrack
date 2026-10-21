@@ -2093,6 +2093,7 @@ describe("instance lifecycle and integration settings (P4)", () => {
         clientSecretPreview: null,
         name: null,
         matchByEmail: false,
+        envIssuerInvalid: false,
         redirectUri: expect.stringMatching(
           /^http:\/\/[^/]+\/api\/auth\/oidc\/callback$/,
         ),

@@ -1,6 +1,7 @@
-// A minimal OpenID provider for tests: discovery, JWKS, and a token endpoint
-// that signs an ID token for whatever the test queued with `nextLogin`. The
-// token endpoint takes only the method it advertises, client_secret_basic.
+// A minimal OpenID provider for tests: discovery, JWKS, a token endpoint that
+// signs an ID token for whatever the test queued with `nextLogin`, and a
+// userinfo endpoint. The token endpoint takes only the method it advertises,
+// client_secret_basic.
 
 import http from "node:http";
 import express from "express";
@@ -11,6 +12,8 @@ export interface FakeLogin {
   email?: string;
   email_verified?: boolean;
   nonce?: string; // defaults to the nonce from the last authorize URL
+  /** Served from /userinfo only. The ID token then carries no email. */
+  userinfo?: { email: string; email_verified: boolean };
 }
 
 export async function startFakeProvider() {
@@ -25,8 +28,10 @@ export async function startFakeProvider() {
   let issuer = "";
   let clientId = "contrack";
   let lastNonce = "";
+  let signedIn: FakeLogin | null = null;
   let tokenRedirect: string | null = null;
   const requests: string[] = [];
+  let tokenRedirectUri: string | null = null;
   idp.use((req, _res, proceed) => {
     requests.push(req.path);
     proceed();
@@ -38,6 +43,7 @@ export async function startFakeProvider() {
       authorization_endpoint: `${issuer}/authorize`,
       token_endpoint: `${issuer}/token`,
       jwks_uri: `${issuer}/jwks`,
+      userinfo_endpoint: `${issuer}/userinfo`,
       response_types_supported: ["code"],
       subject_types_supported: ["public"],
       id_token_signing_alg_values_supported: ["RS256"],
@@ -48,6 +54,9 @@ export async function startFakeProvider() {
   idp.get("/jwks", (_req, res) => {
     res.json({ keys: [jwk] });
   });
+  idp.get("/userinfo", (_req, res) => {
+    res.json({ sub: signedIn?.sub, ...signedIn?.userinfo });
+  });
   idp.post("/token", async (req, res) => {
     const basic = req.headers.authorization?.startsWith("Basic ");
     if (!basic || req.body?.client_secret !== undefined) {
@@ -57,6 +66,7 @@ export async function startFakeProvider() {
       });
       return;
     }
+    tokenRedirectUri = req.body?.redirect_uri ?? null;
     if (tokenRedirect) {
       res.redirect(307, tokenRedirect);
       tokenRedirect = null;
@@ -68,9 +78,12 @@ export async function startFakeProvider() {
     }
     const login = next;
     next = null;
+    signedIn = login;
     const idToken = await new SignJWT({
-      email: login.email,
-      email_verified: login.email_verified,
+      ...(!login.userinfo && {
+        email: login.email,
+        email_verified: login.email_verified,
+      }),
       nonce: login.nonce ?? lastNonce,
     })
       .setProtectedHeader({ alg: "RS256", kid: "k1" })
@@ -113,6 +126,8 @@ export async function startFakeProvider() {
     redirectNextToken(location: string) {
       tokenRedirect = location;
     },
+    /** The redirect_uri of the last token request. */
+    tokenRedirectUri: () => tokenRedirectUri,
     /** Paths the provider was asked for, in order. */
     requests,
     /** Read state and nonce from an authorize URL Contrack produced. */

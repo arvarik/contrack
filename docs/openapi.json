@@ -436,14 +436,19 @@
                           "issuer": { "type": "string" },
                           "email": { "type": ["string", "null"] },
                           "createdAt": { "type": "string" },
-                          "lastUsedAt": { "type": ["string", "null"] }
+                          "lastUsedAt": { "type": ["string", "null"] },
+                          "current": {
+                            "type": "boolean",
+                            "description": "True when it is at the provider set up now"
+                          }
                         },
                         "required": [
                           "id",
                           "issuer",
                           "email",
                           "createdAt",
-                          "lastUsedAt"
+                          "lastUsedAt",
+                          "current"
                         ],
                         "additionalProperties": false
                       }
@@ -584,7 +589,7 @@
     },
     "/api/auth/oidc/callback": {
       "get": {
-        "summary": "Where the provider sends the browser back. Answers 302 to the app, with `?oidc=` naming a failure",
+        "summary": "Where the provider sends the browser back. Answers 302: a sign-in to its `returnTo` (or `/`), a link to `/settings/account?oidc=linked#password`. A failure adds `?oidc=` with denied, expired, failed, no-account, disabled or must-change-password to `/`, or denied, expired, failed or taken to the Account settings address for a link",
         "responses": {
           "302": {
             "description": "Success",
@@ -615,7 +620,23 @@
     },
     "/api/auth/oidc/start": {
       "get": {
-        "summary": "Start a single sign-on. Answers 302 to the provider",
+        "summary": "Start a single sign-on. Answers 302 to the provider, or to `/?oidc=failed` when it cannot start",
+        "parameters": [
+          {
+            "name": "remember",
+            "in": "query",
+            "required": false,
+            "description": "\"0\" for a session that ends when the browser closes",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "returnTo",
+            "in": "query",
+            "required": false,
+            "description": "A path on this site to land on after signing in. Anything else lands on `/`",
+            "schema": { "type": "string" }
+          }
+        ],
         "responses": {
           "302": {
             "description": "Success",
