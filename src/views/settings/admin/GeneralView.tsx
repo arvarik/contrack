@@ -1170,7 +1170,7 @@ export const OidcRow = () => {
                 "Button name",
                 name,
                 setName,
-                "SSO",
+                "OpenID Connect",
                 false,
                 undefined,
                 40,
@@ -1229,7 +1229,7 @@ export const OidcRow = () => {
                           ...(clientSecret.trim() && {
                             clientSecret: clientSecret.trim(),
                           }),
-                          name: name.trim() || "SSO",
+                          name: name.trim() || "OpenID Connect",
                           matchByEmail,
                         },
                       },

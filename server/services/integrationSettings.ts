@@ -63,7 +63,7 @@ export interface OidcConfig {
 
 export type OidcConfigInput = Omit<OidcConfig, "source">;
 
-const DEFAULT_OIDC_NAME = "SSO";
+const DEFAULT_OIDC_NAME = "OpenID Connect";
 
 /** The General page's integrations. SearXNG is in the AI settings view. */
 export interface IntegrationsStatus {

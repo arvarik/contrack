@@ -65,7 +65,7 @@ describe("OIDC integration settings", () => {
       issuer: "https://sso.example.org",
       clientId: "env-id",
       clientSecret: "env-secret",
-      name: "SSO",
+      name: "OpenID Connect",
       matchByEmail: false,
       source: "env",
     });

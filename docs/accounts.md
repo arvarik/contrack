@@ -141,7 +141,7 @@ while sign-in is on.
 
 The issuer must use `https://`. `localhost`, `127.0.0.1` and `[::1]` may use
 `http://`. The sign-in screen then shows **Sign in with** and the button name,
-**Sign in with SSO** when you leave the name empty. If `OIDC_ISSUER`,
+**Sign in with OpenID Connect** when you leave the name empty. If `OIDC_ISSUER`,
 `OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET` are set, they win and the card is
 locked, see [Configuration](configuration.md#environment-variables).
 
@@ -150,7 +150,7 @@ locked, see [Configuration](configuration.md#environment-variables).
 Single sign-on never creates an account. It signs in to an existing one:
 
 - **A linked account.** Under **Settings → Account → Sign-in methods**, select
-  **Link** followed by the provider name (such as **Link SSO**) on the
+  **Link** followed by the provider name (such as **Link OpenID Connect**) on the
   **Single sign-on** card and sign in with the provider. You come back to
   **Account** settings, which says whether the link worked and, if not, why.
   If the browser lost the flow's cookie on the way, such as when the provider

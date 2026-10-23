@@ -137,7 +137,7 @@ describe("OidcRow", () => {
     });
     fireEvent.click(save());
     expect(mutate.mock.calls[0][0].oidc).toMatchObject({
-      name: "SSO",
+      name: "OpenID Connect",
       matchByEmail: false,
     });
   });
@@ -164,12 +164,14 @@ describe("OidcRow", () => {
       target: { value: "" },
     });
     fireEvent.click(save());
-    expect(mutate.mock.calls[0][0].oidc.name).toBe("SSO");
-    mutate.mock.calls[0][1].onSuccess({ oidc: { ...SAVED, name: "SSO" } });
+    expect(mutate.mock.calls[0][0].oidc.name).toBe("OpenID Connect");
+    mutate.mock.calls[0][1].onSuccess({
+      oidc: { ...SAVED, name: "OpenID Connect" },
+    });
     await waitFor(() =>
       expect(
         (screen.getByLabelText("Button name") as HTMLInputElement).value,
-      ).toBe("SSO"),
+      ).toBe("OpenID Connect"),
     );
   });
 
