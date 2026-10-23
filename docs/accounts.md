@@ -117,6 +117,67 @@ Passkeys need HTTPS or `localhost`. They do not work on an IP address, such as
 reverse proxy, set `PUBLIC_URL` to the address in the browser's address bar,
 see [Remote access](self-hosting.md#remote-access).
 
+## Single sign-on
+
+An admin can let people sign in with an OpenID Connect provider, such as
+Authentik, Keycloak, Pocket ID, Authelia or Google. Single sign-on works only
+while sign-in is on.
+
+### Set up the provider
+
+1. In your provider, create an OpenID Connect client of the confidential type.
+   Contrack sends the client secret with HTTP Basic (`client_secret_basic`),
+   the default in most providers, Authelia included.
+2. Open **Settings → Administration → General**. Under **Sign-in**, copy the
+   redirect URI from **OpenID Connect (single sign-on)** into the client. It is
+   your public address plus `/api/auth/oidc/callback`.
+3. Enter **Issuer**, **Client ID**, **Client secret** and **Button name**, then
+   select **Save**. Saving new credentials asks the provider for its settings
+   and refuses the change, with the reason, when the provider does not answer
+   or answers with an error. A change to only the button name or the switch
+   saves without asking, so it works while the provider is down. Leave **Client secret**
+   empty to keep the saved one, as long as the issuer and client ID stay the
+   same. **Remove** asks first.
+
+The issuer must use `https://`. `localhost`, `127.0.0.1` and `[::1]` may use
+`http://`. The sign-in screen then shows **Sign in with** and the button name,
+**Sign in with OpenID Connect** when you leave the name empty. If `OIDC_ISSUER`,
+`OIDC_CLIENT_ID` and `OIDC_CLIENT_SECRET` are set, they win and the card is
+locked, see [Configuration](configuration.md#environment-variables).
+
+### Which account signs in
+
+Single sign-on never creates an account. It signs in to an existing one:
+
+- **A linked account.** Under **Settings → Account → Sign-in methods**, select
+  **Link** followed by the provider name (such as **Link OpenID Connect**) on the
+  **Single sign-on** card and sign in with the provider. You come back to
+  **Account** settings, which says whether the link worked and, if not, why.
+  If the browser lost the flow's cookie on the way, such as when the provider
+  opened in another browser, you land on the start page instead; link again.
+  **Unlink** asks first.
+- **The same email.** When **Accounts with the same verified email can sign
+  in** is on, a provider account whose email the provider calls verified signs
+  in to the Contrack account with that email, and stays linked to it. The
+  switch is off by default. An account that already has a link from this
+  provider is never moved by email. Contrack does not verify the email on an
+  account, and members can change their own. So turn the switch on only when
+  every account's email is trusted, and only when the provider verifies
+  addresses and people cannot choose their own.
+
+Unlinking keeps your password and passkeys, so you can always still sign in.
+While email matching is on, unlinking does not stop single sign-on: the next
+sign-in with the provider links the account again.
+
+**Keep me signed in** works for single sign-on as it does for a password, and
+a link to a page in Contrack opens that page after the sign-in. An account
+that must change its password cannot use single sign-on until it has: sign in
+with the temporary password first. The **Devices** list shows a session from
+the provider as **Single sign-on**.
+
+The server never follows a redirect when it talks to the provider, and a
+sign-in works only in the browser that started it.
+
 ## Your account
 
 ![Settings, Account: the profile, sign-in methods with passkeys, devices, and API tokens](images/account-settings.png)
@@ -131,7 +192,7 @@ see [Remote access](self-hosting.md#remote-access).
   password** asks for your current password and signs out every other device.
   Your API tokens keep working.
 - **Devices.** Each browser where you are signed in, how it signed in
-  (**Password**, **Passkey** or **Emailed link**), and when it was last used.
+  (**Password**, **Passkey**, **Emailed link** or **Single sign-on**), and when it was last used.
   **This device** marks the one you are using. **Sign out other devices**
   ends the others.
 - **API tokens.** Tokens for MCP clients and scripts, and the apps you

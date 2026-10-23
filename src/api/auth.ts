@@ -13,6 +13,8 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { SessionMethod } from "../../shared/devices";
 import type { MapStyleUrls } from "../../shared/geo";
+import { authRoutes } from "../../shared/contracts/auth";
+import type { ResponseOf } from "../../shared/contracts/route";
 import {
   tokenRoutes,
   type ApiToken,
@@ -79,7 +81,25 @@ interface AuthStatus {
   mailConfigured?: boolean;
   /** True when magic link sign-in is enabled and mail is configured. */
   magicLinkSignIn?: boolean;
+  /** The single sign-on provider's button name, or null when it is off. */
+  oidc?: { name: string } | null;
 }
+
+export type LinkedIdentity = ResponseOf<
+  typeof authRoutes.identities
+>["identities"][number];
+
+export const listIdentities = () =>
+  apiJson(authRoutes.identities, "/auth/identities");
+
+export const unlinkIdentity = (id: string) =>
+  apiJson(
+    authRoutes.unlinkIdentity,
+    `/auth/identities/${encodeURIComponent(id)}`,
+  );
+
+export const startOidcLink = () =>
+  apiJson(authRoutes.oidcLink, "/auth/oidc/link");
 
 /** One personal API token, as the account's own token list shows it. */
 export type ApiTokenSummary = ApiToken;

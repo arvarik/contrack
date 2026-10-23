@@ -251,7 +251,7 @@ export const sessions = sqliteTable("sessions", {
     .default(sql`(CURRENT_TIMESTAMP)`),
   /** Truncated User-Agent, so the sessions list can say which device. */
   userAgent: text("userAgent"),
-  /** Method used to establish the session: 'password' | 'passkey' | 'email-link' | null. */
+  /** Method used to establish the session: 'password' | 'passkey' | 'email-link' | 'oidc' | null. */
   method: text("method"),
 });
 
@@ -277,10 +277,32 @@ export const passkeys = sqliteTable("passkeys", {
   lastUsedAt: text("lastUsedAt"),
 });
 
-/** auth_challenges: short-lived WebAuthn ceremony challenges. */
+/** user_identities: an OIDC provider's (issuer, subject) linked to an account. */
+export const userIdentities = sqliteTable(
+  "user_identities",
+  {
+    id: text("id").primaryKey(),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    issuer: text("issuer").notNull(),
+    subject: text("subject").notNull(),
+    email: text("email"),
+    createdAt: text("createdAt")
+      .notNull()
+      .default(sql`(CURRENT_TIMESTAMP)`),
+    lastUsedAt: text("lastUsedAt"),
+  },
+  (t) => [unique().on(t.issuer, t.subject), unique().on(t.userId, t.issuer)],
+);
+
+/**
+ * auth_challenges: short-lived WebAuthn ceremony challenges, and OIDC flows
+ * (the state is the id, and `challenge` holds the flow's JSON).
+ */
 export const authChallenges = sqliteTable("auth_challenges", {
   id: text("id").primaryKey(),
-  /** 'register' | 'login'. */
+  /** 'register' | 'login' | 'oidc'. */
   kind: text("kind").notNull(),
   userId: text("userId").references(() => users.id, { onDelete: "cascade" }),
   challenge: text("challenge").notNull(),

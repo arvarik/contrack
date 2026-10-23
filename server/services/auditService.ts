@@ -39,6 +39,8 @@ export const AUDIT_ACTIONS = [
   "auth.passkey.added",
   "auth.passkey.renamed",
   "auth.passkey.removed",
+  "auth.oidc.linked",
+  "auth.oidc.unlinked",
   "user.created",
   "user.invited",
   "user.invitation.accepted",

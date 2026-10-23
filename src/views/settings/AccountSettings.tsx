@@ -62,6 +62,7 @@ import {
 import { cn, errorText } from "../../lib/utils";
 import { describeDevice, describeSessionMethod } from "../../../shared/devices";
 import { PasskeysCard, passkeysQuery } from "./account/PasskeysCard";
+import { SingleSignOnCard } from "./account/SingleSignOnCard";
 import { passkeysSupported } from "../../api/passkeys";
 import { useHashTarget } from "./SettingRow";
 import {
@@ -982,6 +983,7 @@ export const AccountSettings = () => {
         <div className="space-y-4">
           <PasswordCard />
           <PasskeysCard />
+          <SingleSignOnCard />
         </div>
       </Section>
 

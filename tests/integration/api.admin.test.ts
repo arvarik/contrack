@@ -45,8 +45,11 @@ import {
 } from "../../server/services/backupService.ts";
 import {
   getGoogleOAuthCredentials,
+  getOidcConfig,
   getSearxngUrl,
+  setOidcConfig,
 } from "../../server/services/integrationSettings.ts";
+import { startFakeProvider } from "./oidcProvider.ts";
 
 const app = makeTestApp();
 
@@ -2082,6 +2085,19 @@ describe("instance lifecycle and integration settings (P4)", () => {
         clientSecretPreview: null,
         redirectUri,
       },
+      oidc: {
+        configured: false,
+        source: "none",
+        issuer: null,
+        clientId: null,
+        clientSecretPreview: null,
+        name: null,
+        matchByEmail: false,
+        envIssuerInvalid: false,
+        redirectUri: expect.stringMatching(
+          /^http:\/\/[^/]+\/api\/auth\/oidc\/callback$/,
+        ),
+      },
     });
 
     // 2. PUT the Google OAuth client
@@ -2103,6 +2119,7 @@ describe("instance lifecycle and integration settings (P4)", () => {
         clientSecretPreview: "••••2345",
         redirectUri,
       },
+      oidc: initial.body.oidc,
     };
     expect(putRes.body).toEqual(configured);
 
@@ -2174,12 +2191,160 @@ describe("instance lifecycle and integration settings (P4)", () => {
       }),
     );
     expect(beside.status).toBe(200);
-    expect(Object.keys(beside.body)).toEqual(["googleOAuth"]);
+    expect(Object.keys(beside.body)).toEqual(["googleOAuth", "oidc"]);
     expect(beside.body.googleOAuth.source).toBe("none");
 
     const stray = sqlite
       .prepare("SELECT 1 FROM app_settings WHERE key = 'geo.mapboxKey'")
       .get();
     expect(stray).toBeUndefined();
+  });
+
+  describe("oidc integration", () => {
+    let idp: Awaited<ReturnType<typeof startFakeProvider>>;
+    let OIDC: {
+      issuer: string;
+      clientId: string;
+      clientSecret: string;
+      name: string;
+      matchByEmail: boolean;
+    };
+    beforeAll(async () => {
+      idp = await startFakeProvider();
+      OIDC = {
+        issuer: idp.issuer,
+        clientId: "contrack",
+        clientSecret: "s3cret-value-1234",
+        name: "Authentik",
+        matchByEmail: true,
+      };
+    });
+    afterAll(() => idp.close());
+    beforeEach(() => setOidcConfig(null));
+
+    const save = (oidc: unknown) =>
+      as(admin)(request(app).put("/api/admin/integrations").send({ oidc }));
+
+    it("saves the OIDC provider sealed and shows only a preview", async () => {
+      const res = await save(OIDC);
+      expect(res.status).toBe(200);
+      expect(res.body.oidc).toMatchObject({
+        configured: true,
+        source: "setting",
+        clientSecretPreview: "••••1234",
+      });
+      expect(res.body.oidc.redirectUri).toMatch(/\/api\/auth\/oidc\/callback$/);
+      expect(JSON.stringify(res.body)).not.toContain(OIDC.clientSecret);
+      const row = sqlite
+        .prepare("SELECT value FROM app_settings WHERE key = 'auth.oidc'")
+        .get() as { value: string };
+      expect(JSON.parse(row.value)).toMatch(/^v1:/);
+
+      const cleared = await save(null);
+      expect(cleared.body.oidc.configured).toBe(false);
+    });
+
+    it("refuses a provider that does not answer discovery, and stores nothing", async () => {
+      setOidcConfig(OIDC);
+      const res = await save({ ...OIDC, issuer: "http://127.0.0.1:9" });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe("OIDC_DISCOVERY_FAILED");
+      expect(res.body.error.message).toMatch(/did not answer discovery/);
+      expect(getOidcConfig()?.issuer).toBe(OIDC.issuer);
+    });
+
+    it("saves the switch and the name while the provider is down, but not new credentials", async () => {
+      const down = { ...OIDC, issuer: "http://127.0.0.1:9" };
+      setOidcConfig(down);
+      const { clientSecret: _secret, ...rest } = down;
+      const res = await save({ ...rest, name: "Renamed", matchByEmail: false });
+      expect(res.status).toBe(200);
+      expect(getOidcConfig()).toMatchObject({
+        name: "Renamed",
+        matchByEmail: false,
+      });
+
+      const secret = await save({ ...down, clientSecret: "new-secret-5678" });
+      expect(secret.status).toBe(400);
+      expect(secret.body.error.code).toBe("OIDC_DISCOVERY_FAILED");
+      expect(getOidcConfig()?.clientSecret).toBe(OIDC.clientSecret);
+    });
+
+    it("keeps the saved secret when the issuer and client ID stay", async () => {
+      setOidcConfig(OIDC);
+      const { clientSecret: _secret, ...rest } = OIDC;
+      const res = await save({ ...rest, name: "Renamed", matchByEmail: false });
+      expect(res.status).toBe(200);
+      expect(getOidcConfig()).toMatchObject({
+        clientSecret: OIDC.clientSecret,
+        name: "Renamed",
+        matchByEmail: false,
+      });
+      expect((await save({ ...rest, clientSecret: "" })).status).toBe(200);
+      expect(getOidcConfig()?.clientSecret).toBe(OIDC.clientSecret);
+    });
+
+    it("asks for a secret when no provider is saved, or the issuer or client ID changed", async () => {
+      const { clientSecret: _secret, ...rest } = OIDC;
+      const none = await save(rest);
+      expect(none.status).toBe(400);
+      expect(none.body.error.code).toBe("VALIDATION_ERROR");
+      expect(none.body.error.message).toBe("Client secret is required");
+      expect(getOidcConfig()).toBeNull();
+
+      setOidcConfig(OIDC);
+      for (const changed of [
+        { ...rest, issuer: "https://other.example.com" },
+        { ...rest, clientId: "another" },
+      ]) {
+        const res = await save(changed);
+        expect(res.status).toBe(400);
+        expect(res.body.error.message).toBe("Client secret is required");
+      }
+      expect(getOidcConfig()).toMatchObject({
+        issuer: OIDC.issuer,
+        clientId: OIDC.clientId,
+      });
+    });
+
+    it("refuses a plain-http issuer that is not loopback", async () => {
+      const res = await as(admin)(
+        request(app)
+          .put("/api/admin/integrations")
+          .send({ oidc: { ...OIDC, issuer: "http://id.lan" } }),
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    });
+
+    it("refuses to save while OIDC_* is set", async () => {
+      process.env.OIDC_ISSUER = "https://sso.example.org";
+      process.env.OIDC_CLIENT_ID = "env";
+      process.env.OIDC_CLIENT_SECRET = "env";
+      onTestFinished(() => {
+        delete process.env.OIDC_ISSUER;
+        delete process.env.OIDC_CLIENT_ID;
+        delete process.env.OIDC_CLIENT_SECRET;
+      });
+      const got = await as(admin)(request(app).get("/api/admin/integrations"));
+      expect(got.body.oidc.source).toBe("env");
+      const res = await save(OIDC);
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe("SET_BY_ENVIRONMENT");
+
+      // Both locks are checked first: the Google change beside it is not
+      // stored either.
+      const google = getGoogleOAuthCredentials();
+      const both = await as(admin)(
+        request(app)
+          .put("/api/admin/integrations")
+          .send({
+            googleOAuth: { clientId: "g-id", clientSecret: "g-secret" },
+            oidc: OIDC,
+          }),
+      );
+      expect(both.status).toBe(409);
+      expect(getGoogleOAuthCredentials()).toEqual(google);
+    });
   });
 });

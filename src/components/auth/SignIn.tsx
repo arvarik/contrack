@@ -41,6 +41,41 @@ const HEADINGS: Record<
   },
 };
 
+/** The server sends a failed OIDC sign-in back as /?oidc=<outcome>. */
+const OIDC_ERRORS: Record<string, string> = {
+  "no-account":
+    "No Contrack account uses that sign-in. Sign in with your password, then link it under Account settings",
+  disabled:
+    "An administrator has closed this account. Ask them to enable it, or sign in with a different one",
+  "must-change-password":
+    "This account needs a new password first. Sign in with the temporary password, then set your own",
+  expired: "That sign-in took too long. Try again",
+  denied: "The sign-in was cancelled",
+  failed: "The sign-in did not finish. Try again, or use your password",
+};
+
+/** The message for the address's ?oidc=<outcome>, if it has one. */
+function oidcErrorFromUrl(): string | null {
+  const outcome = new URLSearchParams(window.location.search).get("oidc");
+  return outcome ? (OIDC_ERRORS[outcome] ?? OIDC_ERRORS.failed) : null;
+}
+
+/**
+ * The start link carries "Keep me signed in" and the page to come back to, so
+ * the server can honour both after the provider's round trip.
+ */
+function oidcStartHref(remember: boolean): string {
+  const query = new URLSearchParams();
+  if (!remember) query.set("remember", "0");
+  // The ?oidc= outcome of an earlier try is not a page to come back to.
+  const url = new URL(window.location.href);
+  url.searchParams.delete("oidc");
+  const here = url.pathname + url.search;
+  if (here !== "/") query.set("returnTo", here);
+  const text = query.toString();
+  return `/api/auth/oidc/start${text ? `?${text}` : ""}`;
+}
+
 export const LAST_IDENTIFIER_KEY = "contrack.lastIdentifier";
 
 export const SignIn = ({
@@ -50,6 +85,7 @@ export const SignIn = ({
   onRegister,
   mailConfigured = false,
   magicLinkSignIn = false,
+  oidc = null,
 }: {
   onSignedIn: () => void;
   reason?: SignInReason;
@@ -58,6 +94,8 @@ export const SignIn = ({
   onRegister?: () => void;
   mailConfigured?: boolean;
   magicLinkSignIn?: boolean;
+  /** The single sign-on provider, when the instance has one. */
+  oidc?: { name: string } | null;
 }) => {
   const [view, setView] = useState<"signin" | "forgot" | "magic-link">(
     "signin",
@@ -72,7 +110,13 @@ export const SignIn = ({
   const [identifier, setIdentifier] = useState(savedIdentifier);
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(oidcErrorFromUrl);
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("oidc")) return;
+    url.searchParams.delete("oidc");
+    history.replaceState(history.state, "", url);
+  }, []);
   const [busy, setBusy] = useState(false);
   const [passkeyBusy, setPasskeyBusy] = useState(false);
 
@@ -325,22 +369,34 @@ export const SignIn = ({
           )}
         </AuthSubmit>
 
-        {isPasskeySupported && (
-          <>
-            <div className="relative my-3 flex items-center justify-center">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-outline-variant/30" />
-              </div>
-              <span className="relative bg-surface-container-low px-3 text-xs text-on-surface-variant">
-                or
-              </span>
+        {(isPasskeySupported || oidc) && (
+          <div className="relative my-3 flex items-center justify-center">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-outline-variant/30" />
             </div>
-            <PasskeyButton
-              onClick={handlePasskeySignIn}
-              busy={passkeyBusy}
-              disabled={busy}
-            />
-          </>
+            <span className="relative bg-surface-container-low px-3 text-xs text-on-surface-variant">
+              or
+            </span>
+          </div>
+        )}
+        {isPasskeySupported && (
+          <PasskeyButton
+            onClick={handlePasskeySignIn}
+            busy={passkeyBusy}
+            disabled={busy}
+          />
+        )}
+        {oidc && (
+          <a
+            href={oidcStartHref(remember)}
+            aria-disabled={busy || passkeyBusy || undefined}
+            onClick={(event) => {
+              if (busy || passkeyBusy) event.preventDefault();
+            }}
+            className="btn-secondary w-full"
+          >
+            Sign in with {oidc.name}
+          </a>
         )}
 
         {magicLinkSignIn && (

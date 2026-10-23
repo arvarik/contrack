@@ -390,6 +390,36 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     isolated: false,
   },
   {
+    method: "GET",
+    path: "/api/auth/oidc/start",
+    class: "public",
+    isolated: false,
+  },
+  {
+    method: "GET",
+    path: "/api/auth/oidc/callback",
+    class: "public",
+    isolated: false,
+  },
+  {
+    method: "POST",
+    path: "/api/auth/oidc/link",
+    class: "session-self",
+    isolated: false,
+  },
+  {
+    method: "GET",
+    path: "/api/auth/identities",
+    class: "session-self",
+    isolated: false,
+  },
+  {
+    method: "DELETE",
+    path: "/api/auth/identities/:id",
+    class: "session-self",
+    isolated: false,
+  },
+  {
     method: "POST",
     path: "/api/auth/logout",
     class: "public",

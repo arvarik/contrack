@@ -78,6 +78,8 @@ interface AuthContextValue {
   publicUrl: string | null;
   /** An MCP client can sign in here with OAuth instead of a token. */
   mcpOAuth: boolean;
+  /** The single sign-on provider's button name, or null when it is off. */
+  oidc: { name: string } | null;
   /** The instance's name, or "". Known before sign-in, for sign in and join. */
   instanceName: string;
   /**
@@ -105,6 +107,7 @@ const AuthContext = createContext<AuthContextValue>({
   isAdmin: false,
   publicUrl: null,
   mcpOAuth: false,
+  oidc: null,
   instanceName: "",
   mapStyles: null,
   isResolved: false,
@@ -157,6 +160,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
   const [registrationOpen, setRegistrationOpen] = useState(false);
   const [publicUrl, setPublicUrl] = useState<string | null>(null);
   const [mcpOAuth, setMcpOAuth] = useState(false);
+  const [oidc, setOidc] = useState<{ name: string } | null>(null);
   const [instanceName, setInstanceName] = useState("");
   const [mapStyles, setMapStyles] = useState<MapStyleUrls | null>(null);
   const [localOwnerPresent, setLocalOwnerPresent] = useState(false);
@@ -223,6 +227,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     setRegistrationOpen(status.registrationOpen ?? false);
     setPublicUrl(status.publicUrl ?? null);
     setMcpOAuth(status.mcpOAuth ?? false);
+    setOidc(status.oidc ?? null);
     setInstanceName(status.instanceName ?? "");
     setMapStyles(status.map ?? null);
     setLocalOwnerPresent(status.localOwnerPresent ?? false);
@@ -401,6 +406,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     isAdmin: user?.role === "admin",
     publicUrl,
     mcpOAuth,
+    oidc,
     instanceName,
     mapStyles,
     isResolved: state !== "checking" && state !== "unreachable",
@@ -496,6 +502,7 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
             // A mailed link opens in another browser, where an app's
             // sign-in in progress is not, so the consent page offers none.
             magicLinkSignIn={magicLinkSignIn && !isConsentPage()}
+            oidc={isConsentPage() ? null : oidc}
           />
         );
       default:

@@ -137,10 +137,14 @@ function readCookie(req: Request, name: string): string | null {
  * breaks plain-HTTP local use (`http://localhost:3210`), and never setting it
  * drops it behind the reverse proxies where it matters most.
  */
-function cookieAttributes(req: Request, maxAgeSeconds: number | null): string {
+function cookieAttributes(
+  req: Request,
+  maxAgeSeconds: number | null,
+  path = "/",
+): string {
   const secure = isHttps(req) ? "; Secure" : "";
   const maxAge = maxAgeSeconds !== null ? `; Max-Age=${maxAgeSeconds}` : "";
-  return `HttpOnly; SameSite=Lax; Path=/${secure}${maxAge}`;
+  return `HttpOnly; SameSite=Lax; Path=${path}${secure}${maxAge}`;
 }
 
 function isHttps(req: Request): boolean {
@@ -180,6 +184,37 @@ export function setSessionCookie(
 /** Clear the session cookie. */
 export function clearSessionCookie(req: Request, res: Response): void {
   res.append("Set-Cookie", `${COOKIE_NAME}=; ${cookieAttributes(req, 0)}`);
+}
+
+/**
+ * The OIDC flow cookie: the `state` of the flow this browser started, so a
+ * callback reached from somebody else's flow is refused (login CSRF). Sent
+ * only to the OIDC routes, and gone after the flow's ten minutes.
+ */
+const OIDC_COOKIE_NAME = "contrack_oidc";
+const OIDC_COOKIE_PATH = "/api/auth/oidc";
+
+export function setOidcStateCookie(
+  req: Request,
+  res: Response,
+  state: string,
+): void {
+  res.append(
+    "Set-Cookie",
+    `${OIDC_COOKIE_NAME}=${encodeURIComponent(state)}; ${cookieAttributes(req, 600, OIDC_COOKIE_PATH)}`,
+  );
+}
+
+export function clearOidcStateCookie(req: Request, res: Response): void {
+  res.append(
+    "Set-Cookie",
+    `${OIDC_COOKIE_NAME}=; ${cookieAttributes(req, 0, OIDC_COOKIE_PATH)}`,
+  );
+}
+
+/** The OIDC state this browser holds, if any. */
+export function presentedOidcState(req: Request): string | null {
+  return readCookie(req, OIDC_COOKIE_NAME);
 }
 
 /** Read the session secret this request presented, if any. */

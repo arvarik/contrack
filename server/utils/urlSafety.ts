@@ -283,6 +283,8 @@ export async function safeFetch(
     allowPrivate?: boolean;
     timeoutMs?: number;
     maxRedirects?: number;
+    /** "manual" returns a 3xx response as it is, without following it. */
+    redirect?: "follow" | "manual";
     signal?: AbortSignal;
   } = {},
 ): Promise<{ response: globalThis.Response; finalUrl: string }> {
@@ -313,7 +315,9 @@ export async function safeFetch(
       })) as unknown as globalThis.Response;
       if (response.status >= 300 && response.status < 400) {
         const location = response.headers.get("location");
-        if (!location) return { response, finalUrl: currentUrl };
+        if (!location || options.redirect === "manual") {
+          return { response, finalUrl: currentUrl };
+        }
         void response.body?.cancel().catch(() => undefined);
         const nextUrlObj = new URL(location, currentUrl);
         currentUrl = nextUrlObj.toString();
