@@ -9,11 +9,24 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+
+- Single sign-on: the upgrade to 2.0.3 trusted every existing email. Email
+  matching now skips an account from open registration, or one that accepted
+  an invitation with another address, until a mailed link proves its email.
+
 ### Fixed
 
 - Accessibility: filter chips, map facets, Narrow chips, contact rows, Ask
-  history rows and the import drop zone have names that hold their visible
-  words in order, so voice control reaches them by what they show.
+  history rows, Tags page links and the import drop zone have names that hold
+  their visible words in order, so voice control reaches them by what they
+  show.
+- Settings: removing the Google OAuth client or the OpenID Connect provider
+  moves focus to the first empty field and clears an old save error, and the
+  Single sign-on card follows a provider change at once.
+- Single sign-on: a signed-in person whose sign-in did not finish sees a
+  message, and the unlink dialog warns about linking again only when it can
+  happen.
 
 ## [2.0.3] - 2026-10-27
 

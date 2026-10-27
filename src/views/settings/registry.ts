@@ -993,7 +993,7 @@ export const SETTINGS_PAGES: SettingsPage[] = [
       },
       {
         id: "oidc",
-        label: "Single sign-on (OpenID Connect)",
+        label: "OpenID Connect (single sign-on)",
         keywords: [
           "sso",
           "single sign-on",

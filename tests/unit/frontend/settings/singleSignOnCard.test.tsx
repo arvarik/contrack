@@ -20,6 +20,7 @@ const api = vi.hoisted(() => ({
   passkeys: [] as unknown[],
   matchByEmail: false,
   passkeysSupported: true,
+  accountEmail: "A@b.c",
   // Never settles, so the link stays pending.
   startOidcLink: vi.fn(() => new Promise(() => {})),
 }));
@@ -37,7 +38,10 @@ vi.mock("../../../../src/api/passkeys", () => ({
   passkeysSupported: () => api.passkeysSupported,
 }));
 vi.mock("../../../../src/components/auth/AuthGate", () => ({
-  useAuth: () => ({ oidc: { name: "Authentik" } }),
+  useAuth: () => ({
+    oidc: { name: "Authentik" },
+    user: { email: api.accountEmail },
+  }),
 }));
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }));
 vi.mock("sonner", () => ({ toast }));
@@ -70,6 +74,7 @@ beforeEach(() => {
   api.passkeys = [];
   api.matchByEmail = false;
   api.passkeysSupported = true;
+  api.accountEmail = "A@b.c";
   api.startOidcLink.mockClear();
   toast.success.mockReset();
   toast.error.mockReset();
@@ -110,11 +115,18 @@ describe("SingleSignOnCard", () => {
   // The unlink dialog tells the truth about email matching and passkeys.
   it.each([
     [
-      "warns that SSO links the account again while email matching is on",
+      "warns that SSO can link the account again while email matching is on",
       { matchByEmail: true },
       {},
       "Unlink Authentik",
-      "You can still sign in with your password. Email matching is on, so your next Authentik sign-in links this account again",
+      "You can still sign in with your password. Email matching is on, so your next Authentik sign-in can link this account again",
+    ],
+    [
+      "does not warn when the linked email is not the account's",
+      { matchByEmail: true, accountEmail: "other@b.c" },
+      {},
+      "Unlink Authentik",
+      "You can still sign in with your password",
     ],
     [
       "names an old provider's identity by its host, without the matching warning",

@@ -29,6 +29,7 @@ import React, {
   useState,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { fetchAuthStatus, signOut, type AccountUser } from "../../api/auth";
 import type { MapStyleUrls } from "../../../shared/geo";
 import { contactsQuery } from "../../api/contacts";
@@ -397,6 +398,19 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
       }),
     );
   }, [contactsPhase, user?.id, queryClient]);
+
+  // A flow the server cannot place, such as one whose cookie was lost or one
+  // past the callback limit, lands on /?oidc=… even when the browser is
+  // signed in. The sign-in page would say why, but a signed-in person sees
+  // the app. Tell them, and clean the address.
+  useEffect(() => {
+    if (state !== "open" || window.location.pathname !== "/") return;
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("oidc")) return;
+    url.searchParams.delete("oidc");
+    history.replaceState(history.state, "", url);
+    toast.error("Single sign-on did not finish. Try again");
+  }, [state]);
 
   const context: AuthContextValue = {
     user,

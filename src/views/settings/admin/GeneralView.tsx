@@ -706,28 +706,6 @@ const FormActions = ({
 );
 
 /**
- * Removing an integration takes its Remove button away, and with it the
- * focus the dialog handed back. The keyboard lands on `field` instead, the
- * empty field where a new one starts.
- */
-function useFocusAfterRemove(
-  configured: boolean,
-  field: React.RefObject<HTMLInputElement | null>,
-) {
-  const wasConfigured = useRef(configured);
-  useEffect(() => {
-    if (
-      wasConfigured.current &&
-      !configured &&
-      document.activeElement === document.body
-    ) {
-      field.current?.focus();
-    }
-    wasConfigured.current = configured;
-  }, [configured, field]);
-}
-
-/**
  * The origin the server sends a provider in `redirectUri`, and whether the
  * browser opened Contrack at another one. Then the provider sends people back
  * to an address they did not start from.
@@ -783,7 +761,6 @@ export const GoogleRow = () => {
   const configured = google?.configured === true;
   const fromEnv = google?.source === "env";
   const busy = isLoading || update.isPending;
-  useFocusAfterRemove(configured, clientIdInput);
 
   // The address the server sends Google, which is PUBLIC_URL, or the host
   // and scheme it sees. Behind a proxy that hides its https, that can differ
@@ -981,6 +958,7 @@ export const GoogleRow = () => {
         title="Remove the Google OAuth client?"
         description="Every Google Workspace connector on this instance stops syncing until someone adds a client again"
         confirmLabel="Remove client"
+        returnFocusRef={configured ? undefined : clientIdInput}
         tone="danger"
         busy={update.isPending}
       />
@@ -1003,7 +981,6 @@ export const OidcRow = () => {
   const configured = oidc?.configured === true;
   const fromEnv = oidc?.source === "env";
   const busy = isLoading || update.isPending;
-  useFocusAfterRemove(configured, issuerInput);
 
   // The saved values arrive after the first render. Fill the fields from
   // them once, when they do, as the mail row does for SMTP.
@@ -1241,6 +1218,7 @@ export const OidcRow = () => {
                 setClientSecret("");
                 setName("");
                 setMatchByEmail(false);
+                setSaveError(null);
                 toast.success("OpenID Connect provider removed");
               },
               onError: (error: Error) =>
@@ -1253,6 +1231,7 @@ export const OidcRow = () => {
         title="Remove the OpenID Connect provider?"
         description="Members can no longer sign in with it. Their linked sign-ins stay and work again when a provider with the same issuer is added"
         confirmLabel="Remove provider"
+        returnFocusRef={configured ? undefined : issuerInput}
         tone="danger"
         busy={update.isPending}
       />

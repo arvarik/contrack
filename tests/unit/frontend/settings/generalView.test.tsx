@@ -261,4 +261,26 @@ describe("OidcRow", () => {
     type("Client secret", "s");
     expect(screen.queryByRole("alert")).toBeNull();
   });
+
+  it("drops the last save's refusal when the provider is removed", async () => {
+    show(<OidcRow />);
+    type("Issuer", "https://other.example.com");
+    type("Client secret", "new-secret");
+    fireEvent.click(save());
+    mutate.mock.calls[0][1].onError(
+      new Error("The provider did not answer discovery"),
+    );
+    await screen.findByRole("alert");
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Remove provider" }),
+    );
+    mutate.mock.calls[1][1].onSuccess();
+    await waitFor(() =>
+      expect((screen.getByLabelText("Issuer") as HTMLInputElement).value).toBe(
+        "",
+      ),
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
 });
