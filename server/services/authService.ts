@@ -17,6 +17,7 @@ import {
   needsRehash,
   validatePassword,
 } from "./passwords.ts";
+import { unlinkIdentitiesForReset } from "./identityService.ts";
 
 /**
  * How long a browser session stays valid without signing in again.
@@ -642,12 +643,13 @@ export function findUserByEmail(email: string): User | null {
 
 /**
  * Reset a password with a verified token: set the new hash, clear
- * mustChangePassword, stamp passwordChangedAt, and revoke every session and
- * active API token.
+ * mustChangePassword, stamp passwordChangedAt, and revoke every session,
+ * active API token and linked sign-in.
  */
 export async function resetUserPasswordWithToken(
   userId: string,
   newPassword: string,
+  ip: string | null,
 ): Promise<User> {
   const row = sqlite
     .prepare(`SELECT ${USER_COLUMNS} FROM users WHERE id = ?`)
@@ -691,6 +693,7 @@ export async function resetUserPasswordWithToken(
           WHERE userId = ? AND usedAt IS NULL`,
       )
       .run(userId);
+    unlinkIdentitiesForReset(userId, userId, ip);
   })();
 
   log.info("Auth", `Password reset with token for account ${row.id}`);

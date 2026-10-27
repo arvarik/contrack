@@ -24,6 +24,7 @@ import { log } from "../../server/utils/logger.ts";
 import { setOidcConfig } from "../../server/services/integrationSettings.ts";
 import { forgetOidcDiscovery } from "../../server/services/oidcService.ts";
 import { createUser } from "../../server/services/authService.ts";
+import { createAuthLink } from "../../server/services/authLinkService.ts";
 import * as identityService from "../../server/services/identityService.ts";
 const { linkIdentity } = identityService;
 import { startFakeProvider, type FakeLogin } from "./oidcProvider.ts";
@@ -159,10 +160,10 @@ describe("API: OIDC sign-in", () => {
     expect(Number(/Max-Age=(\d+)/.exec(set)![1])).toBeGreaterThan(flowSeconds);
   });
 
-  it("signs a linked identity in", async () => {
+  it("signs a linked identity in, and keeps the provider's current email", async () => {
     const { ada } = await setup();
-    linkIdentity(ada.id, idp.issuer, "sub-ada", null);
-    const res = await signIn({ sub: "sub-ada" });
+    linkIdentity(ada.id, idp.issuer, "sub-ada", "old@idp.example");
+    const res = await signIn({ sub: "sub-ada", email: "ada@idp.example" });
     expect(res.status).toBe(302);
     expect(res.headers.location).toBe("/");
     expect(cookieFrom(res).some((c) => c.startsWith("contrack_session="))).toBe(
@@ -172,6 +173,11 @@ describe("API: OIDC sign-in", () => {
     expect(cookieFrom(res)).toContainEqual(
       expect.stringMatching(/^contrack_oidc_[0-9a-f]{12}=;.*Max-Age=0/),
     );
+    expect(
+      sqlite
+        .prepare("SELECT email FROM user_identities WHERE userId = ?")
+        .get(ada.id),
+    ).toEqual({ email: "ada@idp.example" });
     const method = sqlite
       .prepare("SELECT method FROM sessions WHERE userId = ?")
       .get(ada.id) as { method: string };
@@ -582,6 +588,44 @@ describe("API: linking OIDC from settings", () => {
         .prepare("SELECT userId FROM user_identities WHERE subject = 'sub-x'")
         .get(),
     ).toEqual({ userId: adminId });
+  });
+});
+
+describe("API: a password reset", () => {
+  it("unlinks every identity, by mailed link or by an admin", async () => {
+    const { ada, adminCookie } = await setup();
+    const identities = () =>
+      sqlite
+        .prepare("SELECT COUNT(*) AS n FROM user_identities WHERE userId = ?")
+        .get(ada.id);
+    linkIdentity(ada.id, idp.issuer, "sub-ada", null);
+    const link = createAuthLink("reset", ada.id, 3600)!;
+    const reset = await request(app)
+      .post("/api/auth/password-reset/complete")
+      .send({ token: link.token, password: `${PASSWORD} again` });
+    expect(reset.status).toBe(200);
+    expect(identities()).toEqual({ n: 0 });
+    const audit = sqlite
+      .prepare(
+        "SELECT details FROM audit_log WHERE action = 'auth.oidc.unlinked' AND targetId = ?",
+      )
+      .get(ada.id) as { details: string };
+    expect(JSON.parse(audit.details)).toMatchObject({
+      reason: "password-reset",
+    });
+
+    linkIdentity(ada.id, idp.issuer, "sub-ada", null);
+    const byAdmin = await request(app)
+      .post(`/api/admin/users/${ada.id}/reset-password`)
+      .set(
+        "Cookie",
+        adminCookie.map((c) => c.split(";")[0]),
+      )
+      .set("Origin", ORIGIN);
+    expect(byAdmin.status).toBe(200);
+    expect(identities()).toEqual({ n: 0 });
+    const res = await signIn({ sub: "sub-ada" });
+    expect(res.headers.location).toBe("/?oidc=no-account");
   });
 });
 

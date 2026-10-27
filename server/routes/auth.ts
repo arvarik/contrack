@@ -591,7 +591,11 @@ router.post(
     }
 
     const link = redeemAuthLink("reset", token);
-    const user = await resetUserPasswordWithToken(link.userId, password);
+    const user = await resetUserPasswordWithToken(
+      link.userId,
+      password,
+      ipOf(req),
+    );
     startSession(req, res, user, "email-link");
     auditService.record({
       actorUserId: user.id,

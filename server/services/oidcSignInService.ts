@@ -165,7 +165,7 @@ export function completeOidcSignIn(
         ip: info.ip,
       });
     }
-    touchIdentity(claims.issuer, claims.subject);
+    touchIdentity(claims.issuer, claims.subject, claims.email);
     sqlite
       .prepare("UPDATE users SET lastLoginAt = CURRENT_TIMESTAMP WHERE id = ?")
       .run(user.id);
