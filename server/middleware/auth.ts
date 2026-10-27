@@ -216,10 +216,7 @@ export function clearOidcFlowCookie(
   res: Response,
   state: string,
 ): void {
-  res.append(
-    "Set-Cookie",
-    `${oidcCookieName(state)}=; ${cookieAttributes(req, 0, OIDC_COOKIE_PATH)}`,
-  );
+  setOidcFlowCookie(req, res, { state, binding: "" }, 0);
 }
 
 /** The binding secret this browser holds for the flow `state` names, if any. */

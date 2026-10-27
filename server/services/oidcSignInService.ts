@@ -58,6 +58,24 @@ export type OidcSignInOutcome =
     }
   | { outcome: "no-account" | "disabled" | "must-change-password" };
 
+/** Link the identity to `userId` and record it, in the caller's transaction. */
+function link(
+  userId: string,
+  claims: OidcClaims,
+  info: OidcRequestInfo,
+  details?: { matchedByEmail: true },
+): void {
+  linkIdentity(userId, claims.issuer, claims.subject, claims.email);
+  auditService.record({
+    actorUserId: userId,
+    action: "auth.oidc.linked",
+    targetType: "user",
+    targetId: userId,
+    details: { issuer: claims.issuer, ...details },
+    ip: info.ip,
+  });
+}
+
 /**
  * Link the provider identity to the account that started the flow. Only that
  * account, signed in with a session, may finish it.
@@ -75,17 +93,7 @@ export function completeOidcLink(
     return "failed";
   }
   try {
-    sqlite.transaction(() => {
-      linkIdentity(sessionUserId, claims.issuer, claims.subject, claims.email);
-      auditService.record({
-        actorUserId: sessionUserId,
-        action: "auth.oidc.linked",
-        targetType: "user",
-        targetId: sessionUserId,
-        details: { issuer: claims.issuer },
-        ip: info.ip,
-      });
-    })();
+    sqlite.transaction(() => link(sessionUserId, claims, info))();
   } catch (err) {
     if (err instanceof AppError && err.statusCode === 409) return "taken";
     throw err;
@@ -102,8 +110,8 @@ function accountFor(
     const user = getUserById(linkedId);
     return user ? { user, matchedByEmail: false } : null;
   }
-  if (!getOidcConfig()?.matchByEmail || !claims.emailVerified) return null;
-  if (!claims.email) return null;
+  if (!getOidcConfig()?.matchByEmail || !claims.emailVerified || !claims.email)
+    return null;
   const match = findUserByTrustedEmail(claims.email);
   if (!match) return null;
   const linkedHere = listIdentities(match.id).some(
@@ -129,43 +137,28 @@ export function completeOidcSignIn(
     return { outcome: "no-account" };
   }
   const { user, matchedByEmail } = found;
-  if (user.status === "disabled") {
+  // A session for an account that must change its password would answer 403
+  // everywhere until it does, and the person may not know the temporary one.
+  const refusal =
+    user.status === "disabled"
+      ? "disabled"
+      : user.mustChangePassword === 1
+        ? "must-change-password"
+        : null;
+  if (refusal) {
     auditService.record({
       actorUserId: user.id,
       action: "auth.login.failed",
       targetType: "user",
       targetId: user.id,
-      details: { method: "oidc", reason: "disabled" },
+      details: { method: "oidc", reason: refusal },
       ip: info.ip,
     });
-    return { outcome: "disabled" };
-  }
-  // A session would answer 403 everywhere until the password changes, and the
-  // person may not know the temporary one.
-  if (user.mustChangePassword === 1) {
-    auditService.record({
-      actorUserId: user.id,
-      action: "auth.login.failed",
-      targetType: "user",
-      targetId: user.id,
-      details: { method: "oidc", reason: "must-change-password" },
-      ip: info.ip,
-    });
-    return { outcome: "must-change-password" };
+    return { outcome: refusal };
   }
 
   const session = sqlite.transaction(() => {
-    if (matchedByEmail) {
-      linkIdentity(user.id, claims.issuer, claims.subject, claims.email);
-      auditService.record({
-        actorUserId: user.id,
-        action: "auth.oidc.linked",
-        targetType: "user",
-        targetId: user.id,
-        details: { issuer: claims.issuer, matchedByEmail: true },
-        ip: info.ip,
-      });
-    }
+    if (matchedByEmail) link(user.id, claims, info, { matchedByEmail: true });
     touchIdentity(claims.issuer, claims.subject, claims.email);
     sqlite
       .prepare("UPDATE users SET lastLoginAt = CURRENT_TIMESTAMP WHERE id = ?")

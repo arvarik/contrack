@@ -3,7 +3,7 @@
 
 import crypto from "crypto";
 import { sqlite } from "../db.ts";
-import { AppError, ConflictError, NotFoundError } from "../utils/AppError.ts";
+import { ConflictError, NotFoundError } from "../utils/AppError.ts";
 import { getOidcConfig } from "./integrationSettings.ts";
 import { normalizeIssuer } from "../../shared/contracts/admin.ts";
 import { auditService } from "./auditService.ts";
@@ -38,14 +38,13 @@ export function linkIdentity(
   issuer: string,
   subject: string,
   email: string | null,
-): IdentitySummary {
+): void {
   const holder = findUserIdByIdentity(issuer, subject);
   if (holder && holder !== userId) {
     throw new ConflictError(
       "This sign-in is already linked to another account",
     );
   }
-  const id = crypto.randomUUID();
   sqlite
     .prepare(
       `INSERT INTO user_identities (id, userId, issuer, subject, email)
@@ -54,10 +53,7 @@ export function linkIdentity(
          SET subject = excluded.subject, email = excluded.email,
              createdAt = CURRENT_TIMESTAMP, lastUsedAt = NULL`,
     )
-    .run(id, userId, issuer, subject, email);
-  const row = listIdentities(userId).find((r) => r.issuer === issuer);
-  if (!row) throw new AppError("Linking the sign-in failed", 500);
-  return row;
+    .run(crypto.randomUUID(), userId, issuer, subject, email);
 }
 
 /** Stamp a sign-in, and keep the address the provider sends now. */
@@ -98,23 +94,19 @@ function issuerKey(issuer: string): string {
 
 /**
  * The account's identities, each marked `current` when it is at the provider
- * set up now, so the account page can offer a link to that one.
+ * set up now, so the account page can offer a link to that one, and whether
+ * the next sign-in would link the account again.
  */
-function listAccountIdentities(
-  userId: string,
-): (IdentitySummary & { current: boolean })[] {
-  const issuer = getOidcConfig()?.issuer;
-  return listIdentities(userId).map((identity) => ({
-    ...identity,
-    current: issuer != null && issuerKey(identity.issuer) === issuerKey(issuer),
-  }));
-}
-
-/** The identities, and whether the next sign-in would link the account again. */
 export function accountIdentities(userId: string) {
+  const config = getOidcConfig();
   return {
-    identities: listAccountIdentities(userId),
-    matchByEmail: getOidcConfig()?.matchByEmail === true,
+    identities: listIdentities(userId).map((identity) => ({
+      ...identity,
+      current:
+        config !== null &&
+        issuerKey(identity.issuer) === issuerKey(config.issuer),
+    })),
+    matchByEmail: config?.matchByEmail === true,
   };
 }
 
