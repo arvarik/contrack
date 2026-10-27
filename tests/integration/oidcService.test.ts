@@ -81,6 +81,28 @@ describe("oidcService", () => {
     );
   });
 
+  it("asks the provider again once its discovery is an hour old", async () => {
+    const discoveries = () =>
+      vi
+        .mocked(safeFetch)
+        .mock.calls.filter(([u]) =>
+          String(u).endsWith("/.well-known/openid-configuration"),
+        ).length;
+    const start = () => startOidc({ redirectUri: REDIRECT, linkUserId: null });
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      await start();
+      vi.setSystemTime(Date.now() + 59 * 60 * 1000);
+      await start();
+      expect(discoveries()).toBe(1);
+      vi.setSystemTime(Date.now() + 2 * 60 * 1000);
+      await start();
+      expect(discoveries()).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("returns validated claims once, then refuses the replay", async () => {
     const { state } = idp.remember(
       await startOidc({ redirectUri: REDIRECT, linkUserId: null }),

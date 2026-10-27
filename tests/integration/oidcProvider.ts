@@ -2,7 +2,7 @@
 // sends a browser straight back, JWKS, a token endpoint that signs an ID token
 // for whatever the test queued with `nextLogin`, and a userinfo endpoint. The
 // token endpoint takes only the method it advertises, client_secret_basic.
-// It can also fail userinfo once.
+// It can also fail userinfo once, or stall a token answer once.
 
 import http from "node:http";
 import express from "express";
@@ -38,6 +38,7 @@ export async function startFakeProvider() {
   let tokenRedirectUri: string | null = null;
   let denyNext = false;
   let failUserinfo = false;
+  let stallToken = false;
   idp.use((req, _res, proceed) => {
     requests.push(req.path);
     proceed();
@@ -93,6 +94,13 @@ export async function startFakeProvider() {
       return;
     }
     tokenRedirectUri = req.body?.redirect_uri ?? null;
+    if (stallToken) {
+      // The headers at once, then a body that never ends.
+      stallToken = false;
+      res.writeHead(200, { "content-type": "application/json" });
+      res.write("{");
+      return;
+    }
     if (tokenRedirect) {
       res.redirect(307, tokenRedirect);
       tokenRedirect = null;
@@ -156,6 +164,10 @@ export async function startFakeProvider() {
     failNextUserinfo() {
       failUserinfo = true;
     },
+    /** Answer the next token request with headers and a body that never ends. */
+    stallNextToken() {
+      stallToken = true;
+    },
     /** Answer the next token request with a 307 to `location`. */
     redirectNextToken(location: string) {
       tokenRedirect = location;
@@ -170,6 +182,11 @@ export async function startFakeProvider() {
       lastNonce = url.searchParams.get("nonce") ?? "";
       return { state: url.searchParams.get("state") ?? "" };
     },
-    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+    close: () =>
+      new Promise<void>((resolve) => {
+        // A stalled answer keeps its socket open.
+        server.closeAllConnections();
+        server.close(() => resolve());
+      }),
   };
 }

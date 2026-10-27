@@ -630,6 +630,17 @@ describe("API: OIDC failures on browser routes", () => {
     );
   });
 
+  it("gives up on a token answer that never ends after ten seconds", async () => {
+    const { state, cookie } = await startSignIn();
+    idp.stallNextToken();
+    const started = Date.now();
+    const res = await request(app)
+      .get(`/api/auth/oidc/callback?code=c&state=${state}`)
+      .set("Cookie", cookie);
+    expect(res.headers.location).toBe("/?oidc=failed");
+    expect(Date.now() - started).toBeLessThan(11_000);
+  }, 15_000);
+
   it("logs the OAuth error when the token endpoint refuses the code", async () => {
     const warn = vi.spyOn(log, "warn");
     try {

@@ -3,7 +3,8 @@
 // client secret with HTTP Basic (client_secret_basic), and checks the ID
 // token's issuer, audience, expiry, nonce and its signature against the
 // provider's published JWKS. Every request it makes, the JWKS included, goes
-// through safeFetch and follows no redirect. A flow's state, PKCE verifier,
+// through safeFetch, follows no redirect and has ten seconds. The discovered
+// provider is reused for an hour. A flow's state, PKCE verifier,
 // nonce, link target, "keep me signed in" choice and return path wait in
 // auth_challenges (kind 'oidc') for at most ten minutes, and the callback
 // consumes them once.
@@ -88,7 +89,11 @@ const viaSafeFetch: client.CustomFetch = async (url, options) => {
   return response;
 };
 
-let cached: { key: string; config: client.Configuration } | null = null;
+/** How long a discovered provider is used before it is asked again. */
+const DISCOVERY_TTL_MS = 60 * 60 * 1000;
+
+let cached: { key: string; at: number; config: client.Configuration } | null =
+  null;
 
 /** Drop the discovered provider, after an admin changes it. */
 export function forgetOidcDiscovery(): void {
@@ -109,7 +114,9 @@ async function discover(
   config: OidcConfigInput,
 ): Promise<client.Configuration> {
   const key = `${config.issuer}\n${config.clientId}\n${config.clientSecret}`;
-  if (cached?.key === key) return cached.config;
+  if (cached?.key === key && Date.now() - cached.at < DISCOVERY_TTL_MS) {
+    return cached.config;
+  }
   if (!isAllowedIssuer(config.issuer)) {
     throw new AppError("The OIDC issuer must use https://", 400, {
       code: "OIDC_INSECURE_ISSUER",
@@ -124,11 +131,15 @@ async function discover(
     client.ClientSecretBasic(config.clientSecret),
     {
       [client.customFetch]: viaSafeFetch,
+      // Seconds for this request and every later one (token, JWKS,
+      // userinfo), the body included. safeFetch's own limit stops at the
+      // headers.
+      timeout: 10,
       ...(insecure ? { execute: [client.allowInsecureRequests] } : {}),
     },
   );
   client.enableNonRepudiationChecks(discovered);
-  cached = { key, config: discovered };
+  cached = { key, at: Date.now(), config: discovered };
   return discovered;
 }
 
