@@ -176,7 +176,9 @@ with the temporary password first. The **Devices** list shows a session from
 the provider as **Single sign-on**.
 
 The server never follows a redirect when it talks to the provider, and a
-sign-in works only in the browser that started it.
+sign-in works only in the browser that started it, even for somebody who has
+copied its address. A sign-in that takes longer than ten minutes ends with a
+message that it took too long.
 
 ## Your account
 

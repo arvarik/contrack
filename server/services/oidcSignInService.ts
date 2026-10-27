@@ -1,6 +1,6 @@
 // What an OIDC flow does once the provider has answered: link the account that
 // started it, or find the account to sign in to and start its session. The
-// route only checks the flow cookie and turns the result into a cookie and a
+// route only reads the flow cookie and turns the result into a cookie and a
 // redirect.
 // - The callback consumes the flow first, then lands every outcome from it: a
 //   link flow on Account settings, a sign-in on the sign-in page, or on the
@@ -13,6 +13,8 @@
 // - A sign-in's writes (the email link, lastUsedAt, lastLoginAt, the session,
 //   the audit row) run in one transaction, as do a link and its audit row: a
 //   failure leaves nothing half made.
+// - The log gets an OAuth error code only, never the provider's description,
+//   which can name the person.
 
 import { ResponseBodyError } from "openid-client";
 import { sqlite } from "../db.ts";
@@ -65,7 +67,12 @@ export function completeOidcLink(
   sessionUserId: string | null,
   info: OidcRequestInfo,
 ): OidcLinkOutcome {
-  if (sessionUserId !== linkUserId) return "failed";
+  if (sessionUserId !== linkUserId) {
+    log.warn("Auth", "OIDC link finished without the session that started it", {
+      userId: linkUserId,
+    });
+    return "failed";
+  }
   try {
     sqlite.transaction(() => {
       linkIdentity(sessionUserId, claims.issuer, claims.subject, claims.email);
@@ -187,6 +194,13 @@ function oidcLanding(flow: OidcFlow | null, outcome: string | null): string {
   return outcome ? `/?oidc=${outcome}` : (flow?.returnTo ?? "/");
 }
 
+/** An OAuth error code fit for the log, or "other" for any other text. */
+function errorCode(value: unknown): string {
+  return typeof value === "string" && /^[a-z_]{1,64}$/.test(value)
+    ? value
+    : "other";
+}
+
 export interface OidcCallbackResult {
   /** Where the browser goes next. */
   landing: string;
@@ -196,30 +210,38 @@ export interface OidcCallbackResult {
 
 /**
  * Finish the flow a callback names, from the URL the provider sent the
- * browser to. The caller has already checked the flow cookie. Never throws:
- * every failure is a landing.
+ * browser to, with the binding secret from this browser's flow cookie. Never
+ * throws: every failure is a landing.
  */
 export async function finishOidcCallback(
   callbackUrl: URL,
+  binding: string | null,
   sessionUserId: string | null,
   info: OidcRequestInfo,
 ): Promise<OidcCallbackResult> {
   // Consumed first, so the landing knows a link flow from a sign-in, and the
-  // state works once whatever happens next.
-  const flow = takeOidcFlow(callbackUrl.searchParams.get("state") ?? "");
+  // state works once whatever happens next. Without this flow's binding the
+  // flow stays for the browser that has it.
+  const state = callbackUrl.searchParams.get("state") ?? "";
+  const flow = binding ? takeOidcFlow(state, binding) : null;
   const land = (outcome: string | null) => ({
     landing: oidcLanding(flow, outcome),
   });
   if (!flow) {
-    log.warn("Auth", "OIDC callback for a flow that does not exist");
+    log.warn(
+      "Auth",
+      binding
+        ? "OIDC callback for a flow that does not exist"
+        : "OIDC callback without this browser's flow cookie",
+    );
     return land("failed");
   }
   const providerError = callbackUrl.searchParams.get("error");
   if (providerError !== null) {
-    log.info("Auth", "OIDC provider returned an error", {
-      error: providerError,
+    log.warn("Auth", "OIDC provider returned an error", {
+      error: errorCode(providerError),
     });
-    return land("denied");
+    return land(providerError === "access_denied" ? "denied" : "failed");
   }
   if (flow.expired) return land("expired");
 
@@ -232,8 +254,7 @@ export async function finishOidcCallback(
     log.warn("Auth", "OIDC sign-in did not finish", {
       error: err,
       ...(err instanceof ResponseBodyError && {
-        oauthError: err.error,
-        oauthErrorDescription: err.error_description,
+        oauthError: errorCode(err.error),
       }),
     });
     return land("failed");

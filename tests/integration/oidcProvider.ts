@@ -33,6 +33,7 @@ export async function startFakeProvider() {
   const requests: string[] = [];
   let tokenRedirectUri: string | null = null;
   let denyNext = false;
+  let tokenRefusal: { error: string; error_description?: string } | null = null;
   idp.use((req, _res, proceed) => {
     requests.push(req.path);
     proceed();
@@ -81,6 +82,11 @@ export async function startFakeProvider() {
       return;
     }
     tokenRedirectUri = req.body?.redirect_uri ?? null;
+    if (tokenRefusal) {
+      res.status(400).json(tokenRefusal);
+      tokenRefusal = null;
+      return;
+    }
     if (tokenRedirect) {
       res.redirect(307, tokenRedirect);
       tokenRedirect = null;
@@ -139,6 +145,10 @@ export async function startFakeProvider() {
     /** Sign the next ID token with a key the JWKS does not publish. */
     signNextWithUnpublishedKey() {
       signWithRogueKey = true;
+    },
+    /** Answer the next token request with this OAuth error. */
+    refuseNextToken(body: { error: string; error_description?: string }) {
+      tokenRefusal = body;
     },
     /** Answer the next token request with a 307 to `location`. */
     redirectNextToken(location: string) {

@@ -48,9 +48,24 @@ beforeEach(() => {
   });
 });
 
-/** Consume the flow `state` names and finish it, as the callback does. */
-function finish(state: string) {
-  const flow = takeOidcFlow(state);
+type Started = Awaited<ReturnType<typeof startOidc>>;
+
+/** Start a flow, and let the fake provider read its authorization URL. */
+async function start(
+  input: { remember?: boolean; returnTo?: string } = {},
+): Promise<Started> {
+  const started = await startOidc({
+    redirectUri: REDIRECT,
+    linkUserId: null,
+    ...input,
+  });
+  idp.remember(started.url);
+  return started;
+}
+
+/** Consume a flow and finish it, as the callback does. */
+function finish({ state, binding }: Started) {
+  const flow = takeOidcFlow(state, binding);
   expect(flow).not.toBeNull();
   return finishOidc(new URL(`${REDIRECT}?code=abc&state=${state}`), flow!);
 }
@@ -59,7 +74,7 @@ describe("oidcService", () => {
   it("builds a PKCE authorization URL and stores the flow", async () => {
     const before = Date.now();
     const url = new URL(
-      await startOidc({ redirectUri: REDIRECT, linkUserId: null }),
+      (await startOidc({ redirectUri: REDIRECT, linkUserId: null })).url,
     );
     expect(url.origin + url.pathname).toBe(`${idp.issuer}/authorize`);
     expect(url.searchParams.get("code_challenge_method")).toBe("S256");
@@ -82,16 +97,14 @@ describe("oidcService", () => {
   });
 
   it("returns validated claims once, then refuses the replay", async () => {
-    const { state } = idp.remember(
-      await startOidc({ redirectUri: REDIRECT, linkUserId: null }),
-    );
+    const flow = await start();
     idp.nextLogin({
       sub: "sub-1",
       email: "Ada@Example.com",
       email_verified: true,
     });
     vi.mocked(safeFetch).mockClear();
-    await expect(finish(state)).resolves.toEqual({
+    await expect(finish(flow)).resolves.toEqual({
       issuer: idp.issuer,
       subject: "sub-1",
       email: "ada@example.com",
@@ -106,15 +119,13 @@ describe("oidcService", () => {
       `Basic ${Buffer.from("contrack:secret").toString("base64")}`,
     );
     expect(token?.body).not.toContain("client_secret");
-    expect(takeOidcFlow(state)).toBeNull();
+    expect(takeOidcFlow(flow.state, flow.binding)).toBeNull();
   });
 
   it("keeps the remember choice and only a same-origin return path in the flow", async () => {
     const take = async (input: { remember?: boolean; returnTo?: string }) => {
-      const { state } = idp.remember(
-        await startOidc({ redirectUri: REDIRECT, linkUserId: null, ...input }),
-      );
-      return takeOidcFlow(state);
+      const { state, binding } = await start(input);
+      return takeOidcFlow(state, binding);
     };
     expect(await take({})).toMatchObject({
       remember: true,
@@ -130,26 +141,12 @@ describe("oidcService", () => {
     });
   });
 
-  it("remembers a flow written without the remember field", async () => {
-    const { state } = idp.remember(
-      await startOidc({ redirectUri: REDIRECT, linkUserId: null }),
-    );
-    sqlite
-      .prepare(
-        "UPDATE auth_challenges SET challenge = json_remove(challenge, '$.remember') WHERE id = ?",
-      )
-      .run(state);
-    expect(takeOidcFlow(state)?.remember).toBe(true);
-  });
-
   it("marks a flow past its ten minutes expired", async () => {
-    const { state } = idp.remember(
-      await startOidc({ redirectUri: REDIRECT, linkUserId: null }),
-    );
+    const flow = await start();
     sqlite
       .prepare("UPDATE auth_challenges SET expiresAt = ? WHERE id = ?")
-      .run(new Date(Date.now() - 1000).toISOString(), state);
-    expect(takeOidcFlow(state)?.expired).toBe(true);
+      .run(new Date(Date.now() - 1000).toISOString(), flow.state);
+    expect(takeOidcFlow(flow.state, flow.binding)?.expired).toBe(true);
   });
 
   it("accepts only a path on this origin as the return path", () => {
@@ -172,23 +169,19 @@ describe("oidcService", () => {
   });
 
   it("refuses a token with the wrong nonce", async () => {
-    const { state } = idp.remember(
-      await startOidc({ redirectUri: REDIRECT, linkUserId: null }),
-    );
+    const flow = await start();
     idp.nextLogin({ sub: "sub-1", nonce: "not-the-one" });
-    await expect(finish(state)).rejects.toMatchObject({
+    await expect(finish(flow)).rejects.toMatchObject({
       cause: { message: expect.stringContaining('"nonce"') },
     });
   });
 
   it("does not follow a redirect from the token endpoint", async () => {
-    const { state } = idp.remember(
-      await startOidc({ redirectUri: REDIRECT, linkUserId: null }),
-    );
+    const flow = await start();
     idp.nextLogin({ sub: "sub-1" });
     const stolen = `${idp.issuer}/stolen-token`;
     idp.redirectNextToken(stolen);
-    await expect(finish(state)).rejects.toBeInstanceOf(Error);
+    await expect(finish(flow)).rejects.toBeInstanceOf(Error);
     expect(idp.requests).toContain("/token");
     expect(idp.requests).not.toContain("/stolen-token");
     expect(vi.mocked(safeFetch).mock.calls.map(([u]) => u)).not.toContain(
@@ -197,13 +190,11 @@ describe("oidcService", () => {
   });
 
   it("refuses an ID token signed with a key the provider does not publish", async () => {
-    const { state } = idp.remember(
-      await startOidc({ redirectUri: REDIRECT, linkUserId: null }),
-    );
+    const flow = await start();
     idp.nextLogin({ sub: "sub-1" });
     idp.signNextWithUnpublishedKey();
     vi.mocked(safeFetch).mockClear();
-    await expect(finish(state)).rejects.toMatchObject({
+    await expect(finish(flow)).rejects.toMatchObject({
       cause: { message: "JWT signature verification failed" },
     });
     // The keys came through safeFetch, which followed no redirect.
@@ -214,23 +205,19 @@ describe("oidcService", () => {
   });
 
   it("stores an email of only spaces as no email", async () => {
-    const { state } = idp.remember(
-      await startOidc({ redirectUri: REDIRECT, linkUserId: null }),
-    );
+    const flow = await start();
     idp.nextLogin({ sub: "sub-1", email: "   ", email_verified: true });
-    await expect(finish(state)).resolves.toMatchObject({ email: null });
+    await expect(finish(flow)).resolves.toMatchObject({ email: null });
   });
 
   it("reads the email from userinfo when the ID token has none", async () => {
-    const { state } = idp.remember(
-      await startOidc({ redirectUri: REDIRECT, linkUserId: null }),
-    );
+    const flow = await start();
     idp.nextLogin({
       sub: "sub-1",
       userinfo: { email: "Ada@Example.com", email_verified: true },
     });
     vi.mocked(safeFetch).mockClear();
-    await expect(finish(state)).resolves.toMatchObject({
+    await expect(finish(flow)).resolves.toMatchObject({
       email: "ada@example.com",
       emailVerified: true,
     });
