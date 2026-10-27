@@ -36,7 +36,6 @@ import type { SyncEvent } from "../../server/connectors/types.ts";
 describe("IMAP Adapter Integration", () => {
   let server: net.Server;
   let serverPort: number;
-  let authFail = false;
   /** The text after `NO` that the fake server sends to LOGIN, if any. */
   let loginRefusal: string | null = null;
   let folderUidValidity = 12345;
@@ -85,10 +84,6 @@ describe("IMAP Adapter Integration", () => {
           if (cmd === "LOGIN") {
             if (loginRefusal) {
               socket.write(`${tag} NO ${loginRefusal}\r\n`);
-            } else if (authFail || rest.includes("badpassword")) {
-              socket.write(
-                `${tag} NO [AUTHENTICATIONFAILED] Invalid credentials\r\n`,
-              );
             } else {
               socket.write(`${tag} OK [CAPABILITY IMAP4rev1] Logged in\r\n`);
             }
@@ -173,7 +168,6 @@ describe("IMAP Adapter Integration", () => {
   const scope: Scope = scopeForOwnerId(ownerId);
 
   beforeEach(() => {
-    authFail = false;
     loginRefusal = null;
     resetOnFetch = false;
     bogusDate = false;
@@ -181,53 +175,36 @@ describe("IMAP Adapter Integration", () => {
     folderUidValidity = 12345;
   });
 
+  /** The config each test() call passes: the fake server, no summaries. */
+  const testConfig = () => ({
+    host: "127.0.0.1",
+    port: serverPort,
+    secure: false,
+    username: "me@example.com",
+    lookbackDays: 90,
+    rollup: true,
+    ghostThreshold: 3,
+    maxMessagesPerFolder: 5000,
+    aliases: [],
+    summaries: false,
+  });
+
   it("test() succeeds with valid credentials", async () => {
-    const result = await imapAdapter.test(
-      {
-        host: "127.0.0.1",
-        port: serverPort,
-        secure: false,
-        username: "me@example.com",
-        lookbackDays: 90,
-        rollup: true,
-        ghostThreshold: 3,
-        maxMessagesPerFolder: 5000,
-        aliases: [],
-        summaries: false,
-      },
-      { password: "goodpassword" },
-    );
+    const result = await imapAdapter.test(testConfig(), {
+      password: "goodpassword",
+    });
 
     expect(result.ok).toBe(true);
     expect(result.detail).toContain("Connected successfully");
   });
 
-  it("test() throws ConnectorAuthError with the server's responseText on invalid credentials", async () => {
-    authFail = true;
-    await expect(
-      imapAdapter.test(
-        {
-          host: "127.0.0.1",
-          port: serverPort,
-          secure: false,
-          username: "me@example.com",
-          lookbackDays: 90,
-          rollup: true,
-          ghostThreshold: 3,
-          maxMessagesPerFolder: 5000,
-          aliases: [],
-          summaries: false,
-        },
-        { password: "badpassword" },
-      ),
-    ).rejects.toMatchObject({
-      name: "ConnectorAuthError",
-      statusCode: 400,
-      message: "IMAP authentication failed: Invalid credentials",
-    });
-  });
-
   it.each([
+    [
+      "[AUTHENTICATIONFAILED] Invalid credentials",
+      "ConnectorAuthError",
+      400,
+      "IMAP authentication failed: Invalid credentials",
+    ],
     [
       "[UNAVAILABLE] Temporary maintenance",
       "ConnectorUnavailableError",
@@ -252,21 +229,7 @@ describe("IMAP Adapter Integration", () => {
     async (refusal, name, statusCode, message) => {
       loginRefusal = refusal;
       await expect(
-        imapAdapter.test(
-          {
-            host: "127.0.0.1",
-            port: serverPort,
-            secure: false,
-            username: "me@example.com",
-            lookbackDays: 90,
-            rollup: true,
-            ghostThreshold: 3,
-            maxMessagesPerFolder: 5000,
-            aliases: [],
-            summaries: false,
-          },
-          { password: "goodpassword" },
-        ),
+        imapAdapter.test(testConfig(), { password: "goodpassword" }),
       ).rejects.toMatchObject({ name, statusCode, message });
     },
   );
@@ -275,21 +238,7 @@ describe("IMAP Adapter Integration", () => {
     delete process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS;
     try {
       await expect(
-        imapAdapter.test(
-          {
-            host: "127.0.0.1",
-            port: serverPort,
-            secure: false,
-            username: "me@example.com",
-            lookbackDays: 90,
-            rollup: true,
-            ghostThreshold: 3,
-            maxMessagesPerFolder: 5000,
-            aliases: [],
-            summaries: false,
-          },
-          { password: "test" },
-        ),
+        imapAdapter.test(testConfig(), { password: "test" }),
       ).rejects.toThrow(ConnectorConfigError);
     } finally {
       process.env.CONNECTORS_ALLOW_PRIVATE_HOSTS = "true";

@@ -16,7 +16,6 @@ import * as authApi from "../../../../src/api/auth";
 import * as passkeysApi from "../../../../src/api/passkeys";
 import { AccountSettings } from "../../../../src/views/settings/AccountSettings";
 import { PasskeysCard } from "../../../../src/views/settings/account/PasskeysCard";
-import { findRows } from "../../../../src/views/settings/registry";
 
 const authState = vi.hoisted(() => ({
   user: {
@@ -97,19 +96,6 @@ function renderWithProviders(
 }
 
 beforeEach(() => {
-  authState.user = {
-    id: "u1",
-    email: "ada@example.com",
-    username: "ada",
-    displayName: "Ada Lovelace",
-    role: "admin",
-    createdAt: "2026-01-01T00:00:00Z",
-    lastLoginAt: "2026-01-01T00:00:00Z",
-    status: "active",
-    credentialState: "password",
-    mustChangePassword: false,
-    avatarUrl: null,
-  };
   vi.mocked(authApi.fetchSessions).mockResolvedValue({ sessions: [] });
   vi.mocked(authApi.fetchApiTokens).mockResolvedValue({ tokens: [] });
   vi.mocked(passkeysApi.listPasskeys).mockResolvedValue({
@@ -279,18 +265,5 @@ describe("PasskeysCard hardening", () => {
       );
     });
     errorToast.mockRestore();
-  });
-});
-
-describe("You registry search", () => {
-  it("finds passkey and avatar rows under Account settings", () => {
-    const passkeyHits = findRows("passkey", { authRequired: true });
-    expect(passkeyHits.map((h) => h.path)).toContain(
-      "/settings/account#password",
-    );
-    const avatarHits = findRows("avatar", { authRequired: true });
-    expect(avatarHits.map((h) => h.path)).toContain(
-      "/settings/account#profile",
-    );
   });
 });

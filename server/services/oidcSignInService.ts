@@ -1,18 +1,21 @@
 // What an OIDC flow does once the provider has answered: link the account that
 // started it, or find the account to sign in to and start its session. The
-// route only checks the flow cookie and turns the result into a cookie and a
+// route only reads the flow cookie and turns the result into a cookie and a
 // redirect.
 // - The callback consumes the flow first, then lands every outcome from it: a
 //   link flow on Account settings, a sign-in on the sign-in page, or on the
 //   path it started from when it succeeds.
 // - Sign-in reaches a linked identity, or an account whose verified email
-//   matches, when the admin allows it and that account has no identity at this
-//   provider yet, so an email never moves an existing link.
+//   matches, when the admin allows it, the account's own email is trusted
+//   (users.emailTrustedAt), and that account has no identity at this provider
+//   yet, so an email never moves an existing link.
 // - A disabled account, or one that must change its password first, is
 //   refused before anything is written.
 // - A sign-in's writes (the email link, lastUsedAt, lastLoginAt, the session,
 //   the audit row) run in one transaction, as do a link and its audit row: a
 //   failure leaves nothing half made.
+// - The log gets an OAuth error code only, never the provider's description,
+//   which can name the person.
 
 import { ResponseBodyError } from "openid-client";
 import { sqlite } from "../db.ts";
@@ -21,7 +24,7 @@ import { log } from "../utils/logger.ts";
 import { auditService } from "./auditService.ts";
 import {
   createSession,
-  findUserByEmail,
+  findUserByTrustedEmail,
   getUserById,
   type User,
 } from "./authService.ts";
@@ -55,6 +58,24 @@ export type OidcSignInOutcome =
     }
   | { outcome: "no-account" | "disabled" | "must-change-password" };
 
+/** Link the identity to `userId` and record it, in the caller's transaction. */
+function link(
+  userId: string,
+  claims: OidcClaims,
+  info: OidcRequestInfo,
+  details?: { matchedByEmail: true },
+): void {
+  linkIdentity(userId, claims.issuer, claims.subject, claims.email);
+  auditService.record({
+    actorUserId: userId,
+    action: "auth.oidc.linked",
+    targetType: "user",
+    targetId: userId,
+    details: { issuer: claims.issuer, ...details },
+    ip: info.ip,
+  });
+}
+
 /**
  * Link the provider identity to the account that started the flow. Only that
  * account, signed in with a session, may finish it.
@@ -65,19 +86,14 @@ export function completeOidcLink(
   sessionUserId: string | null,
   info: OidcRequestInfo,
 ): OidcLinkOutcome {
-  if (sessionUserId !== linkUserId) return "failed";
+  if (sessionUserId !== linkUserId) {
+    log.warn("Auth", "OIDC link finished without the session that started it", {
+      userId: linkUserId,
+    });
+    return "failed";
+  }
   try {
-    sqlite.transaction(() => {
-      linkIdentity(sessionUserId, claims.issuer, claims.subject, claims.email);
-      auditService.record({
-        actorUserId: sessionUserId,
-        action: "auth.oidc.linked",
-        targetType: "user",
-        targetId: sessionUserId,
-        details: { issuer: claims.issuer },
-        ip: info.ip,
-      });
-    })();
+    sqlite.transaction(() => link(sessionUserId, claims, info))();
   } catch (err) {
     if (err instanceof AppError && err.statusCode === 409) return "taken";
     throw err;
@@ -94,9 +110,9 @@ function accountFor(
     const user = getUserById(linkedId);
     return user ? { user, matchedByEmail: false } : null;
   }
-  if (!getOidcConfig()?.matchByEmail || !claims.emailVerified) return null;
-  if (!claims.email) return null;
-  const match = findUserByEmail(claims.email);
+  if (!getOidcConfig()?.matchByEmail || !claims.emailVerified || !claims.email)
+    return null;
+  const match = findUserByTrustedEmail(claims.email);
   if (!match) return null;
   const linkedHere = listIdentities(match.id).some(
     (identity) => identity.issuer === claims.issuer,
@@ -121,44 +137,29 @@ export function completeOidcSignIn(
     return { outcome: "no-account" };
   }
   const { user, matchedByEmail } = found;
-  if (user.status === "disabled") {
+  // A session for an account that must change its password would answer 403
+  // everywhere until it does, and the person may not know the temporary one.
+  const refusal =
+    user.status === "disabled"
+      ? "disabled"
+      : user.mustChangePassword === 1
+        ? "must-change-password"
+        : null;
+  if (refusal) {
     auditService.record({
       actorUserId: user.id,
       action: "auth.login.failed",
       targetType: "user",
       targetId: user.id,
-      details: { method: "oidc", reason: "disabled" },
+      details: { method: "oidc", reason: refusal },
       ip: info.ip,
     });
-    return { outcome: "disabled" };
-  }
-  // A session would answer 403 everywhere until the password changes, and the
-  // person may not know the temporary one.
-  if (user.mustChangePassword === 1) {
-    auditService.record({
-      actorUserId: user.id,
-      action: "auth.login.failed",
-      targetType: "user",
-      targetId: user.id,
-      details: { method: "oidc", reason: "must-change-password" },
-      ip: info.ip,
-    });
-    return { outcome: "must-change-password" };
+    return { outcome: refusal };
   }
 
   const session = sqlite.transaction(() => {
-    if (matchedByEmail) {
-      linkIdentity(user.id, claims.issuer, claims.subject, claims.email);
-      auditService.record({
-        actorUserId: user.id,
-        action: "auth.oidc.linked",
-        targetType: "user",
-        targetId: user.id,
-        details: { issuer: claims.issuer, matchedByEmail: true },
-        ip: info.ip,
-      });
-    }
-    touchIdentity(claims.issuer, claims.subject);
+    if (matchedByEmail) link(user.id, claims, info, { matchedByEmail: true });
+    touchIdentity(claims.issuer, claims.subject, claims.email);
     sqlite
       .prepare("UPDATE users SET lastLoginAt = CURRENT_TIMESTAMP WHERE id = ?")
       .run(user.id);
@@ -187,6 +188,13 @@ function oidcLanding(flow: OidcFlow | null, outcome: string | null): string {
   return outcome ? `/?oidc=${outcome}` : (flow?.returnTo ?? "/");
 }
 
+/** An OAuth error code fit for the log, or "other" for any other text. */
+function errorCode(value: unknown): string {
+  return typeof value === "string" && /^[a-z_]{1,64}$/.test(value)
+    ? value
+    : "other";
+}
+
 export interface OidcCallbackResult {
   /** Where the browser goes next. */
   landing: string;
@@ -196,30 +204,38 @@ export interface OidcCallbackResult {
 
 /**
  * Finish the flow a callback names, from the URL the provider sent the
- * browser to. The caller has already checked the flow cookie. Never throws:
- * every failure is a landing.
+ * browser to, with the binding secret from this browser's flow cookie. Never
+ * throws: every failure is a landing.
  */
 export async function finishOidcCallback(
   callbackUrl: URL,
+  binding: string | null,
   sessionUserId: string | null,
   info: OidcRequestInfo,
 ): Promise<OidcCallbackResult> {
   // Consumed first, so the landing knows a link flow from a sign-in, and the
-  // state works once whatever happens next.
-  const flow = takeOidcFlow(callbackUrl.searchParams.get("state") ?? "");
+  // state works once whatever happens next. Without this flow's binding the
+  // flow stays for the browser that has it.
+  const state = callbackUrl.searchParams.get("state") ?? "";
+  const flow = binding ? takeOidcFlow(state, binding) : null;
   const land = (outcome: string | null) => ({
     landing: oidcLanding(flow, outcome),
   });
   if (!flow) {
-    log.warn("Auth", "OIDC callback for a flow that does not exist");
+    log.warn(
+      "Auth",
+      binding
+        ? "OIDC callback for a flow that does not exist"
+        : "OIDC callback without this browser's flow cookie",
+    );
     return land("failed");
   }
   const providerError = callbackUrl.searchParams.get("error");
   if (providerError !== null) {
-    log.info("Auth", "OIDC provider returned an error", {
-      error: providerError,
+    log.warn("Auth", "OIDC provider returned an error", {
+      error: errorCode(providerError),
     });
-    return land("denied");
+    return land(providerError === "access_denied" ? "denied" : "failed");
   }
   if (flow.expired) return land("expired");
 
@@ -232,8 +248,7 @@ export async function finishOidcCallback(
     log.warn("Auth", "OIDC sign-in did not finish", {
       error: err,
       ...(err instanceof ResponseBodyError && {
-        oauthError: err.error,
-        oauthErrorDescription: err.error_description,
+        oauthError: errorCode(err.error),
       }),
     });
     return land("failed");

@@ -134,29 +134,19 @@ export function getIntegrationsStatus(): IntegrationsStatus {
       };
 
   const oidc = getOidcConfig();
-  const oidcStatus: OidcIntegrationStatus = oidc
-    ? {
-        configured: true,
-        source: oidc.source,
-        issuer: oidc.issuer,
-        clientId: oidc.clientId,
-        clientSecretPreview: redact(oidc.clientSecret),
-        name: oidc.name,
-        matchByEmail: oidc.matchByEmail,
-        envIssuerInvalid: false,
-      }
-    : {
-        configured: false,
-        // getOidcConfig is null under OIDC_* only for a refused issuer. The
-        // environment still owns the setting, so saving stays locked.
-        source: isOidcEnvSet() ? "env" : "none",
-        issuer: null,
-        clientId: null,
-        clientSecretPreview: null,
-        name: null,
-        matchByEmail: false,
-        envIssuerInvalid: isOidcEnvSet(),
-      };
+  // getOidcConfig is null under OIDC_* only for a refused issuer. The
+  // environment still owns the setting, so saving stays locked.
+  const refusedEnv = !oidc && isOidcEnvSet();
+  const oidcStatus: OidcIntegrationStatus = {
+    configured: oidc !== null,
+    source: oidc?.source ?? (refusedEnv ? "env" : "none"),
+    issuer: oidc?.issuer ?? null,
+    clientId: oidc?.clientId ?? null,
+    clientSecretPreview: redact(oidc?.clientSecret),
+    name: oidc?.name ?? null,
+    matchByEmail: oidc?.matchByEmail ?? false,
+    envIssuerInvalid: refusedEnv,
+  };
 
   return { googleOAuth: googleOAuthStatus, oidc: oidcStatus };
 }

@@ -41,17 +41,13 @@ import {
 } from "../layout";
 import { LoadFailed } from "../../../components/ui/LoadFailed";
 import { useAuth } from "../../../components/auth/AuthGate";
+import { normalizeIssuer } from "../../../../shared/contracts/admin";
 
 const KEY_INPUT = cn(SETTINGS_INPUT, "font-mono");
 
 /** A note under a row: the environment's lock, a warning, a way to fix it. */
 const NOTE =
   "flex items-start gap-2 rounded-xl bg-surface-container-low p-3 text-xs text-on-surface-variant text-pretty";
-
-const CONFIGURED_CHIP = cn(
-  "inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md",
-  TONE_WASH.success,
-);
 
 type InstancePatch = Parameters<
   ReturnType<typeof useUpdateInstanceSettings>["mutate"]
@@ -526,10 +522,221 @@ const ConsoleLink = ({
   </a>
 );
 
-const NOT_SET_UP_CHIP = cn(
-  "inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md",
-  TONE_WASH.warning,
+const CHIP =
+  "inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md";
+
+/** An integration's chip, Configured or Not set up, and what follows it. */
+const StatusLine = ({
+  configured,
+  children,
+}: {
+  configured: boolean;
+  children?: React.ReactNode;
+}) => (
+  <div className="flex flex-wrap items-center gap-2 text-xs text-on-surface-variant">
+    {configured ? (
+      <span className={cn(CHIP, TONE_WASH.success)}>
+        <Check className="w-3.5 h-3.5" aria-hidden="true" />
+        Configured
+      </span>
+    ) : (
+      <span className={cn(CHIP, TONE_WASH.warning)}>
+        <TriangleAlert className="w-3.5 h-3.5" aria-hidden="true" />
+        Not set up
+      </span>
+    )}
+    {children}
+  </div>
 );
+
+/**
+ * The steps an admin follows at the provider. They stay open under `title`
+ * until the integration is configured, and fold away under `foldedTitle`
+ * after.
+ */
+const SetupSteps = ({
+  configured,
+  title,
+  foldedTitle,
+  children,
+}: {
+  configured: boolean;
+  title: string;
+  foldedTitle: string;
+  children: React.ReactNode;
+}) => {
+  const steps = (
+    <ol className="list-decimal pl-5 marker:font-semibold marker:text-on-surface-variant space-y-3 text-xs text-on-surface-variant text-pretty max-w-2xl">
+      {children}
+    </ol>
+  );
+  return configured ? (
+    <details className="group rounded-xl bg-surface-container-low px-3 py-1 text-xs">
+      <summary className="state-layer cursor-pointer list-none rounded-lg -mx-1.5 px-1.5 min-h-11 flex items-center gap-1.5 font-semibold text-on-surface">
+        <ChevronRight
+          className="w-4 h-4 shrink-0 transition-transform group-open:rotate-90"
+          aria-hidden="true"
+        />
+        {foldedTitle}
+      </summary>
+      <div className="mt-1 mb-2">{steps}</div>
+    </details>
+  ) : (
+    <div className="rounded-xl bg-surface-container-low p-3 space-y-3 text-xs">
+      <p className="font-semibold text-on-surface">{title}</p>
+      {steps}
+    </div>
+  );
+};
+
+/** A warning beside the step or the setting it is about. */
+const WarningNote = ({ children }: { children: React.ReactNode }) => (
+  <p role="note" className={NOTE}>
+    <TriangleAlert
+      className="w-3.5 h-3.5 shrink-0 mt-0.5 text-warning"
+      aria-hidden="true"
+    />
+    <span>{children}</span>
+  </p>
+);
+
+/** The saved values a row shows but does not edit. */
+const SAVED_VALUES =
+  "text-xs text-on-surface-variant bg-surface-container-low p-3 rounded-xl space-y-1";
+
+const SavedValue = ({
+  label,
+  className,
+  children,
+}: {
+  label: string;
+  className?: string;
+  children: React.ReactNode;
+}) => (
+  <p>
+    {label} <span className={cn("text-on-surface", className)}>{children}</span>
+  </p>
+);
+
+/** A labelled field for a key. A `secret` one hides its value until shown. */
+const Field = ({
+  label,
+  onChange,
+  secret = false,
+  mono = true,
+  ...input
+}: Omit<React.ComponentProps<"input">, "onChange" | "type"> & {
+  id: string;
+  label: string;
+  onChange: (value: string) => void;
+  secret?: boolean;
+  mono?: boolean;
+}) => {
+  const [shown, setShown] = useState(false);
+  const field = (
+    <input
+      {...input}
+      type={secret && !shown ? "password" : "text"}
+      onChange={(event) => onChange(event.target.value)}
+      className={cn(mono ? KEY_INPUT : SETTINGS_INPUT, secret && "pr-10")}
+      {...NO_AUTOCORRECT}
+    />
+  );
+  return (
+    <div>
+      <label htmlFor={input.id} className={cn(SETTINGS_LABEL, "mb-1.5")}>
+        {label}
+      </label>
+      {secret ? (
+        <div className="relative">
+          {field}
+          <button
+            type="button"
+            onClick={() => setShown(!shown)}
+            className="hit-area state-layer absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md text-on-surface-variant hover:text-on-surface p-1 transition-colors"
+            title={shown ? "Hide secret" : "Show secret"}
+            aria-label={shown ? "Hide secret" : "Show secret"}
+          >
+            {shown ? (
+              <EyeOff className="w-4 h-4" />
+            ) : (
+              <Eye className="w-4 h-4" />
+            )}
+          </button>
+        </div>
+      ) : (
+        field
+      )}
+    </div>
+  );
+};
+
+/** Remove, while there is something to remove, and Save. */
+const FormActions = ({
+  onRemove,
+  onSave,
+  canSave,
+  pending,
+}: {
+  onRemove: (() => void) | null;
+  onSave: () => void;
+  canSave: boolean;
+  pending: boolean;
+}) => (
+  <div className="flex flex-wrap justify-end gap-2 pt-1">
+    {onRemove && (
+      <button
+        type="button"
+        disabled={pending}
+        onClick={onRemove}
+        className="btn-secondary shrink-0 text-error mr-auto"
+      >
+        Remove
+      </button>
+    )}
+    <button
+      type="button"
+      disabled={!canSave || pending}
+      onClick={onSave}
+      className="btn-primary shrink-0"
+    >
+      Save
+    </button>
+  </div>
+);
+
+/**
+ * Removing an integration takes its Remove button away, and with it the
+ * focus the dialog handed back. The keyboard lands on `field` instead, the
+ * empty field where a new one starts.
+ */
+function useFocusAfterRemove(
+  configured: boolean,
+  field: React.RefObject<HTMLInputElement | null>,
+) {
+  const wasConfigured = useRef(configured);
+  useEffect(() => {
+    if (
+      wasConfigured.current &&
+      !configured &&
+      document.activeElement === document.body
+    ) {
+      field.current?.focus();
+    }
+    wasConfigured.current = configured;
+  }, [configured, field]);
+}
+
+/**
+ * The origin the server sends a provider in `redirectUri`, and whether the
+ * browser opened Contrack at another one. Then the provider sends people back
+ * to an address they did not start from.
+ */
+function origins(redirectUri: string | undefined) {
+  const browser = window.location.origin;
+  const server = redirectUri ? new URL(redirectUri).origin : browser;
+  return { browser, server, mismatch: server !== browser };
+}
 
 /** A redirect URI the admin pastes into the provider, with a copy button. */
 const RedirectUriBox = ({ uri }: { uri: string }) => {
@@ -568,7 +775,6 @@ export const GoogleRow = () => {
   const update = useUpdateIntegrations();
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
-  const [showSecret, setShowSecret] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const clientIdInput = useRef<HTMLInputElement>(null);
 
@@ -576,95 +782,16 @@ export const GoogleRow = () => {
   const google = data?.googleOAuth;
   const configured = google?.configured === true;
   const fromEnv = google?.source === "env";
-
-  // Removing the client takes its Remove button away, and with it the
-  // focus the dialog handed back. The keyboard lands on the empty client
-  // ID field instead, where a new client starts.
-  const wasConfigured = useRef(configured);
-  useEffect(() => {
-    if (
-      wasConfigured.current &&
-      !configured &&
-      document.activeElement === document.body
-    ) {
-      clientIdInput.current?.focus();
-    }
-    wasConfigured.current = configured;
-  }, [configured]);
+  const busy = isLoading || update.isPending;
+  useFocusAfterRemove(configured, clientIdInput);
 
   // The address the server sends Google, which is PUBLIC_URL, or the host
   // and scheme it sees. Behind a proxy that hides its https, that can differ
   // from the browser's, and Google would refuse the sign-in as a mismatch.
-  const browserOrigin = window.location.origin;
   const redirectUri =
-    google?.redirectUri ?? `${browserOrigin}/api/connectors/google/callback`;
-  const serverOrigin = new URL(redirectUri).origin;
-  const mismatch = serverOrigin !== browserOrigin;
-
-  // The five steps an admin follows in Google Cloud, in the order the console
-  // presents them. The redirect address sits in the step that uses it. They
-  // stay open until a client is saved, and fold away after.
-  const steps = (
-    <ol className="list-decimal pl-5 marker:font-semibold marker:text-on-surface-variant space-y-3 text-xs text-on-surface-variant text-pretty max-w-2xl">
-      <li>
-        Open the{" "}
-        <ConsoleLink href={CONSOLE.home}>Google Cloud Console</ConsoleLink> and
-        create or pick a project
-      </li>
-      <li>
-        In the <ConsoleLink href={CONSOLE.library}>API Library</ConsoleLink>,
-        turn on People API, Gmail API and Google Calendar API
-      </li>
-      <li className="space-y-1">
-        <p>
-          Under{" "}
-          <ConsoleLink href={CONSOLE.audience}>
-            Google Auth platform
-          </ConsoleLink>
-          , set the audience. For Google Workspace choose Internal. For personal
-          Gmail choose External, then Publish app, or sign-ins expire after 7
-          days
-        </p>
-        <p>
-          At sign-in Google warns that the app is unverified. Choose Continue
-          (up to 100 accounts)
-        </p>
-      </li>
-      <li className="space-y-1.5">
-        <p>
-          Under{" "}
-          <ConsoleLink href={CONSOLE.credentials}>Credentials</ConsoleLink>,
-          create a Web application OAuth client ID and add this Authorized
-          redirect URI
-        </p>
-        <RedirectUriBox uri={redirectUri} />
-        <p>
-          Google accepts localhost or an https domain, not a LAN IP.{" "}
-          {publicUrl
-            ? "This address comes from PUBLIC_URL"
-            : "Set PUBLIC_URL when people reach Contrack through a reverse proxy"}
-        </p>
-        {mismatch && (
-          <p role="note" className={NOTE}>
-            <TriangleAlert
-              className="w-3.5 h-3.5 shrink-0 mt-0.5 text-warning"
-              aria-hidden="true"
-            />
-            <span>
-              {publicUrl
-                ? `Google sends people back to ${serverOrigin}, from PUBLIC_URL. Open Contrack there to connect Google`
-                : `Your browser opened Contrack at ${browserOrigin}, but the server sends Google ${serverOrigin}. Set PUBLIC_URL to the address people open`}
-            </span>
-          </p>
-        )}
-      </li>
-      <li>
-        {fromEnv
-          ? "Put the client ID and the client secret Google shows in GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET, where this server reads them"
-          : "Paste the Client ID and Client secret below, then save"}
-      </li>
-    </ol>
-  );
+    google?.redirectUri ??
+    `${window.location.origin}/api/connectors/google/callback`;
+  const origin = origins(google?.redirectUri);
 
   return (
     <>
@@ -675,50 +802,85 @@ export const GoogleRow = () => {
         below
       >
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-on-surface-variant">
-            {configured ? (
-              <>
-                <span className={CONFIGURED_CHIP}>
-                  <Check className="w-3.5 h-3.5" aria-hidden="true" />
-                  Configured
-                </span>
-                <span>
-                  Members connect their accounts under{" "}
-                  <Link
-                    to="/settings/connectors"
-                    className={cn(TEXT_LINK, TOUCH_LINK)}
-                  >
-                    Connectors
-                  </Link>
-                </span>
-              </>
-            ) : (
-              <span className={NOT_SET_UP_CHIP}>
-                <TriangleAlert className="w-3.5 h-3.5" aria-hidden="true" />
-                Not set up
+          <StatusLine configured={configured}>
+            {configured && (
+              <span>
+                Members connect their accounts under{" "}
+                <Link
+                  to="/settings/connectors"
+                  className={cn(TEXT_LINK, TOUCH_LINK)}
+                >
+                  Connectors
+                </Link>
               </span>
             )}
-          </div>
+          </StatusLine>
 
-          {configured ? (
-            <details className="group rounded-xl bg-surface-container-low px-3 py-1 text-xs">
-              <summary className="state-layer cursor-pointer list-none rounded-lg -mx-1.5 px-1.5 min-h-11 flex items-center gap-1.5 font-semibold text-on-surface">
-                <ChevronRight
-                  className="w-4 h-4 shrink-0 transition-transform group-open:rotate-90"
-                  aria-hidden="true"
-                />
-                How to create a client in Google Cloud
-              </summary>
-              <div className="mt-1 mb-2">{steps}</div>
-            </details>
-          ) : (
-            <div className="rounded-xl bg-surface-container-low p-3 space-y-3 text-xs">
-              <p className="font-semibold text-on-surface">
-                Create the client in Google Cloud
+          {/* The five steps an admin follows in Google Cloud, in the order the
+              console presents them. The redirect address sits in the step
+              that uses it. */}
+          <SetupSteps
+            configured={configured}
+            title="Create the client in Google Cloud"
+            foldedTitle="How to create a client in Google Cloud"
+          >
+            <li>
+              Open the{" "}
+              <ConsoleLink href={CONSOLE.home}>
+                Google Cloud Console
+              </ConsoleLink>{" "}
+              and create or pick a project
+            </li>
+            <li>
+              In the{" "}
+              <ConsoleLink href={CONSOLE.library}>API Library</ConsoleLink>,
+              turn on People API, Gmail API and Google Calendar API
+            </li>
+            <li className="space-y-1">
+              <p>
+                Under{" "}
+                <ConsoleLink href={CONSOLE.audience}>
+                  Google Auth platform
+                </ConsoleLink>
+                , set the audience. For Google Workspace choose Internal. For
+                personal Gmail choose External, then Publish app, or sign-ins
+                expire after 7 days
               </p>
-              {steps}
-            </div>
-          )}
+              <p>
+                At sign-in Google warns that the app is unverified. Choose
+                Continue (up to 100 accounts)
+              </p>
+            </li>
+            <li className="space-y-1.5">
+              <p>
+                Under{" "}
+                <ConsoleLink href={CONSOLE.credentials}>
+                  Credentials
+                </ConsoleLink>
+                , create a Web application OAuth client ID and add this
+                Authorized redirect URI
+              </p>
+              <RedirectUriBox uri={redirectUri} />
+              <p>
+                Google accepts localhost or an https domain, not a LAN IP.{" "}
+                {publicUrl
+                  ? "This address comes from PUBLIC_URL"
+                  : "Set PUBLIC_URL when people reach Contrack through a reverse proxy"}
+              </p>
+              {origin.mismatch && (
+                <WarningNote>
+                  {publicUrl
+                    ? `Google sends people back to ${origin.server}, from PUBLIC_URL. Open Contrack there to connect Google`
+                    : `Your browser opened Contrack at ${origin.browser}, but the server sends Google ${origin.server}. Set PUBLIC_URL to the address people open`}
+                </WarningNote>
+              )}
+            </li>
+            <li>
+              {fromEnv
+                ? "Put the client ID and the client secret Google shows in GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET, where this server reads them"
+                : "Paste the Client ID and Client secret below, then save"}
+            </li>
+          </SetupSteps>
 
           {fromEnv ? (
             <p className={NOTE}>
@@ -728,123 +890,67 @@ export const GoogleRow = () => {
           ) : (
             <div className="space-y-2">
               {configured && (
-                <div className="text-xs text-on-surface-variant bg-surface-container-low p-3 rounded-xl space-y-1">
-                  <p>
-                    Client ID{" "}
-                    <span className="font-mono text-on-surface">
-                      {google?.clientId}
-                    </span>
-                  </p>
-                  <p>
-                    Client secret{" "}
-                    <span className="font-mono text-on-surface">
-                      {google?.clientSecretPreview}
-                    </span>
-                  </p>
+                <div className={SAVED_VALUES}>
+                  <SavedValue label="Client ID" className="font-mono">
+                    {google?.clientId}
+                  </SavedValue>
+                  <SavedValue label="Client secret" className="font-mono">
+                    {google?.clientSecretPreview}
+                  </SavedValue>
                 </div>
               )}
-              <div>
-                <label
-                  htmlFor="google-client-id"
-                  className={cn(SETTINGS_LABEL, "mb-1.5")}
-                >
-                  Client ID
-                </label>
-                <input
-                  ref={clientIdInput}
-                  id="google-client-id"
-                  type="text"
-                  value={clientId}
-                  disabled={isLoading || update.isPending}
-                  onChange={(event) => setClientId(event.target.value)}
-                  placeholder={
-                    configured
-                      ? "A new client ID replaces the current one"
-                      : "123456789-...apps.googleusercontent.com"
-                  }
-                  className={KEY_INPUT}
-                  {...NO_AUTOCORRECT}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="google-client-secret"
-                  className={cn(SETTINGS_LABEL, "mb-1.5")}
-                >
-                  Client secret
-                </label>
-                <div className="relative">
-                  <input
-                    id="google-client-secret"
-                    type={showSecret ? "text" : "password"}
-                    value={clientSecret}
-                    disabled={isLoading || update.isPending}
-                    onChange={(event) => setClientSecret(event.target.value)}
-                    placeholder={
-                      configured
-                        ? "A new secret replaces the current one"
-                        : "GOCSPX-..."
-                    }
-                    className={cn(KEY_INPUT, "pr-10")}
-                    {...NO_AUTOCORRECT}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowSecret(!showSecret)}
-                    className="hit-area state-layer absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md text-on-surface-variant hover:text-on-surface p-1 transition-colors"
-                    title={showSecret ? "Hide secret" : "Show secret"}
-                    aria-label={showSecret ? "Hide secret" : "Show secret"}
-                  >
-                    {showSecret ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
-              </div>
-              <div className="flex flex-wrap justify-end gap-2 pt-1">
-                {configured && (
-                  <button
-                    type="button"
-                    disabled={update.isPending}
-                    onClick={() => setConfirmRemove(true)}
-                    className="btn-secondary shrink-0 text-error mr-auto"
-                  >
-                    Remove
-                  </button>
-                )}
-                <button
-                  type="button"
-                  disabled={
-                    !clientId.trim() || !clientSecret.trim() || update.isPending
-                  }
-                  onClick={() =>
-                    update.mutate(
-                      {
-                        googleOAuth: {
-                          clientId: clientId.trim(),
-                          clientSecret: clientSecret.trim(),
-                        },
+              <Field
+                id="google-client-id"
+                label="Client ID"
+                ref={clientIdInput}
+                value={clientId}
+                disabled={busy}
+                onChange={setClientId}
+                placeholder={
+                  configured
+                    ? "A new client ID replaces the current one"
+                    : "123456789-...apps.googleusercontent.com"
+                }
+              />
+              <Field
+                id="google-client-secret"
+                label="Client secret"
+                secret
+                value={clientSecret}
+                disabled={busy}
+                onChange={setClientSecret}
+                placeholder={
+                  configured
+                    ? "A new secret replaces the current one"
+                    : "GOCSPX-..."
+                }
+              />
+              <FormActions
+                onRemove={configured ? () => setConfirmRemove(true) : null}
+                canSave={clientId.trim() !== "" && clientSecret.trim() !== ""}
+                pending={update.isPending}
+                onSave={() =>
+                  update.mutate(
+                    {
+                      googleOAuth: {
+                        clientId: clientId.trim(),
+                        clientSecret: clientSecret.trim(),
                       },
-                      {
-                        onSuccess: () => {
-                          setClientId("");
-                          setClientSecret("");
-                          toast.success("Google OAuth client saved");
-                        },
-                        onError: (error: Error) =>
-                          toast.error(
-                            `Could not save Google OAuth client: ${errorText(error)}`,
-                          ),
+                    },
+                    {
+                      onSuccess: () => {
+                        setClientId("");
+                        setClientSecret("");
+                        toast.success("Google OAuth client saved");
                       },
-                    )
-                  }
-                  className="btn-primary shrink-0"
-                >
-                  Save
-                </button>
-              </div>
+                      onError: (error: Error) =>
+                        toast.error(
+                          `Could not save Google OAuth client: ${errorText(error)}`,
+                        ),
+                    },
+                  )
+                }
+              />
             </div>
           )}
         </div>
@@ -892,12 +998,12 @@ export const OidcRow = () => {
   const [name, setName] = useState(oidc?.name ?? "");
   const [matchByEmail, setMatchByEmail] = useState(oidc?.matchByEmail ?? false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [showSecret, setShowSecret] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const issuerInput = useRef<HTMLInputElement>(null);
   const configured = oidc?.configured === true;
   const fromEnv = oidc?.source === "env";
   const busy = isLoading || update.isPending;
+  useFocusAfterRemove(configured, issuerInput);
 
   // The saved values arrive after the first render. Fill the fields from
   // them once, when they do, as the mail row does for SMTP.
@@ -913,104 +1019,36 @@ export const OidcRow = () => {
   }, [oidc]);
 
   // Save is on for any change from what is saved. A first setup needs all
-  // three credentials; later, an empty secret keeps the saved one.
+  // three credentials. Later, an empty secret keeps the saved one, as the
+  // server does, only while the issuer and client ID name the same client.
   const changed =
     issuer.trim() !== (oidc?.issuer ?? "") ||
     clientId.trim() !== (oidc?.clientId ?? "") ||
     clientSecret.trim() !== "" ||
     name.trim() !== (oidc?.name ?? "") ||
     matchByEmail !== (oidc?.matchByEmail ?? false);
+  const keepsSecret =
+    configured &&
+    normalizeIssuer(issuer) === normalizeIssuer(oidc?.issuer ?? "") &&
+    clientId.trim() === (oidc?.clientId ?? "");
   const canSave =
     changed &&
     issuer.trim() !== "" &&
     clientId.trim() !== "" &&
-    (configured || clientSecret.trim() !== "");
+    (keepsSecret || clientSecret.trim() !== "");
 
   // The provider sends the browser back to the address the server sends it,
   // and the flow cookie belongs to the host that started the flow.
   const { publicUrl } = useAuth();
-  const browserOrigin = window.location.origin;
-  const serverOrigin = oidc?.redirectUri
-    ? new URL(oidc.redirectUri).origin
-    : browserOrigin;
-  const mismatch = serverOrigin !== browserOrigin;
+  const origin = origins(oidc?.redirectUri);
 
-  // As in GoogleRow: Remove takes the focus with it, so hand it to the first
-  // field.
-  const wasConfigured = useRef(configured);
-  useEffect(() => {
-    if (
-      wasConfigured.current &&
-      !configured &&
-      document.activeElement === document.body
-    ) {
-      issuerInput.current?.focus();
-    }
-    wasConfigured.current = configured;
-  }, [configured]);
-
-  const steps = (
-    <ol className="list-decimal pl-5 marker:font-semibold marker:text-on-surface-variant space-y-3 text-xs text-on-surface-variant text-pretty max-w-2xl">
-      <li>
-        In your identity provider (Authentik, Keycloak, Pocket ID, Authelia…),
-        create an OpenID Connect client of the confidential type
-      </li>
-      <li className="space-y-1.5">
-        <p>Add this redirect URI</p>
-        <RedirectUriBox uri={oidc?.redirectUri ?? ""} />
-        {mismatch && (
-          <p role="note" className={NOTE}>
-            <TriangleAlert
-              className="w-3.5 h-3.5 shrink-0 mt-0.5 text-warning"
-              aria-hidden="true"
-            />
-            <span>
-              {publicUrl
-                ? `The provider sends people back to ${serverOrigin}, from PUBLIC_URL. Signing in from another address fails. Open Contrack there`
-                : `Your browser opened Contrack at ${browserOrigin}, but the server sends the provider ${serverOrigin}. Set PUBLIC_URL to the address people open`}
-            </span>
-          </p>
-        )}
-      </li>
-      <li>
-        {fromEnv
-          ? "Put the issuer, client ID and secret in OIDC_ISSUER, OIDC_CLIENT_ID and OIDC_CLIENT_SECRET"
-          : "Paste the issuer URL, client ID and secret below, then save"}
-      </li>
-    </ol>
-  );
-
-  const field = (
-    id: string,
-    label: string,
-    value: string,
-    set: (value: string) => void,
-    placeholder: string,
-    mono = true,
-    ref?: React.Ref<HTMLInputElement>,
-    maxLength?: number,
-  ) => (
-    <div>
-      <label htmlFor={id} className={cn(SETTINGS_LABEL, "mb-1.5")}>
-        {label}
-      </label>
-      <input
-        ref={ref}
-        id={id}
-        type="text"
-        value={value}
-        disabled={busy}
-        maxLength={maxLength}
-        onChange={(event) => {
-          setSaveError(null);
-          set(event.target.value);
-        }}
-        placeholder={placeholder}
-        className={mono ? KEY_INPUT : SETTINGS_INPUT}
-        {...NO_AUTOCORRECT}
-      />
-    </div>
-  );
+  /** An edit clears the refusal of the last save. */
+  const edit =
+    <T,>(set: (value: T) => void) =>
+    (value: T) => {
+      setSaveError(null);
+      set(value);
+    };
 
   return (
     <>
@@ -1021,83 +1059,58 @@ export const OidcRow = () => {
         below
       >
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2 text-xs text-on-surface-variant">
-            {configured ? (
-              <span className={CONFIGURED_CHIP}>
-                <Check className="w-3.5 h-3.5" aria-hidden="true" />
-                Configured
-              </span>
-            ) : (
-              <span className={NOT_SET_UP_CHIP}>
-                <TriangleAlert className="w-3.5 h-3.5" aria-hidden="true" />
-                Not set up
-              </span>
-            )}
-          </div>
+          <StatusLine configured={configured} />
 
-          {configured ? (
-            <details className="group rounded-xl bg-surface-container-low px-3 py-1 text-xs">
-              <summary className="state-layer cursor-pointer list-none rounded-lg -mx-1.5 px-1.5 min-h-11 flex items-center gap-1.5 font-semibold text-on-surface">
-                <ChevronRight
-                  className="w-4 h-4 shrink-0 transition-transform group-open:rotate-90"
-                  aria-hidden="true"
-                />
-                How to add the provider
-              </summary>
-              <div className="mt-1 mb-2">{steps}</div>
-            </details>
-          ) : (
-            <div className="rounded-xl bg-surface-container-low p-3 space-y-3 text-xs">
-              <p className="font-semibold text-on-surface">
-                Add the client in your identity provider
-              </p>
-              {steps}
-            </div>
-          )}
+          <SetupSteps
+            configured={configured}
+            title="Add the client in your identity provider"
+            foldedTitle="How to add the provider"
+          >
+            <li>
+              In your identity provider (Authentik, Keycloak, Pocket ID,
+              Authelia…), create an OpenID Connect client of the confidential
+              type
+            </li>
+            <li className="space-y-1.5">
+              <p>Add this redirect URI</p>
+              <RedirectUriBox uri={oidc?.redirectUri ?? ""} />
+              {origin.mismatch && (
+                <WarningNote>
+                  {publicUrl
+                    ? `The provider sends people back to ${origin.server}, from PUBLIC_URL. Signing in from another address fails. Open Contrack there`
+                    : `Your browser opened Contrack at ${origin.browser}, but the server sends the provider ${origin.server}. Set PUBLIC_URL to the address people open`}
+                </WarningNote>
+              )}
+            </li>
+            <li>
+              {fromEnv
+                ? "Put the issuer, client ID and secret in OIDC_ISSUER, OIDC_CLIENT_ID and OIDC_CLIENT_SECRET"
+                : "Paste the issuer URL, client ID and secret below, then save"}
+            </li>
+          </SetupSteps>
 
           {fromEnv ? (
             <div className="space-y-2">
               {oidc?.envIssuerInvalid ? (
-                <p role="note" className={NOTE}>
-                  <TriangleAlert
-                    className="w-3.5 h-3.5 shrink-0 mt-0.5 text-warning"
-                    aria-hidden="true"
-                  />
-                  <span>
-                    OIDC_ISSUER must start with https:// (http only for
-                    localhost), so single sign-on is off
-                  </span>
-                </p>
+                <WarningNote>
+                  OIDC_ISSUER must start with https:// (http only for
+                  localhost), so single sign-on is off
+                </WarningNote>
               ) : (
-                <div className="text-xs text-on-surface-variant bg-surface-container-low p-3 rounded-xl space-y-1">
-                  <p>
-                    Issuer{" "}
-                    <span className="font-mono text-on-surface break-all">
-                      {oidc?.issuer}
-                    </span>
-                  </p>
-                  <p>
-                    Client ID{" "}
-                    <span className="font-mono text-on-surface">
-                      {oidc?.clientId}
-                    </span>
-                  </p>
-                  <p>
-                    Client secret{" "}
-                    <span className="font-mono text-on-surface">
-                      {oidc?.clientSecretPreview}
-                    </span>
-                  </p>
-                  <p>
-                    Button name{" "}
-                    <span className="text-on-surface">{oidc?.name}</span>
-                  </p>
-                  <p>
-                    Email matching{" "}
-                    <span className="text-on-surface">
-                      {oidc?.matchByEmail ? "On" : "Off"}
-                    </span>
-                  </p>
+                <div className={SAVED_VALUES}>
+                  <SavedValue label="Issuer" className="font-mono break-all">
+                    {oidc?.issuer}
+                  </SavedValue>
+                  <SavedValue label="Client ID" className="font-mono">
+                    {oidc?.clientId}
+                  </SavedValue>
+                  <SavedValue label="Client secret" className="font-mono">
+                    {oidc?.clientSecretPreview}
+                  </SavedValue>
+                  <SavedValue label="Button name">{oidc?.name}</SavedValue>
+                  <SavedValue label="Email matching">
+                    {oidc?.matchByEmail ? "On" : "Off"}
+                  </SavedValue>
                 </div>
               )}
               <p className={NOTE}>
@@ -1108,73 +1121,49 @@ export const OidcRow = () => {
           ) : (
             <div className="space-y-2">
               {configured && (
-                <div className="text-xs text-on-surface-variant bg-surface-container-low p-3 rounded-xl">
-                  <p>
-                    Client secret{" "}
-                    <span className="font-mono text-on-surface">
-                      {oidc?.clientSecretPreview}
-                    </span>
-                  </p>
+                <div className={SAVED_VALUES}>
+                  <SavedValue label="Client secret" className="font-mono">
+                    {oidc?.clientSecretPreview}
+                  </SavedValue>
                 </div>
               )}
-              {field(
-                "oidc-issuer",
-                "Issuer",
-                issuer,
-                setIssuer,
-                "https://id.example.com",
-                true,
-                issuerInput,
-              )}
-              {field("oidc-client-id", "Client ID", clientId, setClientId, "")}
-              <div>
-                <label
-                  htmlFor="oidc-client-secret"
-                  className={cn(SETTINGS_LABEL, "mb-1.5")}
-                >
-                  Client secret
-                </label>
-                <div className="relative">
-                  <input
-                    id="oidc-client-secret"
-                    type={showSecret ? "text" : "password"}
-                    value={clientSecret}
-                    disabled={busy}
-                    onChange={(event) => {
-                      setSaveError(null);
-                      setClientSecret(event.target.value);
-                    }}
-                    placeholder={
-                      configured ? "Leave empty to keep the current secret" : ""
-                    }
-                    className={cn(KEY_INPUT, "pr-10")}
-                    {...NO_AUTOCORRECT}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowSecret(!showSecret)}
-                    className="hit-area state-layer absolute right-2.5 top-1/2 -translate-y-1/2 rounded-md text-on-surface-variant hover:text-on-surface p-1 transition-colors"
-                    title={showSecret ? "Hide secret" : "Show secret"}
-                    aria-label={showSecret ? "Hide secret" : "Show secret"}
-                  >
-                    {showSecret ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
-              </div>
-              {field(
-                "oidc-name",
-                "Button name",
-                name,
-                setName,
-                "OpenID Connect",
-                false,
-                undefined,
-                40,
-              )}
+              <Field
+                id="oidc-issuer"
+                label="Issuer"
+                ref={issuerInput}
+                value={issuer}
+                disabled={busy}
+                onChange={edit(setIssuer)}
+                placeholder="https://id.example.com"
+              />
+              <Field
+                id="oidc-client-id"
+                label="Client ID"
+                value={clientId}
+                disabled={busy}
+                onChange={edit(setClientId)}
+              />
+              <Field
+                id="oidc-client-secret"
+                label="Client secret"
+                secret
+                value={clientSecret}
+                disabled={busy}
+                onChange={edit(setClientSecret)}
+                placeholder={
+                  keepsSecret ? "Leave empty to keep the current secret" : ""
+                }
+              />
+              <Field
+                id="oidc-name"
+                label="Button name"
+                mono={false}
+                maxLength={40}
+                value={name}
+                disabled={busy}
+                onChange={edit(setName)}
+                placeholder="OpenID Connect"
+              />
               <div className="flex items-start justify-between gap-3 min-h-11">
                 <label
                   htmlFor="oidc-match-by-email"
@@ -1183,19 +1172,18 @@ export const OidcRow = () => {
                   Accounts with the same verified email can sign in
                   <span className="block text-xs text-on-surface-variant">
                     Off: members link the provider under Account → Sign-in
-                    methods first. Contrack does not verify the email on an
-                    account, and members can change their own. Turn this on only
-                    when every account&apos;s email is trusted, and the provider
-                    verifies addresses that people cannot choose themselves
+                    methods first. On: a sign-in reaches only an account whose
+                    email Contrack trusts, from setup, an admin, an invitation
+                    to that address or a mailed link. A member who changes their
+                    own email loses that trust. Turn this on only when the
+                    provider verifies addresses that people cannot choose
+                    themselves
                   </span>
                 </label>
                 <Switch
                   id="oidc-match-by-email"
                   checked={matchByEmail}
-                  onChange={(value) => {
-                    setSaveError(null);
-                    setMatchByEmail(value);
-                  }}
+                  onChange={edit(setMatchByEmail)}
                   label="Accounts with the same verified email can sign in"
                   disabled={busy}
                 />
@@ -1205,50 +1193,35 @@ export const OidcRow = () => {
                   {saveError}
                 </p>
               )}
-              <div className="flex flex-wrap justify-end gap-2 pt-1">
-                {configured && (
-                  <button
-                    type="button"
-                    disabled={update.isPending}
-                    onClick={() => setConfirmRemove(true)}
-                    className="btn-secondary shrink-0 text-error mr-auto"
-                  >
-                    Remove
-                  </button>
-                )}
-                <button
-                  type="button"
-                  disabled={!canSave || update.isPending}
-                  onClick={() => {
-                    setSaveError(null);
-                    update.mutate(
-                      {
-                        oidc: {
-                          issuer: issuer.trim(),
-                          clientId: clientId.trim(),
-                          ...(clientSecret.trim() && {
-                            clientSecret: clientSecret.trim(),
-                          }),
-                          name: name.trim() || "OpenID Connect",
-                          matchByEmail,
-                        },
+              <FormActions
+                onRemove={configured ? () => setConfirmRemove(true) : null}
+                canSave={canSave}
+                pending={update.isPending}
+                onSave={() => {
+                  setSaveError(null);
+                  update.mutate(
+                    {
+                      oidc: {
+                        issuer: issuer.trim(),
+                        clientId: clientId.trim(),
+                        ...(clientSecret.trim() && {
+                          clientSecret: clientSecret.trim(),
+                        }),
+                        name: name.trim() || "OpenID Connect",
+                        matchByEmail,
                       },
-                      {
-                        onSuccess: (saved) => {
-                          setClientSecret("");
-                          setName(saved.oidc.name ?? "");
-                          toast.success("OpenID Connect provider saved");
-                        },
-                        onError: (error: Error) =>
-                          setSaveError(errorText(error)),
+                    },
+                    {
+                      onSuccess: (saved) => {
+                        setClientSecret("");
+                        setName(saved.oidc.name ?? "");
+                        toast.success("OpenID Connect provider saved");
                       },
-                    );
-                  }}
-                  className="btn-primary shrink-0"
-                >
-                  Save
-                </button>
-              </div>
+                      onError: (error: Error) => setSaveError(errorText(error)),
+                    },
+                  );
+                }}
+              />
             </div>
           )}
         </div>
@@ -1287,7 +1260,8 @@ export const OidcRow = () => {
   );
 };
 
-const OidcIntegration = () => {
+/** A row that reads the integrations, or says that they did not load. */
+const IntegrationRow = ({ children }: { children: React.ReactNode }) => {
   const { isError, refetch } = useIntegrations();
   if (isError)
     return (
@@ -1297,20 +1271,7 @@ const OidcIntegration = () => {
         level={3}
       />
     );
-  return <OidcRow />;
-};
-
-const Integrations = () => {
-  const { isError, refetch } = useIntegrations();
-  if (isError)
-    return (
-      <LoadFailed
-        what="these settings"
-        onRetry={() => void refetch()}
-        level={3}
-      />
-    );
-  return <GoogleRow />;
+  return <>{children}</>;
 };
 
 export const GeneralView = () => {
@@ -1328,7 +1289,9 @@ export const GeneralView = () => {
           </Section>
           <Section title="Sign-in">
             <SignIn data={data} />
-            <OidcIntegration />
+            <IntegrationRow>
+              <OidcRow />
+            </IntegrationRow>
           </Section>
           <Section title="Data">
             <Data data={data} />
@@ -1337,7 +1300,9 @@ export const GeneralView = () => {
       )}
       <Section title="Integrations" id="integrations">
         <AddressLookups />
-        <Integrations />
+        <IntegrationRow>
+          <GoogleRow />
+        </IntegrationRow>
       </Section>
     </div>
   );

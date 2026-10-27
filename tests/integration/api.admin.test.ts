@@ -2244,44 +2244,26 @@ describe("instance lifecycle and integration settings (P4)", () => {
       expect(cleared.body.oidc.configured).toBe(false);
     });
 
-    it("refuses a provider that does not answer discovery, and stores nothing", async () => {
-      setOidcConfig(OIDC);
-      const res = await save({ ...OIDC, issuer: "http://127.0.0.1:9" });
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("OIDC_DISCOVERY_FAILED");
-      expect(res.body.error.message).toMatch(/did not answer discovery/);
-      expect(getOidcConfig()?.issuer).toBe(OIDC.issuer);
-    });
-
-    it("saves the switch and the name while the provider is down, but not new credentials", async () => {
+    it("keeps the saved secret, and saves the name and switch while the provider is down, but no new credentials it cannot discover", async () => {
       const down = { ...OIDC, issuer: "http://127.0.0.1:9" };
       setOidcConfig(down);
       const { clientSecret: _secret, ...rest } = down;
-      const res = await save({ ...rest, name: "Renamed", matchByEmail: false });
-      expect(res.status).toBe(200);
-      expect(getOidcConfig()).toMatchObject({
-        name: "Renamed",
-        matchByEmail: false,
-      });
+      const renamed = { ...rest, name: "Renamed", matchByEmail: false };
+      expect((await save(renamed)).status).toBe(200);
+      expect((await save({ ...renamed, clientSecret: "" })).status).toBe(200);
+      const kept = { ...down, name: "Renamed", matchByEmail: false };
+      expect(getOidcConfig()).toMatchObject(kept);
 
-      const secret = await save({ ...down, clientSecret: "new-secret-5678" });
-      expect(secret.status).toBe(400);
-      expect(secret.body.error.code).toBe("OIDC_DISCOVERY_FAILED");
-      expect(getOidcConfig()?.clientSecret).toBe(OIDC.clientSecret);
-    });
-
-    it("keeps the saved secret when the issuer and client ID stay", async () => {
-      setOidcConfig(OIDC);
-      const { clientSecret: _secret, ...rest } = OIDC;
-      const res = await save({ ...rest, name: "Renamed", matchByEmail: false });
-      expect(res.status).toBe(200);
-      expect(getOidcConfig()).toMatchObject({
-        clientSecret: OIDC.clientSecret,
-        name: "Renamed",
-        matchByEmail: false,
-      });
-      expect((await save({ ...rest, clientSecret: "" })).status).toBe(200);
-      expect(getOidcConfig()?.clientSecret).toBe(OIDC.clientSecret);
+      for (const changed of [
+        { ...kept, clientSecret: "new-secret-5678" },
+        { ...kept, issuer: "http://127.0.0.1:9/other" },
+      ]) {
+        const res = await save(changed);
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe("OIDC_DISCOVERY_FAILED");
+        expect(res.body.error.message).toMatch(/did not answer discovery/);
+        expect(getOidcConfig()).toMatchObject(kept);
+      }
     });
 
     it("asks for a secret when no provider is saved, or the issuer or client ID changed", async () => {
@@ -2308,11 +2290,7 @@ describe("instance lifecycle and integration settings (P4)", () => {
     });
 
     it("refuses a plain-http issuer that is not loopback", async () => {
-      const res = await as(admin)(
-        request(app)
-          .put("/api/admin/integrations")
-          .send({ oidc: { ...OIDC, issuer: "http://id.lan" } }),
-      );
+      const res = await save({ ...OIDC, issuer: "http://id.lan" });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe("VALIDATION_ERROR");
     });

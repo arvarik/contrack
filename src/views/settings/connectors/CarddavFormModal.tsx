@@ -24,6 +24,7 @@ import {
   FIELD_HEADING,
   FormError,
   SyncScheduleField,
+  isValidHttpUrl,
 } from "./ConnectorFormFields";
 
 interface CarddavFormModalProps {
@@ -38,15 +39,6 @@ const SYNC_DIRECTIONS: SegmentedOption<SyncDirection>[] = [
   { value: "two_way", label: "Two-way sync" },
   { value: "pull_only", label: "Pull only" },
 ];
-
-function isValidHttpUrl(value: string): boolean {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === "https:" || parsed.protocol === "http:";
-  } catch {
-    return false;
-  }
-}
 
 function hasSameOrigin(urlA: string, urlB: string): boolean {
   try {

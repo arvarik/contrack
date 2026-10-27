@@ -675,3 +675,31 @@ describe("reopening the modal", () => {
     setSpy.mockRestore();
   });
 });
+
+describe("a file the panel refuses", () => {
+  const huge = new File(["x"], "huge.csv", { type: "text/csv" });
+  Object.defineProperty(huge, "size", { value: 51 * 1024 * 1024 });
+
+  it.each([
+    ["an empty file", new File([""], "empty.vcf"), "The chosen file is empty"],
+    ["a file over 50 MB", huge, "File is too large. Choose a file under 50 MB"],
+  ])(
+    "refuses %s before it sends anything, until another tab is chosen",
+    async (_what, file, message) => {
+      const server = stubServer({
+        onImport: () => {
+          throw new Error("no import should start");
+        },
+      });
+      mount();
+      fireEvent.change(screen.getByLabelText("Choose a file to import"), {
+        target: { files: [file] },
+      });
+
+      expect((await screen.findByRole("alert")).textContent).toContain(message);
+      expect(server.posts()).toHaveLength(0);
+      fireEvent.click(screen.getByRole("tab", { name: "Google" }));
+      expect(screen.queryByRole("alert")).toBeNull();
+    },
+  );
+});

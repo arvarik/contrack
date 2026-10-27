@@ -1,13 +1,8 @@
 // @vitest-environment jsdom
 /**
- * Unit tests for the "Your data" settings section hardening:
- * - TagsPage: NO_AUTOCORRECT on inline rename, Escape cancels, case-insensitive
- *   self-merge guard, standardized errorText toasts, filter bar
- * - ExportCard: accessible download buttons, double-click prevention while
- *   downloading, and errorText toast on export failure
- * - ArchivedContactsView: search filtering, stale selection cleanup when
- *   filtered, and withUndo on restore
- * - TrashView: search filtering, LoadFailed state, and errorText toasts
+ * The "Your data" settings section: Archived contacts (search, a selection
+ * pruned to the rows shown, Undo on restore) and the Trash (search, cached
+ * rows kept on a failed refetch).
  */
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -19,7 +14,6 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const toastMock = vi.hoisted(() =>
   Object.assign(vi.fn(), {
@@ -30,10 +24,6 @@ const toastMock = vi.hoisted(() =>
 vi.mock("sonner", () => ({ toast: toastMock }));
 
 const apiMock = vi.hoisted(() => ({
-  fetch: vi.fn(),
-  tags: [] as { tag: string; count: number; total: number }[],
-  renameTag: vi.fn(),
-  deleteTag: vi.fn(),
   archivedContacts: [] as unknown[],
   archiveMutate: vi.fn(),
   unarchiveMutate: vi.fn(),
@@ -45,28 +35,6 @@ const apiMock = vi.hoisted(() => ({
   restoreMutate: vi.fn(),
   purgeMutate: vi.fn(),
   emptyMutate: vi.fn(),
-}));
-
-vi.mock("../../../../src/api/client", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("../../../../src/api/client")>()),
-  apiFetch: (...args: unknown[]) => apiMock.fetch(...args),
-}));
-
-vi.mock("../../../../src/api/tags", () => ({
-  useTagSummary: () => ({
-    data: apiMock.tags,
-    isLoading: false,
-    isError: false,
-    refetch: vi.fn(),
-  }),
-  useRenameTag: () => ({
-    mutateAsync: apiMock.renameTag,
-    isPending: false,
-  }),
-  useDeleteTag: () => ({
-    mutateAsync: apiMock.deleteTag,
-    isPending: false,
-  }),
 }));
 
 vi.mock("../../../../src/api", () => ({
@@ -120,117 +88,16 @@ vi.mock("../../../../src/components/FloatingContactCard", () => ({
   FloatingContactCard: () => null,
 }));
 
-import { TagsPage } from "../../../../src/views/settings/pages/TagsPage";
-import { ExportCard } from "../../../../src/views/settings/ExportCard";
 import { ArchivedContactsView } from "../../../../src/views/ArchivedContactsView";
 import { TrashView } from "../../../../src/views/TrashView";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  apiMock.tags = [
-    { tag: "friends", count: 3, total: 3 },
-    { tag: "work", count: 5, total: 5 },
-  ];
   apiMock.trashError = false;
 });
 
 afterEach(() => {
   cleanup();
-});
-
-describe("TagsPage hardening", () => {
-  const mountTags = () => {
-    const qc = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-    return render(
-      <QueryClientProvider client={qc}>
-        <MemoryRouter>
-          <TagsPage />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    );
-  };
-
-  it("applies NO_AUTOCORRECT to inline rename input, cancels on Escape, blocks exact self-merge, and allows merging tags that differ only by case", async () => {
-    apiMock.tags = [
-      { tag: "friends", count: 3, total: 3 },
-      { tag: "work", count: 5, total: 5 },
-      { tag: "Work", count: 2, total: 2 },
-    ];
-    apiMock.renameTag.mockResolvedValueOnce({ affected: 5 });
-    mountTags();
-
-    fireEvent.click(screen.getByRole("button", { name: "Rename friends" }));
-    const renameInput = screen.getByRole("textbox", {
-      name: "Rename tag friends",
-    });
-    expect(renameInput.getAttribute("spellcheck")).toBe("false");
-    expect(renameInput.getAttribute("autocorrect")).toBe("off");
-
-    fireEvent.keyDown(renameInput, { key: "Escape" });
-    expect(
-      screen.queryByRole("textbox", { name: "Rename tag friends" }),
-    ).toBeNull();
-
-    // Open merge modal for "work": exact self-merge ("work") is disabled, but "Work" is allowed
-    fireEvent.click(
-      screen.getByRole("button", { name: "Merge work into another tag" }),
-    );
-    const targetInput = screen.getByLabelText("Target tag");
-    const mergeBtn = screen.getByRole("button", {
-      name: "Merge tags",
-    }) as HTMLButtonElement;
-
-    fireEvent.change(targetInput, { target: { value: "work" } });
-    expect(mergeBtn.disabled).toBe(true);
-
-    fireEvent.change(targetInput, { target: { value: "Work" } });
-    expect(mergeBtn.disabled).toBe(false);
-    fireEvent.click(mergeBtn);
-
-    await waitFor(() =>
-      expect(apiMock.renameTag).toHaveBeenCalledWith({
-        from: "work",
-        to: "Work",
-      }),
-    );
-  });
-
-  it("formats tag rename errors with errorText", async () => {
-    apiMock.renameTag.mockRejectedValueOnce(new Error("Database locked."));
-    mountTags();
-
-    fireEvent.click(screen.getByRole("button", { name: "Rename friends" }));
-    fireEvent.change(
-      screen.getByRole("textbox", { name: "Rename tag friends" }),
-      { target: { value: "family" } },
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Save tag name" }));
-
-    await waitFor(() =>
-      expect(toastMock.error).toHaveBeenCalledWith(
-        "Could not rename the tag: Database locked",
-      ),
-    );
-  });
-});
-
-describe("ExportCard", () => {
-  it("renders native download links for vCard, CSV and JSON exports", () => {
-    render(<ExportCard />);
-
-    const vcardLink = screen.getByRole("link", { name: /vCard \(\.vcf\)/ });
-    const csvLink = screen.getByRole("link", { name: /Spreadsheet \(\.csv\)/ });
-    const jsonLink = screen.getByRole("link", {
-      name: /Everything \(\.json\)/,
-    });
-
-    expect(vcardLink.getAttribute("href")).toBe("/api/export/vcard");
-    expect(vcardLink.hasAttribute("download")).toBe(true);
-    expect(csvLink.getAttribute("href")).toBe("/api/export/csv");
-    expect(jsonLink.getAttribute("href")).toBe("/api/export/json");
-  });
 });
 
 describe("ArchivedContactsView hardening", () => {

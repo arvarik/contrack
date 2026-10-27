@@ -3,25 +3,38 @@
 // client secret with HTTP Basic (client_secret_basic), and checks the ID
 // token's issuer, audience, expiry, nonce and its signature against the
 // provider's published JWKS. Every request it makes, the JWKS included, goes
-// through safeFetch and follows no redirect. A flow's state, PKCE verifier,
+// through safeFetch, follows no redirect and has ten seconds. The discovered
+// provider is reused for an hour. A flow's state, PKCE verifier,
 // nonce, link target, "keep me signed in" choice and return path wait in
 // auth_challenges (kind 'oidc') for at most ten minutes, and the callback
-// consumes them once.
+// consumes them once, only from the browser that holds the flow's binding
+// secret.
 
+import crypto from "node:crypto";
 import * as client from "openid-client";
 import { sqlite } from "../db.ts";
 import { AppError, ValidationError } from "../utils/AppError.ts";
 import { safeFetch } from "../utils/urlSafety.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
+import { log } from "../utils/logger.ts";
 import {
   getOidcConfig,
   setOidcConfig,
   type OidcConfig,
   type OidcConfigInput,
 } from "./integrationSettings.ts";
-import { isAllowedIssuer } from "../../shared/contracts/admin.ts";
+import {
+  isAllowedIssuer,
+  normalizeIssuer,
+} from "../../shared/contracts/admin.ts";
 
-const FLOW_TTL_MS = 10 * 60 * 1000;
+/** How long a flow waits for its callback. */
+const FLOW_TTL_SECONDS = 10 * 60;
+/**
+ * How long the browser keeps a flow's cookie: longer than the flow, so a
+ * callback after the flow ran out still finds its flow and lands as expired.
+ */
+export const FLOW_COOKIE_SECONDS = 3 * FLOW_TTL_SECONDS;
 const SCOPE = "openid email profile";
 
 export interface OidcClaims {
@@ -39,6 +52,12 @@ interface FlowData {
   remember: boolean;
   /** Where a sign-in lands: a path on this origin, or null for `/`. */
   returnTo: string | null;
+  /**
+   * The SHA-256 of the secret in the browser's flow cookie. The state is in
+   * every URL of the flow, so it cannot be the proof that this is the browser
+   * that started it.
+   */
+  binding: string;
 }
 
 /** A flow the callback consumed. */
@@ -87,7 +106,11 @@ const viaSafeFetch: client.CustomFetch = async (url, options) => {
   return response;
 };
 
-let cached: { key: string; config: client.Configuration } | null = null;
+/** How long a discovered provider is used before it is asked again. */
+const DISCOVERY_TTL_MS = 60 * 60 * 1000;
+
+let cached: { key: string; at: number; config: client.Configuration } | null =
+  null;
 
 /** Drop the discovered provider, after an admin changes it. */
 export function forgetOidcDiscovery(): void {
@@ -108,7 +131,9 @@ async function discover(
   config: OidcConfigInput,
 ): Promise<client.Configuration> {
   const key = `${config.issuer}\n${config.clientId}\n${config.clientSecret}`;
-  if (cached?.key === key) return cached.config;
+  if (cached?.key === key && Date.now() - cached.at < DISCOVERY_TTL_MS) {
+    return cached.config;
+  }
   if (!isAllowedIssuer(config.issuer)) {
     throw new AppError("The OIDC issuer must use https://", 400, {
       code: "OIDC_INSECURE_ISSUER",
@@ -123,20 +148,25 @@ async function discover(
     client.ClientSecretBasic(config.clientSecret),
     {
       [client.customFetch]: viaSafeFetch,
+      // Seconds for this request and every later one (token, JWKS,
+      // userinfo), the body included. safeFetch's own limit stops at the
+      // headers.
+      timeout: 10,
       ...(insecure ? { execute: [client.allowInsecureRequests] } : {}),
     },
   );
   client.enableNonRepudiationChecks(discovered);
-  cached = { key, config: discovered };
+  cached = { key, at: Date.now(), config: discovered };
   return discovered;
 }
 
 /**
  * Save the provider an admin entered, or clear it with null. A save without a
- * client secret keeps the saved one, but only for the same issuer and client
- * ID. New credentials must answer discovery first; when they do not, nothing
- * is stored. A save that keeps them (the switch or the name alone) skips
- * discovery, so it works while the provider is down.
+ * client secret keeps the saved one, but only for the same issuer (or its
+ * discovery URL) and client ID. New credentials must answer discovery first;
+ * when they do not, nothing is stored. A save that keeps them exactly (the
+ * switch or the name alone) skips discovery, so it works while the provider
+ * is down.
  */
 export async function saveOidcProvider(
   input:
@@ -148,13 +178,17 @@ export async function saveOidcProvider(
     return;
   }
   const saved = getOidcConfig();
+  // The same provider, even when one side names its discovery URL.
+  const sameProvider =
+    saved !== null &&
+    normalizeIssuer(saved.issuer) === normalizeIssuer(input.issuer) &&
+    saved.clientId === input.clientId;
   const clientSecret =
-    input.clientSecret ||
-    (saved?.issuer === input.issuer && saved.clientId === input.clientId
-      ? saved.clientSecret
-      : "");
+    input.clientSecret || (sameProvider ? saved.clientSecret : "");
   if (!clientSecret) throw new ValidationError("Client secret is required");
   const config = { ...input, clientSecret };
+  // Exact, not normalized: an issuer and its discovery URL are discovered
+  // differently, so a switch between them is checked again.
   const unchanged =
     saved?.issuer === config.issuer &&
     saved.clientId === config.clientId &&
@@ -175,17 +209,23 @@ export async function saveOidcProvider(
   setOidcConfig(config);
 }
 
-/** The provider's sign-in address for a new flow. */
+const sha256 = (value: string) => crypto.hash("sha256", value);
+
+/**
+ * A new flow: the provider's sign-in address, its state, and the binding
+ * secret that only the flow cookie carries.
+ */
 export async function startOidc(input: {
   redirectUri: string;
   linkUserId: string | null;
   remember?: boolean;
   returnTo?: string | null;
-}): Promise<string> {
+}): Promise<{ url: string; state: string; binding: string }> {
   const config = await discover(requireConfig());
   const codeVerifier = client.randomPKCECodeVerifier();
   const nonce = client.randomNonce();
   const state = client.randomState();
+  const binding = client.randomState();
   sqlite
     .prepare(
       `INSERT INTO auth_challenges (id, kind, userId, challenge, expiresAt)
@@ -199,10 +239,11 @@ export async function startOidc(input: {
         nonce,
         remember: input.remember !== false,
         returnTo: safeReturnTo(input.returnTo),
+        binding: sha256(binding),
       } satisfies FlowData),
-      new Date(Date.now() + FLOW_TTL_MS).toISOString(),
+      new Date(Date.now() + FLOW_TTL_SECONDS * 1000).toISOString(),
     );
-  return client
+  const url = client
     .buildAuthorizationUrl(config, {
       redirect_uri: input.redirectUri,
       scope: SCOPE,
@@ -212,26 +253,27 @@ export async function startOidc(input: {
       nonce,
     })
     .toString();
+  return { url, state, binding };
 }
 
 /**
- * Consume the flow a callback's state names. Null for a state with no flow,
- * such as one already used.
+ * Consume the flow a callback's state names, when `binding` is the secret
+ * from that flow's cookie. Null for a state with no flow, one already used,
+ * or a wrong binding, which leaves the flow for the browser that has it.
  */
-export function takeOidcFlow(state: string): OidcFlow | null {
+export function takeOidcFlow(state: string, binding: string): OidcFlow | null {
   const row = sqlite
     .prepare(
-      `DELETE FROM auth_challenges WHERE id = ? AND kind = 'oidc'
+      `DELETE FROM auth_challenges
+        WHERE id = ? AND kind = 'oidc'
+          AND json_extract(challenge, '$.binding') = ?
        RETURNING userId, challenge, expiresAt`,
     )
-    .get(state) as
+    .get(state, sha256(binding)) as
     { userId: string | null; challenge: string; expiresAt: string } | undefined;
   if (!row) return null;
-  const data = JSON.parse(row.challenge) as FlowData;
   return {
-    ...data,
-    // A flow written before `remember` existed keeps the default.
-    remember: data.remember !== false,
+    ...(JSON.parse(row.challenge) as FlowData),
     userId: row.userId,
     expired: new Date(row.expiresAt).getTime() <= Date.now(),
   };
@@ -261,24 +303,34 @@ export async function finishOidc(
   let email = typeof claims.email === "string" ? claims.email : null;
   let emailVerified = claims.email_verified === true;
   // Some providers put the address only in userinfo. One without a userinfo
-  // endpoint simply has no address to give.
+  // endpoint simply has no address to give. The address is optional: a linked
+  // identity signs in without it, so a userinfo failure costs only the email.
   if (
     !email &&
     tokens.access_token &&
     config.serverMetadata().userinfo_endpoint
   ) {
-    const info = await client.fetchUserInfo(
-      config,
-      tokens.access_token,
-      claims.sub,
-    );
-    email = typeof info.email === "string" ? info.email : null;
-    emailVerified = info.email_verified === true;
+    try {
+      const info = await client.fetchUserInfo(
+        config,
+        tokens.access_token,
+        claims.sub,
+      );
+      email = typeof info.email === "string" ? info.email : null;
+      emailVerified = info.email_verified === true;
+    } catch (err) {
+      // The message only: a refused request's body is the provider's.
+      log.warn("Auth", "OIDC userinfo failed, so the sign-in has no email", {
+        error: getErrorMessage(err),
+      });
+    }
   }
   return {
     issuer: config.serverMetadata().issuer,
     subject: claims.sub,
-    email: email?.trim().toLowerCase() || null,
+    // As the provider sent it. The trusted-email lookup folds ASCII letters
+    // only, so a Unicode fold here could turn U+212A (Kelvin sign) into "k".
+    email: email?.trim() || null,
     emailVerified,
   };
 }

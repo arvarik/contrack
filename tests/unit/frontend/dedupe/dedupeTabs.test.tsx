@@ -45,14 +45,18 @@ vi.mock("../../../../src/api", () => ({
 }));
 
 const startScan = vi.hoisted(() => vi.fn());
+const dedupe = vi.hoisted(() => ({
+  scan: null as unknown,
+  isQueued: false,
+}));
 vi.mock("../../../../src/contexts/DedupeContext", () => ({
   useDedupe: () => ({
-    scan: null,
+    scan: dedupe.scan,
     isScanning: false,
     isStarting: false,
     startScan,
     reset: vi.fn(),
-    isQueued: false,
+    isQueued: dedupe.isQueued,
   }),
 }));
 
@@ -118,6 +122,8 @@ afterEach(() => {
   document.body.replaceChildren();
   ai.account = true;
   ai.instanceOff = false;
+  dedupe.scan = null;
+  dedupe.isQueued = false;
   startScan.mockClear();
 });
 
@@ -158,6 +164,24 @@ describe("the one check", () => {
       expect(startScan).toHaveBeenCalledWith("quick");
     });
   }
+
+  it("starts nothing while a check waits in the queue after one finished", () => {
+    dedupe.scan = {
+      phase: "complete",
+      mode: "deep",
+      totalContacts: 12,
+      contactsScanned: 12,
+      autoMerged: 0,
+    };
+    dedupe.isQueued = true;
+    mount();
+    const again = screen.getByRole("button", {
+      name: "Check again",
+    }) as HTMLButtonElement;
+    expect(again.disabled).toBe(true);
+    fireEvent.click(again);
+    expect(startScan).not.toHaveBeenCalled();
+  });
 });
 
 describe("the Manual merge picker", () => {

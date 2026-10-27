@@ -8,6 +8,16 @@ import { Switch } from "../../../components/ui/Switch";
 import { FORM_INPUT, TONE_WASH } from "../../../lib/styles";
 import { cn } from "../../../lib/utils";
 
+/** Whether `value` parses as an http:// or https:// address. */
+export function isValidHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
 /** The heading over one field. */
 export const FIELD_HEADING = "block text-xs font-semibold text-on-surface mb-1";
 

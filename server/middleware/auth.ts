@@ -13,6 +13,7 @@
 // Every request carries a Principal. attachRequestContext turns it into a
 // Scope, which owned-table queries enforce (server/tenancy/scope.ts).
 
+import crypto from "node:crypto";
 import type { Request, Response, NextFunction } from "express";
 import { AppError } from "../utils/AppError.ts";
 import { isOwnOrigin } from "../utils/publicOrigin.ts";
@@ -187,34 +188,43 @@ export function clearSessionCookie(req: Request, res: Response): void {
 }
 
 /**
- * The OIDC flow cookie: the `state` of the flow this browser started, so a
- * callback reached from somebody else's flow is refused (login CSRF). Sent
- * only to the OIDC routes, and gone after the flow's ten minutes.
+ * The OIDC flow cookies: one per flow, holding that flow's binding secret, so
+ * only the browser that started a flow can finish it, even when somebody else
+ * has its callback URL. The name comes from the state, so two flows in one
+ * browser keep both cookies. Sent only to the OIDC routes.
  */
-const OIDC_COOKIE_NAME = "contrack_oidc";
 const OIDC_COOKIE_PATH = "/api/auth/oidc";
 
-export function setOidcStateCookie(
+function oidcCookieName(state: string): string {
+  return `contrack_oidc_${crypto.hash("sha256", state).slice(0, 12)}`;
+}
+
+export function setOidcFlowCookie(
+  req: Request,
+  res: Response,
+  flow: { state: string; binding: string },
+  maxAgeSeconds: number,
+): void {
+  res.append(
+    "Set-Cookie",
+    `${oidcCookieName(flow.state)}=${encodeURIComponent(flow.binding)}; ${cookieAttributes(req, maxAgeSeconds, OIDC_COOKIE_PATH)}`,
+  );
+}
+
+export function clearOidcFlowCookie(
   req: Request,
   res: Response,
   state: string,
 ): void {
-  res.append(
-    "Set-Cookie",
-    `${OIDC_COOKIE_NAME}=${encodeURIComponent(state)}; ${cookieAttributes(req, 600, OIDC_COOKIE_PATH)}`,
-  );
+  setOidcFlowCookie(req, res, { state, binding: "" }, 0);
 }
 
-export function clearOidcStateCookie(req: Request, res: Response): void {
-  res.append(
-    "Set-Cookie",
-    `${OIDC_COOKIE_NAME}=; ${cookieAttributes(req, 0, OIDC_COOKIE_PATH)}`,
-  );
-}
-
-/** The OIDC state this browser holds, if any. */
-export function presentedOidcState(req: Request): string | null {
-  return readCookie(req, OIDC_COOKIE_NAME);
+/** The binding secret this browser holds for the flow `state` names, if any. */
+export function presentedOidcBinding(
+  req: Request,
+  state: string,
+): string | null {
+  return readCookie(req, oidcCookieName(state));
 }
 
 /** Read the session secret this request presented, if any. */

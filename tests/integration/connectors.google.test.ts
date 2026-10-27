@@ -841,63 +841,41 @@ describe("Google Workspace Connector & OAuth Integration", () => {
           : [],
       );
 
-    it("stops the history walk at the cap, after whole records, and keeps the cursor at the last record taken", async () => {
-      // With the cap at 2, the second record is not taken, and the cursor
-      // stays at the first, so the next run starts with m3. Before, the
-      // ids past the cap were dropped and the cursor moved past them.
-      mockGmail({
-        history: {
-          list: vi.fn().mockResolvedValue({
-            data: {
-              historyId: "H2",
-              history: [
-                {
-                  id: "h1",
-                  messagesAdded: [
-                    { message: { id: "m1" } },
-                    { message: { id: "m2" } },
-                  ],
-                },
-                { id: "h2", messagesAdded: [{ message: { id: "m3" } }] },
-              ],
-            },
-          }),
-        },
-      });
-      const { events, cursor } = await run(
-        { syncEmail: true, maxMessagesPerRun: 2 },
-        { gmailHistoryId: "H1" },
-      );
-      expect(emailIds(events)).toEqual(["m1@example.com", "m2@example.com"]);
-      expect(cursor.gmailHistoryId).toBe("h1");
-    });
+    const added = (...ids: string[]) => ids.map((id) => ({ message: { id } }));
 
-    it("takes a record larger than the cap whole, and the mailbox's history id when nothing is left", async () => {
+    // With the cap at 2, the second record is not taken, and the cursor
+    // stays at the first, so the next run starts with m3. Before, the ids
+    // past the cap were dropped and the cursor moved past them.
+    it.each([
+      [
+        "stops the history walk at the cap, after whole records, and keeps the cursor at the last record taken",
+        [
+          { id: "h1", messagesAdded: added("m1", "m2") },
+          { id: "h2", messagesAdded: added("m3") },
+        ],
+        ["m1", "m2"],
+        "h1",
+      ],
+      [
+        "takes a record larger than the cap whole, and the mailbox's history id when nothing is left",
+        [{ id: "h1", messagesAdded: added("m1", "m2", "m3") }],
+        ["m1", "m2", "m3"],
+        "H2",
+      ],
+    ])("%s", async (_name, history, ids, historyId) => {
       mockGmail({
         history: {
-          list: vi.fn().mockResolvedValue({
-            data: {
-              historyId: "H2",
-              history: [
-                {
-                  id: "h1",
-                  messagesAdded: [
-                    { message: { id: "m1" } },
-                    { message: { id: "m2" } },
-                    { message: { id: "m3" } },
-                  ],
-                },
-              ],
-            },
-          }),
+          list: vi
+            .fn()
+            .mockResolvedValue({ data: { historyId: "H2", history } }),
         },
       });
       const { events, cursor } = await run(
         { syncEmail: true, maxMessagesPerRun: 2 },
         { gmailHistoryId: "H1" },
       );
-      expect(emailIds(events)).toHaveLength(3);
-      expect(cursor.gmailHistoryId).toBe("H2");
+      expect(emailIds(events)).toEqual(ids.map((id) => `${id}@example.com`));
+      expect(cursor.gmailHistoryId).toBe(historyId);
     });
 
     it("pages a first sync across runs by date, and switches to history from the id it took at the start", async () => {

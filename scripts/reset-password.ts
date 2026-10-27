@@ -4,6 +4,7 @@ import { hashPassword } from "../server/services/passwords.ts";
 import { generateTemporaryPassword } from "../server/services/adminService.ts";
 import { revokeOtherSessions } from "../server/services/authService.ts";
 import { auditService } from "../server/services/auditService.ts";
+import { unlinkIdentitiesForReset } from "../server/services/identityService.ts";
 
 export interface ResetPasswordResult {
   userId: string;
@@ -26,8 +27,9 @@ function knownUsernames(): string[] {
  * Reset an account's password from the CLI.
  *
  * Finds the account by username or email, generates a temporary password,
- * sets mustChangePassword = 1, revokes all sessions, and writes an audit row
- * with actorUserId: null and details.via: "cli".
+ * sets mustChangePassword = 1, revokes all sessions, tokens and linked
+ * sign-ins, and writes an audit row with actorUserId: null and details.via:
+ * "cli".
  */
 export async function resetPasswordCli(
   identifier: string,
@@ -78,6 +80,7 @@ export async function resetPasswordCli(
           WHERE userId = ? AND revokedAt IS NULL`,
       )
       .run(user.id);
+    unlinkIdentitiesForReset(user.id, null, null);
   })();
 
   auditService.record({

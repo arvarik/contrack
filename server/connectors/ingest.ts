@@ -102,6 +102,15 @@ function payloadValue(
   return typeof value === "string" ? value : undefined;
 }
 
+/** The addresses a payload's email or phone list names, without blanks. */
+function payloadValues(list: unknown, key: "email" | "phone"): string[] {
+  return Array.isArray(list)
+    ? list
+        .map((entry) => payloadValue(entry, key))
+        .filter((value): value is string => Boolean(value))
+    : [];
+}
+
 /**
  * What a sync may write to a contact it did not make: a field the contact
  * leaves empty, and an email or a phone it does not have. Null when there is
@@ -316,6 +325,17 @@ export async function ingestStream(
   const ingestedContactIds = new Set<string>();
   let hasUpcomingEvents = false;
 
+  /** The link of the card `externalId` to a contact, if the card has one. */
+  function contactLink(externalId: string) {
+    return sqlite
+      .prepare(
+        `SELECT localId FROM connector_links
+         WHERE connectorId = ? AND ownerId = ? AND kind = 'contact' AND externalId = ?`,
+      )
+      .get(connector.id, scope.ownerId, externalId) as
+      { localId: string | null } | undefined;
+  }
+
   /**
    * Whether this source owns the contact's details for this external id: its
    * source row names the connector's kind and the id, the pull or the push
@@ -437,13 +457,7 @@ export async function ingestStream(
     }
 
     if (event.kind === "contact_deleted") {
-      const link = sqlite
-        .prepare(
-          `SELECT localId FROM connector_links
-           WHERE connectorId = ? AND ownerId = ? AND kind = 'contact' AND externalId = ?`,
-        )
-        .get(connector.id, scope.ownerId, event.externalId) as
-        { localId: string | null } | undefined;
+      const link = contactLink(event.externalId);
       if (!link) return;
       // To the trash, where the owner can bring it back. A contact the sync
       // only linked stays, and only the link goes.
@@ -839,32 +853,13 @@ export async function ingestStream(
     }
 
     if (event.kind === "contact") {
-      const existingLink = sqlite
-        .prepare(
-          `SELECT localId
-           FROM connector_links
-           WHERE connectorId = ? AND ownerId = ? AND kind = 'contact' AND externalId = ?`,
-        )
-        .get(connector.id, scope.ownerId, event.externalId) as
-        { localId: string | null } | undefined;
+      const existingLink = contactLink(event.externalId);
 
       const cPayload = { ...(event.contact as ContactPayload) };
       // A person with an address and no name keeps the name the contact has.
       if (!cPayload.name) delete cPayload.name;
-      const cEmails: string[] = Array.isArray(cPayload.emails)
-        ? cPayload.emails
-            .map((e: unknown) =>
-              typeof e === "string" ? e : (e as { email?: string })?.email,
-            )
-            .filter((e): e is string => typeof e === "string" && Boolean(e))
-        : [];
-      const cPhones: string[] = Array.isArray(cPayload.phones)
-        ? cPayload.phones
-            .map((p: unknown) =>
-              typeof p === "string" ? p : (p as { phone?: string })?.phone,
-            )
-            .filter((p): p is string => typeof p === "string" && Boolean(p))
-        : [];
+      const cEmails = payloadValues(cPayload.emails, "email");
+      const cPhones = payloadValues(cPayload.phones, "phone");
 
       // By now photoUrl is the local copy the stream loop made, or absent.
       // The prefix check is a second guard: a remote URL is never stored.
@@ -1026,40 +1021,8 @@ export async function ingestStream(
   // events keep the adapter's order.
   const photoSlot = createLimiter(PHOTO_CONCURRENCY);
   let batch: Array<SyncEvent | Promise<SyncEvent>> = [];
-
-  for await (const event of stream) {
-    signal?.throwIfAborted();
-    if (event.kind === "contact" && event.photoUrl) {
-      const remoteUrl = event.photoUrl;
-      const ready = photoSlot(async (): Promise<SyncEvent> => ({
-        ...event,
-        photoUrl: await localContactPhoto(scope, remoteUrl, signal),
-      }));
-      // Only an abort rejects, and Promise.all below reports it. This handler
-      // keeps a rejection that lands before the batch is awaited from being
-      // reported as unhandled, which would stop the process.
-      ready.catch(() => undefined);
-      batch.push(ready);
-    } else {
-      batch.push(event);
-    }
-
-    if (batch.length >= BATCH_SIZE) {
-      const pending = batch;
-      batch = [];
-      const currentBatch = await Promise.all(pending);
-      signal?.throwIfAborted();
-      const nowIso = new Date().toISOString();
-      sqlite.transaction(() => {
-        for (const ev of currentBatch) {
-          processSingleEvent(ev, nowIso);
-        }
-      })();
-      dispatchEvents();
-    }
-  }
-
-  if (batch.length > 0) {
+  /** Writes the batch in one transaction once its photos are local. */
+  const flush = async () => {
     const pending = batch;
     batch = [];
     const currentBatch = await Promise.all(pending);
@@ -1071,7 +1034,29 @@ export async function ingestStream(
       }
     })();
     dispatchEvents();
+  };
+
+  for await (const event of stream) {
+    signal?.throwIfAborted();
+    if (event.kind === "contact" && event.photoUrl) {
+      const remoteUrl = event.photoUrl;
+      const ready = photoSlot(async (): Promise<SyncEvent> => ({
+        ...event,
+        photoUrl: await localContactPhoto(scope, remoteUrl, signal),
+      }));
+      // Only an abort rejects, and the Promise.all in flush reports it. This handler
+      // keeps a rejection that lands before the batch is awaited from being
+      // reported as unhandled, which would stop the process.
+      ready.catch(() => undefined);
+      batch.push(ready);
+    } else {
+      batch.push(event);
+    }
+
+    if (batch.length >= BATCH_SIZE) await flush();
   }
+
+  if (batch.length > 0) await flush();
 
   // Refresh upcoming events: remove stale upcoming events for this connector.
   // ICS feeds always return the full calendar snapshot, whereas Google Calendar

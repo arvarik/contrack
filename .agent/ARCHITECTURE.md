@@ -117,9 +117,12 @@ SQL, and tests prove it.
 - OIDC sign-in (`server/services/oidcService.ts`) uses `openid-client`
   through `safeFetch`, and `oidcSignInService.ts` decides what a callback
   links or signs in to. The provider is a sealed `auth.oidc` setting or
-  `OIDC_*`. A flow waits in `auth_challenges` (`kind = 'oidc'`), and
-  `user_identities` maps (issuer, subject) to an account. Email matching is
-  opt-in, needs `email_verified` and never creates an account.
+  `OIDC_*`. A flow waits in `auth_challenges` (`kind = 'oidc'`), bound to
+  its browser by a per-flow cookie that holds a secret, never the state.
+  `user_identities` maps (issuer, subject) to an account, and a password
+  reset deletes an account's rows. Email matching is opt-in, needs
+  `email_verified` and a trusted account email (`users.emailTrustedAt`), and
+  never creates an account.
 - While sign-in is off, and until the first account exists, `hostGuard`
   answers only local names, the `PUBLIC_URL` host and `ALLOWED_HOSTS`, so DNS
   rebinding cannot reach the owner's data.

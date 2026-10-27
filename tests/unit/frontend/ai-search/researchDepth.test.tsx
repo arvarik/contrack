@@ -677,6 +677,24 @@ describe("the Enrichment page's filters", () => {
     expect(screen.getByText("Kestrel Ames")).toBeTruthy();
   });
 
+  it("clears a typed search that matches nobody from the same row", () => {
+    contacts.list = people;
+    renderView();
+    const search = screen.getByPlaceholderText(
+      "Filter contacts…",
+    ) as HTMLInputElement;
+    fireEvent.change(search, { target: { value: "Nonexistent" } });
+    expect(
+      screen.getByText("No contacts match the current filter"),
+    ).toBeTruthy();
+
+    const clear = screen.getByRole("button", { name: "Clear filters" });
+    expect(clear.hasAttribute("disabled")).toBe(false);
+    fireEvent.click(clear);
+    expect(search.value).toBe("");
+    expect(screen.getByText("Kestrel Ames")).toBeTruthy();
+  });
+
   it("keeps the filters in the page address, so Back comes back to the same list", () => {
     contacts.list = people;
     renderView({}, "/settings/enrichment?research=found_nothing");

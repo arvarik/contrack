@@ -88,6 +88,8 @@ const ADDED_SINCE_FIXTURE = [
   "fts_education_au",
   // 0002_sign_in_identities
   "user_identities",
+  // 0003_address_trust: users gains a column
+  "users",
 ];
 
 interface MasterRow {
@@ -192,6 +194,7 @@ describe("a new database", () => {
     expect(appliedMigrations(dev)).toEqual([
       "0001_baseline",
       "0002_sign_in_identities",
+      "0003_address_trust",
     ]);
     const addr = dev
       .prepare(

@@ -1,17 +1,15 @@
 /**
- * Connectors and the Calendar connector, in the browser.
+ * Connectors in the browser: the Calendar and CardDAV connectors on one
+ * instance with CONNECTORS_ALLOW_PRIVATE_HOSTS, fed by an in-process server.
  *
  * Covers:
- * - Booting dedicated instance with CONNECTORS_ALLOW_PRIVATE_HOSTS="true"
- * - Serving ICS fixture from in-process http.Server
- * - Navigating to Settings → Connectors
- * - Opening AddConnectorSheet gallery and inspecting kinds
- * - Adding Calendar connector with URL, testing connection, and saving
- * - Running manual sync and seeing run stats on card ("1 meeting")
- * - Verifying "via Calendar" badge on contact timeline
- * - Opening RunHistoryDrawer
- * - Removing connector with "delete what it imported" and verifying interaction is deleted
- * - Axe accessibility checks on page, modal form, and run history drawer
+ * - The empty gallery, the Add connector sheet, and the Calendar, IMAP and
+ *   CardDAV forms, each with an axe check
+ * - A Calendar connector: test, save, sync ("1 meeting"), the "via Calendar"
+ *   badge, Run history, and Remove with "delete what it imported"
+ * - A CardDAV connector: discover two address books, test each, pull a card,
+ *   then push a local edit and a new contact with the card's own fields kept
+ * - The Correspondents page, and the empty page on a phone
  *
  * @module tests/e2e/connectors.spec
  */
@@ -26,33 +24,47 @@ import { NAMES } from "../../src/lib/names";
 
 const { defaultBrowserType: _chromium, ...PHONE } = devices["Pixel 7"];
 
+/** A WebDAV multistatus of `responses`. */
+const multistatus = (...responses: string[]) =>
+  `<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">${responses.join("")}</d:multistatus>`;
+
+/** One 200 response for `href` with these properties. */
+const davResponse = (href: string, props: string) =>
+  `<d:response><d:href>${href}</d:href><d:propstat><d:prop>${props}</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>`;
+
+const BOOK = "/dav/addressbooks/alice/default/";
+const addressBook = (href: string, name: string, write: boolean) =>
+  davResponse(
+    href,
+    `<d:resourcetype><d:collection/><c:addressbook/></d:resourcetype><d:displayname>${name}</d:displayname><d:current-user-privilege-set><d:privilege><d:read/></d:privilege>${write ? "<d:privilege><d:write/></d:privilege>" : ""}</d:current-user-privilege-set>`,
+  );
+
 test.describe("Settings — Connectors & Calendar", () => {
   let fixtureServer: http.Server;
   let icsUrl: string;
   let carddavUrl: string;
-  const carddavCards = new Map<string, { etag: string; vcard: string }>();
+  const carddavCards = new Map([
+    [
+      `${BOOK}babbage.vcf`,
+      {
+        etag: '"etag-babbage-1"',
+        vcard: [
+          "BEGIN:VCARD",
+          "VERSION:3.0",
+          "UID:e2e-uid-babbage",
+          "N:Babbage;Charles;;;",
+          "FN:Charles Babbage",
+          "ORG:Analytical Engine",
+          "TITLE:Chief Inventor",
+          "EMAIL;TYPE=INTERNET,WORK,PREF:charles@analytical.org",
+          "NOTE:Met at the Royal Society",
+          "X-CUSTOM-PROP:preserve-e2e",
+          "END:VCARD",
+        ].join("\r\n"),
+      },
+    ],
+  ]);
   const carddavPuts: Array<{ path: string; body: string }> = [];
-
-  function resetCarddavFixture() {
-    carddavCards.clear();
-    carddavPuts.length = 0;
-    carddavCards.set("/dav/addressbooks/alice/default/babbage.vcf", {
-      etag: '"etag-babbage-1"',
-      vcard: [
-        "BEGIN:VCARD",
-        "VERSION:3.0",
-        "UID:e2e-uid-babbage",
-        "N:Babbage;Charles;;;",
-        "FN:Charles Babbage",
-        "ORG:Analytical Engine",
-        "TITLE:Chief Inventor",
-        "EMAIL;TYPE=INTERNET,WORK,PREF:charles@analytical.org",
-        "NOTE:Met at the Royal Society",
-        "X-CUSTOM-PROP:preserve-e2e",
-        "END:VCARD",
-      ].join("\r\n"),
-    });
-  }
 
   test.beforeAll(async () => {
     function toIcsDate(d: Date): string {
@@ -84,8 +96,7 @@ END:VCALENDAR`;
     const expectedAuth = `Basic ${Buffer.from("alice@example.com:app-pass-e2e").toString("base64")}`;
 
     fixtureServer = http.createServer(async (req, res) => {
-      const reqUrl = new URL(req.url ?? "/", "http://127.0.0.1");
-      const pathname = reqUrl.pathname;
+      const { pathname } = new URL(req.url ?? "/", "http://127.0.0.1");
       const method = req.method ?? "GET";
 
       if (pathname === "/feed.ics") {
@@ -106,170 +117,83 @@ END:VCALENDAR`;
         chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
       }
       const body = Buffer.concat(chunks).toString("utf8");
-
-      if (pathname === "/dav/" && method === "PROPFIND") {
+      const xml = (...responses: string[]) => {
         res.writeHead(207, {
           "Content-Type": "application/xml; charset=utf-8",
         });
-        res.end(`<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">
-  <d:response>
-    <d:href>/dav/</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:current-user-principal><d:href>/dav/principals/alice/</d:href></d:current-user-principal>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>
-</d:multistatus>`);
-        return;
-      }
+        res.end(multistatus(...responses));
+      };
 
-      if (pathname === "/dav/principals/alice/" && method === "PROPFIND") {
-        res.writeHead(207, {
-          "Content-Type": "application/xml; charset=utf-8",
-        });
-        res.end(`<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">
-  <d:response>
-    <d:href>/dav/principals/alice/</d:href>
-    <d:propstat>
-      <d:prop>
-        <c:addressbook-home-set><d:href>/dav/addressbooks/alice/</d:href></c:addressbook-home-set>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>
-</d:multistatus>`);
-        return;
+      if (method === "PROPFIND" && pathname === "/dav/") {
+        return xml(
+          davResponse(
+            "/dav/",
+            "<d:current-user-principal><d:href>/dav/principals/alice/</d:href></d:current-user-principal>",
+          ),
+        );
       }
-
-      if (pathname === "/dav/addressbooks/alice/" && method === "PROPFIND") {
-        res.writeHead(207, {
-          "Content-Type": "application/xml; charset=utf-8",
-        });
-        res.end(`<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">
-  <d:response>
-    <d:href>/dav/addressbooks/alice/default/</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:resourcetype><d:collection/><c:addressbook/></d:resourcetype>
-        <d:displayname>Personal Address Book</d:displayname>
-        <d:current-user-privilege-set>
-          <d:privilege><d:read/></d:privilege>
-          <d:privilege><d:write/></d:privilege>
-        </d:current-user-privilege-set>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>
-  <d:response>
-    <d:href>/dav/addressbooks/alice/archive/</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:resourcetype><d:collection/><c:addressbook/></d:resourcetype>
-        <d:displayname>Archive Contacts</d:displayname>
-        <d:current-user-privilege-set>
-          <d:privilege><d:read/></d:privilege>
-        </d:current-user-privilege-set>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>
-</d:multistatus>`);
-        return;
+      if (method === "PROPFIND" && pathname === "/dav/principals/alice/") {
+        return xml(
+          davResponse(
+            "/dav/principals/alice/",
+            "<c:addressbook-home-set><d:href>/dav/addressbooks/alice/</d:href></c:addressbook-home-set>",
+          ),
+        );
       }
-
+      if (method === "PROPFIND" && pathname === "/dav/addressbooks/alice/") {
+        return xml(
+          addressBook(BOOK, "Personal Address Book", true),
+          addressBook(
+            "/dav/addressbooks/alice/archive/",
+            "Archive Contacts",
+            false,
+          ),
+        );
+      }
+      if (method === "PROPFIND" && pathname === BOOK) {
+        const cards =
+          (req.headers.depth ?? "0") === "1" ? [...carddavCards] : [];
+        return xml(
+          davResponse(
+            BOOK,
+            "<d:resourcetype><d:collection/><c:addressbook/></d:resourcetype><d:displayname>Personal Address Book</d:displayname>",
+          ),
+          ...cards.map(([href, card]) =>
+            davResponse(
+              href,
+              `<d:resourcetype/><d:getetag>${card.etag}</d:getetag>`,
+            ),
+          ),
+        );
+      }
       if (
-        pathname === "/dav/addressbooks/alice/default/" &&
-        method === "PROPFIND"
+        method === "REPORT" &&
+        pathname === BOOK &&
+        body.includes("addressbook-multiget")
       ) {
-        const depth = req.headers.depth ?? "0";
-        const items: string[] = [];
-        if (depth === "1") {
-          for (const [href, card] of carddavCards.entries()) {
-            items.push(`  <d:response>
-    <d:href>${href}</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:resourcetype/>
-        <d:getetag>${card.etag}</d:getetag>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>`);
-          }
-        }
-        res.writeHead(207, {
-          "Content-Type": "application/xml; charset=utf-8",
-        });
-        res.end(`<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">
-  <d:response>
-    <d:href>/dav/addressbooks/alice/default/</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:resourcetype><d:collection/><c:addressbook/></d:resourcetype>
-        <d:displayname>Personal Address Book</d:displayname>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>
-${items.join("\n")}
-</d:multistatus>`);
-        return;
-      }
-
-      if (
-        pathname === "/dav/addressbooks/alice/default/" &&
-        method === "REPORT"
-      ) {
-        if (body.includes("addressbook-multiget")) {
-          const hrefs = Array.from(
-            body.matchAll(/<[^:>]*:?href>([^<]+)<\/[^:>]*:?href>/g),
-          ).map((m) => m[1]!);
-          const items: string[] = [];
-          for (const href of hrefs) {
+        const hrefs = Array.from(
+          body.matchAll(/<[^:>]*:?href>([^<]+)<\/[^:>]*:?href>/g),
+        ).map((m) => m[1]!);
+        return xml(
+          ...hrefs.flatMap((href) => {
             const card = carddavCards.get(href);
-            if (!card) continue;
+            if (!card) return [];
             const escaped = card.vcard
               .replace(/&/g, "&amp;")
               .replace(/</g, "&lt;")
               .replace(/>/g, "&gt;");
-            items.push(`  <d:response>
-    <d:href>${href}</d:href>
-    <d:propstat>
-      <d:prop>
-        <d:getetag>${card.etag}</d:getetag>
-        <c:address-data>${escaped}</c:address-data>
-      </d:prop>
-      <d:status>HTTP/1.1 200 OK</d:status>
-    </d:propstat>
-  </d:response>`);
-          }
-          res.writeHead(207, {
-            "Content-Type": "application/xml; charset=utf-8",
-          });
-          res.end(`<?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:carddav">
-${items.join("\n")}
-</d:multistatus>`);
-          return;
-        }
+            return [
+              davResponse(
+                href,
+                `<d:getetag>${card.etag}</d:getetag><c:address-data>${escaped}</c:address-data>`,
+              ),
+            ];
+          }),
+        );
       }
 
-      if (
-        pathname.startsWith("/dav/addressbooks/alice/default/") &&
-        method === "GET"
-      ) {
-        const card = carddavCards.get(pathname);
-        if (!card) {
-          res.writeHead(404);
-          res.end();
-          return;
-        }
+      const card = carddavCards.get(pathname);
+      if (method === "GET" && pathname.startsWith(BOOK) && card) {
         res.writeHead(200, {
           "Content-Type": "text/vcard; charset=utf-8",
           ETag: card.etag,
@@ -277,16 +201,11 @@ ${items.join("\n")}
         res.end(card.vcard);
         return;
       }
-
-      if (
-        pathname.startsWith("/dav/addressbooks/alice/default/") &&
-        method === "PUT"
-      ) {
+      if (method === "PUT" && pathname.startsWith(BOOK)) {
         carddavPuts.push({ path: pathname, body });
-        const existing = carddavCards.has(pathname);
         const newEtag = `"etag-${carddavPuts.length + 1}"`;
         carddavCards.set(pathname, { etag: newEtag, vcard: body });
-        res.writeHead(existing ? 204 : 201, { ETag: newEtag });
+        res.writeHead(card ? 204 : 201, { ETag: newEtag });
         res.end();
         return;
       }
@@ -311,7 +230,7 @@ ${items.join("\n")}
     }
   });
 
-  test("connectors lifecycle: add calendar, test connection, sync meeting, view via badge, and delete imported", async ({
+  test("connectors lifecycle: add calendar and CardDAV, test, sync both ways, view via badge, and delete imported", async ({
     browser,
   }, testInfo) => {
     const local = await ContrackInstance.start({
@@ -408,7 +327,7 @@ ${items.join("\n")}
       await imapDialog.getByRole("button", { name: "Cancel" }).click();
       await expect(imapDialog).toBeHidden();
 
-      // Select CardDAV from gallery to test CardDAV form opening & accessibility
+      // 4a. Connect CardDAV from the gallery, and test it on both address books
       await addBtn.click();
       await expect(galleryDialog).toBeVisible();
       await galleryDialog.getByRole("button", { name: /CardDAV/i }).click();
@@ -417,8 +336,106 @@ ${items.join("\n")}
       });
       await expect(carddavDialog).toBeVisible();
       await expectPageAccessible(page, testInfo, "carddav-form");
-      await carddavDialog.getByRole("button", { name: "Cancel" }).click();
+
+      await carddavDialog.locator("#carddav-url").fill(carddavUrl);
+      await carddavDialog
+        .locator("#carddav-username")
+        .fill("alice@example.com");
+      await carddavDialog.locator("#carddav-password").fill("app-pass-e2e");
+
+      const carddavTest = carddavDialog.getByRole("button", {
+        name: /test connection/i,
+      });
+      await carddavTest.click();
+      await expect(carddavDialog.getByRole("status")).toContainText(
+        "Connected to Personal Address Book",
+      );
+      const bookSelect = carddavDialog.getByLabel("Address book", {
+        exact: true,
+      });
+      await expect(bookSelect).toBeVisible();
+
+      // Selecting another book and clicking Test connection again waits for the
+      // second test response and keeps all discovered address books visible
+      await bookSelect.selectOption({
+        label: "Archive Contacts (read-only)",
+      });
+      await carddavTest.click();
+      await expect(carddavDialog.getByRole("status")).toContainText(
+        "Connected to Archive Contacts",
+      );
+      await expect(bookSelect).toBeVisible();
+      await bookSelect.selectOption({ label: "Personal Address Book" });
+      await expectPageAccessible(page, testInfo, "carddav-form-tested");
+
+      await carddavDialog
+        .getByRole("button", { name: "Connect", exact: true })
+        .click();
       await expect(carddavDialog).toBeHidden();
+      const contactsCard = page
+        .locator(".card")
+        .filter({ hasText: "Personal Contacts" });
+      await expect(contactsCard).toBeVisible();
+      await expect(contactsCard.getByText("Active")).toBeVisible();
+
+      // Sync now pulls Charles Babbage from the CardDAV server
+      const syncContacts = async () => {
+        await contactsCard
+          .getByRole("button", { name: /actions for personal contacts/i })
+          .click();
+        await page.getByRole("menuitem", { name: /sync now/i }).click();
+      };
+      await syncContacts();
+      await expect(contactsCard.getByText(/1 contact/i)).toBeVisible();
+
+      // Search is semantic, so Ada can rank too: one Babbage is the point.
+      const contacts = await local.api<
+        Array<{ id: string; name: string; role: string }>
+      >("GET", "/contacts?search=Babbage");
+      const babbages = contacts.filter((c) => c.name === "Charles Babbage");
+      expect(babbages).toHaveLength(1);
+      const babbage = babbages[0]!;
+
+      await page.goto(`/contact/${babbage.id}`);
+      await expect(
+        page.getByRole("heading", { name: "Charles Babbage" }),
+      ).toBeVisible();
+      await expect(page.getByText("charles@analytical.org")).toBeVisible();
+
+      // Edit Charles Babbage locally and create Grace Hopper, then sync back.
+      // Ada Lovelace was there before the connector, so she stays local.
+      const putRes = await page.request.put(
+        `${local.baseURL}/api/contacts/${babbage.id}`,
+        { data: { name: "Charles Babbage", role: "Lucasian Professor" } },
+      );
+      expect(putRes.ok()).toBe(true);
+      await local.api("POST", "/contacts", {
+        name: "Grace Hopper",
+        company: "US Navy",
+        emails: [{ email: "grace@navy.mil", isPrimary: true }],
+      });
+
+      await page.goto("/settings/connectors");
+      await syncContacts();
+      await expect(contactsCard.getByText(/2 pushed/i)).toBeVisible();
+
+      // The CardDAV server received both cards, with Babbage's own fields kept
+      expect(carddavPuts).toHaveLength(2);
+      const babbagePut = carddavPuts.find((p) =>
+        p.path.endsWith("/babbage.vcf"),
+      );
+      expect(babbagePut).toBeDefined();
+      const unfoldedBabbage = babbagePut!.body.replace(/\r\n[ \t]/g, "");
+      expect(unfoldedBabbage).toContain("UID:e2e-uid-babbage");
+      expect(unfoldedBabbage).toContain("TITLE:Lucasian Professor");
+      expect(unfoldedBabbage).toContain("X-CUSTOM-PROP:preserve-e2e");
+
+      const hopperPut = carddavPuts.find(
+        (p) => !p.path.endsWith("/babbage.vcf"),
+      );
+      expect(hopperPut).toBeDefined();
+      expect(hopperPut!.body).toContain("FN:Grace Hopper");
+      expect(hopperPut!.body).toContain("grace@navy.mil");
 
       // 4b. Test Correspondents page
       await page.goto("/settings/connectors/people");
@@ -494,151 +511,6 @@ ${items.join("\n")}
         page.getByText("Architecture Discussion with Ada"),
       ).toBeHidden();
       await expect(page.getByText("via Calendar")).toBeHidden();
-
-      await context.close();
-    } finally {
-      await local.stop();
-    }
-  });
-
-  test("carddav lifecycle: connect, discover address books, pull remote contact, and push local changes", async ({
-    browser,
-  }, testInfo) => {
-    resetCarddavFixture();
-
-    const local = await ContrackInstance.start({
-      authRequired: false,
-      env: {
-        CONNECTORS_ALLOW_PRIVATE_HOSTS: "true",
-        DISABLE_BACKGROUND_JOBS: "true",
-      },
-    });
-
-    try {
-      const context = await browser.newContext({ baseURL: local.baseURL });
-      const page = await context.newPage();
-
-      // 1. Open Settings → Connectors and click Connect CardDAV
-      await page.goto("/settings/connectors");
-      const connectCarddavBtn = page.getByRole("button", {
-        name: "Connect CardDAV",
-      });
-      await expect(connectCarddavBtn).toBeVisible();
-      await connectCarddavBtn.click();
-
-      const formDialog = page.getByRole("dialog", {
-        name: /Connect CardDAV/i,
-      });
-      await expect(formDialog).toBeVisible();
-
-      // 2. Fill credentials and test connection (discovers 2 address books)
-      await formDialog.locator("#carddav-url").fill(carddavUrl);
-      await formDialog.locator("#carddav-username").fill("alice@example.com");
-      await formDialog.locator("#carddav-password").fill("app-pass-e2e");
-
-      const testBtn = formDialog.getByRole("button", {
-        name: /test connection/i,
-      });
-      await testBtn.click();
-      await expect(formDialog.getByRole("status")).toContainText(
-        "Connected to Personal Address Book",
-      );
-      const bookSelect = formDialog.getByLabel("Address book", {
-        exact: true,
-      });
-      await expect(bookSelect).toBeVisible();
-
-      // Selecting another book and clicking Test connection again waits for the
-      // second test response and keeps all discovered address books visible
-      await bookSelect.selectOption({
-        label: "Archive Contacts (read-only)",
-      });
-      await testBtn.click();
-      await expect(formDialog.getByRole("status")).toContainText(
-        "Connected to Archive Contacts",
-      );
-      await expect(bookSelect).toBeVisible();
-      await bookSelect.selectOption({ label: "Personal Address Book" });
-      await expectPageAccessible(page, testInfo, "carddav-form-tested");
-
-      // 3. Save CardDAV connector
-      await formDialog
-        .getByRole("button", { name: "Connect", exact: true })
-        .click();
-      await expect(formDialog).toBeHidden();
-
-      const card = page
-        .locator(".card")
-        .filter({ hasText: "Personal Contacts" });
-      await expect(card).toBeVisible();
-      await expect(card.getByText("Active")).toBeVisible();
-
-      // 4. Run manual sync to pull Charles Babbage from CardDAV server
-      await card
-        .getByRole("button", { name: /actions for personal contacts/i })
-        .click();
-      await page.getByRole("menuitem", { name: /sync now/i }).click();
-      await expect(card.getByText(/1 contact/i)).toBeVisible();
-
-      // 5. Verify Charles Babbage appears in Contrack with his CardDAV details
-      const contacts = await local.api<
-        Array<{ id: string; name: string; role: string }>
-      >("GET", "/contacts?search=Babbage");
-      expect(contacts).toHaveLength(1);
-      const babbage = contacts[0]!;
-      expect(babbage.name).toBe("Charles Babbage");
-
-      await page.goto(`/contact/${babbage.id}`);
-      await expect(
-        page.getByRole("heading", { name: "Charles Babbage" }),
-      ).toBeVisible();
-      await expect(page.getByText("charles@analytical.org")).toBeVisible();
-
-      // 6. Edit Charles Babbage locally and create Grace Hopper, then sync back to CardDAV
-      const putRes = await page.request.put(
-        `${local.baseURL}/api/contacts/${babbage.id}`,
-        {
-          data: {
-            name: "Charles Babbage",
-            role: "Lucasian Professor",
-          },
-        },
-      );
-      expect(putRes.ok()).toBe(true);
-      await local.api("POST", "/contacts", {
-        name: "Grace Hopper",
-        company: "US Navy",
-        emails: [{ email: "grace@navy.mil", isPrimary: true }],
-      });
-
-      await page.goto("/settings/connectors");
-      const cardAfter = page
-        .locator(".card")
-        .filter({ hasText: "Personal Contacts" });
-      await cardAfter
-        .getByRole("button", { name: /actions for personal contacts/i })
-        .click();
-      await page.getByRole("menuitem", { name: /sync now/i }).click();
-
-      await expect(cardAfter.getByText(/2 pushed/i)).toBeVisible();
-
-      // Verify PUT requests received by the CardDAV server
-      expect(carddavPuts).toHaveLength(2);
-      const babbagePut = carddavPuts.find((p) =>
-        p.path.endsWith("/babbage.vcf"),
-      );
-      expect(babbagePut).toBeDefined();
-      const unfoldedBabbage = babbagePut!.body.replace(/\r\n[ \t]/g, "");
-      expect(unfoldedBabbage).toContain("UID:e2e-uid-babbage");
-      expect(unfoldedBabbage).toContain("TITLE:Lucasian Professor");
-      expect(unfoldedBabbage).toContain("X-CUSTOM-PROP:preserve-e2e");
-
-      const hopperPut = carddavPuts.find(
-        (p) => !p.path.endsWith("/babbage.vcf"),
-      );
-      expect(hopperPut).toBeDefined();
-      expect(hopperPut!.body).toContain("FN:Grace Hopper");
-      expect(hopperPut!.body).toContain("grace@navy.mil");
 
       await context.close();
     } finally {

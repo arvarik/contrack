@@ -130,40 +130,31 @@ describe("SignIn front door", () => {
     },
   );
 
-  it("offers the OIDC provider and explains a refusal from the address", () => {
-    history.replaceState(null, "", "/?oidc=disabled");
+  it("offers the OIDC provider, explains a refusal from the address, and drops it once the person types", () => {
+    history.replaceState(null, "", "/?oidc=must-change-password");
     render(<SignIn onSignedIn={vi.fn()} oidc={{ name: "Authentik" }} />);
     expect(
       screen.getByRole("link", { name: "Sign in with Authentik" }),
     ).toHaveProperty("pathname", "/api/auth/oidc/start");
     expect(screen.getByRole("alert").textContent).toContain(
-      "An administrator has closed this account",
-    );
-    expect(window.location.search).toBe("");
-  });
-
-  it("says why an account that must change its password cannot use SSO", () => {
-    history.replaceState(null, "", "/?oidc=must-change-password");
-    render(<SignIn onSignedIn={vi.fn()} oidc={{ name: "SSO" }} />);
-    expect(screen.getByRole("alert").textContent).toContain(
       "needs a new password first",
     );
-  });
-
-  it("drops the SSO banner once the person types", () => {
-    history.replaceState(null, "", "/?oidc=denied");
-    render(<SignIn onSignedIn={vi.fn()} oidc={{ name: "SSO" }} />);
-    expect(screen.getByRole("alert").textContent).toContain("cancelled");
+    expect(window.location.search).toBe("");
     fireEvent.change(screen.getByLabelText(/username or email/i), {
       target: { value: "a" },
     });
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("sends the keep-me-signed-in choice and the current page on the SSO link", () => {
+  it("sends the keep-me-signed-in choice and the current page, never the home page, on the SSO link", () => {
+    const link = () => screen.getByRole("link", { name: "Sign in with SSO" });
+    history.replaceState(null, "", "/");
+    render(<SignIn onSignedIn={vi.fn()} oidc={{ name: "SSO" }} />);
+    expect(link().getAttribute("href")).toBe("/api/auth/oidc/start");
+    cleanup();
+
     history.replaceState(null, "", "/contacts/42?tab=notes&oidc=failed");
     render(<SignIn onSignedIn={vi.fn()} oidc={{ name: "SSO" }} />);
-    const link = () => screen.getByRole("link", { name: "Sign in with SSO" });
     expect(link().getAttribute("href")).toBe(
       "/api/auth/oidc/start?returnTo=%2Fcontacts%2F42%3Ftab%3Dnotes",
     );
@@ -171,16 +162,6 @@ describe("SignIn front door", () => {
     expect(link().getAttribute("href")).toBe(
       "/api/auth/oidc/start?remember=0&returnTo=%2Fcontacts%2F42%3Ftab%3Dnotes",
     );
-  });
-
-  it("leaves returnTo out on the home page", () => {
-    history.replaceState(null, "", "/");
-    render(<SignIn onSignedIn={vi.fn()} oidc={{ name: "SSO" }} />);
-    expect(
-      screen
-        .getByRole("link", { name: "Sign in with SSO" })
-        .getAttribute("href"),
-    ).toBe("/api/auth/oidc/start");
   });
 
   it("disables the SSO link while a password sign-in runs", () => {

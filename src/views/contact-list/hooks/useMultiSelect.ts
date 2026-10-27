@@ -5,6 +5,7 @@
  */
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useBulkActions } from "../../../components/bulk/useBulkActions";
+import { keepVisible } from "../../../lib/utils";
 import type { Contact } from "../../../types";
 
 export function useMultiSelect(filteredContacts: Contact[]) {
@@ -21,22 +22,7 @@ export function useMultiSelect(filteredContacts: Contact[]) {
   useEffect(() => {
     if (!isSelectMode) return;
     const visibleIds = new Set(filteredContacts.map((c) => c.id));
-    setSelectedIds((prev) => {
-      if (prev.size === 0) return prev;
-      let hasHidden = false;
-      for (const id of prev) {
-        if (!visibleIds.has(id)) {
-          hasHidden = true;
-          break;
-        }
-      }
-      if (!hasHidden) return prev;
-      const next = new Set<string>();
-      for (const id of prev) {
-        if (visibleIds.has(id)) next.add(id);
-      }
-      return next;
-    });
+    setSelectedIds((prev) => keepVisible(prev, visibleIds));
   }, [filteredContacts, isSelectMode]);
 
   const enterSelectMode = useCallback(() => {

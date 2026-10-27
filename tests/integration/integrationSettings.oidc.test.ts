@@ -32,7 +32,7 @@ afterEach(() => {
 });
 
 describe("OIDC integration settings", () => {
-  it("round-trips a sealed config and redacts the secret in the status", () => {
+  it("round-trips a sealed config, redacts the secret in the status, and clears with null", () => {
     setOidcConfig(INPUT);
     expect(getOidcConfig()).toEqual({ ...INPUT, source: "setting" });
     const status = getIntegrationsStatus().oidc;
@@ -44,23 +44,20 @@ describe("OIDC integration settings", () => {
       clientSecretPreview: "••••1234",
       name: "Authentik",
       matchByEmail: true,
+      envIssuerInvalid: false,
     });
     expect(JSON.stringify(status)).not.toContain(INPUT.clientSecret);
-  });
 
-  it("clears with null", () => {
-    setOidcConfig(INPUT);
     setOidcConfig(null);
     expect(getOidcConfig()).toBeNull();
     expect(getIntegrationsStatus().oidc.configured).toBe(false);
   });
 
-  it("lets the environment win", () => {
+  it("lets the environment win, and matches by email only for true", () => {
     setOidcConfig(INPUT);
     process.env.OIDC_ISSUER = "https://sso.example.org";
     process.env.OIDC_CLIENT_ID = "env-id";
     process.env.OIDC_CLIENT_SECRET = "env-secret";
-    process.env.OIDC_MATCH_BY_EMAIL = "false";
     expect(getOidcConfig()).toEqual({
       issuer: "https://sso.example.org",
       clientId: "env-id",
@@ -69,17 +66,14 @@ describe("OIDC integration settings", () => {
       matchByEmail: false,
       source: "env",
     });
-  });
-
-  it("matches by email only when asked to", () => {
-    process.env.OIDC_ISSUER = "https://sso.example.org";
-    process.env.OIDC_CLIENT_ID = "env-id";
-    process.env.OIDC_CLIENT_SECRET = "env-secret";
-    expect(getOidcConfig()?.matchByEmail).toBe(false);
-    process.env.OIDC_MATCH_BY_EMAIL = "yes";
-    expect(getOidcConfig()?.matchByEmail).toBe(false);
-    process.env.OIDC_MATCH_BY_EMAIL = "true";
-    expect(getOidcConfig()?.matchByEmail).toBe(true);
+    for (const [value, matchByEmail] of [
+      ["false", false],
+      ["yes", false],
+      ["true", true],
+    ] as const) {
+      process.env.OIDC_MATCH_BY_EMAIL = value;
+      expect(getOidcConfig()?.matchByEmail, value).toBe(matchByEmail);
+    }
 
     delete process.env.OIDC_ISSUER;
     // A saved provider without the field, and the status with no provider.
@@ -110,14 +104,5 @@ describe("OIDC integration settings", () => {
       source: "env",
       envIssuerInvalid: true,
     });
-  });
-
-  it("reports envIssuerInvalid false otherwise", () => {
-    expect(getIntegrationsStatus().oidc).toMatchObject({
-      source: "none",
-      envIssuerInvalid: false,
-    });
-    setOidcConfig(INPUT);
-    expect(getIntegrationsStatus().oidc.envIssuerInvalid).toBe(false);
   });
 });

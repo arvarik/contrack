@@ -3,8 +3,10 @@
 
 import crypto from "crypto";
 import { sqlite } from "../db.ts";
-import { AppError, ConflictError, NotFoundError } from "../utils/AppError.ts";
+import { ConflictError, NotFoundError } from "../utils/AppError.ts";
 import { getOidcConfig } from "./integrationSettings.ts";
+import { normalizeIssuer } from "../../shared/contracts/admin.ts";
+import { auditService } from "./auditService.ts";
 
 export interface IdentitySummary {
   id: string;
@@ -36,14 +38,13 @@ export function linkIdentity(
   issuer: string,
   subject: string,
   email: string | null,
-): IdentitySummary {
+): void {
   const holder = findUserIdByIdentity(issuer, subject);
   if (holder && holder !== userId) {
     throw new ConflictError(
       "This sign-in is already linked to another account",
     );
   }
-  const id = crypto.randomUUID();
   sqlite
     .prepare(
       `INSERT INTO user_identities (id, userId, issuer, subject, email)
@@ -52,19 +53,21 @@ export function linkIdentity(
          SET subject = excluded.subject, email = excluded.email,
              createdAt = CURRENT_TIMESTAMP, lastUsedAt = NULL`,
     )
-    .run(id, userId, issuer, subject, email);
-  const row = listIdentities(userId).find((r) => r.issuer === issuer);
-  if (!row) throw new AppError("Linking the sign-in failed", 500);
-  return row;
+    .run(crypto.randomUUID(), userId, issuer, subject, email);
 }
 
-export function touchIdentity(issuer: string, subject: string): void {
+/** Stamp a sign-in, and keep the address the provider sends now. */
+export function touchIdentity(
+  issuer: string,
+  subject: string,
+  email: string | null,
+): void {
   sqlite
     .prepare(
-      `UPDATE user_identities SET lastUsedAt = CURRENT_TIMESTAMP
+      `UPDATE user_identities SET lastUsedAt = CURRENT_TIMESTAMP, email = ?
         WHERE issuer = ? AND subject = ?`,
     )
-    .run(issuer, subject);
+    .run(email, issuer, subject);
 }
 
 export function listIdentities(userId: string): IdentitySummary[] {
@@ -76,34 +79,34 @@ export function listIdentities(userId: string): IdentitySummary[] {
     .all(userId) as IdentitySummary[];
 }
 
-/** An issuer as written, compared by its URL with one trailing slash off. */
+/**
+ * An issuer as written, compared by its URL with one trailing slash off. A
+ * configured discovery URL compares as its issuer.
+ */
 function issuerKey(issuer: string): string {
+  const value = normalizeIssuer(issuer);
   try {
-    return new URL(issuer).href.replace(/\/$/, "");
+    return new URL(value).href.replace(/\/$/, "");
   } catch {
-    return issuer;
+    return value;
   }
 }
 
 /**
  * The account's identities, each marked `current` when it is at the provider
- * set up now, so the account page can offer a link to that one.
+ * set up now, so the account page can offer a link to that one, and whether
+ * the next sign-in would link the account again.
  */
-function listAccountIdentities(
-  userId: string,
-): (IdentitySummary & { current: boolean })[] {
-  const issuer = getOidcConfig()?.issuer;
-  return listIdentities(userId).map((identity) => ({
-    ...identity,
-    current: issuer != null && issuerKey(identity.issuer) === issuerKey(issuer),
-  }));
-}
-
-/** The identities, and whether the next sign-in would link the account again. */
 export function accountIdentities(userId: string) {
+  const config = getOidcConfig();
   return {
-    identities: listAccountIdentities(userId),
-    matchByEmail: getOidcConfig()?.matchByEmail === true,
+    identities: listIdentities(userId).map((identity) => ({
+      ...identity,
+      current:
+        config !== null &&
+        issuerKey(identity.issuer) === issuerKey(config.issuer),
+    })),
+    matchByEmail: config?.matchByEmail === true,
   };
 }
 
@@ -114,4 +117,28 @@ export function unlinkIdentity(userId: string, id: string): void {
   if (result.changes === 0) {
     throw new NotFoundError("Linked sign-in");
   }
+}
+
+/**
+ * Unlink every identity of an account whose password is being reset: a link
+ * made while somebody else held the account must not outlive the reset. Run
+ * it inside the reset's transaction. One audit row when any goes.
+ */
+export function unlinkIdentitiesForReset(
+  userId: string,
+  actorUserId: string | null,
+  ip: string | null,
+): void {
+  const removed = sqlite
+    .prepare("DELETE FROM user_identities WHERE userId = ?")
+    .run(userId).changes;
+  if (removed === 0) return;
+  auditService.record({
+    actorUserId,
+    action: "auth.oidc.unlinked",
+    targetType: "user",
+    targetId: userId,
+    details: { reason: "password-reset", count: removed },
+    ip,
+  });
 }

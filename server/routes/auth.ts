@@ -5,13 +5,20 @@
 // itself (`requireSession`). On a gated instance with no accounts nobody can
 // sign in, so /setup is open until an account exists, then answers 409.
 
-import crypto from "crypto";
-import { Router, type Request, type Response } from "express";
+import {
+  Router,
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express";
 import { AppError, ValidationError } from "../utils/AppError.ts";
 import { log } from "../utils/logger.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { validatePassword } from "../services/passwords.ts";
-import { createRateLimiter } from "../middleware/rateLimit.ts";
+import {
+  createRateLimiter,
+  type RateLimiter,
+} from "../middleware/rateLimit.ts";
 import { parseQuery, validateBody } from "../utils/validators.ts";
 import {
   acceptInvitationSchema,
@@ -62,9 +69,9 @@ import {
   presentedSessionSecret,
   setSessionCookie,
   clearSessionCookie,
-  setOidcStateCookie,
-  clearOidcStateCookie,
-  presentedOidcState,
+  setOidcFlowCookie,
+  clearOidcFlowCookie,
+  presentedOidcBinding,
 } from "../middleware/auth.ts";
 import {
   accountIdForIdentifier,
@@ -99,7 +106,7 @@ import {
 } from "../utils/avatarProcessor.ts";
 import { mailLinkOrigin, oidcCallbackUrl } from "../utils/publicOrigin.ts";
 import { getOidcConfig } from "../services/integrationSettings.ts";
-import { startOidc } from "../services/oidcService.ts";
+import { FLOW_COOKIE_SECONDS, startOidc } from "../services/oidcService.ts";
 import { finishOidcCallback } from "../services/oidcSignInService.ts";
 import {
   accountIdentities,
@@ -179,18 +186,25 @@ const linkLimiter = createRateLimiter({
 /**
  * Twenty single sign-on starts a minute per IP, apart from the password
  * budget, so an office signing in with SSO does not lock out password
- * sign-in. The callback has none: the flow cookie, the random state and the
- * single-use flow leave nothing to guess.
+ * sign-in. The callback has its own twenty, so each sign-in counts once in
+ * each window. Its flow cookie, random state and single-use flow leave
+ * nothing to guess, but each callback still reads the database.
  */
 const oidcLimiter = createRateLimiter({
   windowMs: 60_000,
   max: 20,
   name: "single sign-on",
 });
+const oidcCallbackLimiter = createRateLimiter({
+  windowMs: 60_000,
+  max: 20,
+  name: "single sign-on callback",
+});
 
 /** Clear every credential window in this module. Test seam. */
 export function __resetAuthRateLimits(): void {
   oidcLimiter.reset();
+  oidcCallbackLimiter.reset();
   credentialLimiter.reset();
   setupLimiter.reset();
   tokenLimiter.reset();
@@ -319,7 +333,7 @@ router.post(
     // account. The id stays, so every row it owns stays owned.
     const user = hasLocalOwner()
       ? await convertLocalOwner(input)
-      : await createUser({ ...input, setupOnly: true });
+      : await createUser({ ...input, setupOnly: true, emailTrusted: true });
     if (!isAuthRequired()) {
       setForcedAuth(true);
     }
@@ -592,7 +606,11 @@ router.post(
     }
 
     const link = redeemAuthLink("reset", token);
-    const user = await resetUserPasswordWithToken(link.userId, password);
+    const user = await resetUserPasswordWithToken(
+      link.userId,
+      password,
+      ipOf(req),
+    );
     startSession(req, res, user, "email-link");
     auditService.record({
       actorUserId: user.id,
@@ -1019,39 +1037,38 @@ function assertOidcAvailable(): void {
 }
 
 /**
- * Start a flow and bind it to this browser: the flow cookie holds its state,
- * and the callback refuses a state the cookie does not hold.
+ * Start a flow and bind it to this browser: the flow's cookie holds its
+ * binding secret, and the callback finishes the flow only with that secret.
  */
 async function startBoundOidc(
   req: Request,
   res: Response,
   flow: { linkUserId: string | null; remember?: boolean; returnTo?: string },
 ): Promise<string> {
-  const url = await startOidc({ redirectUri: oidcCallbackUrl(req), ...flow });
-  setOidcStateCookie(req, res, new URL(url).searchParams.get("state") ?? "");
-  return url;
+  const started = await startOidc({
+    redirectUri: oidcCallbackUrl(req),
+    ...flow,
+  });
+  setOidcFlowCookie(req, res, started, FLOW_COOKIE_SECONDS);
+  return started.url;
 }
 
-/** True when the flow cookie holds this callback's state. Constant time. */
-function stateMatchesCookie(req: Request): boolean {
-  const state = req.query.state;
-  const held = presentedOidcState(req);
-  if (typeof state !== "string" || !state || !held) return false;
-  const digest = (value: string) =>
-    crypto.createHash("sha256").update(value).digest();
-  return crypto.timingSafeEqual(digest(state), digest(held));
-}
+/**
+ * `limiter` for an address a browser navigates to, so a refusal goes back to
+ * the sign-in page instead of showing JSON.
+ */
+const limitPage =
+  (limiter: RateLimiter, what: string) =>
+  (req: Request, res: Response, next: NextFunction) =>
+    limiter(req, res, (err?: unknown) => {
+      if (!err) return next();
+      log.warn("Auth", `OIDC ${what} refused by the rate limit`);
+      res.redirect("/?oidc=failed");
+    });
 
 router.get(
   "/oidc/start",
-  // A browser navigates here, so a refusal goes back to the sign-in page
-  // instead of showing JSON.
-  (req, res, next) =>
-    oidcLimiter(req, res, (err?: unknown) => {
-      if (!err) return next();
-      log.warn("Auth", "OIDC sign-in start refused by the rate limit");
-      res.redirect("/?oidc=failed");
-    }),
+  limitPage(oidcLimiter, "sign-in start"),
   asyncHandler(async (req, res) => {
     try {
       assertOidcAvailable();
@@ -1088,23 +1105,20 @@ router.post(
 
 router.get(
   "/oidc/callback",
+  limitPage(oidcCallbackLimiter, "callback"),
   asyncHandler(async (req, res) => {
-    // The flow ends here, whatever the outcome.
-    clearOidcStateCookie(req, res);
-    if (!isAuthRequired()) return res.redirect("/");
-    // Checked before the flow is consumed, so a callback from another
-    // browser's flow cannot use up that flow's state.
-    if (!stateMatchesCookie(req)) {
-      log.warn("Auth", "OIDC callback without this browser's flow cookie");
-      return res.redirect("/?oidc=failed");
-    }
     // The address the provider was given at the start, with this query.
     const query = req.originalUrl.indexOf("?");
+    const callbackUrl = new URL(
+      oidcCallbackUrl(req) + (query === -1 ? "" : req.originalUrl.slice(query)),
+    );
+    const state = callbackUrl.searchParams.get("state") ?? "";
+    // This flow ends here, whatever the outcome. Other flows keep their cookies.
+    if (state) clearOidcFlowCookie(req, res, state);
+    if (!isAuthRequired()) return res.redirect("/");
     const result = await finishOidcCallback(
-      new URL(
-        oidcCallbackUrl(req) +
-          (query === -1 ? "" : req.originalUrl.slice(query)),
-      ),
+      callbackUrl,
+      state ? presentedOidcBinding(req, state) : null,
       req.principal?.via === "session" ? req.principal.user.id : null,
       { ip: ipOf(req), userAgent: req.headers["user-agent"] ?? null },
     );

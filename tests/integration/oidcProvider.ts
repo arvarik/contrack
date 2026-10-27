@@ -2,10 +2,14 @@
 // sends a browser straight back, JWKS, a token endpoint that signs an ID token
 // for whatever the test queued with `nextLogin`, and a userinfo endpoint. The
 // token endpoint takes only the method it advertises, client_secret_basic.
+// It can also fail userinfo once, or stall a token answer once.
 
 import http from "node:http";
 import express from "express";
 import { SignJWT, exportJWK, generateKeyPair } from "jose";
+
+/** The error description in a failed userinfo answer, which no log may carry. */
+export const USERINFO_FAILURE = "the userinfo store is down";
 
 export interface FakeLogin {
   sub: string;
@@ -26,13 +30,15 @@ export async function startFakeProvider() {
   idp.use(express.urlencoded({ extended: false }));
   let next: FakeLogin | null = null;
   let issuer = "";
-  let clientId = "contrack";
   let lastNonce = "";
   let signedIn: FakeLogin | null = null;
   let tokenRedirect: string | null = null;
   const requests: string[] = [];
   let tokenRedirectUri: string | null = null;
   let denyNext = false;
+  let failUserinfo = false;
+  let stallToken = false;
+  let tokenRefusal: { error: string; error_description?: string } | null = null;
   idp.use((req, _res, proceed) => {
     requests.push(req.path);
     proceed();
@@ -69,6 +75,13 @@ export async function startFakeProvider() {
     res.json({ keys: [jwk] });
   });
   idp.get("/userinfo", (_req, res) => {
+    if (failUserinfo) {
+      failUserinfo = false;
+      res
+        .status(500)
+        .json({ error: "server_error", error_description: USERINFO_FAILURE });
+      return;
+    }
     res.json({ sub: signedIn?.sub, ...signedIn?.userinfo });
   });
   idp.post("/token", async (req, res) => {
@@ -81,6 +94,18 @@ export async function startFakeProvider() {
       return;
     }
     tokenRedirectUri = req.body?.redirect_uri ?? null;
+    if (stallToken) {
+      // The headers at once, then a body that never ends.
+      stallToken = false;
+      res.writeHead(200, { "content-type": "application/json" });
+      res.write("{");
+      return;
+    }
+    if (tokenRefusal) {
+      res.status(400).json(tokenRefusal);
+      tokenRefusal = null;
+      return;
+    }
     if (tokenRedirect) {
       res.redirect(307, tokenRedirect);
       tokenRedirect = null;
@@ -102,7 +127,7 @@ export async function startFakeProvider() {
     })
       .setProtectedHeader({ alg: "RS256", kid: "k1" })
       .setIssuer(issuer)
-      .setAudience(clientId)
+      .setAudience("contrack")
       .setSubject(login.sub)
       .setIssuedAt()
       .setExpirationTime("5m")
@@ -125,9 +150,6 @@ export async function startFakeProvider() {
 
   return {
     issuer,
-    setClientId(id: string) {
-      clientId = id;
-    },
     /** Queue the account the next code exchange signs in. */
     nextLogin(login: FakeLogin) {
       next = login;
@@ -139,6 +161,18 @@ export async function startFakeProvider() {
     /** Sign the next ID token with a key the JWKS does not publish. */
     signNextWithUnpublishedKey() {
       signWithRogueKey = true;
+    },
+    /** Answer the next userinfo request with a 500 whose body says USERINFO_FAILURE. */
+    failNextUserinfo() {
+      failUserinfo = true;
+    },
+    /** Answer the next token request with headers and a body that never ends. */
+    stallNextToken() {
+      stallToken = true;
+    },
+    /** Answer the next token request with this OAuth error. */
+    refuseNextToken(body: { error: string; error_description?: string }) {
+      tokenRefusal = body;
     },
     /** Answer the next token request with a 307 to `location`. */
     redirectNextToken(location: string) {
@@ -154,6 +188,11 @@ export async function startFakeProvider() {
       lastNonce = url.searchParams.get("nonce") ?? "";
       return { state: url.searchParams.get("state") ?? "" };
     },
-    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+    close: () =>
+      new Promise<void>((resolve) => {
+        // A stalled answer keeps its socket open.
+        server.closeAllConnections();
+        server.close(() => resolve());
+      }),
   };
 }

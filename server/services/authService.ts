@@ -17,6 +17,7 @@ import {
   needsRehash,
   validatePassword,
 } from "./passwords.ts";
+import { unlinkIdentitiesForReset } from "./identityService.ts";
 
 /**
  * How long a browser session stays valid without signing in again.
@@ -365,6 +366,11 @@ export async function createUser(input: {
   mustChangePassword?: boolean;
   /** True when called from first-run setup, which must fail if another account won the race. */
   setupOnly?: boolean;
+  /**
+   * True when somebody other than the person vouches for the email: setup, an
+   * admin, or an invitation to that address. Open registration leaves it false.
+   */
+  emailTrusted?: boolean;
 }): Promise<User> {
   const email = normalizeEmail(input.email);
   const username = normalizeUsername(input.username);
@@ -410,8 +416,10 @@ export async function createUser(input: {
       sqlite
         .prepare(
           `INSERT INTO users (id, email, username, displayName, passwordHash, role,
-                              createdBy, mustChangePassword, passwordChangedAt)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+                              createdBy, mustChangePassword, passwordChangedAt,
+                              emailTrustedAt)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP,
+                   CASE WHEN ? THEN CURRENT_TIMESTAMP END)`,
         )
         .run(
           id,
@@ -422,6 +430,7 @@ export async function createUser(input: {
           role,
           input.createdBy ?? null,
           input.mustChangePassword ? 1 : 0,
+          input.emailTrusted ? 1 : 0,
         );
     } catch (err) {
       if (isUniqueViolation(err)) {
@@ -536,13 +545,22 @@ export async function updateUser(
     id,
   );
 
-  const assignments = keys.map((k) => `${k} = ?`).join(", ");
+  // An address the person typed is not trusted until a mailed link proves it.
+  // A link sent to the old address must not prove the new one, so the
+  // unused ones stop working.
+  if (updates.email !== undefined) updates.emailTrustedAt = null;
+  const assignments = Object.keys(updates)
+    .map((k) => `${k} = ?`)
+    .join(", ");
   try {
-    sqlite
-      .prepare(
-        `UPDATE users SET ${assignments}, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`,
-      )
-      .run(...keys.map((k) => updates[k]), id);
+    sqlite.transaction(() => {
+      sqlite
+        .prepare(
+          `UPDATE users SET ${assignments}, updatedAt = CURRENT_TIMESTAMP WHERE id = ?`,
+        )
+        .run(...Object.values(updates), id);
+      if (updates.email !== undefined) revokeUnusedAuthLinks(id);
+    })();
   } catch (err) {
     if (isUniqueViolation(err)) {
       throw new ConflictError(
@@ -618,14 +636,39 @@ export async function changePassword(
       .run(hash, id);
 
     revokeOtherSessions(id, keepSessionId);
-    sqlite
-      .prepare(
-        `UPDATE auth_links SET usedAt = CURRENT_TIMESTAMP
-          WHERE userId = ? AND usedAt IS NULL`,
-      )
-      .run(id);
+    revokeUnusedAuthLinks(id);
   })();
   log.info("Auth", `Password changed for account ${row.id}`);
+}
+
+/** Mark every unused reset and sign-in link of an account used. */
+function revokeUnusedAuthLinks(userId: string): void {
+  sqlite
+    .prepare(
+      `UPDATE auth_links SET usedAt = CURRENT_TIMESTAMP
+        WHERE userId = ? AND usedAt IS NULL`,
+    )
+    .run(userId);
+}
+
+/**
+ * The account an OIDC email match may sign in to: a password account whose
+ * email is trusted (`emailTrustedAt`) and equals `email`. Only ASCII letters
+ * fold, and an address with any other character matches nothing, so a
+ * provider's U+212A (Kelvin sign) can never stand for "k".
+ */
+export function findUserByTrustedEmail(email: string): User | null {
+  if (!/^[\x21-\x7e]+$/.test(email)) return null;
+  const value = email.replace(/[A-Z]/g, (c) => c.toLowerCase());
+  const row = sqlite
+    .prepare(
+      `SELECT ${USER_COLUMNS} FROM users
+        WHERE lower(email) = ? AND credentialState = 'password'
+          AND emailTrustedAt IS NOT NULL
+        LIMIT 1`,
+    )
+    .get(value) as UserRow | undefined;
+  return row ? stripHash(row) : null;
 }
 
 /** A password-enabled account by email address, ignoring case. */
@@ -642,12 +685,13 @@ export function findUserByEmail(email: string): User | null {
 
 /**
  * Reset a password with a verified token: set the new hash, clear
- * mustChangePassword, stamp passwordChangedAt, and revoke every session and
- * active API token.
+ * mustChangePassword, stamp passwordChangedAt, and revoke every session,
+ * active API token and linked sign-in.
  */
 export async function resetUserPasswordWithToken(
   userId: string,
   newPassword: string,
+  ip: string | null,
 ): Promise<User> {
   const row = sqlite
     .prepare(`SELECT ${USER_COLUMNS} FROM users WHERE id = ?`)
@@ -685,12 +729,8 @@ export async function resetUserPasswordWithToken(
           WHERE userId = ? AND revokedAt IS NULL`,
       )
       .run(userId);
-    sqlite
-      .prepare(
-        `UPDATE auth_links SET usedAt = CURRENT_TIMESTAMP
-          WHERE userId = ? AND usedAt IS NULL`,
-      )
-      .run(userId);
+    revokeUnusedAuthLinks(userId);
+    unlinkIdentitiesForReset(userId, userId, ip);
   })();
 
   log.info("Auth", `Password reset with token for account ${row.id}`);
@@ -895,7 +935,8 @@ export async function convertLocalOwner(input: {
         `UPDATE users
             SET email = ?, username = ?, displayName = ?, passwordHash = ?,
                 credentialState = 'password', passwordChangedAt = CURRENT_TIMESTAMP,
-                role = 'admin', status = 'active', updatedAt = CURRENT_TIMESTAMP
+                role = 'admin', status = 'active', updatedAt = CURRENT_TIMESTAMP,
+                emailTrustedAt = CURRENT_TIMESTAMP
           WHERE id = ? AND credentialState = 'none'`,
       )
       .run(email, username, displayName, passwordHash, local.id);

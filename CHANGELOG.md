@@ -9,10 +9,15 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.3] - 2026-10-27
+
 ### Added
 
 - Sign in with an OpenID Connect provider, linked from account settings or,
-  when an admin turns it on, matched by verified email.
+  when an admin turns it on, matched by verified email (#250). Email matching
+  reaches only an account whose own email Contrack trusts: one made at setup,
+  by an admin or from an invitation to that address, or one a mailed link
+  proved. A password reset also removes the account's linked sign-ins.
 
 ## [2.0.2] - 2026-10-18
 
@@ -284,7 +289,8 @@ server.
 The first release: a local-first personal CRM with contact management,
 semantic search, AI enrichment and duplicate detection.
 
-[unreleased]: https://github.com/arvarik/contrack/compare/v2.0.2...HEAD
+[unreleased]: https://github.com/arvarik/contrack/compare/v2.0.3...HEAD
+[2.0.3]: https://github.com/arvarik/contrack/compare/v2.0.2...v2.0.3
 [2.0.2]: https://github.com/arvarik/contrack/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/arvarik/contrack/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/arvarik/contrack/compare/v1.5.5...v2.0.0

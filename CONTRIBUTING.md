@@ -249,6 +249,12 @@ to a commit, with its version in a comment. Dependabot
 Monday, a week after their release. `.github/workflows/scorecard.yml` runs
 OpenSSF Scorecard on `main` each week and feeds the README badge.
 
+`.github/workflows/codeql.yml` runs CodeQL on pull requests into `main`,
+including pull requests from forks, on pushes to it and each week. The branch
+rule needs its results before a merge. Keep GitHub's default setup for code
+scanning off: it skips pull requests from forks, and it blocks this workflow's
+results.
+
 A manual run can use the `hppc` self-hosted runner when the hosted pool is
 slow. Pull requests from forks never reach it.
 
