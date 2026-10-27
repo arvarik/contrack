@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 // The OpenID Connect row in Settings → Administration → General: it fills
 // from the saved provider, saves any change on its own (an empty secret keeps
-// the saved one), shows the server's refusal, and locks to a read-only block
-// when OIDC_* sets the provider.
+// the saved one for the same client), shows the server's refusal, and locks
+// to a read-only block when OIDC_* sets the provider.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import React from "react";
@@ -140,6 +140,35 @@ describe("OidcRow", () => {
       name: "OpenID Connect",
       matchByEmail: false,
     });
+  });
+
+  it("needs the secret again once the issuer or client ID names another client", () => {
+    show();
+    const secret = screen.getByLabelText("Client secret") as HTMLInputElement;
+    const keep = "Leave empty to keep the current secret";
+    expect(secret.placeholder).toBe(keep);
+    fireEvent.change(screen.getByLabelText("Client ID"), {
+      target: { value: "another" },
+    });
+    expect((save() as HTMLButtonElement).disabled).toBe(true);
+    expect(secret.placeholder).toBe("");
+
+    // The saved issuer's discovery URL names the same client.
+    fireEvent.change(screen.getByLabelText("Client ID"), {
+      target: { value: "contrack" },
+    });
+    fireEvent.change(screen.getByLabelText("Issuer"), {
+      target: { value: `${SAVED.issuer}/.well-known/openid-configuration` },
+    });
+    expect((save() as HTMLButtonElement).disabled).toBe(false);
+    expect(secret.placeholder).toBe(keep);
+
+    fireEvent.change(screen.getByLabelText("Issuer"), {
+      target: { value: "https://other.example.com" },
+    });
+    expect((save() as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(secret, { target: { value: "new-secret" } });
+    expect((save() as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("shows the server's refusal next to the form", async () => {

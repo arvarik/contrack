@@ -41,6 +41,7 @@ import {
 } from "../layout";
 import { LoadFailed } from "../../../components/ui/LoadFailed";
 import { useAuth } from "../../../components/auth/AuthGate";
+import { normalizeIssuer } from "../../../../shared/contracts/admin";
 
 const KEY_INPUT = cn(SETTINGS_INPUT, "font-mono");
 
@@ -913,18 +914,23 @@ export const OidcRow = () => {
   }, [oidc]);
 
   // Save is on for any change from what is saved. A first setup needs all
-  // three credentials; later, an empty secret keeps the saved one.
+  // three credentials. Later, an empty secret keeps the saved one, as the
+  // server does, only while the issuer and client ID name the same client.
   const changed =
     issuer.trim() !== (oidc?.issuer ?? "") ||
     clientId.trim() !== (oidc?.clientId ?? "") ||
     clientSecret.trim() !== "" ||
     name.trim() !== (oidc?.name ?? "") ||
     matchByEmail !== (oidc?.matchByEmail ?? false);
+  const keepsSecret =
+    configured &&
+    normalizeIssuer(issuer) === normalizeIssuer(oidc?.issuer ?? "") &&
+    clientId.trim() === (oidc?.clientId ?? "");
   const canSave =
     changed &&
     issuer.trim() !== "" &&
     clientId.trim() !== "" &&
-    (configured || clientSecret.trim() !== "");
+    (keepsSecret || clientSecret.trim() !== "");
 
   // The provider sends the browser back to the address the server sends it,
   // and the flow cookie belongs to the host that started the flow.
@@ -1145,7 +1151,9 @@ export const OidcRow = () => {
                       setClientSecret(event.target.value);
                     }}
                     placeholder={
-                      configured ? "Leave empty to keep the current secret" : ""
+                      keepsSecret
+                        ? "Leave empty to keep the current secret"
+                        : ""
                     }
                     className={cn(KEY_INPUT, "pr-10")}
                     {...NO_AUTOCORRECT}
