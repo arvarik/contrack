@@ -29,7 +29,6 @@ import {
 const identitiesQuery = queryOptions({
   queryKey: ["auth", "identities"],
   queryFn: listIdentities,
-  staleTime: 30_000,
 });
 
 /** The toast for the address's ?oidc=<outcome> after a link attempt. */
@@ -95,7 +94,7 @@ export const SingleSignOnCard = () => {
     mutationFn: (identity: LinkedIdentity) => unlinkIdentity(identity.id),
     onSuccess: (_data, identity) => {
       setTarget(null);
-      queryClient.invalidateQueries({ queryKey: ["auth", "identities"] });
+      queryClient.invalidateQueries({ queryKey: identitiesQuery.queryKey });
       toast.success(`${nameOf(identity)} unlinked`);
     },
     onError: (error: Error) =>
@@ -104,6 +103,7 @@ export const SingleSignOnCard = () => {
 
   if (!oidc) return null;
   const identities = data?.identities ?? [];
+  const unlinkLabel = `Unlink ${target ? nameOf(target) : oidc.name}`;
   const canLink =
     !isLoading && !isError && !identities.some((identity) => identity.current);
   const linkButton = (
@@ -203,9 +203,9 @@ export const SingleSignOnCard = () => {
         isOpen={target !== null}
         onClose={() => setTarget(null)}
         onConfirm={() => target && unlink.mutate(target)}
-        title={`Unlink ${target ? nameOf(target) : oidc.name}`}
+        title={unlinkLabel}
         description={`You can still sign in with ${others}${data?.matchByEmail && target?.current ? `. Email matching is on, so your next ${oidc.name} sign-in links this account again` : ""}`}
-        confirmLabel={`Unlink ${target ? nameOf(target) : oidc.name}`}
+        confirmLabel={unlinkLabel}
         tone="danger"
         busy={unlink.isPending}
       />
