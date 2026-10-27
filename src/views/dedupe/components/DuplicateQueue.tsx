@@ -61,8 +61,13 @@ import { LoadFailed } from "../../../components/ui/LoadFailed";
 /** A merge request names at most this many contacts besides the one kept. */
 const MERGE_LIMIT = 10;
 
-/** The one Undo message: a new decision's replaces the last one's. */
+/**
+ * The one Undo message: a new decision's replaces the last one's. Each has
+ * its own id, because sonner removes a closed toast by its id 200 ms later,
+ * and that removal also took a new toast that reused the id.
+ */
 const UNDO_TOAST = "duplicates-undo";
+let undoToasts = 0;
 
 const LEVELS: MatchLevel[] = ["very-likely", "likely", "check"];
 
@@ -138,6 +143,7 @@ export const DuplicateQueue = () => {
   /** After a group leaves, the one at this place in the list takes over. */
   const nextAt = useRef<number | null>(null);
   const lastAction = useRef<LastAction | null>(null);
+  const undoToast = useRef<string | null>(null);
 
   const index = (() => {
     const exact = groups.findIndex((g) => g.key === currentKey);
@@ -212,10 +218,13 @@ export const DuplicateQueue = () => {
       undo: () => Promise<void>,
       description?: string,
     ) => {
+      if (undoToast.current) toast.dismiss(undoToast.current);
+      const id = `${UNDO_TOAST}-${++undoToasts}`;
+      undoToast.current = id;
       const action: LastAction = {
         run: async () => {
           if (lastAction.current === action) lastAction.current = null;
-          toast.dismiss(UNDO_TOAST);
+          toast.dismiss(id);
           try {
             await undo();
           } catch (err) {
@@ -225,7 +234,7 @@ export const DuplicateQueue = () => {
       };
       lastAction.current = action;
       const options = {
-        id: UNDO_TOAST,
+        id,
         description,
         ...withUndo(() => void action.run()),
       };

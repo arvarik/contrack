@@ -339,6 +339,26 @@ describe("Undo", () => {
     ).toBe(true);
   });
 
+  // sonner removes a closed toast by its id 200 ms later. A message that
+  // reused the id vanished when it came that soon after an Undo.
+  it("gives each message its own id, so an Undo never closes the next one", async () => {
+    stubApi([pair("ab", ada, quill, 0.95), pair("cd", tobias, wren, 0.95)]);
+    renderQueue();
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Keep separate/ }),
+    );
+    await waitFor(() => expect(toast).toHaveBeenCalledTimes(1));
+    const first = vi.mocked(toast).mock.calls[0][1]?.id;
+    await act(async () => lastUndo(toast)());
+    expect(toast.dismiss).toHaveBeenCalledWith(first);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Keep separate/ }),
+    );
+    await waitFor(() => expect(toast).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(toast).mock.calls[1][1]?.id).not.toBe(first);
+  });
+
   it("is Z, for the last decision", async () => {
     const calls = stubApi([pair("ab", ada, quill, 0.95)]);
     renderQueue();
