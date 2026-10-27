@@ -5,13 +5,14 @@
 // itself (`requireSession`). On a gated instance with no accounts nobody can
 // sign in, so /setup is open until an account exists, then answers 409.
 
+import crypto from "crypto";
 import { Router, type Request, type Response } from "express";
 import { AppError, ValidationError } from "../utils/AppError.ts";
 import { log } from "../utils/logger.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { validatePassword } from "../services/passwords.ts";
 import { createRateLimiter } from "../middleware/rateLimit.ts";
-import { validateBody } from "../utils/validators.ts";
+import { parseQuery, validateBody } from "../utils/validators.ts";
 import {
   acceptInvitationSchema,
   authRoutes,
@@ -61,6 +62,9 @@ import {
   presentedSessionSecret,
   setSessionCookie,
   clearSessionCookie,
+  setOidcStateCookie,
+  clearOidcStateCookie,
+  presentedOidcState,
 } from "../middleware/auth.ts";
 import {
   accountIdForIdentifier,
@@ -93,7 +97,14 @@ import {
   processProfilePhoto,
   AVATAR_MIME_EXTENSIONS,
 } from "../utils/avatarProcessor.ts";
-import { mailLinkOrigin } from "../utils/publicOrigin.ts";
+import { mailLinkOrigin, oidcCallbackUrl } from "../utils/publicOrigin.ts";
+import { getOidcConfig } from "../services/integrationSettings.ts";
+import { startOidc } from "../services/oidcService.ts";
+import { finishOidcCallback } from "../services/oidcSignInService.ts";
+import {
+  accountIdentities,
+  unlinkIdentity,
+} from "../services/identityService.ts";
 import { oauthIssuer } from "../services/oauthService.ts";
 import type { SessionMethod } from "../../shared/devices.ts";
 import {
@@ -165,8 +176,21 @@ const linkLimiter = createRateLimiter({
   name: "auth links",
 });
 
+/**
+ * Twenty single sign-on starts a minute per IP, apart from the password
+ * budget, so an office signing in with SSO does not lock out password
+ * sign-in. The callback has none: the flow cookie, the random state and the
+ * single-use flow leave nothing to guess.
+ */
+const oidcLimiter = createRateLimiter({
+  windowMs: 60_000,
+  max: 20,
+  name: "single sign-on",
+});
+
 /** Clear every credential window in this module. Test seam. */
 export function __resetAuthRateLimits(): void {
+  oidcLimiter.reset();
   credentialLimiter.reset();
   setupLimiter.reset();
   tokenLimiter.reset();
@@ -253,6 +277,11 @@ router.get("/status", (req, res) => {
     // Whether an MCP client can sign in with OAuth here (oauthService.ts):
     // sign-in is on, and PUBLIC_URL is https or a loopback http address.
     mcpOAuth: authRequired && oauthIssuer() !== null,
+    // The OIDC provider's button name, while sign-in is on and one is set up.
+    oidc: (() => {
+      const config = authRequired ? getOidcConfig() : null;
+      return config ? { name: config.name } : null;
+    })(),
     // What this instance calls itself, or "". Unauthenticated on purpose: the
     // sign-in and join screens need it before anybody has a credential. An
     // operator who names an instance chooses to show the name to anybody who
@@ -978,6 +1007,135 @@ router.post(
     dismissPasskeyNudge(user.id);
     res.json({ ok: true });
   }),
+);
+
+// Single sign-on (OIDC)
+
+/** OIDC is offered only while sign-in is on. */
+function assertOidcAvailable(): void {
+  if (!isAuthRequired() || !getOidcConfig()) {
+    throw new AppError("Single sign-on is off", 404, { code: "OIDC_OFF" });
+  }
+}
+
+/**
+ * Start a flow and bind it to this browser: the flow cookie holds its state,
+ * and the callback refuses a state the cookie does not hold.
+ */
+async function startBoundOidc(
+  req: Request,
+  res: Response,
+  flow: { linkUserId: string | null; remember?: boolean; returnTo?: string },
+): Promise<string> {
+  const url = await startOidc({ redirectUri: oidcCallbackUrl(req), ...flow });
+  setOidcStateCookie(req, res, new URL(url).searchParams.get("state") ?? "");
+  return url;
+}
+
+/** True when the flow cookie holds this callback's state. Constant time. */
+function stateMatchesCookie(req: Request): boolean {
+  const state = req.query.state;
+  const held = presentedOidcState(req);
+  if (typeof state !== "string" || !state || !held) return false;
+  const digest = (value: string) =>
+    crypto.createHash("sha256").update(value).digest();
+  return crypto.timingSafeEqual(digest(state), digest(held));
+}
+
+router.get(
+  "/oidc/start",
+  // A browser navigates here, so a refusal goes back to the sign-in page
+  // instead of showing JSON.
+  (req, res, next) =>
+    oidcLimiter(req, res, (err?: unknown) => {
+      if (!err) return next();
+      log.warn("Auth", "OIDC sign-in start refused by the rate limit");
+      res.redirect("/?oidc=failed");
+    }),
+  asyncHandler(async (req, res) => {
+    try {
+      assertOidcAvailable();
+      const query = parseQuery(authRoutes.oidcStart.query, req.query);
+      res.redirect(
+        await startBoundOidc(req, res, {
+          linkUserId: null,
+          remember: query.remember !== "0",
+          returnTo: query.returnTo,
+        }),
+      );
+    } catch (error) {
+      log.warn("Auth", "OIDC sign-in could not start", { error });
+      res.redirect("/?oidc=failed");
+    }
+  }),
+);
+
+/** Start linking the signed-in account. A POST, so a cross-site page cannot start it. */
+router.post(
+  "/oidc/link",
+  oidcLimiter,
+  requireSession,
+  requirePasswordCurrent,
+  asyncHandler(async (req, res) => {
+    assertOidcAvailable();
+    res.json({
+      url: await startBoundOidc(req, res, {
+        linkUserId: req.principal!.user.id,
+      }),
+    });
+  }),
+);
+
+router.get(
+  "/oidc/callback",
+  asyncHandler(async (req, res) => {
+    // The flow ends here, whatever the outcome.
+    clearOidcStateCookie(req, res);
+    if (!isAuthRequired()) return res.redirect("/");
+    // Checked before the flow is consumed, so a callback from another
+    // browser's flow cannot use up that flow's state.
+    if (!stateMatchesCookie(req)) {
+      log.warn("Auth", "OIDC callback without this browser's flow cookie");
+      return res.redirect("/?oidc=failed");
+    }
+    // The address the provider was given at the start, with this query.
+    const query = req.originalUrl.indexOf("?");
+    const result = await finishOidcCallback(
+      new URL(
+        oidcCallbackUrl(req) +
+          (query === -1 ? "" : req.originalUrl.slice(query)),
+      ),
+      req.principal?.via === "session" ? req.principal.user.id : null,
+      { ip: ipOf(req), userAgent: req.headers["user-agent"] ?? null },
+    );
+    if (result.session) {
+      const { secret, expiresAt, remember } = result.session;
+      setSessionCookie(req, res, secret, expiresAt, { sessionOnly: !remember });
+    }
+    res.redirect(result.landing);
+  }),
+);
+
+router.get("/identities", requireSession, (req, res) => {
+  res.json(accountIdentities(req.principal!.user.id));
+});
+
+router.delete(
+  "/identities/:id",
+  requireSession,
+  requirePasswordCurrent,
+  (req, res) => {
+    const user = req.principal!.user;
+    unlinkIdentity(user.id, String(req.params.id));
+    auditService.record({
+      actorUserId: user.id,
+      action: "auth.oidc.unlinked",
+      targetType: "user",
+      targetId: user.id,
+      ip: ipOf(req),
+    });
+    res.json({ ok: true });
+  },
 );
 
 export const authRouter = router;

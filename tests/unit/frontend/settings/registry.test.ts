@@ -56,6 +56,17 @@ describe("settings registry", () => {
     ).toBe(false);
   });
 
+  it("finds single sign-on for a member and for an admin", () => {
+    const member = findRows("single sign-on", { isAdmin: false });
+    expect(member.some((h) => h.path.startsWith("/settings/account"))).toBe(
+      true,
+    );
+    const admin = findRows("oidc", { isAdmin: true });
+    expect(admin.find((h) => h.id === "oidc")?.path).toBe(
+      "/settings/admin/general#oidc",
+    );
+  });
+
   it("findRows returns hits for personal preference rows", () => {
     const cadenceHit = findRows("cadence").find((h) => h.id === "cadence");
     expect(cadenceHit?.path).toBe("/settings/network#cadence");

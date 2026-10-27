@@ -248,6 +248,7 @@ export function resetAccounts(): void {
     DELETE FROM contacts;
     DELETE FROM map_views;
     DELETE FROM sessions;
+    DELETE FROM user_identities;
     DELETE FROM api_tokens;
     DELETE FROM users;
   `);

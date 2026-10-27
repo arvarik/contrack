@@ -14,6 +14,7 @@ import {
 } from "../../../../src/api/connectors";
 import { connectorViaLabel } from "../../../../shared/connectors";
 import { useUpdateIntegrations } from "../../../../src/api/admin";
+import { AUTH_STATUS_STALE_EVENT } from "../../../../src/lib/appEvents";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -266,5 +267,18 @@ describe("src/api/admin.ts useUpdateIntegrations", () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: connectorKeys.kinds,
     });
+  });
+
+  it("asks the gate to re-read the auth status, so a saved SSO provider shows at once", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({})));
+    const stale = vi.fn();
+    window.addEventListener(AUTH_STATUS_STALE_EVENT, stale);
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useUpdateIntegrations(), { wrapper });
+
+    await result.current.mutateAsync({ oidc: null });
+
+    window.removeEventListener(AUTH_STATUS_STALE_EVENT, stale);
+    expect(stale).toHaveBeenCalledTimes(1);
   });
 });

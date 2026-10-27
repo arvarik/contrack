@@ -70,6 +70,20 @@ export const adminSettingsSchema = z
     message: "Send a setting to change",
   });
 
+/** An OIDC issuer address: https, or http on a loopback host. */
+export function isAllowedIssuer(value: string): boolean {
+  try {
+    const url = new URL(value);
+    if (url.protocol === "https:") return true;
+    return (
+      url.protocol === "http:" &&
+      ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
 /** Body for PUT /api/admin/integrations. */
 export const adminIntegrationsSchema = z
   .object({
@@ -77,6 +91,24 @@ export const adminIntegrationsSchema = z
       .object({
         clientId: z.string().trim().min(1, "Client ID is required"),
         clientSecret: z.string().trim().min(1, "Client Secret is required"),
+      })
+      .nullable()
+      .optional(),
+    oidc: z
+      .object({
+        issuer: z
+          .string()
+          .trim()
+          .url("Issuer must be a URL")
+          .refine(isAllowedIssuer, {
+            message: "Issuer must use https:// (http only for localhost)",
+          }),
+        clientId: z.string().trim().min(1, "Client ID is required"),
+        // Left out or empty keeps the saved secret, for the same issuer and
+        // client ID only (oidcService.saveOidcProvider).
+        clientSecret: z.string().trim().optional(),
+        name: z.string().trim().min(1).max(40),
+        matchByEmail: z.boolean(),
       })
       .nullable()
       .optional(),

@@ -86,6 +86,8 @@ const ADDED_SINCE_FIXTURE = [
   "fts_education_ai",
   "fts_education_ad",
   "fts_education_au",
+  // 0002_sign_in_identities
+  "user_identities",
 ];
 
 interface MasterRow {
@@ -187,7 +189,10 @@ describe("a new database", () => {
     }
 
     expect(runMigrations(dev, MIGRATIONS)).toEqual([]);
-    expect(appliedMigrations(dev)).toEqual(["0001_baseline"]);
+    expect(appliedMigrations(dev)).toEqual([
+      "0001_baseline",
+      "0002_sign_in_identities",
+    ]);
     const addr = dev
       .prepare(
         "SELECT address, label, isPrimary FROM contact_addresses WHERE contactId = 'c-legacy'",

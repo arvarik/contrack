@@ -416,6 +416,85 @@
         }
       }
     },
+    "/api/auth/identities": {
+      "get": {
+        "summary": "The provider sign-ins linked to the account",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "identities": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": { "type": "string" },
+                          "issuer": { "type": "string" },
+                          "email": { "type": ["string", "null"] },
+                          "createdAt": { "type": "string" },
+                          "lastUsedAt": { "type": ["string", "null"] },
+                          "current": {
+                            "type": "boolean",
+                            "description": "True when it is at the provider set up now"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "issuer",
+                          "email",
+                          "createdAt",
+                          "lastUsedAt",
+                          "current"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "matchByEmail": {
+                      "type": "boolean",
+                      "description": "True when a sign-in links to an account by its email, so an unlinked account links again"
+                    }
+                  },
+                  "required": ["identities", "matchByEmail"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/identities/{id}": {
+      "delete": {
+        "summary": "Unlink a provider sign-in from the account",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "ok": { "type": "boolean", "const": true } },
+                  "required": ["ok"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/invitations/check": {
       "post": {
         "summary": "Whether an invitation link can still make an account: 404 for one that never was, 410 for one used, revoked or expired",
@@ -508,6 +587,64 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/auth/oidc/callback": {
+      "get": {
+        "summary": "Where the provider sends the browser back. Answers 302: a sign-in to its `returnTo` (or `/`), a link to `/settings/account?oidc=linked#password`. A failure adds `?oidc=` with denied, expired, failed, no-account, disabled or must-change-password to `/`, or denied, expired, failed or taken to the Account settings address for a link",
+        "responses": {
+          "302": {
+            "description": "Success",
+            "content": { "application/json": { "schema": { "type": "null" } } }
+          }
+        }
+      }
+    },
+    "/api/auth/oidc/link": {
+      "post": {
+        "summary": "Start linking the signed-in account to the provider. Answers the provider's address",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "url": { "type": "string" } },
+                  "required": ["url"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/oidc/start": {
+      "get": {
+        "summary": "Start a single sign-on. Answers 302 to the provider, or to `/?oidc=failed` when it cannot start",
+        "parameters": [
+          {
+            "name": "remember",
+            "in": "query",
+            "required": false,
+            "description": "\"0\" for a session that ends when the browser closes",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "returnTo",
+            "in": "query",
+            "required": false,
+            "description": "A path on this site to land on after signing in. Anything else lands on `/`",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Success",
+            "content": { "application/json": { "schema": { "type": "null" } } }
           }
         }
       }

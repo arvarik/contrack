@@ -2,9 +2,10 @@
 // The check of an invitation link, and the bodies of the two routes that
 // create an account from outside. Those two have no contract yet: they are
 // in `UNCONTRACTED` in `index.ts`. The token routes under /api/auth have
-// theirs in `tokens.ts`.
+// theirs in `tokens.ts`. Also the single sign-on (OIDC) routes.
 
 import { z } from "zod";
+import { queryText } from "./common.ts";
 import { route } from "./route.ts";
 
 export const authRoutes = {
@@ -16,6 +17,67 @@ export const authRoutes = {
     // Any string, like accepting the link: an empty token is one more
     // unknown link, not a field error.
     body: z.object({ token: z.string() }),
+    response: z.strictObject({ ok: z.literal(true) }),
+  }),
+  oidcStart: route({
+    method: "GET",
+    path: "/api/auth/oidc/start",
+    summary:
+      "Start a single sign-on. Answers 302 to the provider, or to `/?oidc=failed` when it cannot start",
+    query: z.object({
+      remember: queryText.describe(
+        '"0" for a session that ends when the browser closes',
+      ),
+      returnTo: queryText.describe(
+        "A path on this site to land on after signing in. Anything else lands on `/`",
+      ),
+    }),
+    status: 302,
+    response: z.null(),
+  }),
+  oidcLink: route({
+    method: "POST",
+    path: "/api/auth/oidc/link",
+    summary:
+      "Start linking the signed-in account to the provider. Answers the provider's address",
+    response: z.strictObject({ url: z.string() }),
+  }),
+  oidcCallback: route({
+    method: "GET",
+    path: "/api/auth/oidc/callback",
+    summary:
+      "Where the provider sends the browser back. Answers 302: a sign-in to its `returnTo` (or `/`), a link to `/settings/account?oidc=linked#password`. A failure adds `?oidc=` with denied, expired, failed, no-account, disabled or must-change-password to `/`, or denied, expired, failed or taken to the Account settings address for a link",
+    status: 302,
+    response: z.null(),
+  }),
+  identities: route({
+    method: "GET",
+    path: "/api/auth/identities",
+    summary: "The provider sign-ins linked to the account",
+    response: z.strictObject({
+      identities: z.array(
+        z.strictObject({
+          id: z.string(),
+          issuer: z.string(),
+          email: z.string().nullable(),
+          createdAt: z.string(),
+          lastUsedAt: z.string().nullable(),
+          current: z
+            .boolean()
+            .describe("True when it is at the provider set up now"),
+        }),
+      ),
+      matchByEmail: z
+        .boolean()
+        .describe(
+          "True when a sign-in links to an account by its email, so an unlinked account links again",
+        ),
+    }),
+  }),
+  unlinkIdentity: route({
+    method: "DELETE",
+    path: "/api/auth/identities/:id",
+    summary: "Unlink a provider sign-in from the account",
     response: z.strictObject({ ok: z.literal(true) }),
   }),
 };

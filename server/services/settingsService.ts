@@ -83,4 +83,6 @@ export const SETTING_KEYS = {
   backupKeep: "backup.keep",
   /** string (sealed) — Google OAuth clientId and clientSecret encrypted with secretBox */
   googleOAuth: "connectors.googleOAuth",
+  /** string (sealed) — the OIDC sign-in provider (issuer, client, name, matchByEmail) */
+  oidc: "auth.oidc",
 } as const;
