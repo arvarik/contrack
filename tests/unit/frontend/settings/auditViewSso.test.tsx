@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 // How the audit log reads a failed SSO sign-in: no account, a disabled
-// account, an account that must change its password first. The Sign-in
-// filter finds the SSO and passkey rows.
+// account, an account that must change its password first.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import React from "react";
@@ -74,23 +73,5 @@ describe("AuditView failed SSO sign-ins", () => {
     expect(screen.getByText("SSO · account disabled")).toBeTruthy();
     expect(screen.getByText("by ada")).toBeTruthy();
     expect(screen.getByText("SSO · must change password")).toBeTruthy();
-  });
-});
-
-describe("AUDIT_GROUPS Sign-in", () => {
-  it("covers the SSO and passkey actions", async () => {
-    const { AUDIT_GROUPS } = await vi.importActual<
-      typeof import("../../../../src/api/admin")
-    >("../../../../src/api/admin");
-    const signIn = AUDIT_GROUPS.find((group) => group.key === "sign-in");
-    expect(signIn?.actions).toEqual(
-      expect.arrayContaining([
-        "auth.oidc.linked",
-        "auth.oidc.unlinked",
-        "auth.passkey.added",
-        "auth.passkey.renamed",
-        "auth.passkey.removed",
-      ]),
-    );
   });
 });

@@ -6,7 +6,13 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import React from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const api = vi.hoisted(() => ({
@@ -72,17 +78,10 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("SingleSignOnCard", () => {
-  it("offers Link in the empty state", async () => {
-    show();
-    expect(await screen.findByText("Not linked")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Link Authentik" })).toBeTruthy();
-  });
-
   it("starts one link however often the empty state's Link is clicked", async () => {
     show();
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Link Authentik" }),
-    );
+    expect(await screen.findByText("Not linked")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Link Authentik" }));
     const pending = await screen.findByRole("button", { name: "Opening…" });
     fireEvent.click(pending);
     fireEvent.click(pending);
@@ -91,72 +90,61 @@ describe("SingleSignOnCard", () => {
     expect(api.startOidcLink).toHaveBeenCalledTimes(1);
   });
 
-  it("hides Link while an identity is at the current provider", async () => {
-    api.identities = [identity()];
+  it.each([
+    ["hides Link while an identity is at the current provider", {}, "a@b.c", 0],
+    [
+      "offers Link for the new provider and names the old identity by its host",
+      { email: null, issuer: "https://old.example.org", current: false },
+      "old.example.org account",
+      1,
+    ],
+  ])("%s", async (_case, over, shown, links) => {
+    api.identities = [identity(over)];
     show();
-    await screen.findByText("a@b.c");
-    expect(screen.queryByRole("button", { name: "Link Authentik" })).toBeNull();
+    expect(await screen.findByText(shown)).toBeTruthy();
+    expect(
+      screen.queryAllByRole("button", { name: "Link Authentik" }),
+    ).toHaveLength(links);
   });
 
-  it("offers Link for the new provider and names the old identity by its host", async () => {
-    api.identities = [
-      identity({
-        email: null,
-        issuer: "https://old.example.org",
-        current: false,
-      }),
-    ];
-    show();
-    expect(await screen.findByText("old.example.org account")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Link Authentik" })).toBeTruthy();
-  });
-
-  it("tells the truth in the unlink dialog, and leaves passkeys out when there are none", async () => {
-    api.identities = [identity()];
-    show();
-    fireEvent.click(await screen.findByLabelText("Unlink a@b.c"));
-    const text = (await screen.findByRole("dialog")).textContent ?? "";
-    expect(text).not.toContain("passkeys");
-    expect(text).not.toContain("links this account again");
-  });
-
-  it("warns that SSO links the account again only while email matching is on", async () => {
-    api.identities = [identity()];
-    api.matchByEmail = true;
-    show();
-    fireEvent.click(await screen.findByLabelText("Unlink a@b.c"));
-    await screen.findByText(
-      /Email matching is on, so your next Authentik sign-in links this account again/,
-    );
-  });
-
-  it("names an old provider's identity by its host when unlinking, without the matching warning", async () => {
-    api.identities = [
-      identity({ issuer: "https://old.example.org", current: false }),
-    ];
-    api.matchByEmail = true;
+  // The unlink dialog tells the truth about email matching and passkeys.
+  it.each([
+    [
+      "warns that SSO links the account again while email matching is on",
+      { matchByEmail: true },
+      {},
+      "Unlink Authentik",
+      "You can still sign in with your password. Email matching is on, so your next Authentik sign-in links this account again",
+    ],
+    [
+      "names an old provider's identity by its host, without the matching warning",
+      { matchByEmail: true },
+      { issuer: "https://old.example.org", current: false },
+      "Unlink old.example.org",
+      "You can still sign in with your password",
+    ],
+    [
+      "does not claim the account has no passkeys when they cannot be checked",
+      { passkeysSupported: false },
+      {},
+      "Unlink Authentik",
+      "You can still sign in with your password and any other sign-in methods",
+    ],
+    [
+      "mentions passkeys when the account has one",
+      { passkeys: [{ id: "p" }] },
+      {},
+      "Unlink Authentik",
+      "You can still sign in with your password and passkeys",
+    ],
+  ])("%s", async (_case, state, over, title, words) => {
+    Object.assign(api, state);
+    api.identities = [identity(over)];
     show();
     fireEvent.click(await screen.findByLabelText("Unlink a@b.c"));
     const dialog = await screen.findByRole("dialog");
-    expect(dialog.textContent).toContain("Unlink old.example.org");
-    expect(dialog.textContent).not.toContain("links this account again");
-  });
-
-  it("does not claim the account has no passkeys when passkeys cannot be checked", async () => {
-    api.identities = [identity()];
-    api.passkeysSupported = false;
-    show();
-    fireEvent.click(await screen.findByLabelText("Unlink a@b.c"));
-    await screen.findByText(/any other sign-in methods/);
-  });
-
-  it("mentions passkeys when the account has one", async () => {
-    api.identities = [identity()];
-    api.passkeys = [{ id: "p" }];
-    show();
-    await screen.findByText("a@b.c");
-    fireEvent.click(screen.getByLabelText("Unlink a@b.c"));
-    await screen.findByText(/and passkeys/);
+    expect(await within(dialog).findByText(words)).toBeTruthy();
+    expect(within(dialog).getByRole("heading").textContent).toBe(title);
   });
 
   it("reports the outcome in the address and keeps the history state", async () => {
