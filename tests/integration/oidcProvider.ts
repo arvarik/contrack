@@ -30,7 +30,6 @@ export async function startFakeProvider() {
   idp.use(express.urlencoded({ extended: false }));
   let next: FakeLogin | null = null;
   let issuer = "";
-  let clientId = "contrack";
   let lastNonce = "";
   let signedIn: FakeLogin | null = null;
   let tokenRedirect: string | null = null;
@@ -128,7 +127,7 @@ export async function startFakeProvider() {
     })
       .setProtectedHeader({ alg: "RS256", kid: "k1" })
       .setIssuer(issuer)
-      .setAudience(clientId)
+      .setAudience("contrack")
       .setSubject(login.sub)
       .setIssuedAt()
       .setExpirationTime("5m")
@@ -151,9 +150,6 @@ export async function startFakeProvider() {
 
   return {
     issuer,
-    setClientId(id: string) {
-      clientId = id;
-    },
     /** Queue the account the next code exchange signs in. */
     nextLogin(login: FakeLogin) {
       next = login;

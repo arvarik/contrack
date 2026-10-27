@@ -144,7 +144,7 @@ describe("oidcService", () => {
     expect(takeOidcFlow(flow.state, flow.binding)).toBeNull();
   });
 
-  it("keeps the remember choice and only a same-origin return path in the flow", async () => {
+  it("keeps the remember choice and only a path on this origin as the return path", async () => {
     const take = async (input: { remember?: boolean; returnTo?: string }) => {
       const { state, binding } = await start(input);
       return takeOidcFlow(state, binding);
@@ -161,18 +161,7 @@ describe("oidcService", () => {
     expect(await take({ returnTo: "//evil.com" })).toMatchObject({
       returnTo: null,
     });
-  });
 
-  it("marks a flow past its ten minutes expired", async () => {
-    const flow = await start();
-    sqlite
-      .prepare("UPDATE auth_challenges SET expiresAt = ? WHERE id = ?")
-      .run(new Date(Date.now() - 1000).toISOString(), flow.state);
-    expect(takeOidcFlow(flow.state, flow.binding)?.expired).toBe(true);
-  });
-
-  it("accepts only a path on this origin as the return path", () => {
-    expect(safeReturnTo("/contacts/abc?x=1")).toBe("/contacts/abc?x=1");
     expect(safeReturnTo("/")).toBe("/");
     for (const bad of [
       "//evil.com",

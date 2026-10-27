@@ -27,24 +27,16 @@ async function user(name: string) {
 describe("identityService", () => {
   beforeEach(() => resetAccounts());
 
-  it("links, finds, lists and unlinks", async () => {
-    const ada = await user("ada");
-    const linked = linkIdentity(ada.id, ISSUER, "sub-1", "ada@example.com");
-    expect(findUserIdByIdentity(ISSUER, "sub-1")).toBe(ada.id);
-    expect(listIdentities(ada.id)).toEqual([
-      expect.objectContaining({ id: linked.id, email: "ada@example.com" }),
-    ]);
-    unlinkIdentity(ada.id, linked.id);
-    expect(findUserIdByIdentity(ISSUER, "sub-1")).toBeNull();
-  });
-
-  it("refuses an identity another account holds", async () => {
+  it("will not link or unlink an identity another account holds", async () => {
     const ada = await user("ada");
     const bob = await user("bob");
     linkIdentity(ada.id, ISSUER, "sub-1", null);
     expect(() => linkIdentity(bob.id, ISSUER, "sub-1", null)).toThrow(
       ConflictError,
     );
+    const [held] = listIdentities(ada.id);
+    expect(() => unlinkIdentity(bob.id, held.id)).toThrow(NotFoundError);
+    expect(findUserIdByIdentity(ISSUER, "sub-1")).toBe(ada.id);
   });
 
   it("replaces the same account's link to the same provider", async () => {
@@ -55,18 +47,12 @@ describe("identityService", () => {
         "UPDATE user_identities SET createdAt = '2020-01-01 00:00:00', lastUsedAt = '2020-01-02 00:00:00'",
       )
       .run();
-    const relinked = linkIdentity(ada.id, ISSUER, "sub-2", null);
+    linkIdentity(ada.id, ISSUER, "sub-2", null);
     expect(findUserIdByIdentity(ISSUER, "sub-1")).toBeNull();
     expect(findUserIdByIdentity(ISSUER, "sub-2")).toBe(ada.id);
     // A new link: its dates start over.
+    const [relinked] = listIdentities(ada.id);
     expect(relinked.createdAt).not.toBe("2020-01-01 00:00:00");
     expect(relinked.lastUsedAt).toBeNull();
-  });
-
-  it("will not unlink another account's identity", async () => {
-    const ada = await user("ada");
-    const bob = await user("bob");
-    const linked = linkIdentity(ada.id, ISSUER, "sub-1", null);
-    expect(() => unlinkIdentity(bob.id, linked.id)).toThrow(NotFoundError);
   });
 });

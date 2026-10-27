@@ -10,6 +10,7 @@ import {
   expect,
   beforeAll,
   afterAll,
+  afterEach,
   beforeEach,
   vi,
 } from "vitest";
@@ -21,13 +22,15 @@ import { __resetAuthRateLimits } from "../../server/routes/auth.ts";
 import { __resetAuthWarnings } from "../../server/middleware/auth.ts";
 import { clearSettingsCache } from "../../server/services/settingsService.ts";
 import { log } from "../../server/utils/logger.ts";
-import { setOidcConfig } from "../../server/services/integrationSettings.ts";
+import {
+  setOidcConfig,
+  type OidcConfigInput,
+} from "../../server/services/integrationSettings.ts";
 import { forgetOidcDiscovery } from "../../server/services/oidcService.ts";
-import { completeOidcSignIn } from "../../server/services/oidcSignInService.ts";
 import { createUser } from "../../server/services/authService.ts";
 import { createAuthLink } from "../../server/services/authLinkService.ts";
 import * as identityService from "../../server/services/identityService.ts";
-const { linkIdentity } = identityService;
+const { linkIdentity, listIdentities } = identityService;
 import {
   startFakeProvider,
   USERINFO_FAILURE,
@@ -43,6 +46,10 @@ beforeAll(async () => {
   idp = await startFakeProvider();
 });
 afterAll(() => idp.close());
+afterEach(() => vi.restoreAllMocks());
+
+/** Set-Cookie lines as a browser sends them back. */
+const pairs = (setCookie: string[]) => setCookie.map((c) => c.split(";")[0]);
 
 async function setup(matchByEmail = true) {
   resetAccounts();
@@ -73,8 +80,41 @@ async function setup(matchByEmail = true) {
     role: "member",
     emailTrusted: true,
   });
-  return { adminCookie: cookieFrom(admin), adminId: admin.body.user.id, ada };
+  return {
+    adminCookie: pairs(cookieFrom(admin)),
+    adminId: admin.body.user.id as string,
+    ada,
+  };
 }
+
+let ctx: Awaited<ReturnType<typeof setup>>;
+beforeEach(async () => {
+  ctx = await setup();
+});
+
+/** The rows `COUNT(*) FROM <from>` counts. */
+const count = (from: string, ...args: unknown[]) =>
+  (
+    sqlite.prepare(`SELECT COUNT(*) AS n FROM ${from}`).get(...args) as {
+      n: number;
+    }
+  ).n;
+
+/** The details of the first audit row that matches. */
+const auditDetails = (where: string, ...args: unknown[]) =>
+  JSON.parse(
+    (
+      sqlite
+        .prepare(`SELECT details FROM audit_log WHERE ${where}`)
+        .get(...args) as { details: string }
+    ).details,
+  );
+
+const sessionsOf = (userId: string) =>
+  count("sessions WHERE userId = ?", userId);
+
+/** Sessions an OIDC sign-in made. The admin's setup session is not one. */
+const oidcSessions = () => count("sessions WHERE method = 'oidc'");
 
 /** The flow cookie a response set, as a request sends it. */
 function flowCookie(res: request.Response): string {
@@ -93,21 +133,15 @@ function flowCookieAfter(res: request.Response, seconds: number): string[] {
   return maxAge > seconds ? [set.split(";")[0]] : [];
 }
 
-function sessionsOf(userId: string): number {
-  return (
-    sqlite
-      .prepare("SELECT COUNT(*) AS n FROM sessions WHERE userId = ?")
-      .get(userId) as { n: number }
-  ).n;
+/** The browser coming back from the provider with this query. */
+function callback(query: string, cookie?: string | string[]) {
+  const req = request(app).get(`/api/auth/oidc/callback?${query}`);
+  return cookie ? req.set("Cookie", [cookie].flat()) : req;
 }
 
-/** Sessions an OIDC sign-in made. The admin's setup session is not one. */
-const oidcSessions = () =>
-  (
-    sqlite
-      .prepare("SELECT COUNT(*) AS n FROM sessions WHERE method = 'oidc'")
-      .get() as { n: number }
-  ).n;
+/** Where a link flow lands on Account settings. */
+const linkLanding = (outcome: string) =>
+  `/settings/account?oidc=${outcome}#password`;
 
 /** Start a sign-in as a browser would: the state and the flow cookie. */
 async function startSignIn(query = "") {
@@ -121,9 +155,19 @@ async function startSignIn(query = "") {
 async function signIn(login: FakeLogin, query = "") {
   const { state, cookie } = await startSignIn(query);
   idp.nextLogin(login);
-  return request(app)
-    .get(`/api/auth/oidc/callback?code=c&state=${state}`)
-    .set("Cookie", cookie);
+  return callback(`code=c&state=${state}`, cookie);
+}
+
+/** Start linking the account `session` signs in, as Account settings does. */
+async function startLink(session: string[]) {
+  const link = await request(app)
+    .post("/api/auth/oidc/link")
+    .set("Cookie", session)
+    .set("Origin", ORIGIN);
+  expect(link.status).toBe(200);
+  const { state } = idp.remember(link.body.url);
+  const flow = flowCookie(link);
+  return { state, flow, cookie: [...session, flow], link };
 }
 
 async function passwordLogin(identifier: string): Promise<string[]> {
@@ -131,27 +175,28 @@ async function passwordLogin(identifier: string): Promise<string[]> {
     .post("/api/auth/login")
     .send({ identifier, password: PASSWORD });
   expect(res.status).toBe(200);
-  return cookieFrom(res).map((c) => c.split(";")[0]);
+  return pairs(cookieFrom(res));
 }
 
+const asAdmin = (req: request.Test) =>
+  req.set("Cookie", ctx.adminCookie).set("Origin", ORIGIN);
+
 describe("API: OIDC sign-in", () => {
-  beforeEach(() => setup());
-
-  it("reports the provider on /status while sign-in is on", async () => {
-    const res = await request(app).get("/api/auth/status");
-    expect(res.body.oidc).toEqual({ name: "Test IdP" });
-  });
-
-  it("reports no provider when none is set up, or sign-in is off", async () => {
+  it("reports the provider on /status only while sign-in is on and one is set up", async () => {
+    const status = async () =>
+      (await request(app).get("/api/auth/status")).body.oidc;
+    expect(await status()).toEqual({ name: "Test IdP" });
     setOidcConfig(null);
-    expect((await request(app).get("/api/auth/status")).body.oidc).toBeNull();
+    expect(await status()).toBeNull();
     await setup();
     __resetAuthWarnings();
-    expect((await request(app).get("/api/auth/status")).body.oidc).toBeNull();
+    expect(await status()).toBeNull();
   });
 
-  it("sets an HttpOnly flow cookie scoped to the OIDC routes, that outlives the flow", async () => {
-    const start = await request(app).get("/api/auth/oidc/start");
+  it("signs a linked identity in with a flow cookie that outlives the flow, and keeps the provider's current email", async () => {
+    const { ada } = ctx;
+    linkIdentity(ada.id, idp.issuer, "sub-ada", "old@idp.example");
+    const { state, cookie, start } = await startSignIn();
     const set = cookieFrom(start).find((c) => c.startsWith("contrack_oidc_"))!;
     expect(set).toContain("HttpOnly");
     expect(set).toContain("SameSite=Lax");
@@ -164,12 +209,9 @@ describe("API: OIDC sign-in", () => {
       (new Date(expiresAt).getTime() - Date.now()) / 1000,
     );
     expect(Number(/Max-Age=(\d+)/.exec(set)![1])).toBeGreaterThan(flowSeconds);
-  });
 
-  it("signs a linked identity in, and keeps the provider's current email", async () => {
-    const { ada } = await setup();
-    linkIdentity(ada.id, idp.issuer, "sub-ada", "old@idp.example");
-    const res = await signIn({ sub: "sub-ada", email: "ada@idp.example" });
+    idp.nextLogin({ sub: "sub-ada", email: "ada@idp.example" });
+    const res = await callback(`code=c&state=${state}`, cookie);
     expect(res.status).toBe(302);
     expect(res.headers.location).toBe("/");
     expect(cookieFrom(res).some((c) => c.startsWith("contrack_session="))).toBe(
@@ -179,40 +221,43 @@ describe("API: OIDC sign-in", () => {
     expect(cookieFrom(res)).toContainEqual(
       expect.stringMatching(/^contrack_oidc_[0-9a-f]{12}=;.*Max-Age=0/),
     );
+    // The token request names the redirect URI the start sent.
+    expect(idp.tokenRedirectUri()).toBe(`${ORIGIN}/api/auth/oidc/callback`);
+    expect(listIdentities(ada.id)).toMatchObject([
+      { email: "ada@idp.example" },
+    ]);
     expect(
       sqlite
-        .prepare("SELECT email FROM user_identities WHERE userId = ?")
+        .prepare("SELECT method FROM sessions WHERE userId = ?")
         .get(ada.id),
-    ).toEqual({ email: "ada@idp.example" });
-    const method = sqlite
-      .prepare("SELECT method FROM sessions WHERE userId = ?")
-      .get(ada.id) as { method: string };
-    expect(method.method).toBe("oidc");
-    const audit = sqlite
-      .prepare(
-        "SELECT details FROM audit_log WHERE action = 'auth.login.success' AND actorUserId = ?",
-      )
-      .get(ada.id) as { details: string };
-    expect(JSON.parse(audit.details).method).toBe("oidc");
+    ).toEqual({ method: "oidc" });
+    const { lastLoginAt } = sqlite
+      .prepare("SELECT lastLoginAt FROM users WHERE id = ?")
+      .get(ada.id) as { lastLoginAt: string | null };
+    expect(lastLoginAt).not.toBeNull();
+    expect(
+      auditDetails("action = 'auth.login.success' AND actorUserId = ?", ada.id)
+        .method,
+    ).toBe("oidc");
   });
 
-  it("matches a verified email and links it", async () => {
-    const { ada } = await setup();
+  it("matches a verified email in any case to the account setup made, and links it", async () => {
     const res = await signIn({
       sub: "sub-new",
-      email: "ADA@example.com",
+      email: "ADMIN@example.com",
       email_verified: true,
     });
     expect(res.headers.location).toBe("/");
-    expect(sessionsOf(ada.id)).toBe(1);
-    const row = sqlite
-      .prepare("SELECT userId FROM user_identities WHERE subject = 'sub-new'")
-      .get() as { userId: string };
-    expect(row.userId).toBe(ada.id);
+    expect(oidcSessions()).toBe(1);
+    expect(
+      sqlite
+        .prepare("SELECT userId FROM user_identities WHERE subject = 'sub-new'")
+        .get(),
+    ).toEqual({ userId: ctx.adminId });
   });
 
   it("does not move an existing link to another provider account by email", async () => {
-    const { ada } = await setup();
+    const { ada } = ctx;
     linkIdentity(ada.id, idp.issuer, "sub-old", "ada@example.com");
     const res = await signIn({
       sub: "sub-new",
@@ -228,11 +273,15 @@ describe("API: OIDC sign-in", () => {
     ).toEqual([{ subject: "sub-old" }]);
   });
 
-  it("refuses an unverified email", async () => {
+  it.each([
+    ["an unverified email", true, false],
+    ["email matching that the admin turned off", false, true],
+  ])("refuses %s", async (_case, matchByEmail, emailVerified) => {
+    await setup(matchByEmail);
     const res = await signIn({
       sub: "sub-new",
       email: "ada@example.com",
-      email_verified: false,
+      email_verified: emailVerified,
     });
     expect(res.headers.location).toBe("/?oidc=no-account");
     expect(cookieFrom(res).some((c) => c.startsWith("contrack_session="))).toBe(
@@ -241,80 +290,62 @@ describe("API: OIDC sign-in", () => {
     expect(oidcSessions()).toBe(0);
   });
 
-  it("refuses email matching when the admin turned it off", async () => {
-    await setup(false);
-    const res = await signIn({
-      sub: "sub-new",
-      email: "ada@example.com",
-      email_verified: true,
-    });
-    expect(res.headers.location).toBe("/?oidc=no-account");
-    expect(oidcSessions()).toBe(0);
-  });
+  it.each([
+    ["disabled", "status = 'disabled'"],
+    ["must-change-password", "mustChangePassword = 1"],
+  ])(
+    "refuses a %s account before anything is written",
+    async (reason, change) => {
+      const { ada } = ctx;
+      sqlite.prepare(`UPDATE users SET ${change} WHERE id = ?`).run(ada.id);
+      const res = await signIn({
+        sub: "sub-new",
+        email: "ada@example.com",
+        email_verified: true,
+      });
+      expect(res.headers.location).toBe(`/?oidc=${reason}`);
+      expect(sessionsOf(ada.id)).toBe(0);
+      expect(count("user_identities")).toBe(0);
+      expect(
+        auditDetails(
+          "action = 'auth.login.failed' AND actorUserId = ?",
+          ada.id,
+        ),
+      ).toMatchObject({ method: "oidc", reason });
+    },
+  );
 
-  it("refuses a disabled account", async () => {
-    const { ada } = await setup();
+  it("finishes a flow once, and only in the browser that holds its flow cookie", async () => {
+    const { ada } = ctx;
     linkIdentity(ada.id, idp.issuer, "sub-ada", null);
-    sqlite
-      .prepare("UPDATE users SET status = 'disabled' WHERE id = ?")
-      .run(ada.id);
-    const res = await signIn({ sub: "sub-ada" });
-    expect(res.headers.location).toBe("/?oidc=disabled");
-    expect(sessionsOf(ada.id)).toBe(0);
-  });
-
-  it("refuses a callback without the flow cookie, and leaves the flow alive", async () => {
-    const { ada } = await setup();
-    linkIdentity(ada.id, idp.issuer, "sub-ada", null);
+    const other = await startSignIn();
     const { state, cookie } = await startSignIn();
     idp.nextLogin({ sub: "sub-ada" });
-    const res = await request(app).get(
-      `/api/auth/oidc/callback?code=c&state=${state}`,
-    );
-    expect(res.headers.location).toBe("/?oidc=failed");
-    expect(oidcSessions()).toBe(0);
-    // The refused callback did not consume the state: the real browser's works.
-    const real = await request(app)
-      .get(`/api/auth/oidc/callback?code=c&state=${state}`)
-      .set("Cookie", cookie);
-    expect(real.headers.location).toBe("/");
+    const url = `code=c&state=${state}`;
+    // Somebody holds the callback URL, and so the state the cookie's name
+    // comes from, but not the secret in this browser's cookie.
+    for (const [wrong, sent] of [
+      ["no flow cookie", undefined],
+      ["a cookie made from the state", `${cookie.split("=")[0]}=${state}`],
+      ["another flow's cookie", other.cookie],
+    ]) {
+      const refused = await callback(url, sent);
+      expect(refused.headers.location, wrong).toBe("/?oidc=failed");
+      expect(oidcSessions(), wrong).toBe(0);
+      expect(cookieFrom(refused), wrong).toContainEqual(
+        expect.stringMatching(/^contrack_oidc_[0-9a-f]{12}=;/),
+      );
+    }
+    // The refusals left the flow, so the real browser's callback works, once.
+    expect((await callback(url, cookie)).headers.location).toBe("/");
     expect(sessionsOf(ada.id)).toBe(1);
-  });
-
-  it("refuses a callback whose flow cookie holds another state", async () => {
-    const { ada } = await setup();
-    linkIdentity(ada.id, idp.issuer, "sub-ada", null);
-    const victim = await startSignIn();
-    const attacker = await startSignIn();
-    idp.nextLogin({ sub: "sub-ada" });
-    const res = await request(app)
-      .get(`/api/auth/oidc/callback?code=c&state=${attacker.state}`)
-      .set("Cookie", victim.cookie);
-    expect(res.headers.location).toBe("/?oidc=failed");
-    expect(oidcSessions()).toBe(0);
-    expect(cookieFrom(res)).toContainEqual(
-      expect.stringMatching(/^contrack_oidc_[0-9a-f]{12}=;/),
+    expect((await callback(url, cookie)).headers.location).toBe(
+      "/?oidc=failed",
     );
-  });
-
-  it("refuses a callback URL replayed with a cookie made from its state, and keeps the flow", async () => {
-    const { ada } = await setup();
-    linkIdentity(ada.id, idp.issuer, "sub-ada", null);
-    const { state, cookie } = await startSignIn();
-    idp.nextLogin({ sub: "sub-ada" });
-    const url = `/api/auth/oidc/callback?code=c&state=${state}`;
-    // Somebody holds the URL, and so the state the cookie's name comes from.
-    const forged = `${cookie.split("=")[0]}=${state}`;
-    const replay = await request(app).get(url).set("Cookie", forged);
-    expect(replay.headers.location).toBe("/?oidc=failed");
-    expect(oidcSessions()).toBe(0);
-    const real = await request(app).get(url).set("Cookie", cookie);
-    expect(real.headers.location).toBe("/");
-    expect(sessionsOf(ada.id)).toBe(1);
   });
 
   it("keeps two flows in one browser apart", async () => {
-    const { ada } = await setup();
+    const { ada } = ctx;
     linkIdentity(ada.id, idp.issuer, "sub-ada", null);
     const first = await startSignIn();
     const second = await startSignIn();
@@ -322,109 +353,34 @@ describe("API: OIDC sign-in", () => {
     for (const flow of [first, second]) {
       idp.remember(flow.start.headers.location);
       idp.nextLogin({ sub: "sub-ada" });
-      const res = await request(app)
-        .get(`/api/auth/oidc/callback?code=c&state=${flow.state}`)
-        .set("Cookie", jar);
+      const res = await callback(`code=c&state=${flow.state}`, jar);
       expect(res.headers.location).toBe("/");
     }
     expect(sessionsOf(ada.id)).toBe(2);
   });
 
-  it("answers failed for a state used once already", async () => {
-    const { ada } = await setup();
-    linkIdentity(ada.id, idp.issuer, "sub-ada", null);
-    const { state, cookie } = await startSignIn();
-    idp.nextLogin({ sub: "sub-ada" });
-    const url = `/api/auth/oidc/callback?code=c&state=${state}`;
-    await request(app).get(url).set("Cookie", cookie);
-    const replay = await request(app).get(url).set("Cookie", cookie);
-    expect(replay.headers.location).toBe("/?oidc=failed");
-  });
-
-  it("answers expired for a callback eleven minutes after the start", async () => {
-    const { state, start } = await startSignIn();
-    // Eleven minutes on, the flow has run out and the browser keeps only the
-    // cookies whose Max-Age has not.
-    sqlite
-      .prepare("UPDATE auth_challenges SET expiresAt = ? WHERE id = ?")
-      .run(new Date(Date.now() - 60_000).toISOString(), state);
-    const res = await request(app)
-      .get(`/api/auth/oidc/callback?code=c&state=${state}`)
-      .set("Cookie", flowCookieAfter(start, 11 * 60));
-    expect(res.headers.location).toBe("/?oidc=expired");
-  });
-
-  it("answers denied when the provider refused, and uses up the flow", async () => {
-    const { state, cookie } = await startSignIn();
-    const res = await request(app)
-      .get(`/api/auth/oidc/callback?error=access_denied&state=${state}`)
-      .set("Cookie", cookie);
-    expect(res.headers.location).toBe("/?oidc=denied");
-    expect(
-      sqlite.prepare("SELECT COUNT(*) AS n FROM auth_challenges").get(),
-    ).toEqual({ n: 0 });
-  });
-
-  it("answers failed for a provider error other than access_denied", async () => {
-    const { state, cookie } = await startSignIn();
-    const res = await request(app)
-      .get(`/api/auth/oidc/callback?error=server_error&state=${state}`)
-      .set("Cookie", cookie);
-    expect(res.headers.location).toBe("/?oidc=failed");
-  });
-
-  it("answers failed for a used state, even with a provider error", async () => {
-    const { state, cookie } = await startSignIn();
-    sqlite.prepare("DELETE FROM auth_challenges WHERE id = ?").run(state);
-    const res = await request(app)
-      .get(`/api/auth/oidc/callback?error=access_denied&state=${state}`)
-      .set("Cookie", cookie);
-    expect(res.headers.location).toBe("/?oidc=failed");
-  });
-
-  it("sends the token request the redirect URI the start sent", async () => {
-    const { ada } = await setup();
-    linkIdentity(ada.id, idp.issuer, "sub-ada", null);
-    await signIn({ sub: "sub-ada" });
-    expect(idp.tokenRedirectUri()).toBe(`${ORIGIN}/api/auth/oidc/callback`);
-  });
-
-  it("records lastLoginAt", async () => {
-    const { ada } = await setup();
-    linkIdentity(ada.id, idp.issuer, "sub-ada", null);
-    await signIn({ sub: "sub-ada" });
-    const row = sqlite
-      .prepare("SELECT lastLoginAt FROM users WHERE id = ?")
-      .get(ada.id) as { lastLoginAt: string | null };
-    expect(row.lastLoginAt).not.toBeNull();
-  });
-
   it("signs a linked account in when userinfo fails, and logs no provider body", async () => {
-    const { ada } = await setup();
+    const { ada } = ctx;
     linkIdentity(ada.id, idp.issuer, "sub-ada", null);
     idp.failNextUserinfo();
     const warn = vi.spyOn(log, "warn");
-    try {
-      // The ID token carries no email, so the server asks userinfo.
-      const res = await signIn({
-        sub: "sub-ada",
-        userinfo: { email: "ada@example.com", email_verified: true },
-      });
-      expect(res.headers.location).toBe("/");
-      expect(sessionsOf(ada.id)).toBe(1);
-      expect(warn).toHaveBeenCalledWith(
-        "Auth",
-        "OIDC userinfo failed, so the sign-in has no email",
-        { error: expect.any(String) },
-      );
-      expect(JSON.stringify(warn.mock.calls)).not.toContain(USERINFO_FAILURE);
-    } finally {
-      warn.mockRestore();
-    }
+    // The ID token carries no email, so the server asks userinfo.
+    const res = await signIn({
+      sub: "sub-ada",
+      userinfo: { email: "ada@example.com", email_verified: true },
+    });
+    expect(res.headers.location).toBe("/");
+    expect(sessionsOf(ada.id)).toBe(1);
+    expect(warn).toHaveBeenCalledWith(
+      "Auth",
+      "OIDC userinfo failed, so the sign-in has no email",
+      { error: expect.any(String) },
+    );
+    expect(JSON.stringify(warn.mock.calls)).not.toContain(USERINFO_FAILURE);
   });
 
   it("keeps the session to this browser when keep me signed in is off", async () => {
-    const { ada } = await setup();
+    const { ada } = ctx;
     linkIdentity(ada.id, idp.issuer, "sub-ada", null);
     const session = (res: request.Response) =>
       cookieFrom(res).find((c) => c.startsWith("contrack_session="))!;
@@ -444,8 +400,7 @@ describe("API: OIDC sign-in", () => {
   });
 
   it("lands a sign-in on the path it started from, and only on this site", async () => {
-    const { ada } = await setup();
-    linkIdentity(ada.id, idp.issuer, "sub-ada", null);
+    linkIdentity(ctx.ada.id, idp.issuer, "sub-ada", null);
     const landing = async (returnTo: string) =>
       (
         await signIn(
@@ -467,32 +422,6 @@ describe("API: OIDC sign-in", () => {
     expect(failed.headers.location).toBe("/?oidc=no-account");
   });
 
-  it("refuses an account that must change its password, before any write", async () => {
-    const { ada } = await setup();
-    sqlite
-      .prepare("UPDATE users SET mustChangePassword = 1 WHERE id = ?")
-      .run(ada.id);
-    const res = await signIn({
-      sub: "sub-new",
-      email: "ada@example.com",
-      email_verified: true,
-    });
-    expect(res.headers.location).toBe("/?oidc=must-change-password");
-    expect(sessionsOf(ada.id)).toBe(0);
-    expect(
-      sqlite.prepare("SELECT COUNT(*) AS n FROM user_identities").get(),
-    ).toEqual({ n: 0 });
-    const audit = sqlite
-      .prepare(
-        "SELECT details FROM audit_log WHERE action = 'auth.login.failed' AND actorUserId = ?",
-      )
-      .get(ada.id) as { details: string };
-    expect(JSON.parse(audit.details)).toMatchObject({
-      method: "oidc",
-      reason: "must-change-password",
-    });
-  });
-
   it("limits starts on their own, and leaves the callback and password sign-in alone", async () => {
     for (let i = 0; i < 20; i++) {
       const ok = await request(app).get("/api/auth/oidc/start");
@@ -503,35 +432,118 @@ describe("API: OIDC sign-in", () => {
     expect(refused.headers.location).toBe("/?oidc=failed");
     // Callbacks are not counted against anything.
     for (let i = 0; i < 12; i++) {
-      const cb = await request(app).get(
-        "/api/auth/oidc/callback?code=c&state=x",
-      );
+      const cb = await callback("code=c&state=x");
       expect(cb.headers.location).toBe("/?oidc=failed");
     }
     await passwordLogin("ada");
   });
 });
 
+describe("API: where an OIDC callback lands", () => {
+  /** A flow as a browser starts it: a sign-in, or a link from settings. */
+  async function begin(kind: "sign-in" | "link") {
+    if (kind === "sign-in") {
+      const { state, start } = await startSignIn();
+      return { state, session: [], res: start };
+    }
+    const session = await passwordLogin("ada");
+    const { state, link } = await startLink(session);
+    return { state, session, res: link };
+  }
+  /** What happens before the callback, and the seconds it takes. */
+  const asIs = () => 0;
+  const usedUp = (state: string) => {
+    sqlite.prepare("DELETE FROM auth_challenges WHERE id = ?").run(state);
+    return 0;
+  };
+  // Eleven minutes on, the flow has run out and the browser keeps only the
+  // cookies whose Max-Age has not.
+  const elevenMinutesOn = (state: string) => {
+    sqlite
+      .prepare("UPDATE auth_challenges SET expiresAt = ? WHERE id = ?")
+      .run(new Date(Date.now() - 60_000).toISOString(), state);
+    return 11 * 60;
+  };
+
+  it.each<
+    [string, "sign-in" | "link", string, (state: string) => number, string]
+  >([
+    [
+      "a denied sign-in",
+      "sign-in",
+      "error=access_denied",
+      asIs,
+      "/?oidc=denied",
+    ],
+    [
+      "another provider error",
+      "sign-in",
+      "error=server_error",
+      asIs,
+      "/?oidc=failed",
+    ],
+    [
+      "a provider error for a used state",
+      "sign-in",
+      "error=access_denied",
+      usedUp,
+      "/?oidc=failed",
+    ],
+    [
+      "a sign-in eleven minutes after its start",
+      "sign-in",
+      "code=c",
+      elevenMinutesOn,
+      "/?oidc=expired",
+    ],
+    [
+      "a denied link",
+      "link",
+      "error=access_denied",
+      asIs,
+      linkLanding("denied"),
+    ],
+    [
+      "a link eleven minutes after its start",
+      "link",
+      "code=c",
+      elevenMinutesOn,
+      linkLanding("expired"),
+    ],
+    // Nothing queued: the provider answers 400 invalid_grant.
+    [
+      "a link whose code exchange fails",
+      "link",
+      "code=c",
+      asIs,
+      linkLanding("failed"),
+    ],
+  ])(
+    "lands %s, and uses up the flow",
+    async (_case, kind, query, before, landing) => {
+      const { state, session, res } = await begin(kind);
+      const seconds = before(state);
+      const done = await callback(`${query}&state=${state}`, [
+        ...session,
+        ...flowCookieAfter(res, seconds),
+      ]);
+      expect(done.headers.location).toBe(landing);
+      expect(count("auth_challenges WHERE kind = 'oidc'")).toBe(0);
+    },
+  );
+});
+
 describe("API: linking OIDC from settings", () => {
-  it("links the signed-in account, lists it, and unlinks it", async () => {
-    const { ada, adminId } = await setup();
+  it("links the signed-in account, lists it, and unlinks it, but never another account's", async () => {
+    const { ada, adminId } = ctx;
     linkIdentity(adminId, idp.issuer, "sub-admin", null);
     const cookie = await passwordLogin("ada");
 
     expect((await request(app).post("/api/auth/oidc/link")).status).toBe(401);
-    const link = await request(app)
-      .post("/api/auth/oidc/link")
-      .set("Cookie", cookie)
-      .set("Origin", ORIGIN);
-    expect(link.status).toBe(200);
-    const { state } = idp.remember(link.body.url);
+    const { state, cookie: withFlow } = await startLink(cookie);
     idp.nextLogin({ sub: "sub-ada", email: "ada@idp.example" });
-    const done = await request(app)
-      .get(`/api/auth/oidc/callback?code=c&state=${state}`)
-      .set("Cookie", [...cookie, flowCookie(link)]);
-    expect(done.headers.location).toBe(
-      "/settings/account?oidc=linked#password",
-    );
+    const done = await callback(`code=c&state=${state}`, withFlow);
+    expect(done.headers.location).toBe(linkLanding("linked"));
 
     const list = await request(app)
       .get("/api/auth/identities")
@@ -539,396 +551,222 @@ describe("API: linking OIDC from settings", () => {
     expect(list.body.identities).toHaveLength(1);
     expect(typeof list.body.matchByEmail).toBe("boolean");
     expect(list.body.identities[0].email).toBe("ada@idp.example");
-    const del = await request(app)
-      .delete(`/api/auth/identities/${list.body.identities[0].id}`)
-      .set("Cookie", cookie)
-      .set("Origin", ORIGIN);
-    expect(del.status).toBe(200);
+    const unlink = (id: string) =>
+      request(app)
+        .delete(`/api/auth/identities/${id}`)
+        .set("Cookie", cookie)
+        .set("Origin", ORIGIN);
+    expect((await unlink(listIdentities(adminId)[0].id)).status).toBe(404);
+    expect((await unlink(list.body.identities[0].id)).status).toBe(200);
+    expect(count("user_identities WHERE userId = ?", ada.id)).toBe(0);
+    expect(count("user_identities WHERE userId = ?", adminId)).toBe(1);
     expect(
-      sqlite
-        .prepare("SELECT COUNT(*) AS n FROM user_identities WHERE userId = ?")
-        .get(ada.id),
-    ).toEqual({ n: 0 });
-    expect(
-      sqlite
-        .prepare(
-          "SELECT COUNT(*) AS n FROM audit_log WHERE action = 'auth.oidc.unlinked' AND actorUserId = ?",
-        )
-        .get(ada.id),
-    ).toEqual({ n: 1 });
-  });
-
-  it("will not unlink another account's identity", async () => {
-    const { adminId } = await setup();
-    const theirs = linkIdentity(adminId, idp.issuer, "sub-admin", null);
-    const cookie = await passwordLogin("ada");
-    const del = await request(app)
-      .delete(`/api/auth/identities/${theirs.id}`)
-      .set("Cookie", cookie)
-      .set("Origin", ORIGIN);
-    expect(del.status).toBe(404);
+      count(
+        "audit_log WHERE action = 'auth.oidc.unlinked' AND actorUserId = ?",
+        ada.id,
+      ),
+    ).toBe(1);
   });
 
   it("refuses a link callback opened by another account, and logs it", async () => {
-    const { adminCookie } = await setup();
     const warn = vi.spyOn(log, "warn");
-    const cookie = await passwordLogin("ada");
-    const link = await request(app)
-      .post("/api/auth/oidc/link")
-      .set("Cookie", cookie)
-      .set("Origin", ORIGIN);
-    const { state } = idp.remember(link.body.url);
+    const { state, flow } = await startLink(await passwordLogin("ada"));
     idp.nextLogin({ sub: "sub-x" });
-    const done = await request(app)
-      .get(`/api/auth/oidc/callback?code=c&state=${state}`)
-      .set("Cookie", [
-        ...adminCookie.map((c) => c.split(";")[0]),
-        flowCookie(link),
-      ]);
-    expect(done.headers.location).toBe(
-      "/settings/account?oidc=failed#password",
-    );
-    expect(
-      sqlite.prepare("SELECT COUNT(*) AS n FROM user_identities").get(),
-    ).toEqual({ n: 0 });
+    const done = await callback(`code=c&state=${state}`, [
+      ...ctx.adminCookie,
+      flow,
+    ]);
+    expect(done.headers.location).toBe(linkLanding("failed"));
+    expect(count("user_identities")).toBe(0);
     expect(warn).toHaveBeenCalledWith(
       "Auth",
       "OIDC link finished without the session that started it",
       expect.anything(),
     );
-    warn.mockRestore();
   });
 
   it("refuses to link an identity another account holds", async () => {
-    const { adminId } = await setup();
-    linkIdentity(adminId, idp.issuer, "sub-x", null);
-    const cookie = await passwordLogin("ada");
-    const link = await request(app)
-      .post("/api/auth/oidc/link")
-      .set("Cookie", cookie)
-      .set("Origin", ORIGIN);
-    const { state } = idp.remember(link.body.url);
+    linkIdentity(ctx.adminId, idp.issuer, "sub-x", null);
+    const { state, cookie } = await startLink(await passwordLogin("ada"));
     idp.nextLogin({ sub: "sub-x" });
-    const done = await request(app)
-      .get(`/api/auth/oidc/callback?code=c&state=${state}`)
-      .set("Cookie", [...cookie, flowCookie(link)]);
-    expect(done.headers.location).toBe("/settings/account?oidc=taken#password");
+    const done = await callback(`code=c&state=${state}`, cookie);
+    expect(done.headers.location).toBe(linkLanding("taken"));
     expect(
       sqlite
         .prepare("SELECT userId FROM user_identities WHERE subject = 'sub-x'")
         .get(),
-    ).toEqual({ userId: adminId });
+    ).toEqual({ userId: ctx.adminId });
+  });
+
+  it("marks an identity current at the provider set up now, however its issuer is written", async () => {
+    const { ada, adminCookie } = ctx;
+    linkIdentity(ada.id, `${idp.issuer}/`, "sub-ada", null);
+    linkIdentity(ada.id, "https://old.example.com", "sub-old", null);
+    const cookie = await passwordLogin("ada");
+    const current = async (session: string[]) =>
+      Object.fromEntries(
+        (
+          await request(app).get("/api/auth/identities").set("Cookie", session)
+        ).body.identities.map((i: { issuer: string; current: boolean }) => [
+          i.issuer,
+          i.current,
+        ]),
+      );
+    const adas = { [`${idp.issuer}/`]: true, "https://old.example.com": false };
+    expect(await current(cookie)).toEqual(adas);
+
+    // No secret: the discovery URL names the saved provider, so it stays.
+    const discoveryUrl = `${idp.issuer}/.well-known/openid-configuration`;
+    const saved = await asAdmin(
+      request(app)
+        .put("/api/admin/integrations")
+        .send({
+          oidc: {
+            issuer: discoveryUrl,
+            clientId: "contrack",
+            name: "Test IdP",
+            matchByEmail: false,
+          },
+        }),
+    );
+    expect(saved.status).toBe(200);
+    expect(saved.body.oidc.issuer).toBe(discoveryUrl);
+    expect(await current(cookie)).toEqual(adas);
+
+    // A link made now keeps the issuer that discovery names.
+    const { state, cookie: withFlow } = await startLink(adminCookie);
+    idp.nextLogin({ sub: "sub-admin" });
+    const done = await callback(`code=c&state=${state}`, withFlow);
+    expect(done.headers.location).toBe(linkLanding("linked"));
+    expect(await current(adminCookie)).toEqual({ [idp.issuer]: true });
   });
 });
 
 describe("API: a password reset", () => {
   it("unlinks every identity, by mailed link or by an admin", async () => {
-    const { ada, adminCookie } = await setup();
-    const identities = () =>
-      sqlite
-        .prepare("SELECT COUNT(*) AS n FROM user_identities WHERE userId = ?")
-        .get(ada.id);
+    const { ada } = ctx;
+    const identities = () => count("user_identities WHERE userId = ?", ada.id);
     linkIdentity(ada.id, idp.issuer, "sub-ada", null);
     const link = createAuthLink("reset", ada.id, 3600)!;
     const reset = await request(app)
       .post("/api/auth/password-reset/complete")
       .send({ token: link.token, password: `${PASSWORD} again` });
     expect(reset.status).toBe(200);
-    expect(identities()).toEqual({ n: 0 });
-    const audit = sqlite
-      .prepare(
-        "SELECT details FROM audit_log WHERE action = 'auth.oidc.unlinked' AND targetId = ?",
-      )
-      .get(ada.id) as { details: string };
-    expect(JSON.parse(audit.details)).toMatchObject({
-      reason: "password-reset",
-    });
+    expect(identities()).toBe(0);
+    expect(
+      auditDetails("action = 'auth.oidc.unlinked' AND targetId = ?", ada.id),
+    ).toMatchObject({ reason: "password-reset" });
 
     linkIdentity(ada.id, idp.issuer, "sub-ada", null);
-    const byAdmin = await request(app)
-      .post(`/api/admin/users/${ada.id}/reset-password`)
-      .set(
-        "Cookie",
-        adminCookie.map((c) => c.split(";")[0]),
-      )
-      .set("Origin", ORIGIN);
+    const byAdmin = await asAdmin(
+      request(app).post(`/api/admin/users/${ada.id}/reset-password`),
+    );
     expect(byAdmin.status).toBe(200);
-    expect(identities()).toEqual({ n: 0 });
+    expect(identities()).toBe(0);
     const res = await signIn({ sub: "sub-ada" });
     expect(res.headers.location).toBe("/?oidc=no-account");
   });
 });
 
-describe("API: OIDC link flow landings", () => {
-  async function startLink() {
-    await setup();
-    const cookie = await passwordLogin("ada");
-    const link = await request(app)
-      .post("/api/auth/oidc/link")
-      .set("Cookie", cookie)
-      .set("Origin", ORIGIN);
-    expect(link.status).toBe(200);
-    const { state } = idp.remember(link.body.url);
-    return {
-      state,
-      cookie: [...cookie, flowCookie(link)],
-      session: cookie,
-      link,
-    };
-  }
-
-  it("lands a denied link on Account settings", async () => {
-    const { state, cookie } = await startLink();
-    const res = await request(app)
-      .get(`/api/auth/oidc/callback?error=access_denied&state=${state}`)
-      .set("Cookie", cookie);
-    expect(res.headers.location).toBe("/settings/account?oidc=denied#password");
-  });
-
-  it("lands a link eleven minutes after its start on Account settings as expired", async () => {
-    const { state, session, link } = await startLink();
-    sqlite
-      .prepare("UPDATE auth_challenges SET expiresAt = ? WHERE id = ?")
-      .run(new Date(Date.now() - 60_000).toISOString(), state);
-    const res = await request(app)
-      .get(`/api/auth/oidc/callback?code=c&state=${state}`)
-      .set("Cookie", [...session, ...flowCookieAfter(link, 11 * 60)]);
-    expect(res.headers.location).toBe(
-      "/settings/account?oidc=expired#password",
-    );
-  });
-
-  it("lands a link whose code exchange fails on Account settings", async () => {
-    const { state, cookie } = await startLink();
-    // Nothing queued: the provider answers 400 invalid_grant.
-    const res = await request(app)
-      .get(`/api/auth/oidc/callback?code=c&state=${state}`)
-      .set("Cookie", cookie);
-    expect(res.headers.location).toBe("/settings/account?oidc=failed#password");
-  });
-
-  it("marks the identity at the current provider", async () => {
-    const { ada } = await setup();
-    linkIdentity(ada.id, `${idp.issuer}/`, "sub-ada", null);
-    linkIdentity(ada.id, "https://old.example.com", "sub-old", null);
-    const cookie = await passwordLogin("ada");
-    const list = await request(app)
-      .get("/api/auth/identities")
-      .set("Cookie", cookie);
-    const byIssuer = Object.fromEntries(
-      list.body.identities.map((i: { issuer: string; current: boolean }) => [
-        i.issuer,
-        i.current,
-      ]),
-    );
-    expect(byIssuer).toEqual({
-      [`${idp.issuer}/`]: true,
-      "https://old.example.com": false,
-    });
-  });
-
-  it("marks the identity current when the admin saved the discovery URL as the issuer", async () => {
-    const { adminCookie } = await setup();
-    const cookie = adminCookie.map((c) => c.split(";")[0]);
-    const discoveryUrl = `${idp.issuer}/.well-known/openid-configuration`;
-    // No secret: the discovery URL names the saved provider, so it stays.
-    const saved = await request(app)
-      .put("/api/admin/integrations")
-      .set("Cookie", cookie)
-      .set("Origin", ORIGIN)
-      .send({
-        oidc: {
-          issuer: discoveryUrl,
-          clientId: "contrack",
-          name: "Test IdP",
-          matchByEmail: false,
-        },
-      });
-    expect(saved.status).toBe(200);
-    expect(saved.body.oidc.issuer).toBe(discoveryUrl);
-
-    const link = await request(app)
-      .post("/api/auth/oidc/link")
-      .set("Cookie", cookie)
-      .set("Origin", ORIGIN);
-    const { state } = idp.remember(link.body.url);
-    idp.nextLogin({ sub: "sub-admin" });
-    const done = await request(app)
-      .get(`/api/auth/oidc/callback?code=c&state=${state}`)
-      .set("Cookie", [...cookie, flowCookie(link)]);
-    expect(done.headers.location).toBe(
-      "/settings/account?oidc=linked#password",
-    );
-    const list = await request(app)
-      .get("/api/auth/identities")
-      .set("Cookie", cookie);
-    expect(list.body.identities).toMatchObject([
-      { issuer: idp.issuer, current: true },
-    ]);
-  });
-});
-
 describe("API: OIDC failures on browser routes", () => {
-  beforeEach(() => setup());
-
-  it("sends a start that cannot reach the provider back to sign-in", async () => {
-    setOidcConfig({
-      issuer: "http://127.0.0.1:9",
-      clientId: "contrack",
-      clientSecret: "secret",
-      name: "Test IdP",
-      matchByEmail: true,
-    });
-    forgetOidcDiscovery();
-    const res = await request(app).get("/api/auth/oidc/start");
-    expect(res.status).toBe(302);
-    expect(res.headers.location).toBe("/?oidc=failed");
-    expect(cookieFrom(res).some((c) => /^contrack_oidc_\w+=[^;]/.test(c))).toBe(
-      false,
-    );
-  });
+  it.each<[string, OidcConfigInput | null]>([
+    ["no provider", null],
+    [
+      "a provider it cannot reach",
+      {
+        issuer: "http://127.0.0.1:9",
+        clientId: "contrack",
+        clientSecret: "secret",
+        name: "Test IdP",
+        matchByEmail: true,
+      },
+    ],
+  ])(
+    "sends a start with %s back to sign-in, with no flow cookie",
+    async (_case, config) => {
+      setOidcConfig(config);
+      forgetOidcDiscovery();
+      const res = await request(app).get("/api/auth/oidc/start");
+      expect(res.status).toBe(302);
+      expect(res.headers.location).toBe("/?oidc=failed");
+      expect(
+        cookieFrom(res).some((c) => /^contrack_oidc_\w+=[^;]/.test(c)),
+      ).toBe(false);
+    },
+  );
 
   it("gives up on a token answer that never ends after ten seconds", async () => {
     const { state, cookie } = await startSignIn();
     idp.stallNextToken();
     const started = Date.now();
-    const res = await request(app)
-      .get(`/api/auth/oidc/callback?code=c&state=${state}`)
-      .set("Cookie", cookie);
+    const res = await callback(`code=c&state=${state}`, cookie);
     expect(res.headers.location).toBe("/?oidc=failed");
     expect(Date.now() - started).toBeLessThan(11_000);
   }, 15_000);
 
-  it("logs the OAuth error when the token endpoint refuses the code", async () => {
-    const warn = vi.spyOn(log, "warn");
-    try {
-      const { state, cookie } = await startSignIn();
-      // Nothing queued: the provider answers 400 invalid_grant.
-      const res = await request(app)
-        .get(`/api/auth/oidc/callback?code=c&state=${state}`)
-        .set("Cookie", cookie);
-      expect(res.headers.location).toBe("/?oidc=failed");
-      expect(warn).toHaveBeenCalledWith(
-        "Auth",
-        "OIDC sign-in did not finish",
-        expect.objectContaining({ oauthError: "invalid_grant" }),
-      );
-    } finally {
-      warn.mockRestore();
-    }
-  });
-
-  it("logs no provider text that can name the person", async () => {
+  it("logs the OAuth error code, and no provider text that can name the person", async () => {
     // The lines as the log writes them.
     const lines: string[] = [];
-    const written = vi
-      .spyOn(console, "log")
-      .mockImplementation((line: unknown) => {
-        lines.push(String(line));
-      });
-    try {
-      const email = "ada.lovelace@example.com";
-      const denied = await startSignIn();
-      await request(app)
-        .get(
-          `/api/auth/oidc/callback?state=${denied.state}&error=${email}&error_description=${email}`,
-        )
-        .set("Cookie", denied.cookie);
-      const refused = await startSignIn();
-      idp.refuseNextToken({
-        error: "invalid_grant",
-        error_description: `No consent from ${email}`,
-      });
-      await request(app)
-        .get(`/api/auth/oidc/callback?code=c&state=${refused.state}`)
-        .set("Cookie", refused.cookie);
-    } finally {
-      written.mockRestore();
-    }
+    vi.spyOn(console, "log").mockImplementation((line: unknown) => {
+      lines.push(String(line));
+    });
+    const email = "ada.lovelace@example.com";
+    const denied = await startSignIn();
+    await callback(
+      `state=${denied.state}&error=${email}&error_description=${email}`,
+      denied.cookie,
+    );
+    const refused = await startSignIn();
+    idp.refuseNextToken({
+      error: "invalid_grant",
+      error_description: `No consent from ${email}`,
+    });
+    const res = await callback(`code=c&state=${refused.state}`, refused.cookie);
+    expect(res.headers.location).toBe("/?oidc=failed");
     expect(lines).toContainEqual(
       expect.stringMatching(
         /\[WARN\].*OIDC provider returned an error \{"error":"other"\}/,
       ),
     );
     expect(lines).toContainEqual(
-      expect.stringMatching(/\[WARN\].*"oauthError":"invalid_grant"/),
+      expect.stringMatching(
+        /\[WARN\].*OIDC sign-in did not finish.*"oauthError":"invalid_grant"/,
+      ),
     );
     expect(lines.filter((line) => line.includes("@"))).toEqual([]);
   });
 
-  it("sends a start with no provider back to sign-in", async () => {
-    setOidcConfig(null);
-    const res = await request(app).get("/api/auth/oidc/start");
-    expect(res.status).toBe(302);
-    expect(res.headers.location).toBe("/?oidc=failed");
-  });
-
-  it("sends a callback that throws after the provider answered back to sign-in", async () => {
-    const { ada } = await setup();
-    linkIdentity(ada.id, idp.issuer, "sub-ada", null);
-    const spy = vi
-      .spyOn(identityService, "touchIdentity")
-      .mockImplementationOnce(() => {
+  it.each<[string, FakeLogin, boolean]>([
+    ["a linked sign-in", { sub: "sub-ada" }, true],
+    [
+      "an email sign-in",
+      { sub: "sub-new", email: "ada@example.com", email_verified: true },
+      false,
+    ],
+  ])(
+    "leaves nothing half made when %s fails after the provider answered",
+    async (_case, login, linked) => {
+      const { ada } = ctx;
+      if (linked) linkIdentity(ada.id, idp.issuer, "sub-ada", null);
+      const rows = () => ({
+        identities: count("user_identities"),
+        audit: count("audit_log"),
+      });
+      const before = rows();
+      vi.spyOn(identityService, "touchIdentity").mockImplementationOnce(() => {
         throw new Error("boom");
       });
-    try {
-      const res = await signIn({ sub: "sub-ada" });
+      const res = await signIn(login);
       expect(res.status).toBe(302);
       expect(res.headers.location).toBe("/?oidc=failed");
-      expect(
-        sqlite
-          .prepare("SELECT COUNT(*) AS n FROM sessions WHERE userId = ?")
-          .get(ada.id),
-      ).toEqual({ n: 0 });
-    } finally {
-      spy.mockRestore();
-    }
-  });
-
-  it("leaves no link and no session when an email sign-in fails part way", async () => {
-    const { ada } = await setup();
-    const auditRows = () =>
-      sqlite.prepare("SELECT COUNT(*) AS n FROM audit_log").get();
-    const auditBefore = auditRows();
-    const spy = vi
-      .spyOn(identityService, "touchIdentity")
-      .mockImplementationOnce(() => {
-        throw new Error("boom");
-      });
-    try {
-      const res = await signIn({
-        sub: "sub-new",
-        email: "ada@example.com",
-        email_verified: true,
-      });
-      expect(res.headers.location).toBe("/?oidc=failed");
-      expect(
-        sqlite
-          .prepare("SELECT COUNT(*) AS n FROM user_identities WHERE userId = ?")
-          .get(ada.id),
-      ).toEqual({ n: 0 });
-      expect(
-        sqlite
-          .prepare("SELECT COUNT(*) AS n FROM sessions WHERE userId = ?")
-          .get(ada.id),
-      ).toEqual({ n: 0 });
-      // The auth.oidc.linked row rolled back with the link.
-      expect(auditRows()).toEqual(auditBefore);
-    } finally {
-      spy.mockRestore();
-    }
-  });
+      expect(sessionsOf(ada.id)).toBe(0);
+      // An email link and its auth.oidc.linked row roll back with the rest.
+      expect(rows()).toEqual(before);
+    },
+  );
 });
 
 describe("API: OIDC email matching needs a trusted email", () => {
-  const asAdmin = (req: request.Test, adminCookie: string[]) =>
-    req
-      .set(
-        "Cookie",
-        adminCookie.map((c) => c.split(";")[0]),
-      )
-      .set("Origin", ORIGIN);
-
   /** Where a provider sign-in with this verified email lands. */
   async function landingFor(email: string): Promise<string> {
     const res = await signIn({
@@ -949,20 +787,13 @@ describe("API: OIDC email matching needs a trusted email", () => {
     expect(res.status).toBe(200);
   }
 
-  it("trusts the account first-run setup made", async () => {
-    await setup();
-    expect(await landingFor("admin@example.com")).toBe("/");
-  });
-
   it("trusts an account an admin made", async () => {
-    const { adminCookie } = await setup();
     const made = await asAdmin(
       request(app).post("/api/admin/users").send({
         email: "bob@example.com",
         username: "bob",
         role: "member",
       }),
-      adminCookie,
     );
     expect(made.status).toBe(201);
     // Found by email, then refused until the temporary password is replaced.
@@ -972,13 +803,11 @@ describe("API: OIDC email matching needs a trusted email", () => {
   });
 
   it("trusts an invited account only at the invited address", async () => {
-    const { adminCookie } = await setup();
     const join = async (invited: string, typed: string, username: string) => {
       const invitation = await asAdmin(
         request(app)
           .post("/api/admin/invitations")
           .send({ email: invited, role: "member" }),
-        adminCookie,
       );
       expect(invitation.status).toBe(201);
       const token = new URL(invitation.body.link).searchParams.get("token");
@@ -994,11 +823,9 @@ describe("API: OIDC email matching needs a trusted email", () => {
   });
 
   it("does not trust an account from open registration", async () => {
-    const { adminCookie } = await setup();
     const open = (registrationOpen: boolean) =>
       asAdmin(
         request(app).put("/api/admin/settings").send({ registrationOpen }),
-        adminCookie,
       );
     expect((await open(true)).status).toBe(200);
     try {
@@ -1015,43 +842,37 @@ describe("API: OIDC email matching needs a trusted email", () => {
   });
 
   it("does not hand a member's typed address somebody else's sign-in", async () => {
-    await setup();
     // Ada types the address of somebody who has no account here yet.
     await changeOwnEmail("ada", "victim@corp.example");
     expect(await landingFor("victim@corp.example")).toBe("/?oidc=no-account");
-    expect(
-      sqlite.prepare("SELECT COUNT(*) AS n FROM user_identities").get(),
-    ).toEqual({ n: 0 });
+    expect(count("user_identities")).toBe(0);
   });
 
-  it("trusts an address again once a mailed link to it is followed", async () => {
+  it("trusts a changed address once a link mailed to it is followed, and stops a link mailed before", async () => {
     for (const kind of ["reset", "magic"] as const) {
       const { ada } = await setup();
+      const follow = async (token: string) =>
+        (
+          await request(app)
+            .post(
+              `/api/auth/${kind === "reset" ? "password-reset" : "magic-link"}/complete`,
+            )
+            .send({ token, password: `${PASSWORD} again` })
+        ).status;
+      const mailedBefore = createAuthLink(kind, ada.id, 900)!;
       await changeOwnEmail("ada", "ada@new.example");
-      const { token } = createAuthLink(kind, ada.id, 900)!;
-      const followed = await request(app)
-        .post(
-          `/api/auth/${kind === "reset" ? "password-reset" : "magic-link"}/complete`,
-        )
-        .send({ token, password: `${PASSWORD} again` });
-      expect(followed.status, kind).toBe(200);
+      expect(await follow(mailedBefore.token), kind).toBe(410);
+      expect(await landingFor("ada@new.example"), kind).toBe(
+        "/?oidc=no-account",
+      );
+      expect(await follow(createAuthLink(kind, ada.id, 900)!.token), kind).toBe(
+        200,
+      );
       expect(await landingFor("ada@new.example"), kind).toBe("/");
     }
   });
 
-  it("stops a link mailed to the old address when the address changes", async () => {
-    const { ada } = await setup();
-    const { token } = createAuthLink("magic", ada.id, 900)!;
-    await changeOwnEmail("ada", "ada@new.example");
-    const followed = await request(app)
-      .post("/api/auth/magic-link/complete")
-      .send({ token });
-    expect(followed.status).toBe(410);
-    expect(await landingFor("ada@new.example")).toBe("/?oidc=no-account");
-  });
-
   it("folds only ASCII, so a Kelvin sign never stands for k", async () => {
-    await setup();
     const kate = await createUser({
       email: "kate@example.com",
       username: "kate",
@@ -1059,20 +880,10 @@ describe("API: OIDC email matching needs a trusted email", () => {
       role: "member",
       emailTrusted: true,
     });
-    const signInAs = (email: string) =>
-      completeOidcSignIn(
-        {
-          issuer: idp.issuer,
-          subject: `sub-${email}`,
-          email,
-          emailVerified: true,
-        },
-        true,
-        { ip: null, userAgent: null },
-      );
     // U+212A lowercases to "k" in JavaScript.
-    expect(signInAs("\u212Aate@example.com").outcome).toBe("no-account");
-    const ascii = signInAs("KATE@example.com");
-    expect(ascii.outcome === "signed-in" && ascii.user.id).toBe(kate.id);
+    expect(await landingFor("Kate@example.com")).toBe("/?oidc=no-account");
+    expect(sessionsOf(kate.id)).toBe(0);
+    expect(await landingFor("KATE@example.com")).toBe("/");
+    expect(sessionsOf(kate.id)).toBe(1);
   });
 });
