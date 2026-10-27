@@ -10,6 +10,7 @@ import {
 } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { TagsPage } from "../../../../src/views/settings/pages/TagsPage";
 import * as tagsApi from "../../../../src/api/tags";
 
@@ -57,6 +58,15 @@ describe("TagsPage", () => {
       isError: false,
     } as unknown as ReturnType<typeof tagsApi.useTagSummary>);
 
+  const rename = (to: string) => {
+    fireEvent.click(screen.getByRole("button", { name: "Rename friends" }));
+    fireEvent.change(
+      screen.getByRole("textbox", { name: "Rename tag friends" }),
+      { target: { value: to } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save tag name" }));
+  };
+
   it("renders tag list with counts alphabetically", () => {
     withTags([
       { tag: "work", count: 12 },
@@ -78,15 +88,6 @@ describe("TagsPage", () => {
       { tag: "work", count: 10, total: 12 },
     ]);
     renderComponent();
-    const rename = (to: string) => {
-      fireEvent.click(screen.getByRole("button", { name: "Rename friends" }));
-      fireEvent.change(
-        screen.getByRole("textbox", { name: "Rename tag friends" }),
-        { target: { value: to } },
-      );
-      fireEvent.click(screen.getByRole("button", { name: "Save tag name" }));
-    };
-
     rename("close-friends");
     await waitFor(() =>
       expect(mockRename).toHaveBeenCalledWith({
@@ -104,6 +105,54 @@ describe("TagsPage", () => {
     await waitFor(() =>
       expect(mockRename).toHaveBeenCalledWith({ from: "friends", to: "work" }),
     );
+  });
+
+  it("cancels a rename on Escape, and merges into a tag that differs only by case", async () => {
+    withTags([
+      { tag: "friends", count: 3 },
+      { tag: "work", count: 5 },
+      { tag: "Work", count: 2 },
+    ]);
+    renderComponent();
+    fireEvent.click(screen.getByRole("button", { name: "Rename friends" }));
+    const input = screen.getByRole("textbox", { name: "Rename tag friends" });
+    expect(input.getAttribute("spellcheck")).toBe("false");
+    expect(input.getAttribute("autocorrect")).toBe("off");
+    fireEvent.keyDown(input, { key: "Escape" });
+    expect(
+      screen.queryByRole("textbox", { name: "Rename tag friends" }),
+    ).toBeNull();
+
+    // "work" into itself merges nothing, and "Work" is another tag.
+    fireEvent.click(
+      screen.getByRole("button", { name: "Merge work into another tag" }),
+    );
+    const target = screen.getByLabelText("Target tag");
+    const merge = screen.getByRole("button", {
+      name: "Merge tags",
+    }) as HTMLButtonElement;
+    fireEvent.change(target, { target: { value: "work" } });
+    expect(merge.disabled).toBe(true);
+    fireEvent.change(target, { target: { value: "Work" } });
+    expect(merge.disabled).toBe(false);
+    fireEvent.click(merge);
+    await waitFor(() =>
+      expect(mockRename).toHaveBeenCalledWith({ from: "work", to: "Work" }),
+    );
+  });
+
+  it("says why a rename failed", async () => {
+    const errorToast = vi.spyOn(toast, "error");
+    mockRename.mockRejectedValueOnce(new Error("Database locked."));
+    withTags([{ tag: "friends", count: 3 }]);
+    renderComponent();
+    rename("family");
+    await waitFor(() =>
+      expect(errorToast).toHaveBeenCalledWith(
+        "Could not rename the tag: Database locked",
+      ),
+    );
+    errorToast.mockRestore();
   });
 
   it("says that a delete reaches archived contacts too, and deletes", async () => {
