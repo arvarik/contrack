@@ -58,6 +58,12 @@ export const users = sqliteTable("users", {
     onDelete: "set null",
   }),
   avatarUrl: text("avatarUrl"),
+  /**
+   * When the email was shown to belong to the account (an admin, setup, the
+   * invited address, or a mailed link), or null. A member's own change clears
+   * it. OIDC email matching reaches only an account with it set.
+   */
+  emailTrustedAt: text("emailTrustedAt"),
 });
 
 /**

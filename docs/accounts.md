@@ -160,10 +160,17 @@ Single sign-on never creates an account. It signs in to an existing one:
   in** is on, a provider account whose email the provider calls verified signs
   in to the Contrack account with that email, and stays linked to it. The
   switch is off by default. An account that already has a link from this
-  provider is never moved by email. Contrack does not verify the email on an
-  account, and members can change their own. So turn the switch on only when
-  every account's email is trusted, and only when the provider verifies
-  addresses and people cannot choose their own.
+  provider is never moved by email. Turn the switch on only when the provider
+  verifies addresses and people cannot choose their own.
+
+  Email matching reaches only an account whose own email Contrack trusts. An
+  email is trusted when first-run setup or an admin made the account, when an
+  invitation made it with the invited address, or when the person followed a
+  reset or sign-in link mailed to it. Accounts that existed before this rule
+  start trusted. An account from open registration, or one whose owner
+  changed their own email, is not trusted until a mailed link proves the new
+  address. Changing the email also ends the unused links sent to the old one.
+  An address with a character outside ASCII never matches.
 
 Unlinking keeps your password and passkeys, so you can always still sign in.
 While email matching is on, unlinking does not stop single sign-on: the next

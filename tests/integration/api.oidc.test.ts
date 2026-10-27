@@ -23,6 +23,7 @@ import { clearSettingsCache } from "../../server/services/settingsService.ts";
 import { log } from "../../server/utils/logger.ts";
 import { setOidcConfig } from "../../server/services/integrationSettings.ts";
 import { forgetOidcDiscovery } from "../../server/services/oidcService.ts";
+import { completeOidcSignIn } from "../../server/services/oidcSignInService.ts";
 import { createUser } from "../../server/services/authService.ts";
 import { createAuthLink } from "../../server/services/authLinkService.ts";
 import * as identityService from "../../server/services/identityService.ts";
@@ -66,6 +67,7 @@ async function setup(matchByEmail = true) {
     username: "ada",
     password: PASSWORD,
     role: "member",
+    emailTrusted: true,
   });
   return { adminCookie: cookieFrom(admin), adminId: admin.body.user.id, ada };
 }
@@ -836,5 +838,162 @@ describe("API: OIDC failures on browser routes", () => {
     } finally {
       spy.mockRestore();
     }
+  });
+});
+
+describe("API: OIDC email matching needs a trusted email", () => {
+  const asAdmin = (req: request.Test, adminCookie: string[]) =>
+    req
+      .set(
+        "Cookie",
+        adminCookie.map((c) => c.split(";")[0]),
+      )
+      .set("Origin", ORIGIN);
+
+  /** Where a provider sign-in with this verified email lands. */
+  async function landingFor(email: string): Promise<string> {
+    const res = await signIn({
+      sub: `sub-${email}`,
+      email,
+      email_verified: true,
+    });
+    return res.headers.location;
+  }
+
+  async function changeOwnEmail(identifier: string, email: string) {
+    const cookie = await passwordLogin(identifier);
+    const res = await request(app)
+      .patch("/api/auth/me")
+      .set("Cookie", cookie)
+      .set("Origin", ORIGIN)
+      .send({ email });
+    expect(res.status).toBe(200);
+  }
+
+  it("trusts the account first-run setup made", async () => {
+    await setup();
+    expect(await landingFor("admin@example.com")).toBe("/");
+  });
+
+  it("trusts an account an admin made", async () => {
+    const { adminCookie } = await setup();
+    const made = await asAdmin(
+      request(app).post("/api/admin/users").send({
+        email: "bob@example.com",
+        username: "bob",
+        role: "member",
+      }),
+      adminCookie,
+    );
+    expect(made.status).toBe(201);
+    // Found by email, then refused until the temporary password is replaced.
+    expect(await landingFor("bob@example.com")).toBe(
+      "/?oidc=must-change-password",
+    );
+  });
+
+  it("trusts an invited account only at the invited address", async () => {
+    const { adminCookie } = await setup();
+    const join = async (invited: string, typed: string, username: string) => {
+      const invitation = await asAdmin(
+        request(app)
+          .post("/api/admin/invitations")
+          .send({ email: invited, role: "member" }),
+        adminCookie,
+      );
+      expect(invitation.status).toBe(201);
+      const token = new URL(invitation.body.link).searchParams.get("token");
+      const accepted = await request(app)
+        .post("/api/auth/accept-invitation")
+        .send({ token, email: typed, username, password: PASSWORD });
+      expect(accepted.status).toBe(201);
+    };
+    await join("carol@example.com", "Carol@example.com", "carol");
+    await join("someone@example.com", "dave@example.com", "dave");
+    expect(await landingFor("carol@example.com")).toBe("/");
+    expect(await landingFor("dave@example.com")).toBe("/?oidc=no-account");
+  });
+
+  it("does not trust an account from open registration", async () => {
+    const { adminCookie } = await setup();
+    const open = (registrationOpen: boolean) =>
+      asAdmin(
+        request(app).put("/api/admin/settings").send({ registrationOpen }),
+        adminCookie,
+      );
+    expect((await open(true)).status).toBe(200);
+    try {
+      const registered = await request(app).post("/api/auth/register").send({
+        email: "erin@example.com",
+        username: "erin",
+        password: PASSWORD,
+      });
+      expect(registered.status).toBe(201);
+      expect(await landingFor("erin@example.com")).toBe("/?oidc=no-account");
+    } finally {
+      await open(false);
+    }
+  });
+
+  it("does not hand a member's typed address somebody else's sign-in", async () => {
+    await setup();
+    // Ada types the address of somebody who has no account here yet.
+    await changeOwnEmail("ada", "victim@corp.example");
+    expect(await landingFor("victim@corp.example")).toBe("/?oidc=no-account");
+    expect(
+      sqlite.prepare("SELECT COUNT(*) AS n FROM user_identities").get(),
+    ).toEqual({ n: 0 });
+  });
+
+  it("trusts an address again once a mailed link to it is followed", async () => {
+    for (const kind of ["reset", "magic"] as const) {
+      const { ada } = await setup();
+      await changeOwnEmail("ada", "ada@new.example");
+      const { token } = createAuthLink(kind, ada.id, 900)!;
+      const followed = await request(app)
+        .post(
+          `/api/auth/${kind === "reset" ? "password-reset" : "magic-link"}/complete`,
+        )
+        .send({ token, password: `${PASSWORD} again` });
+      expect(followed.status, kind).toBe(200);
+      expect(await landingFor("ada@new.example"), kind).toBe("/");
+    }
+  });
+
+  it("stops a link mailed to the old address when the address changes", async () => {
+    const { ada } = await setup();
+    const { token } = createAuthLink("magic", ada.id, 900)!;
+    await changeOwnEmail("ada", "ada@new.example");
+    const followed = await request(app)
+      .post("/api/auth/magic-link/complete")
+      .send({ token });
+    expect(followed.status).toBe(410);
+    expect(await landingFor("ada@new.example")).toBe("/?oidc=no-account");
+  });
+
+  it("folds only ASCII, so a Kelvin sign never stands for k", async () => {
+    await setup();
+    const kate = await createUser({
+      email: "kate@example.com",
+      username: "kate",
+      password: PASSWORD,
+      role: "member",
+      emailTrusted: true,
+    });
+    const signInAs = (email: string) =>
+      completeOidcSignIn(
+        {
+          issuer: idp.issuer,
+          subject: `sub-${email}`,
+          email,
+          emailVerified: true,
+        },
+        true,
+        { ip: null, userAgent: null },
+      );
+    // U+212A lowercases to "k" in JavaScript.
+    expect(signInAs("\u212Aate@example.com").outcome).toBe("no-account");
+    const ascii = signInAs("KATE@example.com");
+    expect(ascii.outcome === "signed-in" && ascii.user.id).toBe(kate.id);
   });
 });

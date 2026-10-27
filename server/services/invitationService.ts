@@ -13,7 +13,7 @@ import { sqlite } from "../db.ts";
 import { log } from "../utils/logger.ts";
 import { AppError, NotFoundError } from "../utils/AppError.ts";
 import { auditService } from "./auditService.ts";
-import { createUser, type User } from "./authService.ts";
+import { createUser, normalizeEmail, type User } from "./authService.ts";
 
 /** How long an invitation lives when the admin does not say. */
 export const DEFAULT_INVITATION_DAYS = 7;
@@ -236,6 +236,10 @@ export async function acceptInvitation(
     // The admin who issued the invitation is the one responsible for the
     // account it produced, which is what the admin list shows.
     createdBy: row.invitedBy,
+    // The admin vouched for the invited address only. Another address the
+    // person types instead is theirs to prove with a mailed link.
+    emailTrusted:
+      row.email !== null && normalizeEmail(input.email) === row.email,
   });
 
   // Claimed after the account exists, and conditionally, so two people racing
@@ -277,12 +281,13 @@ function pendingInvitation(token: unknown) {
 
   const row = sqlite
     .prepare(
-      `SELECT id, role, invitedBy, acceptedAt, revokedAt, expiresAt
+      `SELECT id, email, role, invitedBy, acceptedAt, revokedAt, expiresAt
          FROM invitations WHERE tokenHash = ?`,
     )
     .get(tokenHash(token)) as
     | {
         id: string;
+        email: string | null;
         role: string;
         invitedBy: string | null;
         acceptedAt: string | null;

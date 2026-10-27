@@ -6,8 +6,9 @@
 //   link flow on Account settings, a sign-in on the sign-in page, or on the
 //   path it started from when it succeeds.
 // - Sign-in reaches a linked identity, or an account whose verified email
-//   matches, when the admin allows it and that account has no identity at this
-//   provider yet, so an email never moves an existing link.
+//   matches, when the admin allows it, the account's own email is trusted
+//   (users.emailTrustedAt), and that account has no identity at this provider
+//   yet, so an email never moves an existing link.
 // - A disabled account, or one that must change its password first, is
 //   refused before anything is written.
 // - A sign-in's writes (the email link, lastUsedAt, lastLoginAt, the session,
@@ -23,7 +24,7 @@ import { log } from "../utils/logger.ts";
 import { auditService } from "./auditService.ts";
 import {
   createSession,
-  findUserByEmail,
+  findUserByTrustedEmail,
   getUserById,
   type User,
 } from "./authService.ts";
@@ -103,7 +104,7 @@ function accountFor(
   }
   if (!getOidcConfig()?.matchByEmail || !claims.emailVerified) return null;
   if (!claims.email) return null;
-  const match = findUserByEmail(claims.email);
+  const match = findUserByTrustedEmail(claims.email);
   if (!match) return null;
   const linkedHere = listIdentities(match.id).some(
     (identity) => identity.issuer === claims.issuer,

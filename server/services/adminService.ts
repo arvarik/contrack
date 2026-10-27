@@ -324,6 +324,8 @@ export async function createUser(
     // The person did not choose this password, so it is not a credential they
     // can keep. Every data route refuses them until they replace it.
     mustChangePassword: true,
+    // The admin typed the address, so the admin vouches for it.
+    emailTrusted: true,
   });
 
   auditService.record({

@@ -121,7 +121,8 @@ SQL, and tests prove it.
   its browser by a per-flow cookie that holds a secret, never the state.
   `user_identities` maps (issuer, subject) to an account, and a password
   reset deletes an account's rows. Email matching is opt-in, needs
-  `email_verified` and never creates an account.
+  `email_verified` and a trusted account email (`users.emailTrustedAt`), and
+  never creates an account.
 - While sign-in is off, and until the first account exists, `hostGuard`
   answers only local names, the `PUBLIC_URL` host and `ALLOWED_HOSTS`, so DNS
   rebinding cannot reach the owner's data.

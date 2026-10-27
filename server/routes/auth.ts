@@ -318,7 +318,7 @@ router.post(
     // account. The id stays, so every row it owns stays owned.
     const user = hasLocalOwner()
       ? await convertLocalOwner(input)
-      : await createUser({ ...input, setupOnly: true });
+      : await createUser({ ...input, setupOnly: true, emailTrusted: true });
     if (!isAuthRequired()) {
       setForcedAuth(true);
     }
