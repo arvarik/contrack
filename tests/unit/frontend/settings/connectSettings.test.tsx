@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
- * The Connect settings section: the connector forms, Correspondents, the MCP
- * page and the section's search keywords.
+ * The Connect settings section: the connector forms, Correspondents and the
+ * MCP page.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
@@ -21,7 +21,6 @@ import { GoogleFormModal } from "../../../../src/views/settings/connectors/Googl
 import { ImapFormModal } from "../../../../src/views/settings/connectors/ImapFormModal";
 import { CorrespondentsView } from "../../../../src/views/settings/connectors/CorrespondentsView";
 import { McpView } from "../../../../src/views/settings/mcp/McpView";
-import { findRows } from "../../../../src/views/settings/registry";
 import * as connectorsApi from "../../../../src/api/connectors";
 import * as contactsApi from "../../../../src/api/contacts";
 import * as authApi from "../../../../src/api/auth";
@@ -741,23 +740,6 @@ describe("Connect settings", () => {
       // Pressing Escape cancels pasting and resets token draft
       fireEvent.keyDown(tokenInput, { key: "Escape" });
       expect(screen.queryByLabelText("Your token")).toBeNull();
-    });
-  });
-
-  describe("search keywords", () => {
-    it.each([
-      ["webcal", "/settings/connectors#gallery"],
-      ["address book", "/settings/connectors#gallery"],
-      ["strangers", "/settings/connectors/people"],
-    ])("finds %s at %s", (query, expectedPath) => {
-      const paths = findRows(query).map((h) => h.path);
-      expect(paths).toContain(expectedPath);
-    });
-
-    it("does not match unsupported caldav or map non-Claude MCP clients to Claude rows", () => {
-      expect(findRows("caldav")).toHaveLength(0);
-      expect(findRows("vscode")).toHaveLength(0);
-      expect(findRows("codex")).toHaveLength(0);
     });
   });
 });

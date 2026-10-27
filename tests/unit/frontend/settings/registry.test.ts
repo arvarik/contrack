@@ -34,6 +34,23 @@ describe("settings registry", () => {
   });
 
   it.each([
+    ["passkey", "/settings/account#password"],
+    ["avatar", "/settings/account#profile"],
+    ["webcal", "/settings/connectors#gallery"],
+    ["address book", "/settings/connectors#gallery"],
+    ["strangers", "/settings/connectors/people"],
+  ])("finds %s at %s", (query, path) => {
+    const paths = findRows(query, { authRequired: true }).map((h) => h.path);
+    expect(paths).toContain(path);
+  });
+
+  it("does not match unsupported caldav or map non-Claude MCP clients to Claude rows", () => {
+    expect(findRows("caldav")).toHaveLength(0);
+    expect(findRows("vscode")).toHaveLength(0);
+    expect(findRows("codex")).toHaveLength(0);
+  });
+
+  it.each([
     ["embedding", "/settings/admin/ai#embedding-model"],
     ["quick tasks", "/settings/admin/ai#fast-model"],
     ["deep tasks", "/settings/admin/ai#strong-model"],
