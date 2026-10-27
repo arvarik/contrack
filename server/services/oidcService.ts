@@ -7,8 +7,10 @@
 // provider is reused for an hour. A flow's state, PKCE verifier,
 // nonce, link target, "keep me signed in" choice and return path wait in
 // auth_challenges (kind 'oidc') for at most ten minutes, and the callback
-// consumes them once.
+// consumes them once, only from the browser that holds the flow's binding
+// secret.
 
+import crypto from "node:crypto";
 import * as client from "openid-client";
 import { sqlite } from "../db.ts";
 import { AppError, ValidationError } from "../utils/AppError.ts";
@@ -26,7 +28,13 @@ import {
   normalizeIssuer,
 } from "../../shared/contracts/admin.ts";
 
-const FLOW_TTL_MS = 10 * 60 * 1000;
+/** How long a flow waits for its callback. */
+const FLOW_TTL_SECONDS = 10 * 60;
+/**
+ * How long the browser keeps a flow's cookie: longer than the flow, so a
+ * callback after the flow ran out still finds its flow and lands as expired.
+ */
+export const FLOW_COOKIE_SECONDS = 3 * FLOW_TTL_SECONDS;
 const SCOPE = "openid email profile";
 
 export interface OidcClaims {
@@ -44,6 +52,12 @@ interface FlowData {
   remember: boolean;
   /** Where a sign-in lands: a path on this origin, or null for `/`. */
   returnTo: string | null;
+  /**
+   * The SHA-256 of the secret in the browser's flow cookie. The state is in
+   * every URL of the flow, so it cannot be the proof that this is the browser
+   * that started it.
+   */
+  binding: string;
 }
 
 /** A flow the callback consumed. */
@@ -195,17 +209,23 @@ export async function saveOidcProvider(
   setOidcConfig(config);
 }
 
-/** The provider's sign-in address for a new flow. */
+const sha256 = (value: string) => crypto.hash("sha256", value);
+
+/**
+ * A new flow: the provider's sign-in address, its state, and the binding
+ * secret that only the flow cookie carries.
+ */
 export async function startOidc(input: {
   redirectUri: string;
   linkUserId: string | null;
   remember?: boolean;
   returnTo?: string | null;
-}): Promise<string> {
+}): Promise<{ url: string; state: string; binding: string }> {
   const config = await discover(requireConfig());
   const codeVerifier = client.randomPKCECodeVerifier();
   const nonce = client.randomNonce();
   const state = client.randomState();
+  const binding = client.randomState();
   sqlite
     .prepare(
       `INSERT INTO auth_challenges (id, kind, userId, challenge, expiresAt)
@@ -219,10 +239,11 @@ export async function startOidc(input: {
         nonce,
         remember: input.remember !== false,
         returnTo: safeReturnTo(input.returnTo),
+        binding: sha256(binding),
       } satisfies FlowData),
-      new Date(Date.now() + FLOW_TTL_MS).toISOString(),
+      new Date(Date.now() + FLOW_TTL_SECONDS * 1000).toISOString(),
     );
-  return client
+  const url = client
     .buildAuthorizationUrl(config, {
       redirect_uri: input.redirectUri,
       scope: SCOPE,
@@ -232,26 +253,27 @@ export async function startOidc(input: {
       nonce,
     })
     .toString();
+  return { url, state, binding };
 }
 
 /**
- * Consume the flow a callback's state names. Null for a state with no flow,
- * such as one already used.
+ * Consume the flow a callback's state names, when `binding` is the secret
+ * from that flow's cookie. Null for a state with no flow, one already used,
+ * or a wrong binding, which leaves the flow for the browser that has it.
  */
-export function takeOidcFlow(state: string): OidcFlow | null {
+export function takeOidcFlow(state: string, binding: string): OidcFlow | null {
   const row = sqlite
     .prepare(
-      `DELETE FROM auth_challenges WHERE id = ? AND kind = 'oidc'
+      `DELETE FROM auth_challenges
+        WHERE id = ? AND kind = 'oidc'
+          AND json_extract(challenge, '$.binding') = ?
        RETURNING userId, challenge, expiresAt`,
     )
-    .get(state) as
+    .get(state, sha256(binding)) as
     { userId: string | null; challenge: string; expiresAt: string } | undefined;
   if (!row) return null;
-  const data = JSON.parse(row.challenge) as FlowData;
   return {
-    ...data,
-    // A flow written before `remember` existed keeps the default.
-    remember: data.remember !== false,
+    ...(JSON.parse(row.challenge) as FlowData),
     userId: row.userId,
     expired: new Date(row.expiresAt).getTime() <= Date.now(),
   };
@@ -306,7 +328,9 @@ export async function finishOidc(
   return {
     issuer: config.serverMetadata().issuer,
     subject: claims.sub,
-    email: email?.trim().toLowerCase() || null,
+    // As the provider sent it. The trusted-email lookup folds ASCII letters
+    // only, so a Unicode fold here could turn U+212A (Kelvin sign) into "k".
+    email: email?.trim() || null,
     emailVerified,
   };
 }

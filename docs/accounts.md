@@ -160,10 +160,17 @@ Single sign-on never creates an account. It signs in to an existing one:
   in** is on, a provider account whose email the provider calls verified signs
   in to the Contrack account with that email, and stays linked to it. The
   switch is off by default. An account that already has a link from this
-  provider is never moved by email. Contrack does not verify the email on an
-  account, and members can change their own. So turn the switch on only when
-  every account's email is trusted, and only when the provider verifies
-  addresses and people cannot choose their own.
+  provider is never moved by email. Turn the switch on only when the provider
+  verifies addresses and people cannot choose their own.
+
+  Email matching reaches only an account whose own email Contrack trusts. An
+  email is trusted when first-run setup or an admin made the account, when an
+  invitation made it with the invited address, or when the person followed a
+  reset or sign-in link mailed to it. Accounts that existed before this rule
+  start trusted. An account from open registration, or one whose owner
+  changed their own email, is not trusted until a mailed link proves the new
+  address. Changing the email also ends the unused links sent to the old one.
+  An address with a character outside ASCII never matches.
 
 Unlinking keeps your password and passkeys, so you can always still sign in.
 While email matching is on, unlinking does not stop single sign-on: the next
@@ -176,7 +183,10 @@ with the temporary password first. The **Devices** list shows a session from
 the provider as **Single sign-on**.
 
 The server never follows a redirect when it talks to the provider, and a
-sign-in works only in the browser that started it.
+sign-in works only in the browser that started it, even for somebody who has
+copied its address. Each sign-in keeps the email the provider sends now, which
+**Single sign-on** shows. A sign-in that takes longer than ten minutes ends
+with a message that it took too long.
 
 ## Your account
 
@@ -211,11 +221,11 @@ is set.
 3. Open the link in the email. It works once, for one hour.
 4. Choose a new password.
 
-You are then signed in. Every other session ends, and your API tokens and MCP
-apps stop working. One address can ask 3 times in 15 minutes, and one account
-gets at most 3 links an hour. When mail cannot carry links, the screen says
-"This Contrack cannot send email, so an admin resets it for you", and **I run
-this server** shows the reset command.
+You are then signed in. Every other session ends, your API tokens and MCP apps
+stop working, and single sign-on links are removed. One address can ask 3
+times in 15 minutes, and one account gets at most 3 links an hour. When mail
+cannot carry links, the screen says "This Contrack cannot send email, so an
+admin resets it for you", and **I run this server** shows the reset command.
 
 **Ask an admin.** An admin can send you a reset link or give you a temporary
 password, see [Accounts](#accounts).
@@ -231,9 +241,9 @@ docker exec -it contrack node scripts/reset-password.ts <username-or-email>
 ```
 
 The command prints a temporary password. It also signs the account out
-everywhere, and its API tokens and MCP apps stop working. Use it when you are
-the only admin and you lost your password. The built-in **Local account** has
-no password to reset.
+everywhere, its API tokens and MCP apps stop working, and its single sign-on
+links are removed. Use it when you are the only admin and you lost your
+password. The built-in **Local account** has no password to reset.
 
 After a temporary password, the next sign-in opens **Choose your own
 password**. Enter the temporary password, then the new one twice. Nothing else
@@ -276,9 +286,10 @@ Each row's menu holds these actions:
 - **Reset password**: with outgoing mail set up and `PUBLIC_URL` set, choose
   **Email a reset link**, which works for 24 hours, or **Show a temporary
   password**. Otherwise Contrack shows a temporary password. A temporary
-  password signs the person out everywhere at once, and their API tokens and
-  MCP apps stop working. A link does the same when they set the new password.
-  When the mail does not go, Contrack says why and deletes the link.
+  password signs the person out everywhere at once, their API tokens and MCP
+  apps stop working, and their single sign-on links are removed. A link does
+  the same when they set the new password. When the mail does not go,
+  Contrack says why and deletes the link.
 - **Export data**: downloads the account's data as one JSON file, for someone
   who leaves. The audit log records it.
 - **Disable**: asks first, then signs the person out everywhere. Their API

@@ -30,6 +30,7 @@ import {
   revokeOtherSessions,
   type User,
 } from "./authService.ts";
+import { unlinkIdentitiesForReset } from "./identityService.ts";
 import { hashPassword } from "./passwords.ts";
 import { purgeOwnerFromIndexQueue } from "./search/indexQueue.ts";
 
@@ -323,6 +324,8 @@ export async function createUser(
     // The person did not choose this password, so it is not a credential they
     // can keep. Every data route refuses them until they replace it.
     mustChangePassword: true,
+    // The admin typed the address, so the admin vouches for it.
+    emailTrusted: true,
   });
 
   auditService.record({
@@ -382,9 +385,10 @@ export function updateUser(
 }
 
 /**
- * Give an account a new temporary password. Every session and token of the
- * account stops working: a reset means the old credential is not trusted, and a
- * live token would outlive the password it was created under.
+ * Give an account a new temporary password. Every session, token and linked
+ * sign-in of the account stops working: a reset means the old credential is
+ * not trusted, and a live token or link would outlive the password it was
+ * created under.
  */
 export async function resetPassword(
   ctx: AdminContext,
@@ -421,6 +425,7 @@ export async function resetPassword(
           WHERE userId = ? AND revokedAt IS NULL`,
       )
       .run(id);
+    unlinkIdentitiesForReset(id, ctx.actor.id, ctx.ip);
   })();
 
   auditService.record({

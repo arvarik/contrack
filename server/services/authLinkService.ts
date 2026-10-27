@@ -118,8 +118,8 @@ function parseDbDate(dateStr: string): number {
 
 /**
  * Redeem an auth link token: check its kind, hash, single use and expiry, set
- * usedAt and return the link. Throws AppError LINK_INVALID, LINK_USED or
- * LINK_EXPIRED.
+ * usedAt, mark the account's email trusted, and return the link. Throws
+ * AppError LINK_INVALID, LINK_USED or LINK_EXPIRED.
  */
 export function redeemAuthLink(kind: AuthLinkKind, token: string): AuthLinkRow {
   const tokenHash = hashToken(token);
@@ -148,9 +148,23 @@ export function redeemAuthLink(kind: AuthLinkKind, token: string): AuthLinkRow {
   }
 
   const usedAt = new Date().toISOString();
-  const res = sqlite
-    .prepare(`UPDATE auth_links SET usedAt = ? WHERE id = ? AND usedAt IS NULL`)
-    .run(usedAt, row.id);
+  const res = sqlite.transaction(() => {
+    const used = sqlite
+      .prepare(
+        `UPDATE auth_links SET usedAt = ? WHERE id = ? AND usedAt IS NULL`,
+      )
+      .run(usedAt, row.id);
+    // The link went by mail to the account's address, and changing the
+    // address revokes the unused ones, so following it proves the address.
+    if (used.changes > 0) {
+      sqlite
+        .prepare(
+          `UPDATE users SET emailTrustedAt = CURRENT_TIMESTAMP WHERE id = ?`,
+        )
+        .run(row.userId);
+    }
+    return used;
+  })();
 
   if (res.changes === 0) {
     throw new AppError("That link has already been used.", 410, {

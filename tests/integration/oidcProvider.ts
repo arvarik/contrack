@@ -39,6 +39,7 @@ export async function startFakeProvider() {
   let denyNext = false;
   let failUserinfo = false;
   let stallToken = false;
+  let tokenRefusal: { error: string; error_description?: string } | null = null;
   idp.use((req, _res, proceed) => {
     requests.push(req.path);
     proceed();
@@ -99,6 +100,11 @@ export async function startFakeProvider() {
       stallToken = false;
       res.writeHead(200, { "content-type": "application/json" });
       res.write("{");
+      return;
+    }
+    if (tokenRefusal) {
+      res.status(400).json(tokenRefusal);
+      tokenRefusal = null;
       return;
     }
     if (tokenRedirect) {
@@ -167,6 +173,10 @@ export async function startFakeProvider() {
     /** Answer the next token request with headers and a body that never ends. */
     stallNextToken() {
       stallToken = true;
+    },
+    /** Answer the next token request with this OAuth error. */
+    refuseNextToken(body: { error: string; error_description?: string }) {
+      tokenRefusal = body;
     },
     /** Answer the next token request with a 307 to `location`. */
     redirectNextToken(location: string) {

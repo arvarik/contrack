@@ -1191,10 +1191,12 @@ export const OidcRow = () => {
                   Accounts with the same verified email can sign in
                   <span className="block text-xs text-on-surface-variant">
                     Off: members link the provider under Account → Sign-in
-                    methods first. Contrack does not verify the email on an
-                    account, and members can change their own. Turn this on only
-                    when every account&apos;s email is trusted, and the provider
-                    verifies addresses that people cannot choose themselves
+                    methods first. On: a sign-in reaches only an account whose
+                    email Contrack trusts, from setup, an admin, an invitation
+                    to that address or a mailed link. A member who changes their
+                    own email loses that trust. Turn this on only when the
+                    provider verifies addresses that people cannot choose
+                    themselves
                   </span>
                 </label>
                 <Switch

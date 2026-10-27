@@ -218,10 +218,10 @@ describe("OidcRow", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("explains that Contrack does not verify account emails", () => {
+  it("explains which account emails Contrack trusts", () => {
     show();
     expect(
-      screen.getByText(/does not verify the email on an account/i),
+      screen.getByText(/only an account whose\s+email Contrack trusts/i),
     ).toBeTruthy();
   });
 

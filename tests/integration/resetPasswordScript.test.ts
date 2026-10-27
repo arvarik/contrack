@@ -7,6 +7,7 @@ import {
   verifyCredentials,
   listSessions,
 } from "../../server/services/authService.ts";
+import { linkIdentity } from "../../server/services/identityService.ts";
 import { resetPasswordCli } from "../../scripts/reset-password.ts";
 
 describe("scripts/reset-password.ts", () => {
@@ -27,6 +28,7 @@ describe("scripts/reset-password.ts", () => {
 
     createSession(user.id, "Mozilla/5.0");
     expect(listSessions(user.id, null)).toHaveLength(1);
+    linkIdentity(user.id, "https://idp.example.com", "sub-alice", null);
 
     const res = await resetPasswordCli("alice");
     expect(res.userId).toBe(user.id);
@@ -34,8 +36,13 @@ describe("scripts/reset-password.ts", () => {
     expect(res.email).toBe("alice@example.com");
     expect(res.temporaryPassword).toBeDefined();
 
-    // Verify session was revoked
+    // Verify session and single sign-on link were revoked
     expect(listSessions(user.id, null)).toHaveLength(0);
+    expect(
+      sqlite
+        .prepare("SELECT COUNT(*) AS n FROM user_identities WHERE userId = ?")
+        .get(user.id),
+    ).toEqual({ n: 0 });
 
     // Verify mustChangePassword is set to 1
     const row = sqlite
