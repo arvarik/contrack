@@ -1,0 +1,55 @@
+# CodeQL code scanning. The branch rule on `main` requires its results before a
+# pull request merges.
+#
+# This replaces GitHub's default setup, which skips pull requests from forks, so
+# a contributor's pull request could never meet the rule. A `pull_request` run
+# from a fork gets a read-only token and no secrets, and code scanning still
+# accepts its results. Never change the trigger to `pull_request_target`: that
+# runs a fork's code with a token that can write to this repository.
+#
+# Default setup must stay off, because GitHub rejects results from this
+# workflow while it is on. The languages and categories match the ones default
+# setup used, so the alert history continues.
+name: CodeQL
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  schedule:
+    - cron: "17 4 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, javascript-typescript]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # build-mode none reads the source and never runs a fork's code.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+
+      - name: Analyze
+        uses: github/codeql-action/analyze@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          category: /language:${{ matrix.language }}
