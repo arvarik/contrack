@@ -9,11 +9,18 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.4] - 2026-10-27
+
 ### Security
 
 - Single sign-on: the upgrade to 2.0.3 trusted every existing email. Email
   matching now skips an account from open registration, or one that accepted
   an invitation with another address, until a mailed link proves its email.
+- Account: a new email needs the current password. With outgoing mail, it
+  waits for a link mailed to the new address, and the old address gets a
+  notice. Until the link is opened, the account keeps its old email.
+- Single sign-on: linking and unlinking need the current password, and with
+  outgoing mail the account gets a notice each time.
 
 ### Fixed
 
@@ -27,6 +34,8 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Single sign-on: a signed-in person whose sign-in did not finish sees a
   message, and the unlink dialog warns about linking again only when it can
   happen.
+- Possible duplicates: a decision made within a moment of an Undo keeps its
+  own message and Undo, which an old message's removal used to take with it.
 
 ## [2.0.3] - 2026-10-27
 
@@ -308,7 +317,8 @@ server.
 The first release: a local-first personal CRM with contact management,
 semantic search, AI enrichment and duplicate detection.
 
-[unreleased]: https://github.com/arvarik/contrack/compare/v2.0.3...HEAD
+[unreleased]: https://github.com/arvarik/contrack/compare/v2.0.4...HEAD
+[2.0.4]: https://github.com/arvarik/contrack/compare/v2.0.3...v2.0.4
 [2.0.3]: https://github.com/arvarik/contrack/compare/v2.0.2...v2.0.3
 [2.0.2]: https://github.com/arvarik/contrack/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/arvarik/contrack/compare/v2.0.0...v2.0.1
