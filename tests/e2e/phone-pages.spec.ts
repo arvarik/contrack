@@ -244,7 +244,9 @@ test.describe("phone pages (390 px)", () => {
     ).toBeVisible();
 
     // Check that drop zone appears before the disclosure
-    const dropZone = page.getByLabel(/Choose a .* file/);
+    const dropZone = page.getByRole("button", {
+      name: /^Choose a file .* files only$/,
+    });
     const disclosure = page.locator("details", {
       hasText: "How to export from",
     });
@@ -252,13 +254,9 @@ test.describe("phone pages (390 px)", () => {
     await expect(dropZone).toBeVisible();
     await expect(disclosure).toBeVisible();
 
-    const isPreceding = await page.evaluate(() => {
-      const zone = document.querySelector(
-        '[role="button"][aria-label^="Choose a "]',
-      );
+    const isPreceding = await dropZone.evaluate((zone) => {
       const det = document.querySelector("details");
       return Boolean(
-        zone &&
         det &&
         zone.compareDocumentPosition(det) & Node.DOCUMENT_POSITION_FOLLOWING,
       );

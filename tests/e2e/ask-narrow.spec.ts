@@ -34,8 +34,8 @@ test("a long answer offers chips that narrow it, and a press asks again", async 
     const narrow = page.getByRole("group", { name: "Narrow the list" });
     // The tag the question asks for keeps everyone, so it is no chip.
     await expect(narrow.getByRole("button")).toHaveText([
-      "Zinc Mining12",
-      "Zephyr Works20",
+      "Zinc Mining 12",
+      "Zephyr Works 20",
     ]);
     await expectPageAccessible(page, testInfo, "ask-narrow");
 

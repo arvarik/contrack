@@ -115,7 +115,7 @@ test.describe("a tag on the Tags page", () => {
     await page.goto("/settings/tags");
     await page.getByRole("link", { name: "book club, 1 contact" }).click();
     await expect(page).toHaveURL(/\/\?tag=book(\+|%20)club$/);
-    const chip = page.getByRole("button", { name: "Filter: book club (1)" });
+    const chip = page.getByRole("button", { name: "Filter: book club, 1" });
     await expect(chip).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByText("Tamsin Tagged")).toBeVisible();
     await expect(page.getByText("Ada Lovelace")).toHaveCount(0);

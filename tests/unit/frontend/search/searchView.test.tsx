@@ -769,7 +769,7 @@ describe("the page", () => {
       "Narrow to Fintech, 412 people",
       "Narrow to New York, 1,203 people",
     ]);
-    expect(chips[1]!.textContent).toBe("New York1,203");
+    expect(chips[1]!.textContent).toBe("New York 1,203");
 
     fireEvent.click(chips[1]!);
     const narrowed = 'Who do I track? location:"New York"';

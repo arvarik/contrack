@@ -274,7 +274,7 @@ const Bars = ({
                 onClick={() =>
                   on ? onRemoveFacet?.(pill) : onApplyFacet(formatFacet(facet))
                 }
-                aria-label={`Filter by ${field}: ${item.name} (${item.count})`}
+                aria-label={`Filter by ${field}: ${item.name}, ${item.count}`}
                 className={cn(
                   "hit-area state-layer w-full rounded-lg px-2 py-1.5 text-left cursor-pointer",
                   on && SELECTED_TINT,
@@ -283,7 +283,7 @@ const Bars = ({
                 <span className="flex items-center justify-between gap-2 text-xs font-medium mb-1">
                   <span className={cn("truncate", !on && "text-on-surface")}>
                     {item.name}
-                  </span>
+                  </span>{" "}
                   <span className="flex items-center gap-1 text-on-surface-variant font-bold tabular-nums shrink-0">
                     {item.count}
                     {on && <X className="w-3 h-3" aria-hidden="true" />}

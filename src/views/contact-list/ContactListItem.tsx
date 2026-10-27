@@ -166,11 +166,14 @@ const ContactListItemInner = ({
 
   // The row's name says the score and the follow-up in words, so color is
   // never the only sign: "Name, Company, score 72, strong, follow-up 3 days
-  // overdue". An untracked contact has no score words.
+  // overdue". An untracked contact has no score words. It starts with the
+  // visible words in order, so a person who says them reaches the row. The
+  // spaces between the lines below keep those words apart.
   const view = scoreView(contact);
   const rowName = [
     contact.name,
     contact.company || contact.role,
+    matchReason && `matches ${matchReason}`,
     scoreWords(view, { sentence: true }),
     followUp && followUp.text.charAt(0).toLowerCase() + followUp.text.slice(1),
   ]
@@ -224,7 +227,6 @@ const ContactListItemInner = ({
           decorative
         />
       </span>
-
       <div className="flex-1 min-w-0">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-1.5 min-w-0">
@@ -254,8 +256,7 @@ const ContactListItemInner = ({
               {followUpGlyph}
             </span>
           )}
-        </div>
-
+        </div>{" "}
         {contact.company ? (
           <p
             className={cn(
@@ -287,15 +288,13 @@ const ContactListItemInner = ({
             <Briefcase className="w-3.5 h-3.5 shrink-0 opacity-60" />
             <span className="truncate">{contact.role}</span>
           </p>
-        ) : null}
-
+        ) : null}{" "}
         {matchReason && (
           <p className="text-[11px] font-medium text-primary truncate mt-0.5">
             Matches {matchReason}
           </p>
         )}
-      </div>
-
+      </div>{" "}
       {/* Tablet-only column: only between 768 and 1023 px is the row wide
           enough. Recency gets it, as the signal a CRM is for. */}
       <div className="hidden md:flex lg:hidden items-center gap-5 shrink-0 pl-4 text-xs text-on-surface-variant">
@@ -320,7 +319,6 @@ const ContactListItemInner = ({
           {shortRecency(contact.lastContactedAt)}
         </span>
       </div>
-
       <AnimatePresence>
         {isSelectMode && (
           <motion.div
