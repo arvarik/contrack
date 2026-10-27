@@ -336,6 +336,14 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
     [finish, poll],
   );
 
+  /** Back to the upload area with a reason, ready for another file. */
+  const rejectFile = (message: string) => {
+    setError(message);
+    setPhase("idle");
+    setProgress(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const processFile = async (file: File) => {
     if (
       phaseRef.current === "importing" ||
@@ -347,20 +355,12 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
     }
 
     if (file.size > 50 * 1024 * 1024) {
-      setError("File is too large. Choose a file under 50 MB");
-      setPhase("idle");
-      setProgress(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
+      return rejectFile("File is too large. Choose a file under 50 MB");
     }
 
     const ext = file.name.toLowerCase().split(".").pop();
     if (ext && ["vcf", "csv", "json"].includes(ext) && file.size === 0) {
-      setError("The chosen file is empty");
-      setPhase("idle");
-      setProgress(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
+      return rejectFile("The chosen file is empty");
     }
 
     setError(null);
@@ -385,11 +385,7 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
       newContacts = parsed.contacts;
       setSkipped(parsed.skipped);
     } catch (err: unknown) {
-      setError(errorText(err) || "Could not read the file");
-      setPhase("idle");
-      setProgress(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-      return;
+      return rejectFile(errorText(err) || "Could not read the file");
     }
 
     const id = crypto.randomUUID();

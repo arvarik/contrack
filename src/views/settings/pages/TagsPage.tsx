@@ -103,6 +103,12 @@ export const TagsPage = () => {
     setEditValue("");
   };
 
+  /** Another tag than `from` with this name, whatever its case. */
+  const otherNamed = (from: string, name: string) =>
+    tags.find(
+      (t) => t.tag !== from && t.tag.toLowerCase() === name.toLowerCase(),
+    );
+
   const handleRenameSubmit = async (item: TagSummary) => {
     const trimmed = editValue.trim();
     if (!trimmed || trimmed === item.tag) {
@@ -111,10 +117,7 @@ export const TagsPage = () => {
     }
     // A name another tag has joins the two. That is a merge, so it asks
     // first, in the merge dialog that says so.
-    const other = tags.find(
-      (t) =>
-        t.tag !== item.tag && t.tag.toLowerCase() === trimmed.toLowerCase(),
-    );
+    const other = otherNamed(item.tag, trimmed);
     if (other) {
       cancelEditing();
       setMergeSource(item);
@@ -143,11 +146,7 @@ export const TagsPage = () => {
       toast("Select or type a different tag to merge into");
       return;
     }
-    const existing = tags.find(
-      (t) =>
-        t.tag !== mergeSource.tag &&
-        t.tag.toLowerCase() === trimmed.toLowerCase(),
-    );
+    const existing = otherNamed(mergeSource.tag, trimmed);
     const target = existing ? existing.tag : trimmed;
     try {
       const result = await renameMutation.mutateAsync({
