@@ -981,9 +981,10 @@ export const ImportPanel = ({ onComplete, onClose }: ImportPanelProps) => {
               initial={false}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              // Named by its words, which change with the pointer: "or drop
+              // it here" shows only with a mouse.
               role="button"
               tabIndex={0}
-              aria-label={`Choose a ${formats.label} file`}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();

@@ -195,6 +195,7 @@ describe("a new database", () => {
       "0001_baseline",
       "0002_sign_in_identities",
       "0003_address_trust",
+      "0004_unproven_addresses",
     ]);
     const addr = dev
       .prepare(
@@ -207,6 +208,54 @@ describe("a new database", () => {
       isPrimary: 1,
     });
     dev.close();
+  });
+});
+
+describe("an upgrade from 2.0.2", () => {
+  it("keeps email trust only where somebody vouched for the address", () => {
+    const db = new Database(":memory:");
+    runMigrations(db, MIGRATIONS.slice(0, 2));
+    const owner = (
+      db.prepare("SELECT id FROM users LIMIT 1").get() as { id: string }
+    ).id;
+    const account = (id: string, role: string, createdBy: string | null) =>
+      db
+        .prepare(
+          "INSERT INTO users (id, email, username, passwordHash, role, createdBy) VALUES (?, ?, ?, 'x', ?, ?)",
+        )
+        .run(id, `${id}@corp.example`, id, role, createdBy);
+    const invited = (id: string, email: string | null) => {
+      account(id, "member", owner);
+      db.prepare(
+        `INSERT INTO invitations (id, email, tokenHash, invitedBy, expiresAt, acceptedAt, acceptedBy)
+         VALUES (?, ?, ?, ?, '2999-01-01', CURRENT_TIMESTAMP, ?)`,
+      ).run(`inv-${id}`, email, `hash-${id}`, owner, id);
+    };
+    account("registered", "member", null);
+    account("promoted", "admin", null);
+    account("made", "member", owner);
+    invited("same", "same@corp.example");
+    invited("other", "someone@corp.example");
+    invited("blank", null);
+    account("proved", "member", null);
+
+    runMigrations(db, MIGRATIONS.slice(0, 3));
+    // A mailed link proved this one after 2.0.3 started.
+    db.prepare(
+      "UPDATE users SET emailTrustedAt = '2999-01-01 00:00:00' WHERE id = 'proved'",
+    ).run();
+    runMigrations(db, MIGRATIONS);
+
+    const trusted = db
+      .prepare(
+        "SELECT id FROM users WHERE emailTrustedAt IS NOT NULL ORDER BY id",
+      )
+      .all()
+      .map((row) => (row as { id: string }).id);
+    expect(trusted).toEqual(
+      [owner, "made", "promoted", "proved", "same"].sort(),
+    );
+    db.close();
   });
 });
 

@@ -68,6 +68,7 @@ export const HistoryEntryRow = React.memo(
       }
       return meta;
     };
+    const meta = renderMeta();
 
     return (
       // The hover layer is on the whole row, so it holds over Pin or Delete.
@@ -80,7 +81,11 @@ export const HistoryEntryRow = React.memo(
         <button
           type="button"
           onClick={() => onSelect(entry)}
-          aria-label={`Run again: ${entry.query}`}
+          // The visible words in order, after the action, so a person who
+          // says what the row shows reaches it.
+          aria-label={[`Run again: ${entry.query}`, meta]
+            .filter(Boolean)
+            .join(", ")}
           aria-current={isCurrent ? "true" : undefined}
           className="w-full text-left p-2.5 flex items-start gap-2.5 rounded-xl cursor-pointer"
         >
@@ -96,9 +101,9 @@ export const HistoryEntryRow = React.memo(
               )}
             >
               {entry.query}
-            </div>
+            </div>{" "}
             <div className="text-xs text-on-surface-variant mt-0.5 pr-20 truncate">
-              {renderMeta()}
+              {meta}
             </div>
           </div>
         </button>

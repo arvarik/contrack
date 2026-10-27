@@ -3,6 +3,7 @@
  * page and the dialogs' radio groups: what this release changed that a
  * person would find by pressing and dragging.
  */
+import { expectPageAccessible } from "./fixtures/a11y";
 import { test, gatedTest, expect } from "./fixtures/test";
 import type { ContrackInstance } from "./fixtures/instance";
 import { ADMIN, completeSetup } from "./fixtures/accounts";
@@ -105,7 +106,7 @@ test.describe("a tag on the Tags page", () => {
   test("opens the Network list filtered to it, spaces and all", async ({
     page,
     instance,
-  }) => {
+  }, testInfo) => {
     const { id } = await instance.api<{ id: string }>("POST", "/contacts", {
       name: "Tamsin Tagged",
       tags: ["book club"],
@@ -113,9 +114,13 @@ test.describe("a tag on the Tags page", () => {
     created.push({ instance, id });
 
     await page.goto("/settings/tags");
+    await expect(
+      page.getByRole("link", { name: "book club, 1 contact" }),
+    ).toBeVisible();
+    await expectPageAccessible(page, testInfo, "tags-page");
     await page.getByRole("link", { name: "book club, 1 contact" }).click();
     await expect(page).toHaveURL(/\/\?tag=book(\+|%20)club$/);
-    const chip = page.getByRole("button", { name: "Filter: book club (1)" });
+    const chip = page.getByRole("button", { name: "Filter: book club, 1" });
     await expect(chip).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByText("Tamsin Tagged")).toBeVisible();
     await expect(page.getByText("Ada Lovelace")).toHaveCount(0);

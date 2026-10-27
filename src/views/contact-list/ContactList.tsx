@@ -138,11 +138,13 @@ const FilterButton = ({
     // 28 px on screen, a 44 px tap box from hit-area. The sideways-scrolling
     // row carries the padding the box needs.
     className={cn(filterPill(active), "hit-area")}
-    aria-label={`Filter: ${label} (${count})`}
+    // The name holds the visible words in order, so a person who says "All 6"
+    // reaches it. The space only splits the words: a flex row drops it.
+    aria-label={`Filter: ${label}, ${count}`}
     aria-pressed={active}
   >
     {icon}
-    {label}
+    {label}{" "}
     {/* Variant ink at full strength: at half opacity it measured 2.2 to 1. */}
     <span
       className={cn("ml-0.5 text-[11px]", !active && "text-on-surface-variant")}

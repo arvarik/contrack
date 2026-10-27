@@ -584,7 +584,7 @@ export const SearchView = () => {
                             "flex items-center gap-1.5",
                           )}
                         >
-                          {option.label}
+                          {option.label}{" "}
                           <span className="font-semibold tabular-nums">
                             {option.count.toLocaleString()}
                           </span>

@@ -301,7 +301,7 @@ export const TagsPage = () => {
                           >
                             <span className="font-semibold text-sm text-on-surface break-words min-w-0 underline-offset-2 group-hover/tag:underline">
                               {item.tag}
-                            </span>
+                            </span>{" "}
                             <span className="px-2 py-0.5 rounded-md text-xs font-bold bg-primary/10 text-on-primary-wash shrink-0">
                               {item.count}
                             </span>

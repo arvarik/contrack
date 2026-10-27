@@ -313,7 +313,7 @@ test.describe("the Network header and start panel", () => {
     await expect(page.getByText("Ada Lovelace")).toBeVisible();
 
     // Four of the six seeded people are tracked.
-    const chip = page.getByRole("button", { name: "Filter: Tracked (4)" });
+    const chip = page.getByRole("button", { name: "Filter: Tracked, 4" });
     await expect(chip).toHaveAttribute("aria-pressed", "false");
     await chip.click();
     await expect(chip).toHaveAttribute("aria-pressed", "true");
@@ -1045,7 +1045,7 @@ test.describe("tracking", () => {
       await expect(page.getByText("Zeta Three")).toBeVisible();
 
       const chip = page.getByRole("button", { name: /^Filter: Tracked/ });
-      await expect(chip).toHaveAccessibleName("Filter: Tracked (4)");
+      await expect(chip).toHaveAccessibleName("Filter: Tracked, 4");
 
       await page.getByRole("button", { name: "Select", exact: true }).click();
       for (const id of ids) await page.locator(`#contact-row-${id}`).click();
@@ -1059,7 +1059,7 @@ test.describe("tracking", () => {
       );
       await track.click();
       await expect(toastWith(page, "Tracking 3 contacts")).toBeVisible();
-      await expect(chip).toHaveAccessibleName("Filter: Tracked (7)");
+      await expect(chip).toHaveAccessibleName("Filter: Tracked, 7");
       await expect(bar).toBeHidden();
 
       await toastWith(page, "Tracking 3 contacts")
@@ -1068,7 +1068,7 @@ test.describe("tracking", () => {
       await expect(
         toastWith(page, "Stopped tracking 3 contacts"),
       ).toBeVisible();
-      await expect(chip).toHaveAccessibleName("Filter: Tracked (4)");
+      await expect(chip).toHaveAccessibleName("Filter: Tracked, 4");
     });
   });
 });

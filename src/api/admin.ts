@@ -513,6 +513,8 @@ export const useUpdateIntegrations = () => {
       qc.invalidateQueries({ queryKey: connectorKeys.kinds });
       // The gate holds the provider's name from `/api/auth/status`.
       emitAuthStatusStale();
+      // Which linked sign-in is the current provider's changes with it.
+      qc.invalidateQueries({ queryKey: ["auth", "identities"] });
     },
   });
 };

@@ -166,15 +166,19 @@ Single sign-on never creates an account. It signs in to an existing one:
   Email matching reaches only an account whose own email Contrack trusts. An
   email is trusted when first-run setup or an admin made the account, when an
   invitation made it with the invited address, or when the person followed a
-  reset or sign-in link mailed to it. Accounts that existed before this rule
-  start trusted. An account from open registration, or one whose owner
+  reset or sign-in link mailed to it. An account from before 2.0.3 keeps its
+  trust by the same rules. Contrack keeps no record of an email a member
+  changed before 2.0.3, so such an account stays trusted, and an admin should
+  check those addresses before turning matching on. An account from open
+  registration, or one whose owner
   changed their own email, is not trusted until a mailed link proves the new
   address. Changing the email also ends the unused links sent to the old one.
   An address with a character outside ASCII never matches.
 
 Unlinking keeps your password and passkeys, so you can always still sign in.
-While email matching is on, unlinking does not stop single sign-on: the next
-sign-in with the provider links the account again.
+While email matching is on, unlinking does not stop single sign-on when your
+email is trusted: a sign-in with the provider that sends that verified email
+links the account again.
 
 **Keep me signed in** works for single sign-on as it does for a password, and
 a link to a page in Contrack opens that page after the sign-in. An account

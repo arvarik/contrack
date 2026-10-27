@@ -92,7 +92,7 @@ test.describe("desktop", () => {
     const runButtons = historyPane.locator("button[aria-label^='Run again:']");
     await expect(runButtons.first()).toHaveAttribute(
       "aria-label",
-      "Run again: who writes rust code",
+      /^Run again: who writes rust code, /,
     );
 
     // Accessibility check with pane open

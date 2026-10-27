@@ -70,7 +70,7 @@ export const authRoutes = {
       matchByEmail: z
         .boolean()
         .describe(
-          "True when a sign-in links to an account by its email, so an unlinked account links again",
+          "True when email matching is on and this account's email is trusted, so a sign-in with that verified email can link it again",
         ),
     }),
   }),

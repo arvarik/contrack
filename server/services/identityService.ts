@@ -106,7 +106,15 @@ export function accountIdentities(userId: string) {
         config !== null &&
         issuerKey(identity.issuer) === issuerKey(config.issuer),
     })),
-    matchByEmail: config?.matchByEmail === true,
+    // Matching reaches only a trusted email, so an account whose email is not
+    // trusted never links again by it.
+    matchByEmail:
+      config?.matchByEmail === true &&
+      sqlite
+        .prepare(
+          "SELECT 1 FROM users WHERE id = ? AND emailTrustedAt IS NOT NULL",
+        )
+        .get(userId) !== undefined,
   };
 }
 

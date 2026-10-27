@@ -51,7 +51,7 @@ function issuerHost(issuer: string): string {
 }
 
 export const SingleSignOnCard = () => {
-  const { oidc } = useAuth();
+  const { oidc, user } = useAuth();
   const queryClient = useQueryClient();
   const [target, setTarget] = useState<LinkedIdentity | null>(null);
   const { data, isLoading, isError, refetch } = useQuery({
@@ -204,7 +204,8 @@ export const SingleSignOnCard = () => {
         onClose={() => setTarget(null)}
         onConfirm={() => target && unlink.mutate(target)}
         title={unlinkLabel}
-        description={`You can still sign in with ${others}${data?.matchByEmail && target?.current ? `. Email matching is on, so your next ${oidc.name} sign-in links this account again` : ""}`}
+        // A sign-in links the account again only with the account's own email.
+        description={`You can still sign in with ${others}${data?.matchByEmail && target?.current && target.email?.toLowerCase() === user?.email.toLowerCase() ? `. Email matching is on, so your next ${oidc.name} sign-in can link this account again` : ""}`}
         confirmLabel={unlinkLabel}
         tone="danger"
         busy={unlink.isPending}

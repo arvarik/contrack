@@ -559,7 +559,16 @@ describe("API: linking OIDC from settings", () => {
       .get("/api/auth/identities")
       .set("Cookie", cookie);
     expect(list.body.identities).toHaveLength(1);
-    expect(typeof list.body.matchByEmail).toBe("boolean");
+    // Matching is on and Ada's email is trusted. Once it is not, matching
+    // cannot link her again, so the card must not say it will.
+    expect(list.body.matchByEmail).toBe(true);
+    sqlite
+      .prepare("UPDATE users SET emailTrustedAt = NULL WHERE id = ?")
+      .run(ada.id);
+    expect(
+      (await request(app).get("/api/auth/identities").set("Cookie", cookie))
+        .body.matchByEmail,
+    ).toBe(false);
     expect(list.body.identities[0].email).toBe("ada@idp.example");
     const unlink = (id: string) =>
       request(app)

@@ -73,6 +73,8 @@ test("an admin sets up, changes and removes the OIDC provider", async ({
   await card.getByRole("button", { name: "Remove" }).click();
   await page.getByRole("button", { name: "Remove provider" }).click();
   await expect(card.getByText("Not set up")).toBeVisible();
+  // The Remove button is gone, so the keyboard lands on the empty Issuer.
+  await expect(card.getByLabel("Issuer")).toBeFocused();
 });
 
 test("OIDC_* in the environment shows a read-only block", async ({
@@ -161,5 +163,12 @@ gatedTest(
     provider.nextLogin({ sub: "ada-1" });
     await signIn.click();
     await expectSignedIn(page, ADMIN);
+
+    // A flow the server could not place lands on /?oidc= even when signed in.
+    await page.goto("/?oidc=failed");
+    await expect(
+      page.getByText("Single sign-on did not finish. Try again"),
+    ).toBeVisible();
+    await expect(page).toHaveURL(/\/$/);
   },
 );

@@ -153,14 +153,14 @@ describe("MapInsightsPane", () => {
       activeFilters: [{ field: "industry", value: "computing" }],
     });
     const company = screen.getByRole("button", {
-      name: "Filter by company: Babbage & Co (1)",
+      name: "Filter by company: Babbage & Co, 1",
     });
     expect(company.getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(company);
     expect(onApplyFacet).toHaveBeenCalledWith('company:"Babbage & Co"');
 
     const industry = screen.getByRole("button", {
-      name: "Filter by industry: Computing (2)",
+      name: "Filter by industry: Computing, 2",
     });
     expect(industry.getAttribute("aria-pressed")).toBe("true");
     fireEvent.click(industry);
@@ -224,7 +224,7 @@ describe("MapInsightsPane", () => {
     renderPane();
     expect(screen.getByRole("dialog", { name: "Map insights" })).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Filter by tag: pioneer (2)" }),
+      screen.getByRole("button", { name: "Filter by tag: pioneer, 2" }),
     ).toBeTruthy();
   });
 });

@@ -4,7 +4,7 @@
  * working"). The confirm button repeats the verb, not "OK". `children`
  * holds what must be true first: a count, a warning, a checkbox.
  */
-import { type ReactNode } from "react";
+import { type ReactNode, type RefObject } from "react";
 import { Loader2 } from "lucide-react";
 import { Modal } from "./Modal";
 import { DIALOG_ACTIONS } from "../../lib/styles";
@@ -20,6 +20,7 @@ export const ConfirmDialog = ({
   busy = false,
   disabled = false,
   children,
+  returnFocusRef,
 }: {
   isOpen: boolean;
   onClose: () => void;
@@ -33,8 +34,16 @@ export const ConfirmDialog = ({
   /** True while a precondition in `children` is unmet. */
   disabled?: boolean;
   children?: ReactNode;
+  /** Where focus goes on close, when the control that opened it is gone. */
+  returnFocusRef?: RefObject<HTMLElement | null>;
 }) => (
-  <Modal isOpen={isOpen} onClose={onClose} title={title} size="sm">
+  <Modal
+    isOpen={isOpen}
+    onClose={onClose}
+    title={title}
+    size="sm"
+    returnFocusRef={returnFocusRef}
+  >
     <div className="space-y-4">
       {description && (
         <div className="text-sm text-on-surface-variant text-pretty space-y-2">

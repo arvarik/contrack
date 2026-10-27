@@ -205,7 +205,7 @@ test.describe("map", () => {
       await page.goto("/map");
 
       const bar = page.getByRole("button", {
-        name: "Filter by industry: Venture Capital (2)",
+        name: "Filter by industry: Venture Capital, 2",
       });
       await bar.click();
       await expect(
