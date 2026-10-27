@@ -84,6 +84,17 @@ export function isAllowedIssuer(value: string): boolean {
   }
 }
 
+/**
+ * An issuer for comparison: no surrounding space and no trailing
+ * `/.well-known/openid-configuration`, which openid-client also accepts as an
+ * issuer. Discovery still gets the address as typed: without the suffix, a
+ * path issuer can lose the trailing slash its provider names, and
+ * openid-client then refuses it.
+ */
+export function normalizeIssuer(value: string): string {
+  return value.trim().replace(/\/\.well-known\/openid-configuration\/?$/, "");
+}
+
 /** Body for PUT /api/admin/integrations. */
 export const adminIntegrationsSchema = z
   .object({

@@ -21,7 +21,10 @@ import {
   type OidcConfig,
   type OidcConfigInput,
 } from "./integrationSettings.ts";
-import { isAllowedIssuer } from "../../shared/contracts/admin.ts";
+import {
+  isAllowedIssuer,
+  normalizeIssuer,
+} from "../../shared/contracts/admin.ts";
 
 const FLOW_TTL_MS = 10 * 60 * 1000;
 const SCOPE = "openid email profile";
@@ -145,10 +148,11 @@ async function discover(
 
 /**
  * Save the provider an admin entered, or clear it with null. A save without a
- * client secret keeps the saved one, but only for the same issuer and client
- * ID. New credentials must answer discovery first; when they do not, nothing
- * is stored. A save that keeps them (the switch or the name alone) skips
- * discovery, so it works while the provider is down.
+ * client secret keeps the saved one, but only for the same issuer (or its
+ * discovery URL) and client ID. New credentials must answer discovery first;
+ * when they do not, nothing is stored. A save that keeps them exactly (the
+ * switch or the name alone) skips discovery, so it works while the provider
+ * is down.
  */
 export async function saveOidcProvider(
   input:
@@ -160,13 +164,17 @@ export async function saveOidcProvider(
     return;
   }
   const saved = getOidcConfig();
+  // The same provider, even when one side names its discovery URL.
+  const sameProvider =
+    saved !== null &&
+    normalizeIssuer(saved.issuer) === normalizeIssuer(input.issuer) &&
+    saved.clientId === input.clientId;
   const clientSecret =
-    input.clientSecret ||
-    (saved?.issuer === input.issuer && saved.clientId === input.clientId
-      ? saved.clientSecret
-      : "");
+    input.clientSecret || (sameProvider ? saved.clientSecret : "");
   if (!clientSecret) throw new ValidationError("Client secret is required");
   const config = { ...input, clientSecret };
+  // Exact, not normalized: an issuer and its discovery URL are discovered
+  // differently, so a switch between them is checked again.
   const unchanged =
     saved?.issuer === config.issuer &&
     saved.clientId === config.clientId &&

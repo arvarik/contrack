@@ -5,6 +5,7 @@ import crypto from "crypto";
 import { sqlite } from "../db.ts";
 import { AppError, ConflictError, NotFoundError } from "../utils/AppError.ts";
 import { getOidcConfig } from "./integrationSettings.ts";
+import { normalizeIssuer } from "../../shared/contracts/admin.ts";
 
 export interface IdentitySummary {
   id: string;
@@ -76,12 +77,16 @@ export function listIdentities(userId: string): IdentitySummary[] {
     .all(userId) as IdentitySummary[];
 }
 
-/** An issuer as written, compared by its URL with one trailing slash off. */
+/**
+ * An issuer as written, compared by its URL with one trailing slash off. A
+ * configured discovery URL compares as its issuer.
+ */
 function issuerKey(issuer: string): string {
+  const value = normalizeIssuer(issuer);
   try {
-    return new URL(issuer).href.replace(/\/$/, "");
+    return new URL(value).href.replace(/\/$/, "");
   } catch {
-    return issuer;
+    return value;
   }
 }
 

@@ -608,6 +608,46 @@ describe("API: OIDC link flow landings", () => {
       "https://old.example.com": false,
     });
   });
+
+  it("marks the identity current when the admin saved the discovery URL as the issuer", async () => {
+    const { adminCookie } = await setup();
+    const cookie = adminCookie.map((c) => c.split(";")[0]);
+    const discoveryUrl = `${idp.issuer}/.well-known/openid-configuration`;
+    // No secret: the discovery URL names the saved provider, so it stays.
+    const saved = await request(app)
+      .put("/api/admin/integrations")
+      .set("Cookie", cookie)
+      .set("Origin", ORIGIN)
+      .send({
+        oidc: {
+          issuer: discoveryUrl,
+          clientId: "contrack",
+          name: "Test IdP",
+          matchByEmail: false,
+        },
+      });
+    expect(saved.status).toBe(200);
+    expect(saved.body.oidc.issuer).toBe(discoveryUrl);
+
+    const link = await request(app)
+      .post("/api/auth/oidc/link")
+      .set("Cookie", cookie)
+      .set("Origin", ORIGIN);
+    const { state } = idp.remember(link.body.url);
+    idp.nextLogin({ sub: "sub-admin" });
+    const done = await request(app)
+      .get(`/api/auth/oidc/callback?code=c&state=${state}`)
+      .set("Cookie", [...cookie, flowCookie(link)]);
+    expect(done.headers.location).toBe(
+      "/settings/account?oidc=linked#password",
+    );
+    const list = await request(app)
+      .get("/api/auth/identities")
+      .set("Cookie", cookie);
+    expect(list.body.identities).toMatchObject([
+      { issuer: idp.issuer, current: true },
+    ]);
+  });
 });
 
 describe("API: OIDC failures on browser routes", () => {
