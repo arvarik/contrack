@@ -388,6 +388,16 @@ test("Escape asks once before it discards a typed note", async ({ page }) => {
 // An iPhone, run in Chromium as the rest of the suite is.
 const { defaultBrowserType: _webkit, ...PHONE } = devices["iPhone 13"];
 
+/**
+ * Stand in for a 420 px phone keyboard: `--keyboard-inset` as useSoftKeyboard
+ * sets it. The hook measures again on focus, pointer and viewport events, and
+ * with no real keyboard it writes 0 back, so each reading sets it first.
+ */
+const keyboardUp = (page: Page) =>
+  page.evaluate(() =>
+    document.documentElement.style.setProperty("--keyboard-inset", "420px"),
+  );
+
 test.describe("on a phone", () => {
   test.use({ ...PHONE, viewport: { width: 390, height: 844 } });
 
@@ -442,19 +452,18 @@ test.describe("on a phone", () => {
     await page.keyboard.type("eds");
     await palette.getByRole("option", { name: "Edsger Dijkstra" }).tap();
     await expect(palette.getByRole("textbox", { name: "Note" })).toBeVisible();
-    await page.evaluate(() =>
-      document.documentElement.style.setProperty("--keyboard-inset", "420px"),
-    );
+    await keyboardUp(page);
     // It sat under the keyboard, below the scroll area's visible part.
     await expect(
       palette.getByRole("button", { name: "Save" }),
     ).toBeInViewport();
     await expect
-      .poll(() =>
-        palette
+      .poll(async () => {
+        await keyboardUp(page);
+        return palette
           .getByRole("button", { name: "Save" })
-          .evaluate((button) => button.getBoundingClientRect().bottom),
-      )
+          .evaluate((button) => button.getBoundingClientRect().bottom);
+      })
       .toBeLessThanOrEqual(844 - 420);
   });
 
@@ -465,17 +474,15 @@ test.describe("on a phone", () => {
     await page.getByRole("button", { name: "Command palette" }).tap();
     const palette = page.getByRole("dialog");
     await expect(palette.getByRole("combobox")).toBeVisible();
-    // useSoftKeyboard sets this from the visual viewport while it is up.
-    await page.evaluate(() =>
-      document.documentElement.style.setProperty("--keyboard-inset", "420px"),
-    );
+    await keyboardUp(page);
     await page.keyboard.type("a");
     await expect
-      .poll(() =>
-        palette
+      .poll(async () => {
+        await keyboardUp(page);
+        return palette
           .locator("[cmdk-root] > div")
-          .evaluate((panel) => panel.getBoundingClientRect().bottom),
-      )
+          .evaluate((panel) => panel.getBoundingClientRect().bottom);
+      })
       .toBeLessThanOrEqual(844 - 420);
     await expect(palette.locator("kbd:visible")).toHaveCount(0);
   });
