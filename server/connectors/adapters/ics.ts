@@ -198,10 +198,7 @@ function textOf(value: unknown): string | undefined {
  * "undefined", so only the first one was kept.
  */
 function noUidKey(title: string, start: Date): string {
-  const digest = crypto
-    .createHash("sha1")
-    .update(`${title}|${start.toISOString()}`)
-    .digest("hex");
+  const digest = crypto.hash("sha1", `${title}|${start.toISOString()}`);
   return `nouid-${digest.slice(0, 16)}`;
 }
 
