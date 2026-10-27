@@ -13,12 +13,14 @@ import * as m0001 from "./0001_baseline.ts";
 import * as m0002 from "./0002_sign_in_identities.ts";
 import * as m0003 from "./0003_address_trust.ts";
 import * as m0004 from "./0004_unproven_addresses.ts";
+import * as m0005 from "./0005_address_change_links.ts";
 
 export const MIGRATIONS: readonly Migration[] = [
   { id: "0001_baseline", up: m0001.up },
   { id: "0002_sign_in_identities", up: m0002.up },
   { id: "0003_address_trust", up: m0003.up },
   { id: "0004_unproven_addresses", up: m0004.up },
+  { id: "0005_address_change_links", up: m0005.up },
 ];
 
 /** The last migration this build holds. A database that is up to date has it. */

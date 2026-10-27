@@ -95,8 +95,15 @@ import {
   resetUserPasswordWithToken,
   getUserById,
   setUserAvatar,
+  assertCurrentPassword,
+  checkNewEmail,
+  pendingEmail,
+  cancelEmailChange,
+  completeEmailChange,
+  normalizeEmail,
   type User,
 } from "../services/authService.ts";
+import { sendAccountNotice } from "../services/accountNotices.ts";
 import fs from "fs";
 import multer from "multer";
 import { resolveUploadPath } from "../utils/paths.ts";
@@ -117,12 +124,15 @@ import type { SessionMethod } from "../../shared/devices.ts";
 import {
   renderPasswordResetEmail,
   renderMagicLinkEmail,
+  renderEmailChangeEmail,
 } from "../mail/templates.ts";
 import {
   createAuthLink,
   redeemAuthLink,
   RESET_LINK_TTL_SECONDS,
   MAGIC_LINK_TTL_SECONDS,
+  EMAIL_CHANGE_LINK_TTL_SECONDS,
+  discardAuthLink,
 } from "../services/authLinkService.ts";
 
 const router = Router();
@@ -534,6 +544,9 @@ function linkMail(
   return { userId: user.id, mail: { to: user.email, ...template } };
 }
 
+/** Where an email-change link lands in the app. */
+const CONFIRM_EMAIL_PATH = "/confirm-email";
+
 /**
  * Answer 202, then send. An address with an account must answer as fast as
  * one without, or the time to answer tells which addresses have accounts.
@@ -691,30 +704,119 @@ router.post(
 router.get("/me", requireSession, (req, res) => {
   // `via` is always "session" here, since only a session reaches this route. It
   // is part of the documented shape, so it is sent anyway.
+  const user = currentUser(req)!;
   res.json({
-    user: publicUser(currentUser(req)!),
+    user: publicUser(user),
     via: req.principal?.via ?? "session",
+    pendingEmail: pendingEmail(user.id),
   });
 });
 
+/** True when a PATCH /me body asks for an email other than the account's. */
+function changesEmail(req: Request): boolean {
+  const email = (req.body as Record<string, unknown> | undefined)?.email;
+  return (
+    email !== undefined && normalizeEmail(email) !== currentUser(req)?.email
+  );
+}
+
+/**
+ * Update the profile. A new email needs the current password, as OWASP asks
+ * for an account change. When mail can carry links, the new address waits in
+ * a link mailed to it, and the old address gets a notice. Without mail, the
+ * change applies at once and the address stays untrusted.
+ */
 router.patch(
   "/me",
   requireSession,
   requirePasswordCurrent,
+  // The password check is a guess like a sign-in, so it spends the same budget.
+  (req, res, next) =>
+    changesEmail(req) ? credentialLimiter(req, res, next) : next(),
   asyncHandler(async (req, res) => {
     const body = (req.body ?? {}) as Record<string, unknown>;
-    const user = await updateUser(currentUser(req)!.id, {
+    const actor = currentUser(req)!;
+    const emailChange = changesEmail(req);
+    if (emailChange)
+      await assertCurrentPassword(actor.id, body.currentPassword);
+    const origin = mailLinkOrigin();
+    const byLink = emailChange && origin !== null && mailService.isConfigured();
+    const email = byLink ? checkNewEmail(actor.id, body.email) : null;
+
+    const user = await updateUser(actor.id, {
       // Passed through only when present, so omitting a field leaves it alone
       // rather than clearing it.
-      ...(body.email !== undefined ? { email: body.email } : {}),
+      ...(body.email !== undefined && !byLink ? { email: body.email } : {}),
       ...(body.username !== undefined ? { username: body.username } : {}),
       ...(body.displayName !== undefined
         ? { displayName: body.displayName }
         : {}),
     });
-    res.json({ user: publicUser(user) });
+
+    if (email && origin) {
+      // One change waits at a time: a new request replaces the last one.
+      cancelEmailChange(actor.id);
+      const link = createAuthLink(
+        "email",
+        actor.id,
+        EMAIL_CHANGE_LINK_TTL_SECONDS,
+        null,
+        ipOf(req),
+        email,
+      );
+      if (!link) {
+        throw new AppError(
+          "Too many emails were sent to this account in the last hour. Try again later",
+          429,
+          { code: "LINK_LIMIT" },
+        );
+      }
+      const sent = await mailService.send({
+        to: email,
+        ...renderEmailChangeEmail({
+          instanceName: getInstanceName(),
+          link: `${origin}${CONFIRM_EMAIL_PATH}?token=${link.token}`,
+          email,
+        }),
+      });
+      if (!sent) {
+        discardAuthLink(link.id);
+        throw new AppError(
+          "Could not send the confirmation email. Your email did not change",
+          502,
+          { code: "MAIL_FAILED" },
+        );
+      }
+      sendAccountNotice(user.email, { kind: "email-change", email });
+    }
+    res.json({ user: publicUser(user), pendingEmail: pendingEmail(actor.id) });
   }),
 );
+
+/** Stop a pending email change, so its link no longer works. */
+router.delete("/email-change", requireSession, (req, res) => {
+  cancelEmailChange(currentUser(req)!.id);
+  res.json({ ok: true });
+});
+
+/**
+ * Finish an email change from the link mailed to the new address. It needs no
+ * session: the link may open on another device. It signs nobody in.
+ */
+router.post("/email-change/complete", credentialLimiter, (req, res) => {
+  const token = bodyString(req, "token").trim();
+  if (!token) throw new AppError("Link token is required", 400);
+  const { user } = completeEmailChange(token);
+  auditService.record({
+    actorUserId: user.id,
+    action: "auth.email.changed",
+    targetType: "user",
+    targetId: user.id,
+    details: { username: user.username },
+    ip: ipOf(req),
+  });
+  res.json({ email: user.email });
+});
 
 router.post(
   "/me/avatar",
@@ -1087,14 +1189,23 @@ router.get(
   }),
 );
 
-/** Start linking the signed-in account. A POST, so a cross-site page cannot start it. */
+/**
+ * Start linking the signed-in account. A POST, so a cross-site page cannot
+ * start it, and it needs the current password, as OWASP asks before a linked
+ * sign-in is added.
+ */
 router.post(
   "/oidc/link",
   oidcLimiter,
   requireSession,
   requirePasswordCurrent,
+  credentialLimiter,
   asyncHandler(async (req, res) => {
     assertOidcAvailable();
+    await assertCurrentPassword(
+      req.principal!.user.id,
+      bodyString(req, "currentPassword"),
+    );
     res.json({
       url: await startBoundOidc(req, res, {
         linkUserId: req.principal!.user.id,
@@ -1134,12 +1245,15 @@ router.get("/identities", requireSession, (req, res) => {
   res.json(accountIdentities(req.principal!.user.id));
 });
 
+/** Unlink a provider sign-in. It needs the current password, as linking does. */
 router.delete(
   "/identities/:id",
   requireSession,
   requirePasswordCurrent,
-  (req, res) => {
+  credentialLimiter,
+  asyncHandler(async (req, res) => {
     const user = req.principal!.user;
+    await assertCurrentPassword(user.id, bodyString(req, "currentPassword"));
     unlinkIdentity(user.id, String(req.params.id));
     auditService.record({
       actorUserId: user.id,
@@ -1148,8 +1262,12 @@ router.delete(
       targetId: user.id,
       ip: ipOf(req),
     });
+    sendAccountNotice(user.email, {
+      kind: "sign-on-unlinked",
+      provider: getOidcConfig()?.name ?? "single sign-on",
+    });
     res.json({ ok: true });
-  },
+  }),
 );
 
 export const authRouter = router;

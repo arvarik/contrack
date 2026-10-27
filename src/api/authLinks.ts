@@ -1,4 +1,7 @@
-/** Password resets and magic link sign-in, outside the gate (`authFetch`). */
+/**
+ * Password resets, magic link sign-in and email changes, outside the gate
+ * (`authFetch`).
+ */
 
 import { authFetch, type AccountUser } from "./auth";
 
@@ -37,5 +40,15 @@ export async function completeMagicLink(input: {
   return authFetch<{ user: AccountUser }>("/magic-link/complete", {
     method: "POST",
     body: JSON.stringify(input),
+  });
+}
+
+/** Completes an email change with the token mailed to the new address. */
+export async function completeEmailChange(
+  token: string,
+): Promise<{ email: string }> {
+  return authFetch<{ email: string }>("/email-change/complete", {
+    method: "POST",
+    body: JSON.stringify({ token }),
   });
 }

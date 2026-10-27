@@ -1,6 +1,7 @@
 /**
- * Email templates: invitation, test, password reset and magic link, in plain
- * text and minimal HTML, with the instance name as the sender.
+ * Email templates: invitation, test, password reset, magic link, email change
+ * and account notices, in plain text and minimal HTML, with the instance name
+ * as the sender.
  */
 
 function escapeHtml(str: string): string {
@@ -18,7 +19,7 @@ export interface RenderedEmail {
   html: string;
 }
 
-/** The HTML shell all four emails share. */
+/** The HTML shell every email shares. */
 function page(body: string): string {
   return `<!DOCTYPE html>
 <html>
@@ -155,4 +156,70 @@ ${linkBlock("Sign in to Contrack", options.link)}
 ${note("This link works for 15 minutes and can only be used once.")}`);
 
   return { subject, text, html };
+}
+
+/** The email-change confirmation, sent to the new address. */
+export function renderEmailChangeEmail(options: {
+  instanceName?: string;
+  link: string;
+  email: string;
+}): RenderedEmail {
+  const name = options.instanceName?.trim() || "Contrack";
+  const subject = `Confirm your new email for ${name}`;
+  const expiryText =
+    "This link works for 24 hours and can only be used once. Until you open it, your account keeps its old email.";
+  const text = [
+    `Your account on ${name} asked to use ${options.email} as its email.`,
+    "",
+    "To confirm, visit:",
+    options.link,
+    "",
+    expiryText,
+    "If you did not ask for this, you can safely ignore this message.",
+  ].join("\n");
+
+  const html =
+    page(`  <p>Your account on <strong>${escapeHtml(name)}</strong> asked to use <strong>${escapeHtml(options.email)}</strong> as its email.</p>
+${linkBlock("Confirm new email", options.link)}
+${note(expiryText)}`);
+
+  return { subject, text, html };
+}
+
+/** A change to how an account signs in, for the person it belongs to. */
+export type AccountNotice =
+  | { kind: "email-change"; email: string }
+  | { kind: "sign-on-linked"; provider: string }
+  | { kind: "sign-on-unlinked"; provider: string };
+
+/**
+ * The notice of an account change, so a change its owner did not make does not
+ * go unseen. It holds no link: the person acts in Contrack itself.
+ */
+export function renderAccountNoticeEmail(
+  options: { instanceName?: string } & AccountNotice,
+): RenderedEmail {
+  const name = options.instanceName?.trim() || "Contrack";
+  const what =
+    options.kind === "email-change"
+      ? {
+          subject: `Your email for ${name} is changing`,
+          line: `Your account on ${name} asked to use ${options.email} as its email. The change happens only when that address opens the link it was sent.`,
+          act: "If this was not you, change your password now and cancel the change under Account settings.",
+        }
+      : options.kind === "sign-on-linked"
+        ? {
+            subject: `Single sign-on was linked to your account on ${name}`,
+            line: `Your account on ${name} can now sign in with ${options.provider}.`,
+            act: "If this was not you, change your password now and unlink it under Account settings.",
+          }
+        : {
+            subject: `Single sign-on was unlinked from your account on ${name}`,
+            line: `Your account on ${name} no longer signs in with ${options.provider}.`,
+            act: "If this was not you, change your password now.",
+          };
+  const text = [what.line, "", what.act].join("\n");
+  const html = page(`  <p>${escapeHtml(what.line)}</p>
+${note(what.act)}`);
+  return { subject: what.subject, text, html };
 }

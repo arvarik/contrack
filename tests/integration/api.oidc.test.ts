@@ -29,6 +29,7 @@ import {
 import { forgetOidcDiscovery } from "../../server/services/oidcService.ts";
 import { createUser } from "../../server/services/authService.ts";
 import { createAuthLink } from "../../server/services/authLinkService.ts";
+import { mailService } from "../../server/services/mailService.ts";
 import * as identityService from "../../server/services/identityService.ts";
 const { linkIdentity, listIdentities } = identityService;
 import {
@@ -163,7 +164,8 @@ async function startLink(session: string[]) {
   const link = await request(app)
     .post("/api/auth/oidc/link")
     .set("Cookie", session)
-    .set("Origin", ORIGIN);
+    .set("Origin", ORIGIN)
+    .send({ currentPassword: PASSWORD });
   expect(link.status).toBe(200);
   const { state } = idp.remember(link.body.url);
   const flow = flowCookie(link);
@@ -574,7 +576,8 @@ describe("API: linking OIDC from settings", () => {
       request(app)
         .delete(`/api/auth/identities/${id}`)
         .set("Cookie", cookie)
-        .set("Origin", ORIGIN);
+        .set("Origin", ORIGIN)
+        .send({ currentPassword: PASSWORD });
     expect((await unlink(listIdentities(adminId)[0].id)).status).toBe(404);
     expect((await unlink(list.body.identities[0].id)).status).toBe(200);
     expect(count("user_identities WHERE userId = ?", ada.id)).toBe(0);
@@ -658,6 +661,69 @@ describe("API: linking OIDC from settings", () => {
     const done = await callback(`code=c&state=${state}`, withFlow);
     expect(done.headers.location).toBe(linkLanding("linked"));
     expect(await current(adminCookie)).toEqual({ [idp.issuer]: true });
+  });
+});
+
+describe("API: a linked sign-in needs the password, and its owner hears of it", () => {
+  afterEach(() => {
+    mailService.__useJsonTransport(false);
+    mailService.__clearSentMessages();
+  });
+
+  it("refuses to link or unlink without the current password", async () => {
+    const cookie = await passwordLogin("ada");
+    for (const currentPassword of [undefined, "wrong password"]) {
+      const res = await request(app)
+        .post("/api/auth/oidc/link")
+        .set("Cookie", cookie)
+        .set("Origin", ORIGIN)
+        .send({ currentPassword });
+      expect(res.status, String(currentPassword)).toBe(401);
+      expect(res.body.error.code).toBe("INVALID_CREDENTIALS");
+      expect(count("auth_challenges WHERE kind = 'oidc'")).toBe(0);
+    }
+    linkIdentity(ctx.ada.id, idp.issuer, "sub-ada", null);
+    const [identity] = listIdentities(ctx.ada.id);
+    const unlink = await request(app)
+      .delete(`/api/auth/identities/${identity.id}`)
+      .set("Cookie", cookie)
+      .set("Origin", ORIGIN)
+      .send({ currentPassword: "wrong password" });
+    expect(unlink.status).toBe(401);
+    expect(listIdentities(ctx.ada.id)).toHaveLength(1);
+  });
+
+  it("mails the account when a sign-in is linked, by settings or by email, and unlinked", async () => {
+    mailService.__useJsonTransport(true);
+    const cookie = await passwordLogin("ada");
+    const { state, cookie: withFlow } = await startLink(cookie);
+    idp.nextLogin({ sub: "sub-ada" });
+    const linked = await callback(`code=c&state=${state}`, withFlow);
+    expect(linked.headers.location).toBe(linkLanding("linked"));
+    const matched = await signIn({
+      sub: "sub-admin",
+      email: "admin@example.com",
+      email_verified: true,
+    });
+    expect(matched.headers.location).toBe("/");
+    const [identity] = listIdentities(ctx.ada.id);
+    const unlinked = await request(app)
+      .delete(`/api/auth/identities/${identity.id}`)
+      .set("Cookie", cookie)
+      .set("Origin", ORIGIN)
+      .send({ currentPassword: PASSWORD });
+    expect(unlinked.status).toBe(200);
+
+    const mail = await vi.waitFor(() => {
+      const sent = mailService.__getSentMessages();
+      expect(sent).toHaveLength(3);
+      return sent.map((m) => `${JSON.stringify(m.to)} ${m.subject}`);
+    });
+    expect(mail).toEqual([
+      expect.stringMatching(/ada@example\.com.* linked to your account/),
+      expect.stringMatching(/admin@example\.com.* linked to your account/),
+      expect.stringMatching(/ada@example\.com.* unlinked from your account/),
+    ]);
   });
 });
 
@@ -802,7 +868,7 @@ describe("API: OIDC email matching needs a trusted email", () => {
       .patch("/api/auth/me")
       .set("Cookie", cookie)
       .set("Origin", ORIGIN)
-      .send({ email });
+      .send({ email, currentPassword: PASSWORD });
     expect(res.status).toBe(200);
   }
 

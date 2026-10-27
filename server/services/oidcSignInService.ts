@@ -35,6 +35,7 @@ import {
   touchIdentity,
 } from "./identityService.ts";
 import { getOidcConfig } from "./integrationSettings.ts";
+import { sendAccountNotice } from "./accountNotices.ts";
 import {
   finishOidc,
   takeOidcFlow,
@@ -98,7 +99,18 @@ export function completeOidcLink(
     if (err instanceof AppError && err.statusCode === 409) return "taken";
     throw err;
   }
+  noticeLinked(sessionUserId);
   return "linked";
+}
+
+/** Tell the account holder that a provider sign-in now reaches the account. */
+function noticeLinked(userId: string): void {
+  const user = getUserById(userId);
+  if (!user) return;
+  sendAccountNotice(user.email, {
+    kind: "sign-on-linked",
+    provider: getOidcConfig()?.name ?? "single sign-on",
+  });
 }
 
 /** The account a sign-in reaches, and whether the email match found it. */
@@ -177,6 +189,7 @@ export function completeOidcSignIn(
     });
     return created;
   })();
+  if (matchedByEmail) noticeLinked(user.id);
   return { outcome: "signed-in", user, session };
 }
 

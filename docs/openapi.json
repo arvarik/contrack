@@ -416,6 +416,58 @@
         }
       }
     },
+    "/api/auth/email-change": {
+      "delete": {
+        "summary": "Stop the account's pending email change, so the link mailed to the new address no longer works",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "ok": { "type": "boolean", "const": true } },
+                  "required": ["ok"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/email-change/complete": {
+      "post": {
+        "summary": "Finish an email change with the token mailed to the new address. The address becomes the account's and is trusted. It needs no session and signs nobody in. 404 LINK_INVALID, 410 LINK_USED or LINK_EXPIRED, 409 when another account took the address",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "token": { "type": "string" } },
+                "required": ["token"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "email": { "type": "string" } },
+                  "required": ["email"],
+                  "additionalProperties": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/auth/identities": {
       "get": {
         "summary": "The provider sign-ins linked to the account",
@@ -469,7 +521,7 @@
     },
     "/api/auth/identities/{id}": {
       "delete": {
-        "summary": "Unlink a provider sign-in from the account",
+        "summary": "Unlink a provider sign-in from the account. `401 INVALID_CREDENTIALS` when `currentPassword` is wrong",
         "parameters": [
           {
             "name": "id",
@@ -478,6 +530,18 @@
             "schema": { "type": "string" }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "currentPassword": { "type": "string" } },
+                "required": ["currentPassword"]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "OK",
@@ -604,7 +668,19 @@
     },
     "/api/auth/oidc/link": {
       "post": {
-        "summary": "Start linking the signed-in account to the provider. Answers the provider's address",
+        "summary": "Start linking the signed-in account to the provider. Answers the provider's address. `401 INVALID_CREDENTIALS` when `currentPassword` is wrong",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "currentPassword": { "type": "string" } },
+                "required": ["currentPassword"]
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "OK",

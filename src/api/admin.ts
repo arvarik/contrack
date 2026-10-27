@@ -589,6 +589,7 @@ export const AUDIT_GROUPS = [
       "auth.passkey.removed",
       "auth.oidc.linked",
       "auth.oidc.unlinked",
+      "auth.email.changed",
     ],
   },
   {

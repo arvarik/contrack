@@ -92,14 +92,24 @@ export type LinkedIdentity = ResponseOf<
 export const listIdentities = () =>
   apiJson(authRoutes.identities, "/auth/identities");
 
-export const unlinkIdentity = (id: string) =>
+/** Linking and unlinking ask for the current password, as OWASP advises. */
+export const unlinkIdentity = (id: string, currentPassword: string) =>
   apiJson(
     authRoutes.unlinkIdentity,
     `/auth/identities/${encodeURIComponent(id)}`,
+    jsonBody({ currentPassword }),
   );
 
-export const startOidcLink = () =>
-  apiJson(authRoutes.oidcLink, "/auth/oidc/link");
+export const startOidcLink = (currentPassword: string) =>
+  apiJson(
+    authRoutes.oidcLink,
+    "/auth/oidc/link",
+    jsonBody({ currentPassword }),
+  );
+
+/** Stop a pending email change, so its mailed link no longer works. */
+export const cancelEmailChange = () =>
+  apiJson(authRoutes.cancelEmailChange, "/auth/email-change");
 
 /** One personal API token, as the account's own token list shows it. */
 export type ApiTokenSummary = ApiToken;
@@ -250,12 +260,26 @@ export function checkInvitation(token: string): Promise<{ ok: true }> {
 
 // Behind the gate, through the shared client
 
+/**
+ * Update the profile. A new email needs `currentPassword`. When the server can
+ * mail a link, the email does not change yet: `pendingEmail` is the address
+ * waiting for its link.
+ */
 export function updateProfile(input: {
   email?: string;
   username?: string;
   displayName?: string;
-}): Promise<{ user: AccountUser }> {
+  currentPassword?: string;
+}): Promise<{ user: AccountUser; pendingEmail: string | null }> {
   return apiJson("/auth/me", { method: "PATCH", ...jsonBody(input) });
+}
+
+/** The signed-in account, with the address an email change waits on. */
+export function fetchMe(): Promise<{
+  user: AccountUser;
+  pendingEmail: string | null;
+}> {
+  return apiJson("/auth/me");
 }
 
 export function changePassword(input: {

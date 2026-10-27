@@ -59,6 +59,8 @@ vi.mock("../../../../src/api/auth", async (importOriginal) => {
   return {
     ...actual,
     updateProfile: vi.fn(),
+    fetchMe: vi.fn(),
+    cancelEmailChange: vi.fn(),
     changePassword: vi.fn(),
     fetchSessions: vi.fn(),
     revokeOtherSessions: vi.fn(),
@@ -96,6 +98,10 @@ function renderWithProviders(
 }
 
 beforeEach(() => {
+  vi.mocked(authApi.fetchMe).mockResolvedValue({
+    user: authState.user as never,
+    pendingEmail: null,
+  });
   vi.mocked(authApi.fetchSessions).mockResolvedValue({ sessions: [] });
   vi.mocked(authApi.fetchApiTokens).mockResolvedValue({ tokens: [] });
   vi.mocked(passkeysApi.listPasskeys).mockResolvedValue({
@@ -120,6 +126,22 @@ afterEach(() => {
 });
 
 describe("AccountSettings hardening", () => {
+  it("shows an email change that waits for its link, and Cancel stops it", async () => {
+    vi.mocked(authApi.fetchMe).mockResolvedValue({
+      user: authState.user as never,
+      pendingEmail: "ada@new.example",
+    });
+    vi.mocked(authApi.cancelEmailChange).mockResolvedValue({ ok: true });
+    renderWithProviders(<AccountSettings />);
+    expect(
+      await screen.findByText(
+        /Waiting for you to open the link sent to ada@new\.example/,
+      ),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel the change" }));
+    await waitFor(() => expect(authApi.cancelEmailChange).toHaveBeenCalled());
+  });
+
   it("trims and normalizes profile fields, blocks empty username/email, and formats error toast", async () => {
     const errorToast = vi.spyOn(toast, "error");
     vi.mocked(authApi.updateProfile).mockRejectedValueOnce(
@@ -149,6 +171,12 @@ describe("AccountSettings hardening", () => {
     fireEvent.change(emailInput, {
       target: { value: "  ADA.NEW@Example.com " },
     });
+    // A new email needs the current password first.
+    expect(saveBtn.disabled).toBe(true);
+    fireEvent.change(
+      document.getElementById("account-email-password") as HTMLInputElement,
+      { target: { value: "pw" } },
+    );
     expect(saveBtn.disabled).toBe(false);
 
     fireEvent.click(saveBtn);
@@ -157,6 +185,7 @@ describe("AccountSettings hardening", () => {
         displayName: "Ada Lovelace",
         username: "ada_lovelace",
         email: "ada.new@example.com",
+        currentPassword: "pw",
       });
     });
 

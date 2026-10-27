@@ -45,7 +45,7 @@ export function buildMcpServer(scope: Scope, req: Request): McpServer {
     {
       name: "contrack",
       title: "Contrack",
-      version: "2.0.3",
+      version: "2.0.4",
       websiteUrl: "https://github.com/arvarik/contrack",
       // A client may load an icon only from https or a data: URI, so an
       // instance on plain http sends none.

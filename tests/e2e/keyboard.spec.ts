@@ -18,6 +18,16 @@ async function startFromBody(page: Page): Promise<void> {
 }
 
 /**
+ * Wait until the contact page has loaded. Its header first shows the name
+ * from the list's cache, under `aria-busy`, and the loaded header replaces
+ * it. A Tab sent before that loses its focus with the old header, and the
+ * count starts again from the top.
+ */
+async function expectContactLoaded(page: Page): Promise<void> {
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+}
+
+/**
  * Press Tab until focus is inside `selector`, and say how many presses it
  * took, or Infinity if the budget ran out first.
  */
@@ -210,6 +220,7 @@ test("on a contact page the skip link lands on the contact's name", async ({
   await page.goto(`/contact/${seed.byName("Ada Lovelace").id}`);
   const heading = page.getByRole("heading", { level: 1, name: /Ada Lovelace/ });
   await expect(heading).toBeVisible();
+  await expectContactLoaded(page);
   await startFromBody(page);
 
   await page.keyboard.press("Tab");
@@ -240,6 +251,7 @@ test.describe("Tab budget", () => {
     await expect(
       page.getByRole("heading", { level: 1, name: /Ada Lovelace/ }),
     ).toBeVisible();
+    await expectContactLoaded(page);
     await startFromBody(page);
 
     const presses = await tabsToReach(page, "#contact-heading", 21);

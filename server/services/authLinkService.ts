@@ -1,15 +1,15 @@
 /**
  * One-time auth link tokens: password resets (self-service 1 h, admin-issued 24
- * h) and magic link sign-ins (15 m). Only the SHA-256 is stored; the plaintext
- * is returned once, at creation. Self-service requests are capped at three an
- * hour per account.
+ * h), magic link sign-ins (15 m) and email changes (24 h, carrying the new
+ * address). Only the SHA-256 is stored; the plaintext is returned once, at
+ * creation. Self-service requests are capped at three an hour per account.
  */
 
 import crypto from "node:crypto";
 import { sqlite } from "../db.ts";
 import { AppError } from "../utils/AppError.ts";
 
-export type AuthLinkKind = "reset" | "magic";
+export type AuthLinkKind = "reset" | "magic" | "email";
 
 export interface AuthLinkRow {
   id: string;
@@ -21,6 +21,8 @@ export interface AuthLinkRow {
   expiresAt: string;
   usedAt: string | null;
   requestIp: string | null;
+  /** An email-change link's new address. */
+  email: string | null;
 }
 
 export interface CreatedAuthLink {
@@ -33,6 +35,7 @@ export interface CreatedAuthLink {
 export const RESET_LINK_TTL_SECONDS = 3600; // 1 hour
 export const MAGIC_LINK_TTL_SECONDS = 900; // 15 minutes
 export const ADMIN_RESET_LINK_TTL_SECONDS = 86400; // 24 hours
+export const EMAIL_CHANGE_LINK_TTL_SECONDS = 86400; // 24 hours
 
 /** Maximum link creations per hour per account for self-service requests. */
 export const HOURLY_CREATION_CAP = 3;
@@ -62,6 +65,7 @@ export function createAuthLink(
   ttlSeconds: number,
   createdBy?: string | null,
   requestIp?: string | null,
+  email?: string | null,
 ): CreatedAuthLink | null {
   // Check hourly creation cap for self-service requests
   if (!createdBy) {
@@ -84,8 +88,8 @@ export function createAuthLink(
 
   sqlite
     .prepare(
-      `INSERT INTO auth_links (id, kind, userId, tokenHash, createdBy, createdAt, expiresAt, requestIp)
-       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)`,
+      `INSERT INTO auth_links (id, kind, userId, tokenHash, createdBy, createdAt, expiresAt, requestIp, email)
+       VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)`,
     )
     .run(
       id,
@@ -95,6 +99,7 @@ export function createAuthLink(
       createdBy ?? null,
       expiresAt,
       requestIp ?? null,
+      email ?? null,
     );
 
   return { id, token, expiresAt };
@@ -156,7 +161,8 @@ export function redeemAuthLink(kind: AuthLinkKind, token: string): AuthLinkRow {
       .run(usedAt, row.id);
     // The link went by mail to the account's address, and changing the
     // address revokes the unused ones, so following it proves the address.
-    if (used.changes > 0) {
+    // An email-change link proves its new address, which the change sets.
+    if (used.changes > 0 && kind !== "email") {
       sqlite
         .prepare(
           `UPDATE users SET emailTrustedAt = CURRENT_TIMESTAMP WHERE id = ?`,
