@@ -9,6 +9,12 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Accessibility: filter chips, map facets, Narrow chips, contact rows, Ask
+  history rows and the import drop zone have names that hold their visible
+  words in order, so voice control reaches them by what they show.
+
 ## [2.0.3] - 2026-10-27
 
 ### Added
