@@ -123,8 +123,8 @@ describe("the Network list", () => {
       emails: [],
     })) as unknown as Contact[];
     // jsdom lays nothing out and has no scrollIntoView. A height lets the
-    // virtualizer draw the rows.
-    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(800);
+    // virtualizer draw the rows. It reads the scroll element's clientHeight.
+    vi.spyOn(Element.prototype, "clientHeight", "get").mockReturnValue(800);
     Element.prototype.scrollIntoView = vi.fn();
     mount();
     expect(screen.getAllByRole("link", { name: /^Person/ })).toHaveLength(6);
