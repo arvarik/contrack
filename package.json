@@ -101,7 +101,7 @@
     "imapflow": "^2.2.10",
     "mailparser": "^3.9.36",
     "morgan": "^1.12.1",
-    "multer": "^2.4.0",
+    "multer": "^2.5.0",
     "node-ical": "^0.27.3",
     "nodemailer": "^10.0.10",
     "openai": "^7.30.0",
