@@ -84,14 +84,21 @@ describe("ImportPage", () => {
     expect(screen.getByText("Corrupt file")).toBeTruthy();
   });
 
-  it("allows retrying failed imports", async () => {
-    vi.mocked(importsApi.retryImport).mockResolvedValue({
-      importId: "imp-2",
-      status: "complete",
-      retried: 3,
-      imported: 3,
-      failed: 0,
-    });
+  it("retries a failed import, and locks every Try again until it ends", async () => {
+    let finish: () => void = () => {};
+    vi.mocked(importsApi.retryImport).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = () =>
+            resolve({
+              importId: "imp-2",
+              status: "complete",
+              retried: 3,
+              imported: 3,
+              failed: 0,
+            });
+        }),
+    );
 
     vi.mocked(importsApi.useImports).mockReturnValue({
       data: [
@@ -102,18 +109,31 @@ describe("ImportPage", () => {
           failed: 3,
           createdAt: new Date().toISOString(),
         },
+        {
+          id: "imp-3",
+          status: "complete",
+          imported: 4,
+          failed: 1,
+          createdAt: new Date().toISOString(),
+        },
       ],
       isLoading: false,
     } as unknown as ReturnType<typeof importsApi.useImports>);
 
     renderComponent();
-    const retryBtn = screen.getByRole("button", { name: "Try again" });
-    expect(retryBtn).toBeTruthy();
+    const locked = () =>
+      screen
+        .getAllByRole("button", { name: "Try again" })
+        .map((button) => button.hasAttribute("disabled"));
+    expect(locked()).toEqual([false, false]);
 
-    fireEvent.click(retryBtn);
-
+    fireEvent.click(screen.getAllByRole("button", { name: "Try again" })[0]);
     await waitFor(() => {
       expect(importsApi.retryImport).toHaveBeenCalledWith("imp-2");
     });
+    await waitFor(() => expect(locked()).toEqual([true, true]));
+
+    finish();
+    await waitFor(() => expect(locked()).toEqual([false, false]));
   });
 });
