@@ -13,6 +13,7 @@ import { sqlite } from "../db.ts";
 import { AppError, ValidationError } from "../utils/AppError.ts";
 import { safeFetch } from "../utils/urlSafety.ts";
 import { getErrorMessage } from "../utils/helpers.ts";
+import { log } from "../utils/logger.ts";
 import {
   getOidcConfig,
   setOidcConfig,
@@ -261,19 +262,27 @@ export async function finishOidc(
   let email = typeof claims.email === "string" ? claims.email : null;
   let emailVerified = claims.email_verified === true;
   // Some providers put the address only in userinfo. One without a userinfo
-  // endpoint simply has no address to give.
+  // endpoint simply has no address to give. The address is optional: a linked
+  // identity signs in without it, so a userinfo failure costs only the email.
   if (
     !email &&
     tokens.access_token &&
     config.serverMetadata().userinfo_endpoint
   ) {
-    const info = await client.fetchUserInfo(
-      config,
-      tokens.access_token,
-      claims.sub,
-    );
-    email = typeof info.email === "string" ? info.email : null;
-    emailVerified = info.email_verified === true;
+    try {
+      const info = await client.fetchUserInfo(
+        config,
+        tokens.access_token,
+        claims.sub,
+      );
+      email = typeof info.email === "string" ? info.email : null;
+      emailVerified = info.email_verified === true;
+    } catch (err) {
+      // The message only: a refused request's body is the provider's.
+      log.warn("Auth", "OIDC userinfo failed, so the sign-in has no email", {
+        error: getErrorMessage(err),
+      });
+    }
   }
   return {
     issuer: config.serverMetadata().issuer,

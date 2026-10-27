@@ -2,10 +2,14 @@
 // sends a browser straight back, JWKS, a token endpoint that signs an ID token
 // for whatever the test queued with `nextLogin`, and a userinfo endpoint. The
 // token endpoint takes only the method it advertises, client_secret_basic.
+// It can also fail userinfo once.
 
 import http from "node:http";
 import express from "express";
 import { SignJWT, exportJWK, generateKeyPair } from "jose";
+
+/** The error description in a failed userinfo answer, which no log may carry. */
+export const USERINFO_FAILURE = "the userinfo store is down";
 
 export interface FakeLogin {
   sub: string;
@@ -33,6 +37,7 @@ export async function startFakeProvider() {
   const requests: string[] = [];
   let tokenRedirectUri: string | null = null;
   let denyNext = false;
+  let failUserinfo = false;
   idp.use((req, _res, proceed) => {
     requests.push(req.path);
     proceed();
@@ -69,6 +74,13 @@ export async function startFakeProvider() {
     res.json({ keys: [jwk] });
   });
   idp.get("/userinfo", (_req, res) => {
+    if (failUserinfo) {
+      failUserinfo = false;
+      res
+        .status(500)
+        .json({ error: "server_error", error_description: USERINFO_FAILURE });
+      return;
+    }
     res.json({ sub: signedIn?.sub, ...signedIn?.userinfo });
   });
   idp.post("/token", async (req, res) => {
@@ -139,6 +151,10 @@ export async function startFakeProvider() {
     /** Sign the next ID token with a key the JWKS does not publish. */
     signNextWithUnpublishedKey() {
       signWithRogueKey = true;
+    },
+    /** Answer the next userinfo request with a 500 whose body says USERINFO_FAILURE. */
+    failNextUserinfo() {
+      failUserinfo = true;
     },
     /** Answer the next token request with a 307 to `location`. */
     redirectNextToken(location: string) {

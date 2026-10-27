@@ -26,7 +26,11 @@ import { forgetOidcDiscovery } from "../../server/services/oidcService.ts";
 import { createUser } from "../../server/services/authService.ts";
 import * as identityService from "../../server/services/identityService.ts";
 const { linkIdentity } = identityService;
-import { startFakeProvider, type FakeLogin } from "./oidcProvider.ts";
+import {
+  startFakeProvider,
+  USERINFO_FAILURE,
+  type FakeLogin,
+} from "./oidcProvider.ts";
 
 const app = makeTestApp();
 const PASSWORD = "correct horse battery staple";
@@ -325,6 +329,30 @@ describe("API: OIDC sign-in", () => {
       .prepare("SELECT lastLoginAt FROM users WHERE id = ?")
       .get(ada.id) as { lastLoginAt: string | null };
     expect(row.lastLoginAt).not.toBeNull();
+  });
+
+  it("signs a linked account in when userinfo fails, and logs no provider body", async () => {
+    const { ada } = await setup();
+    linkIdentity(ada.id, idp.issuer, "sub-ada", null);
+    idp.failNextUserinfo();
+    const warn = vi.spyOn(log, "warn");
+    try {
+      // The ID token carries no email, so the server asks userinfo.
+      const res = await signIn({
+        sub: "sub-ada",
+        userinfo: { email: "ada@example.com", email_verified: true },
+      });
+      expect(res.headers.location).toBe("/");
+      expect(sessionsOf(ada.id)).toBe(1);
+      expect(warn).toHaveBeenCalledWith(
+        "Auth",
+        "OIDC userinfo failed, so the sign-in has no email",
+        { error: expect.any(String) },
+      );
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(USERINFO_FAILURE);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("keeps the session to this browser when keep me signed in is off", async () => {
