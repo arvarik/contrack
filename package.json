@@ -78,7 +78,7 @@
     "eval:answer:live": "node scripts/record-answer-eval.ts --live"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.135.0",
+    "@anthropic-ai/sdk": "^0.136.0",
     "@dicebear/avataaars": "^9.4.2",
     "@dicebear/bottts": "^9.4.2",
     "@dicebear/core": "^9.4.3",
@@ -98,12 +98,12 @@
     "drizzle-orm": "^0.45.3",
     "express": "^5.2.1",
     "google-auth-library": "^11.3.1",
-    "imapflow": "^2.5.8",
+    "imapflow": "^2.5.9",
     "mailparser": "^3.10.0",
     "morgan": "^1.12.1",
     "multer": "^2.5.0",
     "node-ical": "^0.27.3",
-    "nodemailer": "^10.1.4",
+    "nodemailer": "^10.1.7",
     "openai": "^7.39.0",
     "openid-client": "^6.8.8",
     "sharp": "^0.35.5",
