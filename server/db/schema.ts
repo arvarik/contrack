@@ -318,10 +318,10 @@ export const authChallenges = sqliteTable("auth_challenges", {
   expiresAt: text("expiresAt").notNull(),
 });
 
-/** auth_links: one-time tokens for password reset and magic-link sign-in. */
+/** auth_links: one-time tokens for password reset, magic-link sign-in and email changes. */
 export const authLinks = sqliteTable("auth_links", {
   id: text("id").primaryKey(),
-  /** 'reset' | 'magic'. */
+  /** 'reset' | 'magic' | 'email'. */
   kind: text("kind").notNull(),
   userId: text("userId")
     .notNull()
@@ -336,6 +336,8 @@ export const authLinks = sqliteTable("auth_links", {
   expiresAt: text("expiresAt").notNull(),
   usedAt: text("usedAt"),
   requestIp: text("requestIp"),
+  /** The address an email-change link was mailed to, and will set. */
+  email: text("email"),
 });
 
 // Core tables

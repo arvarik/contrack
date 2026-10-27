@@ -46,6 +46,7 @@ import {
   takeUrlSecret,
   RESET_PASSWORD_PATH,
   SIGNIN_LINK_PATH,
+  CONFIRM_EMAIL_PATH,
 } from "../../lib/credentials";
 import { SignIn } from "./SignIn";
 import { SetupWizard } from "./SetupWizard";
@@ -55,6 +56,7 @@ import { ForcedPasswordChange } from "./ForcedPasswordChange";
 import { PasskeyNudge } from "./PasskeyNudge";
 import { ResetPassword } from "./ResetPassword";
 import { MagicLinkLanding } from "./MagicLinkLanding";
+import { ConfirmEmailLanding } from "./ConfirmEmailLanding";
 import { ForgotPassword } from "./ForgotPassword";
 import { passkeysSupported, listPasskeys } from "../../api/passkeys";
 import { PreferencesProvider } from "../../contexts/PreferencesContext";
@@ -131,6 +133,7 @@ type GateState =
   | "join"
   | "reset"
   | "link"
+  | "confirm-email"
   | "forgot"
   | "signin"
   | "register"
@@ -203,6 +206,15 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     magicTokenRef.current = null;
     setMagicToken(null);
   }, []);
+
+  const [emailToken, setEmailToken] = useState<string | null>(() =>
+    takeUrlSecret(CONFIRM_EMAIL_PATH),
+  );
+  const emailTokenRef = useRef(emailToken);
+  const clearEmailToken = useCallback(() => {
+    emailTokenRef.current = null;
+    setEmailToken(null);
+  }, []);
   const queryClient = useQueryClient();
 
   const check = useCallback(async () => {
@@ -252,6 +264,11 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
     }
     if (magicTokenRef.current) {
       setState("link");
+      return;
+    }
+    // Signed in or not: the link may open on another device.
+    if (emailTokenRef.current) {
+      setState("confirm-email");
       return;
     }
     if (status.authRequired && !status.authenticated) {
@@ -495,6 +512,16 @@ export const AuthGate = ({ children }: { children: React.ReactNode }) => {
             onCancel={() => {
               clearMagicToken();
               setState("signin");
+            }}
+          />
+        );
+      case "confirm-email":
+        return (
+          <ConfirmEmailLanding
+            token={emailToken ?? ""}
+            onDone={() => {
+              clearEmailToken();
+              void check();
             }}
           />
         );

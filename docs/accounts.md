@@ -154,8 +154,11 @@ Single sign-on never creates an account. It signs in to an existing one:
   **Single sign-on** card and sign in with the provider. You come back to
   **Account** settings, which says whether the link worked and, if not, why.
   If the browser lost the flow's cookie on the way, such as when the provider
-  opened in another browser, you land on the start page instead; link again.
-  **Unlink** asks first.
+  opened in another browser, you land on the start page instead, with a
+  message; link again. **Link** and **Unlink** ask for your current password
+  first. When outgoing mail is set up, your email gets a notice each time a
+  sign-in is linked or unlinked, so a change you did not make does not go
+  unseen.
 - **The same email.** When **Accounts with the same verified email can sign
   in** is on, a provider account whose email the provider calls verified signs
   in to the Contrack account with that email, and stays linked to it. The
@@ -170,9 +173,10 @@ Single sign-on never creates an account. It signs in to an existing one:
   trust by the same rules. Contrack keeps no record of an email a member
   changed before 2.0.3, so such an account stays trusted, and an admin should
   check those addresses before turning matching on. An account from open
-  registration, or one whose owner
-  changed their own email, is not trusted until a mailed link proves the new
-  address. Changing the email also ends the unused links sent to the old one.
+  registration is not trusted until a mailed link proves its address. A new
+  email is trusted once its own mailed link is opened (see
+  [Your account](#your-account)). Changing the email also ends the unused
+  links sent to the old one.
   An address with a character outside ASCII never matches.
 
 Unlinking keeps your password and passkeys, so you can always still sign in.
@@ -201,10 +205,18 @@ with a message that it took too long.
 - **Profile.** **Photo** takes a JPEG, PNG, GIF, WebP, or AVIF image up to 10
   MB, cropped to 512 × 512 pixels. **Upload** saves it, and **Remove photo**
   goes back to your initials. **Display name**, **Username**, and **Email**
-  save with **Save changes**.
+  save with **Save changes**. A new **Email** asks for your current password.
+  When outgoing mail is set up, the email does not change yet: a link valid for
+  24 hours goes to the new address, and your old address gets a notice. Open
+  the link to finish the change, on any device. Until then the account keeps
+  its old email, and **Cancel the change** stops it. Without outgoing mail, the
+  email changes at once, and single sign-on email matching does not trust it
+  until a mailed link proves it.
 - **Sign-in methods.** Your password and your **Passkeys**. **Change
   password** asks for your current password and signs out every other device.
-  Your API tokens keep working.
+  Your API tokens and linked single sign-on keep working, because a change you
+  make yourself does not mean anybody else has them. A password reset, which
+  may mean somebody else had the password, removes the linked sign-ins.
 - **Devices.** Each browser where you are signed in, how it signed in
   (**Password**, **Passkey**, **Emailed link** or **Single sign-on**), and when it was last used.
   **This device** marks the one you are using. **Sign out other devices**

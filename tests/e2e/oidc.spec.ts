@@ -131,11 +131,17 @@ gatedTest(
     await expect(
       page.getByRole("heading", { name: "Single sign-on" }),
     ).toBeVisible();
-    const link = page.getByRole("button", { name: "Link Authentik" });
+    // Link asks for the current password first.
+    const link = async () => {
+      await page.getByRole("button", { name: "Link Authentik" }).click();
+      const dialog = page.getByRole("dialog", { name: "Link Authentik" });
+      await dialog.getByLabel("Current password").fill(ADMIN.password);
+      await dialog.getByRole("button", { name: "Link Authentik" }).click();
+    };
 
     // Each outcome lands as a message, and leaves the address clean.
     provider.denyNextAuthorize();
-    await link.click();
+    await link();
     await expect(page.getByText("Linking was cancelled")).toBeVisible();
     await expect(page).toHaveURL(/\/settings\/account#password$/);
 
@@ -144,7 +150,7 @@ gatedTest(
       email: ADMIN.email,
       email_verified: true,
     });
-    await link.click();
+    await link();
     await expect(page.getByText("Authentik linked")).toBeVisible();
     await expect(page.getByText(ADMIN.email)).toBeVisible();
     await expect(page).toHaveURL(/\/settings\/account#password$/);

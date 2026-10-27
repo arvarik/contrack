@@ -1,4 +1,7 @@
-/** Links and unlinks the account's single sign-on (OIDC) identity. */
+/**
+ * Links and unlinks the account's single sign-on (OIDC) identity. Both ask for
+ * the current password first, as OWASP advises before a linked sign-in changes.
+ */
 import { useEffect, useState } from "react";
 import {
   queryOptions,
@@ -16,7 +19,8 @@ import { RailTooltip } from "../../../components/ui/RailTooltip";
 import { ICON_BTN, TONE_WASH } from "../../../lib/styles";
 import { formatDay } from "../../../lib/datetime";
 import { cn, errorText } from "../../../lib/utils";
-import { SETTINGS_CARD } from "../layout";
+import { SETTINGS_CARD, SETTINGS_INPUT, SETTINGS_LABEL } from "../layout";
+import { NO_AUTOCORRECT } from "../../../components/ui/SearchField";
 import { passkeysQuery } from "./PasskeysCard";
 import { passkeysSupported } from "../../../api/passkeys";
 import {
@@ -54,6 +58,9 @@ export const SingleSignOnCard = () => {
   const { oidc, user } = useAuth();
   const queryClient = useQueryClient();
   const [target, setTarget] = useState<LinkedIdentity | null>(null);
+  const [linking, setLinking] = useState(false);
+  // One password for whichever dialog is open, cleared as each one opens.
+  const [password, setPassword] = useState("");
   const { data, isLoading, isError, refetch } = useQuery({
     ...identitiesQuery,
     enabled: Boolean(oidc),
@@ -82,7 +89,7 @@ export const SingleSignOnCard = () => {
   }, [oidc]);
 
   const link = useMutation({
-    mutationFn: startOidcLink,
+    mutationFn: () => startOidcLink(password),
     onSuccess: ({ url }) => window.location.assign(url),
     onError: (error: Error) =>
       toast.error(`Could not start linking: ${errorText(error)}`),
@@ -91,7 +98,8 @@ export const SingleSignOnCard = () => {
   const nameOf = (identity: LinkedIdentity) =>
     identity.current ? (oidc?.name ?? "") : issuerHost(identity.issuer);
   const unlink = useMutation({
-    mutationFn: (identity: LinkedIdentity) => unlinkIdentity(identity.id),
+    mutationFn: (identity: LinkedIdentity) =>
+      unlinkIdentity(identity.id, password),
     onSuccess: (_data, identity) => {
       setTarget(null);
       queryClient.invalidateQueries({ queryKey: identitiesQuery.queryKey });
@@ -106,10 +114,33 @@ export const SingleSignOnCard = () => {
   const unlinkLabel = `Unlink ${target ? nameOf(target) : oidc.name}`;
   const canLink =
     !isLoading && !isError && !identities.some((identity) => identity.current);
+  const openLink = () => {
+    setPassword("");
+    setLinking(true);
+  };
+  const passwordField = (
+    <div>
+      <label
+        htmlFor="sso-current-password"
+        className={cn(SETTINGS_LABEL, "mb-1.5")}
+      >
+        Current password
+      </label>
+      <input
+        id="sso-current-password"
+        type="password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        autoComplete="current-password"
+        className={SETTINGS_INPUT}
+        {...NO_AUTOCORRECT}
+      />
+    </div>
+  );
   const linkButton = (
     <button
       type="button"
-      onClick={() => link.mutate()}
+      onClick={openLink}
       disabled={link.isPending}
       className="btn-secondary btn-sm"
     >
@@ -152,7 +183,7 @@ export const SingleSignOnCard = () => {
           action={{
             label: link.isPending ? "Opening…" : `Link ${oidc.name}`,
             onClick: () => {
-              if (!link.isPending) link.mutate();
+              if (!link.isPending) openLink();
             },
             icon: Link2,
           }}
@@ -187,7 +218,10 @@ export const SingleSignOnCard = () => {
               <RailTooltip label="Unlink" side="bottom-end">
                 <button
                   type="button"
-                  onClick={() => setTarget(identity)}
+                  onClick={() => {
+                    setPassword("");
+                    setTarget(identity);
+                  }}
                   className={cn(ICON_BTN, "hover:text-error")}
                   aria-label={`Unlink ${identity.email ?? nameOf(identity)}`}
                 >
@@ -209,7 +243,22 @@ export const SingleSignOnCard = () => {
         confirmLabel={unlinkLabel}
         tone="danger"
         busy={unlink.isPending}
-      />
+        disabled={!password}
+      >
+        {passwordField}
+      </ConfirmDialog>
+      <ConfirmDialog
+        isOpen={linking}
+        onClose={() => setLinking(false)}
+        onConfirm={() => link.mutate()}
+        title={`Link ${oidc.name}`}
+        description={`Enter your password, then sign in with ${oidc.name} to link it to this account`}
+        confirmLabel={`Link ${oidc.name}`}
+        busy={link.isPending}
+        disabled={!password}
+      >
+        {passwordField}
+      </ConfirmDialog>
     </div>
   );
 };

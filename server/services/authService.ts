@@ -18,6 +18,7 @@ import {
   validatePassword,
 } from "./passwords.ts";
 import { unlinkIdentitiesForReset } from "./identityService.ts";
+import { redeemAuthLink, type AuthLinkKind } from "./authLinkService.ts";
 
 /**
  * How long a browser session stays valid without signing in again.
@@ -604,19 +605,7 @@ export async function changePassword(
   newPassword: unknown,
   keepSessionId: string | null,
 ): Promise<void> {
-  const row = sqlite
-    .prepare(`SELECT ${USER_COLUMNS} FROM users WHERE id = ?`)
-    .get(id) as UserRow | undefined;
-  if (!row) throw new AppError("Account not found", 404);
-
-  const ok =
-    typeof currentPassword === "string" &&
-    (await verifyPassword(currentPassword, row.passwordHash));
-  if (!ok) {
-    throw new AppError("That is not your current password.", 401, {
-      code: "INVALID_CREDENTIALS",
-    });
-  }
+  const row = await assertCurrentPassword(id, currentPassword);
 
   const error = validatePassword(newPassword);
   if (error) throw new ValidationError(error);
@@ -641,14 +630,111 @@ export async function changePassword(
   log.info("Auth", `Password changed for account ${row.id}`);
 }
 
-/** Mark every unused reset and sign-in link of an account used. */
-function revokeUnusedAuthLinks(userId: string): void {
+/**
+ * The account's row, when `password` is its current password. Otherwise 401
+ * INVALID_CREDENTIALS, which the client shows on the form and never reads as
+ * a lost session. A change to how the account signs in asks for it first.
+ */
+export async function assertCurrentPassword(
+  id: string,
+  password: unknown,
+): Promise<UserRow> {
+  const row = sqlite
+    .prepare(`SELECT ${USER_COLUMNS} FROM users WHERE id = ?`)
+    .get(id) as UserRow | undefined;
+  if (!row) throw new AppError("Account not found", 404);
+  const ok =
+    typeof password === "string" &&
+    (await verifyPassword(password, row.passwordHash));
+  if (!ok) {
+    throw new AppError("That is not your current password.", 401, {
+      code: "INVALID_CREDENTIALS",
+    });
+  }
+  return row;
+}
+
+/** Mark every unused reset, sign-in and email-change link of an account used. */
+function revokeUnusedAuthLinks(userId: string, kind?: AuthLinkKind): void {
   sqlite
     .prepare(
       `UPDATE auth_links SET usedAt = CURRENT_TIMESTAMP
-        WHERE userId = ? AND usedAt IS NULL`,
+        WHERE userId = ? AND usedAt IS NULL AND (? IS NULL OR kind = ?)`,
     )
-    .run(userId);
+    .run(userId, kind ?? null, kind ?? null);
+}
+
+// Email changes. A new address waits in an email-change link mailed to it, so
+// the account keeps the address it has proven until the new one is proven.
+
+/** The new address a member asked for and has not proven yet, or null. */
+export function pendingEmail(userId: string): string | null {
+  const row = sqlite
+    .prepare(
+      `SELECT email FROM auth_links
+        WHERE userId = ? AND kind = 'email' AND usedAt IS NULL AND expiresAt > ?
+        ORDER BY createdAt DESC LIMIT 1`,
+    )
+    .get(userId, new Date().toISOString()) as
+    { email: string | null } | undefined;
+  return row?.email ?? null;
+}
+
+/**
+ * A new email for an account, normalized: valid, and used by no other
+ * account. Throws like updateUser.
+ */
+export function checkNewEmail(id: string, value: unknown): string {
+  const current = getUserById(id);
+  if (!current) throw new AppError("Account not found", 404);
+  const email = normalizeEmail(value);
+  const error = validateEmail(email);
+  if (error) throw new ValidationError(error);
+  assertIdentifiersFree(email, current.username, id);
+  return email;
+}
+
+/** Stop a pending email change: its unused links no longer work. */
+export function cancelEmailChange(userId: string): void {
+  revokeUnusedAuthLinks(userId, "email");
+}
+
+/**
+ * Finish an email change from its mailed link. The link's address becomes the
+ * account's and is trusted, because the link reached it. The other unused
+ * links, mailed to the old address, stop working.
+ */
+export function completeEmailChange(token: string): {
+  user: User;
+  previousEmail: string;
+} {
+  const link = redeemAuthLink("email", token);
+  const current = getUserById(link.userId);
+  if (!current || !link.email) {
+    throw new AppError("That link is not valid.", 404, {
+      code: "LINK_INVALID",
+    });
+  }
+  assertIdentifiersFree(link.email, current.username, current.id);
+  try {
+    sqlite.transaction(() => {
+      sqlite
+        .prepare(
+          `UPDATE users SET email = ?, emailTrustedAt = CURRENT_TIMESTAMP,
+                            updatedAt = CURRENT_TIMESTAMP
+            WHERE id = ?`,
+        )
+        .run(link.email, current.id);
+      revokeUnusedAuthLinks(current.id);
+    })();
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      throw new ConflictError("That email address is already taken.");
+    }
+    throw err;
+  }
+  log.info("Auth", `Email changed for account ${current.id}`);
+  return { user: getUserById(current.id)!, previousEmail: current.email };
 }
 
 /**

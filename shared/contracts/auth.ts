@@ -2,7 +2,8 @@
 // The check of an invitation link, and the bodies of the two routes that
 // create an account from outside. Those two have no contract yet: they are
 // in `UNCONTRACTED` in `index.ts`. The token routes under /api/auth have
-// theirs in `tokens.ts`. Also the single sign-on (OIDC) routes.
+// theirs in `tokens.ts`. Also the single sign-on (OIDC) routes and the email
+// change.
 
 import { z } from "zod";
 import { queryText } from "./common.ts";
@@ -39,7 +40,8 @@ export const authRoutes = {
     method: "POST",
     path: "/api/auth/oidc/link",
     summary:
-      "Start linking the signed-in account to the provider. Answers the provider's address",
+      "Start linking the signed-in account to the provider. Answers the provider's address. `401 INVALID_CREDENTIALS` when `currentPassword` is wrong",
+    body: z.object({ currentPassword: z.string() }),
     response: z.strictObject({ url: z.string() }),
   }),
   oidcCallback: route({
@@ -77,8 +79,25 @@ export const authRoutes = {
   unlinkIdentity: route({
     method: "DELETE",
     path: "/api/auth/identities/:id",
-    summary: "Unlink a provider sign-in from the account",
+    summary:
+      "Unlink a provider sign-in from the account. `401 INVALID_CREDENTIALS` when `currentPassword` is wrong",
+    body: z.object({ currentPassword: z.string() }),
     response: z.strictObject({ ok: z.literal(true) }),
+  }),
+  cancelEmailChange: route({
+    method: "DELETE",
+    path: "/api/auth/email-change",
+    summary:
+      "Stop the account's pending email change, so the link mailed to the new address no longer works",
+    response: z.strictObject({ ok: z.literal(true) }),
+  }),
+  completeEmailChange: route({
+    method: "POST",
+    path: "/api/auth/email-change/complete",
+    summary:
+      "Finish an email change with the token mailed to the new address. The address becomes the account's and is trusted. It needs no session and signs nobody in. 404 LINK_INVALID, 410 LINK_USED or LINK_EXPIRED, 409 when another account took the address",
+    body: z.object({ token: z.string() }),
+    response: z.strictObject({ email: z.string() }),
   }),
 };
 

@@ -16,6 +16,9 @@ export const RESET_PASSWORD_PATH = "/reset-password";
 /** Where magic link sign-in lands. */
 export const SIGNIN_LINK_PATH = "/signin-link";
 
+/** Where an email-change link lands. */
+export const CONFIRM_EMAIL_PATH = "/confirm-email";
+
 /**
  * Extract a query parameter secret from a specific path.
  */

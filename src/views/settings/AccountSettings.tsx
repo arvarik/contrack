@@ -37,6 +37,8 @@ import {
   revokeApiToken,
   revokeOtherSessions,
   updateProfile,
+  fetchMe,
+  cancelEmailChange,
   useRemoveAccountAvatar,
   useUploadAccountAvatar,
   type ApiTokenSummary,
@@ -356,9 +358,14 @@ const PhotoCard = () => {
 
 const ProfileCard = () => {
   const { user, refresh } = useAuth();
+  const queryClient = useQueryClient();
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
   const [username, setUsername] = useState(user?.username ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
+  const [currentPassword, setCurrentPassword] = useState("");
+  // The address an email change waits on, until its mailed link is opened.
+  const { data: me } = useQuery({ queryKey: ["auth", "me"], queryFn: fetchMe });
+  const pending = me?.pendingEmail ?? null;
 
   useEffect(() => {
     setDisplayName(user?.displayName ?? "");
@@ -369,7 +376,12 @@ const ProfileCard = () => {
   const trimmedName = displayName.trim();
   const trimmedUsername = username.trim().toLowerCase();
   const trimmedEmail = email.trim().toLowerCase();
-  const valid = trimmedUsername.length > 0 && trimmedEmail.length > 0;
+  // A new email asks for the current password, as OWASP advises.
+  const emailChanges = trimmedEmail !== (user?.email ?? "").toLowerCase();
+  const valid =
+    trimmedUsername.length > 0 &&
+    trimmedEmail.length > 0 &&
+    (!emailChanges || currentPassword.length > 0);
 
   const dirty =
     valid &&
@@ -383,16 +395,32 @@ const ProfileCard = () => {
         displayName: trimmedName,
         username: trimmedUsername,
         email: trimmedEmail,
+        ...(emailChanges ? { currentPassword } : {}),
       }),
-    onSuccess: async () => {
+    onSuccess: async ({ user: saved, pendingEmail }) => {
       setDisplayName(trimmedName);
       setUsername(trimmedUsername);
-      setEmail(trimmedEmail);
+      setEmail(saved.email);
+      setCurrentPassword("");
+      queryClient.setQueryData(["auth", "me"], { user: saved, pendingEmail });
       await refresh();
-      toast.success("Profile updated");
+      toast.success(
+        emailChanges && pendingEmail
+          ? `Check ${pendingEmail} for a link. Your email changes when you open it`
+          : "Profile updated",
+      );
     },
     onError: (error: Error) =>
       toast.error(`Could not update profile: ${errorText(error)}`),
+  });
+  const cancel = useMutation({
+    mutationFn: cancelEmailChange,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      toast.success("Email change cancelled");
+    },
+    onError: (error: Error) =>
+      toast.error(`Could not cancel the change: ${errorText(error)}`),
   });
 
   return (
@@ -428,6 +456,37 @@ const ProfileCard = () => {
         autoComplete="email"
         {...NO_AUTOCORRECT}
       />
+      {pending && !emailChanges && (
+        <p
+          role="status"
+          className="text-xs text-on-surface-variant text-pretty"
+        >
+          Waiting for you to open the link sent to {pending}. Until then, your
+          email stays {user?.email}.{" "}
+          <button
+            type="button"
+            onClick={() => cancel.mutate()}
+            disabled={cancel.isPending}
+            className="font-semibold text-primary hover:underline"
+          >
+            Cancel the change
+          </button>
+        </p>
+      )}
+      {emailChanges && (
+        <Field
+          id="account-email-password"
+          label="Current password"
+          type="password"
+          value={currentPassword}
+          onChange={(e) => setCurrentPassword(e.target.value)}
+          hint="A new email needs your password"
+          autoComplete="current-password"
+          revealable
+          capsLockHint
+          {...NO_AUTOCORRECT}
+        />
+      )}
       <div className="flex justify-end">
         <SaveButton busy={save.isPending} disabled={!dirty}>
           Save changes

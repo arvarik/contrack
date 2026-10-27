@@ -11,6 +11,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -83,16 +84,25 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("SingleSignOnCard", () => {
-  it("starts one link however often the empty state's Link is clicked", async () => {
+  it("asks for the password, then starts one link however often Link is clicked", async () => {
     show();
     expect(await screen.findByText("Not linked")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Link Authentik" }));
-    const pending = await screen.findByRole("button", { name: "Opening…" });
-    fireEvent.click(pending);
-    fireEvent.click(pending);
+    const dialog = await screen.findByRole("dialog");
+    const confirm = within(dialog).getByRole("button", {
+      name: "Link Authentik",
+    }) as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+    fireEvent.change(within(dialog).getByLabelText("Current password"), {
+      target: { value: "pw" },
+    });
+    fireEvent.click(confirm);
+    await waitFor(() => expect(confirm.disabled).toBe(true));
+    fireEvent.click(confirm);
     // A mutation reaches its function a few ticks after mutate.
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(api.startOidcLink).toHaveBeenCalledTimes(1);
+    expect(api.startOidcLink).toHaveBeenCalledWith("pw");
   });
 
   it.each([

@@ -420,6 +420,18 @@ export const ROUTE_MANIFEST: readonly RouteEntry[] = [
     isolated: false,
   },
   {
+    method: "DELETE",
+    path: "/api/auth/email-change",
+    class: "session-self",
+    isolated: false,
+  },
+  {
+    method: "POST",
+    path: "/api/auth/email-change/complete",
+    class: "public",
+    isolated: false,
+  },
+  {
     method: "POST",
     path: "/api/auth/logout",
     class: "public",

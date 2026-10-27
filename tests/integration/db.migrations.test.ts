@@ -90,6 +90,8 @@ const ADDED_SINCE_FIXTURE = [
   "user_identities",
   // 0003_address_trust: users gains a column
   "users",
+  // 0005_address_change_links: auth_links gains a column
+  "auth_links",
 ];
 
 interface MasterRow {
@@ -196,6 +198,7 @@ describe("a new database", () => {
       "0002_sign_in_identities",
       "0003_address_trust",
       "0004_unproven_addresses",
+      "0005_address_change_links",
     ]);
     const addr = dev
       .prepare(

@@ -14,6 +14,7 @@ import {
   KeyRound,
   LogIn,
   LogOut,
+  Mail,
   MailPlus,
   ScrollText,
   Settings2,
@@ -95,6 +96,11 @@ const LOOK: Record<
     icon: LogIn,
     tone: "neutral",
     label: "Unlinked single sign-on",
+  },
+  "auth.email.changed": {
+    icon: Mail,
+    tone: "primary",
+    label: "Email changed",
   },
   "auth.token.created": {
     icon: Terminal,
