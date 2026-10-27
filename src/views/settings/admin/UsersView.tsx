@@ -140,12 +140,16 @@ const RowMenu = ({
   );
 };
 
-/** One account's data as a download, named after it and today. */
+/** One account's data as a download, named after it and today, and a toast. */
 const exportAccount = (user: AdminUser) =>
   downloadFile(
     `/admin/users/${encodeURIComponent(user.id)}/export`,
     `contrack-export-${user.username}-${new Date().toISOString().slice(0, 10)}.json`,
-  );
+  )
+    .then(() => toast.success("Export downloaded"))
+    .catch((error: Error) =>
+      toast.error(`Could not export data: ${errorText(error)}`),
+    );
 
 const AdminField = ({
   id,
@@ -479,12 +483,7 @@ const DeleteUserDialog = ({
           className="w-full"
           onClick={() => {
             setExporting(true);
-            exportAccount(user)
-              .then(() => toast.success("Export downloaded"))
-              .catch((error: Error) =>
-                toast.error(`Could not export data: ${errorText(error)}`),
-              )
-              .finally(() => setExporting(false));
+            exportAccount(user).finally(() => setExporting(false));
           }}
         >
           Export their data first
@@ -528,6 +527,15 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
     null,
   );
   const [disabling, setDisabling] = useState<AdminUser | null>(null);
+  const resetToTemporary = (id: string) =>
+    reset.mutate(id, {
+      onSuccess: ({ temporaryPassword: password }) => {
+        setResetting(null);
+        setTemporaryPassword(password);
+      },
+      onError: (error: Error) =>
+        toast.error(`Could not reset password: ${errorText(error)}`),
+    });
   const [deleting, setDeleting] = useState<{
     user: AdminUser;
     counts: OwnedCounts;
@@ -677,12 +685,7 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
                   setResetMethod("email");
                   setResetting(user);
                 },
-                onExport: () =>
-                  exportAccount(user)
-                    .then(() => toast.success("Export downloaded"))
-                    .catch((error: Error) =>
-                      toast.error(`Could not export data: ${errorText(error)}`),
-                    ),
+                onExport: () => exportAccount(user),
                 // Enable acts at once. Disable signs the person out
                 // everywhere, so it asks first.
                 onToggleEnabled: () =>
@@ -742,17 +745,7 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
               and gives you a temporary password they must replace on sign-in
             </p>
           }
-          onConfirm={() =>
-            resetting &&
-            reset.mutate(resetting.id, {
-              onSuccess: ({ temporaryPassword: password }) => {
-                setResetting(null);
-                setTemporaryPassword(password);
-              },
-              onError: (error: Error) =>
-                toast.error(`Could not reset password: ${errorText(error)}`),
-            })
-          }
+          onConfirm={() => resetting && resetToTemporary(resetting.id)}
         />
       ) : (
         <Modal
@@ -812,16 +805,7 @@ export const UsersView = ({ createOpen = false }: { createOpen?: boolean }) => {
                         ),
                     });
                   } else {
-                    reset.mutate(resetting.id, {
-                      onSuccess: ({ temporaryPassword: password }) => {
-                        setResetting(null);
-                        setTemporaryPassword(password);
-                      },
-                      onError: (error: Error) =>
-                        toast.error(
-                          `Could not reset password: ${errorText(error)}`,
-                        ),
-                    });
+                    resetToTemporary(resetting.id);
                   }
                 }}
               >

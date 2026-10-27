@@ -45,6 +45,29 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
   const refreshModels = useRefreshModels();
   const saveEndpoint = useSaveEndpoint();
   const deleteEndpoint = useDeleteEndpoint();
+  // A function, not a component: every button shares the one mutation, so a
+  // refresh disables and spins them all.
+  const refreshButton = (id: string, label: string) => (
+    <RailTooltip label="Refresh the model list" side="bottom">
+      <button
+        onClick={() =>
+          refreshModels
+            .mutateAsync(id)
+            .then((r) => toast.success(`${r.modelCount} models`))
+            .catch((e) =>
+              toast.error(`Could not refresh models: ${errorText(e)}`),
+            )
+        }
+        disabled={refreshModels.isPending}
+        className={ICON_BTN}
+        aria-label={`Refresh models for ${label}`}
+      >
+        <RefreshCw
+          className={cn("w-4 h-4", refreshModels.isPending && "animate-spin")}
+        />
+      </button>
+    </RailTooltip>
+  );
 
   const [keyModalProvider, setKeyModalProvider] = useState<{
     id: string;
@@ -195,32 +218,8 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
                     </p>
                   )}
                 </div>
-                {provider.supportsDiscovery && (
-                  <RailTooltip label="Refresh the model list" side="bottom">
-                    <button
-                      onClick={() =>
-                        refreshModels
-                          .mutateAsync(provider.id)
-                          .then((r) => toast.success(`${r.modelCount} models`))
-                          .catch((e) =>
-                            toast.error(
-                              `Could not refresh models: ${errorText(e)}`,
-                            ),
-                          )
-                      }
-                      disabled={refreshModels.isPending}
-                      className={ICON_BTN}
-                      aria-label={`Refresh models for ${provider.label}`}
-                    >
-                      <RefreshCw
-                        className={cn(
-                          "w-4 h-4",
-                          refreshModels.isPending && "animate-spin",
-                        )}
-                      />
-                    </button>
-                  </RailTooltip>
-                )}
+                {provider.supportsDiscovery &&
+                  refreshButton(provider.id, provider.label)}
                 {provider.source === "settings" && (
                   <RailTooltip label="Remove key" side="bottom">
                     <button
@@ -304,30 +303,7 @@ export function ProvidersSection({ settings }: { settings: AISettings }) {
                       )}
                     </div>
                   </div>
-                  <RailTooltip label="Refresh the model list" side="bottom">
-                    <button
-                      onClick={() =>
-                        refreshModels
-                          .mutateAsync(`custom:${endpoint.id}`)
-                          .then((r) => toast.success(`${r.modelCount} models`))
-                          .catch((e) =>
-                            toast.error(
-                              `Could not refresh models: ${errorText(e)}`,
-                            ),
-                          )
-                      }
-                      disabled={refreshModels.isPending}
-                      className={ICON_BTN}
-                      aria-label={`Refresh models for ${endpoint.label}`}
-                    >
-                      <RefreshCw
-                        className={cn(
-                          "w-4 h-4",
-                          refreshModels.isPending && "animate-spin",
-                        )}
-                      />
-                    </button>
-                  </RailTooltip>
+                  {refreshButton(`custom:${endpoint.id}`, endpoint.label)}
                   <RailTooltip label="Remove server" side="bottom">
                     <button
                       onClick={() =>

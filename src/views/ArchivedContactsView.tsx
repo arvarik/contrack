@@ -32,7 +32,7 @@ import { EmptyState } from "../components/ui/EmptyState";
 import { LoadFailed } from "../components/ui/LoadFailed";
 import { SearchField } from "../components/ui/SearchField";
 import { CorvidMark } from "../components/brand/CorvidMark";
-import { cn, errorText, plural } from "../lib/utils";
+import { cn, errorText, keepVisible, plural } from "../lib/utils";
 import { FloatingContactCard } from "../components/FloatingContactCard";
 import { SETTINGS_PAGE } from "./settings/layout";
 
@@ -76,19 +76,7 @@ export const ArchivedContactsView = () => {
       return;
     }
     const visibleIds = new Set(filteredContacts.map((c) => c.id));
-    setSelectedIds((prev) => {
-      if (prev.size === 0) return prev;
-      for (const id of prev) {
-        if (!visibleIds.has(id)) {
-          const next = new Set<string>();
-          for (const item of prev) {
-            if (visibleIds.has(item)) next.add(item);
-          }
-          return next;
-        }
-      }
-      return prev;
-    });
+    setSelectedIds((prev) => keepVisible(prev, visibleIds));
   }, [contacts.length, filteredContacts, isSelectMode]);
 
   const enterSelectMode = () => {

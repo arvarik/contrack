@@ -74,3 +74,16 @@ export function errorText(err: unknown, fallback?: string): string {
     ? err.message.replace(/\.$/, "")
     : (fallback ?? String(err));
 }
+
+/**
+ * A selection without the ids that left the screen, for a list a search or
+ * an action can narrow. While every id is still shown it returns `selected`
+ * itself, so a state update with it renders nothing.
+ */
+export function keepVisible(
+  selected: Set<string>,
+  visible: Set<string>,
+): Set<string> {
+  const next = new Set([...selected].filter((id) => visible.has(id)));
+  return next.size === selected.size ? selected : next;
+}

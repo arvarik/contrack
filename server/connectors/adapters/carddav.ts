@@ -140,12 +140,7 @@ export function vcardContentHash(input: VCardInput): string {
       .filter(Boolean)
       .sort((a, b) => a.localeCompare(b)),
   };
-  const canonical = serializeVCard(normalized);
-  return crypto
-    .createHash("sha256")
-    .update(canonical)
-    .digest("hex")
-    .slice(0, 16);
+  return crypto.hash("sha256", serializeVCard(normalized)).slice(0, 16);
 }
 
 function remoteCardHash(
@@ -153,13 +148,8 @@ function remoteCardHash(
   avatarUrl?: string | null,
 ): string {
   const base = vcardContentHash(contactFields);
-  if (!avatarUrl?.trim()) return base;
-  const photoDigest = crypto
-    .createHash("sha256")
-    .update(avatarUrl.trim())
-    .digest("hex")
-    .slice(0, 16);
-  return `${base}:${photoDigest}`;
+  const photo = avatarUrl?.trim();
+  return photo ? `${base}:${crypto.hash("sha256", photo).slice(0, 16)}` : base;
 }
 
 function basicAuthHeader(username: string, password: string): string {
@@ -887,15 +877,12 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
       ? prevCursor.addressBookUrl!
       : (await discoverAddressBook(config, secret, signal)).addressBookUrl;
     const abPath = normalizeHrefPath(addressBookUrl, addressBookUrl);
-    const sameBook = !prevCursor.addressBookUrl
-      ? true
-      : Boolean(prevCursor.addressBookUrl) &&
-        (!prevCursor.configuredUrl ||
-          sameAddressBookUrl(prevCursor.configuredUrl, config.url)) &&
-        sameAddressBookUrl(prevCursor.addressBookUrl, addressBookUrl);
-    const switchedBook = Boolean(prevCursor.addressBookUrl) && !sameBook;
-    const needsBookCleanup =
-      switchedBook || Boolean(prevCursor.bookSwitchPending);
+    const sameBook =
+      !prevCursor.addressBookUrl ||
+      ((!prevCursor.configuredUrl ||
+        sameAddressBookUrl(prevCursor.configuredUrl, config.url)) &&
+        sameAddressBookUrl(prevCursor.addressBookUrl, addressBookUrl));
+    const needsBookCleanup = !sameBook || Boolean(prevCursor.bookSwitchPending);
 
     const prevEtags: Record<string, string> = sameBook
       ? { ...(prevCursor.etags ?? {}) }
@@ -912,6 +899,24 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
     const toFetchHrefs = new Set<string>();
     const pendingEtags = new Map<string, string>();
     const deletedHrefs = new Set<string>();
+    /** A card the server no longer has. Its hash goes after the fetch. */
+    const markDeleted = (href: string) => {
+      deletedHrefs.add(href);
+      toFetchHrefs.delete(href);
+      pendingEtags.delete(href);
+      delete nextEtags[href];
+    };
+    /** Keeps a card whose ETag is unchanged, and queues any other to fetch. */
+    const noteEtag = (href: string, raw: string | null) => {
+      const etag = cleanEtag(raw);
+      if (etag && prevEtags[href] === etag) {
+        nextEtags[href] = etag;
+        return;
+      }
+      toFetchHrefs.add(href);
+      delete nextEtags[href];
+      if (etag) pendingEtags.set(href, etag);
+    };
     let usedSyncCollection = false;
     let activeBookHrefs: string[] | undefined;
 
@@ -975,32 +980,14 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
           const normHref = normalizeHrefPath(item.href, addressBookUrl);
           if (item.status !== null && /\s507(\s|$)/.test(item.status)) {
             has507Truncation = true;
-            if (samePath(normHref, abPath)) continue;
           }
           if (samePath(normHref, abPath)) continue;
           if (item.isCollection || item.isAddressBook) continue;
 
           const isDeleted =
             item.status !== null && /\s(404|410)(\s|$)/.test(item.status);
-          if (isDeleted) {
-            deletedHrefs.add(normHref);
-            toFetchHrefs.delete(normHref);
-            pendingEtags.delete(normHref);
-            delete nextEtags[normHref];
-            delete nextCardHashes[normHref];
-            continue;
-          }
-
-          const etag = cleanEtag(item.etag);
-          if (!prevEtags[normHref] || !etag || prevEtags[normHref] !== etag) {
-            toFetchHrefs.add(normHref);
-            delete nextEtags[normHref];
-            if (etag) {
-              pendingEtags.set(normHref, etag);
-            }
-          } else if (etag) {
-            nextEtags[normHref] = etag;
-          }
+          if (isDeleted) markDeleted(normHref);
+          else noteEtag(normHref, item.etag);
         }
 
         if (
@@ -1070,16 +1057,7 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
         }
 
         seenHrefs.add(normHref);
-        const etag = cleanEtag(item.etag);
-        if (!prevEtags[normHref] || !etag || prevEtags[normHref] !== etag) {
-          toFetchHrefs.add(normHref);
-          delete nextEtags[normHref];
-          if (etag) {
-            pendingEtags.set(normHref, etag);
-          }
-        } else if (etag) {
-          nextEtags[normHref] = etag;
-        }
+        noteEtag(normHref, item.etag);
       }
 
       if (needsBookCleanup && !has507Truncation && seenHrefs.size > 0) {
@@ -1089,11 +1067,7 @@ export const carddavAdapter: ConnectorAdapter<CarddavConfig, CarddavSecret> = {
       // Guard against an empty or 507-truncated PROPFIND response wiping all links
       if (!has507Truncation && seenHrefs.size > 0) {
         for (const oldHref of Object.keys(prevEtags)) {
-          if (!seenHrefs.has(oldHref)) {
-            deletedHrefs.add(oldHref);
-            delete nextEtags[oldHref];
-            delete nextCardHashes[oldHref];
-          }
+          if (!seenHrefs.has(oldHref)) markDeleted(oldHref);
         }
       }
     }
@@ -1182,10 +1156,7 @@ ${hrefElements}
         for (const item of parsedMg.items) {
           const normHref = normalizeHrefPath(item.href, addressBookUrl);
           if (item.status !== null && /\s(404|410)(\s|$)/.test(item.status)) {
-            deletedHrefs.add(normHref);
-            pendingEtags.delete(normHref);
-            delete nextEtags[normHref];
-            delete nextCardHashes[normHref];
+            markDeleted(normHref);
             continue;
           }
           if (!item.addressData) continue;
@@ -1211,10 +1182,7 @@ ${hrefElements}
               );
             }
             if (getRes.status === 404 || getRes.status === 410) {
-              deletedHrefs.add(href);
-              pendingEtags.delete(href);
-              delete nextEtags[href];
-              delete nextCardHashes[href];
+              markDeleted(href);
               continue;
             }
             if (getRes.status >= 200 && getRes.status < 300 && getRes.body) {

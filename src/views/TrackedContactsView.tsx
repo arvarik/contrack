@@ -79,7 +79,7 @@ import {
   SELECTED_ROW,
   SELECTED_TINT,
 } from "../lib/styles";
-import { cn } from "../lib/utils";
+import { cn, keepVisible } from "../lib/utils";
 import type { Contact } from "../types";
 import { SelectedCount } from "./contact-list/BulkActionToolbar";
 import { SettingsHeaderActions } from "./settings/SettingsHeader";
@@ -525,26 +525,12 @@ export const TrackedContactsView = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   // Drop selected ids that are no longer visible (for example when a search
   // narrows the list or a contact is archived).
-  const visibleIds = useMemo(
-    () =>
-      new Set(visible.filter((c) => matchesQuery(c, query)).map((c) => c.id)),
-    [visible, query],
-  );
   useEffect(() => {
-    setSelectedIds((prev) => {
-      if (prev.size === 0) return prev;
-      for (const id of prev) {
-        if (!visibleIds.has(id)) {
-          const next = new Set<string>();
-          for (const item of prev) {
-            if (visibleIds.has(item)) next.add(item);
-          }
-          return next;
-        }
-      }
-      return prev;
-    });
-  }, [visibleIds]);
+    const visibleIds = new Set(
+      visible.filter((c) => matchesQuery(c, query)).map((c) => c.id),
+    );
+    setSelectedIds((prev) => keepVisible(prev, visibleIds));
+  }, [visible, query]);
   const exitSelectMode = useCallback(() => {
     setSelectMode(false);
     setSelectedIds(new Set());

@@ -251,15 +251,12 @@ function imapErrorMessage(err: unknown): string {
     serverResponseCode?: string;
     responseCode?: string;
   };
-  if (
-    error.responseText &&
-    (!error.message || error.message === "Command failed")
-  ) {
-    return error.responseText;
-  }
-  const code = error.serverResponseCode ?? error.responseCode;
-  if (code && (!error.message || error.message === "Command failed")) {
-    return code;
+  // ImapFlow's own message is often only "Command failed": the server's
+  // words, or its response code, say more.
+  const detail =
+    error.responseText || (error.serverResponseCode ?? error.responseCode);
+  if (detail && (!error.message || error.message === "Command failed")) {
+    return detail;
   }
   return error.message || "Unknown IMAP error";
 }

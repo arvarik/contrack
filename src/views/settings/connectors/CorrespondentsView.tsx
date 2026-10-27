@@ -34,7 +34,7 @@ import {
   SECTION_HEADING,
   TONE_WASH,
 } from "../../../lib/styles";
-import { cn, errorText } from "../../../lib/utils";
+import { cn, errorText, plural } from "../../../lib/utils";
 import { LoadFailed } from "../../../components/ui/LoadFailed";
 
 /**
@@ -172,8 +172,7 @@ export const CorrespondentsView: React.FC = () => {
                 "px-4 sm:px-6 py-3 bg-surface-container-low rounded-t-2xl",
               )}
             >
-              {correspondents.length}{" "}
-              {correspondents.length === 1 ? "person" : "people"} to review
+              {plural(correspondents.length, "person", "people")} to review
             </p>
             <div className="py-2 divide-y divide-surface-container/60">
               {filteredCorrespondents.length === 0 && activeQuery && (
@@ -222,8 +221,7 @@ export const CorrespondentsView: React.FC = () => {
                         {/* "Most recently yesterday" and "most recently last
                             week" read as English. "Last yesterday" did not. */}
                         <p className="text-xs text-on-surface-variant mt-0.5">
-                          Seen {c.seenCount}{" "}
-                          {c.seenCount === 1 ? "time" : "times"}
+                          Seen {plural(c.seenCount, "time", "times")}
                           {c.lastSeenAt &&
                             `, most recently ${formatRelative(c.lastSeenAt, "at an unknown time")}`}
                         </p>
