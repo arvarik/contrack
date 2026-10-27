@@ -1,4 +1,8 @@
 // @vitest-environment jsdom
+/**
+ * The Connect settings section: the connector forms, Correspondents, the MCP
+ * page and the section's search keywords.
+ */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import React from "react";
 import {
@@ -9,10 +13,11 @@ import {
   cleanup,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { CalendarFormModal } from "../../../../src/views/settings/connectors/CalendarFormModal";
 import { CarddavFormModal } from "../../../../src/views/settings/connectors/CarddavFormModal";
+import { GoogleFormModal } from "../../../../src/views/settings/connectors/GoogleFormModal";
 import { ImapFormModal } from "../../../../src/views/settings/connectors/ImapFormModal";
 import { CorrespondentsView } from "../../../../src/views/settings/connectors/CorrespondentsView";
 import { McpView } from "../../../../src/views/settings/mcp/McpView";
@@ -21,7 +26,11 @@ import * as connectorsApi from "../../../../src/api/connectors";
 import * as contactsApi from "../../../../src/api/contacts";
 import * as authApi from "../../../../src/api/auth";
 import * as authGate from "../../../../src/components/auth/AuthGate";
-import type { Correspondent } from "../../../../shared/connectors";
+import type {
+  ConnectorSummary,
+  Correspondent,
+  KindInfo,
+} from "../../../../shared/connectors";
 
 vi.mock("../../../../src/api/connectors", () => ({
   useConnectorKinds: vi.fn(),
@@ -50,7 +59,48 @@ vi.mock("../../../../src/components/auth/AuthGate", () => ({
 
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-describe("Connect settings hardening", () => {
+/** Gives a mocked mutation hook this `mutateAsync`, and returns it. */
+function mutation<T extends ReturnType<typeof vi.fn>>(
+  hook: (...args: never[]) => unknown,
+  mutateAsync: T,
+): T {
+  vi.mocked(hook).mockReturnValue({ mutateAsync, isPending: false });
+  return mutateAsync;
+}
+
+/** The kinds the server lists, with Google configured or not. */
+function kinds(googleConfigured: boolean) {
+  const list: KindInfo[] = [
+    {
+      kind: "imap",
+      label: "Mailbox (IMAP)",
+      description: "Sync sent and received mail headers from any IMAP account",
+      capabilities: { schedule: true },
+    },
+    {
+      kind: "google",
+      label: "Google Workspace",
+      description: "Sync contacts, mail and calendar with Google",
+      capabilities: { schedule: true, oauth: true },
+      configured: googleConfigured,
+    },
+  ];
+  vi.mocked(connectorsApi.useConnectorKinds).mockReturnValue({
+    data: list,
+    isLoading: false,
+  } as unknown as ReturnType<typeof connectorsApi.useConnectorKinds>);
+}
+
+function correspondents(data: Correspondent[]) {
+  vi.mocked(connectorsApi.useCorrespondents).mockReturnValue({
+    data,
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  } as unknown as ReturnType<typeof connectorsApi.useCorrespondents>);
+}
+
+describe("Connect settings", () => {
   let queryClient: QueryClient;
 
   beforeEach(() => {
@@ -73,39 +123,28 @@ describe("Connect settings hardening", () => {
       logout: vi.fn(),
     } as unknown as ReturnType<typeof authGate.useAuth>);
 
-    vi.mocked(connectorsApi.useCreateConnector).mockReturnValue({
-      mutateAsync: vi.fn().mockResolvedValue({ id: "conn-1" }),
-      isPending: false,
-    } as unknown as ReturnType<typeof connectorsApi.useCreateConnector>);
-
-    vi.mocked(connectorsApi.useUpdateConnector).mockReturnValue({
-      mutateAsync: vi.fn().mockResolvedValue({ id: "conn-1" }),
-      isPending: false,
-    } as unknown as ReturnType<typeof connectorsApi.useUpdateConnector>);
-
-    vi.mocked(connectorsApi.useTestConnector).mockReturnValue({
-      mutateAsync: vi
-        .fn()
-        .mockResolvedValue({ ok: true, detail: "Connected cleanly" }),
-      isPending: false,
-    } as unknown as ReturnType<typeof connectorsApi.useTestConnector>);
-
-    vi.mocked(connectorsApi.useCorrespondents).mockReturnValue({
-      data: [],
-      isLoading: false,
-      isError: false,
-      refetch: vi.fn(),
-    } as unknown as ReturnType<typeof connectorsApi.useCorrespondents>);
-
-    vi.mocked(connectorsApi.useIgnoreCorrespondent).mockReturnValue({
-      mutateAsync: vi.fn().mockResolvedValue({ ok: true }),
-      isPending: false,
-    } as unknown as ReturnType<typeof connectorsApi.useIgnoreCorrespondent>);
-
-    vi.mocked(contactsApi.useCreateContact).mockReturnValue({
-      mutateAsync: vi.fn().mockResolvedValue({ id: "c-1" }),
-      isPending: false,
-    } as unknown as ReturnType<typeof contactsApi.useCreateContact>);
+    kinds(true);
+    mutation(
+      connectorsApi.useCreateConnector,
+      vi.fn().mockResolvedValue({ id: "conn-1" }),
+    );
+    mutation(
+      connectorsApi.useUpdateConnector,
+      vi.fn().mockResolvedValue({ id: "conn-1" }),
+    );
+    mutation(
+      connectorsApi.useTestConnector,
+      vi.fn().mockResolvedValue({ ok: true, detail: "Connected cleanly" }),
+    );
+    mutation(
+      connectorsApi.useIgnoreCorrespondent,
+      vi.fn().mockResolvedValue({ ok: true }),
+    );
+    mutation(
+      contactsApi.useCreateContact,
+      vi.fn().mockResolvedValue({ id: "c-1" }),
+    );
+    correspondents([]);
   });
 
   afterEach(() => {
@@ -119,16 +158,15 @@ describe("Connect settings hardening", () => {
       </MemoryRouter>,
     );
 
-  describe("CalendarFormModal hardening", () => {
+  describe("CalendarFormModal", () => {
     it("normalizes webcal:// URLs to https://, clears stale test results on edit, and formats error toasts", async () => {
-      const testMock = vi
-        .fn()
-        .mockResolvedValueOnce({ ok: true, detail: "Calendar feed verified" })
-        .mockRejectedValueOnce(new Error("403 Forbidden."));
-      vi.mocked(connectorsApi.useTestConnector).mockReturnValue({
-        mutateAsync: testMock,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useTestConnector>);
+      const testMock = mutation(
+        connectorsApi.useTestConnector,
+        vi
+          .fn()
+          .mockResolvedValueOnce({ ok: true, detail: "Calendar feed verified" })
+          .mockRejectedValueOnce(new Error("403 Forbidden.")),
+      );
 
       renderWithProviders(
         <CalendarFormModal isOpen={true} onClose={vi.fn()} />,
@@ -186,32 +224,29 @@ describe("Connect settings hardening", () => {
     });
   });
 
-  describe("CarddavFormModal hardening", () => {
+  describe("CarddavFormModal", () => {
     it("sets NO_AUTOCORRECT, trims URL and username while preserving password spaces, and validates URL scheme", async () => {
-      const createMock = vi.fn().mockResolvedValue({ id: "carddav-1" });
-      vi.mocked(connectorsApi.useCreateConnector).mockReturnValue({
-        mutateAsync: createMock,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useCreateConnector>);
-
-      const testMock = vi.fn().mockResolvedValue({
-        ok: true,
-        detail: "Connected to Personal",
-        addressBooks: [
-          {
-            url: "https://contacts.icloud.com/dav/personal/",
-            displayName: "Personal",
-          },
-          {
-            url: "https://contacts.icloud.com/dav/work/",
-            displayName: "Work",
-          },
-        ],
-      });
-      vi.mocked(connectorsApi.useTestConnector).mockReturnValue({
-        mutateAsync: testMock,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useTestConnector>);
+      const createMock = mutation(
+        connectorsApi.useCreateConnector,
+        vi.fn().mockResolvedValue({ id: "carddav-1" }),
+      );
+      mutation(
+        connectorsApi.useTestConnector,
+        vi.fn().mockResolvedValue({
+          ok: true,
+          detail: "Connected to Personal",
+          addressBooks: [
+            {
+              url: "https://contacts.icloud.com/dav/personal/",
+              displayName: "Personal",
+            },
+            {
+              url: "https://contacts.icloud.com/dav/work/",
+              displayName: "Work",
+            },
+          ],
+        }),
+      );
 
       const onClose = vi.fn();
       renderWithProviders(<CarddavFormModal isOpen={true} onClose={onClose} />);
@@ -286,11 +321,10 @@ describe("Connect settings hardening", () => {
     });
 
     it("preserves pushExistingContacts and same-origin addressBookUrl when editing a connector", async () => {
-      const updateMock = vi.fn().mockResolvedValue({ id: "carddav-edit-1" });
-      vi.mocked(connectorsApi.useUpdateConnector).mockReturnValue({
-        mutateAsync: updateMock,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useUpdateConnector>);
+      const updateMock = mutation(
+        connectorsApi.useUpdateConnector,
+        vi.fn().mockResolvedValue({ id: "carddav-edit-1" }),
+      );
 
       renderWithProviders(
         <CarddavFormModal
@@ -347,15 +381,76 @@ describe("Connect settings hardening", () => {
     });
   });
 
-  describe("ImapFormModal hardening", () => {
-    it("sets NO_AUTOCORRECT on technical fields, normalizes host scheme, preserves password spaces, and validates port range", async () => {
-      const createMock = vi.fn().mockResolvedValue({ id: "imap-1" });
-      vi.mocked(connectorsApi.useCreateConnector).mockReturnValue({
-        mutateAsync: createMock,
-        isPending: false,
-      } as unknown as ReturnType<typeof connectorsApi.useCreateConnector>);
+  describe("ImapFormModal", () => {
+    it("validates missing host, username, and password", async () => {
+      renderWithProviders(<ImapFormModal isOpen={true} onClose={vi.fn()} />);
+
+      const saveBtn = screen.getByRole("button", { name: "Connect" });
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(screen.getByText("Enter the IMAP server's host")).toBeTruthy();
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("imap.fastmail.com"), {
+        target: { value: "imap.fastmail.com" },
+      });
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(
+          screen.getByText("Enter your IMAP username or email"),
+        ).toBeTruthy();
+      });
+
+      fireEvent.change(screen.getByPlaceholderText("you@example.com"), {
+        target: { value: "you@example.com" },
+      });
+      fireEvent.click(saveBtn);
+
+      await waitFor(() => {
+        expect(screen.getByText("Enter your app password")).toBeTruthy();
+      });
+    });
+
+    it("tests IMAP connection when test button clicked", async () => {
+      const testMutation = mutation(
+        connectorsApi.useTestConnector,
+        vi.fn().mockResolvedValue({
+          ok: true,
+          detail: "Found 150 emails in INBOX",
+        }),
+      );
 
       renderWithProviders(<ImapFormModal isOpen={true} onClose={vi.fn()} />);
+
+      fireEvent.change(screen.getByPlaceholderText("imap.fastmail.com"), {
+        target: { value: "imap.fastmail.com" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("you@example.com"), {
+        target: { value: "you@example.com" },
+      });
+      fireEvent.change(screen.getByPlaceholderText("Paste your app password"), {
+        target: { value: "app-secret-pwd" },
+      });
+
+      const testBtn = screen.getByRole("button", { name: "Test connection" });
+      fireEvent.click(testBtn);
+
+      await waitFor(() => {
+        expect(testMutation).toHaveBeenCalledTimes(1);
+        expect(screen.getByText("Found 150 emails in INBOX")).toBeTruthy();
+      });
+    });
+
+    it("creates the connector with NO_AUTOCORRECT fields, a bare host, a checked port and the password's spaces kept", async () => {
+      const createMock = mutation(
+        connectorsApi.useCreateConnector,
+        vi.fn().mockResolvedValue({ id: "imap-1" }),
+      );
+
+      const onClose = vi.fn();
+      renderWithProviders(<ImapFormModal isOpen={true} onClose={onClose} />);
 
       const hostInput = screen.getByLabelText("IMAP host");
       const portInput = screen.getByLabelText("Port");
@@ -397,6 +492,8 @@ describe("Connect settings hardening", () => {
       await waitFor(() => {
         expect(createMock).toHaveBeenCalledWith(
           expect.objectContaining({
+            kind: "imap",
+            name: "Personal Mail",
             config: expect.objectContaining({
               host: "imap.fastmail.com",
               port: 993,
@@ -405,32 +502,182 @@ describe("Connect settings hardening", () => {
             secret: { password: "app-pass-123 " },
           }),
         );
+        expect(onClose).toHaveBeenCalled();
       });
     });
   });
 
-  describe("CorrespondentsView filtering and naming", () => {
-    it("shows filter box when >5 correspondents exist and prompts for name with NO_AUTOCORRECT when name is missing", async () => {
-      const sixPeople: Correspondent[] = Array.from({ length: 6 }, (_, i) => ({
-        connectorId: "conn-1",
-        connectorName: "Fastmail",
-        kind: "imap",
-        externalId: `person${i}@example.com`,
-        name: i === 0 ? undefined : `Person ${i}`,
-        email:
-          i === 0 ? "rowan.vale+news@example.com" : `person${i}@example.com`,
-        seenCount: i + 2,
-        lastSeenAt: "2026-10-15T12:00:00Z",
-        localId: null,
-        ignoredAt: null,
-      }));
+  describe("GoogleFormModal", () => {
+    it("renders Google Workspace modal when configured", () => {
+      renderWithProviders(<GoogleFormModal isOpen={true} onClose={vi.fn()} />);
 
-      vi.mocked(connectorsApi.useCorrespondents).mockReturnValue({
-        data: sixPeople,
-        isLoading: false,
-        isError: false,
-        refetch: vi.fn(),
-      } as unknown as ReturnType<typeof connectorsApi.useCorrespondents>);
+      expect(
+        screen.getByRole("heading", { name: /Connect Google Workspace/i }),
+      ).toBeTruthy();
+      expect(
+        screen.getByRole("button", { name: /Connect Google Workspace/i }),
+      ).toBeTruthy();
+      expect(
+        screen.getByText(/Summaries require reading email message bodies/i),
+      ).toBeTruthy();
+    });
+
+    it("displays prompt to configure Google OAuth if instance is unconfigured", () => {
+      kinds(false);
+      const Where = () => {
+        const location = useLocation();
+        return <output>{location.pathname + location.hash}</output>;
+      };
+      renderWithProviders(
+        <>
+          <GoogleFormModal isOpen={true} onClose={vi.fn()} />
+          <Where />
+        </>,
+      );
+
+      expect(
+        screen.getByText(/Google is not set up on this server yet/i),
+      ).toBeTruthy();
+      // To the row itself, which scrolls into view and flashes: the section
+      // anchor left the page at its top.
+      fireEvent.click(screen.getByText("Set up Google"));
+      // The open dialog hides the rest of the page from the tree.
+      expect(screen.getByRole("status", { hidden: true }).textContent).toBe(
+        "/settings/admin/general#google-oauth",
+      );
+    });
+
+    it("offers no Google sign-in to a connector that needs it while the server has no client", () => {
+      kinds(false);
+      const connector: ConnectorSummary = {
+        id: "g1",
+        kind: "google",
+        name: "Google (me@example.com)",
+        status: "needs_reauth",
+        config: {},
+        secretPresent: true,
+        intervalMinutes: 30,
+        nextRunAt: null,
+        lastRunAt: null,
+        lastError: null,
+        createdAt: "2026-10-01T00:00:00.000Z",
+        updatedAt: "2026-10-01T00:00:00.000Z",
+      };
+
+      renderWithProviders(
+        <GoogleFormModal
+          isOpen={true}
+          onClose={vi.fn()}
+          connector={connector}
+        />,
+      );
+
+      expect(
+        screen.getByText(/Google is not set up on this server yet/i),
+      ).toBeTruthy();
+      expect(screen.queryByText("Reconnect with Google")).toBeNull();
+    });
+  });
+
+  describe("CorrespondentsView", () => {
+    it("renders empty state when no correspondents exist", () => {
+      renderWithProviders(<CorrespondentsView />);
+
+      expect(screen.getByText("No one to review")).toBeTruthy();
+      expect(
+        screen.getByText(/When a connector syncs mail or meetings/i),
+      ).toBeTruthy();
+    });
+
+    /** Renders the one correspondent, and returns its two mutations. */
+    const renderCorrespondents = () => {
+      correspondents([
+        {
+          connectorId: "conn-1",
+          connectorName: "Work Email",
+          kind: "imap",
+          externalId: "alice@partner.org",
+          name: "Alice Partner",
+          email: "alice@partner.org",
+          phone: undefined,
+          seenCount: 5,
+          lastSeenAt: new Date().toISOString(),
+          localId: null,
+          ignoredAt: null,
+        },
+      ]);
+      const createContactMock = mutation(
+        contactsApi.useCreateContact,
+        vi.fn().mockResolvedValue({ id: "c-123" }),
+      );
+      const ignoreMock = mutation(
+        connectorsApi.useIgnoreCorrespondent,
+        vi.fn().mockResolvedValue({ ok: true }),
+      );
+      renderWithProviders(<CorrespondentsView />);
+      return { createContactMock, ignoreMock };
+    };
+
+    it("renders correspondents list, and Add as contact creates the contact and marks the correspondent", async () => {
+      const { createContactMock, ignoreMock } = renderCorrespondents();
+
+      expect(screen.getByText("Alice Partner")).toBeTruthy();
+      expect(screen.getByText("alice@partner.org")).toBeTruthy();
+
+      const addBtn = screen.getByRole("button", { name: /Add as contact/i });
+      fireEvent.click(addBtn);
+
+      await waitFor(() => {
+        expect(createContactMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            name: "Alice Partner",
+            emails: [{ email: "alice@partner.org", label: "work" }],
+          }),
+        );
+      });
+
+      // Adding also marks the correspondent, so the row leaves the list.
+      await waitFor(() => {
+        expect(ignoreMock).toHaveBeenCalledWith({
+          connectorId: "conn-1",
+          externalId: "alice@partner.org",
+        });
+      });
+      expect(ignoreMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("Ignore marks the correspondent without creating a contact", async () => {
+      const { createContactMock, ignoreMock } = renderCorrespondents();
+
+      const ignoreBtn = screen.getByRole("button", { name: /Ignore/i });
+      fireEvent.click(ignoreBtn);
+
+      await waitFor(() => {
+        expect(ignoreMock).toHaveBeenCalledWith({
+          connectorId: "conn-1",
+          externalId: "alice@partner.org",
+        });
+      });
+      expect(ignoreMock).toHaveBeenCalledTimes(1);
+      expect(createContactMock).not.toHaveBeenCalled();
+    });
+
+    it("shows filter box when >5 correspondents exist and prompts for name with NO_AUTOCORRECT when name is missing", async () => {
+      correspondents(
+        Array.from({ length: 6 }, (_, i) => ({
+          connectorId: "conn-1",
+          connectorName: "Fastmail",
+          kind: "imap",
+          externalId: `person${i}@example.com`,
+          name: i === 0 ? undefined : `Person ${i}`,
+          email:
+            i === 0 ? "rowan.vale+news@example.com" : `person${i}@example.com`,
+          seenCount: i + 2,
+          lastSeenAt: "2026-10-15T12:00:00Z",
+          localId: null,
+          ignoredAt: null,
+        })),
+      );
 
       renderWithProviders(<CorrespondentsView />);
 
@@ -451,7 +698,7 @@ describe("Connect settings hardening", () => {
     });
   });
 
-  describe("McpView hardening", () => {
+  describe("McpView", () => {
     it("validates pasted tokens, supports Escape to cancel, and formats token creation errors", async () => {
       vi.mocked(authApi.createApiToken).mockRejectedValueOnce(
         new Error("Rate limit exceeded."),
@@ -497,7 +744,7 @@ describe("Connect settings hardening", () => {
     });
   });
 
-  describe("Connect registry search keywords", () => {
+  describe("search keywords", () => {
     it.each([
       ["webcal", "/settings/connectors#gallery"],
       ["address book", "/settings/connectors#gallery"],
