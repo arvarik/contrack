@@ -422,20 +422,30 @@ describe("API: OIDC sign-in", () => {
     expect(failed.headers.location).toBe("/?oidc=no-account");
   });
 
-  it("limits starts on their own, and leaves the callback and password sign-in alone", async () => {
-    for (let i = 0; i < 20; i++) {
+  it("limits starts and callbacks apart, and leaves password sign-in alone", async () => {
+    linkIdentity(ctx.ada.id, idp.issuer, "sub-ada", null);
+    const { state, cookie } = await startSignIn();
+    for (let i = 1; i < 20; i++) {
       const ok = await request(app).get("/api/auth/oidc/start");
       expect(ok.headers.location).toMatch(/\/authorize\?/);
     }
     const refused = await request(app).get("/api/auth/oidc/start");
     expect(refused.status).toBe(302);
     expect(refused.headers.location).toBe("/?oidc=failed");
-    // Callbacks are not counted against anything.
-    for (let i = 0; i < 12; i++) {
+    // The callback has its own window, and a refusal leaves the flow unused.
+    for (let i = 0; i < 20; i++) {
       const cb = await callback("code=c&state=x");
       expect(cb.headers.location).toBe("/?oidc=failed");
     }
+    idp.nextLogin({ sub: "sub-ada" });
+    const limited = await callback(`code=c&state=${state}`, cookie);
+    expect(limited.headers.location).toBe("/?oidc=failed");
+    expect(oidcSessions()).toBe(0);
     await passwordLogin("ada");
+    __resetAuthRateLimits();
+    const ok = await callback(`code=c&state=${state}`, cookie);
+    expect(ok.headers.location).toBe("/");
+    expect(oidcSessions()).toBe(1);
   });
 });
 

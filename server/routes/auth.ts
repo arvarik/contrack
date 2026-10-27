@@ -5,12 +5,20 @@
 // itself (`requireSession`). On a gated instance with no accounts nobody can
 // sign in, so /setup is open until an account exists, then answers 409.
 
-import { Router, type Request, type Response } from "express";
+import {
+  Router,
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express";
 import { AppError, ValidationError } from "../utils/AppError.ts";
 import { log } from "../utils/logger.ts";
 import { asyncHandler } from "../utils/asyncHandler.ts";
 import { validatePassword } from "../services/passwords.ts";
-import { createRateLimiter } from "../middleware/rateLimit.ts";
+import {
+  createRateLimiter,
+  type RateLimiter,
+} from "../middleware/rateLimit.ts";
 import { parseQuery, validateBody } from "../utils/validators.ts";
 import {
   acceptInvitationSchema,
@@ -178,18 +186,25 @@ const linkLimiter = createRateLimiter({
 /**
  * Twenty single sign-on starts a minute per IP, apart from the password
  * budget, so an office signing in with SSO does not lock out password
- * sign-in. The callback has none: the flow cookie, the random state and the
- * single-use flow leave nothing to guess.
+ * sign-in. The callback has its own twenty, so each sign-in counts once in
+ * each window. Its flow cookie, random state and single-use flow leave
+ * nothing to guess, but each callback still reads the database.
  */
 const oidcLimiter = createRateLimiter({
   windowMs: 60_000,
   max: 20,
   name: "single sign-on",
 });
+const oidcCallbackLimiter = createRateLimiter({
+  windowMs: 60_000,
+  max: 20,
+  name: "single sign-on callback",
+});
 
 /** Clear every credential window in this module. Test seam. */
 export function __resetAuthRateLimits(): void {
   oidcLimiter.reset();
+  oidcCallbackLimiter.reset();
   credentialLimiter.reset();
   setupLimiter.reset();
   tokenLimiter.reset();
@@ -1038,16 +1053,22 @@ async function startBoundOidc(
   return started.url;
 }
 
+/**
+ * `limiter` for an address a browser navigates to, so a refusal goes back to
+ * the sign-in page instead of showing JSON.
+ */
+const limitPage =
+  (limiter: RateLimiter, what: string) =>
+  (req: Request, res: Response, next: NextFunction) =>
+    limiter(req, res, (err?: unknown) => {
+      if (!err) return next();
+      log.warn("Auth", `OIDC ${what} refused by the rate limit`);
+      res.redirect("/?oidc=failed");
+    });
+
 router.get(
   "/oidc/start",
-  // A browser navigates here, so a refusal goes back to the sign-in page
-  // instead of showing JSON.
-  (req, res, next) =>
-    oidcLimiter(req, res, (err?: unknown) => {
-      if (!err) return next();
-      log.warn("Auth", "OIDC sign-in start refused by the rate limit");
-      res.redirect("/?oidc=failed");
-    }),
+  limitPage(oidcLimiter, "sign-in start"),
   asyncHandler(async (req, res) => {
     try {
       assertOidcAvailable();
@@ -1084,6 +1105,7 @@ router.post(
 
 router.get(
   "/oidc/callback",
+  limitPage(oidcCallbackLimiter, "callback"),
   asyncHandler(async (req, res) => {
     // The address the provider was given at the start, with this query.
     const query = req.originalUrl.indexOf("?");
