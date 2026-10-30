@@ -255,9 +255,6 @@ rule needs its results before a merge. Keep GitHub's default setup for code
 scanning off: it skips pull requests from forks, and it blocks this workflow's
 results.
 
-A manual run can use the `hppc` self-hosted runner when the hosted pool is
-slow. Pull requests from forks never reach it.
-
 ## Releases (maintainers)
 
 1. Set the version in `package.json` and move the `[Unreleased]` entries in
