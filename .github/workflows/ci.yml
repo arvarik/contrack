@@ -6,17 +6,8 @@ on:
     tags: ["v*"]
   pull_request:
     branches: ["main"]
-  # Manual re-run, and an escape hatch when GitHub's hosted pool is congested
-  # or degraded — pick the hppc self-hosted runner instead of waiting in queue.
+  # Manual re-run.
   workflow_dispatch:
-    inputs:
-      runner:
-        description: "Where to run tests"
-        type: choice
-        default: "ubuntu-latest"
-        options:
-          - "ubuntu-latest"
-          - "hppc"
 
 concurrency:
   # A newer push supersedes an in-flight run for the same ref. Tags and main
@@ -55,9 +46,7 @@ permissions:
 jobs:
   checks:
     name: Lint, format and build
-    # Fork pull requests carry untrusted code, so they are pinned to
-    # GitHub-hosted runners and can never reach the self-hosted machine.
-    runs-on: ${{ github.event.inputs.runner == 'hppc' && fromJSON('["self-hosted","hppc"]') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 20
 
     steps:
@@ -98,7 +87,7 @@ jobs:
   # and `coverage` merges them and checks the floor in vitest.config.ts.
   unit-tests:
     name: Tests (${{ matrix.shard }}/4)
-    runs-on: ${{ github.event.inputs.runner == 'hppc' && fromJSON('["self-hosted","hppc"]') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -144,8 +133,7 @@ jobs:
     name: Tests and coverage
     needs: unit-tests
     if: ${{ !cancelled() }}
-    # The shards' runner: a blob names files by their path on the runner.
-    runs-on: ${{ github.event.inputs.runner == 'hppc' && fromJSON('["self-hosted","hppc"]') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
@@ -181,9 +169,7 @@ jobs:
   #
   # Its own job rather than a step in `checks`, so a lint failure and a focus
   # regression are reported separately and neither hides the other. Split
-  # across four runners like the tests. Always the hosted runner: Playwright
-  # installs Chromium's system libraries with apt, which needs the sudo the
-  # self-hosted runner deliberately lacks.
+  # across four runners like the tests.
   browser-a11y:
     name: Browser accessibility (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
