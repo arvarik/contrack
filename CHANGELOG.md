@@ -9,6 +9,21 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.5] - 2026-11-02
+
+### Security
+
+- Docker image: Node.js 26.13.0, which has the fixes of the Node.js 26.12.1
+  security release. They cover TLS hostname checks, DNS names that hold a NUL
+  byte, HTTP connection reuse and the Brotli decoder. If you run Contrack from
+  source, use Node.js 26.12.1 or later.
+
+### Changed
+
+- Anthropic: requests use Claude API version 2026-10-21 and send the key in
+  the `Authorization` header. A proxy set with `ANTHROPIC_BASE_URL` that reads
+  `X-Api-Key` must read `Authorization` instead.
+
 ## [2.0.4] - 2026-10-27
 
 ### Security
@@ -317,7 +332,8 @@ server.
 The first release: a local-first personal CRM with contact management,
 semantic search, AI enrichment and duplicate detection.
 
-[unreleased]: https://github.com/arvarik/contrack/compare/v2.0.4...HEAD
+[unreleased]: https://github.com/arvarik/contrack/compare/v2.0.5...HEAD
+[2.0.5]: https://github.com/arvarik/contrack/compare/v2.0.4...v2.0.5
 [2.0.4]: https://github.com/arvarik/contrack/compare/v2.0.3...v2.0.4
 [2.0.3]: https://github.com/arvarik/contrack/compare/v2.0.2...v2.0.3
 [2.0.2]: https://github.com/arvarik/contrack/compare/v2.0.1...v2.0.2
