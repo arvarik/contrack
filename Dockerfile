@@ -9,7 +9,7 @@
 # by Dependabot); package.json requires 26.10 or later.
 
 # Stage 1: Build the frontend
-FROM node:26-trixie-slim@sha256:0d1e33586362bb9e608c4e751e7a9e7edb55c9ac11461ed5666af696cc461dd4 AS builder
+FROM node:26-trixie-slim@sha256:e4db4c914bf8ad241bd24804fc25d272d89bad97e68cdc8a1414862790a02c39 AS builder
 
 WORKDIR /app
 
@@ -40,7 +40,7 @@ RUN npm run build
 # Stage 2: Production runtime
 # No apt packages needed: better-sqlite3 bundles its own SQLite, and Node
 # ships with a built-in CA store for outbound TLS.
-FROM node:26-trixie-slim@sha256:0d1e33586362bb9e608c4e751e7a9e7edb55c9ac11461ed5666af696cc461dd4 AS runtime
+FROM node:26-trixie-slim@sha256:e4db4c914bf8ad241bd24804fc25d272d89bad97e68cdc8a1414862790a02c39 AS runtime
 
 WORKDIR /app
 
