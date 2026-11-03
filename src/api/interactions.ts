@@ -2,6 +2,7 @@
 import { refreshContact } from "./contactCache";
 import { apiJson, jsonBody } from "./client";
 import { INTERACTION_SEARCH_KEY } from "./search";
+import { loadSanitizer } from "../lib/sanitize";
 import type { interactionRoutes } from "../../shared/contracts/interactions";
 import {
   queryOptions,
@@ -24,18 +25,24 @@ function invalidateInteractionSearch(client: QueryClient): void {
   void client.invalidateQueries({ queryKey: [...INTERACTION_SEARCH_KEY] });
 }
 
-/** One contact's timeline, as the contact page reads it. */
+/**
+ * One contact's timeline, as the contact page reads it. DOMPurify loads
+ * beside the first one, so its notes draw with their entries.
+ */
 export const timelineQuery = (contactId: string) =>
   queryOptions({
     queryKey: ["timeline", contactId],
-    queryFn: ({ signal }): Promise<Interaction[]> =>
-      apiJson<typeof interactionRoutes.timeline>(
-        "GET",
-        `/contacts/${contactId}/timeline`,
-        {
-          signal,
-        },
-      ),
+    queryFn: async ({ signal }): Promise<Interaction[]> => {
+      const [entries] = await Promise.all([
+        apiJson<typeof interactionRoutes.timeline>(
+          "GET",
+          `/contacts/${contactId}/timeline`,
+          { signal },
+        ),
+        loadSanitizer(),
+      ]);
+      return entries;
+    },
     staleTime: STALE_TIMES.timeline,
   });
 

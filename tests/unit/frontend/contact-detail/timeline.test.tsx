@@ -7,7 +7,15 @@
 // once, Undo sends nothing, and a refetch or leaving the page does not bring
 // the entry back.
 import React from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import {
   act,
   cleanup,
@@ -73,6 +81,7 @@ import {
 } from "../../../../src/lib/pendingDeletes";
 import type { Interaction } from "../../../../src/types";
 import { formatDue } from "../../../../src/lib/datetime";
+import { loadSanitizer } from "../../../../src/lib/sanitize";
 
 /** An ISO instant for a local date and hour, so no test depends on the zone. */
 const at = (year: number, month: number, day: number, hour = 12) =>
@@ -213,6 +222,9 @@ const lastToast = () =>
   (toastMock.success.mock.calls as unknown as [string, UndoToastOptions][]).at(
     -1,
   )![1];
+
+// The timeline query loads DOMPurify. These tests pass entries in directly.
+beforeAll(() => loadSanitizer());
 
 beforeEach(() => {
   // Wednesday 16 September 2026, midday. Only Date is mocked, so React and
