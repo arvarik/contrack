@@ -11,7 +11,11 @@ import {
   type TestInfo,
 } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
-import type { AxeResults, Result } from "axe-core";
+
+// axe-core's types, taken from @axe-core/playwright so axe-core itself does
+// not have to be listed in package.json.
+type AxeResults = Awaited<ReturnType<AxeBuilder["analyze"]>>;
+type Result = AxeResults["violations"][number];
 
 /**
  * The rule set every scan runs. WCAG 2.2 AA is the bar the app's own

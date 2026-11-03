@@ -1,5 +1,7 @@
 {
-  // Finds files, exports and types in src that nothing uses. Run `npm run knip`.
+  // Finds files, exports and types in src that nothing uses, and packages that
+  // package.json lists but nothing imports, or that code imports but
+  // package.json does not list. Run `npm run knip`.
   // Everything outside src is an entry point, so a src export that only the
   // server, a script or a test imports counts as used.
   "$schema": "https://unpkg.com/knip@6/schema.json",
@@ -10,14 +12,10 @@
     "tests/**/*.{ts,tsx}",
   ],
   "project": ["src/**/*.{ts,tsx}"],
-  // Only dead code is checked. Dependencies and duplicate exports are not.
+  // src/index.css loads these with `@import` and `@plugin`, which knip does
+  // not read.
+  "ignoreDependencies": ["tailwindcss", "@tailwindcss/typography"],
   "rules": {
     "duplicates": "off",
-    "dependencies": "off",
-    "devDependencies": "off",
-    "optionalPeerDependencies": "off",
-    "unlisted": "off",
-    "binaries": "off",
-    "unresolved": "off",
   },
 }

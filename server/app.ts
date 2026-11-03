@@ -6,7 +6,6 @@
 import express from "express";
 import cors from "cors";
 import crypto from "crypto";
-import morgan from "morgan";
 import { log } from "./utils/logger.ts";
 import { styleOrigins } from "./utils/mapConfig.ts";
 import {
@@ -66,7 +65,7 @@ const INLINE_UPLOAD_EXTENSIONS = new Set([
 export interface CreateAppOptions {
   /** Skip the per-IP AI rate limiter (integration tests hammer endpoints). */
   disableRateLimit?: boolean;
-  /** Attach morgan request logging (off in tests to keep output readable). */
+  /** Log one line per request (off in tests to keep output readable). */
   enableRequestLogging?: boolean;
 }
 
@@ -84,13 +83,6 @@ export function buildProductionCsp(
 ): string {
   return buildContentSecurityPolicy({ origins });
 }
-
-// Morgan's `:url` is `req.originalUrl`, query string included, and the query
-// string holds invitation secrets, palette searches and pasted URLs. Overriding
-// the token makes every format log the path alone.
-morgan.token("url", (req) =>
-  redactUrlForLog((req as express.Request).originalUrl),
-);
 
 /**
  * Build the API application: every middleware and router. The caller adds
@@ -180,22 +172,31 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   }
 
   if (options.enableRequestLogging) {
-    // `dev` colors its status codes, so it runs only on a terminal.
-    const morganFormat =
-      process.env.NODE_ENV !== "production" && process.stdout.isTTY
-        ? "dev"
-        : "short";
-    app.use(
-      morgan(morganFormat, {
-        skip: (req) =>
-          req.url.includes("node_modules") ||
-          req.url.includes("@vite") ||
-          req.url.includes("src/"),
-        // Through the logger, so an access line is an `info` line: it has a
-        // time and a level, and LOG_LEVEL=warn leaves it out.
-        stream: { write: (line: string) => log.info("HTTP", line.trimEnd()) },
-      }),
-    );
+    // One access line per request, in the layout of morgan's `short` format,
+    // written when the response ends or the client goes away. It goes through
+    // the logger, so it is an `info` line: it has a time and a level, and
+    // LOG_LEVEL=warn leaves it out. The URL is the path alone, because the
+    // query string holds invitation secrets, palette searches and pasted URLs.
+    app.use((req, res, next) => {
+      if (
+        req.url.includes("node_modules") ||
+        req.url.includes("@vite") ||
+        req.url.includes("src/")
+      ) {
+        return next();
+      }
+      const start = performance.now();
+      res.once("close", () => {
+        const status = res.headersSent ? res.statusCode : "-";
+        const length = res.getHeader("content-length") ?? "-";
+        const ms = (performance.now() - start).toFixed(3);
+        log.info(
+          "HTTP",
+          `${req.ip} ${req.method} ${redactUrlForLog(req.originalUrl)} HTTP/${req.httpVersion} ${status} ${length} - ${ms} ms`,
+        );
+      });
+      next();
+    });
   }
 
   // Liveness probe, mounted OUTSIDE /api so the auth gate never touches it.
