@@ -88,7 +88,7 @@
     "@googleapis/gmail": "^22.0.1",
     "@googleapis/oauth2": "^10.0.1",
     "@googleapis/people": "^12.0.1",
-    "@huggingface/transformers": "^4.3.1",
+    "@huggingface/transformers": "^4.3.2",
     "@modelcontextprotocol/sdk": "^1.32.2",
     "@simplewebauthn/server": "^14.0.3",
     "better-sqlite3": "^13.0.3",
