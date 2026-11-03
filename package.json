@@ -97,7 +97,7 @@
     "cors": "^2.8.6",
     "drizzle-orm": "^0.45.3",
     "express": "^5.2.1",
-    "google-auth-library": "^11.3.1",
+    "google-auth-library": "^11.3.3",
     "imapflow": "^2.9.1",
     "mailparser": "^3.12.4",
     "morgan": "^1.12.1",
