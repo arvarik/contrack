@@ -78,7 +78,7 @@ import { touchFirst } from "../../lib/platform";
 
 registerPmtilesProtocol();
 
-export const CONTACTS_SOURCE_ID = "contacts";
+const CONTACTS_SOURCE_ID = "contacts";
 
 /** Pins closer than this many pixels join one cluster. */
 const CLUSTER_RADIUS = 50;
