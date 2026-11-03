@@ -202,7 +202,7 @@ with a message that it took too long.
 
 **Settings → Account** holds these sections:
 
-- **Profile.** **Photo** takes a JPEG, PNG, GIF, WebP, or AVIF image up to 10
+- **Profile.** **Photo** takes a JPEG, PNG, GIF, or WebP image up to 10
   MB, cropped to 512 × 512 pixels. **Upload** saves it, and **Remove photo**
   goes back to your initials. **Display name**, **Username**, and **Email**
   save with **Save changes**. A new **Email** asks for your current password.

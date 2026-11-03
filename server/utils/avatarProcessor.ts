@@ -16,6 +16,10 @@ import type { Scope } from "../tenancy/scope.ts";
 
 sharp.cache(false);
 sharp.concurrency(2);
+// No HEIF or AVIF decoding until a sharp release bundles libheif 1.23.7 or
+// later (GHSA-48p4-gj45-w9v6, GHSA-rcqc-842v-m26h, GHSA-hpg4-g2gc-pq42). See
+// remoteImage.ts.
+sharp.block({ operation: ["VipsForeignLoadHeif"] });
 
 // Raster image types only. SVG is left out on purpose: it can carry scripts and
 // is served from the app origin. The extension comes from the MIME type, never

@@ -28,6 +28,12 @@ import {
 
 sharp.cache(false);
 sharp.concurrency(2);
+// No HEIF or AVIF decoding: the libheif 1.23.5 in sharp 0.35.5 has
+// high-severity decoder flaws (GHSA-48p4-gj45-w9v6, GHSA-rcqc-842v-m26h,
+// GHSA-hpg4-g2gc-pq42). Remove this line when a sharp release bundles libheif
+// 1.23.7 or later. The block is for the whole process, and avatarProcessor.ts
+// sets it too, so it holds whichever module loads first.
+sharp.block({ operation: ["VipsForeignLoadHeif"] });
 
 export const DEFAULT_MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 export const DEFAULT_IMAGE_TIMEOUT_MS = 8_000;
@@ -196,7 +202,8 @@ export async function assertRasterImage(body: Buffer): Promise<void> {
     throw new RemoteImageError("Response is not an image", false, err);
   }
   // sharp reports AVIF as "heif" with AV1 compression. HEIF with any other
-  // codec (the HEVC in a phone's .heic) is not on the list.
+  // codec (the HEVC in a phone's .heic) is not on the list. While the HEIF
+  // block at the top stands, sharp refuses AVIF before this check.
   const allowed =
     RASTER_FORMATS.has(meta.format ?? "") ||
     (meta.format === "heif" && meta.compression === "av1");

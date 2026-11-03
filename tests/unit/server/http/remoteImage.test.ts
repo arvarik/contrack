@@ -24,6 +24,7 @@ import path from "node:path";
 import sharp, { type Sharp } from "sharp";
 import {
   RemoteImageError,
+  assertRasterImage,
   ensureLocalImage,
   fetchRemoteImage,
   imageHost,
@@ -98,7 +99,7 @@ afterEach(() => {
 });
 
 describe("fetchRemoteImage", () => {
-  it.each(["png", "jpeg", "webp", "gif", "avif"] as const)(
+  it.each(["png", "jpeg", "webp", "gif"] as const)(
     "accepts a %s image and returns its bytes",
     async (format) => {
       const image = await makeImage(format);
@@ -109,6 +110,15 @@ describe("fetchRemoteImage", () => {
       expect(Buffer.compare(bytes, image)).toBe(0);
     },
   );
+
+  it("refuses an AVIF image while the HEIF loader is blocked", async () => {
+    await expect(
+      assertRasterImage(await makeImage("avif")),
+    ).rejects.toMatchObject({
+      message: "Response is not an image",
+      transient: false,
+    });
+  });
 
   it("goes through safeFetch with the timeout and three redirects", async () => {
     safeFetchMock.mockResolvedValueOnce(served(await makeImage("png")));
