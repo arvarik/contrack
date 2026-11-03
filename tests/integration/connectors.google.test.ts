@@ -4,7 +4,7 @@
  * Covers:
  * - Admin integrations setting for Google OAuth (env overrides, clearing)
  * - OAuth start and callback routes with PKCE and state verification
- * - Google adapter test() and sync() with mocked googleapis boundary
+ * - Google adapter test() and sync() with the Google API calls mocked
  * - People API contacts with syncToken, photo and metadata
  * - Gmail API messages with metadata headers and AI summaries for matched contacts
  * - Google Calendar API with past meetings and upcoming events
@@ -629,10 +629,10 @@ describe("Google Workspace Connector & OAuth Integration", () => {
       const options = (fn: unknown) =>
         (fn as Mock).mock.calls.map((call: unknown[]) => call[1]);
       const sent = [
-        ...options(google.people("v1").people.connections.list),
-        ...options(google.gmail("v1").users.messages.list),
-        ...options(google.gmail("v1").users.messages.get),
-        ...options(google.calendar("v3").events.list),
+        ...options(google.people(null!).people.connections.list),
+        ...options(google.gmail(null!).users.messages.list),
+        ...options(google.gmail(null!).users.messages.get),
+        ...options(google.calendar(null!).events.list),
       ];
       expect(sent).toHaveLength(5);
       for (const option of sent) {
@@ -642,6 +642,43 @@ describe("Google Workspace Connector & OAuth Integration", () => {
         });
       }
     });
+  });
+
+  // The URLs googleapis-common built, recorded before it was removed: RFC
+  // 3986 encoding, an array as a repeated key, an undefined value left out.
+  it("builds the URLs the googleapis clients built, with retries on", async () => {
+    const request = vi.fn().mockResolvedValue({ data: {} });
+    const auth = { request } as never;
+    await google.gmail(auth).users.messages.get(
+      {
+        userId: "me",
+        id: "a b",
+        format: "metadata",
+        metadataHeaders: ["From", "To"],
+      },
+      {},
+    );
+    await google.people(auth).people.connections.list(
+      {
+        resourceName: "people/me",
+        personFields: "names,emailAddresses",
+        pageSize: 100,
+        pageToken: undefined,
+        syncToken: "a +/=!*~",
+        requestSyncToken: true,
+      },
+      {},
+    );
+    expect(request.mock.calls.map(([o]) => [o.url, o.retry])).toEqual([
+      [
+        "https://gmail.googleapis.com/gmail/v1/users/me/messages/a%20b?format=metadata&metadataHeaders=From&metadataHeaders=To",
+        true,
+      ],
+      [
+        "https://people.googleapis.com/v1/people/me/connections?personFields=names%2CemailAddresses&pageSize=100&syncToken=a%20%2B%2F%3D%21%2A~&requestSyncToken=true",
+        true,
+      ],
+    ]);
   });
 
   describe("Expired sync tokens", () => {
