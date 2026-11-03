@@ -19,7 +19,7 @@
  *    the summary and the tags move to the Details tab, the weather stays
  *    off, and a row of quick actions ends the header.
  */
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -53,7 +53,7 @@ import { openQuickNote } from "../../../lib/appEvents";
 
 import {
   LocalTimeWeather,
-  timeZoneAt,
+  useTimeZoneAt,
 } from "../../../components/LocalTimeWeather";
 import { usePreferences } from "../../../contexts/PreferencesContext";
 import { ActionMenu } from "../../../components/ui/ActionMenu";
@@ -614,10 +614,7 @@ const ProfileHeaderInner: React.FC<ProfileHeaderProps> = ({
     heading.focus({ preventScroll: true });
   }, []);
 
-  const timezone = useMemo(
-    () => timeZoneAt(contact.lat, contact.lng),
-    [contact.lat, contact.lng],
-  );
+  const timezone = useTimeZoneAt(contact.lat, contact.lng);
 
   /** The links as the update takes them: what each is, not its row id. */
   const linkPayload = (links: ContactSocialLink[]) =>

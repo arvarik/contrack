@@ -12,7 +12,6 @@
  */
 import React, { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import tzlookup from "@photostructure/tz-lookup";
 import {
   Sun,
   Moon,
@@ -222,16 +221,56 @@ export function describeLocalTime(
 }
 
 /**
- * The IANA time zone at a point, or null. A caller uses it to place a
- * separator only when the time will show.
+ * tz-lookup, the world's zone borders (28 KB gzipped). It loads the first
+ * time a contact with a place shows, not with the app.
  */
-export function timeZoneAt(lat: number | null, lng: number | null) {
-  if (lat === null || lng === null) return null;
+let tzlookup: ((lat: number, lng: number) => string) | null = null;
+let tzlookupLoad: Promise<void> | null = null;
+
+/**
+ * Loads tz-lookup, once. A failed download resolves too, with no zones, and
+ * the next call tries again.
+ */
+export function loadTimeZones(): Promise<void> {
+  tzlookupLoad ??= import("@photostructure/tz-lookup").then(
+    (module) => {
+      tzlookup = module.default;
+    },
+    () => {
+      tzlookupLoad = null;
+    },
+  );
+  return tzlookupLoad;
+}
+
+/**
+ * The IANA time zone at a point, or null. Null too until tz-lookup is here,
+ * so a component reads it through `useTimeZoneAt`.
+ */
+function timeZoneAt(lat: number | null, lng: number | null) {
+  if (lat === null || lng === null || !tzlookup) return null;
   try {
     return tzlookup(lat, lng);
   } catch {
     return null;
   }
+}
+
+/**
+ * The IANA time zone at a point, or null. A caller uses it to place a
+ * separator only when the time will show. The first point loads tz-lookup,
+ * and the zone comes with the render after it lands.
+ */
+export function useTimeZoneAt(lat: number | null, lng: number | null) {
+  const [ready, setReady] = useState(tzlookup !== null);
+  const hasPoint = lat !== null && lng !== null;
+  useEffect(() => {
+    if (!ready && hasPoint) void loadTimeZones().then(() => setReady(true));
+  }, [ready, hasPoint]);
+  return useMemo(
+    () => (ready ? timeZoneAt(lat, lng) : null),
+    [ready, lat, lng],
+  );
 }
 
 /**
@@ -329,7 +368,7 @@ export const LocalTimeWeather: React.FC<LocalTimeWeatherProps> = ({
   lng,
   showWeather,
 }) => {
-  const timezone = useMemo(() => timeZoneAt(lat, lng), [lat, lng]);
+  const timezone = useTimeZoneAt(lat, lng);
   const now = useNow();
 
   if (lat === null || lng === null || !timezone) return null;
