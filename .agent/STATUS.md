@@ -46,7 +46,7 @@
   models ship in the Docker image.
 - **The corvid.** A brand kit drawn from one path file, a rig, a living mark,
   and flights.
-- **Platform.** Node 26.10 runs the TypeScript itself, TypeScript 7, Oxlint,
+- **Platform.** Node 26.13 runs the TypeScript itself, TypeScript 7, Oxlint,
   Express 5, Vite 8, knip, test isolation, and eval gates for search,
   duplicates and answers.
 

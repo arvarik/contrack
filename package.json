@@ -19,12 +19,12 @@
     "react"
   ],
   "engines": {
-    "node": ">=26.10.0"
+    "node": ">=26.13.0"
   },
   "devEngines": {
     "runtime": {
       "name": "node",
-      "version": ">=26.10.0",
+      "version": ">=26.13.0",
       "onFail": "error"
     },
     "packageManager": {

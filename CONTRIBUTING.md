@@ -8,7 +8,7 @@ change ships. The user docs are in [`docs/`](docs/README.md), and
 
 ## Set up
 
-You need Node.js 26.10 or later (`.nvmrc` pins it) and npm 11.19 or later. You
+You need Node.js 26.13 or later (`.nvmrc` pins it) and npm 11.19 or later. You
 need no API key.
 
 ```bash

@@ -6,7 +6,7 @@ code rules are in `STYLE.md`, test rules in `TESTING.md`.
 
 ## 1. Stack
 
-- **Runtime.** Node 26.10 or later runs the TypeScript itself. There is no
+- **Runtime.** Node 26.13 or later runs the TypeScript itself. There is no
   tsx and no server build. `tsc --noEmit` (TypeScript 7) only type-checks.
 - **Server.** Express 5. `server.ts` boots the process. `server/app.ts`
   (`createApp`, `finalizeApp`) builds the app for the server and for the

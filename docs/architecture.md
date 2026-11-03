@@ -42,7 +42,7 @@ flowchart LR
 
 | Part     | Built with                                                                                                                                      |
 | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Runtime  | Node 26.10 or later, which runs the `.ts` files itself. `npm run dev` runs `node server.ts` with Vite as middleware. Production serves `dist/`. |
+| Runtime  | Node 26.13 or later, which runs the `.ts` files itself. `npm run dev` runs `node server.ts` with Vite as middleware. Production serves `dist/`. |
 | Frontend | React 19, Vite 8, React Router 7, TanStack Query 5, Tailwind CSS 4, Motion, Tiptap, cmdk and MapLibre GL.                                       |
 | Backend  | Express 5, Zod 4, multer, sharp, nodemailer, SimpleWebAuthn and the MCP SDK.                                                                    |
 | Database | SQLite through better-sqlite3 and Drizzle ORM, in WAL mode, with FTS5 and sqlite-vec.                                                           |

@@ -24,7 +24,7 @@ file in the same change.
 
 ## Set up
 
-Node.js 26.10 or later is required (`.nvmrc` pins it). Check `node --version`
+Node.js 26.13 or later is required (`.nvmrc` pins it). Check `node --version`
 first, because an older Node on `PATH` makes every npm command fail with
 `EBADDEVENGINES`. No API key is needed.
 

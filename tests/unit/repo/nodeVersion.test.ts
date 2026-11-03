@@ -1,5 +1,5 @@
 // Unit: every place that names a Node version names the same one.
-// Contrack runs on Node 26.10 or later. The version is written in seven places, and
+// Contrack runs on Node 26.13 or later. The version is written in seven places, and
 // this test reads all seven:
 //
 //   .nvmrc           the pin for CI (setup-node) and for nvm and fnm
