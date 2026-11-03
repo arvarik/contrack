@@ -10,7 +10,7 @@
 [![CI](https://github.com/arvarik/contrack/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/arvarik/contrack/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/arvarik/contrack)](https://github.com/arvarik/contrack/releases)
 [![Docker image](https://img.shields.io/badge/image-ghcr.io%2Farvarik%2Fcontrack-2496ED?logo=docker&logoColor=white)](https://github.com/arvarik/contrack/pkgs/container/contrack)
-[![Node.js 26.10+](https://img.shields.io/badge/Node.js-26.10%2B-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![Node.js 26.13+](https://img.shields.io/badge/Node.js-26.13%2B-5FA04E?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/arvarik/contrack/badge)](https://scorecard.dev/viewer/?uri=github.com/arvarik/contrack)
 
@@ -189,7 +189,7 @@ git clone https://github.com/arvarik/contrack.git && cd contrack
 docker compose up -d
 ```
 
-**From source**, with Node.js 26.10 or later:
+**From source**, with Node.js 26.13 or later:
 
 ```bash
 git clone https://github.com/arvarik/contrack.git && cd contrack

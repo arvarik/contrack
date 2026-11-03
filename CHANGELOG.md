@@ -9,6 +9,12 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Security
+
+- Running from source needs Node.js 26.13.0 or later. Until the image library
+  ships the libheif security fixes, the server does not read HEIF or AVIF
+  images, so an account photo or a remote logo or photo in AVIF is refused.
+
 ## [2.0.5] - 2026-11-02
 
 ### Security

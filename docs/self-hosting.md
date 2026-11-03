@@ -8,7 +8,7 @@ Every variable is in the [Configuration reference](configuration.md).
 
 - **With Docker:** Docker Engine or Docker Desktop. The image runs on
   `linux/amd64` and `linux/arm64`.
-- **Without Docker:** Node.js 26.10 or later, npm 11.19 or later, and Git.
+- **Without Docker:** Node.js 26.13 or later, npm 11.19 or later, and Git.
 - Disk space for the data folder, which grows with your contacts, attachments
   and snapshots. AI is optional (see [AI](ai.md)).
 
@@ -544,7 +544,7 @@ back. Or enter the credentials again in **Administration → AI**, in
 
 ### npm fails with EBADDEVENGINES
 
-The project needs Node 26.10 or later and npm 11.19 or later. Install them,
+The project needs Node 26.13 or later and npm 11.19 or later. Install them,
 and run `npm install` again.
 
 ### docker ps shows unhealthy

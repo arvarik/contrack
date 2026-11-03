@@ -22,7 +22,6 @@ const ACCEPTED_TYPES = {
   "image/png": [".png"],
   "image/gif": [".gif"],
   "image/webp": [".webp"],
-  "image/avif": [".avif"],
 };
 
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -66,7 +65,7 @@ export const AccountPhotoField = ({
         if (first?.code === "file-too-large") {
           setError("Image must be under 10 MB");
         } else if (first?.code === "file-invalid-type") {
-          setError("Only JPEG, PNG, GIF, WebP, or AVIF images are allowed");
+          setError("Only JPEG, PNG, GIF, or WebP images are allowed");
         } else {
           setError(first?.message || "Invalid image file");
         }

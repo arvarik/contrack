@@ -142,11 +142,7 @@ const uploadAccountAvatar = multer({
   limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB cap for profile photos
   fileFilter: (_req, file, cb) => {
     if (file.mimetype in AVATAR_MIME_EXTENSIONS) return cb(null, true);
-    cb(
-      new ValidationError(
-        "Only JPEG, PNG, GIF, WebP, or AVIF images are allowed",
-      ),
-    );
+    cb(new ValidationError("Only JPEG, PNG, GIF, or WebP images are allowed"));
   },
 });
 

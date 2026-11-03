@@ -6,7 +6,7 @@
 # Node 26 on Debian 13 (trixie), the current Debian stable. Debian 12
 # (bookworm) moved to reduced LTS support in June 2026. The tag names the
 # major line and is pinned by its multi-arch SHA-256 digest (updated weekly
-# by Dependabot); package.json requires 26.10 or later.
+# by Dependabot); package.json requires 26.13 or later.
 
 # Stage 1: Build the frontend
 FROM node:26-trixie-slim@sha256:e4db4c914bf8ad241bd24804fc25d272d89bad97e68cdc8a1414862790a02c39 AS builder
