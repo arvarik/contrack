@@ -15,6 +15,11 @@ and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ships the libheif security fixes, the server does not read HEIF or AVIF
   images, so an account photo or a remote logo or photo in AVIF is refused.
 
+### Changed
+
+- Access log lines use one layout everywhere, the old `short` one without the
+  empty user field. A terminal no longer gets the colored `dev` layout.
+
 ## [2.0.5] - 2026-11-02
 
 ### Security
